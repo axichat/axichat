@@ -55,6 +55,15 @@ const bool _chatCalendarSurfacePopEnabledDefault = true;
 const String _chatCalendarHeaderAssertMessage =
     'ChatCalendarWidget requires onBackPressed when showHeader and showBackButton are true.';
 
+bool _resolveChatCalendarSurfacePopEnabled(BuildContext context) {
+  try {
+    return context.watch<ChatsCubit?>()?.state.openChatCalendar ??
+        _chatCalendarSurfacePopEnabledDefault;
+  } on FlutterError {
+    return _chatCalendarSurfacePopEnabledDefault;
+  }
+}
+
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
 ) {
@@ -65,15 +74,6 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
     );
   } on FlutterError {
     return null;
-  }
-}
-
-bool _resolveChatCalendarSurfacePopEnabled(BuildContext context) {
-  try {
-    return context.watch<ChatsCubit?>()?.state.openChatCalendar ??
-        _chatCalendarSurfacePopEnabledDefault;
-  } on FlutterError {
-    return _chatCalendarSurfacePopEnabledDefault;
   }
 }
 

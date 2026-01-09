@@ -34,12 +34,11 @@ import 'widgets/calendar_invitation_status_field.dart';
 import 'widgets/calendar_ics_diagnostics_section.dart';
 import 'widgets/calendar_link_geo_fields.dart';
 import 'widgets/calendar_participants_field.dart';
-import 'widgets/ics_meta_fields.dart';
-import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_field_character_hint.dart';
+import 'widgets/reminder_preferences_field.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
@@ -211,10 +210,6 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           _advancedAlarms = value;
         });
       },
-      status: _status,
-      transparency: _transparency,
-      onStatusChanged: (value) => setState(() => _status = value),
-      onTransparencyChanged: (value) => setState(() => _transparency = value),
       categories: _categories,
       onCategoriesChanged: (value) => setState(() => _categories = value),
       url: _url,
@@ -542,10 +537,6 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.onRemindersChanged,
     required this.advancedAlarms,
     required this.onAdvancedAlarmsChanged,
-    required this.status,
-    required this.transparency,
-    required this.onStatusChanged,
-    required this.onTransparencyChanged,
     required this.categories,
     required this.onCategoriesChanged,
     required this.url,
@@ -581,10 +572,6 @@ class _UnifiedTaskForm extends StatelessWidget {
   final ValueChanged<ReminderPreferences> onRemindersChanged;
   final List<CalendarAlarm> advancedAlarms;
   final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
-  final CalendarIcsStatus? status;
-  final CalendarTransparency? transparency;
-  final ValueChanged<CalendarIcsStatus?> onStatusChanged;
-  final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final List<String> categories;
   final ValueChanged<List<String>> onCategoriesChanged;
   final String? url;
@@ -656,14 +643,6 @@ class _UnifiedTaskForm extends StatelessWidget {
                       selectedTime!.minute,
                     )
                   : null,
-            ),
-            const SizedBox(height: calendarGutterLg),
-            CalendarIcsMetaFields(
-              status: status,
-              transparency: transparency,
-              showStatus: false,
-              onStatusChanged: onStatusChanged,
-              onTransparencyChanged: onTransparencyChanged,
             ),
             const SizedBox(height: calendarGutterLg),
             CalendarCategoriesField(

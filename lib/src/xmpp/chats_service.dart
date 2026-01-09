@@ -39,6 +39,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       {};
   bool _conversationIndexLoginSyncInFlight = false;
   List<Chat>? _cachedChatList;
+  bool? _lastMarkerResponsive;
 
   List<Chat>? get cachedChatList => _cachedChatList;
 
@@ -442,6 +443,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       _chatLog.fine('Skipping chat state for foreign domain: $jid');
       return;
     }
+    if (_isMucChatJid(jid)) {
+      final roomState = roomStateFor(jid);
+      if (roomState?.hasSelfPresence != true) {
+        return;
+      }
+    }
     final messageType = _chatStateMessageType(jid);
     await _connection.sendChatState(
       state: state,
@@ -611,6 +618,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   Future<void> toggleAllChatsMarkerResponsive(
       {required bool responsive}) async {
+    if (_lastMarkerResponsive == responsive) return;
+    _lastMarkerResponsive = responsive;
     await _dbOp<XmppDatabase>(
       (db) => db.markChatsMarkerResponsive(responsive: responsive),
     );

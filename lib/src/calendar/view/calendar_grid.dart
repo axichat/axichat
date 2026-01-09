@@ -1337,18 +1337,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final String baseId = baseTaskIdFrom(task.id);
-    final CalendarTask latestTask =
-        context.read<T>().state.model.tasks[baseId] ?? task;
-    final CalendarTask? storedTask =
-        context.read<T>().state.model.tasks[task.id];
+    final String taskId = task.id;
     final String? occurrenceKey = occurrenceKeyFrom(task.id);
-    final CalendarTask? occurrenceTask =
-        storedTask == null && occurrenceKey != null
-            ? latestTask.occurrenceForId(task.id)
-            : null;
-    final CalendarTask displayTask = storedTask ?? occurrenceTask ?? latestTask;
-    final bool shouldUpdateOccurrence =
-        storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
     final locate = context.read;
 
@@ -1364,85 +1354,99 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               mediaQuery.size.height - mediaQuery.viewPadding.vertical;
           return BlocProvider.value(
             value: locate<T>(),
-            child: Builder(
-              builder: (context) => EditTaskDropdown<T>(
-                task: displayTask,
-                maxHeight: maxHeight,
-                isSheet: true,
-                inlineActionsBloc: locate<T>(),
-                inlineActionsBuilder: (state) {
-                  final CalendarTask? latest =
-                      state.model.tasks[displayTask.id] ??
-                          state.model.tasks[displayTask.baseId];
-                  final CalendarTask resolved = latest ?? displayTask;
-                  return _taskContextActions(
-                    task: resolved,
-                    state: state,
-                    onTaskDeleted: () => Navigator.of(sheetContext).maybePop(),
-                    includeDeleteAction: false,
-                    includeCompletionAction: false,
-                    includePriorityActions: false,
-                    includeSplitAction: true,
-                    stripTaskKeyword: true,
-                  );
-                },
-                onClose: () => Navigator.of(sheetContext).maybePop(),
-                scaffoldMessenger: scaffoldMessenger,
-                locationHelper:
-                    LocationAutocompleteHelper.fromState(locate<T>().state),
-                onTaskUpdated: (updatedTask) {
-                  locate<T>().add(
-                    CalendarEvent.taskUpdated(
-                      task: updatedTask,
-                    ),
-                  );
-                },
-                onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask, scope) {
-                        locate<T>().add(
-                          CalendarEvent.taskOccurrenceUpdated(
-                            taskId: baseId,
-                            occurrenceId: task.id,
-                            scheduledTime: updatedTask.scheduledTime,
-                            duration: updatedTask.duration,
-                            endDate: updatedTask.endDate,
-                            checklist: updatedTask.checklist,
-                            range: scope.range,
+            child: BlocBuilder<T, CalendarState>(
+              builder: (context, state) {
+                final CalendarTask latestTask =
+                    state.model.tasks[baseId] ?? task;
+                final CalendarTask? storedTask = state.model.tasks[taskId];
+                final CalendarTask? occurrenceTask =
+                    storedTask == null && occurrenceKey != null
+                        ? latestTask.occurrenceForId(taskId)
+                        : null;
+                final CalendarTask displayTask =
+                    storedTask ?? occurrenceTask ?? latestTask;
+                final bool shouldUpdateOccurrence =
+                    storedTask == null && occurrenceTask != null;
+
+                return EditTaskDropdown<T>(
+                  task: displayTask,
+                  maxHeight: maxHeight,
+                  isSheet: true,
+                  inlineActionsBloc: context.read<T>(),
+                  inlineActionsBuilder: (state) {
+                    final CalendarTask? latest =
+                        state.model.tasks[displayTask.id] ??
+                            state.model.tasks[displayTask.baseId];
+                    final CalendarTask resolved = latest ?? displayTask;
+                    return _taskContextActions(
+                      task: resolved,
+                      state: state,
+                      onTaskDeleted: () =>
+                          Navigator.of(sheetContext).maybePop(),
+                      includeDeleteAction: false,
+                      includeCompletionAction: false,
+                      includePriorityActions: false,
+                      includeSplitAction: true,
+                      stripTaskKeyword: true,
+                    );
+                  },
+                  onClose: () => Navigator.of(sheetContext).maybePop(),
+                  scaffoldMessenger: scaffoldMessenger,
+                  locationHelper: LocationAutocompleteHelper.fromState(state),
+                  onTaskUpdated: (updatedTask) {
+                    context.read<T>().add(
+                          CalendarEvent.taskUpdated(
+                            task: updatedTask,
                           ),
                         );
+                  },
+                  onOccurrenceUpdated: shouldUpdateOccurrence
+                      ? (updatedTask, scope) {
+                          context.read<T>().add(
+                                CalendarEvent.taskOccurrenceUpdated(
+                                  taskId: baseId,
+                                  occurrenceId: taskId,
+                                  scheduledTime: updatedTask.scheduledTime,
+                                  duration: updatedTask.duration,
+                                  endDate: updatedTask.endDate,
+                                  checklist: updatedTask.checklist,
+                                  range: scope.range,
+                                ),
+                              );
 
-                        final CalendarTask seriesUpdate = latestTask.copyWith(
-                          title: updatedTask.title,
-                          description: updatedTask.description,
-                          location: updatedTask.location,
-                          deadline: updatedTask.deadline,
-                          priority: updatedTask.priority,
-                          isCompleted: updatedTask.isCompleted,
-                          checklist: updatedTask.checklist,
-                          recurrence: updatedTask.recurrence,
-                          reminders: updatedTask.reminders,
-                          icsMeta: updatedTask.icsMeta,
-                          modifiedAt: DateTime.now(),
-                        );
-
-                        if (seriesUpdate != latestTask) {
-                          locate<T>().add(
-                            CalendarEvent.taskUpdated(
-                              task: seriesUpdate,
-                            ),
+                          final CalendarTask seriesUpdate = latestTask.copyWith(
+                            title: updatedTask.title,
+                            description: updatedTask.description,
+                            location: updatedTask.location,
+                            deadline: updatedTask.deadline,
+                            priority: updatedTask.priority,
+                            isCompleted: updatedTask.isCompleted,
+                            checklist: updatedTask.checklist,
+                            recurrence: updatedTask.recurrence,
+                            reminders: updatedTask.reminders,
+                            icsMeta: updatedTask.icsMeta,
+                            modifiedAt: DateTime.now(),
                           );
+
+                          if (seriesUpdate != latestTask) {
+                            context.read<T>().add(
+                                  CalendarEvent.taskUpdated(
+                                    task: seriesUpdate,
+                                  ),
+                                );
+                          }
                         }
-                      }
-                    : null,
-                onTaskDeleted: (taskId) {
-                  locate<T>().add(
-                    CalendarEvent.taskDeleted(
-                      taskId: taskId,
-                    ),
-                  );
-                  Navigator.of(sheetContext).maybePop();
-                },
-              ),
+                      : null,
+                  onTaskDeleted: (deletedTaskId) {
+                    context.read<T>().add(
+                          CalendarEvent.taskDeleted(
+                            taskId: deletedTaskId,
+                          ),
+                        );
+                    Navigator.of(sheetContext).maybePop();
+                  },
+                );
+              },
             ),
           );
         },

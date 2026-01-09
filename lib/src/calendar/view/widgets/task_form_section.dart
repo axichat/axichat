@@ -34,7 +34,8 @@ class TaskSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = textStyle ??
-        calendarHeaderTextStyle.copyWith(
+        calendarTimeLabelTextStyle.copyWith(
+          fontWeight: FontWeight.w600,
           color: calendarSubtitleColor,
         );
     final String displayTitle = uppercase ? title.toUpperCase() : title;

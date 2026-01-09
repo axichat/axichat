@@ -36,7 +36,6 @@ import 'widgets/deadline_picker_field.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/calendar_invitation_status_field.dart';
 import 'widgets/calendar_ics_diagnostics_section.dart';
-import 'widgets/ics_meta_fields.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
@@ -669,21 +668,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       fallbackWeekday: _recurrenceFallbackWeekday,
                       referenceStart: _startTime,
                       onChanged: _handleRecurrenceChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    CalendarIcsMetaFields(
-                      status: _status,
-                      transparency: _transparency,
-                      showStatus: false,
-                      onStatusChanged: (value) => _updateDraft(() {
-                        _status = value;
-                      }),
-                      onTransparencyChanged: (value) => _updateDraft(() {
-                        _transparency = value;
-                      }),
                       enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
