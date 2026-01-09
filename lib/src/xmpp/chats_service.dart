@@ -444,10 +444,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       return;
     }
     if (_isMucChatJid(jid)) {
-      final roomState = roomStateFor(jid);
-      if (roomState?.hasSelfPresence != true) {
-        return;
-      }
+      return;
     }
     final messageType = _chatStateMessageType(jid);
     await _connection.sendChatState(

@@ -131,20 +131,25 @@ class _CalendarKeyboardScopeState extends State<CalendarKeyboardScope> {
   };
 
   bool _shouldHandleShortcuts() {
-    final focusNode = FocusManager.instance.primaryFocus;
-    if (focusNode == null || focusNode == _focusNode) {
-      return true;
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return false;
     }
-    final focusContext = focusNode.context;
+    final FocusNode? focusNode = FocusManager.instance.primaryFocus;
+    if (focusNode == null) {
+      return false;
+    }
+    final BuildContext? focusContext = focusNode.context;
     if (focusContext == null) {
       return false;
     }
     if (CalendarKeyboardScope._isEditableFocused()) {
       return false;
     }
-    final bool isGridFocus = focusContext.widget is FocusableActionDetector &&
-        focusContext.findAncestorWidgetOfExactType<CalendarGrid>() != null;
-    return isGridFocus;
+    if (focusContext.widget is! FocusableActionDetector) {
+      return false;
+    }
+    return focusContext.findAncestorWidgetOfExactType<CalendarGrid>() != null;
   }
 
   @override

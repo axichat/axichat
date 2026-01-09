@@ -21,6 +21,7 @@ class CalendarCategoriesField extends StatefulWidget {
     this.title = _categoriesSectionTitle,
     this.hintText = _categoriesHintText,
     this.enabled = true,
+    this.surfaceColor,
   });
 
   final List<String> categories;
@@ -28,6 +29,7 @@ class CalendarCategoriesField extends StatefulWidget {
   final String title;
   final String hintText;
   final bool enabled;
+  final Color? surfaceColor;
 
   @override
   State<CalendarCategoriesField> createState() =>
@@ -156,11 +158,12 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color barBackground = calendarContainerColor;
+    final Color barBackground = widget.surfaceColor ?? calendarContainerColor;
     final List<Widget> chipWidgets = <Widget>[
       ...widget.categories.map(
         (category) => _CategoryChip(
           label: category,
+          backgroundColor: barBackground,
           onRemove: widget.enabled ? () => _removeCategory(category) : null,
         ),
       ),
@@ -205,10 +208,12 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
     required this.label,
+    required this.backgroundColor,
     this.onRemove,
   });
 
   final String label;
+  final Color backgroundColor;
   final VoidCallback? onRemove;
 
   @override
@@ -218,8 +223,8 @@ class _CategoryChip extends StatelessWidget {
     return InputChip(
       shape: const StadiumBorder(),
       showCheckmark: false,
-      backgroundColor: calendarContainerColor,
-      selectedColor: calendarContainerColor,
+      backgroundColor: backgroundColor,
+      selectedColor: backgroundColor,
       side: BorderSide(color: calendarBorderColor),
       labelStyle: labelStyle.copyWith(color: calendarTitleColor),
       label: ConstrainedBox(

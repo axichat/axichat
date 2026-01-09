@@ -34,6 +34,8 @@ const String _carbonOriginRejectedLog =
     'Rejected carbon message with unexpected sender.';
 const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
+const String _mamGlobalNoProgressLog =
+    'Global MAM sync stalled; stopping to avoid churn.';
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
 const bool _mucSendAllowRejoin = true;
@@ -2185,11 +2187,17 @@ mixin MessageService
           start: start,
           pageSize: pageSize,
         );
-        if (result.lastId != null && result.lastId != after) {
-          after = result.lastId;
-          await _storeMamGlobalLastId(after!);
+        final lastId = result.lastId;
+        final hasProgress = lastId != null && lastId != after;
+        if (hasProgress) {
+          after = lastId;
+          await _storeMamGlobalLastId(lastId);
         }
-        if (result.complete || result.lastId == null) {
+        if (result.complete || lastId == null) {
+          break;
+        }
+        if (!hasProgress) {
+          _log.fine(_mamGlobalNoProgressLog);
           break;
         }
         before = null;

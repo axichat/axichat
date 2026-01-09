@@ -590,6 +590,7 @@ class _UnifiedTaskForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final bool showInvitationStatus = hasInvitationStatusData(
       method: invitationMethod,
       sequence: invitationSequence,
@@ -648,6 +649,7 @@ class _UnifiedTaskForm extends StatelessWidget {
             CalendarCategoriesField(
               categories: categories,
               onChanged: onCategoriesChanged,
+              surfaceColor: colors.background,
             ),
             const SizedBox(height: calendarGutterLg),
             CalendarLinkGeoFields(

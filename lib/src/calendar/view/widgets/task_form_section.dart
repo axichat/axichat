@@ -30,13 +30,17 @@ class TaskSectionHeader extends StatelessWidget {
   final TextStyle? textStyle;
   final Widget? trailing;
   final bool uppercase;
+  static const double _headerFontSize = 10;
+  static const double _headerLetterSpacing = 0.6;
 
   @override
   Widget build(BuildContext context) {
     final style = textStyle ??
         calendarTimeLabelTextStyle.copyWith(
+          fontSize: _headerFontSize,
           fontWeight: FontWeight.w600,
           color: calendarSubtitleColor,
+          letterSpacing: _headerLetterSpacing,
         );
     final String displayTitle = uppercase ? title.toUpperCase() : title;
 

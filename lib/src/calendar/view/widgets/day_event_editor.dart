@@ -349,6 +349,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     CalendarCategoriesField(
                       categories: _categories,
                       onChanged: (value) => setState(() => _categories = value),
+                      surfaceColor: colors.background,
                     ),
                     TaskSectionDivider(
                       color: colors.border,
