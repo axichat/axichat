@@ -66,6 +66,7 @@ const bool _calendarActionUsePrimary = true;
 const String _calendarSurfacePageId = 'calendar-surface';
 const ValueKey<String> _calendarSurfacePageKey =
     ValueKey<String>(_calendarSurfacePageId);
+const bool _calendarSurfacePopEnabledDefault = true;
 
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
@@ -77,6 +78,15 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
     );
   } on FlutterError {
     return null;
+  }
+}
+
+bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
+  try {
+    return context.watch<ChatsCubit?>()?.state.openCalendar ??
+        _calendarSurfacePopEnabledDefault;
+  } on FlutterError {
+    return _calendarSurfacePopEnabledDefault;
   }
 }
 
@@ -228,8 +238,9 @@ class _CalendarWidgetState
         ],
       ),
     );
-    return _CalendarSurfaceNavigator(
+    return CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
+      enablePop: _resolveCalendarSurfacePopEnabled(context),
       child: calendarBody,
     );
   }
@@ -422,26 +433,39 @@ class _CalendarActionRow extends StatelessWidget {
   }
 }
 
-class _CalendarSurfaceNavigator extends StatelessWidget {
-  const _CalendarSurfaceNavigator({
+class CalendarSurfaceNavigator extends StatelessWidget {
+  const CalendarSurfaceNavigator({
+    super.key,
     required this.navigatorKey,
     required this.child,
+    this.enablePop = _calendarSurfacePopEnabledDefault,
   });
 
   final GlobalKey<NavigatorState> navigatorKey;
   final Widget child;
+  final bool enablePop;
 
   @override
   Widget build(BuildContext context) {
-    return Navigator(
-      key: navigatorKey,
-      onDidRemovePage: (page) {},
-      pages: [
-        MaterialPage<void>(
-          key: _calendarSurfacePageKey,
-          child: child,
-        ),
-      ],
+    return NavigatorPopHandler<void>(
+      enabled: enablePop,
+      onPopWithResult: (_) {
+        final NavigatorState? navigator = navigatorKey.currentState;
+        if (navigator == null || !navigator.canPop()) {
+          return;
+        }
+        navigator.pop();
+      },
+      child: Navigator(
+        key: navigatorKey,
+        onDidRemovePage: (page) {},
+        pages: [
+          MaterialPage<void>(
+            key: _calendarSurfacePageKey,
+            child: child,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -52,10 +52,9 @@ dependencies:
       path: packages/moxxmpp_socket_tcp
       ref: v0.6.4
   moxlib:
-    hosted:
-      name: moxlib
-      url: https://git.polynom.me/api/packages/Moxxy/pub/
-    version: ^0.2.0
+    git:
+      url: https://gitlab.com/axichat/moxlib.git
+      ref: v0.2.0
   crypto: ^3.0.3
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -106,6 +105,10 @@ dependencies:
 dependency_overrides:
   pinenacl: ^0.6.0
   intl: ^0.20.2
+  moxlib:
+    git:
+      url: https://gitlab.com/axichat/moxlib.git
+      ref: v0.2.0
 
 dev_dependencies:
   flutter_driver:

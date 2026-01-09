@@ -64,7 +64,7 @@ Future<void> main(List<String> args) async {
   );
   generator.writeVariant(
     fileName: 'app_icon_linux.png',
-    exponent: 2.0,
+    exponent: 3.4,
     insetFraction: 0.1,
   );
   generator.writeVariant(

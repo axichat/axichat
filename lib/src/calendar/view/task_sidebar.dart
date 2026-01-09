@@ -2120,7 +2120,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     VoidCallback? onDragStart,
     bool allowContextMenu = false,
   }) {
-    return _SidebarDraggableTaskTile<B>(
+    final Widget tile = _SidebarDraggableTaskTile<B>(
       host: this,
       task: task,
       uiState: _sidebarController.state,
@@ -2130,6 +2130,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       onTapOverride: onTap,
       allowContextMenu: allowContextMenu,
       onDragStart: onDragStart,
+    );
+    return KeyedSubtree(
+      key: ValueKey(task.id),
+      child: tile,
     );
   }
 
@@ -5168,10 +5172,15 @@ class _SidebarTaskList extends StatelessWidget {
                       ),
                       itemCount: tasks.length,
                       itemBuilder: (context, index) {
-                        return taskTileBuilder(
-                          tasks[index],
+                        final CalendarTask task = tasks[index];
+                        final Widget tile = taskTileBuilder(
+                          task,
                           null,
                           requiresLongPress: false,
+                        );
+                        return KeyedSubtree(
+                          key: ValueKey(task.id),
+                          child: tile,
                         );
                       },
                     ),
@@ -5404,7 +5413,7 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
   }
 }
 
-class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
+class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatefulWidget {
   const _SidebarTaskTile({
     required this.host,
     required this.task,
@@ -5424,6 +5433,23 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
   final ValueChanged<bool>? onToggleCompletion;
   final VoidCallback? onTapOverride;
   final bool allowContextMenu;
+
+  @override
+  State<_SidebarTaskTile<B>> createState() => _SidebarTaskTileState<B>();
+}
+
+class _SidebarTaskTileState<B extends BaseCalendarBloc>
+    extends State<_SidebarTaskTile<B>> {
+  late final TaskPopoverAnchorToken _anchorToken = TaskPopoverAnchorToken();
+
+  @override
+  void dispose() {
+    widget.host._releaseTaskPopoverAnchor(
+      _anchorToken,
+      widget.task.id,
+    );
+    super.dispose();
+  }
 
   bool _hasRenderableLayout(RenderBox? box) {
     if (box == null || !box.attached || !box.hasSize) {
@@ -5445,8 +5471,17 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TaskSidebarState<B> host = widget.host;
+    final CalendarTask task = widget.task;
+    final CalendarSidebarState uiState = widget.uiState;
+    final bool enableInteraction = widget.enableInteraction;
+    final Widget? trailing = widget.trailing;
+    final ValueChanged<bool>? onToggleCompletion = widget.onToggleCompletion;
+    final VoidCallback? onTapOverride = widget.onTapOverride;
+    final bool allowContextMenu = widget.allowContextMenu;
+
     final borderColor = task.priorityColor;
-    final bool isActive = uiState.activePopoverTaskId == task.id;
+    final bool isActive = uiState.activePopoverAnchorToken == _anchorToken;
 
     Widget tile = Container(
       margin: const EdgeInsets.only(bottom: calendarGutterSm),
@@ -5508,7 +5543,11 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                         );
                       }
 
-                      final controller = host._popoverControllerFor(task.id);
+                      final ShadPopoverController controller =
+                          host._popoverControllerFor(
+                        _anchorToken,
+                        task.id,
+                      );
                       final renderBox =
                           tileContext.findRenderObject() as RenderBox?;
                       final bool hasLayout = _hasRenderableLayout(renderBox);
@@ -5801,7 +5840,11 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                                 BorderRadius.circular(calendarBorderRadius),
                             hoverColor: calendarSidebarBackgroundColor
                                 .withValues(alpha: 0.5),
-                            onTap: () => host._toggleTaskPopover(task.id),
+                            onTap: () => host._toggleTaskPopover(
+                              taskId: task.id,
+                              anchorToken: _anchorToken,
+                              controller: controller,
+                            ),
                             child: _SidebarTaskTileBody(
                               task: task,
                               trailing: trailing,
