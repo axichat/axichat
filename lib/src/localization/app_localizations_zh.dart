@@ -1591,6 +1591,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileDeleteAccount => '删除账户';
 
   @override
+  String profileExportActionLabel(Object label) {
+    return '导出$label';
+  }
+
+  @override
+  String get profileExportXmppMessagesLabel => 'XMPP 消息';
+
+  @override
+  String get profileExportXmppContactsLabel => 'XMPP 联系人';
+
+  @override
+  String get profileExportEmailMessagesLabel => '电子邮件';
+
+  @override
+  String get profileExportEmailContactsLabel => '电子邮件联系人';
+
+  @override
+  String profileExportShareText(Object label) {
+    return 'Axichat 导出：$label';
+  }
+
+  @override
+  String profileExportShareSubject(Object label) {
+    return 'Axichat $label 导出';
+  }
+
+  @override
+  String profileExportReadyMessage(Object label) {
+    return '$label 导出已准备好。';
+  }
+
+  @override
+  String profileExportEmptyMessage(Object label) {
+    return '没有可导出的$label。';
+  }
+
+  @override
+  String profileExportFailedMessage(Object label) {
+    return '无法导出$label。';
+  }
+
+  @override
+  String get profileExportFormatTitle => '选择导出格式';
+
+  @override
+  String get profileExportFormatCsvTitle => 'CSV (.csv)';
+
+  @override
+  String get profileExportFormatCsvSubtitle => '适用于大多数通讯录。';
+
+  @override
+  String get profileExportFormatVcardTitle => 'vCard (.vcf)';
+
+  @override
+  String get profileExportFormatVcardSubtitle => '标准联系人名片。';
+
+  @override
   String get termsAcceptLabel => '我接受条款和条件';
 
   @override
@@ -4977,6 +5034,63 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get profileDeleteAccount => '刪除帳戶';
+
+  @override
+  String profileExportActionLabel(Object label) {
+    return '匯出$label';
+  }
+
+  @override
+  String get profileExportXmppMessagesLabel => 'XMPP 訊息';
+
+  @override
+  String get profileExportXmppContactsLabel => 'XMPP 聯絡人';
+
+  @override
+  String get profileExportEmailMessagesLabel => '電子郵件';
+
+  @override
+  String get profileExportEmailContactsLabel => '電子郵件聯絡人';
+
+  @override
+  String profileExportShareText(Object label) {
+    return 'Axichat 匯出：$label';
+  }
+
+  @override
+  String profileExportShareSubject(Object label) {
+    return 'Axichat $label 匯出';
+  }
+
+  @override
+  String profileExportReadyMessage(Object label) {
+    return '$label 匯出已準備好。';
+  }
+
+  @override
+  String profileExportEmptyMessage(Object label) {
+    return '沒有可匯出的$label。';
+  }
+
+  @override
+  String profileExportFailedMessage(Object label) {
+    return '無法匯出$label。';
+  }
+
+  @override
+  String get profileExportFormatTitle => '選擇匯出格式';
+
+  @override
+  String get profileExportFormatCsvTitle => 'CSV (.csv)';
+
+  @override
+  String get profileExportFormatCsvSubtitle => '適用於大多數通訊錄。';
+
+  @override
+  String get profileExportFormatVcardTitle => 'vCard (.vcf)';
+
+  @override
+  String get profileExportFormatVcardSubtitle => '標準聯絡人名片。';
 
   @override
   String get termsAcceptLabel => '我接受條款與條件';

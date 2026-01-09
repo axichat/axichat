@@ -1670,6 +1670,64 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileDeleteAccount => 'Konto löschen';
 
   @override
+  String profileExportActionLabel(Object label) {
+    return 'Export $label';
+  }
+
+  @override
+  String get profileExportXmppMessagesLabel => 'XMPP-Nachrichten';
+
+  @override
+  String get profileExportXmppContactsLabel => 'XMPP-Kontakte';
+
+  @override
+  String get profileExportEmailMessagesLabel => 'E-Mails';
+
+  @override
+  String get profileExportEmailContactsLabel => 'E-Mail-Kontakte';
+
+  @override
+  String profileExportShareText(Object label) {
+    return 'Axichat-Export: $label';
+  }
+
+  @override
+  String profileExportShareSubject(Object label) {
+    return 'Axichat-$label-Export';
+  }
+
+  @override
+  String profileExportReadyMessage(Object label) {
+    return '$label-Export bereit.';
+  }
+
+  @override
+  String profileExportEmptyMessage(Object label) {
+    return 'Keine $label zum Exportieren.';
+  }
+
+  @override
+  String profileExportFailedMessage(Object label) {
+    return '$label konnte nicht exportiert werden.';
+  }
+
+  @override
+  String get profileExportFormatTitle => 'Exportformat auswählen';
+
+  @override
+  String get profileExportFormatCsvTitle => 'CSV (.csv)';
+
+  @override
+  String get profileExportFormatCsvSubtitle =>
+      'Funktioniert mit den meisten Adressbüchern.';
+
+  @override
+  String get profileExportFormatVcardTitle => 'vCard (.vcf)';
+
+  @override
+  String get profileExportFormatVcardSubtitle => 'Standard-Visitenkarten.';
+
+  @override
   String get termsAcceptLabel => 'Ich akzeptiere die Geschäftsbedingungen';
 
   @override

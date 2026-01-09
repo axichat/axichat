@@ -9,6 +9,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:axichat/src/storage/models.dart';
 
 typedef ChatHistoryLoader = Future<List<Message>> Function(String jid);
+typedef ChatHistoryMessageLineFormatter = String? Function({
+  required Chat chat,
+  required Message message,
+  required intl.DateFormat format,
+});
 
 class ChatExportResult {
   const ChatExportResult._({
@@ -34,6 +39,7 @@ class ChatHistoryExporter {
     required ChatHistoryLoader loadHistory,
     String? fileLabel,
     intl.DateFormat? dateFormat,
+    ChatHistoryMessageLineFormatter? lineFormatter,
   }) async {
     if (chats.isEmpty) return const ChatExportResult.empty();
     final format = dateFormat ?? intl.DateFormat('y-MM-dd HH:mm');
@@ -47,6 +53,7 @@ class ChatHistoryExporter {
         chat: chat,
         history: history,
         format: format,
+        lineFormatter: lineFormatter,
       );
       if (appended == 0) continue;
       exportedChats++;
@@ -87,6 +94,7 @@ class ChatHistoryExporter {
     required Chat chat,
     required List<Message> history,
     required intl.DateFormat format,
+    ChatHistoryMessageLineFormatter? lineFormatter,
   }) {
     if (history.isEmpty) return 0;
     var appended = 0;
@@ -94,16 +102,30 @@ class ChatHistoryExporter {
       ..writeln('=== ${chat.title} (${chat.jid}) ===')
       ..writeln();
     for (final message in history) {
-      final content = message.body?.trim();
+      final formatted = lineFormatter?.call(
+        chat: chat,
+        message: message,
+        format: format,
+      );
+      final content = formatted ?? _defaultMessageLine(message, format: format);
       if (content == null || content.isEmpty) continue;
-      final timestampValue =
-          message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final timestamp = format.format(timestampValue);
-      final author = message.senderJid;
-      buffer.writeln('[$timestamp] $author: $content');
+      buffer.writeln(content);
       appended++;
     }
     return appended;
+  }
+
+  static String? _defaultMessageLine(
+    Message message, {
+    required intl.DateFormat format,
+  }) {
+    final content = message.body?.trim();
+    if (content == null || content.isEmpty) return null;
+    final timestampValue =
+        message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final timestamp = format.format(timestampValue);
+    final author = message.senderJid;
+    return '[$timestamp] $author: $content';
   }
 
   static String _defaultFileLabel(List<Chat> chats, Chat? singleChat) {

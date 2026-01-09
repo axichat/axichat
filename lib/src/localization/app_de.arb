@@ -649,6 +649,51 @@
   "profileLinkedEmailAccounts": "Email accounts",
   "profileChangePassword": "Passwort ändern",
   "profileDeleteAccount": "Konto löschen",
+  "profileExportActionLabel": "Export {label}",
+  "@profileExportActionLabel": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportXmppMessagesLabel": "XMPP-Nachrichten",
+  "profileExportXmppContactsLabel": "XMPP-Kontakte",
+  "profileExportEmailMessagesLabel": "E-Mails",
+  "profileExportEmailContactsLabel": "E-Mail-Kontakte",
+  "profileExportShareText": "Axichat-Export: {label}",
+  "@profileExportShareText": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportShareSubject": "Axichat-{label}-Export",
+  "@profileExportShareSubject": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportReadyMessage": "{label}-Export bereit.",
+  "@profileExportReadyMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportEmptyMessage": "Keine {label} zum Exportieren.",
+  "@profileExportEmptyMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportFailedMessage": "{label} konnte nicht exportiert werden.",
+  "@profileExportFailedMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportFormatTitle": "Exportformat auswählen",
+  "profileExportFormatCsvTitle": "CSV (.csv)",
+  "profileExportFormatCsvSubtitle": "Funktioniert mit den meisten Adressbüchern.",
+  "profileExportFormatVcardTitle": "vCard (.vcf)",
+  "profileExportFormatVcardSubtitle": "Standard-Visitenkarten.",
   "termsAcceptLabel": "Ich akzeptiere die Geschäftsbedingungen",
   "termsAgreementPrefix": "Du stimmst unseren ",
   "termsAgreementTerms": "Bedingungen",

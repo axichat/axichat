@@ -649,6 +649,51 @@
   "profileLinkedEmailAccounts": "Email accounts",
   "profileChangePassword": "更改密码",
   "profileDeleteAccount": "删除账户",
+  "profileExportActionLabel": "导出{label}",
+  "@profileExportActionLabel": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportXmppMessagesLabel": "XMPP 消息",
+  "profileExportXmppContactsLabel": "XMPP 联系人",
+  "profileExportEmailMessagesLabel": "电子邮件",
+  "profileExportEmailContactsLabel": "电子邮件联系人",
+  "profileExportShareText": "Axichat 导出：{label}",
+  "@profileExportShareText": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportShareSubject": "Axichat {label} 导出",
+  "@profileExportShareSubject": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportReadyMessage": "{label} 导出已准备好。",
+  "@profileExportReadyMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportEmptyMessage": "没有可导出的{label}。",
+  "@profileExportEmptyMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportFailedMessage": "无法导出{label}。",
+  "@profileExportFailedMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportFormatTitle": "选择导出格式",
+  "profileExportFormatCsvTitle": "CSV (.csv)",
+  "profileExportFormatCsvSubtitle": "适用于大多数通讯录。",
+  "profileExportFormatVcardTitle": "vCard (.vcf)",
+  "profileExportFormatVcardSubtitle": "标准联系人名片。",
   "termsAcceptLabel": "我接受条款和条件",
   "termsAgreementPrefix": "您同意我们的",
   "termsAgreementTerms": "条款",
