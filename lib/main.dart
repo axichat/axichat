@@ -152,7 +152,7 @@ void _configureLogging() {
     return;
   }
 
-  Logger.root.level = Level.WARNING;
+  Logger.root.level = Level.OFF;
 }
 
 void _registerThirdPartyLicenses() {

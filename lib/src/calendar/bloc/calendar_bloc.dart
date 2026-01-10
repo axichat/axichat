@@ -2,11 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:developer' as developer;
-
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
-
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
@@ -15,6 +12,7 @@ import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'base_calendar_bloc.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
@@ -90,7 +88,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'add');
     } catch (error) {
-      developer.log('Failed to sync task addition: $error',
+      SafeLogging.debugLog('Failed to sync task addition: $error',
           name: 'CalendarBloc');
     }
   }
@@ -100,7 +98,8 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
     } catch (error) {
-      developer.log('Failed to sync task update: $error', name: 'CalendarBloc');
+      SafeLogging.debugLog('Failed to sync task update: $error',
+          name: 'CalendarBloc');
     }
   }
 
@@ -109,7 +108,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'delete');
     } catch (error) {
-      developer.log('Failed to sync task deletion: $error',
+      SafeLogging.debugLog('Failed to sync task deletion: $error',
           name: 'CalendarBloc');
     }
   }
@@ -119,7 +118,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
     } catch (error) {
-      developer.log('Failed to sync task completion: $error',
+      SafeLogging.debugLog('Failed to sync task completion: $error',
           name: 'CalendarBloc');
     }
   }
@@ -129,7 +128,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendDayEventUpdate(event, 'add');
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync day event addition: $error',
         name: 'CalendarBloc',
       );
@@ -141,7 +140,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendDayEventUpdate(event, 'update');
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync day event update: $error',
         name: 'CalendarBloc',
       );
@@ -153,7 +152,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendDayEventUpdate(event, 'delete');
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync day event deletion: $error',
         name: 'CalendarBloc',
       );
@@ -165,7 +164,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.pushFullSync();
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync critical path change: $error',
         name: 'CalendarBloc',
       );
@@ -177,7 +176,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.pushFullSync();
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync availability change: $error',
         name: 'CalendarBloc',
       );
@@ -189,7 +188,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'add');
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync critical path addition: $error',
         name: 'CalendarBloc',
       );
@@ -201,7 +200,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'update');
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync critical path update: $error',
         name: 'CalendarBloc',
       );
@@ -213,7 +212,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'delete');
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync critical path deletion: $error',
         name: 'CalendarBloc',
       );
@@ -225,7 +224,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.pushFullSync();
     } catch (error) {
-      developer.log(
+      SafeLogging.debugLog(
         'Failed to sync imported calendar: $error',
         name: 'CalendarBloc',
       );
@@ -234,7 +233,7 @@ class CalendarBloc extends BaseCalendarBloc {
 
   @override
   void logError(String message, Object error) {
-    developer.log(message, name: 'CalendarBloc');
+    SafeLogging.debugLog(message, name: 'CalendarBloc');
   }
 
   @override
@@ -257,7 +256,8 @@ class CalendarBloc extends BaseCalendarBloc {
         ),
       );
     } catch (error) {
-      developer.log('Error requesting sync: $error', name: 'CalendarBloc');
+      SafeLogging.debugLog('Error requesting sync: $error',
+          name: 'CalendarBloc');
       emit(
         state.copyWith(
           isSyncing: false,
@@ -281,7 +281,7 @@ class CalendarBloc extends BaseCalendarBloc {
         ),
       );
     } catch (error) {
-      developer.log('Error pushing sync: $error', name: 'CalendarBloc');
+      SafeLogging.debugLog('Error pushing sync: $error', name: 'CalendarBloc');
       emit(
         state.copyWith(
           isSyncing: false,
@@ -319,7 +319,7 @@ class CalendarBloc extends BaseCalendarBloc {
         );
         await propagateLinkedTaskDelete(event.task);
       default:
-        developer.log('Unknown remote operation: ${event.operation}',
+        SafeLogging.debugLog('Unknown remote operation: ${event.operation}',
             name: 'CalendarBloc');
         return;
     }

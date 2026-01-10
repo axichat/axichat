@@ -70,6 +70,7 @@ const _sendSignatureListSeparator = ',';
 const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
 const int _deltaMessageIdUnset = 0;
+const int _composerPinnedRecipientInsertIndex = 0;
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
 const _pinPermissionDeniedMessage =
@@ -961,7 +962,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(
       chat: event.chat,
       showAlert: event.chat.alert != null && state.chat?.alert == null,
-      recipients: _syncRecipientsForChat(event.chat),
+      recipients: _syncRecipientsForChat(
+        event.chat,
+        resetContext: resetContext,
+      ),
       fanOutReports: resetContext ? const {} : state.fanOutReports,
       fanOutDrafts: resetContext ? const {} : state.fanOutDrafts,
       shareContexts: resetContext ? const {} : state.shareContexts,
@@ -4508,7 +4512,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               pinned: true,
             ),
           ]
-        : _syncRecipientsForChat(chat);
+        : _syncRecipientsForChat(
+            chat,
+            resetContext: resetRecipients,
+          );
     if (shareContext == null) {
       return recipients;
     }
@@ -4703,25 +4710,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return null;
   }
 
-  List<ComposerRecipient> _syncRecipientsForChat(Chat chat) {
+  List<ComposerRecipient> _syncRecipientsForChat(
+    Chat chat, {
+    required bool resetContext,
+  }) {
     final isGroupChat = chat.type == ChatType.groupChat;
-    if (isGroupChat) {
+    if (resetContext || isGroupChat) {
       return _pinnedRecipientsForChat(chat);
     }
     final recipients = List<ComposerRecipient>.from(state.recipients);
     final key = chat.jid;
-    final index = recipients.indexWhere(
-      (recipient) => recipient.pinned && recipient.target.chat?.jid == key,
+    recipients.removeWhere(
+      (recipient) => recipient.target.chat?.jid == key,
     );
-    if (index >= 0) {
-      recipients[index] = recipients[index].copyWith(
-        target: FanOutTarget.chat(chat),
-        included: true,
-      );
-      return recipients;
-    }
     recipients.insert(
-      0,
+      _composerPinnedRecipientInsertIndex,
       _pinnedRecipientForChat(chat),
     );
     return recipients;

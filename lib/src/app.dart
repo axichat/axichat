@@ -142,6 +142,7 @@ class _AxichatState extends State<Axichat> {
               },
               notificationService: widget._notificationService,
               capability: widget._capability,
+              policy: widget._policy,
             ),
           )
         else

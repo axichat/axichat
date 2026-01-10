@@ -15,6 +15,14 @@ class RegisteredCredentialKey {
   final String value;
 
   static final _registeredKeys = <RegisteredCredentialKey>{};
+  static final Map<String, RegisteredCredentialKey> _keyCache = {};
+
+  @override
+  bool operator ==(Object other) =>
+      other is RegisteredCredentialKey && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
 }
 
 class CredentialStore
@@ -39,8 +47,29 @@ class CredentialStore
     mOptions: policy.getFssMacOsOptions(),
   );
 
-  static RegisteredCredentialKey registerKey(String key) =>
-      RegisteredCredentialKey._(key);
+  static RegisteredCredentialKey registerKey(String key) {
+    final cached = RegisteredCredentialKey._keyCache[key];
+    if (cached != null) return cached;
+
+    for (final existing in RegisteredCredentialKey._registeredKeys) {
+      if (existing.value != key) continue;
+      RegisteredCredentialKey._keyCache[key] = existing;
+      return existing;
+    }
+
+    final created = RegisteredCredentialKey._(key);
+    RegisteredCredentialKey._keyCache[key] = created;
+
+    final uniqueByValue = <String, RegisteredCredentialKey>{};
+    for (final existing in RegisteredCredentialKey._registeredKeys.toList()) {
+      uniqueByValue.putIfAbsent(existing.value, () => existing);
+    }
+    RegisteredCredentialKey._registeredKeys
+      ..clear()
+      ..addAll(uniqueByValue.values);
+
+    return created;
+  }
 
   @override
   Future<String?> read({required RegisteredCredentialKey key}) async {
