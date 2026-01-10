@@ -3177,7 +3177,7 @@ mixin MessageService
       );
     } catch (error, stackTrace) {
       _log.warning(
-        '$_calendarSnapshotUploadFailedMessage $filename',
+        _calendarSnapshotUploadFailedMessage,
         error,
         stackTrace,
       );
