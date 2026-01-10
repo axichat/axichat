@@ -36,10 +36,6 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/database.dart'
-    show MessageAttachmentData, PinnedMessageEntry;
-import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
@@ -55,6 +51,7 @@ part 'chat_state.dart';
 
 const _attachmentSendFailureMessage =
     'Unable to send attachment. Please try again.';
+const int _emailAttachmentBundleMinimumCount = 2;
 const _calendarTaskIcsAttachmentMimeType = 'text/calendar';
 const _calendarTaskIcsAttachmentSendFailureMessage =
     'Unable to send calendar invite. Please try again.';
@@ -2689,6 +2686,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final htmlCaption = safeForward ? null : htmlBody;
         if (isEmailTarget) {
           if (emailService == null) return;
+          final bool shouldBundle =
+              attachments.length >= _emailAttachmentBundleMinimumCount;
           final bundled = await _bundleEmailAttachmentList(
             attachments: attachments,
             caption: caption,
@@ -2703,6 +2702,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               attachment: captionedAttachment,
               htmlCaption: index == 0 ? htmlCaption : null,
             );
+          }
+          if (shouldBundle && bundled.isNotEmpty) {
+            EmailAttachmentBundler.scheduleCleanup(bundled.first);
           }
           return;
         }
@@ -3339,7 +3341,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<EmailAttachment> attachments,
     required String? caption,
   }) async {
-    if (attachments.length <= 1) return attachments;
+    if (attachments.length < _emailAttachmentBundleMinimumCount) {
+      return attachments;
+    }
     final bundled = await EmailAttachmentBundler.bundle(
       attachments: attachments,
       caption: caption,
@@ -3405,64 +3409,68 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final resolvedAttachment = captionForBundle == null
         ? bundledAttachment
         : bundledAttachment.copyWith(caption: captionForBundle);
-    if (_shouldFanOut(recipients, chat)) {
-      final succeeded = await _sendFanOut(
-        recipients: recipients,
-        attachment: resolvedAttachment,
-        htmlCaption: htmlCaptionForBundle,
-        subject: state.emailSubject,
-        emit: emit,
-      );
-      if (succeeded) {
+    try {
+      if (_shouldFanOut(recipients, chat)) {
+        final succeeded = await _sendFanOut(
+          recipients: recipients,
+          attachment: resolvedAttachment,
+          htmlCaption: htmlCaptionForBundle,
+          subject: state.emailSubject,
+          emit: emit,
+        );
+        if (succeeded) {
+          _handleBundledAttachmentSuccess(
+            attachments,
+            emit,
+            retainOnSuccess: retainOnSuccess,
+          );
+          return true;
+        }
+        _markPendingAttachmentsFailed(
+          attachments,
+          emit,
+          message: state.composerError ?? _attachmentSendFailureMessage,
+        );
+        return false;
+      }
+      try {
+        await service.sendAttachment(
+          chat: chat,
+          attachment: resolvedAttachment,
+          subject: state.emailSubject,
+          htmlCaption: htmlCaptionForBundle,
+        );
         _handleBundledAttachmentSuccess(
           attachments,
           emit,
           retainOnSuccess: retainOnSuccess,
         );
         return true;
+      } on DeltaChatException catch (error, stackTrace) {
+        _log.warning(
+          _bundledAttachmentSendFailureLogMessage,
+          error,
+          stackTrace,
+        );
+        final mappedError = DeltaErrorMapper.resolve(error.message);
+        final readableMessage = mappedError.asString;
+        _markPendingAttachmentsFailed(
+          attachments,
+          emit,
+          message: readableMessage,
+        );
+        emit(state.copyWith(composerError: readableMessage));
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+          _bundledAttachmentSendFailureLogMessage,
+          error,
+          stackTrace,
+        );
+        _markPendingAttachmentsFailed(attachments, emit);
+        emit(state.copyWith(composerError: _attachmentSendFailureMessage));
       }
-      _markPendingAttachmentsFailed(
-        attachments,
-        emit,
-        message: state.composerError ?? _attachmentSendFailureMessage,
-      );
-      return false;
-    }
-    try {
-      await service.sendAttachment(
-        chat: chat,
-        attachment: resolvedAttachment,
-        subject: state.emailSubject,
-        htmlCaption: htmlCaptionForBundle,
-      );
-      _handleBundledAttachmentSuccess(
-        attachments,
-        emit,
-        retainOnSuccess: retainOnSuccess,
-      );
-      return true;
-    } on DeltaChatException catch (error, stackTrace) {
-      _log.warning(
-        _bundledAttachmentSendFailureLogMessage,
-        error,
-        stackTrace,
-      );
-      final mappedError = DeltaErrorMapper.resolve(error.message);
-      final readableMessage = mappedError.asString;
-      _markPendingAttachmentsFailed(
-        attachments,
-        emit,
-        message: readableMessage,
-      );
-      emit(state.copyWith(composerError: readableMessage));
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        _bundledAttachmentSendFailureLogMessage,
-        error,
-        stackTrace,
-      );
-      _markPendingAttachmentsFailed(attachments, emit);
-      emit(state.copyWith(composerError: _attachmentSendFailureMessage));
+    } finally {
+      EmailAttachmentBundler.scheduleCleanup(bundledAttachment);
     }
     return false;
   }
@@ -4925,6 +4933,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       if (hasAttachment) {
         final caption = hasBody ? resolvedBody : null;
+        final bool shouldBundle =
+            attachments.length >= _emailAttachmentBundleMinimumCount;
         final bundled = await _bundleEmailAttachmentList(
           attachments: attachments,
           caption: caption,
@@ -4940,6 +4950,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             subject: shareContext?.subject,
             htmlCaption: index == 0 ? normalizedHtml : null,
           );
+        }
+        if (shouldBundle && bundled.isNotEmpty) {
+          EmailAttachmentBundler.scheduleCleanup(bundled.first);
         }
         return;
       }

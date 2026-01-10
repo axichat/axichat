@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -16,6 +17,8 @@ import 'package:axichat/src/calendar/utils/calendar_ics_codec.dart';
 const int kCalendarJsonExportVersion = 2;
 const String _taskIcsExportPrefix = 'axichat_task';
 const String _dayEventIcsExportPrefix = 'axichat_event';
+const int _calendarImportMaxBytes = 20 * 1024 * 1024;
+const String _calendarImportTooLargeError = 'Calendar import file too large.';
 
 enum CalendarExportFormat { ics, json }
 
@@ -64,6 +67,7 @@ class CalendarTransferService {
 
   final Future<Directory> Function() _tempDirectoryProvider;
   static const CalendarIcsCodec _icsCodec = CalendarIcsCodec();
+  static const Duration _exportCleanupDelay = Duration(hours: 1);
 
   /// Exports tasks only for share flows.
   Future<File> exportTasks({
@@ -93,6 +97,13 @@ class CalendarTransferService {
     final file = File(path);
     await file.writeAsString(contents, flush: true);
     return file;
+  }
+
+  static void scheduleCleanup(File file) {
+    if (file.path.trim().isEmpty) {
+      return;
+    }
+    unawaited(_cleanupExportFile(file));
   }
 
   Future<File> exportTaskIcs({
@@ -199,6 +210,10 @@ class CalendarTransferService {
   /// - A list of tasks (for v1 JSON format)
   Future<CalendarImportResult> importFromFile(File file) async {
     final String extension = p.extension(file.path).toLowerCase();
+    final int sizeBytes = await file.length();
+    if (sizeBytes > _calendarImportMaxBytes) {
+      throw const FormatException(_calendarImportTooLargeError);
+    }
     final String data = await file.readAsString();
 
     if (extension == '.ics') {
@@ -274,5 +289,16 @@ class CalendarTransferService {
     }
 
     throw const FormatException('Invalid calendar JSON');
+  }
+
+  static Future<void> _cleanupExportFile(File file) async {
+    await Future<void>.delayed(_exportCleanupDelay);
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } on Exception {
+      return;
+    }
   }
 }

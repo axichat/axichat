@@ -626,8 +626,8 @@ class EmailService {
       }
     }
 
+    await _transport.ensureAccountSession(null);
     final int deltaAccountId = _transport.activeAccountId;
-    await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
     var alreadyProvisioned =
         (await _credentialStore.read(key: provisionedKey)) ==
@@ -823,8 +823,8 @@ class EmailService {
     if (address == null || address.isEmpty) {
       throw StateError('No email address found.');
     }
+    await _transport.ensureAccountSession(null);
     final int deltaAccountId = _transport.activeAccountId;
-    await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
     await _credentialStore.write(
       key: _passwordKeyForScope(scope),
@@ -3343,8 +3343,8 @@ class EmailService {
     if (resolved.isEmpty) {
       throw StateError(_emailAccountMissingAddressError);
     }
+    await _transport.ensureAccountSession(null);
     final int deltaAccountId = _transport.activeAccountId;
-    await _transport.ensureAccountSession(deltaAccountId);
     await _hydrateAccountAddress(
       address: resolved,
       deltaAccountId: deltaAccountId,

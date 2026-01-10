@@ -63,6 +63,13 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(colorfulAvatars: colorfulAvatars));
   }
 
+  void markEmailForwardingGuideSeen() {
+    if (state.emailForwardingGuideSeen) {
+      return;
+    }
+    emit(state.copyWith(emailForwardingGuideSeen: true));
+  }
+
   void toggleLowMotion(bool lowMotion) {
     emit(state.copyWith(lowMotion: lowMotion));
   }

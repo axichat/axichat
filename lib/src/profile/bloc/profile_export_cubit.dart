@@ -307,7 +307,6 @@ String? _formatEmailMessageLine({
   required Message message,
   required intl.DateFormat format,
 }) {
-  final Chat _ = chat;
   final String? body = message.body?.trim();
   final String? subject = message.subject?.trim();
   if ((body == null || body.isEmpty) && (subject == null || subject.isEmpty)) {
@@ -315,7 +314,7 @@ String? _formatEmailMessageLine({
   }
   final DateTime timestampValue = message.timestamp ?? _fallbackTimestamp;
   final String timestamp = format.format(timestampValue);
-  final String sender = message.senderJid;
+  final String sender = _resolveEmailSender(chat, message);
   final String content =
       (body == null || body.isEmpty) ? '$_subjectOnlyPrefix$subject' : body;
   final StringBuffer buffer = StringBuffer()
@@ -336,4 +335,20 @@ String? _formatEmailMessageLine({
       ..write(_messageSubjectSuffix);
   }
   return buffer.toString();
+}
+
+String _resolveEmailSender(Chat chat, Message message) {
+  final String sender = message.senderJid.trim();
+  if (sender.isNotEmpty) {
+    return sender;
+  }
+  final String? address = chat.emailAddress?.trim();
+  if (address != null && address.isNotEmpty) {
+    return address;
+  }
+  final String? contact = chat.contactJid?.trim();
+  if (contact != null && contact.isNotEmpty) {
+    return contact;
+  }
+  return chat.jid;
 }

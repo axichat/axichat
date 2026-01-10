@@ -409,6 +409,7 @@ Future<EmailAttachment?> _buildCalendarTaskAttachment(
   try {
     const CalendarTransferService transferService = CalendarTransferService();
     final File file = await transferService.exportTaskIcs(task: task);
+    CalendarTransferService.scheduleCleanup(file);
     final int sizeBytes = await file.length();
     return EmailAttachment(
       path: file.path,

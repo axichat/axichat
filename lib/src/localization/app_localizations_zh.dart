@@ -1633,6 +1633,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String profileExportShareUnsupportedMessage(Object label, Object path) {
+    return '此平台不支持分享。$label 导出已保存到 $path。';
+  }
+
+  @override
+  String get profileExportCopyPathAction => '复制路径';
+
+  @override
+  String get profileExportPathCopiedMessage => '导出路径已复制到剪贴板。';
+
+  @override
   String get profileExportFormatTitle => '选择导出格式';
 
   @override
@@ -1660,7 +1671,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get termsAgreementAnd => ' 和 ';
 
   @override
-  String get termsAgreementPrivacy => '隐私政策';
+  String get termsAgreementPrivacy => '隐私';
 
   @override
   String get termsAgreementError => '你必须接受条款和条件';
@@ -1685,6 +1696,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonDismiss => '关闭';
+
+  @override
+  String get settingsButtonLabel => '设置';
 
   @override
   String get settingsSectionImportant => '重要';
@@ -1724,6 +1738,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsSectionChats => '聊天';
+
+  @override
+  String get settingsSectionEmail => '邮件';
 
   @override
   String get settingsMessageStorageTitle => '消息存储';
@@ -3446,6 +3463,45 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get emailForwardingGuideTitle => 'Connect existing email';
+
+  @override
+  String get emailForwardingGuideSubtitle =>
+      'Forward mail from Gmail, Outlook, or any provider.';
+
+  @override
+  String get emailForwardingWelcomeTitle => 'Welcome to Axichat';
+
+  @override
+  String get emailForwardingGuideIntro =>
+      'Keep your existing inbox and forward mail into Axichat.';
+
+  @override
+  String get emailForwardingGuideAddressHint =>
+      'Enter this address in your provider\'s forwarding settings.';
+
+  @override
+  String get emailForwardingGuideAddressFallback =>
+      'Your Axichat address will appear here.';
+
+  @override
+  String get emailForwardingGuideLinksTitle => 'Quick links';
+
+  @override
+  String get emailForwardingGuideLinksSubtitle =>
+      'Search your provider\'s help docs, or start here:';
+
+  @override
+  String get emailForwardingGuideSettingsHint =>
+      'You can do this later in Settings.';
+
+  @override
+  String get emailForwardingProviderGmail => 'Gmail';
+
+  @override
+  String get emailForwardingProviderOutlook => 'Outlook';
+
+  @override
   String get chatChooseTextToAdd => '选择要添加的文本';
 }
 
@@ -5078,6 +5134,17 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
+  String profileExportShareUnsupportedMessage(Object label, Object path) {
+    return '此平台不支援分享。$label 匯出已儲存至 $path。';
+  }
+
+  @override
+  String get profileExportCopyPathAction => '複製路徑';
+
+  @override
+  String get profileExportPathCopiedMessage => '匯出路徑已複製到剪貼簿。';
+
+  @override
   String get profileExportFormatTitle => '選擇匯出格式';
 
   @override
@@ -5105,7 +5172,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get termsAgreementAnd => ' 和 ';
 
   @override
-  String get termsAgreementPrivacy => '隱私權政策';
+  String get termsAgreementPrivacy => '隱私';
 
   @override
   String get termsAgreementError => '你必須接受條款與條件';
@@ -5130,6 +5197,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get commonDismiss => '關閉';
+
+  @override
+  String get settingsButtonLabel => '設定';
 
   @override
   String get settingsSectionImportant => '重要';
@@ -5169,6 +5239,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsSectionChats => '聊天';
+
+  @override
+  String get settingsSectionEmail => '電郵';
 
   @override
   String get settingsMessageStorageTitle => '訊息儲存';
@@ -6889,6 +6962,45 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       Object imported, Object duplicates, Object invalid, Object failed) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
+
+  @override
+  String get emailForwardingGuideTitle => 'Connect existing email';
+
+  @override
+  String get emailForwardingGuideSubtitle =>
+      'Forward mail from Gmail, Outlook, or any provider.';
+
+  @override
+  String get emailForwardingWelcomeTitle => 'Welcome to Axichat';
+
+  @override
+  String get emailForwardingGuideIntro =>
+      'Keep your existing inbox and forward mail into Axichat.';
+
+  @override
+  String get emailForwardingGuideAddressHint =>
+      'Enter this address in your provider\'s forwarding settings.';
+
+  @override
+  String get emailForwardingGuideAddressFallback =>
+      'Your Axichat address will appear here.';
+
+  @override
+  String get emailForwardingGuideLinksTitle => 'Quick links';
+
+  @override
+  String get emailForwardingGuideLinksSubtitle =>
+      'Search your provider\'s help docs, or start here:';
+
+  @override
+  String get emailForwardingGuideSettingsHint =>
+      'You can do this later in Settings.';
+
+  @override
+  String get emailForwardingProviderGmail => 'Gmail';
+
+  @override
+  String get emailForwardingProviderOutlook => 'Outlook';
 
   @override
   String get chatChooseTextToAdd => '選擇要新增的文字';

@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
@@ -285,7 +286,7 @@ class CalendarSyncManager {
 
     bool sent = false;
     try {
-      final tempDir = Directory.systemTemp;
+      final tempDir = await getTemporaryDirectory();
       final file = await CalendarSnapshotCodec.encodeToFile(
         model,
         directory: tempDir,

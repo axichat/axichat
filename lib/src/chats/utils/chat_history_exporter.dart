@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:intl/intl.dart' as intl;
@@ -33,6 +34,8 @@ class ChatExportResult {
 
 class ChatHistoryExporter {
   const ChatHistoryExporter._();
+
+  static const Duration _exportCleanupDelay = Duration(hours: 1);
 
   static Future<ChatExportResult> exportChats({
     required List<Chat> chats,
@@ -72,6 +75,13 @@ class ChatHistoryExporter {
       chatCount: exportedChats,
       messageCount: exportedMessages,
     );
+  }
+
+  static void scheduleCleanup(File file) {
+    if (file.path.trim().isEmpty) {
+      return;
+    }
+    unawaited(_cleanupExportFile(file));
   }
 
   static String sanitizeLabel(String input) {
@@ -136,5 +146,16 @@ class ChatHistoryExporter {
       return 'chat-${sanitizeLabel(chats.single.title)}';
     }
     return 'chats';
+  }
+
+  static Future<void> _cleanupExportFile(File file) async {
+    await Future<void>.delayed(_exportCleanupDelay);
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } on Exception {
+      return;
+    }
   }
 }

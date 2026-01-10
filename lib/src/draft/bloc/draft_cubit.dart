@@ -22,6 +22,7 @@ import 'package:equatable/equatable.dart';
 part 'draft_state.dart';
 
 const int _coreDraftRecipientLimit = 1;
+const int _emailAttachmentBundleMinimumCount = 2;
 const String _jidSeparator = '@';
 const String _axiDomainPatternSource = r'@(?:[\\w-]+\\.)*axi\\.im$';
 final RegExp _axiDomainPattern =
@@ -331,28 +332,38 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (hasAttachments) {
       final caption = trimmedBody.isNotEmpty ? trimmedBody : null;
       final htmlCaption = caption == null ? null : htmlBody;
+      final bool shouldBundle =
+          attachments.length >= _emailAttachmentBundleMinimumCount;
       final attachmentsToSend = await _bundleEmailAttachments(
         attachments: attachments,
         caption: caption,
       );
-      for (var index = 0; index < attachmentsToSend.length; index += 1) {
-        final attachment = attachmentsToSend[index];
-        final captionedAttachment = index == 0 && caption != null
-            ? attachment.copyWith(caption: caption)
-            : attachment;
-        final report = await emailService.fanOutSend(
-          targets: targets,
-          attachment: captionedAttachment,
-          htmlCaption: index == 0 ? htmlCaption : null,
-          subject: subject,
-          shareId: shareId,
-          useSubjectToken: includeSignatureToken,
-          tokenAsSignature: includeSignatureToken,
-        );
-        _throwIfFanOutFailed(
-          report,
-          failureContext: attachment.fileName,
-        );
+      try {
+        for (var index = 0; index < attachmentsToSend.length; index += 1) {
+          final attachment = attachmentsToSend[index];
+          final captionedAttachment = index == 0 && caption != null
+              ? attachment.copyWith(caption: caption)
+              : attachment;
+          final report = await emailService.fanOutSend(
+            targets: targets,
+            attachment: captionedAttachment,
+            htmlCaption: index == 0 ? htmlCaption : null,
+            subject: subject,
+            shareId: shareId,
+            useSubjectToken: includeSignatureToken,
+            tokenAsSignature: includeSignatureToken,
+          );
+          _throwIfFanOutFailed(
+            report,
+            failureContext: attachment.fileName,
+          );
+        }
+      } finally {
+        if (shouldBundle) {
+          for (final attachment in attachmentsToSend) {
+            EmailAttachmentBundler.scheduleCleanup(attachment);
+          }
+        }
       }
     }
   }
@@ -413,7 +424,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<EmailAttachment> attachments,
     required String? caption,
   }) async {
-    if (attachments.length <= 1) return attachments;
+    if (attachments.length < _emailAttachmentBundleMinimumCount) {
+      return attachments;
+    }
     final bundled = await EmailAttachmentBundler.bundle(
       attachments: attachments,
       caption: caption,
