@@ -70,7 +70,7 @@ class EmailForwardingGuideTile extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    context.read<SettingsCubit>().arkEmailForwardingGuideSeen();
+    context.read<SettingsCubit>().markEmailForwardingGuideSeen();
   }
 
   @override
@@ -301,6 +301,6 @@ class _EmailForwardingWelcomeGateState
     if (!mounted) {
       return;
     }
-    context.read<SettingsCubit>().rkEmailForwardingGuideSeen();
+    context.read<SettingsCubit>().markEmailForwardingGuideSeen();
   }
 }
