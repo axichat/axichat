@@ -3050,6 +3050,24 @@ abstract class AppLocalizations {
   /// **'Unable to export {label}.'**
   String profileExportFailedMessage(Object label);
 
+  /// No description provided for @profileExportShareUnsupportedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing isn\'t available on this platform. {label} export saved to {path}.'**
+  String profileExportShareUnsupportedMessage(Object label, Object path);
+
+  /// No description provided for @profileExportCopyPathAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy path'**
+  String get profileExportCopyPathAction;
+
+  /// No description provided for @profileExportPathCopiedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Export path copied to clipboard.'**
+  String get profileExportPathCopiedMessage;
+
   /// No description provided for @profileExportFormatTitle.
   ///
   /// In en, this message translates to:
@@ -3107,7 +3125,7 @@ abstract class AppLocalizations {
   /// No description provided for @termsAgreementPrivacy.
   ///
   /// In en, this message translates to:
-  /// **'privacy policy'**
+  /// **'privacy'**
   String get termsAgreementPrivacy;
 
   /// No description provided for @termsAgreementError.
@@ -3157,6 +3175,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss'**
   String get commonDismiss;
+
+  /// No description provided for @settingsButtonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsButtonLabel;
 
   /// No description provided for @settingsSectionImportant.
   ///
@@ -3235,6 +3259,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Chats'**
   String get settingsSectionChats;
+
+  /// No description provided for @settingsSectionEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get settingsSectionEmail;
 
   /// No description provided for @settingsMessageStorageTitle.
   ///
@@ -6374,6 +6404,72 @@ abstract class AppLocalizations {
   /// **'Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.'**
   String emailContactsImportSuccess(
       Object imported, Object duplicates, Object invalid, Object failed);
+
+  /// No description provided for @emailForwardingGuideTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect existing email'**
+  String get emailForwardingGuideTitle;
+
+  /// No description provided for @emailForwardingGuideSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward mail from Gmail, Outlook, or any provider.'**
+  String get emailForwardingGuideSubtitle;
+
+  /// No description provided for @emailForwardingWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Axichat'**
+  String get emailForwardingWelcomeTitle;
+
+  /// No description provided for @emailForwardingGuideIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep your existing inbox and forward mail into Axichat.'**
+  String get emailForwardingGuideIntro;
+
+  /// No description provided for @emailForwardingGuideAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter this address in your provider\'s forwarding settings.'**
+  String get emailForwardingGuideAddressHint;
+
+  /// No description provided for @emailForwardingGuideAddressFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Axichat address will appear here.'**
+  String get emailForwardingGuideAddressFallback;
+
+  /// No description provided for @emailForwardingGuideLinksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick links'**
+  String get emailForwardingGuideLinksTitle;
+
+  /// No description provided for @emailForwardingGuideLinksSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search your provider\'s help docs, or start here:'**
+  String get emailForwardingGuideLinksSubtitle;
+
+  /// No description provided for @emailForwardingGuideSettingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can do this later in Settings.'**
+  String get emailForwardingGuideSettingsHint;
+
+  /// No description provided for @emailForwardingProviderGmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Gmail'**
+  String get emailForwardingProviderGmail;
+
+  /// No description provided for @emailForwardingProviderOutlook.
+  ///
+  /// In en, this message translates to:
+  /// **'Outlook'**
+  String get emailForwardingProviderOutlook;
 
   /// No description provided for @chatChooseTextToAdd.
   ///

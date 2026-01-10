@@ -689,6 +689,15 @@
       "label": {}
     }
   },
+  "profileExportShareUnsupportedMessage": "Le partage n’est pas disponible sur cette plateforme. Export {label} enregistré dans {path}.",
+  "@profileExportShareUnsupportedMessage": {
+    "placeholders": {
+      "label": {},
+      "path": {}
+    }
+  },
+  "profileExportCopyPathAction": "Copier le chemin",
+  "profileExportPathCopiedMessage": "Chemin d’export copié dans le presse-papiers.",
   "profileExportFormatTitle": "Choisir le format d’export",
   "profileExportFormatCsvTitle": "CSV (.csv)",
   "profileExportFormatCsvSubtitle": "Compatible avec la plupart des carnets d’adresses.",
@@ -698,7 +707,7 @@
   "termsAgreementPrefix": "Vous acceptez nos ",
   "termsAgreementTerms": "conditions",
   "termsAgreementAnd": " et ",
-  "termsAgreementPrivacy": "politique de confidentialité",
+  "termsAgreementPrivacy": "confidentialité",
   "termsAgreementError": "Vous devez accepter les conditions générales",
   "commonContinue": "Continuer",
   "commonDelete": "Supprimer",
@@ -707,6 +716,7 @@
   "commonRemove": "Retirer",
   "commonSend": "Envoyer",
   "commonDismiss": "Ignorer",
+  "settingsButtonLabel": "Paramètres",
   "settingsSectionImportant": "Important",
   "settingsSectionAppearance": "Apparence",
   "settingsLanguage": "Langue",
@@ -720,6 +730,7 @@
   "settingsLowMotion": "Mouvements réduits",
   "settingsLowMotionDescription": "Désactive la plupart des animations. Mieux pour les appareils lents.",
   "settingsSectionChats": "Discussions",
+  "settingsSectionEmail": "E-mail",
   "settingsMessageStorageTitle": "Stockage des messages",
   "settingsMessageStorageSubtitle": "Local conserve des copies sur l’appareil ; Serveur uniquement interroge l’archive.",
   "settingsMessageStorageLocal": "Local",
@@ -1496,5 +1507,16 @@
       "failed": {}
     }
   },
+  "emailForwardingGuideTitle": "Connect existing email",
+  "emailForwardingGuideSubtitle": "Forward mail from Gmail, Outlook, or any provider.",
+  "emailForwardingWelcomeTitle": "Welcome to Axichat",
+  "emailForwardingGuideIntro": "Keep your existing inbox and forward mail into Axichat.",
+  "emailForwardingGuideAddressHint": "Enter this address in your provider's forwarding settings.",
+  "emailForwardingGuideAddressFallback": "Your Axichat address will appear here.",
+  "emailForwardingGuideLinksTitle": "Quick links",
+  "emailForwardingGuideLinksSubtitle": "Search your provider's help docs, or start here:",
+  "emailForwardingGuideSettingsHint": "You can do this later in Settings.",
+  "emailForwardingProviderGmail": "Gmail",
+  "emailForwardingProviderOutlook": "Outlook",
   "chatChooseTextToAdd": "Choisir le texte à ajouter"
 }

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -31,12 +32,14 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:url_launcher/link.dart';
 
 import 'authentication/view/logout_button.dart';
 
@@ -52,9 +55,30 @@ const double _profileHeaderTextSpacing = 4.0;
 const double _profileHeaderWrapSpacing = 2.0;
 const double _profileCardSectionSpacing = 10.0;
 const double _profileStatusFieldPadding = 8.0;
+const double _profileIndicatorSpacing = 8.0;
+const double _profileWideHeaderSpacing = 12.0;
+const double _profileWideHorizontalPadding = 32.0;
+const double _profileWideColumnSpacing = 16.0;
+const double _profileColumnMinWidth = 340.0;
+const double _profileColumnMaxWidth = 460.0;
+const double _profileSettingsMinWidth = 300.0;
+const double _profileWideLayoutMinWidth = _profileColumnMinWidth +
+    _profileSettingsMinWidth +
+    _profileWideColumnSpacing +
+    _profileWideHorizontalPadding * 2;
+const double _profileLegalSeparatorSpacing = 6.0;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
-const String _aboutLegalese = 'Copyright (C) 2025 Eliot Lew\n'
-    'Copyright (C) 2025 Axichat LLC\n\n'
+const String _profileMadeByPrefix = 'Made by ';
+const String _profileMadeBySuffix = ' LLC';
+const String _profileBrandLabel = 'Axichat';
+const String _profileAgplLabel = 'AGPLv3';
+const String _profileLegalSeparatorText = '•';
+const double _profileSettingsCompactTileHeight = 52.0;
+const EdgeInsets _profileSettingsCompactTilePadding = EdgeInsets.symmetric(
+  horizontal: 16,
+  vertical: 6,
+);
+const String _aboutLegalese = 'Copyright (C) 2025 Axichat LLC (Eliot Lew)\n\n'
     'This program is free software: you can redistribute it and/or modify '
     'it under the terms of the GNU Affero General Public License as '
     'published by the Free Software Foundation, either version 3 of the '
@@ -202,7 +226,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isWideLayout = constraints.maxWidth >= largeScreen;
+                final isWideLayout =
+                    constraints.maxWidth >= _profileWideLayoutMinWidth;
                 final Duration animationDuration =
                     context.watch<SettingsCubit>().animationDuration;
                 return AxiFadeIndexedStack(
@@ -262,15 +287,15 @@ class _ProfileMainView extends StatelessWidget {
       applicationVersion: applicationVersion,
     );
     if (!isWideLayout) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500.0),
-          child: SingleChildScrollView(
+      return SingleChildScrollView(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const ConnectivityIndicator(),
-                const ShorebirdChecker(),
+                const _ProfileStatusHeader(),
                 card,
                 const Padding(
                   padding: EdgeInsets.all(12.0),
@@ -284,35 +309,54 @@ class _ProfileMainView extends StatelessWidget {
         ),
       );
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 460,
-            minWidth: 340,
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: _profileWideHorizontalPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _ProfileStatusHeader(),
+          const SizedBox(height: _profileWideHeaderSpacing),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: _profileColumnMaxWidth,
+                    minWidth: _profileColumnMinWidth,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      card,
+                      const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: ProfileFingerprint(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: _profileWideColumnSpacing),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(
+                      right: _profileWideHorizontalPadding,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: _profileSettingsMinWidth,
+                      ),
+                      child: settings,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const ConnectivityIndicator(),
-              const SizedBox(height: 8),
-              const ShorebirdChecker(),
-              card,
-              const Padding(
-                padding: EdgeInsets.all(12.0),
-                child: ProfileFingerprint(),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 24),
-        Expanded(
-          child: SingleChildScrollView(
-            child: settings,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -371,14 +415,6 @@ class _ProfileCardSection extends StatelessWidget {
                   ),
                 ),
                 AxiMenuAction(
-                  label: l10n.draftAttachmentsLabel,
-                  icon: LucideIcons.paperclip,
-                  onPressed: () => context.push(
-                    const AttachmentGalleryRoute().location,
-                    extra: locate,
-                  ),
-                ),
-                AxiMenuAction(
                   label: l10n.profileExportActionLabel(
                     ProfileExportKind.xmppMessages.label(l10n),
                   ),
@@ -430,109 +466,107 @@ class _ProfileCardSection extends StatelessWidget {
                   onPressed: () => onNavigate(_ProfileRoute.delete),
                 ),
               ];
-              final attachmentButton = AxiIconButton(
-                iconData: LucideIcons.image,
-                tooltip: l10n.draftAttachmentsLabel,
-                onPressed: () => context.push(
-                  const AttachmentGalleryRoute().location,
-                  extra: locate,
-                ),
-              );
               final actionButtons = Wrap(
                 alignment: WrapAlignment.center,
                 spacing: _profileActionSpacing,
                 runSpacing: _profileActionSpacing,
                 children: [
                   const LogoutButton(),
-                  attachmentButton,
                   AxiMore(actions: actions),
                 ],
               );
-              final header = Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _EditableAvatarButton(
-                    avatarPath: profileState.avatarPath,
-                    jid: profileState.jid,
-                    status: profileState.status,
-                    onTap: () => context.push(
-                      const AvatarEditorRoute().location,
-                      extra: locate,
-                    ),
-                  ),
-                  const SizedBox(width: _profileHeaderSpacing),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Hero(
-                          tag: 'title',
-                          child: Material(
-                            color: Colors.transparent,
-                            child: Text(
-                              profileState.username,
-                              style: usernameStyle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+              final header = Align(
+                alignment: Alignment.center,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: statusFieldMaxWidth),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _EditableAvatarButton(
+                        avatarPath: profileState.avatarPath,
+                        jid: profileState.jid,
+                        status: profileState.status,
+                        onTap: () => context.push(
+                          const AvatarEditorRoute().location,
+                          extra: locate,
                         ),
-                        const SizedBox(height: _profileHeaderTextSpacing),
-                        SelectionArea(
-                          child: Wrap(
-                            alignment: WrapAlignment.start,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 0,
-                            runSpacing: _profileHeaderWrapSpacing,
-                            children: [
-                              AxiTooltip(
-                                builder: (_) => ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 300.0,
-                                  ),
-                                  child: Text(
-                                    l10n.profileJidDescription,
-                                    textAlign: TextAlign.left,
-                                  ),
-                                ),
-                                child: Hero(
-                                  tag: 'subtitle',
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: Text(
-                                      profileState.jid,
-                                      style: subtitleStyle,
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 2,
-                                    ),
-                                  ),
+                      ),
+                      const SizedBox(width: _profileHeaderSpacing),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Hero(
+                              tag: 'title',
+                              child: Material(
+                                color: Colors.transparent,
+                                child: Text(
+                                  profileState.username,
+                                  style: usernameStyle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (profileState.resource.isNotEmpty)
-                                AxiTooltip(
-                                  builder: (_) => ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 300.0,
+                            ),
+                            const SizedBox(height: _profileHeaderTextSpacing),
+                            SelectionArea(
+                              child: Wrap(
+                                alignment: WrapAlignment.start,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 0,
+                                runSpacing: _profileHeaderWrapSpacing,
+                                children: [
+                                  AxiTooltip(
+                                    builder: (_) => ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 300.0,
+                                      ),
+                                      child: Text(
+                                        l10n.profileJidDescription,
+                                        textAlign: TextAlign.left,
+                                      ),
                                     ),
-                                    child: Text(
-                                      l10n.profileResourceDescription,
-                                      textAlign: TextAlign.left,
+                                    child: Hero(
+                                      tag: 'subtitle',
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: Text(
+                                          profileState.jid,
+                                          style: subtitleStyle,
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  child: Text(
-                                    '/${profileState.resource}',
-                                    style: subtitleStyle,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                ),
-                            ],
-                          ),
+                                  if (profileState.resource.isNotEmpty)
+                                    AxiTooltip(
+                                      builder: (_) => ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 300.0,
+                                        ),
+                                        child: Text(
+                                          l10n.profileResourceDescription,
+                                          textAlign: TextAlign.left,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '/${profileState.resource}',
+                                        style: subtitleStyle,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               );
               final Widget profileCard = ShadCard(
                 child: Column(
@@ -689,24 +723,91 @@ class _ProfileCardSection extends StatelessWidget {
       );
       return;
     }
-    try {
-      await Share.shareXFiles(
-        [XFile(result.file!.path)],
-        text: l10n.profileExportShareText(label),
-        subject: l10n.profileExportShareSubject(label),
-      );
-      showToast?.call(
-        FeedbackToast.success(
-          message: l10n.profileExportReadyMessage(label),
-        ),
-      );
-    } on Exception {
+    final exportFile = result.file!;
+    final exportFileName = p.basename(exportFile.path);
+    if (!await exportFile.exists()) {
+      if (!context.mounted) {
+        return;
+      }
       showToast?.call(
         FeedbackToast.error(
           message: l10n.profileExportFailedMessage(label),
         ),
       );
+      return;
     }
+    String? savePath;
+    try {
+      savePath = await FilePicker.platform.saveFile(
+        fileName: exportFileName,
+      );
+    } on Exception {
+      if (!context.mounted) {
+        return;
+      }
+      showToast?.call(
+        FeedbackToast.error(
+          message: l10n.profileExportFailedMessage(label),
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    if (savePath == null || savePath.trim().isEmpty) {
+      return;
+    }
+    try {
+      final destination = File(savePath);
+      final samePath = p.equals(destination.path, exportFile.path);
+      if (!samePath) {
+        if (await destination.exists()) {
+          await destination.delete();
+        }
+        await exportFile.copy(destination.path);
+        try {
+          await exportFile.delete();
+        } on Exception {
+          // Keep going even if temp cleanup fails.
+        }
+      }
+    } on Exception {
+      if (!context.mounted) {
+        return;
+      }
+      showToast?.call(
+        FeedbackToast.error(
+          message: l10n.profileExportFailedMessage(label),
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    showToast?.call(
+      FeedbackToast.success(
+        message: l10n.profileExportReadyMessage(label),
+      ),
+    );
+  }
+}
+
+class _ProfileStatusHeader extends StatelessWidget {
+  const _ProfileStatusHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConnectivityIndicator(),
+        SizedBox(height: _profileIndicatorSpacing),
+        ShorebirdChecker(),
+      ],
+    );
   }
 }
 
@@ -716,24 +817,112 @@ class _ProfileLegalLinks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final Widget termsLink = AxiLink(
-      link: termsUrl,
-      text: l10n.termsAgreementTerms,
+    final textStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
     );
-    final Widget privacyLink = AxiLink(
+    final termsLabel = l10n.termsAgreementTerms.toUpperCase();
+    final privacyLabel = l10n.termsAgreementPrivacy.toUpperCase();
+    final Widget termsLink = _ProfileMutedLink(
+      link: termsUrl,
+      text: termsLabel,
+      textStyle: textStyle,
+    );
+    final Widget privacyLink = _ProfileMutedLink(
       link: privacyUrl,
-      text: l10n.termsAgreementPrivacy,
+      text: privacyLabel,
+      textStyle: textStyle,
+    );
+    final Widget agplLink = _ProfileMutedLink(
+      link: licenseUrl,
+      text: _profileAgplLabel,
+      textStyle: textStyle,
+    );
+    final Widget separator = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _profileLegalSeparatorSpacing,
+      ),
+      child: Text(
+        _profileLegalSeparatorText,
+        style: textStyle,
+      ),
+    );
+    final Widget trailingSeparator = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _profileLegalSeparatorSpacing,
+      ),
+      child: Text(
+        _profileLegalSeparatorText,
+        style: textStyle,
+      ),
+    );
+    final Widget madeBy = Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      runSpacing: _profileHeaderWrapSpacing,
+      children: [
+        Text(
+          _profileMadeByPrefix,
+          style: textStyle,
+        ),
+        _ProfileMutedLink(
+          link: axichatHomeUrl,
+          text: _profileBrandLabel,
+          textStyle: textStyle,
+        ),
+        Text(
+          _profileMadeBySuffix,
+          style: textStyle,
+        ),
+      ],
     );
     return Align(
       alignment: Alignment.center,
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: _profileActionSpacing,
-        runSpacing: _profileHeaderWrapSpacing,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: _profileHeaderTextSpacing,
         children: [
-          termsLink,
-          privacyLink,
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: _profileHeaderWrapSpacing,
+            children: [
+              termsLink,
+              separator,
+              privacyLink,
+              trailingSeparator,
+              agplLink,
+            ],
+          ),
+          madeBy,
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileMutedLink extends StatelessWidget {
+  const _ProfileMutedLink({
+    required this.text,
+    required this.link,
+    required this.textStyle,
+  });
+
+  final String text;
+  final String link;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Link(
+      uri: Uri.parse(link),
+      builder: (_, followLink) => ShadGestureDetector(
+        cursor: SystemMouseCursors.click,
+        hoverStrategies: mobileHoverStrategies,
+        onTap: followLink,
+        child: Text(
+          text,
+          style: textStyle,
+        ),
       ),
     );
   }
@@ -824,25 +1013,26 @@ class _SettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final aboutLabel =
+        MaterialLocalizations.of(context).aboutListTileTitle(appDisplayName);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingsControls(
           showDivider: showTopDivider,
-          showAppearanceDivider: showTopDivider,
         ),
-        ListTileTheme(
-          data: const ListTileThemeData(
-            dense: true,
-            minVerticalPadding: 0,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12.0),
-            visualDensity: VisualDensity(horizontal: 0, vertical: -2),
-          ),
-          child: AboutListTile(
-            icon: const Icon(LucideIcons.info),
-            applicationName: appDisplayName,
-            applicationVersion: applicationVersion,
-            applicationLegalese: _aboutLegalese,
+        ListItemPadding(
+          child: AxiListTile(
+            leading: const Icon(LucideIcons.info),
+            title: aboutLabel,
+            onTap: () => showAboutDialog(
+              context: context,
+              applicationName: appDisplayName,
+              applicationVersion: applicationVersion,
+              applicationLegalese: _aboutLegalese,
+            ),
+            minTileHeight: _profileSettingsCompactTileHeight,
+            contentPadding: _profileSettingsCompactTilePadding,
           ),
         ),
       ],

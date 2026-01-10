@@ -4,9 +4,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
@@ -23,6 +23,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 String? _bareJid(String? jid) {
   if (jid == null || jid.isEmpty) return null;
@@ -218,6 +219,10 @@ class ChatMessageDetails extends StatelessWidget {
                                       },
                               ),
                             ],
+                            onLinkTap: (url, _, __) {
+                              if (url == null) return;
+                              _handleLinkTap(context, url);
+                            },
                             style: {
                               'body': html_widget.Style(
                                 margin: html_widget.Margins.zero,
@@ -559,6 +564,62 @@ class ChatMessageDetails extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _handleLinkTap(BuildContext context, String url) async {
+    if (!context.mounted) return;
+    final l10n = context.l10n;
+    final report = assessLinkSafety(
+      raw: url,
+      kind: LinkSafetyKind.message,
+    );
+    if (report == null || !report.isSafe) {
+      _showSnackbar(context, l10n.chatInvalidLink(url.trim()));
+      return;
+    }
+    final hostLabel = formatLinkSchemeHostLabel(report);
+    final baseMessage = report.needsWarning
+        ? l10n.chatOpenLinkWarningMessage(
+            report.displayUri,
+            hostLabel,
+          )
+        : l10n.chatOpenLinkMessage(
+            report.displayUri,
+            hostLabel,
+          );
+    final warningBlock = formatLinkWarningText(report.warnings);
+    final action = await showLinkActionDialog(
+      context,
+      title: l10n.chatOpenLinkTitle,
+      message: '$baseMessage$warningBlock',
+      openLabel: l10n.chatOpenLinkConfirm,
+      copyLabel: l10n.chatActionCopy,
+      cancelLabel: l10n.commonCancel,
+    );
+    if (!context.mounted) return;
+    if (action == null) return;
+    if (action == LinkAction.copy) {
+      await Clipboard.setData(
+        ClipboardData(text: report.displayUri),
+      );
+      return;
+    }
+    final launched = await launchUrl(
+      report.uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && context.mounted) {
+      _showSnackbar(context, l10n.chatUnableToOpenHost(report.displayHost));
+    }
+  }
+
+  void _showSnackbar(BuildContext context, String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message)),
+      );
   }
 }
 

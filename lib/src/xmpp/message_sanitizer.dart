@@ -33,8 +33,10 @@ const String _errorTypeAttr = 'type';
 const String _errorTextTag = 'text';
 const String _errorTypeModify = 'modify';
 const String _errorTypeWait = 'wait';
+const String _errorTypeCancel = 'cancel';
 const String _errorConditionNotAcceptable = 'not-acceptable';
 const String _errorConditionResourceConstraint = 'resource-constraint';
+const String _errorConditionServiceUnavailable = 'service-unavailable';
 
 int _utf8ByteLength(String value) => utf8.encode(value).length;
 

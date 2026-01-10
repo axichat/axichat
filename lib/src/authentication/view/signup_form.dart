@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -12,6 +13,7 @@ import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -52,6 +54,7 @@ const int _captchaXmlMaxBytes = 64 * 1024;
 const int _captchaXmlMaxNodes = 4000;
 const int _captchaXmlMaxDepth = 32;
 const Duration _captchaXmlMaxParseDuration = Duration(milliseconds: 120);
+const String _captchaAllowedScheme = 'https';
 const int _httpOkStatus = 200;
 const double _signupButtonSpinnerDimension = 16.0;
 const double _signupButtonSpinnerPadding = 1.0;
@@ -1933,6 +1936,7 @@ class _CaptchaImage extends StatefulWidget {
 class _CaptchaImageState extends State<_CaptchaImage> {
   bool _isReady = false;
   bool _readyNotified = false;
+  bool _unsafeUrlNotified = false;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
@@ -1940,6 +1944,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
     if (oldWidget.url != widget.url) {
       _isReady = false;
       _readyNotified = false;
+      _unsafeUrlNotified = false;
     }
   }
 
@@ -1955,8 +1960,35 @@ class _CaptchaImageState extends State<_CaptchaImage> {
     });
   }
 
+  bool _isSafeCaptchaUrl(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null) return false;
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != _captchaAllowedScheme) return false;
+    final host = uri.host.trim();
+    if (host.isEmpty || isProbablyLocalHostname(host)) return false;
+    final direct = InternetAddress.tryParse(host);
+    if (direct != null) {
+      return isSafeInternetAddress(direct);
+    }
+    return true;
+  }
+
+  void _notifyUnsafeUrl() {
+    if (_unsafeUrlNotified) return;
+    _unsafeUrlNotified = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onInitialError();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_isSafeCaptchaUrl(widget.url)) {
+      _notifyUnsafeUrl();
+      return const _CaptchaErrorMessage();
+    }
     Widget image = Image.network(
       widget.url,
       fit: BoxFit.cover,

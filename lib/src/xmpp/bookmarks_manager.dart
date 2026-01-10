@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/xmpp/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -199,6 +200,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
   final Map<String, MucBookmark> _cache = {};
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;
+  bool _ensureNodePending = false;
   bool _nodeReady = false;
 
   @override
@@ -321,22 +323,25 @@ final class BookmarksManager extends mox.XmppManagerBase {
         _nodeReady = true;
         return;
       }
+      final configuredError = configured.get<mox.PubSubError>();
+      final shouldCreateNode = configuredError.indicatesMissingNode;
+      if (!shouldCreateNode) {
+        return;
+      }
 
       try {
-        final created = await pubsub.createNodeWithConfig(
+        await pubsub.createNodeWithConfig(
           host,
           _createNodeConfig(),
           nodeId: _bookmarksNode,
         );
-        if (created != null) {
-          final applied = await pubsub.configureNode(
-            host,
-            _bookmarksNode,
-            config,
-          );
-          if (!applied.isType<mox.PubSubError>()) {
-            _nodeReady = true;
-          }
+        final applied = await pubsub.configureNode(
+          host,
+          _bookmarksNode,
+          config,
+        );
+        if (!applied.isType<mox.PubSubError>()) {
+          _nodeReady = true;
           return;
         }
       } on Exception {
@@ -344,8 +349,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       }
 
       try {
-        final created = await pubsub.createNode(host, nodeId: _bookmarksNode);
-        if (created == null) return;
+        await pubsub.createNode(host, nodeId: _bookmarksNode);
         final applied =
             await pubsub.configureNode(host, _bookmarksNode, config);
         if (!applied.isType<mox.PubSubError>()) {
@@ -356,6 +360,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
       }
     } finally {
       _ensureNodeInFlight = false;
+      final shouldRetry = _ensureNodePending && !_nodeReady;
+      _ensureNodePending = false;
+      if (shouldRetry) {
+        unawaited(_bootstrap());
+      }
     }
   }
 
@@ -602,7 +611,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
     _clearCache();
     _nodeReady = false;
     _lastEnsureAttempt = null;
-    unawaited(_bootstrap());
+    _ensureNodePending = true;
+    if (!_ensureNodeInFlight) {
+      unawaited(_bootstrap());
+    }
   }
 
   Future<void> _handleNodePurged(mox.PubSubNodePurgedEvent event) async {
@@ -613,7 +625,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
     _clearCache();
     _nodeReady = false;
     _lastEnsureAttempt = null;
-    unawaited(_bootstrap());
+    _ensureNodePending = true;
+    if (!_ensureNodeInFlight) {
+      unawaited(_bootstrap());
+    }
   }
 
   Future<void> _refreshFromServer() async {

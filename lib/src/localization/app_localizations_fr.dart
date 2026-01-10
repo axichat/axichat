@@ -1712,6 +1712,18 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String profileExportShareUnsupportedMessage(Object label, Object path) {
+    return 'Le partage n’est pas disponible sur cette plateforme. Export $label enregistré dans $path.';
+  }
+
+  @override
+  String get profileExportCopyPathAction => 'Copier le chemin';
+
+  @override
+  String get profileExportPathCopiedMessage =>
+      'Chemin d’export copié dans le presse-papiers.';
+
+  @override
   String get profileExportFormatTitle => 'Choisir le format d’export';
 
   @override
@@ -1740,7 +1752,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get termsAgreementAnd => ' et ';
 
   @override
-  String get termsAgreementPrivacy => 'politique de confidentialité';
+  String get termsAgreementPrivacy => 'confidentialité';
 
   @override
   String get termsAgreementError =>
@@ -1766,6 +1778,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get commonDismiss => 'Ignorer';
+
+  @override
+  String get settingsButtonLabel => 'Paramètres';
 
   @override
   String get settingsSectionImportant => 'Important';
@@ -1807,6 +1822,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get settingsSectionChats => 'Discussions';
+
+  @override
+  String get settingsSectionEmail => 'E-mail';
 
   @override
   String get settingsMessageStorageTitle => 'Stockage des messages';
@@ -3594,6 +3612,45 @@ class AppLocalizationsFr extends AppLocalizations {
       Object imported, Object duplicates, Object invalid, Object failed) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
+
+  @override
+  String get emailForwardingGuideTitle => 'Connect existing email';
+
+  @override
+  String get emailForwardingGuideSubtitle =>
+      'Forward mail from Gmail, Outlook, or any provider.';
+
+  @override
+  String get emailForwardingWelcomeTitle => 'Welcome to Axichat';
+
+  @override
+  String get emailForwardingGuideIntro =>
+      'Keep your existing inbox and forward mail into Axichat.';
+
+  @override
+  String get emailForwardingGuideAddressHint =>
+      'Enter this address in your provider\'s forwarding settings.';
+
+  @override
+  String get emailForwardingGuideAddressFallback =>
+      'Your Axichat address will appear here.';
+
+  @override
+  String get emailForwardingGuideLinksTitle => 'Quick links';
+
+  @override
+  String get emailForwardingGuideLinksSubtitle =>
+      'Search your provider\'s help docs, or start here:';
+
+  @override
+  String get emailForwardingGuideSettingsHint =>
+      'You can do this later in Settings.';
+
+  @override
+  String get emailForwardingProviderGmail => 'Gmail';
+
+  @override
+  String get emailForwardingProviderOutlook => 'Outlook';
 
   @override
   String get chatChooseTextToAdd => 'Choisir le texte à ajouter';

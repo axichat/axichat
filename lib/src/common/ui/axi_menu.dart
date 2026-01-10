@@ -50,12 +50,14 @@ class AxiMenu extends StatefulWidget {
 class _AxiMenuState extends State<AxiMenu> {
   late List<FocusNode> _focusNodes;
   late final FocusNode _menuScopeNode;
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     _menuScopeNode = FocusNode(debugLabel: 'AxiMenuScope');
     _focusNodes = _buildFocusNodes(widget.actions.length);
+    _scrollController = ScrollController();
   }
 
   @override
@@ -75,6 +77,7 @@ class _AxiMenuState extends State<AxiMenu> {
       node.dispose();
     }
     _menuScopeNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -218,36 +221,41 @@ class _AxiMenuState extends State<AxiMenu> {
                   child: SizedBox(
                     width: menuWidth,
                     height: height,
-                    child: ListView.separated(
-                      padding: EdgeInsets.zero,
-                      physics: scrollable
-                          ? const ClampingScrollPhysics()
-                          : const NeverScrollableScrollPhysics(),
-                      itemCount: widget.actions.length,
-                      separatorBuilder: (_, __) => Divider(
-                        height: 0,
-                        thickness: 0.7,
-                        color: dividerColor,
+                    child: Scrollbar(
+                      controller: _scrollController,
+                      thumbVisibility: scrollable,
+                      child: ListView.separated(
+                        controller: _scrollController,
+                        padding: EdgeInsets.zero,
+                        physics: scrollable
+                            ? const ClampingScrollPhysics()
+                            : const NeverScrollableScrollPhysics(),
+                        itemCount: widget.actions.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 0,
+                          thickness: 0.7,
+                          color: dividerColor,
+                        ),
+                        itemBuilder: (context, index) {
+                          final action = widget.actions[index];
+                          return SizedBox(
+                            height: _kMenuItemHeight,
+                            child: _AxiMenuItem(
+                              action: action,
+                              focusNode: _focusNodes[index],
+                              textTheme: textTheme,
+                              colors: colors,
+                              hoverColor: hoverColor,
+                              focusColor: focusColor,
+                              onPressed: action.enabled
+                                  ? () {
+                                      action.onPressed?.call();
+                                    }
+                                  : null,
+                            ),
+                          );
+                        },
                       ),
-                      itemBuilder: (context, index) {
-                        final action = widget.actions[index];
-                        return SizedBox(
-                          height: _kMenuItemHeight,
-                          child: _AxiMenuItem(
-                            action: action,
-                            focusNode: _focusNodes[index],
-                            textTheme: textTheme,
-                            colors: colors,
-                            hoverColor: hoverColor,
-                            focusColor: focusColor,
-                            onPressed: action.enabled
-                                ? () {
-                                    action.onPressed?.call();
-                                  }
-                                : null,
-                          ),
-                        );
-                      },
                     ),
                   ),
                 ),

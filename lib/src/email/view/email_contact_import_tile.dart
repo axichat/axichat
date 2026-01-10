@@ -42,7 +42,10 @@ class EmailContactImportTile extends StatelessWidget {
                     context.read<EmailContactImportCubit>().reset();
                     showFadeScaleDialog(
                       context: context,
-                      builder: (context) => const EmailContactImportDialog(),
+                      builder: (dialogContext) => BlocProvider.value(
+                        value: context.read<EmailContactImportCubit>(),
+                        child: const EmailContactImportDialog(),
+                      ),
                     );
                   },
           ),

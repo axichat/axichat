@@ -66,6 +66,16 @@ const String _signupCleanupBlockedLog =
     'Signup blocked because cleanup is still pending.';
 const String _databaseSecretsCheckFailedLog =
     'Failed to check database secrets for pending signup cleanup.';
+const String _databasePrefixKeySuffix = '_database_prefix';
+const String _databasePassphraseKeySuffix = '_database_passphrase';
+const int _pendingSignupRollbackRememberedDays = 7;
+const int _pendingSignupRollbackEphemeralHours = 24;
+const Duration _pendingSignupRollbackMaxAgeRemembered =
+    Duration(days: _pendingSignupRollbackRememberedDays);
+const Duration _pendingSignupRollbackMaxAgeEphemeral =
+    Duration(hours: _pendingSignupRollbackEphemeralHours);
+const Duration _pendingSignupRollbackLegacyMaxAge =
+    _pendingSignupRollbackMaxAgeRemembered;
 
 enum LogoutSeverity {
   auto,
@@ -416,10 +426,59 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> _clearLoginSecrets() async {
+  Future<void> _clearLoginSecrets({String? jid}) async {
+    final resolvedJid = await _resolveLoginClearJid(jid);
     await _credentialStore.delete(key: jidStorageKey);
+    await _clearStoredPassword();
+    if (resolvedJid != null) {
+      await _clearDatabaseSecretsForJid(resolvedJid);
+    }
+  }
+
+  Future<String?> _resolveLoginClearJid(String? jid) async {
+    final trimmed = jid?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      return trimmed;
+    }
+    final stored = await _credentialStore.read(key: jidStorageKey);
+    final storedTrimmed = stored?.trim();
+    if (storedTrimmed == null || storedTrimmed.isEmpty) {
+      return null;
+    }
+    return storedTrimmed;
+  }
+
+  Future<void> _clearStoredPassword() async {
     await _credentialStore.delete(key: passwordStorageKey);
     await _credentialStore.delete(key: passwordPreHashedStorageKey);
+  }
+
+  Future<void> _clearDatabaseSecretsForJid(String jid) async {
+    final normalizedJid = _normalizeJid(jid);
+    final prefixKeys = <RegisteredCredentialKey>{}
+      ..add(CredentialStore.registerKey('$jid$_databasePrefixKeySuffix'))
+      ..add(
+        CredentialStore.registerKey(
+          '$normalizedJid$_databasePrefixKeySuffix',
+        ),
+      );
+    final prefixes = <String>{};
+    for (final key in prefixKeys) {
+      final storedPrefix = await _credentialStore.read(key: key);
+      final trimmedPrefix = storedPrefix?.trim();
+      if (trimmedPrefix != null && trimmedPrefix.isNotEmpty) {
+        prefixes.add(trimmedPrefix);
+      }
+    }
+    for (final key in prefixKeys) {
+      await _credentialStore.delete(key: key);
+    }
+    for (final prefix in prefixes) {
+      final passphraseKey = CredentialStore.registerKey(
+        '$prefix$_databasePassphraseKeySuffix',
+      );
+      await _credentialStore.delete(key: passphraseKey);
+    }
   }
 
   Future<void> _clearStoredSmtpCredentials(
@@ -657,14 +716,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<_DatabaseSecrets> _readDatabaseSecrets(String jid) async {
-    var prefixKey = CredentialStore.registerKey('${jid}_database_prefix');
+    var prefixKey =
+        CredentialStore.registerKey('$jid$_databasePrefixKeySuffix');
     var storedPrefix = await _credentialStore.read(key: prefixKey);
 
     if ((storedPrefix == null || storedPrefix.isEmpty) &&
         jid != _normalizeJid(jid)) {
       final normalizedJid = _normalizeJid(jid);
-      final normalizedKey =
-          CredentialStore.registerKey('${normalizedJid}_database_prefix');
+      final normalizedKey = CredentialStore.registerKey(
+        '$normalizedJid$_databasePrefixKeySuffix',
+      );
       storedPrefix = await _credentialStore.read(key: normalizedKey);
       if (storedPrefix != null && storedPrefix.isNotEmpty) {
         prefixKey = normalizedKey;
@@ -674,8 +735,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     RegisteredCredentialKey? passphraseKey;
     String? storedPassphrase;
     if (storedPrefix != null && storedPrefix.isNotEmpty) {
-      passphraseKey =
-          CredentialStore.registerKey('${storedPrefix}_database_passphrase');
+      passphraseKey = CredentialStore.registerKey(
+        '$storedPrefix$_databasePassphraseKeySuffix',
+      );
       storedPassphrase = await _credentialStore.read(key: passphraseKey);
     }
     return _DatabaseSecrets(
@@ -761,7 +823,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final txn = _authTransaction ?? await _readAuthTransaction();
     if (txn == null) {
       if (clearCredentials) {
-        await _clearLoginSecrets();
+        await _clearLoginSecrets(jid: jid);
         if (jid != null) {
           await _clearStoredSmtpCredentials(jid);
         }
@@ -782,7 +844,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _xmppService.disconnect();
     }
     if (shouldClearCredentials) {
-      await _clearLoginSecrets();
+      await _clearLoginSecrets(jid: txn.jid);
     }
     _authenticatedJid = null;
     await _clearAuthTransaction();
@@ -974,7 +1036,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final RegisteredCredentialKey databasePassphraseStorageKey =
           storedSecrets.passphraseKey ??
               CredentialStore.registerKey(
-                '${ensuredDatabasePrefix}_database_passphrase',
+                '$ensuredDatabasePrefix$_databasePassphraseKeySuffix',
               );
 
       final String ensuredDatabasePassphrase =
@@ -1092,7 +1154,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           } on XmppAlreadyConnectedException catch (_) {
             _log.fine('Re-auth attempted while already connected, proceeding.');
             await _markXmppConnected();
-            effectivePassword = resolvedPassword;
+            final saltedPassword = _xmppService.saltedPassword;
+            if (saltedPassword != null && saltedPassword.isNotEmpty) {
+              effectivePassword = saltedPassword;
+              passwordPreHashed = true;
+            } else {
+              effectivePassword = resolvedPassword;
+            }
           } on Exception catch (error) {
             if (_looksLikeStorageLock(error)) {
               _log.warning('Storage lock detected during login.', error);
@@ -1613,6 +1681,57 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required RegisteredCredentialKey databasePassphraseStorageKey,
     required String databasePassphrase,
   }) async {
+    if (!rememberMe) {
+      await _clearLoginSecrets(jid: jid);
+      if (_endpointConfig.enableSmtp) {
+        await _emailService?.clearStoredCredentials(
+          jid: jid,
+          preserveActiveSession: true,
+        );
+      }
+      return;
+    }
+    try {
+      await _persistDatabaseSecrets(
+        jid: jid,
+        databasePrefixStorageKey: databasePrefixStorageKey,
+        databasePrefix: databasePrefix,
+        databasePassphraseStorageKey: databasePassphraseStorageKey,
+        databasePassphrase: databasePassphrase,
+      );
+      if (_endpointConfig.enableSmtp) {
+        await _emailService?.persistActiveCredentials(jid: jid);
+      }
+      await _credentialStore.write(key: jidStorageKey, value: jid);
+      await _persistPasswordCredentials(
+        password: password,
+        passwordPreHashed: passwordPreHashed,
+      );
+      return;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to persist login credentials atomically',
+        error,
+        stackTrace,
+      );
+      if (_endpointConfig.enableSmtp) {
+        await _emailService?.clearStoredCredentials(
+          jid: jid,
+          preserveActiveSession: true,
+        );
+      }
+      await _clearLoginSecrets(jid: jid);
+      rethrow;
+    }
+  }
+
+  Future<void> _persistDatabaseSecrets({
+    required String jid,
+    required RegisteredCredentialKey databasePrefixStorageKey,
+    required String databasePrefix,
+    required RegisteredCredentialKey databasePassphraseStorageKey,
+    required String databasePassphrase,
+  }) async {
     await _credentialStore.write(
       key: databasePassphraseStorageKey,
       value: databasePassphrase,
@@ -1622,7 +1741,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       value: databasePrefix,
     );
     final normalizedPrefixKey = CredentialStore.registerKey(
-      '${_normalizeJid(jid)}_database_prefix',
+      '${_normalizeJid(jid)}$_databasePrefixKeySuffix',
     );
     if (normalizedPrefixKey != databasePrefixStorageKey) {
       await _credentialStore.write(
@@ -1630,46 +1749,24 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         value: databasePrefix,
       );
     }
-    if (rememberMe) {
-      try {
-        if (_endpointConfig.enableSmtp) {
-          await _emailService?.persistActiveCredentials(jid: jid);
-        }
-        await _credentialStore.write(key: jidStorageKey, value: jid);
-        if (password != null) {
-          await _credentialStore.write(
-            key: passwordStorageKey,
-            value: password,
-          );
-          await _credentialStore.write(
-            key: passwordPreHashedStorageKey,
-            value: passwordPreHashed.toString(),
-          );
-        }
-        return;
-      } on Exception catch (error, stackTrace) {
-        _log.warning(
-          'Failed to persist login credentials atomically',
-          error,
-          stackTrace,
-        );
-        if (_endpointConfig.enableSmtp) {
-          await _emailService?.clearStoredCredentials(
-            jid: jid,
-            preserveActiveSession: true,
-          );
-        }
-        await _clearLoginSecrets();
-        rethrow;
-      }
+  }
+
+  Future<void> _persistPasswordCredentials({
+    required String? password,
+    required bool passwordPreHashed,
+  }) async {
+    if (password == null || !passwordPreHashed) {
+      await _clearStoredPassword();
+      return;
     }
-    await _clearLoginSecrets();
-    if (_endpointConfig.enableSmtp) {
-      await _emailService?.clearStoredCredentials(
-        jid: jid,
-        preserveActiveSession: true,
-      );
-    }
+    await _credentialStore.write(
+      key: passwordStorageKey,
+      value: password,
+    );
+    await _credentialStore.write(
+      key: passwordPreHashedStorageKey,
+      value: true.toString(),
+    );
   }
 
   Future<void> _publishPendingAvatar() async {
@@ -1797,6 +1894,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       username: username,
       host: host,
       password: password,
+      rememberMe: rememberMe,
     );
     var signupComplete = false;
     provisioning.EmailProvisioningCredentials? emailProvisioningCredentials;
@@ -1812,6 +1910,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           host: host,
           password: password,
           credentials: emailProvisioningCredentials,
+          rememberMe: rememberMe,
         );
       }
       final response = await _httpClient.post(
@@ -1865,6 +1964,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           username: username,
           host: host,
           password: password,
+          rememberMe: rememberMe,
         );
       }
     }
@@ -1874,16 +1974,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String username,
     required String host,
     required String password,
+    required bool rememberMe,
   }) async {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
       _log.info(_signupRollbackStageSkippedLog);
       return;
     }
-    final entry = _PendingAccountDeletion(
+    final entry = _PendingAccountDeletion.fromSignup(
       username: username,
       host: host,
       password: password,
+      rememberMe: rememberMe,
     );
     await _upsertPendingAccountDeletion(entry);
   }
@@ -1893,17 +1995,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String host,
     required String password,
     required provisioning.EmailProvisioningCredentials credentials,
+    required bool rememberMe,
   }) async {
     final normalizedEmail = credentials.email.trim();
     if (normalizedEmail.isEmpty) {
       _log.warning('Skipping email rollback staging due to blank email.');
       return;
     }
-    final entry = _PendingAccountDeletion(
+    final entry = _PendingAccountDeletion.fromSignup(
       username: username,
       host: host,
       password: password,
       email: normalizedEmail,
+      rememberMe: rememberMe,
     );
     await _upsertPendingAccountDeletion(entry);
   }
@@ -1912,16 +2016,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String username,
     required String host,
     required String password,
+    required bool rememberMe,
   }) async {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
       _log.info(_signupRollbackSkippedLog);
       return;
     }
-    final deletion = _PendingAccountDeletion(
+    final deletion = _PendingAccountDeletion.fromSignup(
       username: username,
       host: host,
       password: password,
+      rememberMe: rememberMe,
     );
     final succeeded = await _performAccountDeletion(deletion);
     if (!succeeded) {
@@ -2054,9 +2160,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             return;
           }
         }
+        const bool passwordIsPreHashed = false;
+        final rememberMe = await loadRememberMeChoice();
         await _updateStoredPasswords(
           jid: resolvedJid,
           newPassword: password,
+          rememberMe: rememberMe,
+          passwordPreHashed: passwordIsPreHashed,
         );
         _emit(const AuthenticationPasswordChangeSuccess(
           'Password changed successfully.',
@@ -2254,16 +2364,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _updateStoredPasswords({
     required String jid,
     required String newPassword,
+    required bool rememberMe,
+    required bool passwordPreHashed,
   }) async {
     try {
-      await _credentialStore.write(
-        key: passwordStorageKey,
-        value: newPassword,
-      );
-      await _credentialStore.write(
-        key: passwordPreHashedStorageKey,
-        value: false.toString(),
-      );
+      if (!rememberMe || !passwordPreHashed) {
+        await _clearStoredPassword();
+      } else {
+        await _credentialStore.write(
+          key: passwordStorageKey,
+          value: newPassword,
+        );
+        await _credentialStore.write(
+          key: passwordPreHashedStorageKey,
+          value: true.toString(),
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to persist updated password', error, stackTrace);
     }
@@ -2486,10 +2602,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     try {
       final decoded = jsonDecode(serialized) as List<dynamic>;
-      return decoded
+      final entries = decoded
           .whereType<Map<String, dynamic>>()
           .map(_PendingAccountDeletion.fromJson)
           .toList();
+      final now = DateTime.now();
+      final validEntries = entries
+          .where((entry) => !entry.isExpired(now))
+          .toList(growable: false);
+      if (validEntries.length != entries.length) {
+        await _writePendingAccountDeletions(validEntries);
+      }
+      return validEntries;
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to decode pending signup rollbacks',
@@ -2533,7 +2657,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final normalized = existing == null
         ? deletion
-        : deletion.copyWith(createdAt: existing.createdAt);
+        : deletion.copyWith(
+            createdAt: existing.createdAt,
+            expiresAt: existing.expiresAt,
+          );
     filtered.add(normalized);
     await _writePendingAccountDeletions(filtered);
   }
@@ -2798,24 +2925,64 @@ class _AuthTransaction {
 }
 
 class _PendingAccountDeletion {
+  static const String _usernameJsonKey = 'username';
+  static const String _hostJsonKey = 'host';
+  static const String _passwordJsonKey = 'password';
+  static const String _createdAtJsonKey = 'createdAt';
+  static const String _expiresAtJsonKey = 'expiresAt';
+  static const String _emailJsonKey = 'email';
+
   _PendingAccountDeletion({
     required String username,
     required String host,
     required this.password,
     this.email,
-    String? createdAt,
+    required this.createdAt,
+    required this.expiresAt,
   })  : username = username.trim().toLowerCase(),
-        host = host.trim().toLowerCase(),
-        createdAt = createdAt ?? DateTime.now().toIso8601String();
+        host = host.trim().toLowerCase();
+
+  factory _PendingAccountDeletion.fromSignup({
+    required String username,
+    required String host,
+    required String password,
+    String? email,
+    required bool rememberMe,
+  }) {
+    final now = DateTime.now();
+    final expiry = now.add(
+      rememberMe
+          ? _pendingSignupRollbackMaxAgeRemembered
+          : _pendingSignupRollbackMaxAgeEphemeral,
+    );
+    return _PendingAccountDeletion(
+      username: username,
+      host: host,
+      password: password,
+      email: email,
+      createdAt: now.toIso8601String(),
+      expiresAt: expiry.toIso8601String(),
+    );
+  }
 
   factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
-    final rawEmail = json['email'] as String? ?? '';
+    final rawEmail = json[_emailJsonKey] as String? ?? '';
+    final rawCreatedAt = json[_createdAtJsonKey] as String?;
+    final createdAt = rawCreatedAt?.trim().isNotEmpty == true
+        ? rawCreatedAt!.trim()
+        : DateTime.now().toIso8601String();
+    final resolvedExpiry = _resolveExpiry(
+      createdAt: createdAt,
+      expiresAt: json[_expiresAtJsonKey] as String?,
+    );
     return _PendingAccountDeletion(
-      username: (json['username'] as String? ?? '').trim(),
-      host: (json['host'] as String? ?? AuthenticationCubit.domain).trim(),
-      password: json['password'] as String? ?? '',
+      username: (json[_usernameJsonKey] as String? ?? '').trim(),
+      host:
+          (json[_hostJsonKey] as String? ?? AuthenticationCubit.domain).trim(),
+      password: json[_passwordJsonKey] as String? ?? '',
       email: rawEmail.trim().isEmpty ? null : rawEmail.trim(),
-      createdAt: json['createdAt'] as String?,
+      createdAt: createdAt,
+      expiresAt: resolvedExpiry,
     );
   }
 
@@ -2824,19 +2991,22 @@ class _PendingAccountDeletion {
   final String password;
   final String? email;
   final String createdAt;
+  final String expiresAt;
 
   Map<String, dynamic> toJson() => {
-        'username': username,
-        'host': host,
-        'password': password,
-        'createdAt': createdAt,
-        if (email != null) 'email': email,
+        _usernameJsonKey: username,
+        _hostJsonKey: host,
+        _passwordJsonKey: password,
+        _createdAtJsonKey: createdAt,
+        _expiresAtJsonKey: expiresAt,
+        if (email != null) _emailJsonKey: email,
       };
 
   _PendingAccountDeletion copyWith({
     String? password,
     String? email,
     String? createdAt,
+    String? expiresAt,
   }) {
     return _PendingAccountDeletion(
       username: username,
@@ -2844,7 +3014,16 @@ class _PendingAccountDeletion {
       password: password ?? this.password,
       email: email ?? this.email,
       createdAt: createdAt ?? this.createdAt,
+      expiresAt: expiresAt ?? this.expiresAt,
     );
+  }
+
+  bool isExpired(DateTime now) {
+    final expiresAtTimestamp = DateTime.tryParse(expiresAt);
+    if (expiresAtTimestamp == null) {
+      return true;
+    }
+    return !expiresAtTimestamp.isAfter(now);
   }
 
   bool matches(_PendingAccountDeletion other) =>
@@ -2855,4 +3034,17 @@ class _PendingAccountDeletion {
       this.host == host.trim().toLowerCase();
 
   bool matchesKey(String key) => '$username@$host' == key.trim().toLowerCase();
+
+  static String _resolveExpiry({
+    required String createdAt,
+    required String? expiresAt,
+  }) {
+    final trimmedExpiry = expiresAt?.trim();
+    if (trimmedExpiry != null && trimmedExpiry.isNotEmpty) {
+      return trimmedExpiry;
+    }
+    final createdAtTimestamp = DateTime.tryParse(createdAt);
+    final base = createdAtTimestamp ?? DateTime.now();
+    return base.add(_pendingSignupRollbackLegacyMaxAge).toIso8601String();
+  }
 }

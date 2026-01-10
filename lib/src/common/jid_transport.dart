@@ -12,6 +12,8 @@ extension JidTransportExtension on String {
 
   String get _bareJid => _normalized.split(_jidResourceDelimiter).first;
 
+  String get bareJid => _bareJid;
+
   bool get isAxiJid {
     final normalized = _bareJid;
     if (normalized.isEmpty || !normalized.contains(_jidAtSymbol)) {

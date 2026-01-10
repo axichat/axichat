@@ -127,6 +127,7 @@ const String _attachmentShareFallbackName = 'attachment';
 const int _attachmentShareNameMaxLength = 120;
 const int _attachmentSaveNameMaxLength = _attachmentShareNameMaxLength;
 const Duration _attachmentShareCleanupAge = Duration(days: 1);
+const Duration _attachmentShareCleanupDelay = Duration(minutes: 10);
 const bool _attachmentShareCleanupFollowLinks = false;
 const Duration _attachmentImageDecodeTimeout = Duration(seconds: 2);
 const Duration _attachmentVideoInitTimeout = Duration(seconds: 3);
@@ -2499,8 +2500,9 @@ Future<void> _shareAttachmentFromFile(
     );
     return;
   }
+  File? sharedFile;
   try {
-    final sharedFile = await _prepareShareAttachmentFile(
+    sharedFile = await _prepareShareAttachmentFile(
       file: file,
       filename: filename,
     );
@@ -2529,6 +2531,10 @@ Future<void> _shareAttachmentFromFile(
       l10n.chatAttachmentUnavailable,
       destructive: true,
     );
+  } finally {
+    if (sharedFile != null) {
+      _scheduleShareCleanup(sharedFile);
+    }
   }
 }
 
@@ -2691,6 +2697,25 @@ String _resolveAttachmentFallbackName({
     return trimmedPath;
   }
   return fallbackName;
+}
+
+void _scheduleShareCleanup(File sharedFile) {
+  final String parentName = p.basename(sharedFile.parent.path);
+  if (!parentName.startsWith(_attachmentShareDirPrefix)) {
+    return;
+  }
+  final Directory shareDir = sharedFile.parent;
+  unawaited(
+    Future<void>.delayed(_attachmentShareCleanupDelay).then((_) async {
+      try {
+        if (await shareDir.exists()) {
+          await shareDir.delete(recursive: true);
+        }
+      } on Exception {
+        return;
+      }
+    }),
+  );
 }
 
 Future<void> _applyDownloadProtections(File destination) async {

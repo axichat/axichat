@@ -452,6 +452,7 @@ class Message with _$Message implements Insertable<Message> {
     mox.JID? quotedJid,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
     mox.JID? toJidOverride,
+    mox.JID? fromJidOverride,
     String? type,
   }) {
     final extensions = <mox.StanzaHandlerExtension>[
@@ -511,8 +512,9 @@ class Message with _$Message implements Insertable<Message> {
     extensions.addAll(extraExtensions);
 
     final toJid = toJidOverride ?? mox.JID.fromString(chatJid);
+    final fromJid = fromJidOverride ?? mox.JID.fromString(senderJid);
     return mox.MessageEvent(
-      mox.JID.fromString(senderJid),
+      fromJid,
       toJid,
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList(extensions),

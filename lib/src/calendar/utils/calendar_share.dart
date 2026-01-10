@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -13,6 +14,8 @@ enum CalendarShareOutcome {
   copiedPath,
 }
 
+const Duration _calendarExportCleanupDelay = Duration(hours: 1);
+
 Future<CalendarShareOutcome> shareCalendarExport({
   required File file,
   required String subject,
@@ -20,9 +23,11 @@ Future<CalendarShareOutcome> shareCalendarExport({
 }) async {
   if (Platform.isLinux) {
     if (await _openDirectory(file.parent)) {
+      _scheduleExportCleanup(file);
       return CalendarShareOutcome.openedDirectory;
     }
     await Clipboard.setData(ClipboardData(text: file.path));
+    _scheduleExportCleanup(file);
     return CalendarShareOutcome.copiedPath;
   }
 
@@ -31,6 +36,7 @@ Future<CalendarShareOutcome> shareCalendarExport({
     subject: subject,
     text: text,
   );
+  _scheduleExportCleanup(file);
   return CalendarShareOutcome.shared;
 }
 
@@ -59,4 +65,18 @@ Future<bool> _openDirectory(Directory directory) async {
   } catch (_) {
     return false;
   }
+}
+
+void _scheduleExportCleanup(File file) {
+  unawaited(
+    Future<void>.delayed(_calendarExportCleanupDelay, () async {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } on Exception {
+        return;
+      }
+    }),
+  );
 }

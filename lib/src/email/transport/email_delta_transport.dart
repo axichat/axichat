@@ -654,9 +654,9 @@ class EmailDeltaTransport implements ChatTransport {
     return accounts.addAccount(closed: closed);
   }
 
-  Future<void> ensureAccountSession(int accountId) async {
+  Future<void> ensureAccountSession(int? accountId) async {
     await _ensureContextReady();
-    await _ensureAccountSession(accountId);
+    await _ensureSession(accountId: accountId);
   }
 
   Future<bool> removeAccount(int accountId) async {

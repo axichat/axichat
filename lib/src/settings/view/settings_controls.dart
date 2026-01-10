@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
+import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
@@ -17,24 +18,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _compactTileHeight = 52.0;
+const EdgeInsets _compactTilePadding = EdgeInsets.symmetric(
+  horizontal: 16,
+  vertical: 6,
+);
+const EdgeInsets _settingsSectionHeaderPadding = EdgeInsets.symmetric(
+  horizontal: 16.0,
+  vertical: 6.0,
+);
+
 class SettingsControls extends StatelessWidget {
   const SettingsControls({
     super.key,
     this.showDivider = false,
-    this.showAppearanceDivider = true,
   });
 
   final bool showDivider;
-  final bool showAppearanceDivider;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    const double compactTileHeight = 52;
-    const EdgeInsets compactTilePadding = EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 6,
-    );
+    final emailSectionLabel = l10n.settingsSectionEmail;
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
         return Column(
@@ -42,20 +47,13 @@ class SettingsControls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const EmailContactImportTile(),
+            const EmailForwardingGuideTile(),
             if (context.read<Capability>().canForegroundService) ...[
-              if (showDivider) ...[
-                const AxiListDivider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 6.0,
-                  ),
-                  child: Text(
-                    l10n.settingsSectionImportant,
-                    style: context.textTheme.muted,
-                  ),
-                ),
-              ],
+              _SettingsSectionHeader(
+                label: l10n.settingsSectionImportant,
+                showDivider: showDivider,
+              ),
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: NotificationRequest(
@@ -64,16 +62,8 @@ class SettingsControls extends StatelessWidget {
                 ),
               ),
             ],
-            if (showAppearanceDivider) const AxiListDivider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 6.0,
-              ),
-              child: Text(
-                l10n.settingsSectionAppearance,
-                style: context.textTheme.muted,
-              ),
+            _SettingsSectionHeader(
+              label: l10n.settingsSectionAppearance,
             ),
             ListItemPadding(
               child: AxiListTile(
@@ -81,8 +71,8 @@ class SettingsControls extends StatelessWidget {
                 actions: const [
                   LanguageSelector(),
                 ],
-                minTileHeight: compactTileHeight,
-                contentPadding: compactTilePadding,
+                minTileHeight: _compactTileHeight,
+                contentPadding: _compactTilePadding,
               ),
             ),
             ListItemPadding(
@@ -109,8 +99,8 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
-                minTileHeight: compactTileHeight,
-                contentPadding: compactTilePadding,
+                minTileHeight: _compactTileHeight,
+                contentPadding: _compactTilePadding,
               ),
             ),
             ListItemPadding(
@@ -138,8 +128,8 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
-                minTileHeight: compactTileHeight,
-                contentPadding: compactTilePadding,
+                minTileHeight: _compactTileHeight,
+                contentPadding: _compactTilePadding,
               ),
             ),
             Padding(
@@ -163,16 +153,8 @@ class SettingsControls extends StatelessWidget {
                     context.read<SettingsCubit>().toggleLowMotion(lowMotion),
               ),
             ),
-            const AxiListDivider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 6.0,
-              ),
-              child: Text(
-                l10n.settingsSectionChats,
-                style: context.textTheme.muted,
-              ),
+            _SettingsSectionHeader(
+              label: l10n.settingsSectionChats,
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),
@@ -213,45 +195,12 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: Text(l10n.settingsEmailReadReceipts),
-                sublabel: Text(l10n.settingsEmailReadReceiptsDescription),
-                value: state.emailReadReceipts,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleEmailReadReceipts(enabled),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
                 label: Text(l10n.settingsTypingIndicators),
                 sublabel: Text(l10n.settingsTypingIndicatorsDescription),
                 value: state.indicateTyping,
                 onChanged: (indicateTyping) => context
                     .read<SettingsCubit>()
                     .toggleIndicateTyping(indicateTyping),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
-                label: Text(l10n.settingsShareTokenFooter),
-                sublabel: Text(l10n.settingsShareTokenFooterDescription),
-                value: state.shareTokenSignatureEnabled,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleShareTokenSignature(enabled),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
-                label: Text(l10n.settingsAutoLoadEmailImages),
-                sublabel: Text(l10n.settingsAutoLoadEmailImagesDescription),
-                value: state.autoLoadEmailImages,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleAutoLoadEmailImages(enabled),
               ),
             ),
             Padding(
@@ -298,11 +247,77 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoDownloadArchives(enabled),
               ),
             ),
-            const EmailContactImportTile(),
+            _SettingsSectionHeader(
+              label: emailSectionLabel,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsEmailReadReceipts),
+                sublabel: Text(l10n.settingsEmailReadReceiptsDescription),
+                value: state.emailReadReceipts,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleEmailReadReceipts(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsShareTokenFooter),
+                sublabel: Text(l10n.settingsShareTokenFooterDescription),
+                value: state.shareTokenSignatureEnabled,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleShareTokenSignature(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsAutoLoadEmailImages),
+                sublabel: Text(l10n.settingsAutoLoadEmailImagesDescription),
+                value: state.autoLoadEmailImages,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleAutoLoadEmailImages(enabled),
+              ),
+            ),
             const AxiListDivider(),
           ],
         );
       },
+    );
+  }
+}
+
+class _SettingsSectionHeader extends StatelessWidget {
+  const _SettingsSectionHeader({
+    required this.label,
+    this.showDivider = true,
+  });
+
+  final String label;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final header = Padding(
+      padding: _settingsSectionHeaderPadding,
+      child: Text(
+        label,
+        style: context.textTheme.muted,
+      ),
+    );
+    if (!showDivider) {
+      return header;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AxiListDivider(),
+        header,
+      ],
     );
   }
 }

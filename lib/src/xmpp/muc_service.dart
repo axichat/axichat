@@ -52,9 +52,9 @@ const _vCardBinvalTag = 'BINVAL';
 const _vCardTypeTag = 'TYPE';
 const _mucJoinRequestedLog = 'MUC join requested.';
 const _mucJoinPollHasSelfPresenceLog = 'MUC join already has self presence.';
-const _mucJoinPollManagerStateLog = 'MUC join resolved using manager state.';
 const _mucJoinSelfPresenceEventLog = 'MUC self presence event.';
-const _mucJoinSyntheticPresenceLog = 'MUC self presence synthesized.';
+const _mucJoinOwnDataIgnoredLog =
+    'MUC own data ignored; missing self presence.';
 const _mucJoinCompletedLog = 'MUC join completed.';
 const _mucJoinTimeoutLog = 'Timed out waiting for room join to complete.';
 const _mucJoinLogSeparator = ' ';
@@ -78,10 +78,16 @@ const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
 const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
+const bool _mucAvatarSupportEnabled = false;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
 const Set<String> _selfPresenceFallbackStatusCodes = {mucStatusSelfPresence};
 const Set<String> _emptyStatusCodes = <String>{};
+const Map<String, Occupant> _emptyOccupants = <String, Occupant>{};
+const bool _preserveOccupantsDefault = false;
+const bool _preserveOccupantsOnMucError = true;
+const bool _preserveOccupantsOnJoinTimeout = true;
+const bool _occupantNotPresent = false;
 const _iqTypeAttr = 'type';
 const _iqTypeGet = 'get';
 const _iqTypeSet = 'set';
@@ -209,6 +215,7 @@ mixin MucService on XmppBase, BaseStreamService {
   final _roomNicknames = <String, String>{};
   final _leftRooms = <String>{};
   final _explicitlyLeftRooms = <String>{};
+  final _roomsNeedingJoin = <String>{};
   final _mucJoinInFlight = <String>{};
   final _mucJoinCompleters = <String, Completer<void>>{};
   static const int _mucJoinAttemptIdStart = 1;
@@ -526,12 +533,25 @@ mixin MucService on XmppBase, BaseStreamService {
 
   bool hasLeftRoom(String roomJid) => _leftRooms.contains(_roomKey(roomJid));
 
-  bool _hasMucManagerPresence(mox.RoomState? managerState) {
-    final nick = managerState?.nick?.trim();
-    if (nick == null || nick.isEmpty) return false;
-    if (managerState?.affiliation == null) return false;
-    if (managerState?.role == null) return false;
-    return true;
+  Future<mox.RoomState?> _mucManagerRoomState(String roomJid) async {
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) return null;
+    late final mox.JID roomBare;
+    try {
+      roomBare = mox.JID.fromString(roomJid).toBare();
+    } on Exception {
+      return null;
+    }
+    return manager.getRoomState(roomBare);
+  }
+
+  Future<void> _setMucManagerJoinedState({
+    required String roomJid,
+    required bool joined,
+  }) async {
+    final managerState = await _mucManagerRoomState(roomJid);
+    if (managerState == null) return;
+    managerState.joined = joined;
   }
 
   Future<bool> _hasMucPresenceForSend({
@@ -545,13 +565,21 @@ mixin MucService on XmppBase, BaseStreamService {
       return false;
     }
     final roomState = roomStateFor(normalizedRoom);
-    if (roomState?.hasSelfPresence != true) return false;
-    final manager = _connection.getManager<MUCManager>();
-    if (manager == null) return false;
-    final managerState = await manager.getRoomState(
-      mox.JID.fromString(normalizedRoom).toBare(),
-    );
-    return _hasMucManagerPresence(managerState);
+    if (roomState == null) return false;
+    if (_roomNeedsJoin(normalizedRoom)) return false;
+    final managerState = await _mucManagerRoomState(normalizedRoom);
+    if (managerState == null || managerState.joined != true) return false;
+    final managerNick = managerState.nick?.trim();
+    if (managerNick == null || managerNick.isEmpty) return false;
+    if (roomState.hasSelfPresence != true) return false;
+    if (!roomState.selfPresenceStatusCodes.contains(mucStatusSelfPresence)) {
+      return false;
+    }
+    final expectedOccupantId = '$normalizedRoom/$managerNick';
+    if (roomState.myOccupantId != expectedOccupantId) return false;
+    final occupant = roomState.occupants[expectedOccupantId];
+    if (occupant?.isPresent != true) return false;
+    return true;
   }
 
   int _ensureJoinAttemptIdForKey(String roomKey) {
@@ -630,10 +658,29 @@ mixin MucService on XmppBase, BaseStreamService {
     _leftRooms.remove(_roomKey(roomJid));
   }
 
+  void _markRoomNeedsJoin(String roomJid) {
+    _roomsNeedingJoin.add(_roomKey(roomJid));
+  }
+
+  void _clearRoomNeedsJoin(String roomJid) {
+    _roomsNeedingJoin.remove(_roomKey(roomJid));
+  }
+
+  bool _roomNeedsJoin(String roomJid) {
+    return _roomsNeedingJoin.contains(_roomKey(roomJid));
+  }
+
   void _clearSelfPresenceOnDisconnect() {
     if (_roomStates.isEmpty) return;
+    _roomsNeedingJoin.clear();
     for (final entry in _roomStates.entries) {
       final room = entry.value;
+      unawaited(
+        _setMucManagerJoinedState(
+          roomJid: entry.key,
+          joined: false,
+        ),
+      );
       if (room.selfPresenceStatusCodes.isEmpty &&
           room.selfPresenceReason == null) {
         continue;
@@ -674,12 +721,9 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> _pollForSelfPresenceFromMucManager(String roomJid) async {
     final normalizedRoom = _roomKey(roomJid);
-    final manager = _connection.getManager<MUCManager>();
-    if (manager == null) return;
     final activeCompleter = _mucJoinCompleters[normalizedRoom];
     if (activeCompleter == null || activeCompleter.isCompleted) return;
     final attemptId = _joinAttemptIdForKey(normalizedRoom);
-    final roomBare = mox.JID.fromString(normalizedRoom).toBare();
     final deadline = DateTime.timestamp().add(_mucJoinTimeout);
     while (DateTime.timestamp().isBefore(deadline)) {
       final currentCompleter = _mucJoinCompleters[normalizedRoom];
@@ -694,67 +738,58 @@ mixin MucService on XmppBase, BaseStreamService {
         _completeJoinAttempt(normalizedRoom);
         return;
       }
-      try {
-        final roomState = await manager.getRoomState(roomBare);
-        if (roomState == null) {
-          await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
-          continue;
-        }
-        final nick = roomState.nick?.trim();
-        final affiliation = roomState.affiliation;
-        final role = roomState.role;
-        if (nick == null ||
-            nick.isEmpty ||
-            affiliation == null ||
-            role == null) {
-          await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
-          continue;
-        }
-        final usedFallbackStatusCodes =
-            _roomStates[normalizedRoom]?.selfPresenceStatusCodes.isNotEmpty !=
-                true;
-        _logJoinEvent(
-          message: _mucJoinPollManagerStateLog,
-          attemptId: attemptId,
-          managerPresence: true,
-          usedFallbackStatusCodes: usedFallbackStatusCodes,
-        );
-        if (!roomState.joined) {
-          roomState.joined = true;
-        }
-        await _handleOwnDataChanged(
-          roomJid: roomBare,
-          nick: nick,
-          affiliation: affiliation,
-          role: role,
-        );
-        _syncMembersFromMucManager(roomBare, roomState.members);
-        return;
-      } on Exception {
-        // Ignore poll errors and retry until timeout.
-      }
       await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
     }
+  }
+
+  Map<String, Occupant> _markSelfOccupantUnavailable({
+    required Map<String, Occupant> occupants,
+    required String? myOccupantId,
+  }) {
+    if (myOccupantId == null) return occupants;
+    final occupant = occupants[myOccupantId];
+    if (occupant == null) return occupants;
+    return Map<String, Occupant>.of(occupants)
+      ..[myOccupantId] = occupant.copyWith(isPresent: _occupantNotPresent);
   }
 
   void _markRoomLeft(
     String roomJid, {
     Set<String>? statusCodes,
     String? reason,
+    bool preserveOccupants = _preserveOccupantsDefault,
   }) {
     final key = _roomKey(roomJid);
     _leftRooms.add(key);
     _instantRoomPendingRooms.remove(key);
+    if (!preserveOccupants) {
+      _roomsNeedingJoin.remove(key);
+    }
     final normalizedReason = _normalizeSubject(reason);
+    final existing = _roomStates[key];
+    final Map<String, Occupant> preservedOccupants = preserveOccupants
+        ? _markSelfOccupantUnavailable(
+            occupants: existing?.occupants ?? _emptyOccupants,
+            myOccupantId: existing?.myOccupantId,
+          )
+        : _emptyOccupants;
+    final String? preservedOccupantId =
+        preserveOccupants ? existing?.myOccupantId : null;
     final room = RoomState(
       roomJid: key,
-      occupants: const {},
-      myOccupantId: null,
-      selfPresenceStatusCodes: statusCodes ?? const <String>{},
+      occupants: preservedOccupants,
+      myOccupantId: preservedOccupantId,
+      selfPresenceStatusCodes: statusCodes ?? _emptyStatusCodes,
       selfPresenceReason: normalizedReason,
     );
     _roomStates[key] = room;
     _roomStreams[key]?.add(room);
+    unawaited(
+      _setMucManagerJoinedState(
+        roomJid: key,
+        joined: false,
+      ),
+    );
   }
 
   void _updateRoomSubject(String roomJid, String? subject) {
@@ -980,6 +1015,12 @@ mixin MucService on XmppBase, BaseStreamService {
           attemptId: _joinAttemptIdForKey(normalizedRoom),
           hasSelfPresence: hasSelfPresence,
         );
+        _markRoomNeedsJoin(normalizedRoom);
+        _markRoomLeft(
+          normalizedRoom,
+          statusCodes: _emptyStatusCodes,
+          preserveOccupants: _preserveOccupantsOnJoinTimeout,
+        );
       }
     }
   }
@@ -992,6 +1033,7 @@ mixin MucService on XmppBase, BaseStreamService {
     bool allowRejoin = false,
     bool forceRejoin = false,
   }) async {
+    if (connectionState != ConnectionState.connected) return;
     final key = _roomKey(roomJid);
     if (_explicitlyLeftRooms.contains(key) && !forceRejoin) return;
     if (_leftRooms.contains(key) && !allowRejoin && !forceRejoin) return;
@@ -1004,8 +1046,8 @@ mixin MucService on XmppBase, BaseStreamService {
         return;
       }
     }
-    final hasSelfPresence = room?.hasSelfPresence == true;
-    if (hasSelfPresence && !forceRejoin) {
+    final hasPresenceForSend = await _hasMucPresenceForSend(roomJid: key);
+    if (hasPresenceForSend && !forceRejoin) {
       await _awaitInstantRoomConfigurationIfNeeded(key);
       return;
     }
@@ -1509,6 +1551,7 @@ mixin MucService on XmppBase, BaseStreamService {
     required String roomJid,
     required AvatarUploadPayload avatar,
   }) async {
+    if (!_mucAvatarSupportEnabled) return false;
     final normalizedRoomJid = _roomKey(roomJid);
     final resolvedHash = _resolveRoomAvatarHash(avatar);
     final encodedAvatar = _base64EncodeAvatarPublishPayload(avatar.bytes);
@@ -2029,6 +2072,7 @@ mixin MucService on XmppBase, BaseStreamService {
   }
 
   Future<void> refreshRoomAvatars(List<MucBookmark> bookmarks) async {
+    if (!_mucAvatarSupportEnabled) return;
     if (connectionState != ConnectionState.connected) return;
     if (bookmarks.isEmpty) return;
     if (this is! AvatarService) return;
@@ -2046,17 +2090,16 @@ mixin MucService on XmppBase, BaseStreamService {
   }
 
   Future<void> _refreshRoomAvatar(String roomJid) async {
+    if (!_mucAvatarSupportEnabled) return;
     if (this is! AvatarService) return;
     final normalizedRoom = _roomKey(roomJid);
     try {
       final payload = await _fetchRoomAvatarPayload(normalizedRoom);
       if (payload.data == null || payload.data!.isEmpty) {
-        await (this as AvatarService).prefetchAvatarForJid(normalizedRoom);
         return;
       }
       final decoded = _decodeRoomAvatarData(payload.data!);
       if (decoded == null) {
-        await (this as AvatarService).prefetchAvatarForJid(normalizedRoom);
         return;
       }
       await (this as AvatarService).storeAvatarBytesForJid(
@@ -2359,6 +2402,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (nextNick.isEmpty) return;
 
     _markRoomJoined(roomJid);
+    _clearRoomNeedsJoin(roomJid);
     _roomNicknames[roomJid] = nextNick;
     _rememberRoomNickname(roomJid: roomJid, nickname: nextNick);
 
@@ -2423,29 +2467,26 @@ mixin MucService on XmppBase, BaseStreamService {
     required mox.Role role,
   }) async {
     final key = _roomKey(roomJid.toBare().toString());
-    final usedFallbackStatusCodes =
-        _roomStates[key]?.selfPresenceStatusCodes.isNotEmpty != true;
-    _logJoinEvent(
-      message: _mucJoinSyntheticPresenceLog,
-      attemptId: _joinAttemptIdForKey(key),
-      usedFallbackStatusCodes: usedFallbackStatusCodes,
-    );
-    final statusCodes = usedFallbackStatusCodes
-        ? _selfPresenceFallbackStatusCodes
-        : _roomStates[key]!.selfPresenceStatusCodes;
-    await _handleSelfPresence(
-      MucSelfPresenceEvent(
-        roomJid: roomJid.toBare().toString(),
-        occupantJid: roomJid.toBare().withResource(nick).toString(),
-        nick: nick,
-        affiliation: affiliation.value,
-        role: role.value,
-        isAvailable: true,
-        isError: false,
-        isNickChange: false,
-        statusCodes: statusCodes,
-        reason: null,
-      ),
+    final roomState = _roomStates[key];
+    if (roomState?.hasSelfPresence != true) {
+      _logJoinEvent(
+        message: _mucJoinOwnDataIgnoredLog,
+        attemptId: _joinAttemptIdForKey(key),
+      );
+      return;
+    }
+    final trimmedNick = nick.trim();
+    if (trimmedNick.isEmpty) return;
+    _roomNicknames[key] = trimmedNick;
+    _rememberRoomNickname(roomJid: key, nickname: trimmedNick);
+    _upsertOccupant(
+      roomJid: key,
+      occupantId: '$key/$trimmedNick',
+      nick: trimmedNick,
+      realJid: _myJid?.toBare().toString(),
+      affiliation: affiliation.toOccupantAffiliation,
+      role: role.toOccupantRole,
+      isPresent: true,
     );
   }
 
@@ -2461,17 +2502,6 @@ mixin MucService on XmppBase, BaseStreamService {
       role: member.role.toOccupantRole,
       isPresent: true,
     );
-  }
-
-  void _syncMembersFromMucManager(
-    mox.JID roomJid,
-    Map<String, mox.RoomMember> members,
-  ) {
-    if (members.isEmpty) return;
-    final snapshot = members.values.toList(growable: false);
-    for (final member in snapshot) {
-      _handleMemberUpsert(roomJid, member);
-    }
   }
 
   void _handleMemberLeft(mox.JID roomJid, String nick) {
@@ -2759,8 +2789,6 @@ mixin MucService on XmppBase, BaseStreamService {
         _roomStates[key] ?? RoomState(roomJid: key, occupants: const {});
     final updated = Map<String, Occupant>.of(existing.occupants);
     final current = updated[occupantId];
-    final isNickMatch =
-        nick.toLowerCase() == (_roomNicknames[key]?.toLowerCase() ?? '');
     final resolvedRealJid = realJid ?? current?.realJid;
     final resolvedAffiliation =
         affiliation ?? current?.affiliation ?? OccupantAffiliation.none;
@@ -2777,9 +2805,14 @@ mixin MucService on XmppBase, BaseStreamService {
       role: role ?? current?.role,
       isPresent: isPresent ?? current?.isPresent ?? true,
     );
+    final isNickMatch =
+        nick.toLowerCase() == (_roomNicknames[key]?.toLowerCase() ?? '');
+    final isKnownSelf =
+        _isSelfOccupant(next) || existing.myOccupantId == occupantId;
+    final allowNickMatch = _mucJoinInFlight.contains(key);
     updated[occupantId] = next;
     var myOccupantId = existing.myOccupantId;
-    final shouldMarkSelf = _isSelfOccupant(next) || isNickMatch;
+    final shouldMarkSelf = isKnownSelf || (allowNickMatch && isNickMatch);
     if (shouldMarkSelf) {
       _roomNicknames[key] = nick;
       if (resolvedRealJid != null) {

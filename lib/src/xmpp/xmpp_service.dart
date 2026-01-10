@@ -59,6 +59,7 @@ import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/email_blocklist_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
@@ -503,6 +504,8 @@ class XmppService extends XmppBase
   XmppStreamReady? _lastStreamReady;
 
   bool get mamSupported => _mamSupported;
+
+  String? get saltedPassword => _connection.saltedPassword;
 
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
 

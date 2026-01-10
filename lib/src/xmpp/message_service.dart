@@ -2344,11 +2344,13 @@ mixin MessageService
         isGroupChat && !isPrivateMucMessage ? targetJid.toBare() : targetJid;
     final type = isGroupChat && !isPrivateMucMessage ? 'groupchat' : 'chat';
 
+    final mox.JID? fromJidOverride = isGroupChat ? _myJid : null;
     return message.toMox(
       quotedBody: quotedMessage?.body,
       quotedJid: quotedJid,
       extraExtensions: extraExtensions,
       toJidOverride: toJid,
+      fromJidOverride: fromJidOverride,
       type: type,
     );
   }
@@ -4308,6 +4310,10 @@ mixin MessageService
         _matchesStanzaErrorType(errorType, _errorTypeWait)) {
       return true;
     }
+    if (condition == _errorConditionServiceUnavailable &&
+        _matchesStanzaErrorType(errorType, _errorTypeCancel)) {
+      return true;
+    }
     return false;
   }
 
@@ -4372,12 +4378,32 @@ mixin MessageService
     return null;
   }
 
+  Future<String?> _resolveGroupChatRoomJidFromDb(String stanzaId) async {
+    final trimmed = stanzaId.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final message = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByStanzaID(trimmed),
+      );
+      if (message == null) return null;
+      return _normalizeMucRoomJidCandidate(message.chatJid);
+    } on XmppAbortedException {
+      return null;
+    }
+  }
+
   bool _shouldClearMucPresenceForError(
     StanzaErrorConditionData? conditionData,
   ) {
     if (conditionData == null) return false;
-    return conditionData.condition == _errorConditionNotAcceptable &&
-        _matchesStanzaErrorType(conditionData.type, _errorTypeModify);
+    final condition = conditionData.condition;
+    final errorType = conditionData.type;
+    if (condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
+      return true;
+    }
+    return condition == _errorConditionServiceUnavailable &&
+        _matchesStanzaErrorType(errorType, _errorTypeCancel);
   }
 
   Future<void> _repairMucJoin(String roomJid) async {
@@ -4414,19 +4440,25 @@ mixin MessageService
     final _OutboundMessageSummary? summary =
         _outboundMessageSummaries.remove(stanzaId);
     final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
-    final String? roomJid = summaryIsGroupChat
+    String? roomJid = summaryIsGroupChat
         ? _resolveGroupChatRoomJid(event: event, summary: summary!)
         : _resolveGroupChatRoomJidFromEvent(event);
+    roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
     if (roomJid != null &&
         _isMucChatJid(roomJid) &&
         _shouldAttemptMucRepairForRoom(
           roomJid: roomJid,
           conditionData: errorCondition,
         )) {
+      _markRoomNeedsJoin(roomJid);
       if (_shouldClearMucPresenceForError(errorCondition)) {
         final roomState = roomStateFor(roomJid);
         if (roomState?.hasSelfPresence == true) {
-          _markRoomLeft(roomJid, statusCodes: _emptyStatusCodes);
+          _markRoomLeft(
+            roomJid,
+            statusCodes: _emptyStatusCodes,
+            preserveOccupants: _preserveOccupantsOnMucError,
+          );
         }
       }
       unawaited(_repairMucJoin(roomJid));
@@ -6349,33 +6381,35 @@ mixin MessageService
         affiliations: affiliations,
       );
     }
+    final configuredError = configured.get<mox.PubSubError>();
+    final shouldCreateNode = configuredError.indicatesMissingNode;
+    if (!shouldCreateNode) {
+      return false;
+    }
 
     try {
-      final created = await pubsub.createNodeWithConfig(
+      await pubsub.createNodeWithConfig(
         host,
         _pinCreateNodeConfig(policy),
         nodeId: nodeId,
       );
-      if (created != null) {
-        final applied = await pubsub.configureNode(host, nodeId, config);
-        if (applied.isType<mox.PubSubError>()) {
-          return false;
-        }
-        return _applyPinAffiliationsIfNeeded(
-          pubsub: pubsub,
-          host: host,
-          nodeId: nodeId,
-          policy: policy,
-          affiliations: affiliations,
-        );
+      final applied = await pubsub.configureNode(host, nodeId, config);
+      if (applied.isType<mox.PubSubError>()) {
+        return false;
       }
+      return _applyPinAffiliationsIfNeeded(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        policy: policy,
+        affiliations: affiliations,
+      );
     } on Exception {
       // Ignore and try fallback creation.
     }
 
     try {
-      final created = await pubsub.createNode(host, nodeId: nodeId);
-      if (created == null) return false;
+      await pubsub.createNode(host, nodeId: nodeId);
       final applied = await pubsub.configureNode(host, nodeId, config);
       if (applied.isType<mox.PubSubError>()) {
         return false;
