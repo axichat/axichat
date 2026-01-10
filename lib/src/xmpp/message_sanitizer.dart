@@ -37,6 +37,8 @@ const String _errorTypeCancel = 'cancel';
 const String _errorConditionNotAcceptable = 'not-acceptable';
 const String _errorConditionResourceConstraint = 'resource-constraint';
 const String _errorConditionServiceUnavailable = 'service-unavailable';
+const String _messageTag = 'message';
+const int _outgoingMessageHandlerPriority = 120;
 
 int _utf8ByteLength(String value) => utf8.encode(value).length;
 
@@ -232,6 +234,16 @@ final class StanzaErrorConditionData implements mox.StanzaHandlerExtension {
 
   final String condition;
   final String? type;
+}
+
+final class OutboundGroupchatStanzaEvent extends mox.XmppEvent {
+  OutboundGroupchatStanzaEvent({
+    required this.stanzaId,
+    required this.roomJid,
+  });
+
+  final String stanzaId;
+  final String roomJid;
 }
 
 final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
@@ -463,9 +475,18 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
   @override
   List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [
         mox.StanzaHandler(
-          stanzaTag: 'message',
+          stanzaTag: _messageTag,
           priority: 9997,
           callback: _onIncomingMessage,
+        ),
+      ];
+
+  @override
+  List<mox.StanzaHandler> getOutgoingPreStanzaHandlers() => [
+        mox.StanzaHandler(
+          stanzaTag: _messageTag,
+          priority: _outgoingMessageHandlerPriority,
+          callback: _onOutgoingMessage,
         ),
       ];
 
@@ -511,6 +532,27 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
       nodes.add(availability.toXml());
     }
     return nodes;
+  }
+
+  Future<mox.StanzaHandlerData> _onOutgoingMessage(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    final stanzaId = stanza.id?.trim();
+    if (stanzaId == null || stanzaId.isEmpty) return state;
+    final type = stanza.type?.trim();
+    if (type != _messageTypeGroupchat) return state;
+    final toRaw = stanza.to?.trim();
+    if (toRaw == null || toRaw.isEmpty) return state;
+    final roomJid = _normalizeMucRoomJidCandidate(toRaw);
+    if (roomJid == null) return state;
+    getAttributes().sendEvent(
+      OutboundGroupchatStanzaEvent(
+        stanzaId: stanzaId,
+        roomJid: roomJid,
+      ),
+    );
+    return state;
   }
 
   Future<mox.StanzaHandlerData> _onIncomingMessage(

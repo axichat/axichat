@@ -36,6 +36,9 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
@@ -84,6 +87,7 @@ const _mucOccupantSeparator = '/';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
+const _emptyShareReplies = <String, List<Chat>>{};
 
 class ComposerRecipient extends Equatable {
   const ComposerRecipient({

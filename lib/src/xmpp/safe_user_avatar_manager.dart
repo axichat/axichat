@@ -10,11 +10,14 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 /// Fixes metadata parsing for XEP-0084 PEP notifications and corrects the
 /// unsubscribe implementation.
 class SafeUserAvatarManager extends mox.UserAvatarManager {
-  SafeUserAvatarManager();
+  SafeUserAvatarManager({this.shouldSkipJid});
 
   static const String _metadataTag = 'metadata';
   static const String _infoTag = 'info';
   static const int _maxMetadataItems = 1;
+  static const bool _skipAvatarJidDefault = false;
+
+  final bool Function(mox.JID jid)? shouldSkipJid;
 
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
@@ -38,6 +41,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     } on Exception {
       return;
     }
+    if (_shouldSkipAvatarJid(from)) return;
 
     if (event.item.payload case final payload?) {
       await _emitFromPayload(from: from, payload: payload);
@@ -53,6 +57,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
   Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {
     if (event.node != mox.userAvatarMetadataXmlns) return;
+    if (_shouldSkipAvatarJid(event.from)) return;
     await _refreshMetadata(from: event.from);
   }
 
@@ -60,6 +65,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     required mox.JID from,
     String? itemId,
   }) async {
+    if (_shouldSkipAvatarJid(from)) return;
     final pubsub =
         getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
     if (pubsub == null) return;
@@ -114,6 +120,9 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     if (payload == null) return;
     await _emitFromPayload(from: from, payload: payload);
   }
+
+  bool _shouldSkipAvatarJid(mox.JID jid) =>
+      shouldSkipJid?.call(jid) ?? _skipAvatarJidDefault;
 
   Future<void> _emitFromPayload({
     required mox.JID from,
