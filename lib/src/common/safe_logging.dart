@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
 class SafeLogging {
+  static const String _debugLogDefaultName = 'Axichat';
   static const String redactedAccount = '<account>';
   static const String redactedPath = '<path>';
   static const String redactedSecret = '<secret>';
@@ -86,6 +90,23 @@ class SafeLogging {
 
   static void setVerboseXmppTraffic({required bool enabled}) {
     _verboseXmppTraffic = enabled;
+  }
+
+  static void debugLog(
+    String message, {
+    String? name,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    if (!kDebugMode) {
+      return;
+    }
+    developer.log(
+      message,
+      name: name ?? _debugLogDefaultName,
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   static String sanitizeMessage(String message) => _sanitize(message);

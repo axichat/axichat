@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -19,6 +18,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 
 /// Threshold of updates before sending a snapshot.
 const int kSnapshotThreshold = 50;
@@ -84,12 +84,13 @@ class CalendarSyncManager {
         case CalendarSyncType.snapshot:
           return await _handleSnapshotMessage(message, inbound: inbound);
         default:
-          developer.log('Unknown calendar sync message type: ${message.type}');
+          SafeLogging.debugLog(
+              'Unknown calendar sync message type: ${message.type}');
           throw CalendarSyncException(
               'Unknown sync message type: ${message.type}');
       }
     } catch (e) {
-      developer.log('Error handling calendar message: $e',
+      SafeLogging.debugLog('Error handling calendar message: $e',
           name: 'CalendarSyncManager');
       if (e is CalendarException) {
         rethrow;
@@ -110,7 +111,7 @@ class CalendarSyncManager {
       final int? snapshotVersion = message.snapshotVersion;
       if (snapshotVersion != null &&
           snapshotVersion > CalendarSnapshotCodec.currentVersion) {
-        developer.log(
+        SafeLogging.debugLog(
           '$_snapshotVersionUnsupportedLogPrefix'
           '$snapshotVersion'
           '$_snapshotVersionUnsupportedLogSuffix',
@@ -122,14 +123,14 @@ class CalendarSyncManager {
       final localModel = _readModel();
       final snapshotChecksum = message.snapshotChecksum ?? message.checksum;
 
-      developer.log(
+      SafeLogging.debugLog(
         'Applying snapshot (checksum: ${message.snapshotChecksum})',
         name: 'CalendarSyncManager',
       );
 
       if (snapshotChecksum != null &&
           snapshotChecksum != remoteModel.calculateChecksum()) {
-        developer.log(
+        SafeLogging.debugLog(
           _snapshotChecksumMismatchLog,
           name: 'CalendarSyncManager',
         );
@@ -157,7 +158,7 @@ class CalendarSyncManager {
       await _writeSyncState(state);
       return true;
     } catch (e) {
-      developer.log('Error handling snapshot message: $e');
+      SafeLogging.debugLog('Error handling snapshot message: $e');
     }
     return false;
   }
@@ -167,7 +168,7 @@ class CalendarSyncManager {
       await _flushPendingEnvelopes();
       return await _maybeSendSnapshot();
     } catch (e) {
-      developer.log('Error handling request message: $e',
+      SafeLogging.debugLog('Error handling request message: $e',
           name: 'CalendarSyncManager');
       throw CalendarSyncException('Failed to send calendar data', e.toString());
     }
@@ -189,19 +190,19 @@ class CalendarSyncManager {
           message.checksum ?? _calculateChecksum(message.data!);
 
       if (localChecksum == remoteChecksum) {
-        developer.log('Calendars already in sync - no changes needed');
+        SafeLogging.debugLog('Calendars already in sync - no changes needed');
         await _recordAppliedMessage(message, inbound: inbound);
         return true;
       }
 
-      developer.log(
+      SafeLogging.debugLog(
           'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)');
       final mergedModel = localModel.mergeWith(remoteModel);
       await _applyModel(mergedModel);
       await _recordAppliedMessage(message, inbound: inbound);
       return true;
     } catch (e) {
-      developer.log('Error handling full calendar message: $e');
+      SafeLogging.debugLog('Error handling full calendar message: $e');
     }
     return false;
   }
@@ -242,7 +243,7 @@ class CalendarSyncManager {
       await _recordAppliedMessage(message, inbound: inbound);
       return applied;
     } catch (e) {
-      developer.log('Error handling calendar update: $e');
+      SafeLogging.debugLog('Error handling calendar update: $e');
     }
     return false;
   }
@@ -323,7 +324,7 @@ class CalendarSyncManager {
             .copyWith(lastSnapshotChecksum: result.checksum);
         await _writeSyncState(state);
 
-        developer.log(
+        SafeLogging.debugLog(
           'Sent calendar snapshot (checksum: ${result.checksum})',
           name: 'CalendarSyncManager',
         );
@@ -334,7 +335,8 @@ class CalendarSyncManager {
         }
       }
     } catch (e) {
-      developer.log('Error sending snapshot: $e', name: 'CalendarSyncManager');
+      SafeLogging.debugLog('Error sending snapshot: $e',
+          name: 'CalendarSyncManager');
     }
     if (!sent) {
       return _sendInlineSnapshot(model);
@@ -368,13 +370,13 @@ class CalendarSyncManager {
           .copyWith(lastSnapshotChecksum: checksum);
       await _writeSyncState(state);
 
-      developer.log(
+      SafeLogging.debugLog(
         '$_inlineSnapshotSentLog (checksum: $checksum)',
         name: 'CalendarSyncManager',
       );
       return true;
     } catch (e) {
-      developer.log('$_inlineSnapshotFailedLog: $e',
+      SafeLogging.debugLog('$_inlineSnapshotFailedLog: $e',
           name: 'CalendarSyncManager');
     }
     return false;
@@ -542,7 +544,7 @@ class CalendarSyncManager {
         updatedModel = currentModel.deleteTask(remoteTask.id);
         break;
       default:
-        developer.log('Unknown task operation: $operation');
+        SafeLogging.debugLog('Unknown task operation: $operation');
         return false;
     }
 
@@ -591,7 +593,7 @@ class CalendarSyncManager {
         updatedModel = currentModel.deleteDayEvent(remoteEvent.id);
         break;
       default:
-        developer.log('Unknown day event operation: $operation');
+        SafeLogging.debugLog('Unknown day event operation: $operation');
         return false;
     }
 
@@ -627,7 +629,7 @@ class CalendarSyncManager {
         updatedModel = currentModel.removeCriticalPath(remotePath.id);
         break;
       default:
-        developer.log('Unknown critical path operation: $operation');
+        SafeLogging.debugLog('Unknown critical path operation: $operation');
         return false;
     }
 
@@ -681,7 +683,7 @@ class CalendarSyncManager {
         updatedModel = currentModel.deleteJournal(remoteJournal.id);
         break;
       default:
-        developer.log('Unknown journal operation: $operation');
+        SafeLogging.debugLog('Unknown journal operation: $operation');
         return false;
     }
 
@@ -732,7 +734,7 @@ class CalendarSyncManager {
   }
 
   void _logBatchFlushError(Object error, StackTrace stackTrace) {
-    developer.log(
+    SafeLogging.debugLog(
       '$_batchFlushFailedLog: $error',
       name: 'CalendarSyncManager',
       stackTrace: stackTrace,

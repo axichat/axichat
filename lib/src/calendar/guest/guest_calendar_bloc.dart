@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:developer' as developer;
-
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 
 class GuestCalendarBloc extends BaseCalendarBloc {
   GuestCalendarBloc({
@@ -53,6 +52,6 @@ class GuestCalendarBloc extends BaseCalendarBloc {
 
   @override
   void logError(String message, Object error) {
-    developer.log(message, name: 'GuestCalendarBloc');
+    SafeLogging.debugLog(message, name: 'GuestCalendarBloc');
   }
 }

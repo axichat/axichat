@@ -38,6 +38,7 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -50,6 +51,7 @@ import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
@@ -372,12 +374,14 @@ abstract interface class XmppBase {
     required String databasePassphrase,
     bool preHashed = false,
     bool reuseExistingSession = false,
+    bool persistSessionTokens = true,
   });
 
   Future<void> resumeOfflineSession({
     required String jid,
     required String databasePrefix,
     required String databasePassphrase,
+    bool persistSessionTokens = true,
   });
 
   Future<void> disconnect();
@@ -436,6 +440,7 @@ class XmppService extends XmppBase
     this._databaseFactory,
     this._notificationService,
     this._capability,
+    this._policy,
   );
 
   static XmppService? _instance;
@@ -443,6 +448,16 @@ class XmppService extends XmppBase
   static const String _capabilityHashBase = 'https://axichat.im/caps';
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
+  static const String _sessionTokenKeyPrefixLabel = 'xmpp_session';
+  static const String _sessionTokenKeySeparator = '_';
+  static const String _sessionTokenFallbackPrefix = 'session';
+  static const String _sessionTokenFastTokenSuffix = 'fast_token';
+  static const String _sessionTokenSmC2sSuffix = 'sm_c2s';
+  static const String _sessionTokenSmS2cSuffix = 'sm_s2c';
+  static const String _sessionTokenSmResIdSuffix = 'sm_res_id';
+  static const String _sessionTokenSmResLocSuffix = 'sm_res_loc';
+  static final RegExp _sessionTokenPrefixSanitizePattern =
+      RegExp(r'[^a-zA-Z0-9_-]');
   static const int _notificationPayloadLookupStart = 0;
   static const int _notificationPayloadLookupEnd = 0;
 
@@ -452,6 +467,7 @@ class XmppService extends XmppBase
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
     NotificationService? notificationService,
     Capability capability = const Capability(),
+    Policy policy = const Policy(),
   }) =>
       _instance ??= XmppService._(
         buildConnection,
@@ -459,6 +475,7 @@ class XmppService extends XmppBase
         buildDatabase,
         notificationService ?? NotificationService(),
         capability,
+        policy,
       );
 
   final Logger _xmppLogger = Logger('XmppService');
@@ -479,6 +496,11 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
+  final Policy _policy;
+  late final CredentialStore _credentialStore = CredentialStore(
+    capability: _capability,
+    policy: _policy,
+  );
   AttachmentAutoDownloadSettings _attachmentAutoDownloadSettings =
       const AttachmentAutoDownloadSettings();
 
@@ -577,7 +599,65 @@ class XmppService extends XmppBase
     _selfAvatarController.add(avatar);
   }
 
-  final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
+  String _buildSessionTokenPrefix(String? databasePrefix) {
+    final rawPrefix = databasePrefix?.trim();
+    final prefix = rawPrefix == null || rawPrefix.isEmpty
+        ? _sessionTokenFallbackPrefix
+        : rawPrefix;
+    return prefix.replaceAll(_sessionTokenPrefixSanitizePattern, '_');
+  }
+
+  RegisteredCredentialKey _sessionTokenKey(String suffix) =>
+      CredentialStore.registerKey(
+        [
+          _sessionTokenKeyPrefixLabel,
+          _sessionTokenPrefix,
+          suffix,
+        ].join(_sessionTokenKeySeparator),
+      );
+
+  Future<void> _writeSessionToken({
+    required String suffix,
+    required String? value,
+  }) async {
+    if (!_persistSessionTokens) {
+      return;
+    }
+    await _credentialStore.write(
+      key: _sessionTokenKey(suffix),
+      value: value,
+    );
+  }
+
+  Future<String?> _readSessionToken(String suffix) async {
+    if (!_persistSessionTokens) {
+      return null;
+    }
+    return _credentialStore.read(key: _sessionTokenKey(suffix));
+  }
+
+  Future<void> _deleteSessionToken(String suffix) async {
+    await _credentialStore.delete(key: _sessionTokenKey(suffix));
+  }
+
+  Future<void> _clearPersistedSessionTokens() async {
+    await _deleteSessionToken(_sessionTokenFastTokenSuffix);
+    await _deleteSessionToken(_sessionTokenSmC2sSuffix);
+    await _deleteSessionToken(_sessionTokenSmS2cSuffix);
+    await _deleteSessionToken(_sessionTokenSmResIdSuffix);
+    await _deleteSessionToken(_sessionTokenSmResLocSuffix);
+  }
+
+  Future<void> _configureSessionTokenPersistence({
+    required bool enabled,
+  }) async {
+    _persistSessionTokens = enabled;
+    _sessionTokenPrefix = _buildSessionTokenPrefix(_databasePrefix);
+    if (!enabled) {
+      await _clearPersistedSessionTokens();
+    }
+  }
+
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
   final resourceStorageKey = XmppStateStore.registerKey('resource');
   @override
@@ -702,10 +782,11 @@ class XmppService extends XmppBase
       })
       ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
         _xmppLogger.fine('Saving FAST token.');
-        await _dbOp<XmppStateStore>((ss) async {
-          await ss.write(key: fastTokenStorageKey, value: event.token.token);
-          _xmppLogger.fine('FAST token persisted.');
-        });
+        await _writeSessionToken(
+          suffix: _sessionTokenFastTokenSuffix,
+          value: event.token.token,
+        );
+        _xmppLogger.fine('FAST token persisted.');
       })
       ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
         if (event.error is mox.StreamUndefinedConditionError) {
@@ -917,6 +998,8 @@ class XmppService extends XmppBase
 
   var _synchronousConnection = Completer<void>();
   bool _sessionReconnectEnabled = false;
+  bool _persistSessionTokens = true;
+  String _sessionTokenPrefix = _sessionTokenFallbackPrefix;
   bool _connectInFlight = false;
   bool _reconnectBlocked = false;
   var _foregroundServiceNotificationSent = false;
@@ -937,10 +1020,14 @@ class XmppService extends XmppBase
     required String databasePassphrase,
     bool preHashed = false,
     bool reuseExistingSession = false,
+    bool persistSessionTokens = true,
     EndpointOverride? endpoint,
   }) async {
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
+    await _configureSessionTokenPersistence(
+      enabled: persistSessionTokens,
+    );
     _reconnectBlocked = false;
     if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
@@ -1029,10 +1116,14 @@ class XmppService extends XmppBase
     required String jid,
     required String databasePrefix,
     required String databasePassphrase,
+    bool persistSessionTokens = true,
   }) async {
     final shouldNotify = _hasInitializedDatabases;
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
+    await _configureSessionTokenPersistence(
+      enabled: persistSessionTokens,
+    );
     _reconnectBlocked = false;
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
@@ -1241,16 +1332,14 @@ class XmppService extends XmppBase
     if (_enableStreamManagement) {
       final sm = _connection.getManager<XmppStreamManagementManager>();
       if (sm != null) {
-        _streamResumptionAttempted = await _dbOpReturning<XmppStateStore, bool>(
-          (ss) async => ss.read(key: sm.streamResumptionIDKey) != null,
-        );
+        _streamResumptionAttempted = await sm.hasPersistedState();
         if (_streamResumptionAttempted) {
           await _connection.loadStreamState();
         }
       }
     }
+    final fastToken = await _readSessionToken(_sessionTokenFastTokenSuffix);
     await _dbOp<XmppStateStore>((ss) async {
-      final fastToken = ss.read(key: fastTokenStorageKey) as String?;
       var userAgentId = ss.read(key: userAgentStorageKey) as String?;
       if (userAgentId == null) {
         userAgentId = uuid.v4();
@@ -1879,12 +1968,7 @@ class XmppService extends XmppBase
     final sm = _connection.getManager<XmppStreamManagementManager>();
     await sm?.resetState();
     await sm?.clearPersistedState();
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        await ss.delete(key: fastTokenStorageKey);
-      },
-      awaitDatabase: true,
-    );
+    await _deleteSessionToken(_sessionTokenFastTokenSuffix);
   }
 
   Future<void> setClientState([bool active = true]) async {
@@ -2251,6 +2335,8 @@ class XmppService extends XmppBase
     _avatarEncryptionSalt = null;
     _databasePrefix = null;
     _databasePassphrase = null;
+    _persistSessionTokens = false;
+    _sessionTokenPrefix = _sessionTokenFallbackPrefix;
     _cachedSelfAvatar = null;
     _cachedChatList = null;
 
@@ -3180,63 +3266,82 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   final XmppService owner;
   final _log = Logger('XmppStreamManagementManager');
 
-  static const keyPrefix = 'stream_management';
-  final clientToServerCountKey = XmppStateStore.registerKey('${keyPrefix}_c2s');
-  final serverToClientCountKey = XmppStateStore.registerKey('${keyPrefix}_s2c');
-  final streamResumptionIDKey =
-      XmppStateStore.registerKey('${keyPrefix}_resID');
-  final streamResumptionLocationKey =
-      XmppStateStore.registerKey('${keyPrefix}_resLoc');
-
   Future<void> clearPersistedState() async {
-    await owner._dbOp<XmppStateStore>(
-      (ss) async {
-        await ss.delete(key: clientToServerCountKey);
-        await ss.delete(key: serverToClientCountKey);
-        await ss.delete(key: streamResumptionIDKey);
-        await ss.delete(key: streamResumptionLocationKey);
-      },
-      awaitDatabase: true,
-    );
+    await owner._deleteSessionToken(XmppService._sessionTokenSmC2sSuffix);
+    await owner._deleteSessionToken(XmppService._sessionTokenSmS2cSuffix);
+    await owner._deleteSessionToken(XmppService._sessionTokenSmResIdSuffix);
+    await owner._deleteSessionToken(XmppService._sessionTokenSmResLocSuffix);
   }
 
   @override
   Future<void> commitState() async {
-    await owner._dbOp<XmppStateStore>((ss) async {
-      _log.info('Saving c2s: ${state.c2s}...');
-      await ss.write(key: clientToServerCountKey, value: state.c2s);
-      _log.info('Saving s2c: ${state.s2c}...');
-      await ss.write(key: serverToClientCountKey, value: state.s2c);
-      if (state.streamResumptionId case String resID) {
-        await ss.write(key: streamResumptionIDKey, value: resID);
-      }
-      if (state.streamResumptionLocation case String resLoc) {
-        await ss.write(key: streamResumptionLocationKey, value: resLoc);
-      }
-    });
+    _log.info('Saving c2s: ${state.c2s}...');
+    await owner._writeSessionToken(
+      suffix: XmppService._sessionTokenSmC2sSuffix,
+      value: state.c2s.toString(),
+    );
+    _log.info('Saving s2c: ${state.s2c}...');
+    await owner._writeSessionToken(
+      suffix: XmppService._sessionTokenSmS2cSuffix,
+      value: state.s2c.toString(),
+    );
+    if (state.streamResumptionId case String resID) {
+      await owner._writeSessionToken(
+        suffix: XmppService._sessionTokenSmResIdSuffix,
+        value: resID,
+      );
+    } else {
+      await owner._deleteSessionToken(XmppService._sessionTokenSmResIdSuffix);
+    }
+    if (state.streamResumptionLocation case String resLoc) {
+      await owner._writeSessionToken(
+        suffix: XmppService._sessionTokenSmResLocSuffix,
+        value: resLoc,
+      );
+    } else {
+      await owner._deleteSessionToken(XmppService._sessionTokenSmResLocSuffix);
+    }
   }
 
   @override
   Future<void> loadState() async {
-    await owner._dbOp<XmppStateStore>((ss) async {
-      var newState = state;
-      if (ss.read(key: clientToServerCountKey) case int c2s) {
+    var newState = state;
+    final c2sValue =
+        await owner._readSessionToken(XmppService._sessionTokenSmC2sSuffix);
+    if (c2sValue != null) {
+      final parsed = int.tryParse(c2sValue);
+      if (parsed != null) {
         _log.info('Loading c2s: ${state.c2s}...');
-        newState = newState.copyWith(c2s: c2s);
+        newState = newState.copyWith(c2s: parsed);
       }
-      if (ss.read(key: serverToClientCountKey) case int s2c) {
+    }
+    final s2cValue =
+        await owner._readSessionToken(XmppService._sessionTokenSmS2cSuffix);
+    if (s2cValue != null) {
+      final parsed = int.tryParse(s2cValue);
+      if (parsed != null) {
         _log.info('Loading s2c: ${state.s2c}...');
-        newState = newState.copyWith(s2c: s2c);
+        newState = newState.copyWith(s2c: parsed);
       }
-      if (ss.read(key: streamResumptionIDKey) case String resID) {
-        newState = newState.copyWith(streamResumptionId: resID);
-      }
-      if (ss.read(key: streamResumptionLocationKey) case String resLoc) {
-        newState = newState.copyWith(streamResumptionLocation: resLoc);
-      }
+    }
+    final resId =
+        await owner._readSessionToken(XmppService._sessionTokenSmResIdSuffix);
+    if (resId != null && resId.isNotEmpty) {
+      newState = newState.copyWith(streamResumptionId: resId);
+    }
+    final resLoc =
+        await owner._readSessionToken(XmppService._sessionTokenSmResLocSuffix);
+    if (resLoc != null && resLoc.isNotEmpty) {
+      newState = newState.copyWith(streamResumptionLocation: resLoc);
+    }
 
-      await setState(newState);
-    });
+    await setState(newState);
+  }
+
+  Future<bool> hasPersistedState() async {
+    final resId =
+        await owner._readSessionToken(XmppService._sessionTokenSmResIdSuffix);
+    return resId != null && resId.isNotEmpty;
   }
 
   Future<void> handleFailedResumption() async {
