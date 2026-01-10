@@ -157,8 +157,8 @@ const footerLinks = {
     { label: "Contact", href: "#contact" },
   ],
   legal: [
-    { label: "Terms", href: "/terms/axichat_terms.pdf" },
-    { label: "Privacy", href: "/privacy/axichat_privacy.pdf" },
+    { label: "Terms", href: "/axichat_terms.pdf" },
+    { label: "Privacy", href: "/axichat_privacy.pdf" },
     { label: "License", href: "/LICENSE.txt" },
   ],
   links: [
