@@ -469,6 +469,7 @@ mixin AvatarService on XmppBase, MucService {
   }) async {
     final normalizedJid = bareJid.trim();
     if (normalizedJid.isEmpty) return;
+    if (await _shouldSkipAvatarForBareJid(normalizedJid)) return;
     final added = _avatarRefreshInProgress.add(normalizedJid);
     if (!force && !added) return;
     try {
@@ -629,6 +630,7 @@ mixin AvatarService on XmppBase, MucService {
   Future<void> _refreshAvatarFromVCard(String jid, String hash) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
+    if (await _shouldSkipAvatarForBareJid(bareJid)) return;
     if (hash.isEmpty) {
       await _clearAvatarForJid(bareJid);
       return;

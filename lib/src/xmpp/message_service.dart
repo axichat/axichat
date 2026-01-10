@@ -2344,13 +2344,11 @@ mixin MessageService
         isGroupChat && !isPrivateMucMessage ? targetJid.toBare() : targetJid;
     final type = isGroupChat && !isPrivateMucMessage ? 'groupchat' : 'chat';
 
-    final mox.JID? fromJidOverride = isGroupChat ? _myJid : null;
     return message.toMox(
       quotedBody: quotedMessage?.body,
       quotedJid: quotedJid,
       extraExtensions: extraExtensions,
       toJidOverride: toJid,
-      fromJidOverride: fromJidOverride,
       type: type,
     );
   }
