@@ -24,6 +24,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -58,6 +59,8 @@ const String _loginBackoffMessagePrefix = 'Too many attempts. Wait ';
 const String _loginBackoffMessageSuffix = ' seconds before trying again.';
 const String _signupRollbackStageSkippedLog =
     'Skipping rollback staging for previously authenticated account.';
+const String _authApiSchemeHttps = 'https';
+const String _authApiSchemeHttp = 'http';
 const String _signupRollbackSkippedLog =
     'Skipping rollback for previously authenticated account.';
 const String _signupRollbackRequestSkippedLog =
@@ -304,8 +307,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  String _resolveAuthApiScheme() {
+    const allowInsecure = !kReleaseMode;
+    if (!allowInsecure) {
+      return _authApiSchemeHttps;
+    }
+    return _endpointConfig.apiUseTls ? _authApiSchemeHttps : _authApiSchemeHttp;
+  }
+
   Uri _buildBaseUrl() => Uri(
-        scheme: _endpointConfig.apiUseTls ? 'https' : 'http',
+        scheme: _resolveAuthApiScheme(),
         host: _endpointConfig.domain,
         port: _endpointConfig.apiPort,
       );

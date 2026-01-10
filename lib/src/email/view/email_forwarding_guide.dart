@@ -10,8 +10,8 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +22,7 @@ const double _guideItemSpacing = 8.0;
 const double _guideLinkSpacing = 12.0;
 const double _guideLinkRunSpacing = 8.0;
 const double _guideAddressPadding = 12.0;
+const String _emptyForwardingAddress = '';
 
 const String _gmailForwardingUrl =
     'https://support.google.com/mail/answer/10957';
@@ -58,10 +59,12 @@ class EmailForwardingGuideTile extends StatelessWidget {
 
   Future<void> _showGuideDialog(BuildContext context) async {
     final l10n = context.l10n;
+    final forwardingAddress = _resolveForwardingAddress(context);
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) => EmailForwardingGuideDialog(
         title: l10n.emailForwardingGuideTitle,
+        forwardingAddress: forwardingAddress,
         notificationService: context.read<NotificationService>(),
         capability: context.read<Capability>(),
         showSettingsHint: false,
@@ -91,12 +94,14 @@ class EmailForwardingGuideDialog extends StatelessWidget {
   const EmailForwardingGuideDialog({
     super.key,
     required this.title,
+    required this.forwardingAddress,
     required this.notificationService,
     required this.capability,
     required this.showSettingsHint,
   });
 
   final String title;
+  final String forwardingAddress;
   final NotificationService notificationService;
   final Capability capability;
   final bool showSettingsHint;
@@ -107,6 +112,7 @@ class EmailForwardingGuideDialog extends StatelessWidget {
     return AxiInputDialog(
       title: Text(title),
       content: EmailForwardingGuideContent(
+        forwardingAddress: forwardingAddress,
         notificationService: notificationService,
         capability: capability,
         showSettingsHint: showSettingsHint,
@@ -120,11 +126,13 @@ class EmailForwardingGuideDialog extends StatelessWidget {
 class EmailForwardingGuideContent extends StatelessWidget {
   const EmailForwardingGuideContent({
     super.key,
+    required this.forwardingAddress,
     required this.notificationService,
     required this.capability,
     required this.showSettingsHint,
   });
 
+  final String forwardingAddress;
   final NotificationService notificationService;
   final Capability capability;
   final bool showSettingsHint;
@@ -148,7 +156,9 @@ class EmailForwardingGuideContent extends StatelessWidget {
           style: smallStyle,
         ),
         const SizedBox(height: _guideItemSpacing),
-        const EmailForwardingAddressCard(),
+        EmailForwardingAddressCard(
+          forwardingAddress: forwardingAddress,
+        ),
         const SizedBox(height: _guideSectionSpacing),
         Text(
           l10n.emailForwardingGuideLinksTitle,
@@ -181,39 +191,39 @@ class EmailForwardingGuideContent extends StatelessWidget {
 }
 
 class EmailForwardingAddressCard extends StatelessWidget {
-  const EmailForwardingAddressCard({super.key});
+  const EmailForwardingAddressCard({
+    super.key,
+    required this.forwardingAddress,
+  });
+
+  final String forwardingAddress;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final radius = context.radius;
-    return BlocSelector<ProfileCubit, ProfileState, String>(
-      selector: (state) => state.jid,
-      builder: (context, jid) {
-        final l10n = context.l10n;
-        final resolved = jid.bareJid.trim();
-        final hasAddress = resolved.isNotEmpty;
-        final textStyle =
-            hasAddress ? context.textTheme.small : context.textTheme.muted;
-        final addressLabel =
-            hasAddress ? resolved : l10n.emailForwardingGuideAddressFallback;
-        return DecoratedBox(
-          decoration: ShapeDecoration(
-            color: colors.muted,
-            shape: RoundedRectangleBorder(
-              borderRadius: radius,
-              side: BorderSide(color: colors.border),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(_guideAddressPadding),
-            child: SelectableText(
-              addressLabel,
-              style: textStyle,
-            ),
-          ),
-        );
-      },
+    final l10n = context.l10n;
+    final resolved = forwardingAddress.bareJid.trim();
+    final hasAddress = resolved.isNotEmpty;
+    final textStyle =
+        hasAddress ? context.textTheme.small : context.textTheme.muted;
+    final addressLabel =
+        hasAddress ? resolved : l10n.emailForwardingGuideAddressFallback;
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        color: colors.muted,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: colors.border),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(_guideAddressPadding),
+        child: SelectableText(
+          addressLabel,
+          style: textStyle,
+        ),
+      ),
     );
   }
 }
@@ -289,10 +299,12 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     _dialogShown = true;
+    final forwardingAddress = _resolveForwardingAddress(context);
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) => EmailForwardingGuideDialog(
         title: dialogContext.l10n.emailForwardingWelcomeTitle,
+        forwardingAddress: forwardingAddress,
         notificationService: context.read<NotificationService>(),
         capability: context.read<Capability>(),
         showSettingsHint: true,
@@ -303,4 +315,9 @@ class _EmailForwardingWelcomeGateState
     }
     context.read<SettingsCubit>().markEmailForwardingGuideSeen();
   }
+}
+
+String _resolveForwardingAddress(BuildContext context) {
+  final String? jid = context.read<XmppService>().myJid;
+  return (jid ?? _emptyForwardingAddress).bareJid.trim();
 }
