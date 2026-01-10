@@ -76,6 +76,7 @@ mixin AvatarService on XmppBase, MucService {
       Duration(seconds: 5);
   static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
   static const bool _allowAvatarPublisherFallback = true;
+  static const bool _avatarSkipDefault = true;
   static const String _mimePng = 'image/png';
   static const String _mimeJpeg = 'image/jpeg';
   static const List<int> _pngMagicBytes = <int>[
@@ -151,7 +152,9 @@ mixin AvatarService on XmppBase, MucService {
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
-      SafeUserAvatarManager(),
+      SafeUserAvatarManager(
+        shouldSkipJid: _shouldSkipUserAvatarJid,
+      ),
       SafeVCardManager(),
     ]);
 
@@ -391,9 +394,15 @@ mixin AvatarService on XmppBase, MucService {
     }
   }
 
+  bool _shouldSkipUserAvatarJid(mox.JID jid) {
+    final bareJid = jid.toBare().toString().trim();
+    if (bareJid.isEmpty) return _avatarSkipDefault;
+    return _isMucAvatarJid(bareJid);
+  }
+
   Future<bool> _shouldSkipAvatarForBareJid(String bareJid) async {
     final normalized = bareJid.trim();
-    if (normalized.isEmpty) return true;
+    if (normalized.isEmpty) return _avatarSkipDefault;
     if (_isMucAvatarJid(normalized)) return true;
     try {
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(
@@ -401,7 +410,7 @@ mixin AvatarService on XmppBase, MucService {
       );
       return chat?.type == ChatType.groupChat;
     } on XmppAbortedException {
-      return false;
+      return _avatarSkipDefault;
     }
   }
 

@@ -625,7 +625,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
-          child: calendarAwareContent,
+          child: EmailForwardingWelcomeGate(
+            child: calendarAwareContent,
+          ),
         ),
       ),
     );
@@ -736,7 +738,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
-    return EmailForwardingWelcomeGate(child: actionLayer);
+    return actionLayer;
   }
 }
 

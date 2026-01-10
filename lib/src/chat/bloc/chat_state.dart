@@ -29,7 +29,7 @@ class ChatState with _$ChatState {
     Map<String, FanOutSendReport> fanOutReports,
     @Default(<String, FanOutDraft>{}) Map<String, FanOutDraft> fanOutDrafts,
     @Default(<String, ShareContext>{}) Map<String, ShareContext> shareContexts,
-    @Default(<String, List<Chat>>{}) Map<String, List<Chat>> shareReplies,
+    @Default(_emptyShareReplies) Map<String, List<Chat>> shareReplies,
     @Default(<int, String>{}) Map<int, String> emailRawHeadersByDeltaId,
     @Default(<int>{}) Set<int> emailRawHeadersLoading,
     @Default(<int>{}) Set<int> emailRawHeadersUnavailable,
