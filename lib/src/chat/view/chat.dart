@@ -1037,7 +1037,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
               roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
-          roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
           currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
@@ -1872,25 +1871,6 @@ class _ChatState extends State<Chat> {
 
   void _toggleNotifications(bool enable) {
     context.read<ChatBloc>().add(ChatMuted(!enable));
-  }
-
-  Future<void> _handleRoomAvatarTap() async {
-    context.read<ChatBloc>().add(const ChatRoomMembersOpened());
-    if (context.read<ChatBloc>().state.chat == null ||
-        context.read<ChatBloc>().state.chat?.type != ChatType.groupChat) {
-      return;
-    }
-    if (context.read<ChatBloc>().state.roomState == null ||
-        !context.read<ChatBloc>().state.roomState!.canEditAvatar) {
-      _showMembers(refreshMembership: false);
-      return;
-    }
-    final avatar = await RoomAvatarEditorSheet.show(
-      context,
-      avatarPath: context.read<ChatBloc>().state.chat?.avatarPath,
-    );
-    if (!mounted || avatar == null) return;
-    context.read<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
   }
 
   void _showMembers({bool refreshMembership = true}) {
@@ -4009,13 +3989,8 @@ class _ChatState extends State<Chat> {
                                       item?.status?.trim() ?? '';
                                   final presence = item?.presence;
                                   final subscription = item?.subscription;
-                                  final canEditRoomAvatar = isGroupChat &&
-                                      !readOnly &&
-                                      state.roomState?.canEditAvatar == true;
                                   final avatarTooltip = isGroupChat
-                                      ? canEditRoomAvatar
-                                          ? context.l10n.mucEditAvatar
-                                          : context.l10n.chatRoomMembers
+                                      ? context.l10n.chatRoomMembers
                                       : null;
                                   Widget avatar = TransportAwareAvatar(
                                     chat: chatEntity!,
@@ -4035,9 +4010,7 @@ class _ChatState extends State<Chat> {
                                     avatar = MouseRegion(
                                       cursor: SystemMouseCursors.click,
                                       child: GestureDetector(
-                                        onTap: canEditRoomAvatar
-                                            ? _handleRoomAvatarTap
-                                            : _showMembers,
+                                        onTap: _showMembers,
                                         child: avatar,
                                       ),
                                     );
