@@ -1115,6 +1115,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               databasePassphrase: ensuredDatabasePassphrase,
               preHashed: passwordPreHashed,
               reuseExistingSession: reuseExistingSession,
+              persistSessionTokens: rememberMe,
               endpoint: xmppEndpoint,
             );
             passwordPreHashed = true;
@@ -1220,6 +1221,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             jid: resolvedJid,
             databasePrefix: ensuredDatabasePrefix,
             databasePassphrase: ensuredDatabasePassphrase,
+            persistSessionTokens: rememberMe,
           );
           await _markXmppConnected();
           effectivePassword = resolvedPassword;
@@ -1344,6 +1346,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jid: kDemoSelfJid,
         databasePrefix: kDemoDatabasePrefix,
         databasePassphrase: kDemoDatabasePassphrase,
+        persistSessionTokens: false,
       );
       await _markXmppConnected();
       _authenticatedJid = kDemoSelfJid;
@@ -1416,6 +1419,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jid: jid,
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
+        persistSessionTokens: rememberMe,
       );
       await _markXmppConnected();
     } on Exception catch (error, stackTrace) {
