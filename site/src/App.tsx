@@ -24,7 +24,7 @@ const downloads = {
 };
 
 const heroHeadline = "Goodbye, Email";
-const heroSubhead = "The best of instant messaging, email, and calendar all in one focused workspace.";
+const heroSubhead = "The best of instant messaging, email, and calendar all in one.";
 const heroNote = "Verify checksums and signatures in GitHub release notes.";
 
 const sectionLabels = {
@@ -85,48 +85,141 @@ const screenshots: { desktop: ScreenshotItem[]; mobile: ScreenshotItem[] } = {
 };
 
 const featureCards = [
+  { emoji: "🌓", body: "Dark and light modes with brand color schemes" },
+  { emoji: "🧭", body: "Unified inbox for chat + email side by side" },
+  { emoji: "👥", body: "Group chats and per-conversation settings" },
+  { emoji: "🔁", body: "Quick quote-reply" },
+  { emoji: "😀", body: "Emoji reactions" },
+  { emoji: "✅", body: "Delivery and read receipts with typing indicators" },
+  { emoji: "🔄", body: "Stream management with automatic reconnect to stop messages dropping" },
+  { emoji: "🧑‍🎨", body: "Upload your own avatar or use one of our cool defaults" },
+  { emoji: "📌", body: "Message drafts, starred items, and pinned messages" },
+  { emoji: "📎", body: "Rich attachments and inline previews" },
+  { emoji: "🔍", body: "Fast search across chats, mail, and calendar" },
+  { emoji: "🗂️", body: "Collaborative calendars with per-event permissions and owner/assignee roles" },
+  { emoji: "🕒", body: "Availability sharing that shows overlaps before you schedule" },
+  { emoji: "🤝", body: "Live calendar co-editing with comments, mentions, and RSVP updates" },
+  { emoji: "🚀", body: "1st-party push notifications and offline sync" },
+  { emoji: "📅", body: "Natural-language scheduling with drag+drop calendar editing" },
+  { emoji: "➕", body: "One-tap add-to-calendar from simple text messages" },
+  { emoji: "🗓️", body: "Tasks, reminders, and calendar in one view" },
+  { emoji: "📤📥", body: "Calendar export/import for backups and migrations" },
+  { emoji: "⚡", body: "Critical paths and agenda focus to surface what’s next" },
+  { emoji: "🦾", body: "Accessibility-friendly modals and flows (keyboard/touch/reader aware)" },
+  { emoji: "🌍", body: "Translated UI (English, Spanish, German, French, Chinese)" },
+  { emoji: "🔄", body: "Sync across all your devices (Android, Linux, Windows)" },
+  { emoji: "🖥️", body: "Desktop + mobile parity with keyboard shortcuts and touch affordances" },
+  { emoji: "🔔", body: "Smart notifications (muting, per-chat overrides, do-not-disturb)" },
+  { emoji: "🌐", body: "Works without Google/Firebase; pure XMPP + SMTP/IMAP core" },
+];
+
+const whyCards = [
   {
-    title: "Chat + email unified",
-    body: "Use a chat-first interface for SMTP/IMAP email and XMPP messaging.",
+    title: "Tools matter",
+    body: "Would you rather write a letter while standing up outside or sitting at your desk? Using the right software makes the same difference. Axichat is a digital desk for your online communication.",
   },
   {
-    title: "Best-in-class calendar",
-    body: "Natural-language scheduling (no AI), drag + drop editing, tasks, and reminders.",
+    title: "Time matters",
+    body: "You can always make more money, but not more time. Axichat’s calendar helps you seize the day, and the chat-like email format keeps you from retyping, opening the wrong emails, and spamming alt+tab.",
   },
   {
-    title: "No trackers",
-    body: "Encryption on device and in transit. No analytics, selling, or sharing data.",
-  },
-  {
-    title: "Offline-first",
-    body: "Keep working without a connection, then sync across Android, Linux, and Windows.",
-  },
-  {
-    title: "Fast search",
-    body: "Search across chats, mail, and calendar in one place.",
-  },
-  {
-    title: "No lock-in",
-    body: "Pure XMPP + SMTP/IMAP core with zero big tech dependency.",
+    title: "Collaboration matters",
+    body: "Share availability, co-edit events, and resolve scheduling overlaps together so everyone stays aligned.",
   },
 ];
 
 const faqItems = [
   {
-    question: "Do I need an account?",
-    answer: "No. Axichat supports guest mode and works offline, including the calendar.",
+    question: "What if I don't like Axichat?",
+    answer: (
+      <>
+        <p>First, do no harm.</p>
+        <p className="mt-3">
+          You can easily export all your emails, chats and contacts out of Axichat and delete your account through
+          the app.
+        </p>
+      </>
+    ),
   },
   {
-    question: "What protocols does Axichat use?",
-    answer: "Pure XMPP for chat and SMTP/IMAP for email.",
+    question: "Can I connect my existing email accounts to Axichat?",
+    answer: (
+      <>
+        <p>
+          Yes, you can set up forwarding with your curent provider. They should have instructions on how to do so.
+          Here are some quick links:{" "}
+          <a
+            href="https://support.google.com/mail/answer/10957?hl=en"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Gmail
+          </a>
+          ,{" "}
+          <a
+            href="https://support.microsoft.com/en-us/office/forward-email-from-outlook-to-another-email-account-0d6d6b7b-3783-4e98-9c3e-1ea6e2e6b4d3"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Outlook
+          </a>
+          .
+        </p>
+        <p className="mt-3">
+          Note that Axichat does not yet support directly logging in to existing providers, so you cannot send email
+          with an existing account. You can only receive it for now.
+        </p>
+      </>
+    ),
   },
   {
-    question: "Which platforms are supported?",
-    answer: "Android, Linux, and Windows today, with iOS and macOS in progress.",
+    question: "Is it FOSS?",
+    answer: (
+      <p>
+        Yes, Axichat is free and open source. Check out our{" "}
+        <a href="https://github.com/axichat/axichat" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          GitHub
+        </a>{" "}
+        and{" "}
+        <a href="https://gitlab.com/axichat" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          GitLab
+        </a>
+        .
+      </p>
+    ),
   },
   {
-    question: "Is Axichat free?",
-    answer: "The calendar is free, and the project avoids paid lock-in by design.",
+    question: "How does Axichat compare to Spike?",
+    answer: (
+      <>
+        <p>
+          Both Spike and Axichat are tremendous improvements over traditional email clients. However,
+        </p>
+        <ul className="mt-3 list-disc space-y-2 pl-5">
+          <li>
+            Spike still limits itself to the email protocol (SMTP). Axichat leverages both SMTP and XMPP, which is a
+            protocol designed for instant messaging and enables us to provide a significantly richer IM experience,
+            especially when you are talking to another Axichat user.
+          </li>
+          <li>
+            Spike is closed source, so you have no idea what software you're actually using or what it's really doing
+            behind the scenes. Axichat is open source, so you can see for yourself exactly what you're running and know
+            that nothing suspicious is going on.
+          </li>
+          <li>
+            Axichat is completely free to use with the only limit being server-side storage. Spike has free tiers, but
+            charges for most of their plans.
+          </li>
+          <li>
+            Axichat was made with Dart + Flutter and Spike was not. This allows us to implement a much more
+            aesthetically pleasing interface with attention to detail and performance that can't be matched without
+            Flutter.
+          </li>
+        </ul>
+      </>
+    ),
   },
 ];
 
@@ -268,7 +361,7 @@ function SectionHeader({
 }: {
   kicker: string;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
 }) {
   return (
     <div className="mb-10">
@@ -316,11 +409,29 @@ function DownloadButton({ href, os, file, borderColor, icon }: DownloadItem) {
   );
 }
 
-function FAQItem({ question, answer }: { question: string; answer: string }) {
+function FAQItem({
+  question,
+  answer,
+  isOpen,
+  onToggle,
+}: {
+  question: string;
+  answer: React.ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/50 p-5">
-      <div className="text-sm font-semibold text-white">{question}</div>
-      <div className="mt-2 text-sm leading-relaxed text-white/70">{answer}</div>
+    <div className="rounded-2xl border border-white/10 bg-black/50">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-white"
+      >
+        <span>{question}</span>
+        <span className={cn("text-lg text-white/60 transition-transform", isOpen ? "rotate-45" : "rotate-0")}>+</span>
+      </button>
+      {isOpen ? <div className="px-5 pb-5 text-sm leading-relaxed text-white/70">{answer}</div> : null}
     </div>
   );
 }
@@ -345,6 +456,8 @@ function ScreenshotCard({ src, label, description, aspect }: ScreenshotItem) {
 }
 
 export default function App() {
+  const [openFaqIndex, setOpenFaqIndex] = React.useState<number | null>(0);
+
   const downloadButtons: DownloadItem[] = [
     {
       href: downloads.android,
@@ -381,8 +494,8 @@ export default function App() {
         <Container>
           <div className="flex h-16 items-center justify-between">
             <a href="#top" className="flex items-center gap-3">
-              <BrandIcon alt="Axichat" className="h-8 w-8" />
-              <div className="text-sm font-display font-medium tracking-tight">Axichat</div>
+              <BrandIcon alt="Axichat" className="h-10 w-10" />
+              <div className="text-lg font-display font-medium tracking-tight leading-none">Axichat</div>
             </a>
 
             <nav className="hidden items-center gap-6 md:flex">
@@ -419,7 +532,7 @@ export default function App() {
             <div className="mx-auto max-w-3xl text-center">
               <div className="mx-auto mb-6 flex w-fit items-center gap-3 rounded-full border border-white/15 bg-black/50 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/70">
                 <span className="inline-flex h-2 w-2 rounded-full bg-white" />
-                Modular XMPP + SMTP messenger
+                Chat + Email unified
               </div>
               <h1 className="text-balance text-5xl font-semibold tracking-tight text-white sm:text-7xl font-display">
                 {heroHeadline}
@@ -475,15 +588,33 @@ export default function App() {
           <Container>
             <SectionHeader
               kicker={sectionLabels.features}
-              title="Everything you need — nothing you don't"
-              subtitle="Axichat is built for proactive, busy people: chat + email unified, a world-class calendar, and privacy by default."
+              title="Feature highlights"
+              subtitle="If you're proactive and busy, you'll love Axichat both because of what it has and what it doesn't have."
             />
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {featureCards.map((feature) => (
-                <div key={feature.title} className="rounded-2xl border border-white/10 bg-black/50 p-5">
-                  <div className="text-sm font-semibold text-white">{feature.title}</div>
-                  <div className="mt-2 text-sm leading-relaxed text-white/70">{feature.body}</div>
+                <div key={feature.body} className="rounded-2xl border border-white/10 bg-black/50 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-black text-lg">
+                      {feature.emoji}
+                    </div>
+                    <div className="text-sm leading-relaxed text-white/80">{feature.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Container>
+        </section>
+
+        <section id="why" className="py-16 sm:py-20">
+          <Container>
+            <SectionHeader kicker="Why?" title="Why Axichat?" />
+            <div className="grid gap-4 md:grid-cols-3">
+              {whyCards.map((card) => (
+                <div key={card.title} className="rounded-2xl border border-white/10 bg-black/50 p-5">
+                  <div className="text-sm font-semibold text-white">{card.title}</div>
+                  <div className="mt-2 text-sm leading-relaxed text-white/70">{card.body}</div>
                 </div>
               ))}
             </div>
@@ -493,9 +624,15 @@ export default function App() {
         <section id="faq" className="py-16 sm:py-20">
           <Container>
             <SectionHeader kicker={sectionLabels.faq} title="Common questions" />
-            <div className="grid gap-4 lg:grid-cols-2">
-              {faqItems.map((item) => (
-                <FAQItem key={item.question} question={item.question} answer={item.answer} />
+            <div className="flex flex-col gap-4">
+              {faqItems.map((item, index) => (
+                <FAQItem
+                  key={item.question}
+                  question={item.question}
+                  answer={item.answer}
+                  isOpen={openFaqIndex === index}
+                  onToggle={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                />
               ))}
             </div>
           </Container>
@@ -528,45 +665,41 @@ export default function App() {
           <Container>
             <SectionHeader
               kicker={sectionLabels.contact}
-              title="Reach the project"
-              subtitle="The most reliable way to contact Axichat today is via GitHub."
+              title="Contact us"
+              subtitle={
+                <>
+                  <span>For help and inquiries, reach out to </span>
+                  <a href="mailto:support@axichat.com" className="underline underline-offset-4">
+                    support@axichat.com
+                  </a>
+                  <span>. To report bugs or request features please use our </span>
+                  <a
+                    href="https://github.com/axichat/axichat/issues"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-4"
+                  >
+                    GitHub Issues
+                  </a>
+                  <span>.</span>
+                </>
+              }
             />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <a
-                href="https://github.com/axichat/axichat"
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-2xl border border-white/10 bg-black/50 p-5 hover:bg-white/5"
-              >
-                <div className="text-sm font-semibold">GitHub repository</div>
-                <div className="mt-2 text-sm text-white/70">Releases, docs, and source code.</div>
-              </a>
-              <a
-                href="https://github.com/axichat/axichat/issues"
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-2xl border border-white/10 bg-black/50 p-5 hover:bg-white/5"
-              >
-                <div className="text-sm font-semibold">Issues</div>
-                <div className="mt-2 text-sm text-white/70">Bug reports and feature requests.</div>
-              </a>
-            </div>
           </Container>
         </section>
 
         <footer className="border-t border-white/10 py-10">
           <Container>
             <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
-              <div className="flex items-center gap-3">
-                <BrandIcon alt="Axichat" className="h-9 w-9" />
-                <div>
-                  <div className="text-sm font-display font-medium">Axichat</div>
-                  <div className="text-xs text-white/60">© {new Date().getFullYear()} Axichat LLC</div>
-                  <a href="/LICENSE.txt" className="text-xs text-white/60 hover:text-white">
-                    AGPL-3.0
-                  </a>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <BrandIcon alt="Axichat" className="h-10 w-10" />
+                  <div className="text-lg font-display font-medium leading-none">Axichat</div>
                 </div>
+                <div className="text-xs text-white/60">© {new Date().getFullYear()} Axichat LLC</div>
+                <a href="/LICENSE.txt" className="text-xs text-white/60 hover:text-white">
+                  AGPL-3.0
+                </a>
               </div>
 
               <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-3">
