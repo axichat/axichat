@@ -47,8 +47,8 @@ class SettingsControls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const EmailContactImportTile(),
             const EmailForwardingGuideTile(),
+            const EmailContactImportTile(),
             if (context.read<Capability>().canForegroundService) ...[
               _SettingsSectionHeader(
                 label: l10n.settingsSectionImportant,
