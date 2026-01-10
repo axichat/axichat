@@ -67,6 +67,7 @@ const double _profileWideLayoutMinWidth = _profileColumnMinWidth +
     _profileWideColumnSpacing +
     _profileWideHorizontalPadding * 2;
 const double _profileLegalSeparatorSpacing = 6.0;
+const double _profileLegalFontSizeDelta = 2.0;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
 const String _profileMadeByPrefix = 'Made by ';
 const String _profileMadeBySuffix = ' LLC';
@@ -466,12 +467,21 @@ class _ProfileCardSection extends StatelessWidget {
                   onPressed: () => onNavigate(_ProfileRoute.delete),
                 ),
               ];
+              final attachmentButton = AxiIconButton(
+                iconData: LucideIcons.image,
+                tooltip: l10n.draftAttachmentsLabel,
+                onPressed: () => context.push(
+                  const AttachmentGalleryRoute().location,
+                  extra: locate,
+                ),
+              );
               final actionButtons = Wrap(
                 alignment: WrapAlignment.center,
                 spacing: _profileActionSpacing,
                 runSpacing: _profileActionSpacing,
                 children: [
                   const LogoutButton(),
+                  attachmentButton,
                   AxiMore(actions: actions),
                 ],
               );
@@ -817,8 +827,10 @@ class _ProfileLegalLinks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final baseSize = context.textTheme.small.fontSize;
     final textStyle = context.textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
+      fontSize: baseSize == null ? null : baseSize - _profileLegalFontSizeDelta,
     );
     final termsLabel = l10n.termsAgreementTerms.toUpperCase();
     final privacyLabel = l10n.termsAgreementPrivacy.toUpperCase();

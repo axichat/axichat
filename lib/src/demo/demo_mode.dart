@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-const bool kEnableDemoChats =
+import 'package:flutter/foundation.dart';
+
+const bool kEnableDemoChats = !kReleaseMode &&
     bool.fromEnvironment('ENABLE_DEMO_CHATS', defaultValue: false);
 
 const String kDemoSelfJid = 'franklin@axi.im';

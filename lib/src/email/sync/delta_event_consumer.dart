@@ -1055,9 +1055,12 @@ class DeltaEventConsumer {
       msgId: msg.id,
       accountId: deltaAccountId,
     );
+    final bool isSpamQuarantined =
+        warning == MessageWarning.emailSpamQuarantined;
     if (!isOutgoing &&
         msg.hasFile &&
-        resolvedChat.attachmentAutoDownload.isAllowed) {
+        resolvedChat.attachmentAutoDownload.isAllowed &&
+        !isSpamQuarantined) {
       unawaited(_context.downloadFullMessage(msg.id));
     }
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);

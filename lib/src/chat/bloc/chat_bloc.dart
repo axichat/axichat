@@ -83,6 +83,23 @@ const _roomAvatarUpdateFailureMessage = 'Could not update room avatar.';
 const _roomAvatarUpdateFailedLogMessage = 'Failed to update room avatar.';
 const _roomAffiliationRefreshFailedLogMessage =
     'Failed to refresh room affiliations.';
+const _mamLoadFailedLogMessage = 'Failed to load older MAM page.';
+const _mamCatchUpFailedLogMessage = 'Failed to catch up via MAM.';
+const _viewFilterLoadFailedLogMessage = 'Failed to load view filter.';
+const _mamHydrateFailedLogMessage = 'Failed to hydrate MAM for chat.';
+const _mucMembershipFailedLogMessage = 'Failed to ensure membership.';
+const _roomStateWarmFailedLogMessage = 'Failed to warm room state.';
+const _contactRenameFailedLogMessage = 'Failed to rename contact.';
+const _sendEmailMessageFailedLogMessage = 'Failed to send email message.';
+const _sendMessageFailedLogMessage = 'Failed to send message.';
+const _messageReactionFailedLogMessage = 'Failed to react to message.';
+const _messageForwardFailedLogMessage = 'Failed to forward message.';
+const _messageResendFailedLogMessage = 'Failed to resend message.';
+const _emailResendFailedLogMessage = 'Failed to resend email message.';
+const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
+const _xmppAttachmentSendFailedLogMessage = 'Failed to send XMPP attachment.';
+const _offlineDraftSaveFailedLogMessage = 'Failed to save offline email draft.';
+const _xmppDraftSaveFailedLogMessage = 'Failed to save XMPP draft.';
 const _mucOccupantSeparator = '/';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
@@ -523,7 +540,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(
-        'Failed to load older MAM page for ${chat.jid}',
+        _mamLoadFailedLogMessage,
         error,
         stackTrace,
       );
@@ -605,7 +622,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception catch (error, stackTrace) {
       completed = false;
       _log.safeFine(
-        'Failed to catch up via MAM for ${chat.jid}',
+        _mamCatchUpFailedLogMessage,
         error,
         stackTrace,
       );
@@ -625,7 +642,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       add(ChatViewFilterChanged(filter: filter, persist: false));
     } on Exception catch (error, stackTrace) {
       _log.safeFine(
-        'Failed to load view filter for $jid',
+        _viewFilterLoadFailedLogMessage,
         error,
         stackTrace,
       );
@@ -676,7 +693,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(
-        'Failed to hydrate MAM for chat ${chat.jid}',
+        _mamHydrateFailedLogMessage,
         error,
         stackTrace,
       );
@@ -724,7 +741,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(
-        'Failed to ensure membership for ${chat.jid}',
+        _mucMembershipFailedLogMessage,
         error,
         stackTrace,
       );
@@ -1042,7 +1059,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         add(_RoomStateUpdated(warmed));
       } on Exception catch (error, stackTrace) {
         _log.safeFine(
-          'Failed to warm room state for ${chat.jid}',
+          _roomStateWarmFailedLogMessage,
           error,
           stackTrace,
         );
@@ -1684,7 +1701,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(
-        'Failed to rename contact ${chat.jid}',
+        _contactRenameFailedLogMessage,
         error,
         stackTrace,
       );
@@ -2365,7 +2382,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } on DeltaChatException catch (error, stackTrace) {
       _log.safeWarning(
-        'Failed to send email message for chat ${chat.jid}',
+        _sendEmailMessageFailedLogMessage,
         error,
         stackTrace,
       );
@@ -2390,7 +2407,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(
-        'Failed to send message for chat ${chat.jid}',
+        _sendMessageFailedLogMessage,
         error,
         stackTrace,
       );
@@ -2651,7 +2668,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.fine(
-        'Failed to react to message ${event.message.stanzaID}',
+        _messageReactionFailedLogMessage,
         error,
         stackTrace,
       );
@@ -2750,7 +2767,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to forward message ${event.message.stanzaID} to ${target.jid}',
+        _messageForwardFailedLogMessage,
         error,
         stackTrace,
       );
@@ -2808,7 +2825,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to resend message ${message.stanzaID}',
+        _messageResendFailedLogMessage,
         error,
         stackTrace,
       );
@@ -3212,7 +3229,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return true;
     } on DeltaChatException catch (error, stackTrace) {
       _log.safeWarning(
-        'Failed to send attachment for chat ${chat.jid}',
+        _attachmentSendFailedLogMessage,
         error,
         stackTrace,
       );
@@ -3226,7 +3243,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(
-        'Failed to send attachment for chat ${chat.jid}',
+        _attachmentSendFailedLogMessage,
         error,
         stackTrace,
       );
@@ -3651,7 +3668,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return false;
       } on Exception catch (error, stackTrace) {
         _log.safeWarning(
-          'Failed to send XMPP attachment for chat ${chat.jid}',
+          _xmppAttachmentSendFailedLogMessage,
           error,
           stackTrace,
         );
@@ -3749,7 +3766,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(
-        'Failed to save offline email draft for chat ${chat.jid}',
+        _offlineDraftSaveFailedLogMessage,
         error,
         stackTrace,
       );
@@ -4772,7 +4789,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } catch (error, stackTrace) {
       _log.safeFine(
-        'Failed to save XMPP draft for chat ${chat.jid}',
+        _xmppDraftSaveFailedLogMessage,
         error,
         stackTrace,
       );
@@ -4970,7 +4987,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
-        'Failed to resend email message ${message.stanzaID}',
+        _emailResendFailedLogMessage,
         error,
         stackTrace,
       );
@@ -4986,7 +5003,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to resend email message ${message.stanzaID}',
+        _emailResendFailedLogMessage,
         error,
         stackTrace,
       );

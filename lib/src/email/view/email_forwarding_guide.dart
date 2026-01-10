@@ -27,7 +27,7 @@ const String _emptyForwardingAddress = '';
 const String _gmailForwardingUrl =
     'https://support.google.com/mail/answer/10957';
 const String _outlookForwardingUrl =
-    'https://support.microsoft.com/en-us/office/forward-email-from-outlook-to-another-email-account-9a41fa93-5f8c-4bd5-9c41-1f6d96b8f3c6';
+    'https://support.microsoft.com/en-us/office/turn-on-automatic-forwarding-in-outlook-7f2670a1-7fff-4475-8a3c-5822d63b0c8e';
 
 enum EmailForwardingProvider {
   gmail,
