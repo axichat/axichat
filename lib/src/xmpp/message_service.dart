@@ -636,6 +636,8 @@ const int _attachmentCacheEmptyByteCount = 0;
 const int _attachmentCacheMaxBytes = 256 * 1024 * 1024;
 const String _attachmentCacheTempPrefix = '.';
 const bool _attachmentCacheFollowLinks = false;
+const String _attachmentCacheSessionPrefixLabel = 'session';
+const String _attachmentCacheSessionPrefixSeparator = '_';
 const Duration _inboundAttachmentAutoDownloadRateLimitWindow =
     Duration(minutes: 1);
 const Duration _inboundAttachmentAutoDownloadRateLimitCleanupInterval =
@@ -1724,6 +1726,7 @@ mixin MessageService
       <String, Map<String, String>>{};
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   Directory? _attachmentDirectory;
+  String? _attachmentCacheSessionPrefix;
   final WindowRateLimiter _inboundAttachmentAutoDownloadGlobalLimiter =
       WindowRateLimiter(_inboundAttachmentAutoDownloadGlobalRateLimit);
   final KeyedWindowRateLimiter _inboundAttachmentAutoDownloadChatLimiter =
@@ -1773,6 +1776,7 @@ mixin MessageService
         final hasAttachmentMetadata = metadata != null;
 
         var message = Message.fromMox(event, accountJid: myJid);
+        final shouldPersistAttachment = metadata != null && !message.noStore;
         final isGroupChat = event.type == 'groupchat';
         final stableKey = _stableKeyForEvent(event);
 
@@ -1786,7 +1790,7 @@ mixin MessageService
             (event.isCarbon || event.isFromMAM)) {
           message = message.copyWith(acked: true);
         }
-        if (metadata != null) {
+        if (shouldPersistAttachment) {
           message = message.copyWith(fileMetadataID: metadata.id);
         }
         if (metadata != null && (message.body?.trim().isEmpty ?? true)) {
@@ -1842,7 +1846,7 @@ mixin MessageService
 
         unawaited(_acknowledgeMessage(event));
 
-        if (metadata != null) {
+        if (shouldPersistAttachment) {
           await _dbOp<XmppDatabase>(
             (db) => db.saveFileMetadata(metadata),
           );
@@ -1901,7 +1905,7 @@ mixin MessageService
             chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
           );
         }
-        if (metadata != null &&
+        if (shouldPersistAttachment &&
             _allowInboundAttachmentAutoDownload(message.chatJid)) {
           unawaited(
             _autoDownloadTrustedInboundAttachment(
@@ -3235,7 +3239,7 @@ mixin MessageService
       if (putUrl == null || getUrl == null) {
         throw XmppUploadMisconfiguredException();
       }
-      _validateHttpUploadSlotUrls(
+      await _validateHttpUploadSlotUrls(
         putUrl: putUrl,
         getUrl: getUrl,
       );
@@ -3267,10 +3271,10 @@ mixin MessageService
     return List.unmodifiable(headers);
   }
 
-  void _validateHttpUploadSlotUrls({
+  Future<void> _validateHttpUploadSlotUrls({
     required String putUrl,
     required String getUrl,
-  }) {
+  }) async {
     final putUri = Uri.tryParse(putUrl);
     final getUri = Uri.tryParse(getUrl);
     if (putUri == null || getUri == null) {
@@ -3279,15 +3283,36 @@ mixin MessageService
     const allowInsecure = !kReleaseMode && kAllowInsecureXmppHttpUploadSlots;
     final putIsHttps = putUri.scheme.toLowerCase() == 'https';
     final getIsHttps = getUri.scheme.toLowerCase() == 'https';
-    if (putIsHttps && getIsHttps) return;
-    if (allowInsecure) {
+    if (putIsHttps && getIsHttps) {
+      // continue
+    } else if (allowInsecure) {
       _log.warning(
         'Using non-HTTPS upload slot URLs '
         '(development override enabled).',
       );
-      return;
+    } else {
+      throw XmppUploadMisconfiguredException(
+        'Upload slot URLs must use HTTPS.',
+      );
     }
-    throw XmppUploadMisconfiguredException('Upload slot URLs must use HTTPS.');
+    if (putUri.userInfo.trim().isNotEmpty ||
+        getUri.userInfo.trim().isNotEmpty) {
+      throw XmppUploadMisconfiguredException('Upload slot URL invalid.');
+    }
+    final putHost = putUri.host.trim();
+    final getHost = getUri.host.trim();
+    if (putHost.isEmpty || getHost.isEmpty) {
+      throw XmppUploadMisconfiguredException('Upload slot URL invalid.');
+    }
+    if (!allowInsecure) {
+      final putSafe = await isSafeHostForRemoteConnection(putHost);
+      final getSafe = await isSafeHostForRemoteConnection(getHost);
+      if (!putSafe || !getSafe) {
+        throw XmppUploadMisconfiguredException(
+          'Upload slot host not allowed.',
+        );
+      }
+    }
   }
 
   Future<void> _uploadFileToSlot(
@@ -3302,7 +3327,9 @@ mixin MessageService
     final stopwatch = Stopwatch()..start();
     final uri = Uri.parse(putUrl);
     try {
-      final request = await client.openUrl('PUT', uri);
+      final request = await client.openUrl('PUT', uri)
+        ..followRedirects = false
+        ..maxRedirects = 0;
       for (final header in slot.headers) {
         request.headers.add(header.name, header.value);
       }
@@ -4246,6 +4273,7 @@ mixin MessageService
     _inboundAttachmentAutoDownloadGlobalLimiter.reset();
     _inboundAttachmentAutoDownloadChatLimiter.reset();
     _attachmentDirectory = null;
+    _attachmentCacheSessionPrefix = null;
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {
@@ -5120,9 +5148,15 @@ mixin MessageService
       tmpFile = File(p.join(directory.path, fileName));
 
       const maxBytes = _calendarSnapshotDownloadMaxBytes;
-      final allowHttp = allowHttpOverride ?? !kReleaseMode;
-      final allowInsecureHosts = allowInsecureHostsOverride ??
-          (!kReleaseMode && kAllowInsecureXmppAttachmentDownloads);
+      const allowInsecureDownloads =
+          !kReleaseMode && kAllowInsecureXmppAttachmentDownloads;
+      final allowHttpOverrideEnabled = allowHttpOverride == true;
+      final allowInsecureHostsOverrideEnabled =
+          allowInsecureHostsOverride == true;
+      final allowHttp =
+          !kReleaseMode && (allowHttpOverrideEnabled || allowInsecureDownloads);
+      final allowInsecureHosts = !kReleaseMode &&
+          (allowInsecureHostsOverrideEnabled || allowInsecureDownloads);
       await _downloadUrlToFile(
         uri: uri,
         destination: tmpFile,
@@ -5531,6 +5565,43 @@ mixin MessageService
       }
       return null;
     }
+    final encryptedSources = statelessData.sources
+        .whereType<mox.StatelessFileSharingEncryptedSource>()
+        .toList(growable: false);
+    if (encryptedSources.isNotEmpty) {
+      String? encryptedUrl;
+      mox.StatelessFileSharingEncryptedSource? encryptedSource;
+      for (final source in encryptedSources) {
+        final sanitizedUrl = _sanitizeAttachmentUrl(source.source.url);
+        if (sanitizedUrl == null) {
+          continue;
+        }
+        encryptedUrl = sanitizedUrl;
+        encryptedSource = source;
+        break;
+      }
+      if (encryptedUrl != null && encryptedSource != null) {
+        final resolvedName = _sanitizeAttachmentFilename(
+          statelessData.metadata.name ?? p.basename(encryptedUrl),
+        );
+        final mimeType =
+            _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
+        return FileMetadataData(
+          id: uuid.v4(),
+          sourceUrls: [encryptedUrl],
+          filename: resolvedName,
+          mimeType: mimeType,
+          encryptionKey: base64Encode(encryptedSource.key),
+          encryptionIV: base64Encode(encryptedSource.iv),
+          encryptionScheme: encryptedSource.encryption.toNamespace(),
+          cipherTextHashes: encryptedSource.hashes,
+          plainTextHashes: statelessData.metadata.hashes,
+          sizeBytes: statelessData.metadata.size,
+          width: statelessData.metadata.width,
+          height: statelessData.metadata.height,
+        );
+      }
+    }
     final urls = <String>[];
     var exceededSourceLimit = false;
     for (final source in statelessData.sources
@@ -5564,47 +5635,17 @@ mixin MessageService
         height: statelessData.metadata.height,
         plainTextHashes: statelessData.metadata.hashes,
       );
-    } else {
-      final encryptedSources = statelessData.sources
-          .whereType<mox.StatelessFileSharingEncryptedSource>();
-      final encryptedSource =
-          encryptedSources.isEmpty ? null : encryptedSources.first;
-      if (encryptedSource == null) {
-        if (oobUrl != null) {
-          return FileMetadataData(
-            id: uuid.v4(),
-            sourceUrls: [oobUrl],
-            filename: _sanitizeAttachmentFilename(
-              oobName ?? _filenameFromUrl(oobUrl),
-            ),
-          );
-        }
-        return null;
-      }
-      final encryptedUrl = _sanitizeAttachmentUrl(encryptedSource.source.url);
-      if (encryptedUrl == null) {
-        return null;
-      }
-      final resolvedName = _sanitizeAttachmentFilename(
-        statelessData.metadata.name ?? p.basename(encryptedUrl),
-      );
-      final mimeType =
-          _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
+    }
+    if (oobUrl != null) {
       return FileMetadataData(
         id: uuid.v4(),
-        sourceUrls: [encryptedUrl],
-        filename: resolvedName,
-        mimeType: mimeType,
-        encryptionKey: base64Encode(encryptedSource.key),
-        encryptionIV: base64Encode(encryptedSource.iv),
-        encryptionScheme: encryptedSource.encryption.toNamespace(),
-        cipherTextHashes: encryptedSource.hashes,
-        plainTextHashes: statelessData.metadata.hashes,
-        sizeBytes: statelessData.metadata.size,
-        width: statelessData.metadata.width,
-        height: statelessData.metadata.height,
+        sourceUrls: [oobUrl],
+        filename: _sanitizeAttachmentFilename(
+          oobName ?? _filenameFromUrl(oobUrl),
+        ),
       );
     }
+    return null;
   }
 
   String _filenameFromUrl(String url) {
@@ -5692,15 +5733,20 @@ mixin MessageService
       }
 
       final encrypted = metadata.encryptionScheme?.isNotEmpty == true;
-      const allowInsecureHosts =
+      final hasPlainHash = _hasExpectedSha256Hash(metadata.plainTextHashes);
+      final hasCipherHash = _hasExpectedSha256Hash(metadata.cipherTextHashes);
+      if (encrypted && !hasPlainHash && !hasCipherHash) {
+        throw XmppMessageException();
+      }
+      const allowInsecureDownloads =
           !kReleaseMode && kAllowInsecureXmppAttachmentDownloads;
-      final allowHttp = !kReleaseMode ||
-          encrypted ||
-          _hasExpectedSha256Hash(metadata.plainTextHashes) ||
-          _hasExpectedSha256Hash(metadata.cipherTextHashes);
-      final resolvedAllowHttp = allowHttpOverride ?? allowHttp;
-      final resolvedAllowInsecureHosts =
-          allowInsecureHostsOverride ?? allowInsecureHosts;
+      final allowHttpOverrideEnabled = allowHttpOverride == true;
+      final allowInsecureHostsOverrideEnabled =
+          allowInsecureHostsOverride == true;
+      final resolvedAllowHttp =
+          !kReleaseMode && (allowHttpOverrideEnabled || allowInsecureDownloads);
+      final resolvedAllowInsecureHosts = !kReleaseMode &&
+          (allowInsecureHostsOverrideEnabled || allowInsecureDownloads);
 
       await _validateInboundAttachmentDownloadUri(
         uri,
@@ -5818,16 +5864,31 @@ mixin MessageService
     return _xmppAttachmentDownloadLimitFallbackBytes;
   }
 
+  String _resolveAttachmentCachePrefix() {
+    final prefix = _databasePrefix?.trim();
+    if (prefix != null && prefix.isNotEmpty) {
+      return prefix;
+    }
+    final cached = _attachmentCacheSessionPrefix;
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+    final generated = [
+      _attachmentCacheSessionPrefixLabel,
+      uuid.v4(),
+    ].join(_attachmentCacheSessionPrefixSeparator);
+    _attachmentCacheSessionPrefix = generated;
+    return generated;
+  }
+
   Future<Directory> _attachmentCacheDirectory() async {
     final cached = _attachmentDirectory;
     if (cached != null && await cached.exists()) {
       return cached;
     }
     final supportDir = await getApplicationSupportDirectory();
-    final prefix = _databasePrefix;
-    final normalizedPrefix = prefix == null || prefix.isEmpty
-        ? 'shared'
-        : prefix.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final prefix = _resolveAttachmentCachePrefix();
+    final normalizedPrefix = prefix.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final directory = Directory(
       p.join(supportDir.path, 'attachments', normalizedPrefix),
     );

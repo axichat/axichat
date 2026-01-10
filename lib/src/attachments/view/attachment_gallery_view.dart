@@ -213,11 +213,11 @@ extension AttachmentGallerySourceFilterLabels on AttachmentGallerySourceFilter {
     };
   }
 
-  bool matches(Message message) {
+  bool matches({required bool isSelf}) {
     return switch (this) {
       AttachmentGallerySourceFilter.all => true,
-      AttachmentGallerySourceFilter.sent => !message.received,
-      AttachmentGallerySourceFilter.received => message.received,
+      AttachmentGallerySourceFilter.sent => isSelf,
+      AttachmentGallerySourceFilter.received => !isSelf,
     };
   }
 }
@@ -227,7 +227,6 @@ bool _isSelfMessage(
   required XmppService xmppService,
   required EmailService? emailService,
 }) {
-  if (!message.received) return true;
   final sender = message.senderJid.trim().toLowerCase();
   final xmppJid = xmppService.myJid?.trim().toLowerCase();
   if (xmppJid != null && sender == xmppJid) return true;
@@ -644,9 +643,16 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   }) {
     final query = _searchQuery;
     final hasQuery = query.isNotEmpty;
+    final xmppService = context.read<XmppService>();
+    final emailService = RepositoryProvider.of<EmailService?>(context);
     final filtered = items.where((item) {
       if (!_typeFilter.matches(item.metadata)) return false;
-      if (!_sourceFilter.matches(item.message)) return false;
+      final isSelf = _isSelfMessage(
+        item.message,
+        xmppService: xmppService,
+        emailService: emailService,
+      );
+      if (!_sourceFilter.matches(isSelf: isSelf)) return false;
       if (!hasQuery) return true;
       if (item.metadata.normalizedFilename.contains(query)) return true;
       if (!showChatLabel) return false;

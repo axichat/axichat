@@ -39,12 +39,11 @@ class EmailContactImportTile extends StatelessWidget {
             onTap: loading
                 ? null
                 : () {
-                    final cubit = context.read<EmailContactImportCubit>()
-                      ..reset();
                     showFadeScaleDialog(
                       context: context,
-                      builder: (dialogContext) =>
-                          EmailContactImportDialog(cubit: cubit),
+                      builder: (dialogContext) => EmailContactImportDialog(
+                        cubit: context.read<EmailContactImportCubit>()..reset(),
+                      ),
                     );
                   },
           ),
