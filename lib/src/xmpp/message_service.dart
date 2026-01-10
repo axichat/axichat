@@ -1688,6 +1688,7 @@ mixin MessageService
 
   final Map<String, _OutboundMessageSummary> _outboundMessageSummaries =
       <String, _OutboundMessageSummary>{};
+  final Map<String, String> _outboundGroupchatStanzaRooms = <String, String>{};
 
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
@@ -1943,6 +1944,12 @@ mixin MessageService
           return;
         }
         unawaited(_syncMucArchiveAfterJoin(roomJid));
+      })
+      ..registerHandler<OutboundGroupchatStanzaEvent>((event) async {
+        _trackOutboundGroupchatStanza(
+          stanzaId: event.stanzaId,
+          roomJid: event.roomJid,
+        );
       })
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
         _log.info('Received chat marker');
@@ -2453,12 +2460,38 @@ mixin MessageService
     _trimOutboundMessageSummaries();
   }
 
+  void _trackOutboundGroupchatStanza({
+    required String stanzaId,
+    required String roomJid,
+  }) {
+    final trimmedId = stanzaId.trim();
+    if (trimmedId.isEmpty) return;
+    final normalizedRoom = _normalizeMucRoomJidCandidate(roomJid);
+    if (normalizedRoom == null) return;
+    _outboundGroupchatStanzaRooms[trimmedId] = normalizedRoom;
+    _trimOutboundGroupchatStanzas();
+  }
+
+  String? _takeOutboundGroupchatRoomJid(String stanzaId) {
+    final trimmedId = stanzaId.trim();
+    if (trimmedId.isEmpty) return null;
+    return _outboundGroupchatStanzaRooms.remove(trimmedId);
+  }
+
   void _trimOutboundMessageSummaries() {
     if (_outboundMessageSummaries.length <= _outboundSummaryLimit) {
       return;
     }
     final String oldestKey = _outboundMessageSummaries.keys.first;
     _outboundMessageSummaries.remove(oldestKey);
+  }
+
+  void _trimOutboundGroupchatStanzas() {
+    if (_outboundGroupchatStanzaRooms.length <= _outboundSummaryLimit) {
+      return;
+    }
+    final oldestKey = _outboundGroupchatStanzaRooms.keys.first;
+    _outboundGroupchatStanzaRooms.remove(oldestKey);
   }
 
   Future<void> sendMessage({
@@ -4437,10 +4470,12 @@ mixin MessageService
     );
     final _OutboundMessageSummary? summary =
         _outboundMessageSummaries.remove(stanzaId);
+    final String? mappedRoomJid = _takeOutboundGroupchatRoomJid(stanzaId);
     final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
     String? roomJid = summaryIsGroupChat
         ? _resolveGroupChatRoomJid(event: event, summary: summary!)
         : _resolveGroupChatRoomJidFromEvent(event);
+    roomJid ??= mappedRoomJid;
     roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
     if (roomJid != null &&
         _isMucChatJid(roomJid) &&
@@ -4450,14 +4485,11 @@ mixin MessageService
         )) {
       _markRoomNeedsJoin(roomJid);
       if (_shouldClearMucPresenceForError(errorCondition)) {
-        final roomState = roomStateFor(roomJid);
-        if (roomState?.hasSelfPresence == true) {
-          _markRoomLeft(
-            roomJid,
-            statusCodes: _emptyStatusCodes,
-            preserveOccupants: _preserveOccupantsOnMucError,
-          );
-        }
+        _markRoomLeft(
+          roomJid,
+          statusCodes: _emptyStatusCodes,
+          preserveOccupants: _preserveOccupantsOnMucError,
+        );
       }
       unawaited(_repairMucJoin(roomJid));
     }

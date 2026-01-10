@@ -227,14 +227,13 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         .toSet();
     final roomBare = fromJid.toBare();
     final roomJid = roomBare.toString();
-    final itemJid = item.attributes['jid'];
-    final ownBareJid = getAttributes().getFullJID().toBare().toString();
-    final isSelfByJid = itemJid is String && itemJid.isNotEmpty
-        ? _matchesBareJid(itemJid, ownBareJid)
-        : false;
+    final storedNick = _nickForRoom(roomJid);
+    final trimmedStoredNick = storedNick?.trim();
+    final bool isSelfByStoredNick = trimmedStoredNick?.isNotEmpty == true &&
+        trimmedStoredNick!.toLowerCase() == nick.toLowerCase();
     final isSelfPresence = statuses.contains(mucStatusSelfPresence) ||
         statuses.contains(mucStatusNickAssigned) ||
-        isSelfByJid;
+        isSelfByStoredNick;
     if (!isSelfPresence) return state;
     final resolvedStatuses = statuses.contains(mucStatusSelfPresence)
         ? statuses
