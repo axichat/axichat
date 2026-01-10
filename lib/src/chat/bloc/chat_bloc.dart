@@ -4188,17 +4188,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       state.recipients.where((recipient) => recipient.included).toList();
 
   List<ComposerRecipient> _resolveComposerRecipients(Chat chat) {
+    final isGroupChat = chat.type == ChatType.groupChat;
+    if (isGroupChat) {
+      return _pinnedRecipientsForChat(chat);
+    }
     final recipients = _includedRecipients();
     if (recipients.isNotEmpty) {
       return recipients;
     }
-    return [
-      ComposerRecipient(
-        target: FanOutTarget.chat(chat),
-        included: true,
-        pinned: true,
-      ),
-    ];
+    return _pinnedRecipientsForChat(chat);
   }
 
   ({
@@ -4706,6 +4704,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   List<ComposerRecipient> _syncRecipientsForChat(Chat chat) {
+    final isGroupChat = chat.type == ChatType.groupChat;
+    if (isGroupChat) {
+      return _pinnedRecipientsForChat(chat);
+    }
     final recipients = List<ComposerRecipient>.from(state.recipients);
     final key = chat.jid;
     final index = recipients.indexWhere(
@@ -4720,13 +4722,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     recipients.insert(
       0,
-      ComposerRecipient(
-        target: FanOutTarget.chat(chat),
-        included: true,
-        pinned: true,
-      ),
+      _pinnedRecipientForChat(chat),
     );
     return recipients;
+  }
+
+  List<ComposerRecipient> _pinnedRecipientsForChat(Chat chat) {
+    final pinnedRecipient = _pinnedRecipientForChat(chat);
+    return <ComposerRecipient>[pinnedRecipient];
+  }
+
+  ComposerRecipient _pinnedRecipientForChat(Chat chat) {
+    const isIncluded = true;
+    const isPinned = true;
+    return ComposerRecipient(
+      target: FanOutTarget.chat(chat),
+      included: isIncluded,
+      pinned: isPinned,
+    );
   }
 
   Future<void> _rehydrateXmppDraft(

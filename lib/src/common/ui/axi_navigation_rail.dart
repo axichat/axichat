@@ -11,6 +11,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _railHeaderHorizontalPaddingCollapsed = 12.0;
 const double _railHeaderHorizontalPaddingExpanded = 18.0;
+const FontWeight _railTitleFontWeight = FontWeight.w500;
 
 class AxiRailDestination {
   const AxiRailDestination({
@@ -108,7 +109,7 @@ class AxiNavigationRail extends StatelessWidget {
     final titleStyle = context.textTheme.h2.copyWith(
       fontFamily: gabaritoFontFamily,
       fontFamilyFallback: gabaritoFontFallback,
-      fontWeight: FontWeight.w800,
+      fontWeight: _railTitleFontWeight,
       letterSpacing: -0.3,
       color: colors.foreground,
     );
