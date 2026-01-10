@@ -62,7 +62,7 @@ const double _profileWideColumnSpacing = 16.0;
 const double _profileColumnMinWidth = 340.0;
 const double _profileColumnMaxWidth = 460.0;
 const double _profileSettingsMinWidth = 300.0;
-const double _profileWideLayoutMinWidth = _profileColumnMinWidth +
+const double _profileWideLayoutMinWidth = _profileColumnMaxWidth +
     _profileSettingsMinWidth +
     _profileWideColumnSpacing +
     _profileWideHorizontalPadding * 2;

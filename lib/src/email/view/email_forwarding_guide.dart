@@ -13,6 +13,7 @@ import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -22,6 +23,7 @@ const double _guideItemSpacing = 8.0;
 const double _guideLinkSpacing = 12.0;
 const double _guideLinkRunSpacing = 8.0;
 const double _guideAddressPadding = 12.0;
+const bool _forceShowEmailForwardingWelcome = false;
 const String _emptyForwardingAddress = '';
 
 const String _gmailForwardingUrl =
@@ -198,6 +200,10 @@ class EmailForwardingAddressCard extends StatelessWidget {
 
   final String forwardingAddress;
 
+  Future<void> _copyForwardingAddress(String address) async {
+    await Clipboard.setData(ClipboardData(text: address));
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -209,6 +215,12 @@ class EmailForwardingAddressCard extends StatelessWidget {
         hasAddress ? context.textTheme.small : context.textTheme.muted;
     final addressLabel =
         hasAddress ? resolved : l10n.emailForwardingGuideAddressFallback;
+    final copyButton = AxiIconButton.ghost(
+      iconData: LucideIcons.copy,
+      tooltip: l10n.chatActionCopy,
+      onPressed: hasAddress ? () => _copyForwardingAddress(resolved) : null,
+      color: hasAddress ? colors.foreground : colors.mutedForeground,
+    );
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.muted,
@@ -219,9 +231,17 @@ class EmailForwardingAddressCard extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(_guideAddressPadding),
-        child: SelectableText(
-          addressLabel,
-          style: textStyle,
+        child: Row(
+          children: [
+            Expanded(
+              child: SelectableText(
+                addressLabel,
+                style: textStyle,
+              ),
+            ),
+            const SizedBox(width: _guideItemSpacing),
+            copyButton,
+          ],
         ),
       ),
     );
@@ -291,11 +311,15 @@ class _EmailForwardingWelcomeGateState
     if (_dialogShown || !mounted) {
       return;
     }
-    if (context.read<AuthenticationCubit>().state
-        is! AuthenticationCompleteFromSignup) {
-      return;
-    }
-    if (context.read<SettingsCubit>().state.emailForwardingGuideSeen) {
+    final authState = context.read<AuthenticationCubit>().state;
+    if (!_forceShowEmailForwardingWelcome) {
+      if (authState is! AuthenticationCompleteFromSignup) {
+        return;
+      }
+      if (context.read<SettingsCubit>().state.emailForwardingGuideSeen) {
+        return;
+      }
+    } else if (authState is! AuthenticationComplete) {
       return;
     }
     _dialogShown = true;
