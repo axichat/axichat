@@ -245,7 +245,7 @@ final class ChatQuoteRequested extends ChatEvent {
   final Message message;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => const [];
 }
 
 final class ChatQuoteCleared extends ChatEvent {
@@ -265,7 +265,7 @@ final class ChatMessagePinRequested extends ChatEvent {
   final bool pin;
 
   @override
-  List<Object?> get props => [message, pin];
+  List<Object?> get props => [pin];
 }
 
 final class ChatMessageReactionToggled extends ChatEvent {
@@ -278,7 +278,7 @@ final class ChatMessageReactionToggled extends ChatEvent {
   final String emoji;
 
   @override
-  List<Object?> get props => [message, emoji];
+  List<Object?> get props => const [];
 }
 
 final class ChatMessageForwardRequested extends ChatEvent {
@@ -293,7 +293,7 @@ final class ChatMessageForwardRequested extends ChatEvent {
   final EmailForwardingMode forwardingMode;
 
   @override
-  List<Object?> get props => [message, target, forwardingMode];
+  List<Object?> get props => [forwardingMode];
 }
 
 final class ChatMessageResendRequested extends ChatEvent {
@@ -302,7 +302,7 @@ final class ChatMessageResendRequested extends ChatEvent {
   final Message message;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => const [];
 }
 
 final class ChatMessageEditRequested extends ChatEvent {
@@ -311,7 +311,7 @@ final class ChatMessageEditRequested extends ChatEvent {
   final Message message;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => const [];
 }
 
 final class ChatAttachmentPicked extends ChatEvent {
@@ -431,7 +431,7 @@ final class ChatInviteRevocationRequested extends ChatEvent {
   final Message message;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => const [];
 }
 
 final class ChatInviteJoinRequested extends ChatEvent {
@@ -440,7 +440,7 @@ final class ChatInviteJoinRequested extends ChatEvent {
   final Message message;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => const [];
 }
 
 final class ChatLeaveRoomRequested extends ChatEvent {
