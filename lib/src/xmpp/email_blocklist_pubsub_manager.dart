@@ -8,6 +8,7 @@ import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -161,6 +162,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       SyncRateLimiter(emailBlocklistSyncRateLimit);
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;
+  bool _ensureNodePending = false;
   bool _nodeReady = false;
 
   @override
@@ -307,55 +309,57 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
         _setAccessModel(mox.AccessModel.authorize);
         return;
       }
+      final configuredError = configured.get<mox.PubSubError>();
+      final fallbackError = fallbackConfigured.get<mox.PubSubError>();
+      final shouldCreateNode = configuredError.indicatesMissingNode ||
+          fallbackError.indicatesMissingNode;
+      if (!shouldCreateNode) {
+        return;
+      }
 
       try {
-        final created = await pubsub.createNodeWithConfig(
+        await pubsub.createNodeWithConfig(
           host,
           _createNodeConfig(mox.AccessModel.whitelist),
           nodeId: emailBlocklistPubSubNode,
         );
-        if (created != null) {
-          final applied = await pubsub.configureNode(
-            host,
-            emailBlocklistPubSubNode,
-            primaryConfig,
-          );
-          if (!applied.isType<mox.PubSubError>()) {
-            _setAccessModel(mox.AccessModel.whitelist);
-            return;
-          }
+        final applied = await pubsub.configureNode(
+          host,
+          emailBlocklistPubSubNode,
+          primaryConfig,
+        );
+        if (!applied.isType<mox.PubSubError>()) {
+          _setAccessModel(mox.AccessModel.whitelist);
+          return;
         }
       } on Exception {
         // ignore and retry below
       }
 
       try {
-        final created = await pubsub.createNodeWithConfig(
+        await pubsub.createNodeWithConfig(
           host,
           _createNodeConfig(mox.AccessModel.authorize),
           nodeId: emailBlocklistPubSubNode,
         );
-        if (created != null) {
-          final applied = await pubsub.configureNode(
-            host,
-            emailBlocklistPubSubNode,
-            fallbackConfig,
-          );
-          if (!applied.isType<mox.PubSubError>()) {
-            _setAccessModel(mox.AccessModel.authorize);
-            return;
-          }
+        final applied = await pubsub.configureNode(
+          host,
+          emailBlocklistPubSubNode,
+          fallbackConfig,
+        );
+        if (!applied.isType<mox.PubSubError>()) {
+          _setAccessModel(mox.AccessModel.authorize);
+          return;
         }
       } on Exception {
         // ignore and retry below
       }
 
       try {
-        final created = await pubsub.createNode(
+        await pubsub.createNode(
           host,
           nodeId: emailBlocklistPubSubNode,
         );
-        if (created == null) return;
         final appliedPrimary = await pubsub.configureNode(
           host,
           emailBlocklistPubSubNode,
@@ -378,6 +382,11 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       }
     } finally {
       _ensureNodeInFlight = false;
+      final shouldRetry = _ensureNodePending && !_nodeReady;
+      _ensureNodePending = false;
+      if (shouldRetry) {
+        unawaited(_bootstrap());
+      }
     }
   }
 
@@ -624,7 +633,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _clearCache();
     _nodeReady = false;
     _lastEnsureAttempt = null;
-    unawaited(_bootstrap());
+    _ensureNodePending = true;
+    if (!_ensureNodeInFlight) {
+      unawaited(_bootstrap());
+    }
   }
 
   Future<void> _handleNodePurged(mox.PubSubNodePurgedEvent event) async {
@@ -635,7 +647,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _clearCache();
     _nodeReady = false;
     _lastEnsureAttempt = null;
-    unawaited(_bootstrap());
+    _ensureNodePending = true;
+    if (!_ensureNodeInFlight) {
+      unawaited(_bootstrap());
+    }
   }
 
   Future<void> _refreshFromServer() async {

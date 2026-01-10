@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -15,6 +16,7 @@ class EmailAttachmentOptimizer {
   static const _maxDimension = 2048;
   static const _jpegQuality = 82;
   static const _pngCompressionLevel = 6;
+  static const Duration _optimizedCleanupDelay = Duration(hours: 1);
   static const _optimizedDirectoryName = 'email_attachments';
   static const _optimizedFilePrefix = 'attachment_';
   static const _jpegExtension = '.jpg';
@@ -62,6 +64,7 @@ class EmailAttachmentOptimizer {
       if (optimizedPath.isEmpty) {
         return attachment;
       }
+      _scheduleOptimizedCleanup(optimizedPath);
       final String optimizedFileName =
           result?[_resultFileNameKey] as String? ?? attachment.fileName;
       final String optimizedMimeType = result?[_resultMimeTypeKey] as String? ??
@@ -221,4 +224,36 @@ String _resolvePngMimeType(String? declaredMimeType) {
     return trimmed;
   }
   return EmailAttachmentOptimizer._pngMimeType;
+}
+
+void _scheduleOptimizedCleanup(String path) {
+  final String trimmedPath = path.trim();
+  if (trimmedPath.isEmpty) {
+    return;
+  }
+  final File file = File(trimmedPath);
+  if (!_isOptimizedAttachmentFile(file)) {
+    return;
+  }
+  unawaited(
+    Future<void>.delayed(EmailAttachmentOptimizer._optimizedCleanupDelay)
+        .then((_) async {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } on Exception {
+        return;
+      }
+    }),
+  );
+}
+
+bool _isOptimizedAttachmentFile(File file) {
+  final String baseName = p.basename(file.path);
+  if (!baseName.startsWith(EmailAttachmentOptimizer._optimizedFilePrefix)) {
+    return false;
+  }
+  final String parentName = p.basename(p.dirname(file.path));
+  return parentName == EmailAttachmentOptimizer._optimizedDirectoryName;
 }

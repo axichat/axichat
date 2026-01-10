@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -23,6 +24,7 @@ const int _bundleMinFileSizeBytes = 0;
 const int _bundleBytesPerKiB = 1024;
 const int _bundleBytesPerMiB = _bundleBytesPerKiB * _bundleBytesPerKiB;
 const int _bundleMaxTotalBytes = _bundleMaxTotalSizeMiB * _bundleBytesPerMiB;
+const Duration _bundleCleanupDelay = Duration(hours: 1);
 const String _bundleFallbackFileName = 'attachment';
 const String _bundleFileIndexSeparator = '_';
 const String _bundlePayloadPathKey = 'path';
@@ -119,6 +121,18 @@ final class EmailAttachmentBundler {
       caption: caption,
     );
   }
+
+  static void scheduleCleanup(EmailAttachment attachment) {
+    final String path = attachment.path.trim();
+    if (path.isEmpty) {
+      return;
+    }
+    final File file = File(path);
+    if (!_isBundledAttachmentFile(file)) {
+      return;
+    }
+    _scheduleBundleCleanup(file);
+  }
 }
 
 String _sanitizeBundleFileName({
@@ -183,4 +197,27 @@ void _writeBundle(Map<String, Object?> payload) {
   } finally {
     encoder.close();
   }
+}
+
+bool _isBundledAttachmentFile(File file) {
+  final String baseName = p.basename(file.path);
+  if (!baseName.startsWith(emailAttachmentBundleNamePrefix)) {
+    return false;
+  }
+  final String parentName = p.basename(p.dirname(file.path));
+  return parentName == emailAttachmentBundleDirName;
+}
+
+void _scheduleBundleCleanup(File file) {
+  unawaited(
+    Future<void>.delayed(_bundleCleanupDelay).then((_) async {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } on Exception {
+        return;
+      }
+    }),
+  );
 }

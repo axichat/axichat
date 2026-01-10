@@ -52,7 +52,7 @@ final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
   const _AvatarMetadataLoadFailed();
 }
 
-mixin AvatarService on XmppBase {
+mixin AvatarService on XmppBase, MucService {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
@@ -290,6 +290,7 @@ mixin AvatarService on XmppBase {
     bool force = false,
   }) {
     for (final jid in jids) {
+      if (_isMucAvatarJid(jid)) continue;
       unawaited(_refreshAvatarForJid(jid, force: force));
     }
   }
@@ -378,9 +379,36 @@ mixin AvatarService on XmppBase {
     return sha1.convert(bytes).toString();
   }
 
+  bool _isMucAvatarJid(String jid) {
+    try {
+      final bareJid = mox.JID.fromString(jid).toBare().toString();
+      if (roomStateFor(bareJid) != null) return true;
+      final host = mucServiceHost.trim();
+      if (host.isEmpty) return false;
+      return mox.JID.fromString(bareJid).domain == host;
+    } on Exception {
+      return false;
+    }
+  }
+
+  Future<bool> _shouldSkipAvatarForBareJid(String bareJid) async {
+    final normalized = bareJid.trim();
+    if (normalized.isEmpty) return true;
+    if (_isMucAvatarJid(normalized)) return true;
+    try {
+      final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+        (db) => db.getChat(normalized),
+      );
+      return chat?.type == ChatType.groupChat;
+    } on XmppAbortedException {
+      return false;
+    }
+  }
+
   Future<void> prefetchAvatarForJid(String jid) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
+    if (await _shouldSkipAvatarForBareJid(bareJid)) return;
 
     switch (await _loadMetadata(bareJid)) {
       case final _AvatarMetadataLoaded loaded:
@@ -520,6 +548,7 @@ mixin AvatarService on XmppBase {
   }) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
+    if (await _shouldSkipAvatarForBareJid(bareJid)) return;
     final added = _avatarRefreshInProgress.add(bareJid);
     if (!force && !added) return;
     try {
@@ -1051,22 +1080,25 @@ mixin AvatarService on XmppBase {
         _configuredAvatarNodes.add(cacheKey);
         return;
       }
+      final configuredError = configured.get<mox.PubSubError>();
+      final shouldCreateNode = configuredError.indicatesMissingNode;
+      if (!shouldCreateNode) {
+        return;
+      }
 
       try {
-        final created = await pubsub
+        await pubsub
             .createNodeWithConfig(
               host,
               config.toNodeConfig(),
               nodeId: node,
             )
             .timeout(_avatarPublishTimeout);
-        if (created != null) {
-          final confirmed = await pubsub
-              .configureNode(host, node, config)
-              .timeout(_avatarPublishTimeout);
-          if (!confirmed.isType<mox.PubSubError>()) {
-            _configuredAvatarNodes.add(cacheKey);
-          }
+        final confirmed = await pubsub
+            .configureNode(host, node, config)
+            .timeout(_avatarPublishTimeout);
+        if (!confirmed.isType<mox.PubSubError>()) {
+          _configuredAvatarNodes.add(cacheKey);
           return;
         }
       } on Exception {
@@ -1074,10 +1106,9 @@ mixin AvatarService on XmppBase {
       }
 
       try {
-        final created = await pubsub
+        await pubsub
             .createNode(host, nodeId: node)
             .timeout(_avatarPublishTimeout);
-        if (created == null) return;
         final confirmed = await pubsub
             .configureNode(host, node, config)
             .timeout(_avatarPublishTimeout);

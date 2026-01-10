@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -866,19 +867,20 @@ class _ChatListTileState extends State<ChatListTile> {
     if (context.read<ChatsCubit?>() == null) return;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
+    File? exportFile;
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: [chat],
         loadHistory: context.read<ChatsCubit>().loadChatHistory,
       );
+      exportFile = result.file;
       if (!mounted) return;
-      final file = result.file;
-      if (file == null) {
+      if (exportFile == null) {
         _showMessage(l10n.chatsExportNoContent);
         return;
       }
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [XFile(exportFile.path)],
         text: l10n.chatsExportShareText,
         subject: l10n.chatsExportShareSubject(chat.displayName),
       );
@@ -887,6 +889,10 @@ class _ChatListTileState extends State<ChatListTile> {
     } catch (_) {
       if (!mounted) return;
       _showMessage(l10n.chatsExportFailure);
+    } finally {
+      if (exportFile != null) {
+        ChatHistoryExporter.scheduleCleanup(exportFile);
+      }
     }
   }
 
@@ -1128,19 +1134,20 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     setState(() {
       _exporting = true;
     });
+    File? exportFile;
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: [widget.chat],
         loadHistory: context.read<ChatsCubit>().loadChatHistory,
       );
+      exportFile = result.file;
       if (!mounted) return;
-      final file = result.file;
-      if (file == null) {
+      if (exportFile == null) {
         _showSnack(l10n.chatsExportNoContent);
         return;
       }
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [XFile(exportFile.path)],
         text: l10n.chatsExportShareText,
         subject: l10n.chatsExportShareSubject(widget.chat.displayName),
       );
@@ -1151,6 +1158,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       if (!mounted) return;
       _showSnack(l10n.chatsExportFailure);
     } finally {
+      if (exportFile != null) {
+        ChatHistoryExporter.scheduleCleanup(exportFile);
+      }
       if (mounted) {
         setState(() {
           _exporting = false;

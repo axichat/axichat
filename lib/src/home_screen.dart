@@ -49,6 +49,7 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
 import 'package:axichat/src/home/home_search_models.dart';
@@ -58,6 +59,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -66,6 +68,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -86,6 +89,13 @@ const int _homeChatPageIndex = 0;
 const int _homeCalendarPageIndex = 1;
 const Curve _homeCalendarFadeCurve = Curves.easeInOutCubic;
 const double _homeHeaderActionSpacing = 4.0;
+const double _railFooterSpacing = 12.0;
+const double _railFooterItemSpacing = 12.0;
+const double _railFooterIconSize = 20.0;
+const EdgeInsets _railFooterItemPadding = EdgeInsets.symmetric(
+  horizontal: 12,
+  vertical: 12,
+);
 const String _homeSyncTooltip = 'Sync';
 
 class HomeScreen extends StatefulWidget {
@@ -634,7 +644,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return BlocProvider(
+    final actionLayer = BlocProvider(
       create: (context) {
         final bloc = AccessibilityActionBloc(
           chatsService: context.read<XmppService>(),
@@ -726,6 +736,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
+    return EmailForwardingWelcomeGate(child: actionLayer);
   }
 }
 
@@ -1239,12 +1250,103 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
               .read<AccessibilityActionBloc?>()
               ?.add(const AccessibilityMenuOpened()),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            padding: _railFooterItemPadding,
             child: Row(
               children: [
-                const Icon(LucideIcons.lifeBuoy, size: 20),
-                const SizedBox(width: 12),
+                const Icon(
+                  LucideIcons.lifeBuoy,
+                  size: _railFooterIconSize,
+                ),
+                const SizedBox(width: _railFooterItemSpacing),
                 ShortcutHint(shortcut: shortcut, dense: true),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeNavigationRailFooter extends StatelessWidget {
+  const _HomeNavigationRailFooter({required this.collapsed});
+
+  final bool collapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+    if (context.read<AccessibilityActionBloc?>() != null) {
+      items.add(_AccessibilityFindActionRailItem(collapsed: collapsed));
+    }
+    if (items.isNotEmpty) {
+      items.add(const SizedBox(height: _railFooterSpacing));
+    }
+    items.add(_SettingsRailItem(collapsed: collapsed));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: items,
+    );
+  }
+}
+
+class _SettingsRailItem extends StatelessWidget {
+  const _SettingsRailItem({required this.collapsed});
+
+  final bool collapsed;
+
+  void _openSettings(BuildContext context) {
+    context.push(
+      const ProfileRoute().location,
+      extra: context.read,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final label = l10n.settingsButtonLabel;
+    if (collapsed) {
+      return AxiIconButton.ghost(
+        iconData: LucideIcons.settings,
+        tooltip: label,
+        onPressed: () => _openSettings(context),
+        usePrimary: true,
+      );
+    }
+    final colors = context.colorScheme;
+    final radius = context.radius;
+    return Semantics(
+      label: label,
+      button: true,
+      child: Material(
+        color: colors.background,
+        shape: SquircleBorder(
+          cornerRadius: radius.topLeft.x,
+          side: BorderSide(color: colors.border),
+        ),
+        child: InkWell(
+          borderRadius: radius,
+          onTap: () => _openSettings(context),
+          child: Padding(
+            padding: _railFooterItemPadding,
+            child: Row(
+              children: [
+                const Icon(
+                  LucideIcons.settings,
+                  size: _railFooterIconSize,
+                ),
+                const SizedBox(width: _railFooterItemSpacing),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.textTheme.small.copyWith(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1552,7 +1654,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         toggleExpandedTooltip: l10n.homeRailHideMenu,
         toggleCollapsedTooltip: l10n.homeRailShowMenu,
         backgroundColor: context.colorScheme.background,
-        footer: _AccessibilityFindActionRailItem(
+        footer: _HomeNavigationRailFooter(
           collapsed: widget.collapsed,
         ),
         onDestinationSelected: (index) {

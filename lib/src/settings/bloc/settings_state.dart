@@ -18,6 +18,8 @@ enum ShadColor {
   zinc,
 }
 
+const bool _emailForwardingGuideSeenDefault = false;
+
 @freezed
 class SettingsState with _$SettingsState {
   const factory SettingsState({
@@ -31,6 +33,7 @@ class SettingsState with _$SettingsState {
     @Default(true) bool indicateTyping,
     @Default(false) bool lowMotion,
     @Default(true) bool colorfulAvatars,
+    @Default(_emailForwardingGuideSeenDefault) bool emailForwardingGuideSeen,
     @Default(MessageStorageMode.local) MessageStorageMode messageStorageMode,
     @Default(true) bool shareTokenSignatureEnabled,
     @Default(false) bool hideCompletedScheduled,

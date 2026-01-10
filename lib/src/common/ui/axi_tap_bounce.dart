@@ -45,21 +45,35 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     });
   }
 
-  bool _shouldHandlePointerDown(PointerDownEvent event) {
-    if (_tapBouncePointerKinds.contains(event.kind)) {
+  bool _shouldHandleTapKind(PointerDeviceKind? kind) {
+    if (kind == null) {
       return true;
     }
-    return event.buttons != 0;
+    if (_tapBouncePointerKinds.contains(kind)) {
+      return true;
+    }
+    return kind == PointerDeviceKind.mouse ||
+        kind == PointerDeviceKind.trackpad;
   }
 
-  void _handlePointerDown(PointerDownEvent event) {
-    if (!_shouldHandlePointerDown(event)) {
+  void _handleTapDown(TapDownDetails details) {
+    if (!_shouldHandleTapKind(details.kind)) {
       return;
     }
     _setPressed(true);
   }
 
-  void _handlePointerEnd(PointerEvent event) => _setPressed(false);
+  void _handleTapUp(TapUpDetails details) => _setPressed(false);
+
+  void _handleTapCancel() => _setPressed(false);
+
+  @override
+  void didUpdateWidget(AxiTapBounce oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled) {
+      _setPressed(false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,11 +81,11 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     final targetScale = _pressed ? widget.scale : 1.0;
     final duration = _pressed ? widget.pressDuration : widget.releaseDuration;
     final curve = _pressed ? widget.pressCurve : widget.releaseCurve;
-    return Listener(
+    return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: _handlePointerDown,
-      onPointerUp: _handlePointerEnd,
-      onPointerCancel: _handlePointerEnd,
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
       child: AnimatedScale(
         scale: targetScale,
         duration: duration,

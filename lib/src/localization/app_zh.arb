@@ -689,6 +689,15 @@
       "label": {}
     }
   },
+  "profileExportShareUnsupportedMessage": "此平台不支持分享。{label} 导出已保存到 {path}。",
+  "@profileExportShareUnsupportedMessage": {
+    "placeholders": {
+      "label": {},
+      "path": {}
+    }
+  },
+  "profileExportCopyPathAction": "复制路径",
+  "profileExportPathCopiedMessage": "导出路径已复制到剪贴板。",
   "profileExportFormatTitle": "选择导出格式",
   "profileExportFormatCsvTitle": "CSV (.csv)",
   "profileExportFormatCsvSubtitle": "适用于大多数通讯录。",
@@ -698,7 +707,7 @@
   "termsAgreementPrefix": "您同意我们的",
   "termsAgreementTerms": "条款",
   "termsAgreementAnd": " 和 ",
-  "termsAgreementPrivacy": "隐私政策",
+  "termsAgreementPrivacy": "隐私",
   "termsAgreementError": "你必须接受条款和条件",
   "commonContinue": "继续",
   "commonDelete": "删除",
@@ -707,6 +716,7 @@
   "commonRemove": "移除",
   "commonSend": "发送",
   "commonDismiss": "关闭",
+  "settingsButtonLabel": "设置",
   "settingsSectionImportant": "重要",
   "settingsSectionAppearance": "外观",
   "settingsLanguage": "语言",
@@ -720,6 +730,7 @@
   "settingsLowMotion": "低动效",
   "settingsLowMotionDescription": "禁用大部分动画，更适合性能较慢的设备。",
   "settingsSectionChats": "聊天",
+  "settingsSectionEmail": "邮件",
   "settingsMessageStorageTitle": "消息存储",
   "settingsMessageStorageSubtitle": "本地保留设备副本；仅服务器模式从存档查询。",
   "settingsMessageStorageLocal": "本地",
@@ -1496,5 +1507,16 @@
       "failed": {}
     }
   },
+  "emailForwardingGuideTitle": "Connect existing email",
+  "emailForwardingGuideSubtitle": "Forward mail from Gmail, Outlook, or any provider.",
+  "emailForwardingWelcomeTitle": "Welcome to Axichat",
+  "emailForwardingGuideIntro": "Keep your existing inbox and forward mail into Axichat.",
+  "emailForwardingGuideAddressHint": "Enter this address in your provider's forwarding settings.",
+  "emailForwardingGuideAddressFallback": "Your Axichat address will appear here.",
+  "emailForwardingGuideLinksTitle": "Quick links",
+  "emailForwardingGuideLinksSubtitle": "Search your provider's help docs, or start here:",
+  "emailForwardingGuideSettingsHint": "You can do this later in Settings.",
+  "emailForwardingProviderGmail": "Gmail",
+  "emailForwardingProviderOutlook": "Outlook",
   "chatChooseTextToAdd": "选择要添加的文本"
 }

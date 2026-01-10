@@ -40,8 +40,6 @@ definitions:
     - &diagnose_git_remotes
       name: Diagnose Git Remotes
       script: |
-        cat ~/.ssh/config 
-        cat .git/config 
         git remote -v
     - &github_release_create_android
       name: Create Android GitHub Release
