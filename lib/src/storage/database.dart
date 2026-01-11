@@ -1987,6 +1987,7 @@ WHERE delta_chat_id IS NOT NULL
     final String? lastMessagePreview = shouldUpdateChatSummary
         ? await _messagePreview(
             trimmedBody: trimmedBody,
+            subject: message.subject,
             fileMetadataId: message.fileMetadataID,
             hasAttachment: hasAttachment,
             pseudoMessageType: message.pseudoMessageType,
@@ -2111,6 +2112,7 @@ WHERE delta_chat_id IS NOT NULL
 
   Future<String?> _messagePreview({
     required String? trimmedBody,
+    required String? subject,
     required String? fileMetadataId,
     required bool hasAttachment,
     required PseudoMessageType? pseudoMessageType,
@@ -2125,6 +2127,7 @@ WHERE delta_chat_id IS NOT NULL
           : 'Invite revoked';
     }
 
+    final String? trimmedSubject = subject?.trim();
     if (trimmedBody?.isNotEmpty == true) {
       final lines = trimmedBody!.split('\n');
       final filtered = lines
@@ -2147,6 +2150,9 @@ WHERE delta_chat_id IS NOT NULL
         }
       }
       if (cleaned.isNotEmpty) return cleaned;
+    }
+    if (trimmedSubject?.isNotEmpty == true) {
+      return trimmedSubject;
     }
     if (!hasAttachment) {
       return null;
@@ -2364,6 +2370,7 @@ WHERE jid = ?
       final lastMessage = await getLastMessageForChat(chat.jid);
       final lastMessagePreview = await _messagePreview(
         trimmedBody: lastMessage?.body?.trim(),
+        subject: lastMessage?.subject,
         fileMetadataId: lastMessage?.fileMetadataID,
         hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
         pseudoMessageType: lastMessage?.pseudoMessageType,
@@ -2760,6 +2767,7 @@ WHERE email_from_address IN ($placeholderClause)
         ? null
         : await _messagePreview(
             trimmedBody: trimmedBody,
+            subject: lastMessage.subject,
             fileMetadataId: lastMessage.fileMetadataID,
             hasAttachment: hasAttachment,
             pseudoMessageType: lastMessage.pseudoMessageType,
@@ -3692,6 +3700,7 @@ $limitClause
     final lastMessage = await getLastMessageForChat(chat.jid);
     final lastMessagePreview = await _messagePreview(
       trimmedBody: lastMessage?.body?.trim(),
+      subject: lastMessage?.subject,
       fileMetadataId: lastMessage?.fileMetadataID,
       hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
       pseudoMessageType: lastMessage?.pseudoMessageType,
@@ -3731,6 +3740,7 @@ $limitClause
     final lastMessage = await getLastMessageForChat(jid);
     final lastMessagePreview = await _messagePreview(
       trimmedBody: lastMessage?.body?.trim(),
+      subject: lastMessage?.subject,
       fileMetadataId: lastMessage?.fileMetadataID,
       hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
       pseudoMessageType: lastMessage?.pseudoMessageType,
