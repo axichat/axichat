@@ -167,7 +167,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   static const String managerId = 'axi.conversation.index';
   static const String _defaultMaxItems = '1000';
   static const String _publishModelPublishers = 'publishers';
-  static const String _sendLastOnSubscribe = 'on_subscribe';
+  static const String _sendLastOnSubscribe = 'on_sub';
   static const bool _notifyEnabled = true;
   static const bool _deliverNotificationsEnabled = true;
   static const bool _deliverPayloadsEnabled = true;
