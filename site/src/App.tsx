@@ -98,7 +98,6 @@ const featureCards = [
   { emoji: "🔍", body: "Fast search across chats, mail, and calendar" },
   { emoji: "🗂️", body: "Collaborative calendars with per-event permissions and owner/assignee roles" },
   { emoji: "🕒", body: "Availability sharing that shows overlaps before you schedule" },
-  { emoji: "🤝", body: "Live calendar co-editing with comments, mentions, and RSVP updates" },
   { emoji: "🚀", body: "1st-party push notifications and offline sync" },
   { emoji: "📅", body: "Natural-language scheduling with drag+drop calendar editing" },
   { emoji: "➕", body: "One-tap add-to-calendar from simple text messages" },
@@ -107,7 +106,7 @@ const featureCards = [
   { emoji: "⚡", body: "Critical paths and agenda focus to surface what’s next" },
   { emoji: "🦾", body: "Accessibility-friendly modals and flows (keyboard/touch/reader aware)" },
   { emoji: "🌍", body: "Translated UI (English, Spanish, German, French, Chinese)" },
-  { emoji: "🔄", body: "Sync across all your devices (Android, Linux, Windows)" },
+  { emoji: "📲", body: "Sync across all your devices (Android, Linux, Windows)" },
   { emoji: "🖥️", body: "Desktop + mobile parity with keyboard shortcuts and touch affordances" },
   { emoji: "🔔", body: "Smart notifications (muting, per-chat overrides, do-not-disturb)" },
   { emoji: "🌐", body: "Works without Google/Firebase; pure XMPP + SMTP/IMAP core" },
@@ -149,7 +148,7 @@ const faqItems = [
           Yes, you can set up forwarding with your curent provider. They should have instructions on how to do so.
           Here are some quick links:{" "}
           <a
-            href="https://support.google.com/mail/answer/10957?hl=en"
+            href="https://support.google.com/mail/answer/10957"
             target="_blank"
             rel="noreferrer"
             className="underline underline-offset-4"
@@ -158,7 +157,7 @@ const faqItems = [
           </a>
           ,{" "}
           <a
-            href="https://support.microsoft.com/en-us/office/forward-email-from-outlook-to-another-email-account-0d6d6b7b-3783-4e98-9c3e-1ea6e2e6b4d3"
+            href="https://support.microsoft.com/en-us/office/turn-on-automatic-forwarding-in-outlook-7f2670a1-7fff-4475-8a3c-5822d63b0c8e"
             target="_blank"
             rel="noreferrer"
             className="underline underline-offset-4"
@@ -179,14 +178,38 @@ const faqItems = [
     answer: (
       <p>
         Yes, Axichat is free and open source. Check out our{" "}
-        <a href="https://github.com/axichat/axichat" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+        <a
+          href="https://github.com/axichat/axichat"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 underline underline-offset-4"
+        >
+          <GitHubIcon className="h-4 w-4" />
           GitHub
         </a>{" "}
         and{" "}
-        <a href="https://gitlab.com/axichat" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+        <a
+          href="https://gitlab.com/axichat"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 underline underline-offset-4"
+        >
+          <GitLabIcon className="h-4 w-4" />
           GitLab
         </a>
         .
+      </p>
+    ),
+  },
+  {
+    question: "If Axichat uses XMPP, is it federated?",
+    answer: (
+      <p>
+        Axichat uses SMTP for Axichat-to-External emails. That part is necessarily federated. For Axichat-to-Axichat
+        messages, we switch to XMPP for more speed and features. Federating this side is unfinished, but on our
+        roadmap. Axichat is built to work with the latest, most secure versions of ejabberd and requires SASL2 and
+        SCRAM-SHA-512 for authentication. Many XMPP servers run outdated software and therefore do not work with
+        Axichat. We are still working on adhering to the various XMPP Compliance Suites.
       </p>
     ),
   },
@@ -350,6 +373,28 @@ function ArrowRight({ className }: { className?: string }) {
   );
 }
 
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path
+        d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.207 11.387.6.113.793-.262.793-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.757-1.333-1.757-1.089-.745.083-.73.083-.73 1.205.085 1.84 1.236 1.84 1.236 1.07 1.835 2.807 1.305 3.492.998.108-.775.418-1.305.762-1.605-2.665-.303-5.466-1.332-5.466-5.93 0-1.31.468-2.38 1.235-3.22-.123-.303-.535-1.523.117-3.176 0 0 1.008-.322 3.3 1.23a11.5 11.5 0 0 1 3.004-.404c1.02.005 2.047.138 3.004.404 2.29-1.552 3.296-1.23 3.296-1.23.653 1.653.241 2.873.118 3.176.77.84 1.234 1.91 1.234 3.22 0 4.61-2.807 5.625-5.479 5.922.43.37.823 1.096.823 2.21 0 1.594-.015 2.88-.015 3.273 0 .318.19.694.8.576C20.565 21.796 24 17.298 24 12 24 5.37 18.63 0 12 0z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function GitLabIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path
+        d="M23.955 13.257 20.732 2.66a.6.6 0 0 0-1.145 0l-2.81 8.64H7.223l-2.81-8.64a.6.6 0 0 0-1.145 0L.045 13.257a.6.6 0 0 0 .223.678L12 22.485l11.732-8.55a.6.6 0 0 0 .223-.678Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function Container({ children }: { children: React.ReactNode }) {
   return <div className={containerClassName}>{children}</div>;
 }
@@ -359,13 +404,13 @@ function SectionHeader({
   title,
   subtitle,
 }: {
-  kicker: string;
+  kicker?: string;
   title: string;
   subtitle?: React.ReactNode;
 }) {
   return (
     <div className="mb-10">
-      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">{kicker}</div>
+      {kicker ? <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">{kicker}</div> : null}
       <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl font-display">{title}</h2>
       {subtitle ? <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">{subtitle}</p> : null}
     </div>
@@ -494,8 +539,8 @@ export default function App() {
         <Container>
           <div className="flex h-16 items-center justify-between">
             <a href="#top" className="flex items-center gap-3">
-              <BrandIcon alt="Axichat" className="h-10 w-10" />
-              <div className="text-lg font-display font-medium tracking-tight leading-none">Axichat</div>
+              <BrandIcon alt="Axichat" className="h-12 w-12" />
+              <div className="text-2xl font-display font-medium tracking-tight leading-none">Axichat</div>
             </a>
 
             <nav className="hidden items-center gap-6 md:flex">
@@ -511,9 +556,10 @@ export default function App() {
                 href="https://github.com/axichat/axichat"
                 target="_blank"
                 rel="noreferrer"
-                className="hidden rounded-xl border border-white/15 bg-black px-4 py-2 text-sm text-white/80 hover:bg-white/5 md:inline-flex"
+                aria-label="Axichat on GitHub"
+                className="hidden h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black text-white/80 hover:bg-white/5 md:inline-flex"
               >
-                GitHub
+                <GitHubIcon className="h-5 w-5" />
               </a>
               <a
                 href={downloads.android}
@@ -555,7 +601,6 @@ export default function App() {
         <section id="screenshots" className="py-16 sm:py-20">
           <Container>
             <SectionHeader
-              kicker={sectionLabels.screenshots}
               title="One screen for chat, mail, and calendar"
               subtitle="Real screens from Axichat across desktop and mobile."
             />
@@ -587,7 +632,6 @@ export default function App() {
         <section id="features" className="border-y border-white/10 py-16 sm:py-20">
           <Container>
             <SectionHeader
-              kicker={sectionLabels.features}
               title="Feature highlights"
               subtitle="If you're proactive and busy, you'll love Axichat both because of what it has and what it doesn't have."
             />
@@ -596,8 +640,8 @@ export default function App() {
               {featureCards.map((feature) => (
                 <div key={feature.body} className="rounded-2xl border border-white/10 bg-black/50 p-5">
                   <div className="flex items-start gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-black text-lg">
-                      {feature.emoji}
+                    <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-black">
+                      <span className="text-xl emoji">{feature.emoji}</span>
                     </div>
                     <div className="text-sm leading-relaxed text-white/80">{feature.body}</div>
                   </div>
@@ -609,7 +653,7 @@ export default function App() {
 
         <section id="why" className="py-16 sm:py-20">
           <Container>
-            <SectionHeader kicker="Why?" title="Why Axichat?" />
+            <SectionHeader title="Why Axichat?" />
             <div className="grid gap-4 md:grid-cols-3">
               {whyCards.map((card) => (
                 <div key={card.title} className="rounded-2xl border border-white/10 bg-black/50 p-5">
@@ -623,7 +667,7 @@ export default function App() {
 
         <section id="faq" className="py-16 sm:py-20">
           <Container>
-            <SectionHeader kicker={sectionLabels.faq} title="Common questions" />
+            <SectionHeader title="Common questions" />
             <div className="flex flex-col gap-4">
               {faqItems.map((item, index) => (
                 <FAQItem
@@ -641,7 +685,6 @@ export default function App() {
         <section id="about" className="border-y border-white/10 py-16 sm:py-20">
           <Container>
             <SectionHeader
-              kicker={sectionLabels.about}
               title="A digital desk for your communication"
               subtitle="Built in 2025 in New Zealand. Designed for people who want control of their communications and time."
             />
@@ -664,7 +707,6 @@ export default function App() {
         <section id="contact" className="py-16 sm:py-20">
           <Container>
             <SectionHeader
-              kicker={sectionLabels.contact}
               title="Contact us"
               subtitle={
                 <>
@@ -685,6 +727,17 @@ export default function App() {
                 </>
               }
             />
+            <div className="inline-flex items-center gap-2 text-sm text-white/70">
+              <GitLabIcon className="h-4 w-4" />
+              <a
+                href="https://gitlab.com/axichat/axichat"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-4"
+              >
+                https://gitlab.com/axichat/axichat
+              </a>
+            </div>
           </Container>
         </section>
 
@@ -693,8 +746,8 @@ export default function App() {
             <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
-                  <BrandIcon alt="Axichat" className="h-10 w-10" />
-                  <div className="text-lg font-display font-medium leading-none">Axichat</div>
+                  <BrandIcon alt="Axichat" className="h-12 w-12" />
+                  <div className="text-2xl font-display font-medium leading-none">Axichat</div>
                 </div>
                 <div className="text-xs text-white/60">© {new Date().getFullYear()} Axichat LLC</div>
                 <a href="/LICENSE.txt" className="text-xs text-white/60 hover:text-white">
@@ -734,8 +787,9 @@ export default function App() {
                         href={link.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-sm text-white/70 hover:text-white"
+                        className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white"
                       >
+                        {link.label === "GitHub" ? <GitHubIcon className="h-4 w-4" /> : null}
                         {link.label}
                       </a>
                     ))}

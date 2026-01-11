@@ -456,6 +456,13 @@ class XmppService extends XmppBase
   static const String _sessionTokenSmS2cSuffix = 'sm_s2c';
   static const String _sessionTokenSmResIdSuffix = 'sm_res_id';
   static const String _sessionTokenSmResLocSuffix = 'sm_res_loc';
+  static const List<String> _sessionTokenSuffixes = [
+    _sessionTokenFastTokenSuffix,
+    _sessionTokenSmC2sSuffix,
+    _sessionTokenSmS2cSuffix,
+    _sessionTokenSmResIdSuffix,
+    _sessionTokenSmResLocSuffix,
+  ];
   static final RegExp _sessionTokenPrefixSanitizePattern =
       RegExp(r'[^a-zA-Z0-9_-]');
   static const int _notificationPayloadLookupStart = 0;
@@ -599,12 +606,29 @@ class XmppService extends XmppBase
     _selfAvatarController.add(avatar);
   }
 
-  String _buildSessionTokenPrefix(String? databasePrefix) {
+  static String _buildSessionTokenPrefix(String? databasePrefix) {
     final rawPrefix = databasePrefix?.trim();
     final prefix = rawPrefix == null || rawPrefix.isEmpty
         ? _sessionTokenFallbackPrefix
         : rawPrefix;
     return prefix.replaceAll(_sessionTokenPrefixSanitizePattern, '_');
+  }
+
+  static List<RegisteredCredentialKey> sessionTokenKeysForPrefix(
+    String? databasePrefix,
+  ) {
+    final normalizedPrefix = _buildSessionTokenPrefix(databasePrefix);
+    return _sessionTokenSuffixes
+        .map(
+          (suffix) => CredentialStore.registerKey(
+            [
+              _sessionTokenKeyPrefixLabel,
+              normalizedPrefix,
+              suffix,
+            ].join(_sessionTokenKeySeparator),
+          ),
+        )
+        .toList();
   }
 
   RegisteredCredentialKey _sessionTokenKey(String suffix) =>

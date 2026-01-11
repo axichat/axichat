@@ -481,14 +481,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         prefixes.add(trimmedPrefix);
       }
     }
-    for (final key in prefixKeys) {
-      await _credentialStore.delete(key: key);
-    }
+    final keysToDelete = <RegisteredCredentialKey>{}..addAll(prefixKeys);
     for (final prefix in prefixes) {
-      final passphraseKey = CredentialStore.registerKey(
-        '$prefix$_databasePassphraseKeySuffix',
-      );
-      await _credentialStore.delete(key: passphraseKey);
+      keysToDelete
+        ..add(
+          CredentialStore.registerKey(
+            '$prefix$_databasePassphraseKeySuffix',
+          ),
+        )
+        ..addAll(XmppService.sessionTokenKeysForPrefix(prefix));
+    }
+    for (final key in keysToDelete) {
+      await _credentialStore.delete(key: key);
     }
   }
 
