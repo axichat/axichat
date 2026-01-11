@@ -34,6 +34,7 @@ const String _deltaAttachmentLabelPrefix = '📎 ';
 const String _unknownAttachmentSizeLabel = 'Unknown size';
 const String _emptyJid = '';
 const String _emptyHtml = '';
+const int _emailChatInitialTimestampMillis = 0;
 const int _attachmentSizeUnitBase = 1024;
 const double _attachmentSizePrecisionThreshold = 10;
 const List<String> _attachmentSizeUnits = <String>[
@@ -404,7 +405,7 @@ class DeltaEventConsumer {
       if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
         final last = await _context.getMessage(entry.msgId);
         final timestamp = last?.timestamp;
-        final preview = last?.text?.trim();
+        final preview = _previewTextForDeltaMessage(last);
         if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
           updated = updated.copyWith(lastChangeTimestamp: timestamp);
         }
@@ -541,7 +542,7 @@ class DeltaEventConsumer {
       if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
         final last = await _context.getMessage(entry.msgId);
         lastTimestamp = last?.timestamp;
-        lastPreview = last?.text?.trim();
+        lastPreview = _previewTextForDeltaMessage(last);
         if (last != null) {
           final stanzaId = _stanzaId(entry.msgId);
           final existing = await db.getMessageByStanzaID(stanzaId);
@@ -560,12 +561,17 @@ class DeltaEventConsumer {
         updated = updated.copyWith(archived: isArchived);
       }
       if (!hydratedLastMessage && lastTimestamp != null) {
-        final newerTimestamp =
-            lastTimestamp.isAfter(updated.lastChangeTimestamp);
-        if (newerTimestamp) {
+        final bool hasPreview = lastPreview?.isNotEmpty == true;
+        final bool hasStoredPreview =
+            updated.lastMessage?.trim().isNotEmpty == true;
+        final bool shouldBackfillPreview = hasPreview && !hasStoredPreview;
+        final bool shouldUpdateTimestamp =
+            lastTimestamp.isAfter(updated.lastChangeTimestamp) ||
+                shouldBackfillPreview;
+        if (shouldUpdateTimestamp) {
           updated = updated.copyWith(lastChangeTimestamp: lastTimestamp);
         }
-        if (newerTimestamp && lastPreview != null && lastPreview.isNotEmpty) {
+        if (hasPreview && shouldUpdateTimestamp) {
           updated = updated.copyWith(lastMessage: lastPreview);
         }
       }
@@ -1343,6 +1349,21 @@ class DeltaEventConsumer {
     return parseEmailMessageId(headers);
   }
 
+  String? _previewTextForDeltaMessage(DeltaMessage? message) {
+    if (message == null) {
+      return null;
+    }
+    final String? trimmedBody = message.text?.trim();
+    if (trimmedBody?.isNotEmpty == true) {
+      return trimmedBody;
+    }
+    final String? trimmedSubject = message.subject?.trim();
+    if (trimmedSubject?.isNotEmpty == true) {
+      return trimmedSubject;
+    }
+    return null;
+  }
+
   Future<Chat> _ensureChat(int chatId) async {
     final db = await _db();
     final int deltaAccountId = _deltaAccountId;
@@ -1405,7 +1426,8 @@ class DeltaEventConsumer {
       jid: emailAddress,
       title: title,
       type: _mapChatType(remote?.type),
-      lastChangeTimestamp: DateTime.timestamp(),
+      lastChangeTimestamp:
+          DateTime.fromMillisecondsSinceEpoch(_emailChatInitialTimestampMillis),
       encryptionProtocol: EncryptionProtocol.none,
       contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,

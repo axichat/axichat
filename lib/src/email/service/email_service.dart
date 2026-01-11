@@ -37,6 +37,10 @@ import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 const _defaultPageSize = 50;
+const int _emailMessageTimestampFallbackMillis = 0;
+const int _sortEqual = 0;
+const int _sortBefore = -1;
+const int _sortAfter = 1;
 const _maxFanOutRecipients = 20;
 const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
@@ -1836,18 +1840,21 @@ class EmailService {
   }) async* {
     await _ensureReady();
     final db = await _databaseBuilder();
-    yield await db.getChatMessages(
+    final initial = await db.getChatMessages(
       jid,
       start: start,
       end: end,
       filter: filter,
     );
-    yield* db.watchChatMessages(
-      jid,
-      start: start,
-      end: end,
-      filter: filter,
-    );
+    yield _sortMessages(initial);
+    yield* db
+        .watchChatMessages(
+          jid,
+          start: start,
+          end: end,
+          filter: filter,
+        )
+        .map(_sortMessages);
   }
 
   Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String jid) async* {
@@ -3186,6 +3193,47 @@ class EmailService {
         index == -1 ? address.trim() : address.substring(0, index).trim();
     return localPart.isEmpty ? null : localPart;
   }
+
+  DateTime _messageTimestampOrFallback(Message message) {
+    final timestamp = message.timestamp;
+    if (timestamp != null) {
+      return timestamp;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(
+      _emailMessageTimestampFallbackMillis,
+    );
+  }
+
+  int _compareDeltaIdsDesc(int? left, int? right) {
+    if (left == null && right == null) {
+      return _sortEqual;
+    }
+    if (left == null) {
+      return _sortAfter;
+    }
+    if (right == null) {
+      return _sortBefore;
+    }
+    return right.compareTo(left);
+  }
+
+  int _compareMessagesByTimestampDesc(Message left, Message right) {
+    final DateTime leftTimestamp = _messageTimestampOrFallback(left);
+    final DateTime rightTimestamp = _messageTimestampOrFallback(right);
+    final int timestampComparison = rightTimestamp.compareTo(leftTimestamp);
+    if (timestampComparison != _sortEqual) {
+      return timestampComparison;
+    }
+    final int deltaComparison =
+        _compareDeltaIdsDesc(left.deltaMsgId, right.deltaMsgId);
+    if (deltaComparison != _sortEqual) {
+      return deltaComparison;
+    }
+    return right.stanzaID.compareTo(left.stanzaID);
+  }
+
+  List<Message> _sortMessages(List<Message> messages) =>
+      List<Message>.of(messages)..sort(_compareMessagesByTimestampDesc);
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
     ..sort((a, b) {
