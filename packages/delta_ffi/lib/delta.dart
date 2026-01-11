@@ -6,6 +6,9 @@ import 'src/bindings.dart';
 
 const _assetId = 'package:delta_ffi/deltachat_wrap';
 const _libraryName = 'deltachat_wrap';
+const _deltaLoadFailureMessage = 'Failed to load deltachat native library.';
+const _deltaLoadFailureDetailsPrefix = ' (lastError: ';
+const _deltaLoadFailureDetailsSuffix = ')';
 
 @ffi.DefaultAsset(_assetId)
 final DeltaChatBindings deltaBindings = DeltaChatBindings(loadDeltaLibrary());
@@ -148,62 +151,61 @@ ffi.DynamicLibrary loadDeltaLibrary() {
     }
   }
 
-  if (_isProduct) {
-    for (final candidate in _bundledLibraryFiles()) {
-      final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
-      if (library != null) {
-        return library;
-      }
-    }
-    if (Platform.isAndroid) {
-      for (final name in _platformLibraryNames()) {
-        final library = tryLoad(() => ffi.DynamicLibrary.open(name));
-        if (library != null) {
-          return library;
-        }
-      }
-    }
-  } else {
-    final configPath = _pathFromNativeAssetsConfig();
-    if (configPath != null) {
-      final configLibrary = tryLoad(() => ffi.DynamicLibrary.open(configPath));
-      if (configLibrary != null) {
-        return configLibrary;
-      }
-    }
+  final assetLibrary = tryLoad(() => ffi.DynamicLibrary.open(_assetId));
+  if (assetLibrary != null) {
+    return assetLibrary;
+  }
 
-    final processLibrary = tryLoad(ffi.DynamicLibrary.process);
-    if (processLibrary != null) {
-      return processLibrary;
-    }
-
-    final envOverride = Platform.environment['DELTA_FFI_LIBRARY_PATH'];
-    if (envOverride != null && envOverride.isNotEmpty) {
-      final envLibrary = tryLoad(() => ffi.DynamicLibrary.open(envOverride));
-      if (envLibrary != null) {
-        return envLibrary;
-      }
-    }
-
-    for (final candidate in _candidateLibraryFiles()) {
-      final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
-      if (library != null) {
-        return library;
-      }
-    }
-
-    for (final name in _platformLibraryNames()) {
-      final library = tryLoad(() => ffi.DynamicLibrary.open(name));
-      if (library != null) {
-        return library;
-      }
+  final configPath = _pathFromNativeAssetsConfig();
+  if (configPath != null) {
+    final configLibrary = tryLoad(() => ffi.DynamicLibrary.open(configPath));
+    if (configLibrary != null) {
+      return configLibrary;
     }
   }
 
+  final processLibrary = tryLoad(ffi.DynamicLibrary.process);
+  if (processLibrary != null) {
+    return processLibrary;
+  }
+
+  final envOverride = Platform.environment['DELTA_FFI_LIBRARY_PATH'];
+  if (envOverride != null && envOverride.isNotEmpty) {
+    final envLibrary = tryLoad(() => ffi.DynamicLibrary.open(envOverride));
+    if (envLibrary != null) {
+      return envLibrary;
+    }
+  }
+
+  for (final candidate in _bundledLibraryFiles()) {
+    final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+    if (library != null) {
+      return library;
+    }
+  }
+
+  for (final candidate in _candidateLibraryFiles()) {
+    final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+    if (library != null) {
+      return library;
+    }
+  }
+
+  for (final name in _platformLibraryNames()) {
+    final library = tryLoad(() => ffi.DynamicLibrary.open(name));
+    if (library != null) {
+      return library;
+    }
+  }
+
+  final message = lastError == null
+      ? _deltaLoadFailureMessage
+      : '$_deltaLoadFailureMessage$_deltaLoadFailureDetailsPrefix'
+          '$lastError$_deltaLoadFailureDetailsSuffix';
   throw ArgumentError.value(
     lastError,
     _libraryName,
-    'Failed to load deltachat native library.',
+    message,
   );
 }
 
