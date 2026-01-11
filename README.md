@@ -152,7 +152,6 @@
 - 🔍 Fast search across chats, mail, and calendar
 - 🗂️ Collaborative calendars with per-event permissions and owner/assignee roles
 - 🕒 Availability sharing that shows overlaps before you schedule
-- 🤝 Live calendar co-editing with comments, mentions, and RSVP updates
 - 🚀 1st-party push notifications and offline sync
 - 📅 Natural-language scheduling with drag+drop calendar editing
 - ➕ One-tap add-to-calendar from simple text messages
@@ -203,9 +202,6 @@
       desktop entry guidance).
 
 
-## Developer notes
-
-- OAuth email provider setup: see `docs/email_oauth_setup.md`.
 
 <hr />
 

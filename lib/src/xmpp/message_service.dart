@@ -90,7 +90,7 @@ const String _pinPublishModelPublishers = 'publishers';
 const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
 const mox.PubSubAffiliation _pinAffiliationPublisher =
     mox.PubSubAffiliation.publisher;
-const String _pinSendLastOnSubscribe = 'on_subscribe';
+const String _pinSendLastOnSubscribe = 'on_sub';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
 const bool _pinNotifyEnabled = true;
@@ -103,6 +103,7 @@ const mox.AccessModel _pinAccessModelRestricted = mox.AccessModel.whitelist;
 const String _pinPubSubHostPrefix = 'pubsub.';
 const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
+const Duration _mamQueryTimeout = Duration(seconds: 90);
 const Set<String> _emptyPinPublisherSet = <String>{};
 final _pinPendingPublishesKey =
     XmppStateStore.registerKey(_pinPendingPublishesKeyName);
@@ -2279,6 +2280,7 @@ mixin MessageService
         after: after,
         max: pageSize,
       ),
+      timeout: _mamQueryTimeout,
     );
     if (result == null) {
       _log.warning('Global MAM query failed.');
@@ -3701,6 +3703,7 @@ mixin MessageService
         after: after,
         max: pageSize,
       ),
+      timeout: _mamQueryTimeout,
     );
     if (result == null) {
       _log.warning('MAM query failed.');
