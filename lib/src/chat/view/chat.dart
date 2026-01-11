@@ -3862,20 +3862,21 @@ class _ChatState extends State<Chat> {
                 const IconData pinnedIcon = LucideIcons.pin;
                 final bool showingChatCalendar =
                     openChatCalendar || _chatRoute.isCalendar;
-                final List<AppBarActionItem> leadingActions =
+                final AppBarActionItem? closeAction = readOnly
+                    ? null
+                    : AppBarActionItem(
+                        label: context.l10n.commonClose,
+                        iconData: LucideIcons.x,
+                        usePrimary: false,
+                        onPressed: () {
+                          if (!prepareChatExit()) return;
+                          unawaited(
+                            context.read<ChatsCubit>().closeAllChats(),
+                          );
+                        },
+                      );
+                final List<AppBarActionItem> navigationActions =
                     <AppBarActionItem>[
-                  if (!readOnly)
-                    AppBarActionItem(
-                      label: context.l10n.commonClose,
-                      iconData: LucideIcons.x,
-                      usePrimary: false,
-                      onPressed: () {
-                        if (!prepareChatExit()) return;
-                        unawaited(
-                          context.read<ChatsCubit>().closeAllChats(),
-                        );
-                      },
-                    ),
                   if (!readOnly && openStack.length > 1)
                     AppBarActionItem(
                       label: context.l10n.chatBack,
@@ -3900,6 +3901,11 @@ class _ChatState extends State<Chat> {
                         );
                       },
                     ),
+                ];
+                final List<AppBarActionItem> leadingActions =
+                    <AppBarActionItem>[
+                  if (closeAction != null) closeAction,
+                  ...navigationActions,
                 ];
                 final int leadingActionCount = leadingActions.length;
                 final int chatActionCount = _chatBaseActionCount +
@@ -3932,10 +3938,21 @@ class _ChatState extends State<Chat> {
                                 chatActionsWidth +
                                 titleReserveWidth +
                                 actionsPaddingWidth;
-                    final double leadingWidth =
-                        collapseAppBarActions || leadingActionCount == 0
-                            ? _chatAppBarCollapsedLeadingWidth
-                            : leadingWidthExpanded;
+                    final List<AppBarActionItem> visibleLeadingActions =
+                        collapseAppBarActions
+                            ? <AppBarActionItem>[
+                                if (closeAction != null) closeAction,
+                              ]
+                            : leadingActions;
+                    final int visibleLeadingActionCount =
+                        visibleLeadingActions.length;
+                    final double leadingWidth = visibleLeadingActionCount == 0
+                        ? _chatAppBarCollapsedLeadingWidth
+                        : _chatAppBarLeadingInset +
+                            (AxiIconButton.kTapTargetSize *
+                                visibleLeadingActionCount) +
+                            (_chatAppBarLeadingSpacing *
+                                math.max(0, visibleLeadingActionCount - 1));
                     return Scaffold(
                       backgroundColor: context.colorScheme.background,
                       appBar: AppBar(
@@ -3949,9 +3966,7 @@ class _ChatState extends State<Chat> {
                           horizontal: _chatAppBarActionsPadding,
                         ),
                         leadingWidth: leadingWidth,
-                        leading: readOnly ||
-                                collapseAppBarActions ||
-                                leadingActionCount == 0
+                        leading: visibleLeadingActionCount == 0
                             ? null
                             : Padding(
                                 padding: const EdgeInsets.only(
@@ -3960,10 +3975,10 @@ class _ChatState extends State<Chat> {
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: AppBarActions(
-                                    actions: leadingActions,
+                                    actions: visibleLeadingActions,
                                     spacing: _chatAppBarLeadingSpacing,
                                     overflowBreakpoint: 0,
-                                    availableWidth: leadingWidthExpanded,
+                                    availableWidth: leadingWidth,
                                   ),
                                 ),
                               ),
@@ -4199,7 +4214,7 @@ class _ChatState extends State<Chat> {
                                 final List<AppBarActionItem> combinedActions =
                                     collapseAppBarActions
                                         ? <AppBarActionItem>[
-                                            ...leadingActions,
+                                            ...navigationActions,
                                             ...chatActions,
                                           ]
                                         : chatActions;
