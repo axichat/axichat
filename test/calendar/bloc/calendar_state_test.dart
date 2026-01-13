@@ -20,8 +20,9 @@ void main() {
           duration: const Duration(hours: 1),
           createdAt: baseStart,
           modifiedAt: baseStart,
-          recurrence:
-              const RecurrenceRule(frequency: RecurrenceFrequency.daily),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
           occurrenceOverrides: {
             overrideKey: TaskOccurrenceOverride(scheduledTime: movedStart),
           },
@@ -51,8 +52,9 @@ void main() {
       final DateTime baseStart = DateTime(2024, 1, 1, 9);
       final DateTime excludedStart = DateTime(2024, 1, 2, 9);
       final DateTime extraStart = DateTime(2024, 1, 5, 9);
-      final CalendarDateTime excludedDate =
-          CalendarDateTime(value: excludedStart);
+      final CalendarDateTime excludedDate = CalendarDateTime(
+        value: excludedStart,
+      );
       final CalendarDateTime extraDate = CalendarDateTime(value: extraStart);
       final RecurrenceRule recurrence = RecurrenceRule(
         frequency: RecurrenceFrequency.daily,
@@ -76,8 +78,9 @@ void main() {
         selectedDate: baseStart,
       );
 
-      final List<CalendarTask> excludedDayTasks =
-          state.tasksForDate(excludedStart);
+      final List<CalendarTask> excludedDayTasks = state.tasksForDate(
+        excludedStart,
+      );
       expect(excludedDayTasks, isEmpty);
 
       final List<CalendarTask> extraDayTasks = state.tasksForDate(extraStart);
@@ -99,15 +102,28 @@ void main() {
       const int durationHours = 1;
       const int singleItemCount = 1;
       const Duration taskDuration = Duration(hours: durationHours);
-      const RecurrenceRule recurrence =
-          RecurrenceRule(frequency: RecurrenceFrequency.daily);
+      const RecurrenceRule recurrence = RecurrenceRule(
+        frequency: RecurrenceFrequency.daily,
+      );
 
-      final DateTime baseStart =
-          DateTime(baseYear, baseMonth, baseDay, baseHour);
-      final DateTime overrideOriginalStart =
-          DateTime(baseYear, baseMonth, overrideDay, baseHour);
-      final DateTime overrideShiftedStart =
-          DateTime(baseYear, baseMonth, overrideDay, shiftedHour);
+      final DateTime baseStart = DateTime(
+        baseYear,
+        baseMonth,
+        baseDay,
+        baseHour,
+      );
+      final DateTime overrideOriginalStart = DateTime(
+        baseYear,
+        baseMonth,
+        overrideDay,
+        baseHour,
+      );
+      final DateTime overrideShiftedStart = DateTime(
+        baseYear,
+        baseMonth,
+        overrideDay,
+        shiftedHour,
+      );
       final DateTime priorDate = DateTime(baseYear, baseMonth, priorDay);
       final DateTime futureDate = DateTime(baseYear, baseMonth, futureDay);
       final String overrideKey =
@@ -138,14 +154,22 @@ void main() {
 
       final List<CalendarTask> priorTasks = state.tasksForDate(priorDate);
       expect(priorTasks, hasLength(singleItemCount));
-      final DateTime expectedPriorStart =
-          DateTime(baseYear, baseMonth, priorDay, baseHour);
+      final DateTime expectedPriorStart = DateTime(
+        baseYear,
+        baseMonth,
+        priorDay,
+        baseHour,
+      );
       expect(priorTasks.first.scheduledTime, equals(expectedPriorStart));
 
       final List<CalendarTask> futureTasks = state.tasksForDate(futureDate);
       expect(futureTasks, hasLength(singleItemCount));
-      final DateTime expectedFutureStart =
-          DateTime(baseYear, baseMonth, futureDay, shiftedHour);
+      final DateTime expectedFutureStart = DateTime(
+        baseYear,
+        baseMonth,
+        futureDay,
+        shiftedHour,
+      );
       expect(futureTasks.first.scheduledTime, equals(expectedFutureStart));
     });
   });

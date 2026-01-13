@@ -38,10 +38,8 @@ class AttachmentGalleryState extends Equatable {
 }
 
 class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
-  AttachmentGalleryCubit({
-    required XmppService xmppService,
-    this.chatJid,
-  })  : _xmppService = xmppService,
+  AttachmentGalleryCubit({required XmppService xmppService, this.chatJid})
+      : _xmppService = xmppService,
         super(const AttachmentGalleryState()) {
     unawaited(_subscribe());
   }
@@ -54,38 +52,25 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
     emit(state.copyWith(status: RequestStatus.loading));
     final db = await _xmppService.database;
     if (db is! XmppDrift) {
-      emit(
-        state.copyWith(
-          status: RequestStatus.failure,
-          error: null,
-        ),
-      );
+      emit(state.copyWith(status: RequestStatus.failure, error: null));
       return;
     }
     final repository = AttachmentGalleryRepository(db);
     await _subscription?.cancel();
-    _subscription = repository.watch(chatJid: chatJid).listen(
-          _handleItems,
-          onError: _handleError,
-        );
+    _subscription = repository
+        .watch(chatJid: chatJid)
+        .listen(_handleItems, onError: _handleError);
   }
 
   void _handleItems(List<AttachmentGalleryItem> items) {
     emit(
-      state.copyWith(
-        status: RequestStatus.success,
-        items: items,
-        error: null,
-      ),
+      state.copyWith(status: RequestStatus.success, items: items, error: null),
     );
   }
 
   void _handleError(Object error, StackTrace stackTrace) {
     emit(
-      state.copyWith(
-        status: RequestStatus.failure,
-        error: error.toString(),
-      ),
+      state.copyWith(status: RequestStatus.failure, error: error.toString()),
     );
   }
 

@@ -12,11 +12,7 @@ const double _fadeScaleAnimationEnd = 1.0;
 const Duration _fallbackFadeScaleDuration = Duration(milliseconds: 300);
 
 class InBoundsFadeScale extends StatelessWidget {
-  const InBoundsFadeScale({
-    super.key,
-    required this.child,
-    this.duration,
-  });
+  const InBoundsFadeScale({super.key, required this.child, this.duration});
 
   final Widget child;
   final Duration? duration;
@@ -30,19 +26,12 @@ class InBoundsFadeScale extends StatelessWidget {
             : context.select<SettingsCubit, Duration>(
                 (cubit) => cubit.animationDuration,
               ));
-    return _FadeScaleTransitionPlayer(
-      duration: resolvedDuration,
-      child: child,
-    );
+    return _FadeScaleTransitionPlayer(duration: resolvedDuration, child: child);
   }
 }
 
 class InBoundsFadeScaleChild extends StatelessWidget {
-  const InBoundsFadeScaleChild({
-    super.key,
-    required this.child,
-    this.duration,
-  });
+  const InBoundsFadeScaleChild({super.key, required this.child, this.duration});
 
   final Widget? child;
   final Duration? duration;
@@ -50,10 +39,7 @@ class InBoundsFadeScaleChild extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget resolvedChild = child ?? const SizedBox.shrink();
-    return InBoundsFadeScale(
-      duration: duration,
-      child: resolvedChild,
-    );
+    return InBoundsFadeScale(duration: duration, child: resolvedChild);
   }
 }
 
@@ -78,10 +64,7 @@ class _FadeScaleTransitionPlayerState extends State<_FadeScaleTransitionPlayer>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: widget.duration,
-      vsync: this,
-    );
+    _controller = AnimationController(duration: widget.duration, vsync: this);
     _startAnimation();
   }
 
@@ -106,10 +89,7 @@ class _FadeScaleTransitionPlayerState extends State<_FadeScaleTransitionPlayer>
 
   @override
   Widget build(BuildContext context) {
-    return FadeScaleTransition(
-      animation: _controller,
-      child: widget.child,
-    );
+    return FadeScaleTransition(animation: _controller, child: widget.child);
   }
 
   @override

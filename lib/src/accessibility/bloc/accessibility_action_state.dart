@@ -26,7 +26,7 @@ class AccessibilityActionState extends Equatable {
   const AccessibilityActionState.initial()
       : visible = false,
         stack = const [
-          AccessibilityStepEntry(kind: AccessibilityStepKind.root),
+          AccessibilityStepEntry(kind: AccessibilityStepKind.root)
         ],
         sections = const [],
         composerText = '',

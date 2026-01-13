@@ -273,11 +273,7 @@ enum AttachmentAutoDownload {
   bool get isAllowed => this == allowed;
 }
 
-enum NotificationPreviewSetting {
-  inherit,
-  show,
-  hide,
-}
+enum NotificationPreviewSetting { inherit, show, hide }
 
 extension NotificationPreviewSettingExtensions on NotificationPreviewSetting {
   bool get isInherited => this == NotificationPreviewSetting.inherit;
@@ -388,8 +384,9 @@ class Chat with _$Chat implements Insertable<Chat> {
       'unread_count': Variable<int>(unreadCount),
       'open': Variable<bool>(open),
       'muted': Variable<bool>(muted),
-      'notification_preview_setting':
-          Variable<int>(notificationPreviewSetting.index),
+      'notification_preview_setting': Variable<int>(
+        notificationPreviewSetting.index,
+      ),
       'favorited': Variable<bool>(favorited),
       'archived': Variable<bool>(archived),
       'hidden': Variable<bool>(hidden),
@@ -533,8 +530,9 @@ class EmailChatAccounts extends Table {
   Set<Column> get primaryKey => {chatJid, deltaAccountId};
 
   @override
-  List<String> get customConstraints =>
-      const ['UNIQUE(delta_account_id, delta_chat_id)'];
+  List<String> get customConstraints => const [
+        'UNIQUE(delta_account_id, delta_chat_id)',
+      ];
 }
 
 class Contacts extends Table {

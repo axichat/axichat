@@ -156,8 +156,9 @@ RosterItem generateRandomRosterItem({
 void prepareMockConnection() {
   when(() => mockConnection.hasConnectionSettings).thenReturn(false);
 
-  when(() => mockConnection.registerFeatureNegotiators(any()))
-      .thenAnswer((_) async {});
+  when(
+    () => mockConnection.registerFeatureNegotiators(any()),
+  ).thenAnswer((_) async {});
 
   when(() => mockConnection.registerManagers(any())).thenAnswer((_) async {});
 
@@ -166,25 +167,25 @@ void prepareMockConnection() {
   when(() => mockConnection.setUserAgent(any())).thenAnswer((_) {});
   when(() => mockConnection.setFastToken(any())).thenAnswer((_) {});
 
-  when(() => mockConnection.asBroadcastStream())
-      .thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
+  when(
+    () => mockConnection.asBroadcastStream(),
+  ).thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
 
-  when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
-    (_) async {
-      final discoInfo = mox.DiscoInfo(
-        const [mox.mamXmlns],
-        const [],
-        const [],
-        null,
-        mox.JID.fromString(jid),
-      );
-      return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
-    },
-  );
+  when(() => mockConnection.discoInfoQuery(any())).thenAnswer((_) async {
+    final discoInfo = mox.DiscoInfo(
+      const [mox.mamXmlns],
+      const [],
+      const [],
+      null,
+      mox.JID.fromString(jid),
+    );
+    return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
+  });
 
   when(() => mockConnection.saltedPassword).thenReturn('');
-  when(() => mockConnection.omemoActivityStream)
-      .thenAnswer((_) => const Stream<mox.OmemoActivityEvent>.empty());
+  when(
+    () => mockConnection.omemoActivityStream,
+  ).thenAnswer((_) => const Stream<mox.OmemoActivityEvent>.empty());
 }
 
 Future<void> connectSuccessfully(XmppService xmppService) async {
@@ -199,49 +200,64 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
     ),
   ).thenAnswer((_) async {});
 
-  when(() => mockStateStore.write(
-        key: any(named: 'key'),
-        value: any(named: 'value'),
-      )).thenAnswer((_) async => true);
+  when(
+    () => mockStateStore.write(
+      key: any(named: 'key'),
+      value: any(named: 'value'),
+    ),
+  ).thenAnswer((_) async => true);
 
   when(() => mockDatabase.getOmemoDevice(any())).thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoDevice(any())).thenAnswer((_) async {});
   when(() => mockDatabase.deleteOmemoDevice(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoRatchets(any()))
-      .thenAnswer((_) async => <OmemoRatchet>[]);
+  when(
+    () => mockDatabase.getOmemoRatchets(any()),
+  ).thenAnswer((_) async => <OmemoRatchet>[]);
   when(() => mockDatabase.saveOmemoRatchet(any())).thenAnswer((_) async {});
   when(() => mockDatabase.removeOmemoRatchets(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoBundleCache(any(), any()))
-      .thenAnswer((_) async => null);
+  when(
+    () => mockDatabase.getOmemoBundleCache(any(), any()),
+  ).thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoBundleCache(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.removeOmemoBundleCache(any(), any()))
-      .thenAnswer((_) async {});
+  when(
+    () => mockDatabase.removeOmemoBundleCache(any(), any()),
+  ).thenAnswer((_) async {});
   when(() => mockDatabase.clearOmemoBundleCache()).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoDeviceList(any()))
-      .thenAnswer((_) async => null);
+  when(
+    () => mockDatabase.getOmemoDeviceList(any()),
+  ).thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoDeviceList(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.deleteOmemoDeviceList(any()))
-      .thenAnswer((_) async {});
+  when(
+    () => mockDatabase.deleteOmemoDeviceList(any()),
+  ).thenAnswer((_) async {});
   when(() => mockDatabase.setOmemoTrust(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoTrusts(any()))
-      .thenAnswer((_) async => <OmemoTrust>[]);
-  when(() => mockDatabase.getAllOmemoTrusts())
-      .thenAnswer((_) async => <OmemoTrust>[]);
-  when(() => mockDatabase.replaceDeltaPlaceholderSelfJids(
-        deltaAccountId: any(named: 'deltaAccountId'),
-        resolvedAddress: any(named: 'resolvedAddress'),
-        placeholderJids: any(named: 'placeholderJids'),
-      )).thenAnswer((_) async {});
-  when(() => mockDatabase.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: any(named: 'deltaAccountId'),
-        placeholderJids: any(named: 'placeholderJids'),
-      )).thenAnswer((_) async {});
+  when(
+    () => mockDatabase.getOmemoTrusts(any()),
+  ).thenAnswer((_) async => <OmemoTrust>[]);
+  when(
+    () => mockDatabase.getAllOmemoTrusts(),
+  ).thenAnswer((_) async => <OmemoTrust>[]);
+  when(
+    () => mockDatabase.replaceDeltaPlaceholderSelfJids(
+      deltaAccountId: any(named: 'deltaAccountId'),
+      resolvedAddress: any(named: 'resolvedAddress'),
+      placeholderJids: any(named: 'placeholderJids'),
+    ),
+  ).thenAnswer((_) async {});
+  when(
+    () => mockDatabase.removeDeltaPlaceholderDuplicates(
+      deltaAccountId: any(named: 'deltaAccountId'),
+      placeholderJids: any(named: 'placeholderJids'),
+    ),
+  ).thenAnswer((_) async {});
 
-  when(() => mockConnection.connect(
-        shouldReconnect: false,
-        waitForConnection: true,
-        waitUntilLogin: true,
-      )).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
+  when(
+    () => mockConnection.connect(
+      shouldReconnect: false,
+      waitForConnection: true,
+      waitUntilLogin: true,
+    ),
+  ).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
   when(() => mockDatabase.close()).thenAnswer((_) async {});
@@ -266,40 +282,51 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
     ),
   ).thenAnswer((_) async {});
 
-  when(() => mockStateStore.write(
-        key: any(named: 'key'),
-        value: any(named: 'value'),
-      )).thenAnswer((_) async => true);
+  when(
+    () => mockStateStore.write(
+      key: any(named: 'key'),
+      value: any(named: 'value'),
+    ),
+  ).thenAnswer((_) async => true);
 
   when(() => mockDatabase.getOmemoDevice(any())).thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoDevice(any())).thenAnswer((_) async {});
   when(() => mockDatabase.deleteOmemoDevice(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoRatchets(any()))
-      .thenAnswer((_) async => <OmemoRatchet>[]);
+  when(
+    () => mockDatabase.getOmemoRatchets(any()),
+  ).thenAnswer((_) async => <OmemoRatchet>[]);
   when(() => mockDatabase.saveOmemoRatchet(any())).thenAnswer((_) async {});
   when(() => mockDatabase.removeOmemoRatchets(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoBundleCache(any(), any()))
-      .thenAnswer((_) async => null);
+  when(
+    () => mockDatabase.getOmemoBundleCache(any(), any()),
+  ).thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoBundleCache(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.removeOmemoBundleCache(any(), any()))
-      .thenAnswer((_) async {});
+  when(
+    () => mockDatabase.removeOmemoBundleCache(any(), any()),
+  ).thenAnswer((_) async {});
   when(() => mockDatabase.clearOmemoBundleCache()).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoDeviceList(any()))
-      .thenAnswer((_) async => null);
+  when(
+    () => mockDatabase.getOmemoDeviceList(any()),
+  ).thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoDeviceList(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.deleteOmemoDeviceList(any()))
-      .thenAnswer((_) async {});
+  when(
+    () => mockDatabase.deleteOmemoDeviceList(any()),
+  ).thenAnswer((_) async {});
   when(() => mockDatabase.setOmemoTrust(any())).thenAnswer((_) async {});
-  when(() => mockDatabase.getOmemoTrusts(any()))
-      .thenAnswer((_) async => <OmemoTrust>[]);
-  when(() => mockDatabase.getAllOmemoTrusts())
-      .thenAnswer((_) async => <OmemoTrust>[]);
+  when(
+    () => mockDatabase.getOmemoTrusts(any()),
+  ).thenAnswer((_) async => <OmemoTrust>[]);
+  when(
+    () => mockDatabase.getAllOmemoTrusts(),
+  ).thenAnswer((_) async => <OmemoTrust>[]);
 
-  when(() => mockConnection.connect(
-        shouldReconnect: false,
-        waitForConnection: true,
-        waitUntilLogin: true,
-      )).thenAnswer((_) async => const Result<bool, mox.XmppError>(false));
+  when(
+    () => mockConnection.connect(
+      shouldReconnect: false,
+      waitForConnection: true,
+      waitUntilLogin: true,
+    ),
+  ).thenAnswer((_) async => const Result<bool, mox.XmppError>(false));
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
   when(() => mockDatabase.close()).thenAnswer((_) async {});

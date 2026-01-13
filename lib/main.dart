@@ -43,8 +43,9 @@ Future<void> main() async {
     capability: capability,
     policy: policy,
   );
-  final Future<bool> storedCredentialsFuture =
-      resolveHasStoredLoginCredentials(credentialStore);
+  final Future<bool> storedCredentialsFuture = resolveHasStoredLoginCredentials(
+    credentialStore,
+  );
 
   _configureLogging();
   _registerThirdPartyLicenses();
@@ -59,25 +60,26 @@ Future<void> main() async {
   const bool isWeb = kIsWeb;
 
   final Future<HydratedStorage> baseStorageFuture = storageDirectoryFuture.then(
-    (Directory storageDirectory) => HydratedStorage.build(
-      storageDirectory: storageDirectory,
-    ),
+    (Directory storageDirectory) =>
+        HydratedStorage.build(storageDirectory: storageDirectory),
   );
-  final Future<void> hiveInitFuture = storageDirectoryFuture.then(
-    (Directory storageDirectory) async {
-      final String storagePath = storageDirectory.path;
-      if (isWeb) {
-        await Hive.initFlutter();
-        return;
-      }
-      Hive.init(storagePath);
-    },
-  );
+  final Future<void> hiveInitFuture = storageDirectoryFuture.then((
+    Directory storageDirectory,
+  ) async {
+    final String storagePath = storageDirectory.path;
+    if (isWeb) {
+      await Hive.initFlutter();
+      return;
+    }
+    Hive.init(storagePath);
+  });
   final HydratedStorage baseStorage = await baseStorageFuture;
-  final CalendarStorageRegistry storageRegistry =
-      CalendarStorageRegistry(fallback: baseStorage);
-  final CalendarStorageManager storageManager =
-      CalendarStorageManager(registry: storageRegistry);
+  final CalendarStorageRegistry storageRegistry = CalendarStorageRegistry(
+    fallback: baseStorage,
+  );
+  final CalendarStorageManager storageManager = CalendarStorageManager(
+    registry: storageRegistry,
+  );
   HydratedBloc.storage = storageRegistry;
 
   await hiveInitFuture;
@@ -95,8 +97,9 @@ Future<void> main() async {
   }
 
   final bool hasStoredLoginCredentials = await storedCredentialsFuture;
-  final AuthBootstrap authBootstrap =
-      AuthBootstrap(hasStoredLoginCredentials: hasStoredLoginCredentials);
+  final AuthBootstrap authBootstrap = AuthBootstrap(
+    hasStoredLoginCredentials: hasStoredLoginCredentials,
+  );
   final Widget app = withForeground
       ? WithForegroundTask(
           child: Material(
@@ -113,12 +116,7 @@ Future<void> main() async {
           storageManager: storageManager,
         );
 
-  runApp(
-    RepositoryProvider.value(
-      value: authBootstrap,
-      child: app,
-    ),
-  );
+  runApp(RepositoryProvider.value(value: authBootstrap, child: app));
   firstFrameGate.allow();
 }
 
@@ -136,12 +134,11 @@ void _configureLogging() {
       ..onRecord.listen((record) {
         final sanitizedMessage = SafeLogging.sanitizeMessage(record.message);
         final sanitizedError = SafeLogging.sanitizeError(record.error);
-        final sanitizedStackTrace =
-            SafeLogging.sanitizeStackTrace(record.stackTrace);
+        final sanitizedStackTrace = SafeLogging.sanitizeStackTrace(
+          record.stackTrace,
+        );
         final buffer = StringBuffer()
-          ..write(
-            '${record.level.name}: ${record.time}: $sanitizedMessage',
-          );
+          ..write('${record.level.name}: ${record.time}: $sanitizedMessage');
         if (record.stackTrace != null) {
           buffer
             ..write(' Exception: $sanitizedError')
@@ -163,38 +160,23 @@ void _registerThirdPartyLicenses() {
   const gabaritoLicenseAsset = 'assets/licenses/gabarito_ofl.txt';
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(deltaLicenseAsset);
-    yield LicenseEntryWithLineBreaks(
-      ['Delta Chat Core (MPL-2.0)'],
-      text,
-    );
+    yield LicenseEntryWithLineBreaks(['Delta Chat Core (MPL-2.0)'], text);
   });
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(notoColorEmojiLicenseAsset);
-    yield LicenseEntryWithLineBreaks(
-      ['Noto Color Emoji (OFL-1.1)'],
-      text,
-    );
+    yield LicenseEntryWithLineBreaks(['Noto Color Emoji (OFL-1.1)'], text);
   });
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(interLicenseAsset);
-    yield LicenseEntryWithLineBreaks(
-      ['Inter (OFL-1.1)'],
-      text,
-    );
+    yield LicenseEntryWithLineBreaks(['Inter (OFL-1.1)'], text);
   });
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(dmSansLicenseAsset);
-    yield LicenseEntryWithLineBreaks(
-      ['DM Sans (OFL-1.1)'],
-      text,
-    );
+    yield LicenseEntryWithLineBreaks(['DM Sans (OFL-1.1)'], text);
   });
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(gabaritoLicenseAsset);
-    yield LicenseEntryWithLineBreaks(
-      ['Gabarito (OFL-1.1)'],
-      text,
-    );
+    yield LicenseEntryWithLineBreaks(['Gabarito (OFL-1.1)'], text);
   });
 }
 
@@ -235,8 +217,9 @@ _KeyboardTransitMode? _keyboardTransitMode;
 bool _shouldIgnoreKeyData(ui.KeyData data) {
   final bool isGuardedType = _guardedKeyDataTypes.contains(data.type);
   final PhysicalKeyboardKey key = PhysicalKeyboardKey(data.physical);
-  final bool isPressed =
-      HardwareKeyboard.instance.physicalKeysPressed.contains(key);
+  final bool isPressed = HardwareKeyboard.instance.physicalKeysPressed.contains(
+    key,
+  );
   return isGuardedType && !isPressed;
 }
 
@@ -248,8 +231,9 @@ bool _shouldIgnoreRawKeyEvent(RawKeyEvent rawEvent) {
   final bool isRepeatDownEvent = rawEvent is RawKeyDownEvent && rawEvent.repeat;
   final bool isRepeatOrUp = isUpEvent || isRepeatDownEvent;
   final PhysicalKeyboardKey key = rawEvent.physicalKey;
-  final bool isPressed =
-      HardwareKeyboard.instance.physicalKeysPressed.contains(key);
+  final bool isPressed = HardwareKeyboard.instance.physicalKeysPressed.contains(
+    key,
+  );
   return isRepeatOrUp && !isPressed;
 }
 

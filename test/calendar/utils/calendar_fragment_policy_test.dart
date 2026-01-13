@@ -10,10 +10,7 @@ const String _roomJid = 'room@conference.axi.im';
 const String _occupantId = 'me';
 const String _occupantNick = 'Me';
 
-Chat createChat({
-  ChatType type = ChatType.chat,
-  String jid = _axiJid,
-}) {
+Chat createChat({ChatType type = ChatType.chat, String jid = _axiJid}) {
   return Chat(
     jid: jid,
     title: jid,
@@ -50,9 +47,7 @@ void main() {
 
     test('blocks email-only chats', () {
       const policy = CalendarFragmentPolicy();
-      final decision = policy.decisionForChat(
-        chat: createChat(jid: _emailJid),
-      );
+      final decision = policy.decisionForChat(chat: createChat(jid: _emailJid));
 
       expect(decision.canWrite, isFalse);
     });
@@ -61,9 +56,7 @@ void main() {
       const policy = CalendarFragmentPolicy();
       final decision = policy.decisionForChat(
         chat: createChat(type: ChatType.groupChat, jid: _roomJid),
-        roomState: createRoomState(
-          affiliation: OccupantAffiliation.member,
-        ),
+        roomState: createRoomState(affiliation: OccupantAffiliation.member),
       );
 
       expect(decision.canWrite, isTrue);

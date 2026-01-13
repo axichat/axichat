@@ -38,12 +38,10 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
       state: state,
       onEmptySlotTapped: onEmptySlotTapped,
       onTaskDragEnd: onTaskDragEnd,
-      onDateSelected: (date) => context.read<B>().add(
-            CalendarEvent.dateSelected(date: date),
-          ),
-      onViewChanged: (view) => context.read<B>().add(
-            CalendarEvent.viewChanged(view: view),
-          ),
+      onDateSelected: (date) =>
+          context.read<B>().add(CalendarEvent.dateSelected(date: date)),
+      onViewChanged: (view) =>
+          context.read<B>().add(CalendarEvent.viewChanged(view: view)),
       focusRequest: state.pendingFocus,
       onDragSessionStarted: onDragSessionStarted,
       onDragGlobalPositionChanged: onDragGlobalPositionChanged,

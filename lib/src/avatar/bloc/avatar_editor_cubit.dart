@@ -18,10 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-enum AvatarSource {
-  upload,
-  template,
-}
+enum AvatarSource { upload, template }
 
 enum AvatarEditorErrorType {
   openFailed,
@@ -172,11 +169,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   })  : _xmppService = xmppService,
         _templates = templates,
         _profileCubit = profileCubit,
-        super(
-          const AvatarEditorState(
-            backgroundColor: Colors.transparent,
-          ),
-        );
+        super(const AvatarEditorState(backgroundColor: Colors.transparent));
 
   void _emitIfOpen(AvatarEditorState next) {
     if (isClosed) return;
@@ -208,14 +201,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   final ProfileCubit? _profileCubit;
   final List<AvatarTemplate> _templates;
   late final List<AvatarTemplate> _abstractTemplates = _templates
-      .where(
-        (template) => template.category == AvatarTemplateCategory.abstract,
-      )
+      .where((template) => template.category == AvatarTemplateCategory.abstract)
       .toList(growable: false);
   late final List<AvatarTemplate> _nonAbstractTemplates = _templates
-      .where(
-        (template) => template.category != AvatarTemplateCategory.abstract,
-      )
+      .where((template) => template.category != AvatarTemplateCategory.abstract)
       .toList(growable: false);
   final List<String> _recentShuffleIds = <String>[];
   final List<AvatarTemplate> _abstractShuffleBag = <AvatarTemplate>[];
@@ -306,11 +295,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         : state.backgroundColor == Colors.transparent
             ? colors.accent
             : state.backgroundColor;
-    await selectTemplate(
-      template,
-      colors,
-      background: background,
-    );
+    await selectTemplate(template, colors, background: background);
   }
 
   Future<void> _loadInitialAvatar() async {
@@ -382,10 +367,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       final selectedBackground = background ?? state.backgroundColor;
       final generatorBackground =
           template.hasAlphaBackground ? Colors.transparent : selectedBackground;
-      final generated = await template.generator(
-        generatorBackground,
-        colors,
-      );
+      final generated = await template.generator(generatorBackground, colors);
       if (isClosed) return;
       _emitIfOpen(
         state.copyWith(
@@ -415,10 +397,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  Future<void> setBackgroundColor(
-    Color color,
-    ShadColorScheme colors,
-  ) async {
+  Future<void> setBackgroundColor(Color color, ShadColorScheme colors) async {
     _emitIfOpen(state.copyWith(backgroundColor: color));
     final template = state.template;
     final shouldRebuild = template != null &&
@@ -444,11 +423,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             ? colors.accent
             : state.backgroundColor;
     try {
-      await selectTemplate(
-        template,
-        colors,
-        background: background,
-      );
+      await selectTemplate(template, colors, background: background);
     } finally {
       _emitIfOpen(state.copyWith(shuffling: false));
     }
@@ -498,24 +473,17 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       _showNextCarouselAvatar();
     }
 
-    unawaited(
-      _prefillCarousel(targetSize: _avatarCarouselInitialBuffer),
-    );
+    unawaited(_prefillCarousel(targetSize: _avatarCarouselInitialBuffer));
 
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
     }
 
-    _avatarCarouselTimer = Timer.periodic(
-      _avatarCarouselInterval,
-      (_) {
-        if (_isCarouselBlocked()) return;
-        _showNextCarouselAvatar();
-        unawaited(
-          _prefillCarousel(targetSize: _avatarCarouselSustainBuffer),
-        );
-      },
-    );
+    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) {
+      if (_isCarouselBlocked()) return;
+      _showNextCarouselAvatar();
+      unawaited(_prefillCarousel(targetSize: _avatarCarouselSustainBuffer));
+    });
   }
 
   bool _showNextCarouselAvatar() {
@@ -606,10 +574,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final maxSide = min(imageWidth, imageHeight);
     final side = minCropSide + (maxSide - minCropSide) * clampedFactor;
     final current = state.cropRect ??
-        _initialCropRect(
-          imageWidth: imageWidth,
-          imageHeight: imageHeight,
-        );
+        _initialCropRect(imageWidth: imageWidth, imageHeight: imageHeight);
     final next = Rect.fromCenter(
       center: current.center,
       width: side,
@@ -657,10 +622,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (isClosed) return;
     try {
       final result = await _xmppService.publishAvatar(draft);
-      _profileCubit?.updateAvatar(
-        path: result.path,
-        hash: result.hash,
-      );
+      _profileCubit?.updateAvatar(path: result.path, hash: result.hash);
       _emitIfOpen(
         state.copyWith(
           publishing: false,
@@ -709,10 +671,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void _scheduleRebuild() {
     _rebuildTimer?.cancel();
-    _rebuildTimer = Timer(
-      _rebuildDelay,
-      _rebuildDraft,
-    );
+    _rebuildTimer = Timer(_rebuildDelay, _rebuildDraft);
   }
 
   Future<void> _rebuildDraft() async {
@@ -865,11 +824,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   AvatarTemplate? _pickTemplate() {
     final abstract = _templates
         .where(
-            (template) => template.category == AvatarTemplateCategory.abstract)
+          (template) => template.category == AvatarTemplateCategory.abstract,
+        )
         .toList();
     final nonAbstract = _templates
         .where(
-            (template) => template.category != AvatarTemplateCategory.abstract)
+          (template) => template.category != AvatarTemplateCategory.abstract,
+        )
         .toList();
     final hasAbstract = abstract.isNotEmpty;
     final hasNonAbstract = nonAbstract.isNotEmpty;
@@ -1102,9 +1063,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       _emitIfOpen(
         state.copyWith(
           processing: false,
-          error: const AvatarEditorError(
-            AvatarEditorErrorType.invalidImage,
-          ),
+          error: const AvatarEditorError(AvatarEditorErrorType.invalidImage),
         ),
       );
     }

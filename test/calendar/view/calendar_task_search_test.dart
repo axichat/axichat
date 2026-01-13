@@ -16,13 +16,15 @@ void main() {
 
   setUpAll(registerCalendarFallbackValues);
 
-  testWidgets('task search filters results when query text changes',
-      (tester) async {
+  testWidgets('task search filters results when query text changes', (
+    tester,
+  ) async {
     final CalendarState initialState = CalendarTestData.weekView();
     final MockCalendarBloc bloc = MockCalendarBloc();
     when(() => bloc.state).thenReturn(initialState);
-    when(() => bloc.stream)
-        .thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
     when(() => bloc.add(any<CalendarEvent>())).thenReturn(null);
     when(() => bloc.close()).thenAnswer((_) async {});
     addTearDown(bloc.close);
@@ -39,10 +41,8 @@ void main() {
               body: Center(
                 child: ShadButton(
                   key: const ValueKey('open-search'),
-                  onPressed: () => showCalendarTaskSearch(
-                    context: context,
-                    bloc: bloc,
-                  ),
+                  onPressed: () =>
+                      showCalendarTaskSearch(context: context, bloc: bloc),
                   child: const Text('Open Search'),
                 ),
               ),
@@ -81,13 +81,12 @@ void main() {
     final CalendarModel updatedModel = baseState.model.copyWith(
       tasks: updatedTasks,
     );
-    final CalendarState initialState = baseState.copyWith(
-      model: updatedModel,
-    );
+    final CalendarState initialState = baseState.copyWith(model: updatedModel);
     final MockCalendarBloc bloc = MockCalendarBloc();
     when(() => bloc.state).thenReturn(initialState);
-    when(() => bloc.stream)
-        .thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
     when(() => bloc.add(any<CalendarEvent>())).thenReturn(null);
     when(() => bloc.close()).thenAnswer((_) async {});
     addTearDown(bloc.close);
@@ -104,10 +103,8 @@ void main() {
               body: Center(
                 child: ShadButton(
                   key: const ValueKey('open-search'),
-                  onPressed: () => showCalendarTaskSearch(
-                    context: context,
-                    bloc: bloc,
-                  ),
+                  onPressed: () =>
+                      showCalendarTaskSearch(context: context, bloc: bloc),
                   child: const Text('Open Search'),
                 ),
               ),

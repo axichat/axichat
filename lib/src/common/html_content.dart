@@ -41,10 +41,7 @@ class HtmlContentCodec {
     'tr',
     'ul',
   };
-  static const Set<String> _lineBreakTags = <String>{
-    'br',
-    'hr',
-  };
+  static const Set<String> _lineBreakTags = <String>{'br', 'hr'};
   static const Set<String> _sanitizedAllowedTags = <String>{
     'a',
     'b',
@@ -78,11 +75,7 @@ class HtmlContentCodec {
     'u',
     'ul',
   };
-  static const Set<String> _sanitizedVoidTags = <String>{
-    'br',
-    'hr',
-    'img',
-  };
+  static const Set<String> _sanitizedVoidTags = <String>{'br', 'hr', 'img'};
   static const Set<String> _plainTextHtmlTags = <String>{
     'body',
     'br',
@@ -101,9 +94,7 @@ class HtmlContentCodec {
     'mailto',
     'xmpp',
   };
-  static const Set<String> _sanitizedImageSchemes = <String>{
-    'https',
-  };
+  static const Set<String> _sanitizedImageSchemes = <String>{'https'};
   static const String _hrefAttribute = 'href';
   static const String _srcAttribute = 'src';
   static const String _titleAttribute = 'title';
@@ -422,10 +413,7 @@ class HtmlContentCodec {
     return sanitized;
   }
 
-  static String? _sanitizeUriValue(
-    String value,
-    Set<String> allowedSchemes,
-  ) {
+  static String? _sanitizeUriValue(String value, Set<String> allowedSchemes) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
     if (containsUnsafeUriText(trimmed) || containsSuspiciousUriText(trimmed)) {
@@ -455,8 +443,10 @@ class HtmlContentCodec {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return '';
     final collapsed = trimmed.replaceAll(_spaceCollapse, ' ');
-    final withoutExtras =
-        collapsed.replaceAll(_multiLineBreaks, _doubleLineBreak);
+    final withoutExtras = collapsed.replaceAll(
+      _multiLineBreaks,
+      _doubleLineBreak,
+    );
     final lines = withoutExtras.split(_lineBreak);
     final cleaned = <String>[];
     for (final line in lines) {

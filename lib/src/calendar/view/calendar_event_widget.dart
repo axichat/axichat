@@ -45,11 +45,8 @@ class CalendarEventWidget extends StatefulWidget {
   State<CalendarEventWidget> createState() => _CalendarEventWidgetState();
 }
 
-typedef _EventContainerBuilder = Widget Function({
-  bool isDragging,
-  bool isGhost,
-  bool interactive,
-});
+typedef _EventContainerBuilder = Widget Function(
+    {bool isDragging, bool isGhost, bool interactive});
 
 class _CalendarEventWidgetState extends State<CalendarEventWidget>
     with TickerProviderStateMixin {
@@ -168,9 +165,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
                 setState(() => _isDragging = true);
                 HapticFeedback.selectionClick();
                 context.read<CalendarBloc>().add(
-                      CalendarEvent.taskDragStarted(
-                        taskId: widget.task.baseId,
-                      ),
+                      CalendarEvent.taskDragStarted(taskId: widget.task.baseId),
                     );
               },
               onDragEnd: (details) {
@@ -282,8 +277,9 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
       case ResizeDirection.left:
         final int deltaDays = (-_resizeAccumulatedDelta / widget.width).round();
         if (deltaDays != 0) {
-          final DateTime candidateStart =
-              _resizeStartTime!.add(Duration(days: deltaDays));
+          final DateTime candidateStart = _resizeStartTime!.add(
+            Duration(days: deltaDays),
+          );
           final DateTime? end = initialEnd;
           if (end != null && candidateStart.isBefore(end)) {
             newStartTime = candidateStart;
@@ -479,8 +475,11 @@ class _CalendarEventContainer extends StatelessWidget {
             : Colors.white;
     final BorderRadius radius = BorderRadius.circular(calendarEventRadius);
     final double blendAmount = isDragging ? 0.22 : 0.14;
-    final Color blendedBackground =
-        Color.lerp(colors.card, eventColor, blendAmount)!;
+    final Color blendedBackground = Color.lerp(
+      colors.card,
+      eventColor,
+      blendAmount,
+    )!;
     final Color background =
         isGhost ? blendedBackground.withValues(alpha: 0.75) : blendedBackground;
     final Color textColor = foregroundFor(blendedBackground);
@@ -656,11 +655,7 @@ class _CalendarEventContent extends StatelessWidget {
             const SizedBox(height: calendarInsetSm),
             Row(
               children: [
-                Icon(
-                  Icons.location_on,
-                  size: 8,
-                  color: mutedColor,
-                ),
+                Icon(Icons.location_on, size: 8, color: mutedColor),
                 const SizedBox(width: calendarInsetSm),
                 Expanded(
                   child: Text(
@@ -762,9 +757,4 @@ class _CalendarEventResizeHandles extends StatelessWidget {
   }
 }
 
-enum ResizeDirection {
-  top,
-  bottom,
-  left,
-  right,
-}
+enum ResizeDirection { top, bottom, left, right }

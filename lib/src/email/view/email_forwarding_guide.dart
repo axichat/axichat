@@ -31,10 +31,7 @@ const String _gmailForwardingUrl =
 const String _outlookForwardingUrl =
     'https://support.microsoft.com/en-us/office/turn-on-automatic-forwarding-in-outlook-7f2670a1-7fff-4475-8a3c-5822d63b0c8e';
 
-enum EmailForwardingProvider {
-  gmail,
-  outlook,
-}
+enum EmailForwardingProvider { gmail, outlook }
 
 extension EmailForwardingProviderMetadata on EmailForwardingProvider {
   String label(AppLocalizations l10n) {
@@ -148,29 +145,15 @@ class EmailForwardingGuideContent extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          l10n.emailForwardingGuideIntro,
-          style: mutedStyle,
-        ),
+        Text(l10n.emailForwardingGuideIntro, style: mutedStyle),
         const SizedBox(height: _guideSectionSpacing),
-        Text(
-          l10n.emailForwardingGuideAddressHint,
-          style: smallStyle,
-        ),
+        Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
-        EmailForwardingAddressCard(
-          forwardingAddress: forwardingAddress,
-        ),
+        EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
         const SizedBox(height: _guideSectionSpacing),
-        Text(
-          l10n.emailForwardingGuideLinksTitle,
-          style: smallStyle,
-        ),
+        Text(l10n.emailForwardingGuideLinksTitle, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
-        Text(
-          l10n.emailForwardingGuideLinksSubtitle,
-          style: mutedStyle,
-        ),
+        Text(l10n.emailForwardingGuideLinksSubtitle, style: mutedStyle),
         const SizedBox(height: _guideItemSpacing),
         const EmailForwardingLinkRow(),
         if (capability.canForegroundService) ...[
@@ -182,10 +165,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
         ],
         if (showSettingsHint) ...[
           const SizedBox(height: _guideSectionSpacing),
-          Text(
-            l10n.emailForwardingGuideSettingsHint,
-            style: mutedStyle,
-          ),
+          Text(l10n.emailForwardingGuideSettingsHint, style: mutedStyle),
         ],
       ],
     );
@@ -233,12 +213,7 @@ class EmailForwardingAddressCard extends StatelessWidget {
         padding: const EdgeInsets.all(_guideAddressPadding),
         child: Row(
           children: [
-            Expanded(
-              child: SelectableText(
-                addressLabel,
-                style: textStyle,
-              ),
-            ),
+            Expanded(child: SelectableText(addressLabel, style: textStyle)),
             const SizedBox(width: _guideItemSpacing),
             copyButton,
           ],
@@ -259,20 +234,14 @@ class EmailForwardingLinkRow extends StatelessWidget {
       runSpacing: _guideLinkRunSpacing,
       children: [
         for (final provider in EmailForwardingProvider.values)
-          AxiLink(
-            text: provider.label(l10n),
-            link: provider.helpUrl,
-          ),
+          AxiLink(text: provider.label(l10n), link: provider.helpUrl),
       ],
     );
   }
 }
 
 class EmailForwardingWelcomeGate extends StatefulWidget {
-  const EmailForwardingWelcomeGate({
-    super.key,
-    required this.child,
-  });
+  const EmailForwardingWelcomeGate({super.key, required this.child});
 
   final Widget child;
 

@@ -163,7 +163,8 @@ class _CalendarAvailabilityRequestSheetState
       header: header,
       children: [
         const _AvailabilitySheetSectionLabel(
-            text: _availabilityRequestRangeLabel),
+          text: _availabilityRequestRangeLabel,
+        ),
         ScheduleRangeFields(
           start: _start,
           end: _end,
@@ -224,7 +225,9 @@ class _CalendarAvailabilityRequestSheetState
     final end = _end;
     if (start == null || end == null || !end.isAfter(start)) {
       FeedbackSystem.showError(
-          context, _availabilityRequestInvalidRangeMessage);
+        context,
+        _availabilityRequestInvalidRangeMessage,
+      );
       return;
     }
     final overlay = widget.share.overlay;
@@ -441,9 +444,7 @@ class _AvailabilityDecisionSummary extends StatelessWidget {
       children: [
         Text(
           title,
-          style: context.textTheme.small.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: _availabilityDecisionTextSpacing),
         Text(
@@ -516,10 +517,7 @@ class _AvailabilitySheetActionRow extends StatelessWidget {
               duration: baseAnimationDuration,
             ),
             if (!isBusy) ...[
-              Icon(
-                iconData,
-                size: _availabilityRequestSheetHeaderIconSize,
-              ),
+              Icon(iconData, size: _availabilityRequestSheetHeaderIconSize),
               const SizedBox(width: _availabilityRequestSheetGap),
             ],
             Text(label),
@@ -531,17 +529,15 @@ class _AvailabilitySheetActionRow extends StatelessWidget {
 }
 
 class _RequestRangeDefaults {
-  const _RequestRangeDefaults({
-    required this.start,
-    required this.end,
-  });
+  const _RequestRangeDefaults({required this.start, required this.end});
 
   final DateTime start;
   final DateTime end;
 }
 
 _RequestRangeDefaults _defaultRequestRange(
-    CalendarAvailabilityOverlay overlay) {
+  CalendarAvailabilityOverlay overlay,
+) {
   final List<CalendarFreeBusyInterval> freeIntervals = overlay.intervals
       .where((interval) => interval.type == CalendarFreeBusyType.free)
       .toList()

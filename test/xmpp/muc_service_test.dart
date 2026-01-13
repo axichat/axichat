@@ -122,13 +122,16 @@ void main() {
 
     prepareMockConnection();
 
-    when(() => mockConnection.asBroadcastStream())
-        .thenAnswer((_) => eventStreamController.stream);
+    when(
+      () => mockConnection.asBroadcastStream(),
+    ).thenAnswer((_) => eventStreamController.stream);
     when(() => mockConnection.getManager<MUCManager>()).thenReturn(mucManager);
-    when(() => mockConnection.getManager<mox.DiscoManager>())
-        .thenReturn(discoManager);
-    when(() => mockConnection.getManager<MucJoinBootstrapManager>())
-        .thenReturn(joinBootstrapManager);
+    when(
+      () => mockConnection.getManager<mox.DiscoManager>(),
+    ).thenReturn(discoManager);
+    when(
+      () => mockConnection.getManager<MucJoinBootstrapManager>(),
+    ).thenReturn(joinBootstrapManager);
     when(() => mockConnection.sendStanza(any())).thenAnswer((_) async => null);
     when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
 
@@ -141,10 +144,7 @@ void main() {
 
     await connectSuccessfully(xmppService);
     eventStreamController.add(
-      mox.ConnectionStateChangedEvent(
-        _connectedState,
-        _disconnectedState,
-      ),
+      mox.ConnectionStateChangedEvent(_connectedState, _disconnectedState),
     );
     await pumpEventQueue();
   });
@@ -165,9 +165,8 @@ void main() {
         when(() => info.features).thenReturn([_mucDiscoFeature]);
 
         when(() => discoManager.discoItemsQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
-            [item],
-          ),
+          (_) async =>
+              moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>([item]),
         );
         when(() => discoManager.discoInfoQuery(any())).thenAnswer(
           (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info),
@@ -179,60 +178,50 @@ void main() {
       },
     );
 
-    test(
-      'DISC-013 [UP] disco item errors fall back to domain info',
-      () async {
-        final info = MockDiscoInfo();
-        when(() => info.features).thenReturn([_mucDiscoFeature]);
+    test('DISC-013 [UP] disco item errors fall back to domain info', () async {
+      final info = MockDiscoInfo();
+      when(() => info.features).thenReturn([_mucDiscoFeature]);
 
-        when(() => discoManager.discoItemsQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
-            FakeStanzaError(),
-          ),
-        );
-        when(() => discoManager.discoInfoQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info),
-        );
+      when(() => discoManager.discoItemsQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
+          FakeStanzaError(),
+        ),
+      );
+      when(() => discoManager.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info),
+      );
 
-        await xmppService.discoverMucServiceHost();
+      await xmppService.discoverMucServiceHost();
 
-        expect(xmppService.mucServiceHost, equals(_accountDomain));
-      },
-    );
+      expect(xmppService.mucServiceHost, equals(_accountDomain));
+    });
 
-    test(
-      'DISC-011 [HP] discoverRooms returns room items',
-      () async {
-        final roomItem = MockDiscoItem();
-        when(() => roomItem.jid).thenReturn(mox.JID.fromString(_roomJid));
+    test('DISC-011 [HP] discoverRooms returns room items', () async {
+      final roomItem = MockDiscoItem();
+      when(() => roomItem.jid).thenReturn(mox.JID.fromString(_roomJid));
 
-        when(() => discoManager.discoItemsQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
-            [roomItem],
-          ),
-        );
+      when(() => discoManager.discoItemsQuery(any())).thenAnswer(
+        (_) async =>
+            moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>([roomItem]),
+      );
 
-        final rooms = await xmppService.discoverRooms(serviceJid: _serviceJid);
+      final rooms = await xmppService.discoverRooms(serviceJid: _serviceJid);
 
-        expect(rooms, hasLength(_singleItemCount));
-        expect(rooms.single, equals(roomItem));
-      },
-    );
+      expect(rooms, hasLength(_singleItemCount));
+      expect(rooms.single, equals(roomItem));
+    });
 
-    test(
-      'DISC-013 [UP] discoverRooms returns empty list on error',
-      () async {
-        when(() => discoManager.discoItemsQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
-            FakeStanzaError(),
-          ),
-        );
+    test('DISC-013 [UP] discoverRooms returns empty list on error', () async {
+      when(() => discoManager.discoItemsQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
+          FakeStanzaError(),
+        ),
+      );
 
-        final rooms = await xmppService.discoverRooms(serviceJid: _serviceJid);
+      final rooms = await xmppService.discoverRooms(serviceJid: _serviceJid);
 
-        expect(rooms, isEmpty);
-      },
-    );
+      expect(rooms, isEmpty);
+    });
 
     test(
       'DISC-020 [HP] fetchRoomInformation returns information on success',
@@ -266,33 +255,25 @@ void main() {
   });
 
   group('Room configuration', () {
-    test(
-      'OWN-010 [HP] fetchRoomConfigurationForm returns data form',
-      () async {
-        final form = mox.XMLNode.xmlns(
-          tag: _dataFormTag,
-          xmlns: _dataFormXmlns,
-        );
-        final query = mox.XMLNode.xmlns(
-          tag: _queryTag,
-          xmlns: _mucOwnerXmlns,
-          children: [form],
-        );
-        final response = mox.Stanza.iq(
-          type: _iqTypeResult,
-          children: [query],
-        );
+    test('OWN-010 [HP] fetchRoomConfigurationForm returns data form', () async {
+      final form = mox.XMLNode.xmlns(tag: _dataFormTag, xmlns: _dataFormXmlns);
+      final query = mox.XMLNode.xmlns(
+        tag: _queryTag,
+        xmlns: _mucOwnerXmlns,
+        children: [form],
+      );
+      final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
 
-        when(() => mockConnection.sendStanza(any()))
-            .thenAnswer((_) async => response);
+      when(
+        () => mockConnection.sendStanza(any()),
+      ).thenAnswer((_) async => response);
 
-        final result = await xmppService.fetchRoomConfigurationForm(_roomJid);
+      final result = await xmppService.fetchRoomConfigurationForm(_roomJid);
 
-        expect(result, isNotNull);
-        expect(result?.tag, equals(_dataFormTag));
-        expect(result?.attributes[_xmlnsAttr], equals(_dataFormXmlns));
-      },
-    );
+      expect(result, isNotNull);
+      expect(result?.tag, equals(_dataFormTag));
+      expect(result?.attributes[_xmlnsAttr], equals(_dataFormXmlns));
+    });
 
     test(
       'OWN-011 [HP] submitRoomConfiguration returns true on result',
@@ -303,8 +284,9 @@ void main() {
         );
         final response = mox.Stanza.iq(type: _iqTypeResult);
 
-        when(() => mockConnection.sendStanza(any()))
-            .thenAnswer((_) async => response);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
 
         final result = await xmppService.submitRoomConfiguration(
           roomJid: _roomJid,
@@ -324,8 +306,9 @@ void main() {
         );
         final response = mox.Stanza.iq(type: _iqTypeError);
 
-        when(() => mockConnection.sendStanza(any()))
-            .thenAnswer((_) async => response);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
 
         final result = await xmppService.submitRoomConfiguration(
           roomJid: _roomJid,
@@ -342,13 +325,12 @@ void main() {
       'SUBJ-001 [HP] setRoomSubject sends subject-only groupchat messages',
       () async {
         mox.StanzaDetails? captured;
-        when(() => mockConnection.sendStanza(any())).thenAnswer(
-          (invocation) async {
-            captured =
-                invocation.positionalArguments.first as mox.StanzaDetails;
-            return null;
-          },
-        );
+        when(() => mockConnection.sendStanza(any())).thenAnswer((
+          invocation,
+        ) async {
+          captured = invocation.positionalArguments.first as mox.StanzaDetails;
+          return null;
+        });
 
         await xmppService.setRoomSubject(
           roomJid: _roomJid,
@@ -367,40 +349,25 @@ void main() {
       },
     );
 
-    test(
-      'SUBJ-003 [HP] subject events update room subject streams',
-      () async {
-        final stream = xmppService.roomSubjectStream(_roomJid);
-        expectLater(
-          stream,
-          emitsInOrder([_subjectTrimmed]),
-        );
+    test('SUBJ-003 [HP] subject events update room subject streams', () async {
+      final stream = xmppService.roomSubjectStream(_roomJid);
+      expectLater(stream, emitsInOrder([_subjectTrimmed]));
 
-        eventStreamController.add(
-          MucSubjectChangedEvent(
-            roomJid: _roomJid,
-            subject: _subjectRaw,
-          ),
-        );
+      eventStreamController.add(
+        MucSubjectChangedEvent(roomJid: _roomJid, subject: _subjectRaw),
+      );
 
-        await pumpEventQueue();
-      },
-    );
+      await pumpEventQueue();
+    });
 
     test(
       'SUBJ-006 [EC] empty subject events clear the stored subject',
       () async {
         final stream = xmppService.roomSubjectStream(_roomJid);
-        expectLater(
-          stream,
-          emitsInOrder([null]),
-        );
+        expectLater(stream, emitsInOrder([null]));
 
         eventStreamController.add(
-          MucSubjectChangedEvent(
-            roomJid: _roomJid,
-            subject: _subjectEmpty,
-          ),
+          MucSubjectChangedEvent(roomJid: _roomJid, subject: _subjectEmpty),
         );
 
         await pumpEventQueue();
@@ -419,15 +386,11 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         ).thenAnswer(
-          (_) async => const moxlib.Result<bool, mox.MUCError>(
-            _presenceAvailable,
-          ),
+          (_) async =>
+              const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
         );
 
-        await xmppService.joinRoom(
-          roomJid: _roomJid,
-          nickname: _roomNick,
-        );
+        await xmppService.joinRoom(roomJid: _roomJid, nickname: _roomNick);
 
         verify(
           () => mucManager.joinRoom(
@@ -439,36 +402,32 @@ void main() {
       },
     );
 
-    test(
-      'HIST-010 [HP] joinRoom forwards custom history maxstanzas',
-      () async {
-        when(
-          () => mucManager.joinRoom(
-            any(),
-            any(),
-            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
-          ),
-        ).thenAnswer(
-          (_) async => const moxlib.Result<bool, mox.MUCError>(
-            _presenceAvailable,
-          ),
-        );
+    test('HIST-010 [HP] joinRoom forwards custom history maxstanzas', () async {
+      when(
+        () => mucManager.joinRoom(
+          any(),
+          any(),
+          maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+        ),
+      ).thenAnswer(
+        (_) async =>
+            const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
+      );
 
-        await xmppService.joinRoom(
-          roomJid: _roomJid,
-          nickname: _roomNick,
+      await xmppService.joinRoom(
+        roomJid: _roomJid,
+        nickname: _roomNick,
+        maxHistoryStanzas: _customHistoryStanzas,
+      );
+
+      verify(
+        () => mucManager.joinRoom(
+          mox.JID.fromString(_roomJidBare),
+          _roomNick,
           maxHistoryStanzas: _customHistoryStanzas,
-        );
-
-        verify(
-          () => mucManager.joinRoom(
-            mox.JID.fromString(_roomJidBare),
-            _roomNick,
-            maxHistoryStanzas: _customHistoryStanzas,
-          ),
-        ).called(1);
-      },
-    );
+        ),
+      ).called(1);
+    });
 
     test(
       'JOIN-015 [EC] ensureJoined skips rejoin when already present',
@@ -480,9 +439,8 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         ).thenAnswer(
-          (_) async => const moxlib.Result<bool, mox.MUCError>(
-            _presenceAvailable,
-          ),
+          (_) async =>
+              const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
         );
 
         xmppService.updateOccupantFromPresence(
@@ -519,8 +477,9 @@ void main() {
           contactJid: _roomJid,
         );
 
-        when(() => mockDatabase.getChat(_roomJid))
-            .thenAnswer((_) async => chat);
+        when(
+          () => mockDatabase.getChat(_roomJid),
+        ).thenAnswer((_) async => chat);
         when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
         when(
           () => mucManager.joinRoom(
@@ -529,9 +488,8 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         ).thenAnswer(
-          (_) async => const moxlib.Result<bool, mox.MUCError>(
-            _presenceAvailable,
-          ),
+          (_) async =>
+              const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
         );
 
         await xmppService.changeNickname(
@@ -562,13 +520,12 @@ void main() {
       () async {
         when(() => mockConnection.generateId()).thenReturn(_stanzaId);
         when(
-          () => mockDatabase.saveMessage(
-            any(),
-            chatType: any(named: 'chatType'),
-          ),
+          () =>
+              mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
         ).thenAnswer((_) async {});
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => true);
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
 
         await xmppService.inviteUserToRoom(
           roomJid: _roomJid,
@@ -577,9 +534,9 @@ void main() {
           password: _invitePasswordRaw,
         );
 
-        final captured = verify(() => mockConnection.sendMessage(captureAny()))
-            .captured
-            .single as mox.MessageEvent;
+        final captured = verify(
+          () => mockConnection.sendMessage(captureAny()),
+        ).captured.single as mox.MessageEvent;
         final directInvite = captured.get<DirectMucInviteData>();
         final axiInvite = captured.get<AxiMucInvitePayload>();
 
@@ -611,7 +568,9 @@ void main() {
         final room = xmppService.roomStateFor(_roomJid);
         expect(room, isNotNull);
         expect(
-            room?.occupants[_roomJidWithNick]?.nick, equals(_roomNickTrimmed));
+          room?.occupants[_roomJidWithNick]?.nick,
+          equals(_roomNickTrimmed),
+        );
         expect(
           room?.occupants[_roomJidWithNick]?.affiliation,
           equals(OccupantAffiliation.member),
@@ -623,38 +582,32 @@ void main() {
       },
     );
 
-    test(
-      'PRES-002 [HP] removeOccupant deletes a roster entry',
-      () async {
-        xmppService.updateOccupantFromPresence(
-          roomJid: _roomJid,
-          occupantId: _roomJidWithNick,
-          nick: _roomNick,
-          realJid: _accountBareJid,
-        );
+    test('PRES-002 [HP] removeOccupant deletes a roster entry', () async {
+      xmppService.updateOccupantFromPresence(
+        roomJid: _roomJid,
+        occupantId: _roomJidWithNick,
+        nick: _roomNick,
+        realJid: _accountBareJid,
+      );
 
-        xmppService.removeOccupant(
-          roomJid: _roomJid,
-          occupantId: _roomJidWithNick,
-        );
+      xmppService.removeOccupant(
+        roomJid: _roomJid,
+        occupantId: _roomJidWithNick,
+      );
 
-        final room = xmppService.roomStateFor(_roomJid);
-        expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
-      },
-    );
+      final room = xmppService.roomStateFor(_roomJid);
+      expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
+    });
 
-    test(
-      'PRES-003 [EC] removing unknown occupants is safe',
-      () async {
-        xmppService.removeOccupant(
-          roomJid: _roomJid,
-          occupantId: _roomJidWithNick,
-        );
+    test('PRES-003 [EC] removing unknown occupants is safe', () async {
+      xmppService.removeOccupant(
+        roomJid: _roomJid,
+        occupantId: _roomJidWithNick,
+      );
 
-        final room = xmppService.roomStateFor(_roomJid);
-        expect(room, isNull);
-      },
-    );
+      final room = xmppService.roomStateFor(_roomJid);
+      expect(room, isNull);
+    });
   });
 
   group('Affiliations', () {
@@ -677,22 +630,18 @@ void main() {
             _jidAttr: _accountBareJid,
             _nickAttr: _roomNick,
           },
-          children: [
-            mox.XMLNode(tag: _reasonTag, text: _inviteReasonTrimmed),
-          ],
+          children: [mox.XMLNode(tag: _reasonTag, text: _inviteReasonTrimmed)],
         );
         final query = mox.XMLNode.xmlns(
           tag: _queryTag,
           xmlns: _mucAdminXmlns,
           children: [item],
         );
-        final response = mox.Stanza.iq(
-          type: _iqTypeResult,
-          children: [query],
-        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
 
-        when(() => mockConnection.sendStanza(any()))
-            .thenAnswer((_) async => response);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
 
         final entries = await xmppService.fetchRoomAffiliations(
           roomJid: _roomJid,
@@ -717,47 +666,42 @@ void main() {
   });
 
   group('Moderation actions', () {
-    test(
-      'MOD-001 [HP] kickOccupant sends role=none admin IQ',
-      () async {
-        when(() => mucManager.sendAdminIq(
-              roomJid: any(named: 'roomJid'),
-              items: any(named: 'items'),
-            )).thenAnswer((_) async {});
+    test('MOD-001 [HP] kickOccupant sends role=none admin IQ', () async {
+      when(
+        () => mucManager.sendAdminIq(
+          roomJid: any(named: 'roomJid'),
+          items: any(named: 'items'),
+        ),
+      ).thenAnswer((_) async {});
 
-        await xmppService.kickOccupant(
+      await xmppService.kickOccupant(
+        roomJid: _roomJid,
+        nick: _roomNick,
+        reason: _inviteReasonRaw,
+      );
+
+      final captured = verify(
+        () => mucManager.sendAdminIq(
           roomJid: _roomJid,
-          nick: _roomNick,
-          reason: _inviteReasonRaw,
-        );
+          items: captureAny(named: 'items'),
+        ),
+      ).captured.single as List<mox.XMLNode>;
 
-        final captured = verify(
-          () => mucManager.sendAdminIq(
-            roomJid: _roomJid,
-            items: captureAny(named: 'items'),
-          ),
-        ).captured.single as List<mox.XMLNode>;
-
-        final item = captured.single;
-        expect(item.attributes[_nickAttr], equals(_roomNickTrimmed));
-        expect(
-          item.attributes[_roleAttr],
-          equals(OccupantRole.none.xmlValue),
-        );
-        expect(
-          item.firstTag(_reasonTag)?.innerText(),
-          equals(_inviteReasonRaw),
-        );
-      },
-    );
+      final item = captured.single;
+      expect(item.attributes[_nickAttr], equals(_roomNickTrimmed));
+      expect(item.attributes[_roleAttr], equals(OccupantRole.none.xmlValue));
+      expect(item.firstTag(_reasonTag)?.innerText(), equals(_inviteReasonRaw));
+    });
 
     test(
       'ADM-001 [HP] banOccupant sends affiliation=outcast admin IQ',
       () async {
-        when(() => mucManager.sendAdminIq(
-              roomJid: any(named: 'roomJid'),
-              items: any(named: 'items'),
-            )).thenAnswer((_) async {});
+        when(
+          () => mucManager.sendAdminIq(
+            roomJid: any(named: 'roomJid'),
+            items: any(named: 'items'),
+          ),
+        ).thenAnswer((_) async {});
 
         await xmppService.banOccupant(
           roomJid: _roomJid,
@@ -785,43 +729,44 @@ void main() {
       },
     );
 
-    test(
-      'MOD-010 [HP] changeRole sends role updates via admin IQ',
-      () async {
-        when(() => mucManager.sendAdminIq(
-              roomJid: any(named: 'roomJid'),
-              items: any(named: 'items'),
-            )).thenAnswer((_) async {});
+    test('MOD-010 [HP] changeRole sends role updates via admin IQ', () async {
+      when(
+        () => mucManager.sendAdminIq(
+          roomJid: any(named: 'roomJid'),
+          items: any(named: 'items'),
+        ),
+      ).thenAnswer((_) async {});
 
-        await xmppService.changeRole(
+      await xmppService.changeRole(
+        roomJid: _roomJid,
+        nick: _roomNick,
+        role: OccupantRole.moderator,
+      );
+
+      final captured = verify(
+        () => mucManager.sendAdminIq(
           roomJid: _roomJid,
-          nick: _roomNick,
-          role: OccupantRole.moderator,
-        );
+          items: captureAny(named: 'items'),
+        ),
+      ).captured.single as List<mox.XMLNode>;
 
-        final captured = verify(
-          () => mucManager.sendAdminIq(
-            roomJid: _roomJid,
-            items: captureAny(named: 'items'),
-          ),
-        ).captured.single as List<mox.XMLNode>;
-
-        final item = captured.single;
-        expect(item.attributes[_nickAttr], equals(_roomNickTrimmed));
-        expect(
-          item.attributes[_roleAttr],
-          equals(OccupantRole.moderator.xmlValue),
-        );
-      },
-    );
+      final item = captured.single;
+      expect(item.attributes[_nickAttr], equals(_roomNickTrimmed));
+      expect(
+        item.attributes[_roleAttr],
+        equals(OccupantRole.moderator.xmlValue),
+      );
+    });
 
     test(
       'ADM-010 [HP] changeAffiliation sends affiliation updates via admin IQ',
       () async {
-        when(() => mucManager.sendAdminIq(
-              roomJid: any(named: 'roomJid'),
-              items: any(named: 'items'),
-            )).thenAnswer((_) async {});
+        when(
+          () => mucManager.sendAdminIq(
+            roomJid: any(named: 'roomJid'),
+            items: any(named: 'items'),
+          ),
+        ).thenAnswer((_) async {});
 
         await xmppService.changeAffiliation(
           roomJid: _roomJid,
@@ -876,64 +821,49 @@ void main() {
   });
 
   group('Room status codes', () {
-    test(
-      'STAT-002 [HP] roomCreated reflects status 201',
-      () {
-        final state = RoomState(
-          roomJid: _roomJid,
-          occupants: const {},
-          selfPresenceStatusCodes: {mucStatusRoomCreated},
-        );
-        expect(state.roomCreated, isTrue);
-      },
-    );
+    test('STAT-002 [HP] roomCreated reflects status 201', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {mucStatusRoomCreated},
+      );
+      expect(state.roomCreated, isTrue);
+    });
 
-    test(
-      'STAT-003 [HP] nickAssigned reflects status 210',
-      () {
-        final state = RoomState(
-          roomJid: _roomJid,
-          occupants: const {},
-          selfPresenceStatusCodes: {mucStatusNickAssigned},
-        );
-        expect(state.nickAssigned, isTrue);
-      },
-    );
+    test('STAT-003 [HP] nickAssigned reflects status 210', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {mucStatusNickAssigned},
+      );
+      expect(state.nickAssigned, isTrue);
+    });
 
-    test(
-      'STAT-009 [HP] wasBanned reflects status 301',
-      () {
-        final state = RoomState(
-          roomJid: _roomJid,
-          occupants: const {},
-          selfPresenceStatusCodes: {mucStatusBanned},
-        );
-        expect(state.wasBanned, isTrue);
-      },
-    );
+    test('STAT-009 [HP] wasBanned reflects status 301', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {mucStatusBanned},
+      );
+      expect(state.wasBanned, isTrue);
+    });
 
-    test(
-      'STAT-010 [HP] wasKicked reflects status 307',
-      () {
-        final state = RoomState(
-          roomJid: _roomJid,
-          occupants: const {},
-          selfPresenceStatusCodes: {mucStatusKicked},
-        );
-        expect(state.wasKicked, isTrue);
-      },
-    );
+    test('STAT-010 [HP] wasKicked reflects status 307', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {mucStatusKicked},
+      );
+      expect(state.wasKicked, isTrue);
+    });
 
-    test(
-      'STAT-013 [HP] roomShutdown reflects status 332',
-      () {
-        final state = RoomState(
-          roomJid: _roomJid,
-          occupants: const {},
-          selfPresenceStatusCodes: {mucStatusRoomShutdown},
-        );
-        expect(state.roomShutdown, isTrue);
-      },
-    );
+    test('STAT-013 [HP] roomShutdown reflects status 332', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {mucStatusRoomShutdown},
+      );
+      expect(state.roomShutdown, isTrue);
+    });
   });
 }

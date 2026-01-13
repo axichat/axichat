@@ -205,10 +205,7 @@ class _CalendarCriticalPathShareSheetState
         .where(availableIds.contains)
         .toList(growable: false);
     final CalendarCriticalPath path = widget.path.copyWith(taskIds: orderedIds);
-    return CalendarFragment.criticalPath(
-      path: path,
-      tasks: widget.tasks,
-    );
+    return CalendarFragment.criticalPath(path: path, tasks: widget.tasks);
   }
 }
 
@@ -335,10 +332,7 @@ class _CriticalPathShareEmptyMessage extends StatelessWidget {
 
 XmppService? _maybeReadXmppService(BuildContext context) {
   try {
-    return RepositoryProvider.of<XmppService>(
-      context,
-      listen: false,
-    );
+    return RepositoryProvider.of<XmppService>(context, listen: false);
   } on FlutterError {
     return null;
   }

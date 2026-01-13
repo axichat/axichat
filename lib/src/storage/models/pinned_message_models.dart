@@ -21,9 +21,7 @@ class PinnedMessages extends Table {
 
   List<Index> get indexes => [
         Index(_pinnedMessagesChatIndexName, _pinnedMessagesChatIndexColumns),
-        Index(
-          _pinnedMessagesMessageIndexName,
-          _pinnedMessagesMessageIndexColumns,
-        ),
+        Index(_pinnedMessagesMessageIndexName,
+            _pinnedMessagesMessageIndexColumns),
       ];
 }

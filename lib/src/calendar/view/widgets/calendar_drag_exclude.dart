@@ -9,10 +9,7 @@ class CalendarDragExcludeMarker {
 }
 
 class CalendarDragExclude extends StatelessWidget {
-  const CalendarDragExclude({
-    super.key,
-    required this.child,
-  });
+  const CalendarDragExclude({super.key, required this.child});
 
   static const CalendarDragExcludeMarker marker = CalendarDragExcludeMarker();
 

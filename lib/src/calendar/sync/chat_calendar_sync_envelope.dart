@@ -19,5 +19,4 @@ class ChatCalendarSyncEnvelope {
 }
 
 typedef ChatCalendarSyncHandler = Future<void> Function(
-  ChatCalendarSyncEnvelope envelope,
-);
+    ChatCalendarSyncEnvelope envelope);

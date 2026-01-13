@@ -29,10 +29,7 @@ const EdgeInsets _settingsSectionHeaderPadding = EdgeInsets.symmetric(
 );
 
 class SettingsControls extends StatelessWidget {
-  const SettingsControls({
-    super.key,
-    this.showDivider = false,
-  });
+  const SettingsControls({super.key, this.showDivider = false});
 
   final bool showDivider;
 
@@ -62,15 +59,11 @@ class SettingsControls extends StatelessWidget {
                 ),
               ),
             ],
-            _SettingsSectionHeader(
-              label: l10n.settingsSectionAppearance,
-            ),
+            _SettingsSectionHeader(label: l10n.settingsSectionAppearance),
             ListItemPadding(
               child: AxiListTile(
                 title: l10n.settingsLanguage,
-                actions: const [
-                  LanguageSelector(),
-                ],
+                actions: const [LanguageSelector()],
                 minTileHeight: _compactTileHeight,
                 contentPadding: _compactTilePadding,
               ),
@@ -153,9 +146,7 @@ class SettingsControls extends StatelessWidget {
                     context.read<SettingsCubit>().toggleLowMotion(lowMotion),
               ),
             ),
-            _SettingsSectionHeader(
-              label: l10n.settingsSectionChats,
-            ),
+            _SettingsSectionHeader(label: l10n.settingsSectionChats),
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: MessageStorageTile(state: state),
@@ -247,9 +238,7 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoDownloadArchives(enabled),
               ),
             ),
-            _SettingsSectionHeader(
-              label: emailSectionLabel,
-            ),
+            _SettingsSectionHeader(label: emailSectionLabel),
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
@@ -292,10 +281,7 @@ class SettingsControls extends StatelessWidget {
 }
 
 class _SettingsSectionHeader extends StatelessWidget {
-  const _SettingsSectionHeader({
-    required this.label,
-    this.showDivider = true,
-  });
+  const _SettingsSectionHeader({required this.label, this.showDivider = true});
 
   final String label;
   final bool showDivider;
@@ -304,20 +290,14 @@ class _SettingsSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final header = Padding(
       padding: _settingsSectionHeaderPadding,
-      child: Text(
-        label,
-        style: context.textTheme.muted,
-      ),
+      child: Text(label, style: context.textTheme.muted),
     );
     if (!showDivider) {
       return header;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const AxiListDivider(),
-        header,
-      ],
+      children: [const AxiListDivider(), header],
     );
   }
 }
@@ -341,10 +321,7 @@ class MessageStorageTile extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -377,9 +354,9 @@ class MessageStorageTile extends StatelessWidget {
                       onChanged: (mode) {
                         if (mode == null) return;
                         if (mode.isServerOnly && !mamSupported) return;
-                        context
-                            .read<SettingsCubit>()
-                            .updateMessageStorageMode(mode);
+                        context.read<SettingsCubit>().updateMessageStorageMode(
+                              mode,
+                            );
                       },
                       options: options
                           .map(
@@ -406,8 +383,10 @@ class MessageStorageTile extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               l10n.settingsMessageStorageSubtitle,
-              style: context.textTheme.muted
-                  .copyWith(color: colors.mutedForeground, height: 1.2),
+              style: context.textTheme.muted.copyWith(
+                color: colors.mutedForeground,
+                height: 1.2,
+              ),
             ),
           ],
         ),

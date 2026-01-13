@@ -6,14 +6,7 @@ import 'package:equatable/equatable.dart';
 
 import 'package:axichat/src/common/search/search_models.dart';
 
-enum HomeTab {
-  chats,
-  contacts,
-  invites,
-  blocked,
-  spam,
-  drafts;
-}
+enum HomeTab { chats, contacts, invites, blocked, spam, drafts }
 
 class TabSearchState extends Equatable {
   const TabSearchState({

@@ -143,10 +143,7 @@ Map<String, Object?> _optimizeAttachmentInIsolate(
       ? _resolveJpegFileName(fileName)
       : _resolvePngFileName(fileName);
   final Directory directory = Directory(
-    p.join(
-      tempDirPath,
-      EmailAttachmentOptimizer._optimizedDirectoryName,
-    ),
+    p.join(tempDirPath, EmailAttachmentOptimizer._optimizedDirectoryName),
   );
   if (!directory.existsSync()) {
     directory.createSync(recursive: true);
@@ -154,9 +151,7 @@ Map<String, Object?> _optimizeAttachmentInIsolate(
   final String optimizedFileName =
       '${EmailAttachmentOptimizer._optimizedFilePrefix}'
       '${DateTime.now().microsecondsSinceEpoch}$extension';
-  final File optimizedFile = File(
-    p.join(directory.path, optimizedFileName),
-  );
+  final File optimizedFile = File(p.join(directory.path, optimizedFileName));
   optimizedFile.writeAsBytesSync(encodedBytes, flush: true);
   final String mimeType = encodeAsJpeg
       ? EmailAttachmentOptimizer._jpegMimeType
@@ -236,8 +231,9 @@ void _scheduleOptimizedCleanup(String path) {
     return;
   }
   unawaited(
-    Future<void>.delayed(EmailAttachmentOptimizer._optimizedCleanupDelay)
-        .then((_) async {
+    Future<void>.delayed(EmailAttachmentOptimizer._optimizedCleanupDelay).then((
+      _,
+    ) async {
       try {
         if (await file.exists()) {
           await file.delete();

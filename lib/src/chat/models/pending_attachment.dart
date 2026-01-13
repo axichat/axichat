@@ -39,6 +39,11 @@ class PendingAttachment extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [id, attachment, status, isPreparing, errorMessage];
+  List<Object?> get props => [
+        id,
+        attachment,
+        status,
+        isPreparing,
+        errorMessage,
+      ];
 }

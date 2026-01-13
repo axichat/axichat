@@ -23,9 +23,7 @@ class CalendarCriticalPath with _$CalendarCriticalPath {
   factory CalendarCriticalPath.fromJson(Map<String, dynamic> json) =>
       _$CalendarCriticalPathFromJson(json);
 
-  factory CalendarCriticalPath.create({
-    required String name,
-  }) {
+  factory CalendarCriticalPath.create({required String name}) {
     final now = DateTime.now();
     return CalendarCriticalPath(
       id: const Uuid().v4(),
@@ -44,8 +42,9 @@ extension CalendarCriticalPathX on CalendarCriticalPath {
     if (sanitizedId.isEmpty) {
       return this;
     }
-    final existing =
-        List<String>.from(taskIds.where((id) => id != sanitizedId));
+    final existing = List<String>.from(
+      taskIds.where((id) => id != sanitizedId),
+    );
     final insertionIndex =
         index != null ? index.clamp(0, existing.length) : existing.length;
     existing.insert(insertionIndex, sanitizedId);
@@ -62,10 +61,7 @@ extension CalendarCriticalPathX on CalendarCriticalPath {
     if (filtered.length == taskIds.length) {
       return this;
     }
-    return copyWith(
-      taskIds: filtered,
-      modifiedAt: DateTime.now(),
-    );
+    return copyWith(taskIds: filtered, modifiedAt: DateTime.now());
   }
 
   CalendarCriticalPath rename(String nextName) {
@@ -73,14 +69,9 @@ extension CalendarCriticalPathX on CalendarCriticalPath {
     if (trimmed.isEmpty || trimmed == name) {
       return this;
     }
-    return copyWith(
-      name: trimmed,
-      modifiedAt: DateTime.now(),
-    );
+    return copyWith(name: trimmed, modifiedAt: DateTime.now());
   }
 
-  CalendarCriticalPath archive() => copyWith(
-        isArchived: true,
-        modifiedAt: DateTime.now(),
-      );
+  CalendarCriticalPath archive() =>
+      copyWith(isArchived: true, modifiedAt: DateTime.now());
 }

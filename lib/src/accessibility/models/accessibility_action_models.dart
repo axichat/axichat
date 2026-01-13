@@ -113,10 +113,7 @@ sealed class AccessibilityMenuAction extends Equatable {
 }
 
 class AccessibilityNavigateAction extends AccessibilityMenuAction {
-  const AccessibilityNavigateAction({
-    required this.step,
-    this.purpose,
-  });
+  const AccessibilityNavigateAction({required this.step, this.purpose});
 
   final AccessibilityStepKind step;
   final AccessibilityFlowPurpose? purpose;
@@ -154,9 +151,7 @@ class AccessibilityCommandAction extends AccessibilityMenuAction {
 }
 
 class AccessibilitySelectContactAction extends AccessibilityMenuAction {
-  const AccessibilitySelectContactAction({
-    required this.contact,
-  });
+  const AccessibilitySelectContactAction({required this.contact});
 
   final AccessibilityContact contact;
 
@@ -224,15 +219,16 @@ class AccessibilityStepEntry extends Equatable {
       );
 
   @override
-  List<Object?> get props =>
-      [kind, purpose, recipients, addingRecipient, draftId];
+  List<Object?> get props => [
+        kind,
+        purpose,
+        recipients,
+        addingRecipient,
+        draftId,
+      ];
 }
 
-enum AccessibilityContactSource {
-  chat,
-  roster,
-  manual,
-}
+enum AccessibilityContactSource { chat, roster, manual }
 
 class AccessibilityContact extends Equatable {
   const AccessibilityContact({

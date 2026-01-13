@@ -9,10 +9,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 class AccessibilityFindActionButton extends StatelessWidget {
-  const AccessibilityFindActionButton({
-    super.key,
-    this.compact = false,
-  });
+  const AccessibilityFindActionButton({super.key, this.compact = false});
 
   final bool compact;
 
@@ -28,27 +25,24 @@ class AccessibilityFindActionButton extends StatelessWidget {
       return AxiTooltip(
         builder: (_) => Text(tooltip),
         child: ShadButton.ghost(
-          onPressed: () => context
-              .read<AccessibilityActionBloc?>()
-              ?.add(const AccessibilityMenuOpened()),
+          onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+                const AccessibilityMenuOpened(),
+              ),
           padding: const EdgeInsets.all(12),
           child: const Icon(LucideIcons.lifeBuoy, size: 18),
         ),
       );
     }
     return ShadButton.outline(
-      onPressed: () => context
-          .read<AccessibilityActionBloc?>()
-          ?.add(const AccessibilityMenuOpened()),
+      onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+            const AccessibilityMenuOpened(),
+          ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(LucideIcons.lifeBuoy, size: 18),
           const SizedBox(width: 10),
-          ShortcutHint(
-            shortcut: shortcut,
-            dense: true,
-          ),
+          ShortcutHint(shortcut: shortcut, dense: true),
         ],
       ),
     );

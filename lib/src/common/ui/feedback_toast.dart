@@ -4,12 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-enum FeedbackTone {
-  success,
-  info,
-  warning,
-  error,
-}
+enum FeedbackTone { success, info, warning, error }
 
 class FeedbackToast extends ShadToast {
   FeedbackToast({

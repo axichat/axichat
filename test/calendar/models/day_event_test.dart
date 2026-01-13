@@ -50,8 +50,10 @@ void main() {
       );
 
       expect(updated.normalizedEnd, equals(updated.normalizedStart));
-      expect(updated.effectiveReminders.startOffsets,
-          contains(const Duration(hours: 2)));
+      expect(
+        updated.effectiveReminders.startOffsets,
+        contains(const Duration(hours: 2)),
+      );
       expect(updated.effectiveReminders.startOffsets, hasLength(1));
     });
 

@@ -11,10 +11,7 @@ const bool _expectError = true;
 const bool _expectNoError = false;
 
 class _EmailImageHarness extends StatelessWidget {
-  const _EmailImageHarness({
-    required this.html,
-    required this.shouldLoad,
-  });
+  const _EmailImageHarness({required this.html, required this.shouldLoad});
 
   final String html;
   final bool shouldLoad;
@@ -25,11 +22,7 @@ class _EmailImageHarness extends StatelessWidget {
       home: Scaffold(
         body: html_widget.Html(
           data: html,
-          extensions: [
-            createEmailImageExtension(
-              shouldLoad: shouldLoad,
-            ),
-          ],
+          extensions: [createEmailImageExtension(shouldLoad: shouldLoad)],
         ),
       ),
     );
@@ -38,8 +31,9 @@ class _EmailImageHarness extends StatelessWidget {
 
 void main() {
   group('EmailImageExtension', () {
-    testWidgets('blocks remote images when loading is disabled',
-        (tester) async {
+    testWidgets('blocks remote images when loading is disabled', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const _EmailImageHarness(
           html: _httpsImageHtml,
@@ -55,8 +49,9 @@ void main() {
       expect(placeholder.isError, _expectNoError);
     });
 
-    testWidgets('rejects non-https sources when loading is enabled',
-        (tester) async {
+    testWidgets('rejects non-https sources when loading is enabled', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const _EmailImageHarness(
           html: _httpImageHtml,

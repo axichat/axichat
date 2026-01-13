@@ -3,10 +3,7 @@
 
 part of 'chat_bloc.dart';
 
-enum EmailForwardingMode {
-  original,
-  safe,
-}
+enum EmailForwardingMode { original, safe }
 
 extension EmailForwardingModeExtensions on EmailForwardingMode {
   bool get isOriginal => this == EmailForwardingMode.original;
@@ -152,9 +149,7 @@ final class ChatMessageSent extends ChatEvent {
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {
-  const ChatAvailabilityMessageSent({
-    required this.message,
-  });
+  const ChatAvailabilityMessageSent({required this.message});
 
   final CalendarAvailabilityMessage message;
 
@@ -256,10 +251,7 @@ final class ChatQuoteCleared extends ChatEvent {
 }
 
 final class ChatMessagePinRequested extends ChatEvent {
-  const ChatMessagePinRequested({
-    required this.message,
-    required this.pin,
-  });
+  const ChatMessagePinRequested({required this.message, required this.pin});
 
   final Message message;
   final bool pin;
@@ -367,10 +359,7 @@ final class ChatModerationActionRequested extends ChatEvent {
 }
 
 final class ChatViewFilterChanged extends ChatEvent {
-  const ChatViewFilterChanged({
-    required this.filter,
-    this.persist = true,
-  });
+  const ChatViewFilterChanged({required this.filter, this.persist = true});
 
   final MessageTimelineFilter filter;
   final bool persist;

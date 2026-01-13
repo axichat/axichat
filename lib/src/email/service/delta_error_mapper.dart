@@ -17,8 +17,12 @@ class DeltaErrorMapper {
     if (_matchesAny(lower, const ['too large', 'size', 'quota'])) {
       return MessageError.emailAttachmentTooLarge;
     }
-    if (_matchesAny(
-        lower, const ['recipient', 'address', 'invalid', 'unknown'])) {
+    if (_matchesAny(lower, const [
+      'recipient',
+      'address',
+      'invalid',
+      'unknown',
+    ])) {
       return MessageError.emailRecipientRejected;
     }
     if (lower.contains('bounce')) {

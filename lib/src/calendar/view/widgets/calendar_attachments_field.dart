@@ -42,9 +42,7 @@ class CalendarAttachmentsField extends StatelessWidget {
 }
 
 class _AttachmentTile extends StatelessWidget {
-  const _AttachmentTile({
-    required this.attachment,
-  });
+  const _AttachmentTile({required this.attachment});
 
   final CalendarAttachment attachment;
 

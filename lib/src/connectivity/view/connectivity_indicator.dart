@@ -83,16 +83,9 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      iconData,
-                      color: Colors.white,
-                      size: 20.0,
-                    ),
+                    Icon(iconData, color: Colors.white, size: 20.0),
                     const SizedBox.square(dimension: 8.0),
-                    Text(
-                      text,
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                    Text(text, style: const TextStyle(color: Colors.white)),
                   ],
                 ),
               ),

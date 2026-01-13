@@ -15,9 +15,7 @@ void main() {
           title: 'Task on 16th',
           scheduledTime: DateTime(2024, 1, 16, 10, 0),
         );
-        final taskWithoutDate = CalendarTask.create(
-          title: 'Task without date',
-        );
+        final taskWithoutDate = CalendarTask.create(title: 'Task without date');
 
         final modelWithTasks = CalendarModel.empty()
             .addTask(task1)

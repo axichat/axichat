@@ -9,9 +9,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 enum AvatarTemplateCategory { abstract, stem, sports, music, misc }
 
 typedef AvatarTemplateBuilder = Future<GeneratedAvatar> Function(
-  Color background,
-  ShadColorScheme colors,
-);
+    Color background, ShadColorScheme colors);
 
 class AvatarTemplate {
   const AvatarTemplate({

@@ -177,11 +177,7 @@ class SafePubSubManager extends mox.PubSubManager {
       return const moxlib.Result(true);
     }
     if (!result.isType<mox.PubSubError>()) {
-      _removeSubscription(
-        jid: subscriberJid,
-        node: node,
-        subId: subId,
-      );
+      _removeSubscription(jid: subscriberJid, node: node, subId: subId);
     }
     return result;
   }
@@ -250,10 +246,7 @@ class SafePubSubManager extends mox.PubSubManager {
       affiliationNodes.add(
         mox.XMLNode(
           tag: _affiliationTag,
-          attributes: {
-            _jidAttr: targetJid,
-            _affiliationAttr: affiliationValue,
-          },
+          attributes: {_jidAttr: targetJid, _affiliationAttr: affiliationValue},
         ),
       );
     }
@@ -272,8 +265,10 @@ class SafePubSubManager extends mox.PubSubManager {
           type: _iqSet,
           to: jid.toString(),
           children: [
-            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
-                  ..child(affiliationsBuilder.build()))
+            (mox.XmlBuilder.withNamespace(
+              _pubsubTag,
+              _pubsubOwnerXmlns,
+            )..child(affiliationsBuilder.build()))
                 .build(),
           ],
         ),
@@ -327,10 +322,7 @@ class SafePubSubManager extends mox.PubSubManager {
         final node = items.attributes[_nodeAttr]?.toString().trim();
         if (node != null && node.isNotEmpty) {
           getAttributes().sendEvent(
-            PubSubItemsRefreshedEvent(
-              from: from,
-              node: node,
-            ),
+            PubSubItemsRefreshedEvent(from: from, node: node),
           );
         }
       }
@@ -376,10 +368,7 @@ class SafePubSubManager extends mox.PubSubManager {
     final node = configuration.attributes[_nodeAttr]?.toString().trim();
     if (node == null || node.isEmpty) return;
 
-    final form = configuration.firstTag(
-      _dataFormTag,
-      xmlns: _dataFormXmlns,
-    );
+    final form = configuration.firstTag(_dataFormTag, xmlns: _dataFormXmlns);
 
     getAttributes().sendEvent(
       PubSubSubscriptionConfigChangedEvent(
@@ -392,11 +381,7 @@ class SafePubSubManager extends mox.PubSubManager {
 
   void _recordSubscription(mox.SubscriptionInfo info) {
     if (info.state == mox.SubscriptionState.none) {
-      _removeSubscription(
-        jid: info.jid,
-        node: info.node,
-        subId: info.subId,
-      );
+      _removeSubscription(jid: info.jid, node: info.node, subId: info.subId);
       return;
     }
     final key = _SubscriptionCacheKey(
@@ -413,11 +398,7 @@ class SafePubSubManager extends mox.PubSubManager {
     required String node,
     String? subId,
   }) {
-    final key = _SubscriptionCacheKey(
-      jid: jid,
-      node: node,
-      subId: subId,
-    );
+    final key = _SubscriptionCacheKey(jid: jid, node: node, subId: subId);
     _subscriptionCache.remove(key);
     subscriptionManager.removeSubscription(jid, node, subId: subId);
   }

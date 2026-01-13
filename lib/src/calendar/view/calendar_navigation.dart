@@ -24,8 +24,11 @@ DateTime shiftedCalendarDate(CalendarState state, int steps) {
       return base.add(Duration(days: 7 * steps));
     case CalendarView.month:
       final DateTime targetMonth = DateTime(base.year, base.month + steps, 1);
-      final int maxDay =
-          DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+      final int maxDay = DateTime(
+        targetMonth.year,
+        targetMonth.month + 1,
+        0,
+      ).day;
       final int clampedDay = base.day.clamp(1, maxDay).toInt();
       return DateTime(targetMonth.year, targetMonth.month, clampedDay);
   }
@@ -141,11 +144,8 @@ class CalendarNavigation extends StatelessWidget {
         final double safeMaxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.of(context).size.width;
-        final double availableWidth =
-            (safeMaxWidth - (horizontalPadding * 2)).clamp(
-          0.0,
-          double.infinity,
-        );
+        final double availableWidth = (safeMaxWidth - (horizontalPadding * 2))
+            .clamp(0.0, double.infinity);
         final bool collapseDateText =
             isCompact || availableWidth < _compactDateLabelCollapseWidth;
         final double navSpacing =
@@ -190,10 +190,7 @@ class CalendarNavigation extends StatelessWidget {
               boxShadow: navShadows,
             ),
             child: DefaultTextStyle.merge(
-              style: TextStyle(
-                fontSize: 12,
-                color: colors.mutedForeground,
-              ),
+              style: TextStyle(fontSize: 12, color: colors.mutedForeground),
               child: stackNavigation
                   ? Wrap(
                       spacing: navSpacing,
@@ -201,10 +198,7 @@ class CalendarNavigation extends StatelessWidget {
                       alignment: WrapAlignment.spaceBetween,
                       runAlignment: WrapAlignment.start,
                       crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        navRow,
-                        trailingRow,
-                      ],
+                      children: [navRow, trailingRow],
                     )
                   : Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -418,10 +412,7 @@ class _UndoRedoGroup extends StatelessWidget {
 }
 
 class _NavigationButtonRow extends StatelessWidget {
-  const _NavigationButtonRow({
-    required this.navButtons,
-    required this.spacing,
-  });
+  const _NavigationButtonRow({required this.navButtons, required this.spacing});
 
   final List<Widget> navButtons;
   final double spacing;
@@ -496,10 +487,7 @@ class _TrailingControls extends StatelessWidget {
           compact: isCompact,
         ),
       if (onSearchRequested != null)
-        _SearchButton(
-          onPressed: onSearchRequested!,
-          compact: isCompact,
-        ),
+        _SearchButton(onPressed: onSearchRequested!, compact: isCompact),
       if (hideToggle != null) hideToggle,
       if (hasUndoRedo) undoRedoGroup,
     ];
@@ -650,17 +638,18 @@ class _ViewModeToggleItem extends StatelessWidget {
       left: isFirst ? Radius.circular(cornerRadius) : Radius.zero,
       right: isLast ? Radius.circular(cornerRadius) : Radius.zero,
     );
-    final WidgetStateProperty<Color?> overlay =
-        WidgetStateProperty.resolveWith((states) {
-      if (states.contains(WidgetState.pressed) ||
-          states.contains(WidgetState.focused)) {
-        return activeBackground;
-      }
-      if (states.contains(WidgetState.hovered)) {
-        return hoverBackground;
-      }
-      return Colors.transparent;
-    });
+    final WidgetStateProperty<Color?> overlay = WidgetStateProperty.resolveWith(
+      (states) {
+        if (states.contains(WidgetState.pressed) ||
+            states.contains(WidgetState.focused)) {
+          return activeBackground;
+        }
+        if (states.contains(WidgetState.hovered)) {
+          return hoverBackground;
+        }
+        return Colors.transparent;
+      },
+    );
 
     return MouseRegion(
       cursor: selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
@@ -672,9 +661,7 @@ class _ViewModeToggleItem extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
           padding: padding,
-          constraints: BoxConstraints(
-            minHeight: minHeight,
-          ),
+          constraints: BoxConstraints(minHeight: minHeight),
           alignment: Alignment.center,
           decoration: ShapeDecoration(
             color: selected ? activeBackground : Colors.transparent,
@@ -779,10 +766,7 @@ class _HideCompletedButton extends StatelessWidget {
 }
 
 class _SearchButton extends StatelessWidget {
-  const _SearchButton({
-    required this.onPressed,
-    required this.compact,
-  });
+  const _SearchButton({required this.onPressed, required this.compact});
 
   final VoidCallback onPressed;
   final bool compact;
@@ -794,11 +778,7 @@ class _SearchButton extends StatelessWidget {
       return ShadButton.ghost(
         size: ShadButtonSize.sm,
         onPressed: onPressed,
-        child: Icon(
-          Icons.search,
-          size: 16,
-          color: colors.primary,
-        ),
+        child: Icon(Icons.search, size: 16, color: colors.primary),
       ).withTapBounce();
     }
     return ShadButton.secondary(
@@ -807,11 +787,7 @@ class _SearchButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.search,
-            size: 16,
-            color: colors.primary,
-          ),
+          Icon(Icons.search, size: 16, color: colors.primary),
           const SizedBox(width: calendarInsetSm),
           Text(context.l10n.commonSearch),
         ],
@@ -846,7 +822,9 @@ class _DateLabelState extends State<_DateLabel> {
   void initState() {
     super.initState();
     _visibleMonth = DateTime(
-        widget.state.selectedDate.year, widget.state.selectedDate.month);
+      widget.state.selectedDate.year,
+      widget.state.selectedDate.month,
+    );
   }
 
   @override
@@ -855,7 +833,9 @@ class _DateLabelState extends State<_DateLabel> {
     if (widget.state.selectedDate.year != oldWidget.state.selectedDate.year ||
         widget.state.selectedDate.month != oldWidget.state.selectedDate.month) {
       _visibleMonth = DateTime(
-          widget.state.selectedDate.year, widget.state.selectedDate.month);
+        widget.state.selectedDate.year,
+        widget.state.selectedDate.month,
+      );
     }
     if (_overlayEntry != null) {
       _overlayEntry!.markNeedsBuild();
@@ -874,8 +854,9 @@ class _DateLabelState extends State<_DateLabel> {
       CalendarView.day => _formatDay(widget.state.selectedDate),
       CalendarView.week =>
         '${_formatDay(widget.state.weekStart)} – ${_formatDay(widget.state.weekEnd)}',
-      CalendarView.month =>
-        DateFormat.yMMMM().format(widget.state.selectedDate),
+      CalendarView.month => DateFormat.yMMMM().format(
+          widget.state.selectedDate,
+        ),
     };
     final bool hideText =
         widget.collapseText || MediaQuery.of(context).size.width < 420;
@@ -900,11 +881,7 @@ class _DateLabelState extends State<_DateLabel> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 16,
-                  color: iconColor,
-                ),
+                Icon(Icons.calendar_today_outlined, size: 16, color: iconColor),
                 if (!hideText) ...[
                   const SizedBox(width: calendarGutterSm),
                   ConstrainedBox(
@@ -1163,8 +1140,9 @@ class _CalendarDropdown extends StatelessWidget {
               final date = days[index];
               final isOtherMonth = date.month != month.month;
               final isToday = _isSameDay(date, now);
-              final isSelectedWeek = _weekStart(date)
-                  .isAtSameMomentAs(_weekStart(selectedWeekStart));
+              final isSelectedWeek = _weekStart(
+                date,
+              ).isAtSameMomentAs(_weekStart(selectedWeekStart));
               final isSelectedDay = _isSameDay(date, selectedDate);
 
               Color textColor = calendarTitleColor;
@@ -1190,8 +1168,9 @@ class _CalendarDropdown extends StatelessWidget {
               return MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: InkWell(
-                  borderRadius:
-                      BorderRadius.circular(calendarBorderRadius / 1.5),
+                  borderRadius: BorderRadius.circular(
+                    calendarBorderRadius / 1.5,
+                  ),
                   mouseCursor: SystemMouseCursors.click,
                   hoverColor: Colors.transparent,
                   highlightColor: Colors.transparent,
@@ -1200,15 +1179,17 @@ class _CalendarDropdown extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       color: backgroundColor,
-                      borderRadius:
-                          BorderRadius.circular(calendarBorderRadius / 1.5),
+                      borderRadius: BorderRadius.circular(
+                        calendarBorderRadius / 1.5,
+                      ),
                       border: border == BorderSide.none
                           ? null
                           : Border.fromBorderSide(border),
                     ),
                     alignment: Alignment.center,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: calendarInsetLg),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: calendarInsetLg,
+                    ),
                     child: Text(
                       '${date.day}',
                       style: calendarBodyTextStyle.copyWith(
@@ -1283,8 +1264,9 @@ class _CalendarDropdown extends StatelessWidget {
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
             padding: EdgeInsets.zero,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
             side: BorderSide(color: calendarBorderColor),
             foregroundColor: calendarSubtitleColor,
           ),

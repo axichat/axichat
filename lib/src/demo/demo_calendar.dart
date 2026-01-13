@@ -15,9 +15,7 @@ const Duration _demoReminderLeadMedium = Duration(hours: 1);
 class DemoCalendar {
   DemoCalendar._();
 
-  static CalendarModel franklin({
-    required DateTime anchor,
-  }) {
+  static CalendarModel franklin({required DateTime anchor}) {
     final DateTime weekStart = _startOfWeek(anchor);
 
     final List<CalendarTask> tasks = <CalendarTask>[
@@ -62,10 +60,7 @@ CalendarTask _scheduledTask({
     reminders: reminders,
     checklist: checklist,
   );
-  return base.withScheduled(
-    scheduledTime: scheduledTime,
-    duration: duration,
-  );
+  return base.withScheduled(scheduledTime: scheduledTime, duration: duration);
 }
 
 CalendarTask _deadlineTask({
@@ -128,10 +123,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
 
   const ReminderPreferences startReminder = ReminderPreferences(
     enabled: true,
-    startOffsets: <Duration>[
-      _demoReminderLeadShort,
-      _demoReminderLeadMedium,
-    ],
+    startOffsets: <Duration>[_demoReminderLeadShort, _demoReminderLeadMedium],
   );
 
   final List<CalendarTask> tasks = <CalendarTask>[];
@@ -243,8 +235,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Early workshop: tools & repairs',
-        scheduledTime:
-            _atWeekdayTime(weekStart, tuesdayOffset, hour: 6, minute: 20),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 6,
+          minute: 20,
+        ),
         duration: const Duration(minutes: 55),
         location: workshop,
       ),
@@ -252,37 +248,51 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Appointments & walk-ins',
-        scheduledTime:
-            _atWeekdayTime(weekStart, tuesdayOffset, hour: 8, minute: 40),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 8,
+          minute: 40,
+        ),
         duration: const Duration(minutes: 50),
         location: printingHouse,
       ),
     )
-    ..addAll(
-      <CalendarTask>[
-        _scheduledTask(
-          title: 'Committee meeting: civic improvements',
-          scheduledTime:
-              _atWeekdayTime(weekStart, tuesdayOffset, hour: 10, minute: 0),
-          duration: const Duration(minutes: 60),
-          location: 'State House',
-          priority: TaskPriority.urgent,
+    ..addAll(<CalendarTask>[
+      _scheduledTask(
+        title: 'Committee meeting: civic improvements',
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 10,
+          minute: 0,
         ),
-        _scheduledTask(
-          title: 'Printer’s client: pamphlet commission',
-          scheduledTime:
-              _atWeekdayTime(weekStart, tuesdayOffset, hour: 10, minute: 0),
-          duration: const Duration(minutes: 45),
-          location: printingHouse,
-          priority: TaskPriority.urgent,
+        duration: const Duration(minutes: 60),
+        location: 'State House',
+        priority: TaskPriority.urgent,
+      ),
+      _scheduledTask(
+        title: 'Printer’s client: pamphlet commission',
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 10,
+          minute: 0,
         ),
-      ],
-    )
+        duration: const Duration(minutes: 45),
+        location: printingHouse,
+        priority: TaskPriority.urgent,
+      ),
+    ])
     ..add(
       _scheduledTask(
         title: 'Press run: type setting & proofs',
-        scheduledTime:
-            _atWeekdayTime(weekStart, tuesdayOffset, hour: 11, minute: 15),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 11,
+          minute: 15,
+        ),
         duration: const Duration(minutes: 105),
         location: printingHouse,
         priority: TaskPriority.important,
@@ -291,8 +301,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Dinner with friends',
-        scheduledTime:
-            _atWeekdayTime(weekStart, tuesdayOffset, hour: 18, minute: 30),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 18,
+          minute: 30,
+        ),
         duration: const Duration(minutes: 90),
         location: 'Tavern',
       ),
@@ -420,8 +434,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Long walk',
-        scheduledTime:
-            _atWeekdayTime(weekStart, saturdayOffset, hour: 8, minute: 10),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          saturdayOffset,
+          hour: 8,
+          minute: 10,
+        ),
         duration: const Duration(minutes: 75),
         location: 'Outdoors',
       ),
@@ -429,8 +447,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Errands & supplies',
-        scheduledTime:
-            _atWeekdayTime(weekStart, saturdayOffset, hour: 10, minute: 15),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          saturdayOffset,
+          hour: 10,
+          minute: 15,
+        ),
         duration: const Duration(minutes: 95),
         location: 'Market',
       ),
@@ -438,8 +460,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Fix the kite & twine (for next storm)',
-        scheduledTime:
-            _atWeekdayTime(weekStart, saturdayOffset, hour: 15, minute: 40),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          saturdayOffset,
+          hour: 15,
+          minute: 40,
+        ),
         duration: const Duration(minutes: 50),
         location: 'Home',
       ),
@@ -447,8 +473,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Music / relaxation',
-        scheduledTime:
-            _atWeekdayTime(weekStart, saturdayOffset, hour: 21, minute: 15),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          saturdayOffset,
+          hour: 21,
+          minute: 15,
+        ),
         duration: const Duration(minutes: 45),
         location: 'Home',
       ),
@@ -459,8 +489,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Quiet reading & correspondence',
-        scheduledTime:
-            _atWeekdayTime(weekStart, sundayOffset, hour: 9, minute: 0),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          sundayOffset,
+          hour: 9,
+          minute: 0,
+        ),
         duration: const Duration(minutes: 75),
         location: 'Home',
       ),
@@ -468,8 +502,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Visit friends',
-        scheduledTime:
-            _atWeekdayTime(weekStart, sundayOffset, hour: 13, minute: 30),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          sundayOffset,
+          hour: 13,
+          minute: 30,
+        ),
         duration: const Duration(minutes: 120),
         location: 'Town',
       ),
@@ -477,8 +515,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Prepare week plan',
-        scheduledTime:
-            _atWeekdayTime(weekStart, sundayOffset, hour: 18, minute: 45),
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          sundayOffset,
+          hour: 18,
+          minute: 45,
+        ),
         duration: const Duration(minutes: 40),
         location: 'Home',
         priority: TaskPriority.important,
@@ -504,18 +546,12 @@ List<CalendarTask> _unscheduledTasks() {
         TaskChecklistItem(id: 'measure', label: 'Note measurements'),
       ],
     ),
-    _unscheduledTask(
-      title: 'Read: Addison & Steele (notes for style)',
-    ),
-    _unscheduledTask(
-      title: 'Repair kite silk & twine for the next storm',
-    ),
+    _unscheduledTask(title: 'Read: Addison & Steele (notes for style)'),
+    _unscheduledTask(title: 'Repair kite silk & twine for the next storm'),
     _unscheduledTask(
       title: 'Write short notes of thanks (subscriptions and favors)',
     ),
-    _unscheduledTask(
-      title: 'Prepare Sunday dinner list',
-    ),
+    _unscheduledTask(title: 'Prepare Sunday dinner list'),
     _unscheduledTask(
       title: 'Junto: prepare agenda & minutes',
       priority: TaskPriority.important,
@@ -526,9 +562,7 @@ List<CalendarTask> _unscheduledTasks() {
       priority: TaskPriority.important,
       location: 'Library Company Hall',
     ),
-    _unscheduledTask(
-      title: 'Draft sermon notes (optional)',
-    ),
+    _unscheduledTask(title: 'Draft sermon notes (optional)'),
     _unscheduledTask(
       title: 'Organize workshop shelves',
       location: 'Workshop',
@@ -612,8 +646,9 @@ List<DayEvent> _dayEvents(DateTime weekStart) {
 }
 
 CalendarModel _attachCriticalPaths(CalendarModel model) {
-  final List<CalendarTask> candidates =
-      model.tasks.values.toList(growable: false);
+  final List<CalendarTask> candidates = model.tasks.values.toList(
+    growable: false,
+  );
 
   CalendarTask? findByTitle(String title) {
     for (final CalendarTask task in candidates) {
@@ -624,12 +659,15 @@ CalendarModel _attachCriticalPaths(CalendarModel model) {
     return null;
   }
 
-  final CalendarTask? correspondence =
-      findByTitle('Morning correspondence & ledgers');
-  final CalendarTask? proofs =
-      findByTitle('Press run: Gazette proofs & corrections');
-  final CalendarTask? dispatches =
-      findByTitle('Weekly mail dispatch (seal & log)');
+  final CalendarTask? correspondence = findByTitle(
+    'Morning correspondence & ledgers',
+  );
+  final CalendarTask? proofs = findByTitle(
+    'Press run: Gazette proofs & corrections',
+  );
+  final CalendarTask? dispatches = findByTitle(
+    'Weekly mail dispatch (seal & log)',
+  );
 
   final List<String> pathTaskIds = <String>[
     if (correspondence != null) correspondence.id,
@@ -641,14 +679,12 @@ CalendarModel _attachCriticalPaths(CalendarModel model) {
     return model;
   }
 
-  final CalendarCriticalPath path =
-      CalendarCriticalPath.create(name: 'Gazette & Dispatch');
+  final CalendarCriticalPath path = CalendarCriticalPath.create(
+    name: 'Gazette & Dispatch',
+  );
   CalendarModel updated = model.addCriticalPath(path);
   for (final String taskId in pathTaskIds) {
-    updated = updated.addTaskToCriticalPath(
-      pathId: path.id,
-      taskId: taskId,
-    );
+    updated = updated.addTaskToCriticalPath(pathId: path.id, taskId: taskId);
   }
   return updated;
 }

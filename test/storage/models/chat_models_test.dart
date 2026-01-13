@@ -28,19 +28,21 @@ void main() {
     expect(emailChat.isAxiContact, isFalse);
   });
 
-  test('transport remains XMPP for axi.im contacts even with email metadata',
-      () {
-    final chat = Chat(
-      jid: 'peer@axi.im',
-      title: 'Peer',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime(2024, 1, 1),
-      emailAddress: 'friend@example.com',
-    );
+  test(
+    'transport remains XMPP for axi.im contacts even with email metadata',
+    () {
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime(2024, 1, 1),
+        emailAddress: 'friend@example.com',
+      );
 
-    expect(chat.transport, MessageTransport.xmpp);
-    expect(chat.supportsEmail, isFalse);
-    expect(chat.isEmailOnlyContact, isFalse);
-    expect(chat.isAxiContact, isTrue);
-  });
+      expect(chat.transport, MessageTransport.xmpp);
+      expect(chat.supportsEmail, isFalse);
+      expect(chat.isEmailOnlyContact, isFalse);
+      expect(chat.isAxiContact, isTrue);
+    },
+  );
 }

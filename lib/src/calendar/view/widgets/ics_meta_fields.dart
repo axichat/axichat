@@ -97,9 +97,7 @@ class CalendarIcsMetaFields extends StatelessWidget {
         const SizedBox(height: calendarInsetSm),
         Text(
           _icsMetaTransparencyHelper,
-          style: context.textTheme.muted.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
+          style: context.textTheme.muted.copyWith(fontWeight: FontWeight.w500),
         ),
       ],
     );

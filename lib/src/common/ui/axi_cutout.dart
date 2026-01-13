@@ -33,10 +33,7 @@ class AxiCutout extends StatelessWidget {
     final textScaler = mediaQuery?.textScaler ?? const TextScaler.linear(1);
     double scaled(double value) => textScaler.scale(value);
     final resolvedPadding = padding ??
-        EdgeInsets.symmetric(
-          horizontal: scaled(10),
-          vertical: scaled(4),
-        );
+        EdgeInsets.symmetric(horizontal: scaled(10), vertical: scaled(4));
     final resolvedBorderWidth = borderWidth * scaled(1);
     final resolvedCornerRadius = cornerRadius * scaled(1);
     return DecoratedBox(
@@ -50,10 +47,7 @@ class AxiCutout extends StatelessWidget {
           ),
         ),
       ),
-      child: Padding(
-        padding: resolvedPadding,
-        child: child,
-      ),
+      child: Padding(padding: resolvedPadding, child: child),
     );
   }
 }

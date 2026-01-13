@@ -171,9 +171,7 @@ class AppTheme {
       brightness: brightness,
       colorScheme: patchedScheme,
       textTheme: textTheme,
-      decoration: const ShadDecoration(
-        errorPadding: inputSubtextInsets,
-      ),
+      decoration: const ShadDecoration(errorPadding: inputSubtextInsets),
       radius: const BorderRadius.all(Radius.circular(12)),
     );
   }

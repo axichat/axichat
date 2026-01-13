@@ -20,11 +20,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'calendar_test_utils.dart';
 
 class _TestApp extends StatelessWidget {
-  const _TestApp({
-    required this.bloc,
-    required this.child,
-    required this.size,
-  });
+  const _TestApp({required this.bloc, required this.child, required this.size});
 
   final CalendarBloc bloc;
   final Widget child;
@@ -70,14 +66,9 @@ class _TestApp extends StatelessWidget {
               providers: [
                 BlocProvider<CalendarBloc>.value(value: bloc),
                 BlocProvider<BaseCalendarBloc>.value(value: bloc),
-                BlocProvider<SettingsCubit>(
-                  create: (_) => SettingsCubit(),
-                ),
+                BlocProvider<SettingsCubit>(create: (_) => SettingsCubit()),
               ],
-              child: Material(
-                type: MaterialType.transparency,
-                child: child,
-              ),
+              child: Material(type: MaterialType.transparency, child: child),
             ),
           ),
         ),
@@ -101,18 +92,13 @@ Future<MockCalendarBloc> _pumpCalendarHarness(
 
   final bloc = MockCalendarBloc();
   when(() => bloc.state).thenReturn(state);
-  when(() => bloc.stream)
-      .thenAnswer((_) => const Stream<CalendarState>.empty());
+  when(
+    () => bloc.stream,
+  ).thenAnswer((_) => const Stream<CalendarState>.empty());
   when(() => bloc.add(any<CalendarEvent>())).thenReturn(null);
   when(() => bloc.close()).thenAnswer((_) async {});
 
-  await tester.pumpWidget(
-    _TestApp(
-      bloc: bloc,
-      size: size,
-      child: child,
-    ),
-  );
+  await tester.pumpWidget(_TestApp(bloc: bloc, size: size, child: child));
   await tester.pumpAndSettle();
   addTearDown(bloc.close);
   return bloc;
@@ -123,8 +109,9 @@ void main() {
 
   setUpAll(() async {
     HydratedBloc.storage = await HydratedStorage.build(
-      storageDirectory:
-          Directory.systemTemp.createTempSync('calendar_widget_tests'),
+      storageDirectory: Directory.systemTemp.createTempSync(
+        'calendar_widget_tests',
+      ),
     );
     registerCalendarFallbackValues();
   });
@@ -195,8 +182,9 @@ void main() {
       );
     }, skip: true);
 
-    testWidgets('TaskSidebar width responds to resize rail drag',
-        (tester) async {
+    testWidgets('TaskSidebar width responds to resize rail drag', (
+      tester,
+    ) async {
       final state = CalendarTestData.weekView();
       await _pumpCalendarHarness(
         tester,
@@ -212,8 +200,9 @@ void main() {
 
       Rect rect = tester.getRect(find.byType(TaskSidebar));
       final double initialWidth = rect.width;
-      final Finder handleFinder =
-          find.byKey(const ValueKey('calendar.sidebar.resizeHandle'));
+      final Finder handleFinder = find.byKey(
+        const ValueKey('calendar.sidebar.resizeHandle'),
+      );
       expect(handleFinder, findsOneWidget);
       Rect handleRect = tester.getRect(handleFinder);
 
@@ -221,8 +210,9 @@ void main() {
       Offset dragStart = handleRect.center;
       final TestGesture shrinkGesture = await tester.startGesture(dragStart);
       await tester.pump();
-      final dynamic stateAfterPointerDown =
-          tester.state(find.byType(TaskSidebar));
+      final dynamic stateAfterPointerDown = tester.state(
+        find.byType(TaskSidebar),
+      );
       final bool isResizingAfterDown = (stateAfterPointerDown as dynamic)
           .debugSidebarState
           .isResizing as bool;
@@ -234,8 +224,9 @@ void main() {
       await shrinkGesture.moveBy(const Offset(-20, 0));
       await tester.pump();
       handleRect = tester.getRect(handleFinder);
-      final dynamic sidebarStateDuringDrag =
-          tester.state(find.byType(TaskSidebar));
+      final dynamic sidebarStateDuringDrag = tester.state(
+        find.byType(TaskSidebar),
+      );
       final bool isResizingDuringDrag = (sidebarStateDuringDrag as dynamic)
           .debugSidebarState
           .isResizing as bool;
@@ -250,8 +241,9 @@ void main() {
 
       rect = tester.getRect(find.byType(TaskSidebar));
       final double shrunkWidth = rect.width;
-      final dynamic sidebarStateAfterShrink =
-          tester.state(find.byType(TaskSidebar));
+      final dynamic sidebarStateAfterShrink = tester.state(
+        find.byType(TaskSidebar),
+      );
       final double controllerShrunkWidth = (sidebarStateAfterShrink as dynamic)
           .debugSidebarState
           .width as double;
@@ -278,8 +270,9 @@ void main() {
 
       rect = tester.getRect(find.byType(TaskSidebar));
       final double expandedWidth = rect.width;
-      final dynamic sidebarStateAfterExpand =
-          tester.state(find.byType(TaskSidebar));
+      final dynamic sidebarStateAfterExpand = tester.state(
+        find.byType(TaskSidebar),
+      );
       final double controllerExpandedWidth =
           (sidebarStateAfterExpand as dynamic).debugSidebarState.width
               as double;

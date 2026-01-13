@@ -10,9 +10,8 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 /// Declarative controller for managing inline task checklists across forms.
 class TaskChecklistController extends ChangeNotifier {
-  TaskChecklistController({
-    List<TaskChecklistItem> initialItems = const [],
-  }) : _items = List<TaskChecklistItem>.from(
+  TaskChecklistController({List<TaskChecklistItem> initialItems = const []})
+      : _items = List<TaskChecklistItem>.from(
           TaskChecklistController.normalize(initialItems),
           growable: true,
         );
@@ -67,11 +66,7 @@ class TaskChecklistController extends ChangeNotifier {
     _pendingEntry = _emptyPendingEntry;
     _items = [
       ..._items,
-      TaskChecklistItem(
-        id: _uuid.v4(),
-        label: trimmed,
-        isCompleted: false,
-      ),
+      TaskChecklistItem(id: _uuid.v4(), label: trimmed, isCompleted: false),
     ];
     notifyListeners();
   }
@@ -83,11 +78,7 @@ class TaskChecklistController extends ChangeNotifier {
     }
     _items = [
       ..._items,
-      TaskChecklistItem(
-        id: _uuid.v4(),
-        label: trimmed,
-        isCompleted: false,
-      ),
+      TaskChecklistItem(id: _uuid.v4(), label: trimmed, isCompleted: false),
     ];
     if (_pendingEntry != _emptyPendingEntry) {
       _pendingEntry = _emptyPendingEntry;
@@ -176,9 +167,7 @@ class TaskChecklistController extends ChangeNotifier {
 
   static List<TaskChecklistItem> normalize(List<TaskChecklistItem> source) {
     return source
-        .map(
-          (item) => item.copyWith(label: item.label.trim()),
-        )
+        .map((item) => item.copyWith(label: item.label.trim()))
         .where((item) => item.label.isNotEmpty)
         .toList(growable: true);
   }

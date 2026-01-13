@@ -29,8 +29,10 @@ class OmemoOperationOverlay extends StatelessWidget {
                 bottom: 32 + bottomInset,
               ),
               child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(maxWidth: 320, maxHeight: 320),
+                constraints: const BoxConstraints(
+                  maxWidth: 320,
+                  maxHeight: 320,
+                ),
                 child: ListView.builder(
                   shrinkWrap: true,
                   reverse: true,
@@ -106,10 +108,9 @@ class _OmemoOperationToast extends StatelessWidget {
                 children: [
                   Text(
                     operation.statusLabel(),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: textColor),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: textColor),
                   ),
                   if (operation.status == OmemoOperationStatus.failure &&
                       operation.error != null)
@@ -117,10 +118,10 @@ class _OmemoOperationToast extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         operation.error!,
-                        style:
-                            Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: textColor.withValues(alpha: 0.9),
-                                ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium
+                            ?.copyWith(color: textColor.withValues(alpha: 0.9)),
                       ),
                     ),
                 ],

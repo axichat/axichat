@@ -16,12 +16,12 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   RosterCubit({required RosterService rosterService})
       : _rosterService = rosterService,
         super(const RosterInitial()) {
-    _rosterSubscription = _rosterService
-        .rosterStream()
-        .listen((items) => emit(RosterAvailable(items: items)));
-    _invitesSubscription = _rosterService
-        .invitesStream()
-        .listen((invites) => emit(RosterInvitesAvailable(invites: invites)));
+    _rosterSubscription = _rosterService.rosterStream().listen(
+          (items) => emit(RosterAvailable(items: items)),
+        );
+    _invitesSubscription = _rosterService.invitesStream().listen(
+          (invites) => emit(RosterInvitesAvailable(invites: invites)),
+        );
   }
 
   final RosterService _rosterService;
@@ -60,10 +60,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     return super.close();
   }
 
-  Future<void> addContact({
-    required String jid,
-    String? title,
-  }) async {
+  Future<void> addContact({required String jid, String? title}) async {
     if (!jid.isValidJid) {
       emit(const RosterFailure('Enter a valid jid'));
       return;
@@ -73,8 +70,10 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
       await _rosterService.addToRoster(jid: jid, title: title);
     } on XmppRosterException catch (_) {
       emit(
-        const RosterFailure('Failed to add contact: '
-            'make sure the address exists or try again later.'),
+        const RosterFailure(
+          'Failed to add contact: '
+          'make sure the address exists or try again later.',
+        ),
       );
       return;
     }

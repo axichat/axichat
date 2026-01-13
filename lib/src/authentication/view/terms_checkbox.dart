@@ -26,19 +26,12 @@ class TermsCheckbox extends StatelessWidget {
           text: TextSpan(
             style: context.textTheme.muted,
             children: [
-              TextSpan(
-                text: l10n.termsAgreementPrefix,
-              ),
+              TextSpan(text: l10n.termsAgreementPrefix),
               WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
-                child: AxiLink(
-                  link: termsUrl,
-                  text: l10n.termsAgreementTerms,
-                ),
+                child: AxiLink(link: termsUrl, text: l10n.termsAgreementTerms),
               ),
-              TextSpan(
-                text: l10n.termsAgreementAnd,
-              ),
+              TextSpan(text: l10n.termsAgreementAnd),
               WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
                 child: AxiLink(
@@ -46,9 +39,7 @@ class TermsCheckbox extends StatelessWidget {
                   text: l10n.termsAgreementPrivacy,
                 ),
               ),
-              const TextSpan(
-                text: '.',
-              ),
+              const TextSpan(text: '.'),
             ],
           ),
         ),

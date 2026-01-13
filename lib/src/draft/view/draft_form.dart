@@ -198,9 +198,9 @@ class _DraftFormState extends State<DraftForm> {
           listener: (context, state) {
             if (state is DraftSaveComplete) {
               if (!state.autoSaved) {
-                ShadToaster.maybeOf(context)?.show(
-                  FeedbackToast.success(title: l10n.draftSaved),
-                );
+                ShadToaster.maybeOf(
+                  context,
+                )?.show(FeedbackToast.success(title: l10n.draftSaved));
               }
             }
             if (state is DraftSending) {
@@ -245,8 +245,9 @@ class _DraftFormState extends State<DraftForm> {
             final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
             final hasAttachments = pendingAttachments.isNotEmpty;
-            final hasPreparingAttachments =
-                pendingAttachments.any((pending) => pending.isPreparing);
+            final hasPreparingAttachments = pendingAttachments.any(
+              (pending) => pending.isPreparing,
+            );
             final split = _splitRecipients();
             final hasActiveRecipients = split.hasActiveRecipients;
             final hasContent = _hasContent(hasAttachments: hasAttachments);
@@ -344,8 +345,9 @@ class _DraftFormState extends State<DraftForm> {
                                   textInputAction: TextInputAction.next,
                                   onSubmitted: (_) =>
                                       _bodyFocusNode.requestFocus(),
-                                  placeholder:
-                                      Text(l10n.draftSubjectHintOptional),
+                                  placeholder: Text(
+                                    l10n.draftSubjectHintOptional,
+                                  ),
                                   constraints: const BoxConstraints.tightFor(
                                     height: _draftSubjectHeight,
                                   ),
@@ -508,9 +510,7 @@ class _DraftFormState extends State<DraftForm> {
         }
       }
       if (match != null) {
-        recipients.add(
-          ComposerRecipient(target: FanOutTarget.chat(match)),
-        );
+        recipients.add(ComposerRecipient(target: FanOutTarget.chat(match)));
       } else {
         recipients.add(
           ComposerRecipient(target: FanOutTarget.address(address: trimmed)),
@@ -536,8 +536,9 @@ class _DraftFormState extends State<DraftForm> {
     }
     setState(() => _loadingAttachments = true);
     try {
-      final pending =
-          await _pendingAttachmentsFromMetadata(widget.attachmentMetadataIds);
+      final pending = await _pendingAttachmentsFromMetadata(
+        widget.attachmentMetadataIds,
+      );
       if (!mounted) return;
       setState(() => _pendingAttachments = pending);
     } finally {
@@ -551,8 +552,9 @@ class _DraftFormState extends State<DraftForm> {
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final hydrated =
-        await _messageService.loadDraftAttachments(metadataIds.toList());
+    final hydrated = await _messageService.loadDraftAttachments(
+      metadataIds.toList(),
+    );
     final List<PendingAttachment> pending = <PendingAttachment>[];
     for (final attachment in hydrated) {
       final EmailAttachment resolvedAttachment =
@@ -584,11 +586,14 @@ class _DraftFormState extends State<DraftForm> {
   void _handleRecipientAdded(FanOutTarget target) {
     setState(() {
       _sendErrorMessage = null;
-      final existingIndex =
-          _recipients.indexWhere((recipient) => recipient.key == target.key);
+      final existingIndex = _recipients.indexWhere(
+        (recipient) => recipient.key == target.key,
+      );
       if (existingIndex >= 0) {
-        _recipients[existingIndex] =
-            _recipients[existingIndex].copyWith(target: target, included: true);
+        _recipients[existingIndex] = _recipients[existingIndex].copyWith(
+          target: target,
+          included: true,
+        );
       } else {
         _recipients.add(ComposerRecipient(target: target));
       }
@@ -673,10 +678,7 @@ class _DraftFormState extends State<DraftForm> {
         _pendingAttachments = _pendingAttachments
             .map(
               (pending) => pending.id == pendingId
-                  ? pending.copyWith(
-                      attachment: attachment,
-                      isPreparing: false,
-                    )
+                  ? pending.copyWith(attachment: attachment, isPreparing: false)
                   : pending,
             )
             .toList();
@@ -1053,9 +1055,9 @@ class _DraftFormState extends State<DraftForm> {
       _lastAutosaveAt = null;
       _lastSavedSignature = null;
     });
-    ShadToaster.maybeOf(context)?.show(
-      FeedbackToast.success(title: l10n.draftSent),
-    );
+    ShadToaster.maybeOf(
+      context,
+    )?.show(FeedbackToast.success(title: l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
       unawaited(_cleanupSeedAttachmentMetadata());
     }
@@ -1090,7 +1092,7 @@ class _DraftFormState extends State<DraftForm> {
   ({
     List<ComposerRecipient> emailTargets,
     List<ComposerRecipient> xmppTargets,
-    bool hasActiveRecipients
+    bool hasActiveRecipients,
   }) _splitRecipients() {
     final emailTargets = <ComposerRecipient>[];
     final xmppTargets = <ComposerRecipient>[];
@@ -1154,9 +1156,7 @@ class _DraftFormState extends State<DraftForm> {
       _pendingAttachments.map((pending) => pending.attachment).toList();
 
   void _showToast(String message) {
-    ShadToaster.maybeOf(context)?.show(
-      FeedbackToast.info(message: message),
-    );
+    ShadToaster.maybeOf(context)?.show(FeedbackToast.info(message: message));
   }
 
   String _nextPendingAttachmentId() =>
@@ -1223,12 +1223,7 @@ class _DraftFormState extends State<DraftForm> {
         return Dialog(
           child: Stack(
             children: [
-              Positioned.fill(
-                child: Image.file(
-                  file,
-                  fit: BoxFit.contain,
-                ),
-              ),
+              Positioned.fill(child: Image.file(file, fit: BoxFit.contain)),
               Positioned(
                 top: 8,
                 right: 8,
@@ -1266,10 +1261,7 @@ class _DraftFormState extends State<DraftForm> {
           bodyPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           children: [
             ListTile(
-              leading: Icon(
-                attachmentIcon(attachment),
-                color: colors.primary,
-              ),
+              leading: Icon(attachmentIcon(attachment), color: colors.primary),
               title: Text(attachment.fileName),
               subtitle: Text(sizeLabel),
             ),
@@ -1298,10 +1290,7 @@ class _DraftFormState extends State<DraftForm> {
 }
 
 class _DraftTaskDropRegion extends StatefulWidget {
-  const _DraftTaskDropRegion({
-    required this.child,
-    this.onTaskDropped,
-  });
+  const _DraftTaskDropRegion({required this.child, this.onTaskDropped});
 
   final Widget child;
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
@@ -1450,20 +1439,14 @@ class _TaskDragGhostOverlay extends StatelessWidget {
       left: offset.dx,
       top: offset.dy,
       child: IgnorePointer(
-        child: _DraftTaskDragGhost(
-          payload: payload,
-          size: ghostSize,
-        ),
+        child: _DraftTaskDragGhost(payload: payload, size: ghostSize),
       ),
     );
   }
 }
 
 class _DraftTaskDragGhost extends StatelessWidget {
-  const _DraftTaskDragGhost({
-    required this.payload,
-    required this.size,
-  });
+  const _DraftTaskDragGhost({required this.payload, required this.size});
 
   final CalendarDragPayload payload;
   final Size size;
@@ -1506,10 +1489,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
         decoration: BoxDecoration(
           color: colors.card.withValues(alpha: 0.96),
           borderRadius: borderRadius,
-          border: Border.all(
-            color: colors.primary,
-            width: 1.25,
-          ),
+          border: Border.all(color: colors.primary, width: 1.25),
           boxShadow: [
             BoxShadow(
               color: materialScheme.shadow.withValues(alpha: 0.14),
@@ -1560,9 +1540,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
                 description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: textTheme.muted.copyWith(
-                  color: colors.mutedForeground,
-                ),
+                style: textTheme.muted.copyWith(color: colors.mutedForeground),
               ),
             ],
           ],
@@ -1668,10 +1646,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
     if (loading) {
       body = const Center(child: CircularProgressIndicator());
     } else if (attachments.isEmpty) {
-      body = Text(
-        l10n.draftNoAttachments,
-        style: context.textTheme.muted,
-      );
+      body = Text(l10n.draftNoAttachments, style: context.textTheme.muted);
     } else {
       body = PendingAttachmentList(
         attachments: attachments,

@@ -11,8 +11,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 /// F-Droid and other store builds pass `--dart-define=ENABLE_SHOREBIRD=false`
 /// to disable OTA updates entirely.
-const bool kEnableShorebird =
-    bool.fromEnvironment('ENABLE_SHOREBIRD', defaultValue: true);
+const bool kEnableShorebird = bool.fromEnvironment(
+  'ENABLE_SHOREBIRD',
+  defaultValue: true,
+);
 
 enum ShorebirdUpdateGateStatus {
   upToDate,
@@ -30,8 +32,9 @@ const double _updateGatePaddingValue = 20.0;
 const double _updateGateBackdropAlpha = 0.9;
 const double _updateGateNoticePaddingValue = 8.0;
 const EdgeInsets _updateGatePadding = EdgeInsets.all(_updateGatePaddingValue);
-const EdgeInsets _updateGateNoticePadding =
-    EdgeInsets.all(_updateGateNoticePaddingValue);
+const EdgeInsets _updateGateNoticePadding = EdgeInsets.all(
+  _updateGateNoticePaddingValue,
+);
 
 Future<ShorebirdUpdateGateStatus>? _shorebirdUpdateFuture;
 

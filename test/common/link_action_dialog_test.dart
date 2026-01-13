@@ -69,10 +69,7 @@ void main() {
     final message = '$baseMessage$warningBlock';
 
     await tester.pumpWidget(
-      LinkDialogHarness(
-        title: l10n.chatOpenLinkTitle,
-        message: message,
-      ),
+      LinkDialogHarness(title: l10n.chatOpenLinkTitle, message: message),
     );
 
     await tester.tap(find.text('Show'));
@@ -81,11 +78,11 @@ void main() {
     expect(find.text(l10n.chatOpenLinkTitle), findsOneWidget);
     expect(find.text(_openButtonLabel), findsOneWidget);
     expect(
-        find.textContaining(l10n.chatOpenLinkWarningMessage(
-          report.displayUri,
-          hostLabel,
-        )),
-        findsOneWidget);
+      find.textContaining(
+        l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel),
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('Warnings:'), findsOneWidget);
   });
 }

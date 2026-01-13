@@ -106,10 +106,12 @@ const _mucServiceHostStorageKeyName = 'muc_service_host';
 const _mucPrejoinRoomsStorageKeyName = 'muc_prejoin_rooms';
 const _mucPrejoinRoomJidKey = 'room_jid';
 const _mucPrejoinRoomNickKey = 'nickname';
-final _mucServiceHostStorageKey =
-    XmppStateStore.registerKey(_mucServiceHostStorageKeyName);
-final _mucPrejoinRoomsStorageKey =
-    XmppStateStore.registerKey(_mucPrejoinRoomsStorageKeyName);
+final _mucServiceHostStorageKey = XmppStateStore.registerKey(
+  _mucServiceHostStorageKeyName,
+);
+final _mucPrejoinRoomsStorageKey = XmppStateStore.registerKey(
+  _mucPrejoinRoomsStorageKeyName,
+);
 
 extension _MoxAffiliationConversion on mox.Affiliation {
   OccupantAffiliation get toOccupantAffiliation => switch (this) {
@@ -131,10 +133,7 @@ extension _MoxRoleConversion on mox.Role {
 }
 
 final class MucSubjectChangedEvent extends mox.XmppEvent {
-  MucSubjectChangedEvent({
-    required this.roomJid,
-    required this.subject,
-  });
+  MucSubjectChangedEvent({required this.roomJid, required this.subject});
 
   final String roomJid;
   final String? subject;
@@ -157,10 +156,7 @@ final class MucAffiliationEntry {
 }
 
 final class MucPrejoinRoom {
-  const MucPrejoinRoom({
-    required this.roomJid,
-    required this.nickname,
-  });
+  const MucPrejoinRoom({required this.roomJid, required this.nickname});
 
   final String roomJid;
   final String nickname;
@@ -178,20 +174,14 @@ final class MucPrejoinRoom {
     final trimmedRoom = roomJid.trim();
     final trimmedNickname = nickname.trim();
     if (trimmedRoom.isEmpty || trimmedNickname.isEmpty) return null;
-    return MucPrejoinRoom(
-      roomJid: trimmedRoom,
-      nickname: trimmedNickname,
-    );
+    return MucPrejoinRoom(roomJid: trimmedRoom, nickname: trimmedNickname);
   }
 }
 
 const List<MucPrejoinRoom> _emptyMucPrejoinRooms = <MucPrejoinRoom>[];
 
 final class _RoomAvatarPayload {
-  const _RoomAvatarPayload({
-    this.data,
-    this.hash,
-  });
+  const _RoomAvatarPayload({this.data, this.hash});
 
   final String? data;
   final String? hash;
@@ -401,20 +391,13 @@ mixin MucService on XmppBase, BaseStreamService {
     if (!bookmark.autojoin) {
       if (!roomsByJid.containsKey(roomJid)) return;
       roomsByJid.remove(roomJid);
-      await _persistMucPrejoinRooms(
-        roomsByJid.values.toList(growable: false),
-      );
+      await _persistMucPrejoinRooms(roomsByJid.values.toList(growable: false));
       return;
     }
     final nickname = (await _resolveMucPrejoinNickname(bookmark)).trim();
     if (nickname.isEmpty) return;
-    roomsByJid[roomJid] = MucPrejoinRoom(
-      roomJid: roomJid,
-      nickname: nickname,
-    );
-    await _persistMucPrejoinRooms(
-      roomsByJid.values.toList(growable: false),
-    );
+    roomsByJid[roomJid] = MucPrejoinRoom(roomJid: roomJid, nickname: nickname);
+    await _persistMucPrejoinRooms(roomsByJid.values.toList(growable: false));
   }
 
   Future<void> _removeMucPrejoinRoom(mox.JID roomBare) async {
@@ -554,9 +537,7 @@ mixin MucService on XmppBase, BaseStreamService {
     managerState.joined = joined;
   }
 
-  Future<bool> _hasMucPresenceForSend({
-    required String roomJid,
-  }) async {
+  Future<bool> _hasMucPresenceForSend({required String roomJid}) async {
     if (connectionState != ConnectionState.connected) return false;
     late final String normalizedRoom;
     try {
@@ -675,12 +656,7 @@ mixin MucService on XmppBase, BaseStreamService {
     _roomsNeedingJoin.clear();
     for (final entry in _roomStates.entries) {
       final room = entry.value;
-      unawaited(
-        _setMucManagerJoinedState(
-          roomJid: entry.key,
-          joined: false,
-        ),
-      );
+      unawaited(_setMucManagerJoinedState(roomJid: entry.key, joined: false));
       if (room.selfPresenceStatusCodes.isEmpty &&
           room.selfPresenceReason == null) {
         continue;
@@ -784,12 +760,7 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     _roomStates[key] = room;
     _roomStreams[key]?.add(room);
-    unawaited(
-      _setMucManagerJoinedState(
-        roomJid: key,
-        joined: false,
-      ),
-    );
+    unawaited(_setMucManagerJoinedState(roomJid: key, joined: false));
   }
 
   void _updateRoomSubject(String roomJid, String? subject) {
@@ -819,10 +790,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (normalizedPassword == null) return;
     final manager = _connection.getManager<MucJoinBootstrapManager>();
     if (manager == null) return;
-    manager.rememberPassword(
-      roomJid: roomJid,
-      password: normalizedPassword,
-    );
+    manager.rememberPassword(roomJid: roomJid, password: normalizedPassword);
   }
 
   void _rememberRoomNickname({
@@ -833,10 +801,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (normalizedNick.isEmpty) return;
     final manager = _connection.getManager<MucJoinBootstrapManager>();
     if (manager == null) return;
-    manager.rememberNickname(
-      roomJid: roomJid,
-      nickname: normalizedNick,
-    );
+    manager.rememberNickname(roomJid: roomJid, nickname: normalizedNick);
   }
 
   void _forgetRoomPassword({required String roomJid}) {
@@ -931,10 +896,7 @@ mixin MucService on XmppBase, BaseStreamService {
       autojoin: true,
     );
     if (avatar != null) {
-      final updated = await updateRoomAvatar(
-        roomJid: roomJid,
-        avatar: avatar,
-      );
+      final updated = await updateRoomAvatar(roomJid: roomJid, avatar: avatar);
       if (!updated) {
         _mucLog.fine(_roomAvatarUpdateFailedLog);
       }
@@ -1101,10 +1063,7 @@ mixin MucService on XmppBase, BaseStreamService {
       items: [
         mox.XMLNode(
           tag: 'item',
-          attributes: {
-            'nick': nick,
-            'role': OccupantRole.none.xmlValue,
-          },
+          attributes: {'nick': nick, 'role': OccupantRole.none.xmlValue},
           children: reason?.isNotEmpty == true
               ? [mox.XMLNode(tag: 'reason', text: reason)]
               : const [],
@@ -1145,10 +1104,7 @@ mixin MucService on XmppBase, BaseStreamService {
       items: [
         mox.XMLNode(
           tag: 'item',
-          attributes: {
-            'jid': jid,
-            'affiliation': affiliation.xmlValue,
-          },
+          attributes: {'jid': jid, 'affiliation': affiliation.xmlValue},
         ),
       ],
     );
@@ -1164,10 +1120,7 @@ mixin MucService on XmppBase, BaseStreamService {
       items: [
         mox.XMLNode(
           tag: 'item',
-          attributes: {
-            'nick': nick,
-            'role': role.xmlValue,
-          },
+          attributes: {'nick': nick, 'role': role.xmlValue},
         ),
       ],
     );
@@ -1228,10 +1181,7 @@ mixin MucService on XmppBase, BaseStreamService {
       ],
     );
     final result = await _connection.sendStanza(
-      mox.StanzaDetails(
-        request,
-        shouldEncrypt: false,
-      ),
+      mox.StanzaDetails(request, shouldEncrypt: false),
     );
     if (result == null) return const [];
     if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
@@ -1245,8 +1195,9 @@ mixin MucService on XmppBase, BaseStreamService {
       final roleAttr = _readItemAttr(item, _roleAttr);
       final itemAffiliation =
           _readItemAttr(item, _affiliationAttr) ?? affiliation.xmlValue;
-      final resolvedAffiliation =
-          OccupantAffiliation.fromString(itemAffiliation);
+      final resolvedAffiliation = OccupantAffiliation.fromString(
+        itemAffiliation,
+      );
       final resolvedRole =
           roleAttr == null ? null : OccupantRole.fromString(roleAttr);
       final reason = _normalizeSubject(
@@ -1320,35 +1271,35 @@ mixin MucService on XmppBase, BaseStreamService {
     final resolvedNickname = _nickForRoom(nickname);
     final resolvedPassword = _normalizePassword(password);
     _rememberRoomPassword(roomJid: roomJid, password: resolvedPassword);
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final existing = await db.getChat(roomJid);
-        if (existing == null) {
-          await db.createChat(
-            Chat(
-              jid: roomJid,
-              title: title,
-              type: ChatType.groupChat,
-              myNickname: resolvedNickname,
-              lastChangeTimestamp: DateTime.timestamp(),
-              contactJid: roomJid,
-            ),
-          );
-          return;
-        }
-        if (existing.type != ChatType.groupChat ||
-            existing.title != title ||
-            existing.myNickname != resolvedNickname ||
-            existing.contactJid != roomJid) {
-          await db.updateChat(existing.copyWith(
+    await _dbOp<XmppDatabase>((db) async {
+      final existing = await db.getChat(roomJid);
+      if (existing == null) {
+        await db.createChat(
+          Chat(
+            jid: roomJid,
+            title: title,
+            type: ChatType.groupChat,
+            myNickname: resolvedNickname,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+        return;
+      }
+      if (existing.type != ChatType.groupChat ||
+          existing.title != title ||
+          existing.myNickname != resolvedNickname ||
+          existing.contactJid != roomJid) {
+        await db.updateChat(
+          existing.copyWith(
             type: ChatType.groupChat,
             title: title,
             myNickname: resolvedNickname,
             contactJid: roomJid,
-          ));
-        }
-      },
-    );
+          ),
+        );
+      }
+    });
     await joinRoom(
       roomJid: roomJid,
       nickname: resolvedNickname,
@@ -1381,8 +1332,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final mucManager = _connection.getManager<MUCManager>();
     if (mucManager != null && connectionState == ConnectionState.connected) {
       try {
-        final result =
-            await mucManager.queryRoomInformation(mox.JID.fromString(roomJid));
+        final result = await mucManager.queryRoomInformation(
+          mox.JID.fromString(roomJid),
+        );
         if (!result.isType<mox.MUCError>()) {
           final info = result.get<mox.RoomInformation>();
           final discovered = info.name.trim();
@@ -1440,8 +1392,9 @@ mixin MucService on XmppBase, BaseStreamService {
         ? serviceJid!.trim()
         : mucServiceHost;
     try {
-      final result = await discoManager
-          .discoItemsQuery(mox.JID.fromString(resolvedService));
+      final result = await discoManager.discoItemsQuery(
+        mox.JID.fromString(resolvedService),
+      );
       if (result.isType<mox.StanzaError>()) {
         return const [];
       }
@@ -1456,8 +1409,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final manager = _connection.getManager<MUCManager>();
     if (manager == null) return null;
     try {
-      final result =
-          await manager.queryRoomInformation(mox.JID.fromString(roomJid));
+      final result = await manager.queryRoomInformation(
+        mox.JID.fromString(roomJid),
+      );
       if (result.isType<mox.MUCError>()) {
         return null;
       }
@@ -1471,18 +1425,10 @@ mixin MucService on XmppBase, BaseStreamService {
     final stanza = mox.Stanza.iq(
       type: _iqTypeGet,
       to: roomJid,
-      children: [
-        mox.XMLNode.xmlns(
-          tag: _queryTag,
-          xmlns: _discoInfoXmlns,
-        ),
-      ],
+      children: [mox.XMLNode.xmlns(tag: _queryTag, xmlns: _discoInfoXmlns)],
     );
     final result = await _connection.sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        shouldEncrypt: false,
-      ),
+      mox.StanzaDetails(stanza, shouldEncrypt: false),
     );
     if (result == null) return null;
     if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
@@ -1497,18 +1443,10 @@ mixin MucService on XmppBase, BaseStreamService {
     final stanza = mox.Stanza.iq(
       type: _iqTypeGet,
       to: roomJid,
-      children: [
-        mox.XMLNode.xmlns(
-          tag: _queryTag,
-          xmlns: _mucOwnerXmlns,
-        ),
-      ],
+      children: [mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucOwnerXmlns)],
     );
     final result = await _connection.sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        shouldEncrypt: false,
-      ),
+      mox.StanzaDetails(stanza, shouldEncrypt: false),
     );
     if (result == null) return null;
     if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
@@ -1535,10 +1473,7 @@ mixin MucService on XmppBase, BaseStreamService {
       ],
     );
     final result = await _connection.sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        shouldEncrypt: false,
-      ),
+      mox.StanzaDetails(stanza, shouldEncrypt: false),
     );
     if (result == null) return false;
     final type = result.attributes[_iqTypeAttr]?.toString();
@@ -1669,18 +1604,10 @@ mixin MucService on XmppBase, BaseStreamService {
     final stanza = mox.Stanza.iq(
       type: _iqTypeGet,
       to: roomJid,
-      children: [
-        mox.XMLNode.xmlns(
-          tag: _vCardTag,
-          xmlns: _vCardTempXmlns,
-        ),
-      ],
+      children: [mox.XMLNode.xmlns(tag: _vCardTag, xmlns: _vCardTempXmlns)],
     );
     final result = await _connection.sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        shouldEncrypt: false,
-      ),
+      mox.StanzaDetails(stanza, shouldEncrypt: false),
     );
     if (result == null) return null;
     if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
@@ -1704,9 +1631,7 @@ mixin MucService on XmppBase, BaseStreamService {
       mox.XMLNode(tag: _vCardBinvalTag, text: encodedAvatar),
     ];
     if (trimmedMimeType.isNotEmpty) {
-      photoChildren.add(
-        mox.XMLNode(tag: _vCardTypeTag, text: trimmedMimeType),
-      );
+      photoChildren.add(mox.XMLNode(tag: _vCardTypeTag, text: trimmedMimeType));
     }
     final stanza = mox.Stanza.iq(
       type: _iqTypeSet,
@@ -1715,20 +1640,12 @@ mixin MucService on XmppBase, BaseStreamService {
         mox.XMLNode.xmlns(
           tag: _vCardTag,
           xmlns: _vCardTempXmlns,
-          children: [
-            mox.XMLNode(
-              tag: _vCardPhotoTag,
-              children: photoChildren,
-            ),
-          ],
+          children: [mox.XMLNode(tag: _vCardPhotoTag, children: photoChildren)],
         ),
       ],
     );
     final result = await _connection.sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        shouldEncrypt: false,
-      ),
+      mox.StanzaDetails(stanza, shouldEncrypt: false),
     );
     if (result == null) return false;
     final type = result.attributes[_iqTypeAttr]?.toString();
@@ -1784,9 +1701,7 @@ mixin MucService on XmppBase, BaseStreamService {
       }
       if (_isAvatarHashField(lowerVar)) {
         hasAvatarField = true;
-        updatedChildren.add(
-          _replaceFieldValues(child, [avatarHash]),
-        );
+        updatedChildren.add(_replaceFieldValues(child, [avatarHash]));
         continue;
       }
       if (_isAvatarMimeField(lowerVar)) {
@@ -1795,15 +1710,11 @@ mixin MucService on XmppBase, BaseStreamService {
           updatedChildren.add(child);
           continue;
         }
-        updatedChildren.add(
-          _replaceFieldValues(child, [resolvedMimeType]),
-        );
+        updatedChildren.add(_replaceFieldValues(child, [resolvedMimeType]));
         continue;
       }
       hasAvatarField = true;
-      updatedChildren.add(
-        _replaceFieldValues(child, [avatarValue]),
-      );
+      updatedChildren.add(_replaceFieldValues(child, [avatarValue]));
     }
     if (!hasAvatarField) return null;
     final updatedAttributes = _stringAttributes(form.attributes)
@@ -1816,9 +1727,7 @@ mixin MucService on XmppBase, BaseStreamService {
   }
 
   Map<String, String> _stringAttributes(Map<String, dynamic> attributes) {
-    return attributes.map(
-      (key, value) => MapEntry(key, value.toString()),
-    );
+    return attributes.map((key, value) => MapEntry(key, value.toString()));
   }
 
   void _logRoomConfigurationError(mox.XMLNode stanza) {
@@ -1841,9 +1750,7 @@ mixin MucService on XmppBase, BaseStreamService {
     final field = mox.XMLNode(
       tag: _fieldTag,
       attributes: fieldAttributes,
-      children: [
-        mox.XMLNode(tag: _valueTag, text: _mucRoomConfigFormType),
-      ],
+      children: [mox.XMLNode(tag: _valueTag, text: _mucRoomConfigFormType)],
     );
     return mox.XMLNode.xmlns(
       tag: _dataFormTag,
@@ -1939,19 +1846,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final stanza = mox.Stanza.message(
       to: roomJid,
       type: _messageTypeGroupchat,
-      children: [
-        mox.XMLNode(
-          tag: _subjectTag,
-          text: resolvedSubject,
-        ),
-      ],
+      children: [mox.XMLNode(tag: _subjectTag, text: resolvedSubject)],
     );
-    await _connection.sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        awaitable: false,
-      ),
-    );
+    await _connection.sendStanza(mox.StanzaDetails(stanza, awaitable: false));
   }
 
   Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
@@ -2007,22 +1904,19 @@ mixin MucService on XmppBase, BaseStreamService {
         .map((bookmark) => bookmark.roomBare.toBare().toString())
         .toSet();
     final toRemove = <String>{};
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final chats = await db.getChats(
-          start: _mucSnapshotStart,
-          end: _mucSnapshotEnd,
-        );
-        for (final chat in chats) {
-          if (!_isSnapshotRoomChat(chat)) continue;
-          final roomBare = _normalizeBareJid(chat.jid);
-          if (roomBare == null || roomBare.isEmpty) continue;
-          if (knownRooms.contains(roomBare)) continue;
-          toRemove.add(roomBare);
-        }
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final chats = await db.getChats(
+        start: _mucSnapshotStart,
+        end: _mucSnapshotEnd,
+      );
+      for (final chat in chats) {
+        if (!_isSnapshotRoomChat(chat)) continue;
+        final roomBare = _normalizeBareJid(chat.jid);
+        if (roomBare == null || roomBare.isEmpty) continue;
+        if (knownRooms.contains(roomBare)) continue;
+        toRemove.add(roomBare);
+      }
+    }, awaitDatabase: true);
 
     for (final roomBare in toRemove) {
       try {
@@ -2216,9 +2110,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (normalized.startsWith(_dataUriPrefix)) {
       final index = normalized.indexOf(_dataUriBase64Delimiter);
       if (index == -1) return null;
-      raw = normalized.substring(
-        index + _dataUriBase64Delimiter.length,
-      );
+      raw = normalized.substring(index + _dataUriBase64Delimiter.length);
     }
     final trimmed = raw.replaceAll(RegExp(r'\s+'), '');
     if (trimmed.isEmpty) return null;
@@ -2247,49 +2139,45 @@ mixin MucService on XmppBase, BaseStreamService {
           trimmedNick?.isNotEmpty == true ? trimmedNick! : _nickForRoom(null);
 
       try {
-        await _dbOp<XmppDatabase>(
-          (db) async {
-            final existing = await db.getChat(roomJid);
-            if (existing == null) {
-              await db.createChat(
-                Chat(
-                  jid: roomJid,
-                  title: title.isNotEmpty ? title : roomJid,
-                  type: ChatType.groupChat,
-                  myNickname: nickname,
-                  lastChangeTimestamp: DateTime.timestamp(),
-                  contactJid: roomJid,
-                ),
-              );
-              return;
-            }
-
-            final shouldUpdateTitle =
-                title.isNotEmpty && existing.title.trim() != title;
-            final shouldUpdateNickname = nickname.isNotEmpty &&
-                (existing.myNickname ?? '').trim() != nickname;
-            final shouldUpdateType = existing.type != ChatType.groupChat;
-            final shouldUpdateContactJid = existing.contactJid != roomJid;
-
-            if (!shouldUpdateTitle &&
-                !shouldUpdateNickname &&
-                !shouldUpdateType &&
-                !shouldUpdateContactJid) {
-              return;
-            }
-
-            await db.updateChat(
-              existing.copyWith(
+        await _dbOp<XmppDatabase>((db) async {
+          final existing = await db.getChat(roomJid);
+          if (existing == null) {
+            await db.createChat(
+              Chat(
+                jid: roomJid,
+                title: title.isNotEmpty ? title : roomJid,
                 type: ChatType.groupChat,
-                title: shouldUpdateTitle ? title : existing.title,
-                myNickname:
-                    shouldUpdateNickname ? nickname : existing.myNickname,
+                myNickname: nickname,
+                lastChangeTimestamp: DateTime.timestamp(),
                 contactJid: roomJid,
               ),
             );
-          },
-          awaitDatabase: true,
-        );
+            return;
+          }
+
+          final shouldUpdateTitle =
+              title.isNotEmpty && existing.title.trim() != title;
+          final shouldUpdateNickname = nickname.isNotEmpty &&
+              (existing.myNickname ?? '').trim() != nickname;
+          final shouldUpdateType = existing.type != ChatType.groupChat;
+          final shouldUpdateContactJid = existing.contactJid != roomJid;
+
+          if (!shouldUpdateTitle &&
+              !shouldUpdateNickname &&
+              !shouldUpdateType &&
+              !shouldUpdateContactJid) {
+            return;
+          }
+
+          await db.updateChat(
+            existing.copyWith(
+              type: ChatType.groupChat,
+              title: shouldUpdateTitle ? title : existing.title,
+              myNickname: shouldUpdateNickname ? nickname : existing.myNickname,
+              contactJid: roomJid,
+            ),
+          );
+        }, awaitDatabase: true);
       } on XmppAbortedException {
         return;
       } on Exception {
@@ -2356,16 +2244,13 @@ mixin MucService on XmppBase, BaseStreamService {
       }
     }
     _markRoomLeft(roomJid, statusCodes: const <String>{});
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final chat = await db.getChat(roomJid);
-        if (chat == null) return;
-        if (!chat.archived) {
-          await db.updateChat(chat.copyWith(archived: true));
-        }
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final chat = await db.getChat(roomJid);
+      if (chat == null) return;
+      if (!chat.archived) {
+        await db.updateChat(chat.copyWith(archived: true));
+      }
+    }, awaitDatabase: true);
   }
 
   Future<void> _handleSelfPresence(MucSelfPresenceEvent event) async {
@@ -2382,16 +2267,9 @@ mixin MucService on XmppBase, BaseStreamService {
     if (!event.isAvailable && !event.isNickChange) {
       final Set<String> statusCodes =
           event.isError ? const <String>{} : event.statusCodes;
-      _markRoomLeft(
-        roomJid,
-        statusCodes: statusCodes,
-        reason: event.reason,
-      );
+      _markRoomLeft(roomJid, statusCodes: statusCodes, reason: event.reason);
       if (event.isError) {
-        _completeJoinAttempt(
-          roomJid,
-          error: XmppMessageException(),
-        );
+        _completeJoinAttempt(roomJid, error: XmppMessageException());
       }
       return;
     }
@@ -2428,19 +2306,11 @@ mixin MucService on XmppBase, BaseStreamService {
       _instantRoomConfiguredRooms.remove(roomJid);
       _instantRoomPendingRooms.add(roomJid);
       try {
-        await _ensureInstantRoomConfiguration(
-          roomJid: roomJid,
-        );
+        await _ensureInstantRoomConfiguration(roomJid: roomJid);
       } on Exception catch (error, stackTrace) {
         _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
-        _markRoomLeft(
-          roomJid,
-          statusCodes: _emptyStatusCodes,
-        );
-        _completeJoinAttempt(
-          roomJid,
-          error: XmppMessageException(),
-        );
+        _markRoomLeft(roomJid, statusCodes: _emptyStatusCodes);
+        _completeJoinAttempt(roomJid, error: XmppMessageException());
         return;
       }
     }
@@ -2449,15 +2319,14 @@ mixin MucService on XmppBase, BaseStreamService {
       unawaited(_refreshRoomAvatar(roomJid));
     }
 
-    unawaited(_dbOp<XmppDatabase>(
-      (db) async {
+    unawaited(
+      _dbOp<XmppDatabase>((db) async {
         final chat = await db.getChat(roomJid);
         if (chat != null && chat.myNickname != nextNick) {
           await db.updateChat(chat.copyWith(myNickname: nextNick));
         }
-      },
-      awaitDatabase: true,
-    ));
+      }, awaitDatabase: true),
+    );
   }
 
   Future<void> _handleOwnDataChanged({
@@ -2607,10 +2476,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (myOccupantId == null || myOccupantId != occupantId) return;
     final codes = updated.selfPresenceStatusCodes;
     if (codes.contains(mucStatusSelfPresence)) return;
-    final mergedCodes = <String>{
-      ...codes,
-      ..._selfPresenceFallbackStatusCodes,
-    };
+    final mergedCodes = <String>{...codes, ..._selfPresenceFallbackStatusCodes};
     _applySelfPresenceStatus(
       roomJid: roomJid,
       statusCodes: mergedCodes,
@@ -2619,10 +2485,7 @@ mixin MucService on XmppBase, BaseStreamService {
     _completeJoinAttempt(roomJid);
   }
 
-  void removeOccupant({
-    required String roomJid,
-    required String occupantId,
-  }) {
+  void removeOccupant({required String roomJid, required String occupantId}) {
     final key = _roomKey(roomJid);
     final existing = _roomStates[key];
     if (existing == null) return;
@@ -2854,8 +2717,9 @@ mixin MucService on XmppBase, BaseStreamService {
   }) async {
     final myBare = _myJid?.toBare().toString();
     if (myBare == null) throw XmppMessageException();
-    final chat =
-        await _dbOpReturning<XmppDatabase, Chat?>((db) => db.getChat(roomJid));
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(roomJid),
+    );
     final roomName = chat?.title;
     final resolvedPassword =
         _normalizePassword(password) ?? _passwordForRoom(roomJid);
@@ -3001,14 +2865,12 @@ mixin MucService on XmppBase, BaseStreamService {
       role: currentOccupant?.role,
       isPresent: currentOccupant?.isPresent ?? true,
     );
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final chat = await db.getChat(roomJid);
-        if (chat != null && chat.myNickname != nickname) {
-          await db.updateChat(chat.copyWith(myNickname: nickname));
-        }
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final chat = await db.getChat(roomJid);
+      if (chat != null && chat.myNickname != nickname) {
+        await db.updateChat(chat.copyWith(myNickname: nickname));
+      }
+    });
   }
 
   Future<void> seedDummyRoomData(String roomJid) async {
@@ -3099,8 +2961,9 @@ mixin MucService on XmppBase, BaseStreamService {
         senderJid: senderJid,
         chatJid: roomJid,
         body: member.message,
-        timestamp:
-            now.subtract(Duration(minutes: (dummyMembers.length - index) * 2)),
+        timestamp: now.subtract(
+          Duration(minutes: (dummyMembers.length - index) * 2),
+        ),
         occupantID: occupantId,
       );
       await _dbOp<XmppDatabase>(

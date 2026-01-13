@@ -71,14 +71,10 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
     target.registerAdapter<CalendarIcsStatus>(CalendarIcsStatusAdapter());
   }
   if (!target.isAdapterRegistered(CalendarPrivacyClassAdapter().typeId)) {
-    target.registerAdapter<CalendarPrivacyClass>(
-      CalendarPrivacyClassAdapter(),
-    );
+    target.registerAdapter<CalendarPrivacyClass>(CalendarPrivacyClassAdapter());
   }
   if (!target.isAdapterRegistered(CalendarTransparencyAdapter().typeId)) {
-    target.registerAdapter<CalendarTransparency>(
-      CalendarTransparencyAdapter(),
-    );
+    target.registerAdapter<CalendarTransparency>(CalendarTransparencyAdapter());
   }
   if (!target.isAdapterRegistered(CalendarIcsComponentTypeAdapter().typeId)) {
     target.registerAdapter<CalendarIcsComponentType>(
@@ -162,29 +158,24 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
     target.registerAdapter<CalendarCollection>(CalendarCollectionAdapter());
   }
   if (!target.isAdapterRegistered(CalendarFreeBusyTypeAdapter().typeId)) {
-    target.registerAdapter<CalendarFreeBusyType>(
-      CalendarFreeBusyTypeAdapter(),
-    );
+    target.registerAdapter<CalendarFreeBusyType>(CalendarFreeBusyTypeAdapter());
   }
   if (!target.isAdapterRegistered(CalendarFreeBusyIntervalAdapter().typeId)) {
     target.registerAdapter<CalendarFreeBusyInterval>(
       CalendarFreeBusyIntervalAdapter(),
     );
   }
-  if (!target.isAdapterRegistered(
-    CalendarAvailabilityWindowAdapter().typeId,
-  )) {
+  if (!target.isAdapterRegistered(CalendarAvailabilityWindowAdapter().typeId)) {
     target.registerAdapter<CalendarAvailabilityWindow>(
       CalendarAvailabilityWindowAdapter(),
     );
   }
   if (!target.isAdapterRegistered(CalendarAvailabilityAdapter().typeId)) {
-    target.registerAdapter<CalendarAvailability>(
-      CalendarAvailabilityAdapter(),
-    );
+    target.registerAdapter<CalendarAvailability>(CalendarAvailabilityAdapter());
   }
-  if (!target
-      .isAdapterRegistered(CalendarAvailabilityOverlayAdapter().typeId)) {
+  if (!target.isAdapterRegistered(
+    CalendarAvailabilityOverlayAdapter().typeId,
+  )) {
     target.registerAdapter<CalendarAvailabilityOverlay>(
       CalendarAvailabilityOverlayAdapter(),
     );
@@ -222,14 +213,10 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
     target.registerAdapter<RecurrenceRule>(RecurrenceRuleAdapter());
   }
   if (!target.isAdapterRegistered(RecurrenceFrequencyAdapter().typeId)) {
-    target.registerAdapter<RecurrenceFrequency>(
-      RecurrenceFrequencyAdapter(),
-    );
+    target.registerAdapter<RecurrenceFrequency>(RecurrenceFrequencyAdapter());
   }
   if (!target.isAdapterRegistered(CalendarCriticalPathAdapter().typeId)) {
-    target.registerAdapter<CalendarCriticalPath>(
-      CalendarCriticalPathAdapter(),
-    );
+    target.registerAdapter<CalendarCriticalPath>(CalendarCriticalPathAdapter());
   }
   if (!target.isAdapterRegistered(DayEventAdapter().typeId)) {
     target.registerAdapter<DayEvent>(DayEventAdapter());

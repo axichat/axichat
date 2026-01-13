@@ -12,28 +12,26 @@ import 'package:axichat/src/calendar/view/calendar_month_view.dart';
 import 'package:axichat/src/calendar/view/widgets/day_event_editor.dart';
 
 class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
-  const CalendarMonthHost({
-    super.key,
-    required this.state,
-  });
+  const CalendarMonthHost({super.key, required this.state});
 
   final CalendarState state;
 
   @override
   Widget build(BuildContext context) {
-    final _MonthViewport viewport =
-        _MonthViewport.forAnchor(state.selectedDate);
-    final List<DayEvent> visibleEvents =
-        state.dayEventsInRange(viewport.start, viewport.end);
+    final _MonthViewport viewport = _MonthViewport.forAnchor(
+      state.selectedDate,
+    );
+    final List<DayEvent> visibleEvents = state.dayEventsInRange(
+      viewport.start,
+      viewport.end,
+    );
     return CalendarMonthView(
       state: state,
       visibleEvents: visibleEvents,
       onDateSelected: (DateTime date) =>
           context.read<B>().add(CalendarEvent.dateSelected(date: date)),
-      onCreateEvent: (DateTime date) => _openComposer(
-        context,
-        initialDate: date,
-      ),
+      onCreateEvent: (DateTime date) =>
+          _openComposer(context, initialDate: date),
       onEditEvent: (DayEvent event) => _openComposer(
         context,
         initialDate: event.normalizedStart,
@@ -97,18 +95,16 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
 }
 
 class _MonthViewport {
-  const _MonthViewport({
-    required this.start,
-    required this.end,
-  });
+  const _MonthViewport({required this.start, required this.end});
 
   final DateTime start;
   final DateTime end;
 
   factory _MonthViewport.forAnchor(DateTime anchor) {
     final DateTime monthStart = DateTime(anchor.year, anchor.month, 1);
-    final DateTime leading = monthStart
-        .subtract(Duration(days: monthStart.weekday - DateTime.monday));
+    final DateTime leading = monthStart.subtract(
+      Duration(days: monthStart.weekday - DateTime.monday),
+    );
     final DateTime monthEnd = DateTime(anchor.year, anchor.month + 1, 0);
     final DateTime trailing = monthEnd.add(
       Duration(days: DateTime.sunday - monthEnd.weekday),

@@ -20,11 +20,7 @@ const double _attachmentGalleryLeadingWidth =
     AxiIconButton.kDefaultSize + (_attachmentGalleryLeadingInset * 2);
 
 class AttachmentGalleryScreen extends StatelessWidget {
-  const AttachmentGalleryScreen({
-    super.key,
-    required this.locate,
-    this.chat,
-  });
+  const AttachmentGalleryScreen({super.key, required this.locate, this.chat});
 
   final T Function<T>() locate;
   final Chat? chat;
@@ -37,10 +33,8 @@ class AttachmentGalleryScreen extends StatelessWidget {
     final bool showChatLabel = resolvedChat == null;
     final XmppService xmppService = locate<XmppService>();
     return BlocProvider(
-      create: (context) => AttachmentGalleryCubit(
-        xmppService: xmppService,
-        chatJid: chatJid,
-      ),
+      create: (context) =>
+          AttachmentGalleryCubit(xmppService: xmppService, chatJid: chatJid),
       child: Scaffold(
         backgroundColor: context.colorScheme.background,
         appBar: AppBar(
@@ -51,8 +45,9 @@ class AttachmentGalleryScreen extends StatelessWidget {
           scrolledUnderElevation: 0,
           leadingWidth: _attachmentGalleryLeadingWidth,
           leading: Padding(
-            padding:
-                const EdgeInsets.only(left: _attachmentGalleryLeadingInset),
+            padding: const EdgeInsets.only(
+              left: _attachmentGalleryLeadingInset,
+            ),
             child: Align(
               alignment: Alignment.centerLeft,
               child: SizedBox(
@@ -67,8 +62,9 @@ class AttachmentGalleryScreen extends StatelessWidget {
             ),
           ),
           bottom: PreferredSize(
-            preferredSize:
-                const Size.fromHeight(_attachmentGalleryPreferredSizeHeight),
+            preferredSize: const Size.fromHeight(
+              _attachmentGalleryPreferredSizeHeight,
+            ),
             child: Divider(
               height: _attachmentGalleryDividerHeight,
               thickness: _attachmentGalleryDividerThickness,

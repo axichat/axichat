@@ -8,11 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Outcome of attempting to share a calendar export.
-enum CalendarShareOutcome {
-  shared,
-  openedDirectory,
-  copiedPath,
-}
+enum CalendarShareOutcome { shared, openedDirectory, copiedPath }
 
 const Duration _calendarExportCleanupDelay = Duration(hours: 1);
 
@@ -57,10 +53,9 @@ String calendarShareSuccessMessage({
 
 Future<bool> _openDirectory(Directory directory) async {
   try {
-    final ProcessResult result = await Process.run(
-      'xdg-open',
-      <String>[directory.path],
-    );
+    final ProcessResult result = await Process.run('xdg-open', <String>[
+      directory.path,
+    ]);
     return result.exitCode == 0;
   } catch (_) {
     return false;

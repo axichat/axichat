@@ -28,9 +28,7 @@ class CalendarBloc extends BaseCalendarBloc {
   })  : _syncManagerBuilder = syncManagerBuilder,
         _availabilityCoordinator = availabilityCoordinator,
         _onDispose = onDispose,
-        super(
-          storagePrefix: authStoragePrefix,
-        ) {
+        super(storagePrefix: authStoragePrefix) {
     _syncManager = _syncManagerBuilder(this);
     on<CalendarSyncRequested>(_onCalendarSyncRequested);
     on<CalendarSyncPushed>(_onCalendarSyncPushed);
@@ -88,8 +86,10 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'add');
     } catch (error) {
-      SafeLogging.debugLog('Failed to sync task addition: $error',
-          name: 'CalendarBloc');
+      SafeLogging.debugLog(
+        'Failed to sync task addition: $error',
+        name: 'CalendarBloc',
+      );
     }
   }
 
@@ -98,8 +98,10 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
     } catch (error) {
-      SafeLogging.debugLog('Failed to sync task update: $error',
-          name: 'CalendarBloc');
+      SafeLogging.debugLog(
+        'Failed to sync task update: $error',
+        name: 'CalendarBloc',
+      );
     }
   }
 
@@ -108,8 +110,10 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'delete');
     } catch (error) {
-      SafeLogging.debugLog('Failed to sync task deletion: $error',
-          name: 'CalendarBloc');
+      SafeLogging.debugLog(
+        'Failed to sync task deletion: $error',
+        name: 'CalendarBloc',
+      );
     }
   }
 
@@ -118,8 +122,10 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
     } catch (error) {
-      SafeLogging.debugLog('Failed to sync task completion: $error',
-          name: 'CalendarBloc');
+      SafeLogging.debugLog(
+        'Failed to sync task completion: $error',
+        name: 'CalendarBloc',
+      );
     }
   }
 
@@ -249,15 +255,12 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       emit(state.copyWith(isSyncing: true, syncError: null));
       await _syncManager.requestFullSync();
-      emit(
-        state.copyWith(
-          isSyncing: false,
-          lastSyncTime: DateTime.now(),
-        ),
-      );
+      emit(state.copyWith(isSyncing: false, lastSyncTime: DateTime.now()));
     } catch (error) {
-      SafeLogging.debugLog('Error requesting sync: $error',
-          name: 'CalendarBloc');
+      SafeLogging.debugLog(
+        'Error requesting sync: $error',
+        name: 'CalendarBloc',
+      );
       emit(
         state.copyWith(
           isSyncing: false,
@@ -274,19 +277,11 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       emit(state.copyWith(isSyncing: true, syncError: null));
       await _syncManager.pushFullSync();
-      emit(
-        state.copyWith(
-          isSyncing: false,
-          lastSyncTime: DateTime.now(),
-        ),
-      );
+      emit(state.copyWith(isSyncing: false, lastSyncTime: DateTime.now()));
     } catch (error) {
       SafeLogging.debugLog('Error pushing sync: $error', name: 'CalendarBloc');
       emit(
-        state.copyWith(
-          isSyncing: false,
-          syncError: 'Sync push failed: $error',
-        ),
+        state.copyWith(isSyncing: false, syncError: 'Sync push failed: $error'),
       );
     }
   }
@@ -319,8 +314,10 @@ class CalendarBloc extends BaseCalendarBloc {
         );
         await propagateLinkedTaskDelete(event.task);
       default:
-        SafeLogging.debugLog('Unknown remote operation: ${event.operation}',
-            name: 'CalendarBloc');
+        SafeLogging.debugLog(
+          'Unknown remote operation: ${event.operation}',
+          name: 'CalendarBloc',
+        );
         return;
     }
   }

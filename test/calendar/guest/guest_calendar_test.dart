@@ -63,8 +63,9 @@ void main() {
           true,
         ),
         predicate<CalendarState>((state) {
-          return state.model.tasks.values
-              .any((task) => task.title == 'Guest task');
+          return state.model.tasks.values.any(
+            (task) => task.title == 'Guest task',
+          );
         }),
       ],
     );
@@ -84,9 +85,9 @@ void main() {
       },
       act: (bloc) {
         final existing = bloc.state.model.tasks.values.first;
-        bloc.add(CalendarEvent.taskUpdated(
-          task: existing.copyWith(title: 'Updated'),
-        ));
+        bloc.add(
+          CalendarEvent.taskUpdated(task: existing.copyWith(title: 'Updated')),
+        );
       },
       expect: () => [
         isA<CalendarState>().having(

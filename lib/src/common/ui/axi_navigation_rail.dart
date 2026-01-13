@@ -38,10 +38,7 @@ class _RailBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.primary,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colors.background,
-          width: 1.5,
-        ),
+        border: Border.all(color: colors.background, width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -128,9 +125,7 @@ class AxiNavigationRail extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: surfaceColor,
-        border: Border(
-          right: BorderSide(color: colors.border),
-        ),
+        border: Border(right: BorderSide(color: colors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,9 +133,7 @@ class AxiNavigationRail extends StatelessWidget {
           if (showTitle) ...[
             DecoratedBox(
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: colors.border),
-                ),
+                border: Border(bottom: BorderSide(color: colors.border)),
               ),
               child: SizedBox(
                 height: kToolbarHeight,
@@ -278,12 +271,7 @@ class _AxiNavigationRailItemState extends State<_AxiNavigationRailItem> {
               clipBehavior: Clip.none,
               children: [
                 icon,
-                if (badge != null)
-                  Positioned(
-                    top: -6,
-                    right: -8,
-                    child: badge,
-                  ),
+                if (badge != null) Positioned(top: -6, right: -8, child: badge),
               ],
             )
           : Row(
@@ -301,10 +289,7 @@ class _AxiNavigationRailItemState extends State<_AxiNavigationRailItem> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (badge != null) ...[
-                  const SizedBox(width: 8),
-                  badge,
-                ],
+                if (badge != null) ...[const SizedBox(width: 8), badge],
               ],
             ),
     );
@@ -312,10 +297,7 @@ class _AxiNavigationRailItemState extends State<_AxiNavigationRailItem> {
     final child = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeInOutCubic,
-      decoration: ShapeDecoration(
-        color: background,
-        shape: itemShape,
-      ),
+      decoration: ShapeDecoration(color: background, shape: itemShape),
       child: widget.isDesktop
           ? content
           : InkWell(

@@ -41,17 +41,12 @@ class LanguageSelector extends StatelessWidget {
                   .map(
                     (entry) => ShadOption<AppLanguage>(
                       value: entry,
-                      child: _LanguageLabel(
-                        language: entry,
-                        style: labelStyle,
-                      ),
+                      child: _LanguageLabel(language: entry, style: labelStyle),
                     ),
                   )
                   .toList(),
-              selectedOptionBuilder: (context, value) => _LanguageLabel(
-                language: value,
-                style: labelStyle,
-              ),
+              selectedOptionBuilder: (context, value) =>
+                  _LanguageLabel(language: value, style: labelStyle),
             ),
           ),
         );
@@ -61,10 +56,7 @@ class LanguageSelector extends StatelessWidget {
 }
 
 class _LanguageLabel extends StatelessWidget {
-  const _LanguageLabel({
-    required this.language,
-    required this.style,
-  });
+  const _LanguageLabel({required this.language, required this.style});
 
   final AppLanguage language;
   final LanguageLabelStyle style;
@@ -76,11 +68,7 @@ class _LanguageLabel extends StatelessWidget {
         : language.label;
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(language.flag),
-        const SizedBox(width: 8),
-        Text(text),
-      ],
+      children: [Text(language.flag), const SizedBox(width: 8), Text(text)],
     );
   }
 }

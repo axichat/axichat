@@ -30,23 +30,11 @@ const _sendLastPublishedItemField = 'pubsub#send_last_published_item';
 const _boolTrue = '1';
 const _boolFalse = '0';
 
-mox.XMLNode _formField(
-  String name,
-  String value, {
-  String? type,
-}) =>
+mox.XMLNode _formField(String name, String value, {String? type}) =>
     mox.XMLNode(
       tag: _fieldTag,
-      attributes: {
-        _varAttr: name,
-        if (type != null) _typeAttr: type,
-      },
-      children: [
-        mox.XMLNode(
-          tag: _valueTag,
-          text: value,
-        ),
-      ],
+      attributes: {_varAttr: name, if (type != null) _typeAttr: type},
+      children: [mox.XMLNode(tag: _valueTag, text: value)],
     );
 
 String _boolValue(bool value) => value ? _boolTrue : _boolFalse;
@@ -97,10 +85,7 @@ final class AxiPubSubNodeConfig {
           _deliverNotificationsField,
           _boolValue(deliverNotifications),
         ),
-        _formField(
-          _deliverPayloadsField,
-          _boolValue(deliverPayloads),
-        ),
+        _formField(_deliverPayloadsField, _boolValue(deliverPayloads)),
         _formField(_maxItemsField, maxItems),
         _formField(_persistItemsField, _boolValue(persistItems)),
         _formField(_notifyRetractField, _boolValue(notifyRetract)),

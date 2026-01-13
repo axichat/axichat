@@ -209,19 +209,14 @@ class CalendarTestData {
 
   static CalendarState weekView() => baseState();
 
-  static CalendarState dayView() => baseState().copyWith(
-        viewMode: CalendarView.day,
-        selectedDayIndex: 1,
-      );
+  static CalendarState dayView() =>
+      baseState().copyWith(viewMode: CalendarView.day, selectedDayIndex: 1);
 
   static CalendarState selectionMode() => baseState().copyWith(
         viewMode: CalendarView.day,
         selectedDayIndex: 0,
         isSelectionMode: true,
-        selectedTaskIds: {
-          'task-overlap-a',
-          'task-overlap-b',
-        },
+        selectedTaskIds: {'task-overlap-a', 'task-overlap-b'},
       );
 
   static String dayLabel(DateTime date) {
@@ -383,7 +378,9 @@ class CalendarWidgetHarness {
           task.duration != null &&
           task.duration!.inMinutes > 0;
     }).toList()
-      ..sort((a, b) => a.duration!.inMinutes.compareTo(b.duration!.inMinutes));
+      ..sort(
+        (a, b) => a.duration!.inMinutes.compareTo(b.duration!.inMinutes),
+      );
 
     for (final task in scheduledTasks) {
       final finder = find.byKey(ValueKey(task.id));

@@ -148,13 +148,13 @@ class _AxiMenuState extends State<AxiMenu> {
 
     final TextDirection textDirection =
         Directionality.maybeOf(context) ?? TextDirection.ltr;
-    final double computedWidth =
-        widget.actions.fold<double>(widget.minWidth, (current, action) {
+    final double computedWidth = widget.actions.fold<double>(widget.minWidth, (
+      current,
+      action,
+    ) {
       final double textWidth = _measureLabelWidth(
         action.label,
-        textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+        textTheme.small.copyWith(fontWeight: FontWeight.w700),
         textDirection,
       );
       final double iconWidth = action.icon != null ? 28 : 0; // 16 icon + 12 gap
@@ -310,17 +310,18 @@ class _AxiMenuItem extends StatelessWidget {
             ? colors.foreground
             : colors.mutedForeground.withValues(alpha: 0.65));
     final BorderRadius radius = context.radius;
-    final WidgetStateProperty<Color?> overlay =
-        WidgetStateProperty.resolveWith((states) {
-      if (states.contains(WidgetState.pressed) ||
-          states.contains(WidgetState.focused)) {
-        return focusColor;
-      }
-      if (states.contains(WidgetState.hovered)) {
-        return hoverColor;
-      }
-      return Colors.transparent;
-    });
+    final WidgetStateProperty<Color?> overlay = WidgetStateProperty.resolveWith(
+      (states) {
+        if (states.contains(WidgetState.pressed) ||
+            states.contains(WidgetState.focused)) {
+          return focusColor;
+        }
+        if (states.contains(WidgetState.hovered)) {
+          return hoverColor;
+        }
+        return Colors.transparent;
+      },
+    );
 
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
@@ -337,11 +338,7 @@ class _AxiMenuItem extends StatelessWidget {
               if (action.icon != null)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: Icon(
-                    action.icon,
-                    size: 16,
-                    color: foreground,
-                  ),
+                  child: Icon(action.icon, size: 16, color: foreground),
                 ),
               Expanded(
                 child: Text(

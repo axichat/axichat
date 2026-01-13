@@ -51,8 +51,9 @@ void main() {
 
   test('registers TLS requirement negotiator before StartTLS', () async {
     final captured = <mox.XmppFeatureNegotiatorBase>[];
-    when(() => mockConnection.registerFeatureNegotiators(any()))
-        .thenAnswer((invocation) async {
+    when(() => mockConnection.registerFeatureNegotiators(any())).thenAnswer((
+      invocation,
+    ) async {
       final negotiators = invocation.positionalArguments.first
           as List<mox.XmppFeatureNegotiatorBase>;
       captured
@@ -62,10 +63,12 @@ void main() {
 
     await connectSuccessfully(xmppService);
 
-    final tlsIndex = captured
-        .indexWhere((negotiator) => negotiator is XmppTlsRequirementNegotiator);
-    final startTlsIndex = captured
-        .indexWhere((negotiator) => negotiator is mox.StartTlsNegotiator);
+    final tlsIndex = captured.indexWhere(
+      (negotiator) => negotiator is XmppTlsRequirementNegotiator,
+    );
+    final startTlsIndex = captured.indexWhere(
+      (negotiator) => negotiator is mox.StartTlsNegotiator,
+    );
     expect(tlsIndex, isNot(equals(-1)));
     expect(startTlsIndex, isNot(equals(-1)));
     expect(tlsIndex, lessThan(startTlsIndex));

@@ -49,10 +49,7 @@ Future<T?> showFadeScaleDialog<T>({
       if (resolvedDuration == Duration.zero) {
         return child;
       }
-      return FadeScaleTransition(
-        animation: animation,
-        child: child,
-      );
+      return FadeScaleTransition(animation: animation, child: child);
     },
   );
 }

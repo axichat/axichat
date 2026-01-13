@@ -39,8 +39,9 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('Secondary pointer down does not trigger drag pointer callback',
-      (tester) async {
+  testWidgets('Secondary pointer down does not trigger drag pointer callback', (
+    tester,
+  ) async {
     final task = CalendarTask.create(title: 'Secondary Pointer Task');
     Offset? capturedOffset;
 
@@ -75,8 +76,9 @@ void main() {
     expect(capturedOffset, isNull);
   });
 
-  testWidgets('Primary pointer down forwards to drag pointer callback',
-      (tester) async {
+  testWidgets('Primary pointer down forwards to drag pointer callback', (
+    tester,
+  ) async {
     final task = CalendarTask.create(title: 'Primary Pointer Task');
     Offset? capturedOffset;
 

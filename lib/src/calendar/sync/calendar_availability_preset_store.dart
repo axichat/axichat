@@ -7,13 +7,13 @@ import 'package:axichat/src/storage/state_store.dart';
 const String _availabilityPresetStoreKey = 'calendar_availability_preset_v1';
 
 class CalendarAvailabilityPresetStore {
-  CalendarAvailabilityPresetStore({
-    XmppStateStore? stateStore,
-  }) : _stateStore = stateStore ?? XmppStateStore();
+  CalendarAvailabilityPresetStore({XmppStateStore? stateStore})
+      : _stateStore = stateStore ?? XmppStateStore();
 
   final XmppStateStore _stateStore;
-  static final RegisteredStateKey _storeKey =
-      XmppStateStore.registerKey(_availabilityPresetStoreKey);
+  static final RegisteredStateKey _storeKey = XmppStateStore.registerKey(
+    _availabilityPresetStoreKey,
+  );
 
   Map<String, CalendarAvailabilityPreset> readAll() {
     final raw = _stateStore.read(key: _storeKey);
@@ -38,9 +38,7 @@ class CalendarAvailabilityPresetStore {
     return records;
   }
 
-  Future<void> writeAll(
-    Map<String, CalendarAvailabilityPreset> records,
-  ) async {
+  Future<void> writeAll(Map<String, CalendarAvailabilityPreset> records) async {
     final encoded = records.map(
       (key, record) => MapEntry(key, record.toJson()),
     );

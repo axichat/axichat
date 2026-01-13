@@ -142,8 +142,10 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
 
   CalendarDragPayload _dragPayload() {
     final Rect? bounds = _sourceBounds;
-    final double pointerNormalized =
-        (_pointerNormalized ?? 0.5).clamp(0.0, 1.0);
+    final double pointerNormalized = (_pointerNormalized ?? 0.5).clamp(
+      0.0,
+      1.0,
+    );
     final double pointerOffsetY = _pointerOffsetY ??
         (_childSize.height.isFinite && _childSize.height > 0
             ? _childSize.height / 2

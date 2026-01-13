@@ -19,37 +19,39 @@ Future<bool> resolveHasStoredLoginCredentials(
   CredentialStore credentialStore,
 ) async {
   final RegisteredCredentialKey rememberMeChoiceKey =
-      CredentialStore.registerKey(
-    _rememberMeChoiceKeyName,
+      CredentialStore.registerKey(_rememberMeChoiceKeyName);
+  final Future<String?> rememberMeFuture = credentialStore.read(
+    key: rememberMeChoiceKey,
   );
-  final Future<String?> rememberMeFuture =
-      credentialStore.read(key: rememberMeChoiceKey);
   final String? rememberMeRaw = await rememberMeFuture;
   final bool rememberMe =
       _parseBoolOrNull(rememberMeRaw) ?? _defaultRememberMeChoice;
   if (!rememberMe) return false;
 
-  final RegisteredCredentialKey jidKey =
-      CredentialStore.registerKey(_jidKeyName);
-  final RegisteredCredentialKey passwordKey =
-      CredentialStore.registerKey(_passwordKeyName);
-  final RegisteredCredentialKey passwordPreHashedKey =
-      CredentialStore.registerKey(
-    _passwordPreHashedKeyName,
+  final RegisteredCredentialKey jidKey = CredentialStore.registerKey(
+    _jidKeyName,
   );
+  final RegisteredCredentialKey passwordKey = CredentialStore.registerKey(
+    _passwordKeyName,
+  );
+  final RegisteredCredentialKey passwordPreHashedKey =
+      CredentialStore.registerKey(_passwordPreHashedKeyName);
 
   final Future<String?> storedJidFuture = credentialStore.read(key: jidKey);
-  final Future<String?> storedPasswordFuture =
-      credentialStore.read(key: passwordKey);
-  final Future<String?> storedPasswordPreHashedFuture =
-      credentialStore.read(key: passwordPreHashedKey);
+  final Future<String?> storedPasswordFuture = credentialStore.read(
+    key: passwordKey,
+  );
+  final Future<String?> storedPasswordPreHashedFuture = credentialStore.read(
+    key: passwordPreHashedKey,
+  );
 
   final String? storedJid = await storedJidFuture;
   final String? storedPassword = await storedPasswordFuture;
   final String? storedPasswordPreHashedRaw =
       await storedPasswordPreHashedFuture;
-  final bool? storedPasswordPreHashed =
-      _parseBoolOrNull(storedPasswordPreHashedRaw);
+  final bool? storedPasswordPreHashed = _parseBoolOrNull(
+    storedPasswordPreHashedRaw,
+  );
 
   return storedJid != null &&
       storedPassword != null &&

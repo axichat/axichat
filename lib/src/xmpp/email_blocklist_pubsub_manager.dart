@@ -71,8 +71,9 @@ final class EmailBlocklistSyncPayload {
     final resolvedAddress =
         rawAddress == null || rawAddress.isEmpty ? itemId?.trim() : rawAddress;
     if (resolvedAddress == null || resolvedAddress.isEmpty) return null;
-    final normalizedAddress =
-        resolvedAddress.toBareJidOrNull(maxBytes: syncAddressMaxBytes);
+    final normalizedAddress = resolvedAddress.toBareJidOrNull(
+      maxBytes: syncAddressMaxBytes,
+    );
     if (normalizedAddress == null) return null;
 
     final rawUpdatedAt =
@@ -143,9 +144,8 @@ final class EmailBlocklistSyncRetractedEvent extends mox.XmppEvent {
 }
 
 final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
-  EmailBlocklistPubSubManager({
-    String? maxItems,
-  })  : _maxItems = maxItems ?? _defaultMaxItems,
+  EmailBlocklistPubSubManager({String? maxItems})
+      : _maxItems = maxItems ?? _defaultMaxItems,
         super(managerId);
 
   static const String managerId = 'axi.email_blocklist';
@@ -158,8 +158,9 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Stream<EmailBlocklistSyncUpdate> get updates => _updatesController.stream;
 
   final Map<String, EmailBlocklistSyncPayload> _cache = {};
-  final SyncRateLimiter _rateLimiter =
-      SyncRateLimiter(emailBlocklistSyncRateLimit);
+  final SyncRateLimiter _rateLimiter = SyncRateLimiter(
+    emailBlocklistSyncRateLimit,
+  );
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
@@ -261,10 +262,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     return int.parse(_defaultMaxItems);
   }
 
-  bool _isSnapshotComplete({
-    required int itemsCount,
-    required int maxItems,
-  }) =>
+  bool _isSnapshotComplete({required int itemsCount, required int maxItems}) =>
       itemsCount < maxItems;
 
   void _setAccessModel(mox.AccessModel accessModel) {
@@ -356,10 +354,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       }
 
       try {
-        await pubsub.createNode(
-          host,
-          nodeId: emailBlocklistPubSubNode,
-        );
+        await pubsub.createNode(host, nodeId: emailBlocklistPubSubNode);
         final appliedPrimary = await pubsub.configureNode(
           host,
           emailBlocklistPubSubNode,
@@ -466,10 +461,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       parsed.add(parsedPayload);
     }
     final isComplete = !hadParseFailure &&
-        _isSnapshotComplete(
-          itemsCount: items.length,
-          maxItems: limit,
-        );
+        _isSnapshotComplete(itemsCount: items.length, maxItems: limit);
 
     return PubSubFetchResult(
       items: List<EmailBlocklistSyncPayload>.unmodifiable(parsed),
@@ -557,16 +549,16 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
         return;
       }
       if (pubsub != null && itemId.isNotEmpty) {
-        final itemResult =
-            await pubsub.getItem(host, emailBlocklistPubSubNode, itemId);
+        final itemResult = await pubsub.getItem(
+          host,
+          emailBlocklistPubSubNode,
+          itemId,
+        );
         if (!itemResult.isType<mox.PubSubError>()) {
           final item = itemResult.get<mox.PubSubItem>();
           final payload = item.payload;
           if (payload != null) {
-            parsed = EmailBlocklistSyncPayload.fromXml(
-              payload,
-              itemId: itemId,
-            );
+            parsed = EmailBlocklistSyncPayload.fromXml(payload, itemId: itemId);
           }
         }
       }

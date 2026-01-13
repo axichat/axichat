@@ -60,23 +60,11 @@ enum AttachmentGallerySortOption {
   sizeDescending,
 }
 
-enum AttachmentGalleryTypeFilter {
-  all,
-  images,
-  videos,
-  files,
-}
+enum AttachmentGalleryTypeFilter { all, images, videos, files }
 
-enum AttachmentGallerySourceFilter {
-  all,
-  sent,
-  received,
-}
+enum AttachmentGallerySourceFilter { all, sent, received }
 
-enum AttachmentGalleryLayout {
-  grid,
-  list,
-}
+enum AttachmentGalleryLayout { grid, list }
 
 extension AttachmentGallerySortOptionLabels on AttachmentGallerySortOption {
   String label(AppLocalizations l10n) {
@@ -96,18 +84,36 @@ extension AttachmentGallerySortOptionLabels on AttachmentGallerySortOption {
 
   int compare(AttachmentGalleryItem a, AttachmentGalleryItem b) {
     return switch (this) {
-      AttachmentGallerySortOption.newestFirst =>
-        _compareByTimestamp(a, b, descending: true),
-      AttachmentGallerySortOption.oldestFirst =>
-        _compareByTimestamp(a, b, descending: false),
-      AttachmentGallerySortOption.nameAscending =>
-        _compareByName(a, b, descending: false),
-      AttachmentGallerySortOption.nameDescending =>
-        _compareByName(a, b, descending: true),
-      AttachmentGallerySortOption.sizeAscending =>
-        _compareBySize(a, b, descending: false),
-      AttachmentGallerySortOption.sizeDescending =>
-        _compareBySize(a, b, descending: true),
+      AttachmentGallerySortOption.newestFirst => _compareByTimestamp(
+          a,
+          b,
+          descending: true,
+        ),
+      AttachmentGallerySortOption.oldestFirst => _compareByTimestamp(
+          a,
+          b,
+          descending: false,
+        ),
+      AttachmentGallerySortOption.nameAscending => _compareByName(
+          a,
+          b,
+          descending: false,
+        ),
+      AttachmentGallerySortOption.nameDescending => _compareByName(
+          a,
+          b,
+          descending: true,
+        ),
+      AttachmentGallerySortOption.sizeAscending => _compareBySize(
+          a,
+          b,
+          descending: false,
+        ),
+      AttachmentGallerySortOption.sizeDescending => _compareBySize(
+          a,
+          b,
+          descending: true,
+        ),
     };
   }
 }
@@ -122,10 +128,7 @@ AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
   final rawCount =
       (availableWidth / _attachmentGalleryGridMinTileWidth).floor();
   final crossAxisCount = rawCount
-      .clamp(
-        _attachmentGalleryGridMinColumns,
-        _attachmentGalleryGridMaxColumns,
-      )
+      .clamp(_attachmentGalleryGridMinColumns, _attachmentGalleryGridMaxColumns)
       .toInt();
   final totalSpacing = _attachmentGalleryGridSpacing * (crossAxisCount - 1);
   final tileWidth = math.max(
@@ -155,8 +158,9 @@ int _compareByName(
   AttachmentGalleryItem b, {
   required bool descending,
 }) {
-  final result =
-      a.metadata.normalizedFilename.compareTo(b.metadata.normalizedFilename);
+  final result = a.metadata.normalizedFilename.compareTo(
+    b.metadata.normalizedFilename,
+  );
   if (result != 0) {
     return descending ? -result : result;
   }
@@ -235,10 +239,7 @@ bool _isSelfMessage(
   return false;
 }
 
-String? _resolveMetaText({
-  required Chat? chat,
-  required bool showChatLabel,
-}) {
+String? _resolveMetaText({required Chat? chat, required bool showChatLabel}) {
   final parts = <String>[];
   if (showChatLabel && chat != null) {
     final label = chat.displayName.trim();
@@ -326,9 +327,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   String get _searchQuery => _searchController.text.trim().toLowerCase();
 
-  AttachmentGalleryLayout _resolveLayout({
-    required bool hasVisualMedia,
-  }) {
+  AttachmentGalleryLayout _resolveLayout({required bool hasVisualMedia}) {
     final defaultLayout = hasVisualMedia
         ? AttachmentGalleryLayout.grid
         : AttachmentGalleryLayout.list;
@@ -348,10 +347,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     return _oneTimeAllowedStanzaIds.contains(trimmed);
   }
 
-  bool _shouldAllowAttachment({
-    required bool isSelf,
-    required Chat? chat,
-  }) {
+  bool _shouldAllowAttachment({required bool isSelf, required Chat? chat}) {
     if (isSelf) return true;
     final resolvedChat = chat;
     if (resolvedChat == null) return false;
@@ -443,9 +439,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final l10n = context.l10n;
     final chatOverride = widget.chatOverride;
     final showChatLabel = widget.showChatLabel;
-    final chatLookup = <String, Chat>{
-      for (final chat in chats) chat.jid: chat,
-    };
+    final chatLookup = <String, Chat>{for (final chat in chats) chat.jid: chat};
 
     return BlocBuilder<AttachmentGalleryCubit, AttachmentGalleryState>(
       builder: (context, state) {
@@ -543,8 +537,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                           ),
                           itemCount: filteredItems.length,
                           separatorBuilder: (_, __) => const SizedBox(
-                            height: _attachmentGalleryItemSpacing,
-                          ),
+                              height: _attachmentGalleryItemSpacing),
                           itemBuilder: (context, index) =>
                               AttachmentGalleryEntry(
                             item: filteredItems[index],
@@ -561,8 +554,9 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                         )
                       : LayoutBuilder(
                           builder: (context, constraints) {
-                            final gridMetrics =
-                                _resolveGridMetrics(constraints.maxWidth);
+                            final gridMetrics = _resolveGridMetrics(
+                              constraints.maxWidth,
+                            );
                             final rowCount = (filteredItems.length /
                                     gridMetrics.crossAxisCount)
                                 .ceil();
@@ -584,8 +578,10 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                   rowStart + gridMetrics.crossAxisCount,
                                   filteredItems.length,
                                 );
-                                final rowItems =
-                                    filteredItems.sublist(rowStart, rowEnd);
+                                final rowItems = filteredItems.sublist(
+                                  rowStart,
+                                  rowEnd,
+                                );
                                 return Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -844,11 +840,7 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: _attachmentGalleryControlRowSpacing,
-            children: [
-              sortSelect,
-              typeSelect,
-              sourceSelect,
-            ],
+            children: [sortSelect, typeSelect, sourceSelect],
           );
         }
         return Row(
@@ -889,10 +881,8 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
       },
       options: options
           .map(
-            (option) => ShadOption<T>(
-              value: option,
-              child: Text(labelBuilder(option)),
-            ),
+            (option) =>
+                ShadOption<T>(value: option, child: Text(labelBuilder(option))),
           )
           .toList(growable: false),
       selectedOptionBuilder: (_, value) => Text(labelBuilder(value)),
@@ -921,10 +911,8 @@ class AttachmentGalleryEntry extends StatefulWidget {
   final AttachmentAutoDownloadSettings autoDownloadSettings;
   final AttachmentGalleryLayout layout;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({
-    required bool isSelf,
-    required Chat? chat,
-  }) shouldAllowAttachment;
+  final bool Function({required bool isSelf, required Chat? chat})
+      shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,

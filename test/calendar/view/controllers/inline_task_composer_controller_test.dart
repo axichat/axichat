@@ -12,8 +12,10 @@ void main() {
 
       controller.applyParserSchedule(scheduled);
 
-      expect(controller.selectedDate,
-          DateTime(scheduled.year, scheduled.month, scheduled.day));
+      expect(
+        controller.selectedDate,
+        DateTime(scheduled.year, scheduled.month, scheduled.day),
+      );
       expect(controller.selectedTime, const TimeOfDay(hour: 14, minute: 30));
       expect(controller.isExpanded, isTrue);
     });

@@ -29,10 +29,7 @@ class SafeVCardManager extends mox.VCardManager {
     final hash = x.firstTag('photo')?.innerText() ?? '';
 
     getAttributes().sendEvent(
-      mox.VCardAvatarUpdatedEvent(
-        mox.JID.fromString(from),
-        hash,
-      ),
+      mox.VCardAvatarUpdatedEvent(mox.JID.fromString(from), hash),
     );
     return state;
   }

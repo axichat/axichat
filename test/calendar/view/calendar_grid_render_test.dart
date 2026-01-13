@@ -19,10 +19,7 @@ import 'calendar_test_utils.dart';
 class _MockCalendarBloc extends Mock implements CalendarBloc {}
 
 class _GridHarness extends StatelessWidget {
-  const _GridHarness({
-    required this.child,
-    required this.state,
-  });
+  const _GridHarness({required this.child, required this.state});
 
   final Widget child;
   final CalendarState state;
@@ -31,16 +28,15 @@ class _GridHarness extends StatelessWidget {
   Widget build(BuildContext context) {
     final bloc = _MockCalendarBloc();
     when(() => bloc.state).thenReturn(state);
-    when(() => bloc.stream)
-        .thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
     when(() => bloc.add(any())).thenReturn(null);
 
     return MultiBlocProvider(
       providers: [
         BlocProvider<CalendarBloc>.value(value: bloc),
-        BlocProvider<SettingsCubit>(
-          create: (_) => SettingsCubit(),
-        ),
+        BlocProvider<SettingsCubit>(create: (_) => SettingsCubit()),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -52,12 +48,8 @@ class _GridHarness extends StatelessWidget {
             brightness: Brightness.light,
           ),
           child: MediaQuery(
-            data: const MediaQueryData(
-              size: Size(1280, 900),
-            ),
-            child: Scaffold(
-              body: child,
-            ),
+            data: const MediaQueryData(size: Size(1280, 900)),
+            child: Scaffold(body: child),
           ),
         ),
       ),
@@ -69,8 +61,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
     HydratedBloc.storage = await HydratedStorage.build(
-      storageDirectory:
-          Directory.systemTemp.createTempSync('calendar_grid_render_tests'),
+      storageDirectory: Directory.systemTemp.createTempSync(
+        'calendar_grid_render_tests',
+      ),
     );
     registerCalendarFallbackValues();
   });
@@ -92,8 +85,9 @@ void main() {
     expect(find.byType(CalendarRenderSurface), findsOneWidget);
   });
 
-  testWidgets('CalendarGrid preserves explicit day view on desktop',
-      (tester) async {
+  testWidgets('CalendarGrid preserves explicit day view on desktop', (
+    tester,
+  ) async {
     final state = CalendarTestData.dayView();
     await tester.binding.setSurfaceSize(const Size(1600, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));

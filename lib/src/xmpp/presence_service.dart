@@ -4,8 +4,9 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 final _presenceStatusesKey = XmppStateStore.registerKey('presence_statuses');
-final _directedPresenceTargetsKey =
-    XmppStateStore.registerKey('presence_directed_targets');
+final _directedPresenceTargetsKey = XmppStateStore.registerKey(
+  'presence_directed_targets',
+);
 
 mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');
@@ -59,10 +60,8 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([
-      XmppPresenceManager(owner: this),
-    ]);
+  List<mox.XmppManagerBase> get featureManagers =>
+      super.featureManagers..addAll([XmppPresenceManager(owner: this)]);
 
   Future<void> sendPresence({
     required Presence? presence,
@@ -128,10 +127,7 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  String? _preferredStatus(
-    Map<String, String>? statuses, {
-    String? fallback,
-  }) {
+  String? _preferredStatus(Map<String, String>? statuses, {String? fallback}) {
     if (statuses == null || statuses.isEmpty) return fallback;
     final normalized = <String, String>{};
     for (final entry in statuses.entries) {
@@ -166,27 +162,22 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
       _presenceStatuses[jid] = Map.unmodifiable(sanitized);
     }
 
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final current =
-            (ss.read(key: _presenceStatusesKey) as Map<Object?, Object?>?)?.map(
-                  (key, value) => MapEntry(
-                    key as String,
-                    (value as Map).cast<String, String>(),
-                  ),
-                ) ??
-                <String, Map<String, String>>{};
+    await _dbOp<XmppStateStore>((ss) async {
+      final current =
+          (ss.read(key: _presenceStatusesKey) as Map<Object?, Object?>?)?.map(
+                (key, value) => MapEntry(
+                    key as String, (value as Map).cast<String, String>()),
+              ) ??
+              <String, Map<String, String>>{};
 
-        if (sanitized.isEmpty) {
-          current.remove(jid);
-        } else {
-          current[jid] = sanitized;
-        }
+      if (sanitized.isEmpty) {
+        current.remove(jid);
+      } else {
+        current[jid] = sanitized;
+      }
 
-        await ss.write(key: _presenceStatusesKey, value: current);
-      },
-      awaitDatabase: true,
-    );
+      await ss.write(key: _presenceStatusesKey, value: current);
+    }, awaitDatabase: true);
   }
 
   Future<void> _markSubscriptionApproved(String jid) async {
@@ -298,8 +289,10 @@ class XmppPresenceManager extends mox.PresenceManager {
 
             final from = mox.JID.fromString(stanza.from!).toBare();
             final stanzaType = stanza.type;
-            _log.info('Incoming presence from: ${from.toString()} '
-                'type: ${stanzaType ?? 'available'}');
+            _log.info(
+              'Incoming presence from: ${from.toString()} '
+              'type: ${stanzaType ?? 'available'}',
+            );
             if (await owner._isBlockedPresenceSender(from)) {
               state.done = true;
               return state;
@@ -401,11 +394,7 @@ class XmppPresenceManager extends mox.PresenceManager {
 
       try {
         await getAttributes().sendStanza(
-          mox.StanzaDetails(
-            stanza,
-            addId: false,
-            awaitable: false,
-          ),
+          mox.StanzaDetails(stanza, addId: false, awaitable: false),
         );
       } on Exception catch (error, stackTrace) {
         _log.severe('Failed to send presence stanza', error, stackTrace);
@@ -425,10 +414,12 @@ class XmppPresenceManager extends mox.PresenceManager {
     if (to == null) {
       _log.info('Persisting current presence: ${presence?.name}');
       await owner._dbOp<XmppStateStore>((ss) async {
-        await ss.writeAll(data: {
-          owner.presenceStorageKey: presence,
-          owner.statusStorageKey: status,
-        });
+        await ss.writeAll(
+          data: {
+            owner.presenceStorageKey: presence,
+            owner.statusStorageKey: status,
+          },
+        );
       });
       owner._cachedPresence = presence ?? owner._cachedPresence;
       owner._cachedStatus = status;
@@ -552,10 +543,7 @@ class XmppPresenceManager extends mox.PresenceManager {
     try {
       await getAttributes().sendStanza(
         mox.StanzaDetails(
-          mox.Stanza.presence(
-            to: jid.toString(),
-            type: 'unsubscribed',
-          ),
+          mox.Stanza.presence(to: jid.toString(), type: 'unsubscribed'),
           addId: false,
           awaitable: false,
         ),

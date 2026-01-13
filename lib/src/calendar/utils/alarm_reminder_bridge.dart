@@ -92,9 +92,7 @@ AlarmReminderSplit splitAlarms(List<CalendarAlarm> alarms) {
     reminders: reminders,
     advancedAlarms: advanced.isEmpty
         ? _emptyAlarms
-        : List<CalendarAlarm>.unmodifiable(
-            advanced,
-          ),
+        : List<CalendarAlarm>.unmodifiable(advanced),
   );
 }
 
@@ -141,9 +139,7 @@ List<CalendarAlarm> mergeAdvancedAlarms({
   required List<CalendarAlarm> advancedAlarms,
   required ReminderPreferences reminders,
 }) {
-  final List<CalendarAlarm> merged = <CalendarAlarm>[
-    ...advancedAlarms,
-  ];
+  final List<CalendarAlarm> merged = <CalendarAlarm>[...advancedAlarms];
   final List<CalendarAlarm> reminderAlarms = alarmsFromReminders(reminders);
   for (final CalendarAlarm alarm in reminderAlarms) {
     if (!merged.contains(alarm)) {

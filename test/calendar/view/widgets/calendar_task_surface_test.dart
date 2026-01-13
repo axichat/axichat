@@ -9,8 +9,9 @@ import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
 
 void main() {
-  testWidgets('CalendarTaskSurface reuses popover controller across rebuilds',
-      (tester) async {
+  testWidgets('CalendarTaskSurface reuses popover controller across rebuilds', (
+    tester,
+  ) async {
     final interactionController = TaskInteractionController();
     final task = CalendarTask.create(title: 'Persistent Menu');
 
@@ -99,8 +100,9 @@ void main() {
     expect(updatedState.menuController, same(initialController));
   });
 
-  testWidgets('CalendarTaskSurface rebuilds when geometry becomes available',
-      (tester) async {
+  testWidgets('CalendarTaskSurface rebuilds when geometry becomes available', (
+    tester,
+  ) async {
     final interactionController = TaskInteractionController();
     final task = CalendarTask.create(
       title: 'Geometry Task',

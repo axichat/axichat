@@ -100,17 +100,11 @@ class _ComposeWindowHeader extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: colors.muted.withValues(alpha: 0.05),
-          border: Border(
-            bottom: BorderSide(color: colors.border),
-          ),
+          border: Border(bottom: BorderSide(color: colors.border)),
         ),
         child: Row(
           children: [
-            Icon(
-              LucideIcons.pencilLine,
-              size: 18,
-              color: colors.foreground,
-            ),
+            Icon(LucideIcons.pencilLine, size: 18, color: colors.foreground),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -129,8 +123,9 @@ class _ComposeWindowHeader extends StatelessWidget {
                   Text(
                     detailLabel,
                     overflow: TextOverflow.ellipsis,
-                    style:
-                        textTheme.muted.copyWith(color: colors.mutedForeground),
+                    style: textTheme.muted.copyWith(
+                      color: colors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -252,8 +247,10 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final isMinimized = entry.isMinimized;
     final isExpanded = entry.isExpanded;
 
-    final double availableWidth =
-        math.max(mediaSize.width - (_composeWindowPadding * 2), 0);
+    final double availableWidth = math.max(
+      mediaSize.width - (_composeWindowPadding * 2),
+      0,
+    );
     final double targetWidth = math.max(
       math.min(
         isExpanded ? _composeWindowExpandedWidth : _composeWindowWidth,
@@ -262,8 +259,10 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       math.min(availableWidth, _composeWindowMinWidth),
     );
 
-    final double availableHeight =
-        math.max(mediaSize.height - (_composeWindowPadding * 2), 0);
+    final double availableHeight = math.max(
+      mediaSize.height - (_composeWindowPadding * 2),
+      0,
+    );
     final double normalHeight = math.max(
       math.min(
         isExpanded ? _composeWindowExpandedHeight : _composeWindowHeight,
@@ -315,9 +314,8 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
                     : context.read<ComposeWindowCubit>().minimize(entry.id),
                 onToggleExpanded: () =>
                     context.read<ComposeWindowCubit>().toggleExpanded(entry.id),
-                onClose: () => context.read<ComposeWindowCubit>().closeWindow(
-                      entry.id,
-                    ),
+                onClose: () =>
+                    context.read<ComposeWindowCubit>().closeWindow(entry.id),
                 onDragStart: (details) =>
                     _handleDragStart(details, resolvedOffset),
                 onDragUpdate: (details) =>

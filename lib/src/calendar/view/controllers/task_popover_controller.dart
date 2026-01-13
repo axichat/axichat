@@ -8,10 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 class TaskPopoverLayout {
-  const TaskPopoverLayout({
-    required this.topLeft,
-    required this.maxHeight,
-  });
+  const TaskPopoverLayout({required this.topLeft, required this.maxHeight});
 
   final Offset topLeft;
   final double maxHeight;

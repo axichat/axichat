@@ -21,9 +21,8 @@ const List<CalendarTask> _emptyCriticalPathTasks = <CalendarTask>[];
   unionValueCase: FreezedUnionCase.snake,
 )
 class CalendarFragment with _$CalendarFragment {
-  const factory CalendarFragment.task({
-    required CalendarTask task,
-  }) = CalendarTaskFragment;
+  const factory CalendarFragment.task({required CalendarTask task}) =
+      CalendarTaskFragment;
 
   const factory CalendarFragment.checklist({
     required String taskId,
@@ -35,9 +34,8 @@ class CalendarFragment with _$CalendarFragment {
     required ReminderPreferences reminders,
   }) = CalendarReminderFragment;
 
-  const factory CalendarFragment.dayEvent({
-    required DayEvent event,
-  }) = CalendarDayEventFragment;
+  const factory CalendarFragment.dayEvent({required DayEvent event}) =
+      CalendarDayEventFragment;
 
   const factory CalendarFragment.criticalPath({
     required CalendarCriticalPath path,

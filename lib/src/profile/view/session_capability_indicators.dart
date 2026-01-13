@@ -223,9 +223,7 @@ class _CapabilityChip extends StatelessWidget {
 }
 
 class _CapabilityPalette {
-  const _CapabilityPalette({
-    required this.foreground,
-  });
+  const _CapabilityPalette({required this.foreground});
 
   final Color foreground;
 }
@@ -238,21 +236,13 @@ _CapabilityPalette _paletteForLevel(
 ) {
   switch (level) {
     case _CapabilityLevel.ready:
-      return const _CapabilityPalette(
-        foreground: axiGreen,
-      );
+      return const _CapabilityPalette(foreground: axiGreen);
     case _CapabilityLevel.syncing:
-      return _CapabilityPalette(
-        foreground: colors.primary,
-      );
+      return _CapabilityPalette(foreground: colors.primary);
     case _CapabilityLevel.offline:
     case _CapabilityLevel.disabled:
-      return _CapabilityPalette(
-        foreground: colors.mutedForeground,
-      );
+      return _CapabilityPalette(foreground: colors.mutedForeground);
     case _CapabilityLevel.error:
-      return _CapabilityPalette(
-        foreground: colors.destructive,
-      );
+      return _CapabilityPalette(foreground: colors.destructive);
   }
 }

@@ -4,10 +4,7 @@
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 final class PubSubItemsRefreshedEvent extends mox.XmppEvent {
-  PubSubItemsRefreshedEvent({
-    required this.from,
-    required this.node,
-  });
+  PubSubItemsRefreshedEvent({required this.from, required this.node});
 
   final mox.JID from;
   final String node;

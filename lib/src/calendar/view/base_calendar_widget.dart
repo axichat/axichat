@@ -37,8 +37,11 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       listener: (context, state) {},
       builder: (context, state) {
         final tasks = _getTasksForSelectedDate(state);
-        final dateLabel =
-            _formatDate(context, state.selectedDate, state.viewMode);
+        final dateLabel = _formatDate(
+          context,
+          state.selectedDate,
+          state.viewMode,
+        );
         Future<void> handleRefresh() async {
           context.read<T>().add(const CalendarEvent.dataChanged());
           await Future.delayed(const Duration(milliseconds: 500));
@@ -59,11 +62,8 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
             onViewChanged: (view) {
               context.read<T>().add(CalendarEvent.viewChanged(view: view));
             },
-            syncButton: widget.isGuestMode
-                ? null
-                : _CalendarSyncButton(
-                    state: state,
-                  ),
+            syncButton:
+                widget.isGuestMode ? null : _CalendarSyncButton(state: state),
           ),
           body: Container(
             color: calendarBackgroundColor,
@@ -76,14 +76,14 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                     child: ErrorDisplay(
                       error: state.error!,
                       onRetry: () {
-                        context
-                            .read<T>()
-                            .add(const CalendarEvent.errorCleared());
+                        context.read<T>().add(
+                              const CalendarEvent.errorCleared(),
+                            );
                       },
                       onDismiss: () {
-                        context
-                            .read<T>()
-                            .add(const CalendarEvent.errorCleared());
+                        context.read<T>().add(
+                              const CalendarEvent.errorCleared(),
+                            );
                       },
                     ),
                   ),
@@ -110,16 +110,17 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                         taskBuilder: (task, isCompact) =>
                             buildTaskTile(task, isCompact),
                         onTaskDragEnd: (task, newTime) {
-                          final normalized =
-                              task.normalizedForInteraction(newTime);
+                          final normalized = task.normalizedForInteraction(
+                            newTime,
+                          );
                           context.read<T>().commitTaskInteraction(normalized);
                         },
-                        onDateSelected: (date) => context
-                            .read<T>()
-                            .add(CalendarEvent.dateSelected(date: date)),
-                        onViewChanged: (view) => context
-                            .read<T>()
-                            .add(CalendarEvent.viewChanged(view: view)),
+                        onDateSelected: (date) => context.read<T>().add(
+                              CalendarEvent.dateSelected(date: date),
+                            ),
+                        onViewChanged: (view) => context.read<T>().add(
+                              CalendarEvent.viewChanged(view: view),
+                            ),
                       ),
                       desktop: _CalendarDesktopLayout<T>(
                         state: state,
@@ -129,16 +130,17 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                         taskBuilder: (task, isCompact) =>
                             buildTaskTile(task, isCompact),
                         onTaskDragEnd: (task, newTime) {
-                          final normalized =
-                              task.normalizedForInteraction(newTime);
+                          final normalized = task.normalizedForInteraction(
+                            newTime,
+                          );
                           context.read<T>().commitTaskInteraction(normalized);
                         },
-                        onDateSelected: (date) => context
-                            .read<T>()
-                            .add(CalendarEvent.dateSelected(date: date)),
-                        onViewChanged: (view) => context
-                            .read<T>()
-                            .add(CalendarEvent.viewChanged(view: view)),
+                        onDateSelected: (date) => context.read<T>().add(
+                              CalendarEvent.dateSelected(date: date),
+                            ),
+                        onViewChanged: (view) => context.read<T>().add(
+                              CalendarEvent.viewChanged(view: view),
+                            ),
                         isGuestMode: widget.isGuestMode,
                         dateLabel: dateLabel,
                         onPrevious: () => _changeDate(-1),
@@ -163,20 +165,14 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   void _changeDate(int direction) {
     context.read<T>().add(
           CalendarEvent.dateSelected(
-            date: context
-                .read<T>()
-                .state
-                .selectedDate
-                .add(Duration(days: direction)),
+            date: context.read<T>().state.selectedDate.add(
+                  Duration(days: direction),
+                ),
           ),
         );
   }
 
-  String _formatDate(
-    BuildContext context,
-    DateTime date,
-    CalendarView view,
-  ) {
+  String _formatDate(BuildContext context, DateTime date, CalendarView view) {
     final locale = Localizations.localeOf(context).toString();
     final dateFormat = DateFormat.yMd(locale);
     switch (view) {
@@ -191,8 +187,9 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
 
   List<CalendarTask> _getTasksForSelectedDate(CalendarState state) {
     final selectedDate = state.selectedDate;
-    final tasks =
-        state.model.tasks.values.whereType<CalendarTask>().where((task) {
+    final tasks = state.model.tasks.values.whereType<CalendarTask>().where((
+      task,
+    ) {
       if (task.scheduledTime == null) return false;
       final taskDate = task.scheduledTime!;
       return taskDate.year == selectedDate.year &&
@@ -226,11 +223,7 @@ class _CalendarGuestBanner extends StatelessWidget {
       padding: calendarMarginMedium,
       child: Row(
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 20,
-            color: calendarSubtitleColor,
-          ),
+          Icon(Icons.info_outline, size: 20, color: calendarSubtitleColor),
           const SizedBox(width: 8),
           Text(
             context.l10n.calendarGuestBanner,
@@ -273,14 +266,13 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
     const double appBarShadowAlpha = 0.06;
     const double appBarShadowBlurRadius = 18;
     const Offset appBarShadowOffset = Offset(0, 6);
-    final Color appBarShadowColor =
-        Theme.of(context).shadowColor.withValues(alpha: appBarShadowAlpha);
+    final Color appBarShadowColor = Theme.of(
+      context,
+    ).shadowColor.withValues(alpha: appBarShadowAlpha);
     return Container(
       decoration: BoxDecoration(
         color: colors.background,
-        border: Border(
-          bottom: BorderSide(color: colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: colors.border)),
         boxShadow: [
           BoxShadow(
             color: appBarShadowColor,
@@ -423,9 +415,7 @@ class _CalendarViewModeSelector extends StatelessWidget {
 }
 
 class _CalendarSyncButton extends StatelessWidget {
-  const _CalendarSyncButton({
-    required this.state,
-  });
+  const _CalendarSyncButton({required this.state});
 
   final CalendarState state;
 
@@ -621,10 +611,7 @@ class _CalendarDateHeader extends StatelessWidget {
             backgroundColor: colors.card,
             borderColor: colors.border,
           ),
-          Text(
-            label,
-            style: calendarTitleTextStyle,
-          ),
+          Text(label, style: calendarTitleTextStyle),
           AxiIconButton(
             iconData: Icons.chevron_right,
             tooltip: context.l10n.calendarNextDate,
@@ -692,11 +679,7 @@ class _CalendarTaskList extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.task_alt,
-              size: 64,
-              color: calendarTimeLabelColor,
-            ),
+            Icon(Icons.task_alt, size: 64, color: calendarTimeLabelColor),
             const SizedBox(height: calendarGutterLg),
             Text(
               context.l10n.calendarNoTasksForDate,
@@ -802,10 +785,7 @@ class _CalendarGuestModeInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          context.l10n.calendarGuestModeLabel,
-          style: calendarBodyTextStyle,
-        ),
+        Text(context.l10n.calendarGuestModeLabel, style: calendarBodyTextStyle),
         const SizedBox(height: calendarGutterSm),
         Text(
           context.l10n.calendarGuestModeDescription,
@@ -864,11 +844,7 @@ class _CalendarAddTaskFab<T extends BaseCalendarBloc> extends StatelessWidget {
                               color: onAccent,
                             ),
                           )
-                        : Icon(
-                            Icons.add,
-                            color: onAccent,
-                            size: 24,
-                          ),
+                        : Icon(Icons.add, color: onAccent, size: 24),
                   ),
                 ),
               ),

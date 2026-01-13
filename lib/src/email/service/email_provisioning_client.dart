@@ -150,11 +150,7 @@ class EmailProvisioningClient {
     final headers = _headers();
     http.Response response;
     try {
-      response = await _httpClient.post(
-        uri,
-        headers: headers,
-        body: payload,
-      );
+      response = await _httpClient.post(uri, headers: headers, body: payload);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach email provisioning service',
@@ -182,9 +178,7 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode >= 500) {
-      _log.warning(
-        'Email provisioning unavailable: ${response.statusCode}',
-      );
+      _log.warning('Email provisioning unavailable: ${response.statusCode}');
       throw const EmailProvisioningApiException(
         'We couldn\'t reach the email service. Please check your '
         'connection and try again.',
@@ -242,11 +236,7 @@ class EmailProvisioningClient {
     });
     http.Response response;
     try {
-      response = await _httpClient.delete(
-        uri,
-        headers: headers,
-        body: payload,
-      );
+      response = await _httpClient.delete(uri, headers: headers, body: payload);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach email account deletion service',
@@ -359,9 +349,7 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode >= 500) {
-      _log.warning(
-        'Email password change unavailable: ${response.statusCode}',
-      );
+      _log.warning('Email password change unavailable: ${response.statusCode}');
       throw const EmailProvisioningApiException(
         'We could not change your password. Please try again later.',
         code: EmailProvisioningApiErrorCode.unavailable,
@@ -422,10 +410,7 @@ class EmailProvisioningClient {
       if (email is! String || email.isEmpty) {
         throw const FormatException('Missing email field');
       }
-      return EmailProvisioningCredentials(
-        email: email,
-        password: password,
-      );
+      return EmailProvisioningCredentials(email: email, password: password);
     } on FormatException catch (error, stackTrace) {
       _log.warning('Invalid email provisioning response', error, stackTrace);
       throw const EmailProvisioningApiException(

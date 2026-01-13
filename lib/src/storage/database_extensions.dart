@@ -83,7 +83,10 @@ extension DatabaseOperations on XmppDatabase {
       return await getter();
     } catch (e, stackTrace) {
       _log.warning(
-          'Failed to retrieve $name, returning empty list', e, stackTrace);
+        'Failed to retrieve $name, returning empty list',
+        e,
+        stackTrace,
+      );
       return <T>[];
     }
   }

@@ -81,8 +81,9 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
       if (databasePrefix == null) {
         throw StateError(l10n.emailDemoErrorMissingPrefix);
       }
-      final passphraseKey =
-          CredentialStore.registerKey('${databasePrefix}_database_passphrase');
+      final passphraseKey = CredentialStore.registerKey(
+        '${databasePrefix}_database_passphrase',
+      );
       final passphrase = await credentialStore.read(key: passphraseKey);
       if (passphrase == null) {
         throw StateError(l10n.emailDemoErrorMissingPassphrase);
@@ -165,9 +166,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
         backgroundColor: context.colorScheme.background,
         scrolledUnderElevation: 0,
         forceMaterialTransparency: true,
-        shape: Border(
-          bottom: BorderSide(color: context.colorScheme.border),
-        ),
+        shape: Border(bottom: BorderSide(color: context.colorScheme.border)),
         leadingWidth: AxiIconButton.kDefaultSize + 24,
         leading: Navigator.canPop(context)
             ? Padding(

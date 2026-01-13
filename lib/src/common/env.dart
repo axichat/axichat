@@ -4,21 +4,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-enum FormFactor {
-  handset,
-  tablet,
-  desktop,
-}
+enum FormFactor { handset, tablet, desktop }
 
-enum NavPlacement {
-  bottom,
-  rail,
-}
+enum NavPlacement { bottom, rail }
 
-enum CommandSurface {
-  sheet,
-  menu,
-}
+enum CommandSurface { sheet, menu }
 
 CommandSurface resolveCommandSurface(BuildContext context) {
   final env = EnvScope.maybeOf(context);
@@ -36,10 +26,8 @@ CommandSurface resolveCommandSurface(BuildContext context) {
 
 @immutable
 class Env {
-  Env({
-    required this.size,
-    required this.platform,
-  }) : formFactor = _formFactorFor(size.width);
+  Env({required this.size, required this.platform})
+      : formFactor = _formFactorFor(size.width);
 
   final Size size;
   final TargetPlatform platform;
@@ -72,10 +60,7 @@ class Env {
   bool get usesDesktopMenu => isDesktopPlatform;
 
   Env copyWith({Size? size, TargetPlatform? platform}) {
-    return Env(
-      size: size ?? this.size,
-      platform: platform ?? this.platform,
-    );
+    return Env(size: size ?? this.size, platform: platform ?? this.platform);
   }
 
   @override
@@ -92,10 +77,7 @@ class Env {
 }
 
 class EnvScope extends StatelessWidget {
-  const EnvScope({
-    super.key,
-    required this.child,
-  });
+  const EnvScope({super.key, required this.child});
 
   final Widget child;
 
@@ -119,10 +101,7 @@ class EnvScope extends StatelessWidget {
 }
 
 class _EnvInherited extends InheritedWidget {
-  const _EnvInherited({
-    required this.env,
-    required super.child,
-  });
+  const _EnvInherited({required this.env, required super.child});
 
   final Env env;
 

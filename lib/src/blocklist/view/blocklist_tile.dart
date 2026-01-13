@@ -44,10 +44,7 @@ class BlocklistTile extends StatelessWidget {
                       }
                     }
                   }
-                  return AxiAvatar(
-                    jid: entry.address,
-                    avatarPath: avatarPath,
-                  );
+                  return AxiAvatar(jid: entry.address, avatarPath: avatarPath);
                 },
               );
         return AxiListTile(

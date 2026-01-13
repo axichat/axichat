@@ -23,10 +23,7 @@ String sanitizeAttachmentFileName({
   final resolved =
       sanitizedCandidate.isNotEmpty ? sanitizedCandidate : sanitizedFallback;
   final safeName = resolved.isNotEmpty ? resolved : fallbackName;
-  return _truncateFileName(
-    name: safeName,
-    maxLength: maxLength,
-  );
+  return _truncateFileName(name: safeName, maxLength: maxLength);
 }
 
 String _resolveCandidate({
@@ -49,10 +46,7 @@ String _sanitizeBaseName(String name) {
 String _normalizePathSeparators(String name) =>
     name.replaceAll(_windowsPathSeparator, _posixPathSeparator);
 
-String _truncateFileName({
-  required String name,
-  required int maxLength,
-}) {
+String _truncateFileName({required String name, required int maxLength}) {
   final safeMaxLength =
       maxLength < _minFileNameLength ? _minFileNameLength : maxLength;
   if (name.length <= safeMaxLength) {

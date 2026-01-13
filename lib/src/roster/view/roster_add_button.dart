@@ -26,12 +26,8 @@ class RosterAddButton extends StatelessWidget {
         String? title;
         return MultiBlocProvider(
           providers: [
-            BlocProvider.value(
-              value: locate<RosterCubit>(),
-            ),
-            BlocProvider.value(
-              value: locate<AuthenticationCubit>(),
-            ),
+            BlocProvider.value(value: locate<RosterCubit>()),
+            BlocProvider.value(value: locate<AuthenticationCubit>()),
           ],
           child: StatefulBuilder(
             builder: (context, setState) {
@@ -69,9 +65,10 @@ class RosterAddButton extends StatelessWidget {
                 ),
                 callback: jid.isEmpty
                     ? null
-                    : () => context
-                        .read<RosterCubit>()
-                        .addContact(jid: jid, title: title),
+                    : () => context.read<RosterCubit>().addContact(
+                          jid: jid,
+                          title: title,
+                        ),
               );
             },
           ),

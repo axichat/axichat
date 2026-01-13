@@ -71,19 +71,18 @@ class AxiAdaptiveLayout extends StatelessWidget {
               child: PageTransitionSwitcher(
                 reverse: !invertPriority,
                 duration: context.watch<SettingsCubit>().animationDuration,
-                transitionBuilder: (
-                  child,
-                  primaryAnimation,
-                  secondaryAnimation,
-                ) {
+                transitionBuilder:
+                    (child, primaryAnimation, secondaryAnimation) {
                   return SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(1.0, 0),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: primaryAnimation,
-                      curve: Curves.easeIn,
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: primaryAnimation,
+                        curve: Curves.easeIn,
+                      ),
+                    ),
                     child: child,
                   );
                 },
@@ -191,10 +190,7 @@ class AxiAdaptivePane extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: padding,
-      child: Align(
-        alignment: alignment,
-        child: child,
-      ),
+      child: Align(alignment: alignment, child: child),
     );
   }
 }

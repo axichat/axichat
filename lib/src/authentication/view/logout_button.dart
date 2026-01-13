@@ -71,9 +71,9 @@ class LogoutButton extends StatelessWidget {
                       ),
                     ),
                   ),
-                  callback: () => context
-                      .read<AuthenticationCubit>()
-                      .logout(severity: severity),
+                  callback: () => context.read<AuthenticationCubit>().logout(
+                        severity: severity,
+                      ),
                 );
               },
             ),

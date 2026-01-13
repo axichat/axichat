@@ -14,8 +14,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
-const EdgeInsets _draftListItemPadding =
-    EdgeInsets.symmetric(horizontal: 16, vertical: 6);
+const EdgeInsets _draftListItemPadding = EdgeInsets.symmetric(
+  horizontal: 16,
+  vertical: 6,
+);
 const double _draftTileHeight = 56.0;
 
 class DraftsList extends StatelessWidget {
@@ -31,9 +33,7 @@ class DraftsList extends StatelessWidget {
 
         if (items == null) {
           return Center(
-            child: AxiProgressIndicator(
-              color: context.colorScheme.foreground,
-            ),
+            child: AxiProgressIndicator(color: context.colorScheme.foreground),
           );
         }
 
@@ -90,10 +90,7 @@ class _DraftsListBody extends StatelessWidget {
 
     if (visibleItems.isEmpty) {
       return Center(
-        child: Text(
-          l10n.draftsEmpty,
-          style: context.textTheme.muted,
-        ),
+        child: Text(l10n.draftsEmpty, style: context.textTheme.muted),
       );
     }
 
@@ -155,7 +152,7 @@ class _DraftsListBody extends StatelessWidget {
                       context.read<DraftCubit?>()?.deleteDraft(id: item.id);
                     }
                   },
-                )
+                ),
               ],
               leading: leadingAvatar,
               title:

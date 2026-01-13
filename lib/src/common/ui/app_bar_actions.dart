@@ -94,8 +94,9 @@ class AppBarActions extends StatelessWidget {
           final List<AxiMenuAction> menuActions = actions
               .map((action) => action.toMenuAction())
               .toList(growable: false);
-          final bool hasEnabledAction = actions
-              .any((action) => action.enabled && action.onPressed != null);
+          final bool hasEnabledAction = actions.any(
+            (action) => action.enabled && action.onPressed != null,
+          );
           if (moreTooltip == null) {
             return AxiMore(
               actions: menuActions,

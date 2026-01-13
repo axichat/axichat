@@ -54,7 +54,7 @@ class TimeFormatter {
       'Sep',
       'Oct',
       'Nov',
-      'Dec'
+      'Dec',
     ];
     return '${months[date.month]} ${date.day}';
   }
@@ -91,7 +91,7 @@ class TimeFormatter {
       'Sep',
       'Oct',
       'Nov',
-      'Dec'
+      'Dec',
     ];
     final String month = months[date.month];
     return '$month ${date.day}, ${date.year}';

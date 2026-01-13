@@ -43,8 +43,9 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   bool _usesMobileLayout = false;
   final GlobalKey<TaskSidebarState<B>> _sidebarKey =
       GlobalKey<TaskSidebarState<B>>();
-  final ValueNotifier<bool> _cancelBucketHoverNotifier =
-      ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _cancelBucketHoverNotifier = ValueNotifier<bool>(
+    false,
+  );
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -90,10 +91,14 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       builder: (context, state) {
         final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
         final MediaQueryData mediaQuery = MediaQuery.of(context);
-        final CalendarSizeClass sizeClass =
-            resolveLayoutSizeClass(spec, mediaQuery);
-        final bool usesDesktopLayout =
-            shouldUseDesktopLayout(sizeClass, mediaQuery);
+        final CalendarSizeClass sizeClass = resolveLayoutSizeClass(
+          spec,
+          mediaQuery,
+        );
+        final bool usesDesktopLayout = shouldUseDesktopLayout(
+          sizeClass,
+          mediaQuery,
+        );
         _usesMobileLayout = !usesDesktopLayout;
         onLayoutModeResolved(state, usesDesktopLayout);
 
@@ -101,10 +106,18 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
             state.isSelectionMode &&
             _mobileTabController.index != 1;
 
-        final Widget navigation =
-            buildNavigation(context, state, spec, usesDesktopLayout);
-        final Widget? errorBanner =
-            buildErrorBanner(context, state, spec, usesDesktopLayout);
+        final Widget navigation = buildNavigation(
+          context,
+          state,
+          spec,
+          usesDesktopLayout,
+        );
+        final Widget? errorBanner = buildErrorBanner(
+          context,
+          state,
+          spec,
+          usesDesktopLayout,
+        );
         final Widget sidebar = CalendarSidebarHost<B>(
           sidebarKey: _sidebarKey,
           onDragSessionStarted: handleGridDragSessionStarted,
@@ -113,9 +126,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         );
         final bool isMonthView = state.viewMode == CalendarView.month;
         final Widget calendarSurface = isMonthView
-            ? CalendarMonthHost<B>(
-                state: state,
-              )
+            ? CalendarMonthHost<B>(state: state)
             : CalendarGridHost<B>(
                 state: state,
                 onEmptySlotTapped: _onEmptySlotTapped,
@@ -161,8 +172,9 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         );
         _updateTasksTabPulse(highlightTasksTab);
         final Color surfaceColor = resolveSurfaceColor(context);
-        final bool resizeForKeyboard =
-            shouldResizeForKeyboard(usesDesktopLayout);
+        final bool resizeForKeyboard = shouldResizeForKeyboard(
+          usesDesktopLayout,
+        );
 
         return SizedBox.expand(
           child: ColoredBox(
@@ -230,12 +242,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       tabBar: mobileTabShell,
       safeAreaTop: useMobileSafeAreaTop,
       safeAreaBottom: useMobileSafeAreaBottom,
-      headerBuilder: (context, showingPrimary) => buildMobileHeader(
-        context,
-        showingPrimary,
-        navigation,
-        errorBanner,
-      ),
+      headerBuilder: (context, showingPrimary) =>
+          buildMobileHeader(context, showingPrimary, navigation, errorBanner),
     );
   }
 
@@ -334,9 +342,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   void onDragDayShiftRequested(int deltaDays) {
     final DateTime selected = calendarBloc.state.selectedDate;
     calendarBloc.add(
-      CalendarEvent.dateSelected(
-        date: selected.add(Duration(days: deltaDays)),
-      ),
+      CalendarEvent.dateSelected(date: selected.add(Duration(days: deltaDays))),
     );
   }
 
@@ -355,19 +361,20 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
   ) {
-    final VoidCallback? searchAction =
-        buildNavigationSearchAction(context, state, usesDesktopLayout);
+    final VoidCallback? searchAction = buildNavigationSearchAction(
+      context,
+      state,
+      usesDesktopLayout,
+    );
     final CalendarChatAcl? chatAcl = buildNavigationChatAcl(state);
     final String? chatTitle = buildNavigationChatTitle(state);
     final Widget base = CalendarNavigation(
       state: state,
       sidebarVisible: usesDesktopLayout,
-      onDateSelected: (date) => calendarBloc.add(
-        CalendarEvent.dateSelected(date: date),
-      ),
-      onViewChanged: (view) => calendarBloc.add(
-        CalendarEvent.viewChanged(view: view),
-      ),
+      onDateSelected: (date) =>
+          calendarBloc.add(CalendarEvent.dateSelected(date: date)),
+      onViewChanged: (view) =>
+          calendarBloc.add(CalendarEvent.viewChanged(view: view)),
       onErrorCleared: () =>
           calendarBloc.add(const CalendarEvent.errorCleared()),
       onUndo: () => calendarBloc.add(const CalendarEvent.undoRequested()),
@@ -446,10 +453,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     bool highlight,
     Animation<double> animation,
   ) {
-    return TasksTabLabel(
-      highlight: highlight,
-      animation: animation,
-    );
+    return TasksTabLabel(highlight: highlight, animation: animation);
   }
 
   /// Wraps the tab/cancel bucket chrome for mobile layouts.
@@ -543,9 +547,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   }
 
   void _handleKeyboardJumpToToday(CalendarState state) {
-    calendarBloc.add(
-      CalendarEvent.dateSelected(date: DateTime.now()),
-    );
+    calendarBloc.add(CalendarEvent.dateSelected(date: DateTime.now()));
   }
 
   DateTime _shiftedDate(CalendarState state, int steps) {
@@ -557,8 +559,11 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         return base.add(Duration(days: 7 * steps));
       case CalendarView.month:
         final DateTime targetMonth = DateTime(base.year, base.month + steps, 1);
-        final int maxDay =
-            DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+        final int maxDay = DateTime(
+          targetMonth.year,
+          targetMonth.month + 1,
+          0,
+        ).day;
         final int clampedDay = base.day.clamp(1, maxDay).toInt();
         return DateTime(targetMonth.year, targetMonth.month, clampedDay);
     }

@@ -22,8 +22,9 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 const Duration _messageNotificationRateLimitWindow = Duration(minutes: 1);
-const Duration _messageNotificationRateLimitCleanupInterval =
-    Duration(minutes: 5);
+const Duration _messageNotificationRateLimitCleanupInterval = Duration(
+  minutes: 5,
+);
 const int _messageNotificationMaxPerThread = 30;
 const int _messageNotificationMaxGlobal = 120;
 const WindowRateLimit _messageNotificationPerThreadRateLimit = WindowRateLimit(
@@ -49,8 +50,9 @@ class NotificationService {
   final Map<int, Timer> _inAppTimers = {};
   Completer<void>? _initializationCompleter;
   bool _foregroundCheckUnavailable = false;
-  final WindowRateLimiter _messageNotificationGlobalLimiter =
-      WindowRateLimiter(_messageNotificationGlobalRateLimit);
+  final WindowRateLimiter _messageNotificationGlobalLimiter = WindowRateLimiter(
+    _messageNotificationGlobalRateLimit,
+  );
   final KeyedWindowRateLimiter _messageNotificationPerThreadLimiter =
       KeyedWindowRateLimiter(
     limit: _messageNotificationPerThreadRateLimit,

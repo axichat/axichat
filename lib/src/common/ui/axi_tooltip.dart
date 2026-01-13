@@ -5,15 +5,13 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 const double _tooltipVerticalOffset = 12;
-const EdgeInsets _tooltipPadding =
-    EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+const EdgeInsets _tooltipPadding = EdgeInsets.symmetric(
+  horizontal: 12,
+  vertical: 8,
+);
 
 class AxiTooltip extends StatelessWidget {
-  const AxiTooltip({
-    super.key,
-    required this.builder,
-    required this.child,
-  });
+  const AxiTooltip({super.key, required this.builder, required this.child});
 
   final WidgetBuilder builder;
   final Widget child;

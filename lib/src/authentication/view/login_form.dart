@@ -210,10 +210,7 @@ class _LoginFormState extends State<LoginForm> {
                           onPressed: () => _onPressed(context),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              spinnerSlot,
-                              Text(l10n.authLogin),
-                            ],
+                            children: [spinnerSlot, Text(l10n.authLogin)],
                           ),
                         ).withTapBounce(enabled: !loading);
                         return AxiAnimatedSize(

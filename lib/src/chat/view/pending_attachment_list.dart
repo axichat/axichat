@@ -290,10 +290,7 @@ class _PendingImageAttachment extends StatelessWidget {
                 errorBuilder: (_, __, ___) => ColoredBox(
                   color: colors.card,
                   child: Icon(
-                    attachmentIcon(
-                      pending.attachment,
-                      typeReport: typeReport,
-                    ),
+                    attachmentIcon(pending.attachment, typeReport: typeReport),
                     color: colors.mutedForeground,
                   ),
                 ),
@@ -367,10 +364,7 @@ class _PendingFileAttachment extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  attachmentIcon(
-                    pending.attachment,
-                    typeReport: typeReport,
-                  ),
+                  attachmentIcon(pending.attachment, typeReport: typeReport),
                   color: foreground,
                 ),
               ),
@@ -447,10 +441,7 @@ class _PendingImageSkeleton extends StatelessWidget {
     return SizedBox(
       width: extent,
       height: extent,
-      child: ClipRRect(
-        borderRadius: radius,
-        child: const _ShimmerSurface(),
-      ),
+      child: ClipRRect(borderRadius: radius, child: const _ShimmerSurface()),
     );
   }
 }
@@ -475,9 +466,7 @@ class _PendingFileSkeleton extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: borderRadius,
-        border: Border.all(
-          color: colors.border,
-        ),
+        border: Border.all(color: colors.border),
       ),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Column(
@@ -708,10 +697,7 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
                     Expanded(
                       child: AxiTooltip(
                         builder: (_) => Text(
-                          l10n.chatAttachmentErrorTooltip(
-                            errorLabel,
-                            fileName,
-                          ),
+                          l10n.chatAttachmentErrorTooltip(errorLabel, fileName),
                         ),
                         child: Text(
                           errorLabel,
@@ -803,11 +789,7 @@ class _PendingAttachmentActionButton extends StatelessWidget {
       onPressed: onPressed,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
+        children: [Icon(icon, size: 14), const SizedBox(width: 6), Text(label)],
       ),
     ).withTapBounce();
   }
@@ -824,10 +806,7 @@ class _PendingAttachmentSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CircularProgressIndicator(
-      strokeWidth: strokeWidth,
-      color: color,
-    );
+    return CircularProgressIndicator(strokeWidth: strokeWidth, color: color);
   }
 }
 
@@ -859,10 +838,7 @@ class PendingAttachmentStatusBadge extends StatelessWidget {
 }
 
 class PendingAttachmentStatusInlineBadge extends StatelessWidget {
-  const PendingAttachmentStatusInlineBadge({
-    super.key,
-    required this.status,
-  });
+  const PendingAttachmentStatusInlineBadge({super.key, required this.status});
 
   final PendingAttachmentStatus status;
 
@@ -890,16 +866,9 @@ class _StatusIndicator extends StatelessWidget {
     final colors = context.colorScheme;
     switch (status) {
       case PendingAttachmentStatus.uploading:
-        return _PendingAttachmentSpinner(
-          color: colors.primary,
-          strokeWidth: 2,
-        );
+        return _PendingAttachmentSpinner(color: colors.primary, strokeWidth: 2);
       case PendingAttachmentStatus.queued:
-        return Icon(
-          LucideIcons.clock,
-          size: 14,
-          color: colors.mutedForeground,
-        );
+        return Icon(LucideIcons.clock, size: 14, color: colors.mutedForeground);
       case PendingAttachmentStatus.failed:
         return Icon(
           LucideIcons.triangleAlert,

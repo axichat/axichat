@@ -34,8 +34,10 @@ const String _messageSubjectPrefix =
 const String _messageSubjectSuffix = ')';
 const String _subjectOnlyPrefix =
     '$_messageSubjectLabel$_messageSubjectSeparator';
-final DateTime _fallbackTimestamp =
-    DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+final DateTime _fallbackTimestamp = DateTime.fromMillisecondsSinceEpoch(
+  0,
+  isUtc: true,
+);
 
 enum ProfileExportKind {
   xmppMessages,
@@ -73,17 +75,15 @@ class ProfileExportResult {
           itemCount: itemCount,
         );
 
-  const ProfileExportResult.empty({
-    required ProfileExportKind kind,
-  }) : this._(
+  const ProfileExportResult.empty({required ProfileExportKind kind})
+      : this._(
           kind: kind,
           outcome: ProfileExportOutcome.empty,
           itemCount: _emptyCount,
         );
 
-  const ProfileExportResult.failure({
-    required ProfileExportKind kind,
-  }) : this._(
+  const ProfileExportResult.failure({required ProfileExportKind kind})
+      : this._(
           kind: kind,
           outcome: ProfileExportOutcome.failure,
           itemCount: _emptyCount,
@@ -98,10 +98,7 @@ class ProfileExportResult {
 }
 
 class ProfileExportState {
-  const ProfileExportState({
-    this.status = RequestStatus.none,
-    this.activeKind,
-  });
+  const ProfileExportState({this.status = RequestStatus.none, this.activeKind});
 
   final RequestStatus status;
   final ProfileExportKind? activeKind;
@@ -151,17 +148,13 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         ),
       );
 
-  Future<ProfileExportResult> exportXmppContacts(
-    ContactExportFormat format,
-  ) =>
+  Future<ProfileExportResult> exportXmppContacts(ContactExportFormat format) =>
       _runExport(
         kind: ProfileExportKind.xmppContacts,
         operation: () => _exportXmppContacts(format),
       );
 
-  Future<ProfileExportResult> exportEmailContacts(
-    ContactExportFormat format,
-  ) =>
+  Future<ProfileExportResult> exportEmailContacts(ContactExportFormat format) =>
       _runExport(
         kind: ProfileExportKind.emailContacts,
         operation: () => _exportEmailContacts(format),
@@ -287,9 +280,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     );
   }
 
-  List<ContactExportEntry> _sortedContacts(
-    List<ContactExportEntry> contacts,
-  ) =>
+  List<ContactExportEntry> _sortedContacts(List<ContactExportEntry> contacts) =>
       contacts.toList()
         ..sort((a, b) {
           final aKey = (a.displayName?.isNotEmpty == true)

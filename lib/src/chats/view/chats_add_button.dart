@@ -70,9 +70,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
     setState(() {
       _validationError = null;
     });
-    context.read<ChatsCubit>().createChatRoom(
-          title: trimmed,
-        );
+    context.read<ChatsCubit>().createChatRoom(title: trimmed);
   }
 
   @override
@@ -96,9 +94,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
           content: Padding(
             padding: EdgeInsets.only(bottom: keyboardInset),
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: dialogMaxHeight,
-              ),
+              constraints: BoxConstraints(maxHeight: dialogMaxHeight),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

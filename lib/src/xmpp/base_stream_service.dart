@@ -13,13 +13,11 @@ mixin BaseStreamService on XmppBase {
     return databaseReloadStream
         .startWith(null)
         .asyncMap(
-          (_) => _dbOpReturning<D, Stream<List<T>>>(
-            (db) async {
-              final stream = await watchFunction(db);
-              final initial = await getFunction(db);
-              return stream.startWith(initial);
-            },
-          ),
+          (_) => _dbOpReturning<D, Stream<List<T>>>((db) async {
+            final stream = await watchFunction(db);
+            final initial = await getFunction(db);
+            return stream.startWith(initial);
+          }),
         )
         .switchMap((stream) => stream);
   }
@@ -31,9 +29,7 @@ mixin BaseStreamService on XmppBase {
     yield* databaseReloadStream
         .startWith(null)
         .asyncMap(
-          (_) => _dbOpReturning<D, Stream<T>>(
-            (db) => watchFunction(db),
-          ),
+          (_) => _dbOpReturning<D, Stream<T>>((db) => watchFunction(db)),
         )
         .switchMap((stream) => stream);
   }

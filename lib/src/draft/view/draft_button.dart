@@ -16,10 +16,7 @@ class DraftButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     void handleCompose() {
-      openComposeDraft(
-        context,
-        attachmentMetadataIds: const <String>[],
-      );
+      openComposeDraft(context, attachmentMetadataIds: const <String>[]);
     }
 
     if (compact) {

@@ -32,17 +32,13 @@ class BlocklistList extends StatelessWidget {
 
         if (items == null) {
           return Center(
-            child: AxiProgressIndicator(
-              color: context.colorScheme.foreground,
-            ),
+            child: AxiProgressIndicator(color: context.colorScheme.foreground),
           );
         }
 
         return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-          builder: (context, searchState) => _BlocklistListBody(
-            items: items,
-            searchState: searchState,
-          ),
+          builder: (context, searchState) =>
+              _BlocklistListBody(items: items, searchState: searchState),
         );
       },
     );
@@ -50,10 +46,7 @@ class BlocklistList extends StatelessWidget {
 }
 
 class _BlocklistListBody extends StatelessWidget {
-  const _BlocklistListBody({
-    required this.items,
-    this.searchState,
-  });
+  const _BlocklistListBody({required this.items, this.searchState});
 
   final List<BlocklistEntry> items;
   final HomeSearchState? searchState;
@@ -82,10 +75,7 @@ class _BlocklistListBody extends StatelessWidget {
 
     if (visibleItems.isEmpty) {
       return Center(
-        child: Text(
-          'Nobody blocked',
-          style: context.textTheme.muted,
-        ),
+        child: Text('Nobody blocked', style: context.textTheme.muted),
       );
     }
 
@@ -103,11 +93,7 @@ class _BlocklistListBody extends StatelessWidget {
             );
           }
           final item = visibleItems[index - 1];
-          return ListItemPadding(
-            child: BlocklistTile(
-              entry: item,
-            ),
-          );
+          return ListItemPadding(child: BlocklistTile(entry: item));
         },
       ),
     );

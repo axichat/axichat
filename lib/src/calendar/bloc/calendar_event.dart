@@ -35,13 +35,11 @@ class CalendarEvent with _$CalendarEvent {
     CalendarIcsMeta? icsMeta,
   }) = CalendarTaskAdded;
 
-  const factory CalendarEvent.taskUpdated({
-    required CalendarTask task,
-  }) = CalendarTaskUpdated;
+  const factory CalendarEvent.taskUpdated({required CalendarTask task}) =
+      CalendarTaskUpdated;
 
-  const factory CalendarEvent.taskDeleted({
-    required String taskId,
-  }) = CalendarTaskDeleted;
+  const factory CalendarEvent.taskDeleted({required String taskId}) =
+      CalendarTaskDeleted;
 
   const factory CalendarEvent.taskCompleted({
     required String taskId,
@@ -65,9 +63,8 @@ class CalendarEvent with _$CalendarEvent {
     required List<CalendarTask> tasks,
   }) = CalendarTasksImported;
 
-  const factory CalendarEvent.modelImported({
-    required CalendarModel model,
-  }) = CalendarModelImported;
+  const factory CalendarEvent.modelImported({required CalendarModel model}) =
+      CalendarModelImported;
 
   const factory CalendarEvent.syncWarningRaised({
     required CalendarSyncWarning warning,
@@ -75,24 +72,20 @@ class CalendarEvent with _$CalendarEvent {
 
   const factory CalendarEvent.syncWarningCleared() = CalendarSyncWarningCleared;
 
-  const factory CalendarEvent.viewChanged({
-    required CalendarView view,
-  }) = CalendarViewChanged;
+  const factory CalendarEvent.viewChanged({required CalendarView view}) =
+      CalendarViewChanged;
 
-  const factory CalendarEvent.dateSelected({
-    required DateTime date,
-  }) = CalendarDateSelected;
+  const factory CalendarEvent.dateSelected({required DateTime date}) =
+      CalendarDateSelected;
 
   const factory CalendarEvent.errorCleared() = CalendarErrorCleared;
 
   // Enhanced events for weekly schedule
-  const factory CalendarEvent.dayViewSelected({
-    required int dayIndex,
-  }) = CalendarDayViewSelected;
+  const factory CalendarEvent.dayViewSelected({required int dayIndex}) =
+      CalendarDayViewSelected;
 
-  const factory CalendarEvent.taskDragStarted({
-    required String taskId,
-  }) = CalendarTaskDragStarted;
+  const factory CalendarEvent.taskDragStarted({required String taskId}) =
+      CalendarTaskDragStarted;
 
   const factory CalendarEvent.taskDropped({
     required String taskId,
@@ -142,13 +135,11 @@ class CalendarEvent with _$CalendarEvent {
     CalendarIcsMeta? icsMeta,
   }) = CalendarDayEventAdded;
 
-  const factory CalendarEvent.dayEventUpdated({
-    required DayEvent event,
-  }) = CalendarDayEventUpdated;
+  const factory CalendarEvent.dayEventUpdated({required DayEvent event}) =
+      CalendarDayEventUpdated;
 
-  const factory CalendarEvent.dayEventDeleted({
-    required String eventId,
-  }) = CalendarDayEventDeleted;
+  const factory CalendarEvent.dayEventDeleted({required String eventId}) =
+      CalendarDayEventDeleted;
 
   const factory CalendarEvent.availabilityUpdated({
     required CalendarAvailability availability,
@@ -172,16 +163,14 @@ class CalendarEvent with _$CalendarEvent {
     ReminderPreferences? reminders,
   }) = CalendarQuickTaskAdded;
 
-  const factory CalendarEvent.selectionModeEntered({
-    String? taskId,
-  }) = CalendarSelectionModeEntered;
+  const factory CalendarEvent.selectionModeEntered({String? taskId}) =
+      CalendarSelectionModeEntered;
 
   const factory CalendarEvent.selectionAllRequested() =
       CalendarSelectionAllRequested;
 
-  const factory CalendarEvent.selectionToggled({
-    required String taskId,
-  }) = CalendarSelectionToggled;
+  const factory CalendarEvent.selectionToggled({required String taskId}) =
+      CalendarSelectionToggled;
 
   const factory CalendarEvent.selectionCleared() = CalendarSelectionCleared;
 
@@ -199,17 +188,15 @@ class CalendarEvent with _$CalendarEvent {
     RecurrenceRule? recurrence,
   }) = CalendarSelectionRecurrenceChanged;
 
-  const factory CalendarEvent.selectionTitleChanged({
-    required String title,
-  }) = CalendarSelectionTitleChanged;
+  const factory CalendarEvent.selectionTitleChanged({required String title}) =
+      CalendarSelectionTitleChanged;
 
   const factory CalendarEvent.selectionDescriptionChanged({
     String? description,
   }) = CalendarSelectionDescriptionChanged;
 
-  const factory CalendarEvent.selectionLocationChanged({
-    String? location,
-  }) = CalendarSelectionLocationChanged;
+  const factory CalendarEvent.selectionLocationChanged({String? location}) =
+      CalendarSelectionLocationChanged;
 
   const factory CalendarEvent.selectionChecklistChanged({
     required List<TaskChecklistItem> checklist,
@@ -236,9 +223,8 @@ class CalendarEvent with _$CalendarEvent {
 
   const factory CalendarEvent.redoRequested() = CalendarRedoRequested;
 
-  const factory CalendarEvent.taskFocusRequested({
-    required String taskId,
-  }) = CalendarTaskFocusRequested;
+  const factory CalendarEvent.taskFocusRequested({required String taskId}) =
+      CalendarTaskFocusRequested;
 
   const factory CalendarEvent.taskFocusCleared() = CalendarTaskFocusCleared;
 
@@ -252,9 +238,8 @@ class CalendarEvent with _$CalendarEvent {
     required String name,
   }) = CalendarCriticalPathRenamed;
 
-  const factory CalendarEvent.criticalPathDeleted({
-    required String pathId,
-  }) = CalendarCriticalPathDeleted;
+  const factory CalendarEvent.criticalPathDeleted({required String pathId}) =
+      CalendarCriticalPathDeleted;
 
   const factory CalendarEvent.criticalPathTaskAdded({
     required String pathId,
@@ -267,9 +252,8 @@ class CalendarEvent with _$CalendarEvent {
     required String taskId,
   }) = CalendarCriticalPathTaskRemoved;
 
-  const factory CalendarEvent.criticalPathFocused({
-    String? pathId,
-  }) = CalendarCriticalPathFocused;
+  const factory CalendarEvent.criticalPathFocused({String? pathId}) =
+      CalendarCriticalPathFocused;
 
   const factory CalendarEvent.criticalPathReordered({
     required String pathId,

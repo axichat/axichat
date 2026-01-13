@@ -72,11 +72,7 @@ class _CalendarTransferOption extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.all(10),
-            child: Icon(
-              icon,
-              size: 18,
-              color: colors.primary,
-            ),
+            child: Icon(icon, size: 18, color: colors.primary),
           ),
         ),
         title: label,

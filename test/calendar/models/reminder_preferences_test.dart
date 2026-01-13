@@ -28,8 +28,10 @@ void main() {
 
       final ReminderPreferences normalized = prefs.normalized();
 
-      expect(normalized.startOffsets,
-          equals(<Duration>[const Duration(hours: 1)]));
+      expect(
+        normalized.startOffsets,
+        equals(<Duration>[const Duration(hours: 1)]),
+      );
       expect(
         normalized.deadlineOffsets,
         equals(<Duration>[const Duration(minutes: 30)]),

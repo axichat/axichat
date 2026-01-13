@@ -54,10 +54,7 @@ class EmailContactImportTile extends StatelessWidget {
 }
 
 class EmailContactImportDialog extends StatefulWidget {
-  const EmailContactImportDialog({
-    super.key,
-    required this.cubit,
-  });
+  const EmailContactImportDialog({super.key, required this.cubit});
 
   final EmailContactImportCubit cubit;
 
@@ -108,10 +105,7 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
     if (file == null) {
       return;
     }
-    widget.cubit.importContacts(
-      file: file,
-      format: _format,
-    );
+    widget.cubit.importContacts(file: file, format: _format);
   }
 
   @override
@@ -138,9 +132,7 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
           final summary = state.summary;
           if (summary.hasImported) {
             showToast(
-              FeedbackToast.success(
-                message: _successMessage(l10n, summary),
-              ),
+              FeedbackToast.success(message: _successMessage(l10n, summary)),
             );
             if (context.canPop()) {
               context.pop();

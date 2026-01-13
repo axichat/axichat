@@ -50,10 +50,7 @@ class TransportAwareAvatar extends StatelessWidget {
     }
     XmppService? xmppService;
     try {
-      xmppService = RepositoryProvider.of<XmppService>(
-        context,
-        listen: false,
-      );
+      xmppService = RepositoryProvider.of<XmppService>(context, listen: false);
     } on Exception {
       xmppService = null;
     }
@@ -63,8 +60,9 @@ class TransportAwareAvatar extends StatelessWidget {
         ? resolvedProfileJid
         : xmppService?.myJid;
     final String? normalizedXmppSelfJid = _normalizeBareJid(selfXmppJid);
-    final String? normalizedEmailSelfJid =
-        _normalizeBareJid(emailService?.selfSenderJid);
+    final String? normalizedEmailSelfJid = _normalizeBareJid(
+      emailService?.selfSenderJid,
+    );
     final bool isSelfChat = normalizedChatJid != null &&
         ((normalizedXmppSelfJid != null &&
                 normalizedChatJid == normalizedXmppSelfJid) ||

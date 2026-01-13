@@ -126,10 +126,7 @@ const List<CalendarWeekday> _orderedWeekdays = <CalendarWeekday>[
 ];
 
 class _MonthOption {
-  const _MonthOption({
-    required this.value,
-    required this.label,
-  });
+  const _MonthOption({required this.value, required this.label});
 
   final int value;
   final String label;
@@ -151,10 +148,7 @@ const List<_MonthOption> _monthOptions = <_MonthOption>[
 ];
 
 class _OrdinalOption {
-  const _OrdinalOption({
-    required this.position,
-    required this.label,
-  });
+  const _OrdinalOption({required this.position, required this.label});
 
   final int? position;
   final String label;
@@ -248,8 +242,10 @@ class RecurrenceFormValue {
       rule.byDays ?? const <RecurrenceWeekday>[],
     );
     final Set<int> derivedWeekdays = _weekdaySetFromRule(rule, ruleByDays);
-    final List<RecurrenceWeekday> advancedByDays =
-        _advancedByDaysForFrequency(rule.frequency, ruleByDays);
+    final List<RecurrenceWeekday> advancedByDays = _advancedByDaysForFrequency(
+      rule.frequency,
+      ruleByDays,
+    );
 
     return RecurrenceFormValue(
       frequency: rule.frequency,
@@ -368,8 +364,9 @@ class RecurrenceFormValue {
 
     final DateTime? effectiveUntil =
         normalized.count != null ? null : normalized.until;
-    final List<RecurrenceWeekday> normalizedByDays =
-        _normalizeByDays(normalized.byDays);
+    final List<RecurrenceWeekday> normalizedByDays = _normalizeByDays(
+      normalized.byDays,
+    );
     final List<int> normalizedByMonths = _normalizeNumericList(
       normalized.byMonths,
       min: _recurrenceMonthMin,
@@ -400,10 +397,12 @@ class RecurrenceFormValue {
       max: _recurrenceSetPositionMax,
       allowNegative: true,
     );
-    final List<CalendarDateTime> normalizedRDates =
-        _normalizeDateTimes(normalized.rDates);
-    final List<CalendarDateTime> normalizedExDates =
-        _normalizeDateTimes(normalized.exDates);
+    final List<CalendarDateTime> normalizedRDates = _normalizeDateTimes(
+      normalized.rDates,
+    );
+    final List<CalendarDateTime> normalizedExDates = _normalizeDateTimes(
+      normalized.exDates,
+    );
     final List<int> normalizedByHours = _normalizeNumericList(
       normalized.byHours,
       min: 0,
@@ -426,13 +425,16 @@ class RecurrenceFormValue {
     List<RecurrenceWeekday>? resolvedByDays;
     List<int>? resolvedByWeekdays;
     if (normalized.frequency.isWeekly) {
-      final List<RecurrenceWeekday> mergedByDays =
-          _mergeWeekdaysIntoByDays(normalizedByDays, normalized.weekdays);
+      final List<RecurrenceWeekday> mergedByDays = _mergeWeekdaysIntoByDays(
+        normalizedByDays,
+        normalized.weekdays,
+      );
       if (mergedByDays.isNotEmpty) {
         resolvedByDays = mergedByDays;
       } else {
-        final List<int> normalizedWeekdays =
-            _normalizeWeekdayList(normalized.weekdays);
+        final List<int> normalizedWeekdays = _normalizeWeekdayList(
+          normalized.weekdays,
+        );
         resolvedByWeekdays = normalizedWeekdays.isEmpty
             ? _normalizeWeekdayList(<int>[start.weekday])
             : normalizedWeekdays;
@@ -473,9 +475,7 @@ class RecurrenceFormValue {
       case RecurrenceFrequency.none:
         return null;
       case RecurrenceFrequency.daily:
-        return buildRule(
-          frequency: RecurrenceFrequency.daily,
-        );
+        return buildRule(frequency: RecurrenceFrequency.daily);
       case RecurrenceFrequency.weekdays:
         return buildRule(
           frequency: RecurrenceFrequency.weekdays,
@@ -547,9 +547,7 @@ List<RecurrenceWeekday> _mergeWeekdaysIntoByDays(
   if (byDays.isEmpty) {
     return const <RecurrenceWeekday>[];
   }
-  final List<RecurrenceWeekday> merged = <RecurrenceWeekday>[
-    ...byDays,
-  ];
+  final List<RecurrenceWeekday> merged = <RecurrenceWeekday>[...byDays];
   final Set<String> seen = <String>{};
   for (final RecurrenceWeekday entry in merged) {
     final int? position = _normalizeOrdinal(entry.position);
@@ -587,10 +585,7 @@ List<RecurrenceWeekday> _normalizeByDays(List<RecurrenceWeekday> values) {
     final int? position = _normalizeOrdinal(entry.position);
     final String key =
         '${entry.weekday.icsValue}:${position ?? _recurrenceEveryKey}';
-    unique[key] = RecurrenceWeekday(
-      weekday: entry.weekday,
-      position: position,
-    );
+    unique[key] = RecurrenceWeekday(weekday: entry.weekday, position: position);
   }
   final List<RecurrenceWeekday> normalized = unique.values.toList();
   normalized.sort((a, b) {
@@ -652,9 +647,7 @@ List<CalendarDateTime> _normalizeDateTimes(List<CalendarDateTime> values) {
     unique[entry.value.microsecondsSinceEpoch] = entry;
   }
   final List<CalendarDateTime> normalized = unique.values.toList()
-    ..sort(
-      (a, b) => a.value.compareTo(b.value),
-    );
+    ..sort((a, b) => a.value.compareTo(b.value));
   return normalized;
 }
 
@@ -688,9 +681,13 @@ class RecurrenceEditor extends StatefulWidget {
     this.showAdvancedToggle = true,
     this.forceAdvanced = false,
     this.chipPadding = const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd, vertical: calendarGutterSm),
-    this.weekdayChipPadding =
-        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      horizontal: calendarGutterMd,
+      vertical: calendarGutterSm,
+    ),
+    this.weekdayChipPadding = const EdgeInsets.symmetric(
+      horizontal: 10,
+      vertical: 6,
+    ),
     this.intervalSelectWidth = 120,
   });
 
@@ -766,9 +763,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
                 padding: widget.chipPadding,
                 label: _frequencyLabel(freq),
                 onPressed: enabled
-                    ? () => widget.onChanged(
-                          _normalizedForFrequency(freq),
-                        )
+                    ? () => widget.onChanged(_normalizedForFrequency(freq))
                     : null,
               ),
             )
@@ -817,25 +812,14 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
               switch (mode) {
                 case _RecurrenceEndMode.never:
                   widget.onChanged(
-                    value.copyWith(
-                      clearCount: true,
-                      clearUntil: true,
-                    ),
+                    value.copyWith(clearCount: true, clearUntil: true),
                   );
                   break;
                 case _RecurrenceEndMode.until:
-                  widget.onChanged(
-                    value.copyWith(
-                      clearCount: true,
-                    ),
-                  );
+                  widget.onChanged(value.copyWith(clearCount: true));
                   break;
                 case _RecurrenceEndMode.count:
-                  widget.onChanged(
-                    value.copyWith(
-                      clearUntil: true,
-                    ),
-                  );
+                  widget.onChanged(value.copyWith(clearUntil: true));
                   break;
               }
             },
@@ -844,11 +828,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
                 value.copyWith(
                   until: selected == null
                       ? null
-                      : DateTime(
-                          selected.year,
-                          selected.month,
-                          selected.day,
-                        ),
+                      : DateTime(selected.year, selected.month, selected.day),
                   clearCount: true,
                 ),
               );
@@ -907,10 +887,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
   }
 
   RecurrenceFormValue _normalizedForFrequency(RecurrenceFrequency frequency) {
-    var result = value.copyWith(
-      frequency: frequency,
-      interval: 1,
-    );
+    var result = value.copyWith(frequency: frequency, interval: 1);
 
     if (frequency.isNone) {
       result = result.copyWith(
@@ -1062,10 +1039,12 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final Color unselectedBackground =
-        colors.muted.withValues(alpha: enabled ? 0.12 : 0.08);
-    final Color unselectedHover =
-        colors.muted.withValues(alpha: enabled ? 0.18 : 0.1);
+    final Color unselectedBackground = colors.muted.withValues(
+      alpha: enabled ? 0.12 : 0.08,
+    );
+    final Color unselectedHover = colors.muted.withValues(
+      alpha: enabled ? 0.18 : 0.1,
+    );
     final Color selectedForeground = colors.primaryForeground;
     return Wrap(
       spacing: 6,
@@ -1121,12 +1100,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = List.generate(12, (index) => index + 1)
-        .map(
-          (value) => ShadOption<int>(
-            value: value,
-            child: Text('$value'),
-          ),
-        )
+        .map((value) => ShadOption<int>(value: value, child: Text('$value')))
         .toList();
 
     return Row(
@@ -1182,11 +1156,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
   }
 }
 
-enum _RecurrenceEndMode {
-  never,
-  until,
-  count;
-}
+enum _RecurrenceEndMode { never, until, count }
 
 extension _RecurrenceEndModeX on _RecurrenceEndMode {
   bool get isUntil => this == _RecurrenceEndMode.until;
@@ -1247,10 +1217,7 @@ class _RecurrenceEndControls extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          _recurrenceEndHeaderLabel.toUpperCase(),
-          style: labelStyle,
-        ),
+        Text(_recurrenceEndHeaderLabel.toUpperCase(), style: labelStyle),
         const SizedBox(height: calendarInsetLg),
         Wrap(
           spacing: calendarGutterSm,
@@ -1318,9 +1285,7 @@ class _RecurrenceEndControls extends StatelessWidget {
               filled: true,
               fillColor: calendarContainerColor,
             ),
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-            ],
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: onCountChanged,
           ),
           if (derivedUntil != null) ...[
@@ -1552,10 +1517,7 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Text(
-                _recurrenceAdvancedLabel.toUpperCase(),
-                style: labelStyle,
-              ),
+              Text(_recurrenceAdvancedLabel.toUpperCase(), style: labelStyle),
               if (hasAdvancedData) ...[
                 const SizedBox(width: calendarInsetSm),
                 _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
@@ -1575,17 +1537,16 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
 }
 
 class _RecurrenceAdvancedActiveBadge extends StatelessWidget {
-  const _RecurrenceAdvancedActiveBadge({
-    required this.enabled,
-  });
+  const _RecurrenceAdvancedActiveBadge({required this.enabled});
 
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final Color background =
-        colors.muted.withValues(alpha: enabled ? 0.18 : 0.12);
+    final Color background = colors.muted.withValues(
+      alpha: enabled ? 0.18 : 0.12,
+    );
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterSm,
@@ -2050,10 +2011,7 @@ class _RecurrenceNumberListFieldState
 }
 
 class _RecurrenceNumberChip extends StatelessWidget {
-  const _RecurrenceNumberChip({
-    required this.value,
-    this.onRemove,
-  });
+  const _RecurrenceNumberChip({required this.value, this.onRemove});
 
   final int value;
   final VoidCallback? onRemove;
@@ -2077,10 +2035,7 @@ class _RecurrenceNumberChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            value.toString(),
-            style: labelStyle,
-          ),
+          Text(value.toString(), style: labelStyle),
           if (onRemove != null) ...[
             const SizedBox(width: calendarInsetSm),
             _RecurrenceChipRemoveButton(onPressed: onRemove!),
@@ -2092,9 +2047,7 @@ class _RecurrenceNumberChip extends StatelessWidget {
 }
 
 class _RecurrenceChipRemoveButton extends StatelessWidget {
-  const _RecurrenceChipRemoveButton({
-    required this.onPressed,
-  });
+  const _RecurrenceChipRemoveButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -2158,9 +2111,10 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
       referenceStart: widget.referenceStart,
       template: template,
     );
-    final List<CalendarDateTime> next = _normalizeDateTimes(
-      <CalendarDateTime>[...widget.values, entry],
-    );
+    final List<CalendarDateTime> next = _normalizeDateTimes(<CalendarDateTime>[
+      ...widget.values,
+      entry,
+    ]);
     widget.onChanged(next);
     setState(() {
       _pendingDate = null;
@@ -2170,9 +2124,7 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
   void _removeDate(CalendarDateTime entry) {
     final List<CalendarDateTime> next = List<CalendarDateTime>.from(
       widget.values,
-    )..removeWhere(
-        (value) => value.value == entry.value,
-      );
+    )..removeWhere((value) => value.value == entry.value);
     widget.onChanged(next);
   }
 
@@ -2228,10 +2180,7 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
 }
 
 class _RecurrenceDateChip extends StatelessWidget {
-  const _RecurrenceDateChip({
-    required this.entry,
-    this.onRemove,
-  });
+  const _RecurrenceDateChip({required this.entry, this.onRemove});
 
   final CalendarDateTime entry;
   final VoidCallback? onRemove;
@@ -2256,10 +2205,7 @@ class _RecurrenceDateChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: labelStyle,
-          ),
+          Text(label, style: labelStyle),
           if (onRemove != null) ...[
             const SizedBox(width: calendarInsetSm),
             _RecurrenceChipRemoveButton(onPressed: onRemove!),
@@ -2302,8 +2248,10 @@ class _RecurrenceOrdinalWeekdayEditorState
       weekday: _selectedWeekday,
       position: position,
     );
-    final List<RecurrenceWeekday> merged =
-        _normalizeByDays(<RecurrenceWeekday>[...widget.value, entry]);
+    final List<RecurrenceWeekday> merged = _normalizeByDays(<RecurrenceWeekday>[
+      ...widget.value,
+      entry,
+    ]);
     if (_listsEqual(widget.value, merged)) {
       return;
     }
@@ -2311,7 +2259,9 @@ class _RecurrenceOrdinalWeekdayEditorState
   }
 
   bool _listsEqual(
-      List<RecurrenceWeekday> left, List<RecurrenceWeekday> right) {
+    List<RecurrenceWeekday> left,
+    List<RecurrenceWeekday> right,
+  ) {
     if (left.length != right.length) {
       return false;
     }
@@ -2457,10 +2407,7 @@ class _RecurrenceOrdinalWeekdayEditorState
 }
 
 class _RecurrenceWeekdayChip extends StatelessWidget {
-  const _RecurrenceWeekdayChip({
-    required this.entry,
-    this.onRemove,
-  });
+  const _RecurrenceWeekdayChip({required this.entry, this.onRemove});
 
   final RecurrenceWeekday entry;
   final VoidCallback? onRemove;
@@ -2485,10 +2432,7 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: labelStyle,
-          ),
+          Text(label, style: labelStyle),
           if (onRemove != null) ...[
             const SizedBox(width: calendarInsetSm),
             _RecurrenceChipRemoveButton(onPressed: onRemove!),
@@ -2537,18 +2481,12 @@ class _RecurrenceTimeSummary extends StatelessWidget {
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: rows,
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
   }
 }
 
 class _RecurrenceTimeSummaryRow extends StatelessWidget {
-  const _RecurrenceTimeSummaryRow({
-    required this.label,
-    required this.values,
-  });
+  const _RecurrenceTimeSummaryRow({required this.label, required this.values});
 
   final String label;
   final String values;

@@ -6,10 +6,7 @@ import 'package:flutter/material.dart';
 const double _fadeHiddenOpacity = 0.0;
 const double _fadeVisibleOpacity = 1.0;
 
-enum AxiFadeIndexedStackTransition {
-  crossFade,
-  fadeOutIn,
-}
+enum AxiFadeIndexedStackTransition { crossFade, fadeOutIn }
 
 class AxiFadeIndexedStack extends StatelessWidget {
   const AxiFadeIndexedStack({
@@ -115,10 +112,7 @@ class _AxiFadeIndexedStackFadeOutInState
       _controller.duration = widget.duration;
     }
     if (widget.curve != oldWidget.curve) {
-      _opacity = CurvedAnimation(
-        parent: _controller,
-        curve: widget.curve,
-      );
+      _opacity = CurvedAnimation(parent: _controller, curve: widget.curve);
     }
     if (widget.index != _targetIndex) {
       _queueTransition(widget.index);
@@ -261,9 +255,6 @@ class _AxiFadeIndexedStackChildState extends State<_AxiFadeIndexedStackChild> {
     if (widget.overlapChildren) {
       return animatedChild;
     }
-    return Offstage(
-      offstage: !widget.visible,
-      child: animatedChild,
-    );
+    return Offstage(offstage: !widget.visible, child: animatedChild);
   }
 }

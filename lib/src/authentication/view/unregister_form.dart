@@ -21,10 +21,12 @@ const double _unregisterSpinnerPadding = 1.0;
 const double _unregisterSpinnerSlotSize =
     _unregisterSpinnerDimension + (_unregisterSpinnerPadding * 2);
 const double _unregisterSpinnerGap = 8.0;
-const EdgeInsets _unregisterErrorPadding =
-    EdgeInsets.all(_unregisterErrorPaddingValue);
-const EdgeInsets _unregisterFieldPadding =
-    EdgeInsets.all(_unregisterFieldPaddingValue);
+const EdgeInsets _unregisterErrorPadding = EdgeInsets.all(
+  _unregisterErrorPaddingValue,
+);
+const EdgeInsets _unregisterFieldPadding = EdgeInsets.all(
+  _unregisterFieldPaddingValue,
+);
 
 class UnregisterForm extends StatefulWidget {
   const UnregisterForm({super.key});
@@ -83,10 +85,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                UnregisterForm.title(l10n),
-                style: context.textTheme.h3,
-              ),
+              Text(UnregisterForm.title(l10n), style: context.textTheme.h3),
               state is AuthenticationUnregisterFailure
                   ? Padding(
                       padding: _unregisterErrorPadding,
@@ -127,10 +126,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                     onPressed: () => _onPressed(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: [
-                        spinnerSlot,
-                        Text(l10n.commonContinue),
-                      ],
+                      children: [spinnerSlot, Text(l10n.commonContinue)],
                     ),
                   ).withTapBounce(enabled: !loading);
                 },

@@ -61,13 +61,11 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     await _refreshMetadata(from: event.from);
   }
 
-  Future<void> _refreshMetadata({
-    required mox.JID from,
-    String? itemId,
-  }) async {
+  Future<void> _refreshMetadata({required mox.JID from, String? itemId}) async {
     if (_shouldSkipAvatarJid(from)) return;
-    final pubsub =
-        getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
+    final pubsub = getAttributes().getManagerById<mox.PubSubManager>(
+      mox.pubsubManager,
+    );
     if (pubsub == null) return;
 
     final bareFrom = from.toBare();
@@ -108,10 +106,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     final items = itemsResult.get<List<mox.PubSubItem>>();
     if (items.isEmpty) {
       getAttributes().sendEvent(
-        mox.UserAvatarUpdatedEvent(
-          from,
-          const <mox.UserAvatarMetadata>[],
-        ),
+        mox.UserAvatarUpdatedEvent(from, const <mox.UserAvatarMetadata>[]),
       );
       return;
     }
@@ -136,18 +131,14 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
     final metadata =
         payload.findTags(_infoTag).map(mox.UserAvatarMetadata.fromXML).toList();
-    getAttributes().sendEvent(
-      mox.UserAvatarUpdatedEvent(
-        from,
-        metadata,
-      ),
-    );
+    getAttributes().sendEvent(mox.UserAvatarUpdatedEvent(from, metadata));
   }
 
   @override
   Future<moxlib.Result<mox.AvatarError, bool>> unsubscribe(mox.JID jid) async {
-    final pubsub =
-        getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
+    final pubsub = getAttributes().getManagerById<mox.PubSubManager>(
+      mox.pubsubManager,
+    );
     if (pubsub == null) {
       return moxlib.Result(mox.UnknownAvatarError());
     }

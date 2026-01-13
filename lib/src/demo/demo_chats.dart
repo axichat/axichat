@@ -20,10 +20,7 @@ class DemoAttachmentAsset {
 }
 
 class DemoContactAvatar {
-  const DemoContactAvatar({
-    required this.assetPath,
-    required this.hash,
-  });
+  const DemoContactAvatar({required this.assetPath, required this.hash});
 
   final String assetPath;
   final String hash;
@@ -501,43 +498,23 @@ class DemoChats {
 
     return [
       DemoChatScript(
-        chat: directChat(
-          washingtonJid,
-          'Washington',
-          washingtonMessages,
-        ),
+        chat: directChat(washingtonJid, 'Washington', washingtonMessages),
         messages: washingtonMessages,
       ),
       DemoChatScript(
-        chat: directChat(
-          jeffersonJid,
-          'Jefferson',
-          jeffersonMessages,
-        ),
+        chat: directChat(jeffersonJid, 'Jefferson', jeffersonMessages),
         messages: jeffersonMessages,
       ),
       DemoChatScript(
-        chat: directChat(
-          adamsJid,
-          'Adams',
-          adamsMessages,
-        ),
+        chat: directChat(adamsJid, 'Adams', adamsMessages),
         messages: adamsMessages,
       ),
       DemoChatScript(
-        chat: directChat(
-          madisonJid,
-          'Madison',
-          madisonMessages,
-        ),
+        chat: directChat(madisonJid, 'Madison', madisonMessages),
         messages: madisonMessages,
       ),
       DemoChatScript(
-        chat: directChat(
-          hamiltonJid,
-          'Hamilton',
-          hamiltonMessages,
-        ),
+        chat: directChat(hamiltonJid, 'Hamilton', hamiltonMessages),
         messages: hamiltonMessages,
       ),
       DemoChatScript(
@@ -576,10 +553,7 @@ class DemoChats {
             occupantId: gmailJid,
           ).copyWith(fileMetadataID: gmailDocAttachment.id),
         ],
-        attachments: const [
-          gmailDocAttachment,
-          gmailDocAttachment2,
-        ],
+        attachments: const [gmailDocAttachment, gmailDocAttachment2],
       ),
       DemoChatScript(
         chat: groupChat,

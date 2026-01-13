@@ -34,10 +34,7 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CalendarFragmentCard(
-      fragment: CalendarFragment.criticalPath(
-        path: path,
-        tasks: tasks,
-      ),
+      fragment: CalendarFragment.criticalPath(path: path, tasks: tasks),
       footerDetails: footerDetails,
       onTap: () => _handleCopy(context),
     );
@@ -71,16 +68,12 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     if (decision.addToPersonal &&
         _maybeReadPersonalCalendarBloc(context) != null) {
       context.read<CalendarBloc>().add(
-            CalendarEvent.modelImported(
-              model: importModel,
-            ),
+            CalendarEvent.modelImported(model: importModel),
           );
     }
     if (decision.addToChat && _maybeReadChatCalendarBloc(context) != null) {
       context.read<ChatCalendarBloc>().add(
-            CalendarEvent.modelImported(
-              model: importModel,
-            ),
+            CalendarEvent.modelImported(model: importModel),
           );
     }
 
@@ -91,8 +84,9 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final Set<String> availableIds = tasks.map((task) => task.id).toSet();
     final List<String> orderedIds =
         path.taskIds.where(availableIds.contains).toList(growable: false);
-    final CalendarCriticalPath resolvedPath =
-        path.copyWith(taskIds: orderedIds);
+    final CalendarCriticalPath resolvedPath = path.copyWith(
+      taskIds: orderedIds,
+    );
     final Map<String, CalendarTask> taskMap = <String, CalendarTask>{
       for (final task in tasks) task.id: task,
     };

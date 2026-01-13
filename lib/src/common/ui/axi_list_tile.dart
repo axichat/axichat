@@ -7,8 +7,10 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class AxiListTile extends StatelessWidget {
-  static const EdgeInsets _defaultContentPadding =
-      EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+  static const EdgeInsets _defaultContentPadding = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 8,
+  );
   static const double _defaultMinTileHeight = 72.0;
   static const double _compactMinTileHeight = 56.0;
 
@@ -88,10 +90,7 @@ class AxiListTile extends StatelessWidget {
           ? null
           : ConstrainedBox(
               constraints: leadingConstraints ??
-                  const BoxConstraints(
-                    maxHeight: 40.0,
-                    maxWidth: 40.0,
-                  ),
+                  const BoxConstraints(maxHeight: 40.0, maxWidth: 40.0),
               child: leading,
             ),
       title: title == null
@@ -118,8 +117,10 @@ class AxiListTile extends StatelessWidget {
           : Text(
               subtitle!,
               overflow: TextOverflow.ellipsis,
-              style: context.textTheme.muted
-                  .copyWith(color: colors.mutedForeground, height: 1.2),
+              style: context.textTheme.muted.copyWith(
+                color: colors.mutedForeground,
+                height: 1.2,
+              ),
             ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -141,19 +142,13 @@ class AxiListTile extends StatelessWidget {
     if (paintSurface) {
       child = AnimatedContainer(
         duration: baseAnimationDuration,
-        decoration: ShapeDecoration(
-          color: backgroundColor,
-          shape: shape,
-        ),
+        decoration: ShapeDecoration(color: backgroundColor, shape: shape),
         child: child,
       );
     }
 
     if (menuItems != null) {
-      child = AxiContextMenuRegion(
-        items: menuItems!,
-        child: child,
-      );
+      child = AxiContextMenuRegion(items: menuItems!, child: child);
     }
 
     if (tapBounce) {

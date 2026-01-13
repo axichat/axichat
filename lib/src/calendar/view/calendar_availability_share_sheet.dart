@@ -102,10 +102,7 @@ const Uuid _availabilityPresetIdGenerator = Uuid();
 
 XmppService? _maybeReadXmppService(BuildContext context) {
   try {
-    return RepositoryProvider.of<XmppService>(
-      context,
-      listen: false,
-    );
+    return RepositoryProvider.of<XmppService>(context, listen: false);
   } on FlutterError {
     return null;
   }
@@ -129,7 +126,8 @@ Future<void> showCalendarAvailabilityShareSheet({
       ? (canLockToChat ? <Chat>[lockedChat] : const <Chat>[])
       : chats
           .where(
-              (chat) => chat.supportsChatCalendar && chat.type != ChatType.note)
+            (chat) => chat.supportsChatCalendar && chat.type != ChatType.note,
+          )
           .toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(
@@ -376,8 +374,9 @@ class _CalendarAvailabilityShareScreenState
       _rangeStart = value;
       final end = _rangeEnd;
       if (value != null && end != null && !end.isAfter(value)) {
-        _rangeEnd =
-            value.add(const Duration(days: _availabilityDefaultRangeDays));
+        _rangeEnd = value.add(
+          const Duration(days: _availabilityDefaultRangeDays),
+        );
       }
       _hasCustomDraft = false;
       _resetDraftIntervals();
@@ -465,9 +464,7 @@ class _CalendarAvailabilityShareScreenState
         builder: (dialogContext) => AxiInputDialog(
           title: const Text(_availabilitySharePresetNameTitle),
           callbackText: _availabilityShareSaveLabel,
-          callback: () => Navigator.of(dialogContext).pop(
-            controller.text,
-          ),
+          callback: () => Navigator.of(dialogContext).pop(controller.text),
           content: AxiTextField(
             controller: controller,
             decoration: const InputDecoration(
@@ -506,9 +503,11 @@ class _CalendarAvailabilityShareScreenState
     final List<Chat> filtered = query.isEmpty
         ? base
         : base
-            .where((chat) =>
-                chat.displayName.toLowerCase().contains(query) ||
-                chat.jid.toLowerCase().contains(query))
+            .where(
+              (chat) =>
+                  chat.displayName.toLowerCase().contains(query) ||
+                  chat.jid.toLowerCase().contains(query),
+            )
             .toList(growable: false);
     final int capped = math.min(filtered.length, _recipientPageSize);
     return filtered.take(capped).toList(growable: false);
@@ -518,10 +517,12 @@ class _CalendarAvailabilityShareScreenState
     final String query = _searchController.text.trim().toLowerCase();
     final int total = widget.availableChats
         .where((chat) => chat.type != ChatType.note)
-        .where((chat) => query.isEmpty
-            ? true
-            : chat.displayName.toLowerCase().contains(query) ||
-                chat.jid.toLowerCase().contains(query))
+        .where(
+          (chat) => query.isEmpty
+              ? true
+              : chat.displayName.toLowerCase().contains(query) ||
+                  chat.jid.toLowerCase().contains(query),
+        )
         .length;
     return _recipientPageSize < total;
   }
@@ -669,8 +670,10 @@ class _CalendarAvailabilityShareScreenState
       rangeEnd: CalendarDateTime(value: end, tzid: tzid),
       isRedacted: false,
     );
-    final CalendarAvailabilityOverlay overlay =
-        deriveAvailabilityOverlay(model: _localModel, base: base);
+    final CalendarAvailabilityOverlay overlay = deriveAvailabilityOverlay(
+      model: _localModel,
+      base: base,
+    );
     _draftIntervals = overlay.intervals
         .map(
           (interval) => interval.copyWith(
@@ -713,8 +716,10 @@ class _CalendarAvailabilityShareScreenState
         .where((preset) => preset.name?.trim().isNotEmpty == true)
         .toList(growable: false)
       ..sort(
-        (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+        (a, b) =>
+            (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+          a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+        ),
       );
     final Map<String, CalendarAvailabilityPreset> trimmed = {
       for (final preset in sorted.take(_availabilityPresetMaxCount))
@@ -727,9 +732,7 @@ class _CalendarAvailabilityShareScreenState
     });
   }
 
-  Future<void> _saveRecentPreset(
-    CalendarAvailabilityOverlay overlay,
-  ) async {
+  Future<void> _saveRecentPreset(CalendarAvailabilityOverlay overlay) async {
     final DateTime start = overlay.rangeStart.value;
     final DateTime end = overlay.rangeEnd.value;
     if (!end.isAfter(start)) {
@@ -809,14 +812,8 @@ class _AvailabilityEditorStep extends StatelessWidget {
       onSharePressed: onSharePressed,
     );
     return spec.sizeClass == CalendarSizeClass.expanded
-        ? _AvailabilityEditorWideLayout(
-            panel: panel,
-            editor: editor,
-          )
-        : _AvailabilityEditorCompactLayout(
-            panel: panel,
-            editor: editor,
-          );
+        ? _AvailabilityEditorWideLayout(panel: panel, editor: editor)
+        : _AvailabilityEditorCompactLayout(panel: panel, editor: editor);
   }
 }
 
@@ -985,9 +982,7 @@ class _AvailabilityShareHeader extends StatelessWidget {
     );
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: context.colorScheme.border),
-        ),
+        border: Border(bottom: BorderSide(color: context.colorScheme.border)),
       ),
       child: Padding(
         padding: calendarMarginLarge,
@@ -1102,10 +1097,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
                     message: _availabilityShareRecipientsEmptyLabel,
                   ),
                 )
-              : ListView(
-                  padding: EdgeInsets.zero,
-                  children: listItems,
-                ),
+              : ListView(padding: EdgeInsets.zero, children: listItems),
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         _AvailabilityActionRow(
@@ -1258,12 +1250,7 @@ class _AvailabilityRecipientTile extends StatelessWidget {
           selected: isSelected,
           onTap: onToggle,
           contentPadding: _availabilityChatTilePadding,
-          actions: [
-            Checkbox(
-              value: isSelected,
-              onChanged: (_) => onToggle(),
-            ),
-          ],
+          actions: [Checkbox(value: isSelected, onChanged: (_) => onToggle())],
         ),
         const SizedBox(height: _availabilitySheetTileGap),
       ],
@@ -1366,13 +1353,7 @@ class _AvailabilityActionRow extends StatelessWidget {
 }
 
 DateTime _normalizeRangeStart(DateTime now) {
-  return DateTime(
-    now.year,
-    now.month,
-    now.day,
-    now.hour,
-    now.minute,
-  );
+  return DateTime(now.year, now.month, now.day, now.hour, now.minute);
 }
 
 String? _resolveTimeZone(CalendarModel model) {

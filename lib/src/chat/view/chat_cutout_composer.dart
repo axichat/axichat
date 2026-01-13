@@ -116,10 +116,7 @@ class ChatCutoutComposer extends StatelessWidget {
       ),
     };
 
-    final textStyle = context.textTheme.p.copyWith(
-      fontSize: 16,
-      height: 1.35,
-    );
+    final textStyle = context.textTheme.p.copyWith(fontSize: 16, height: 1.35);
     final cursorHeight = textStyle.fontSize == null
         ? null
         : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);

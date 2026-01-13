@@ -6,10 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 /// Describes a location suggestion along with its source metadata.
 class LocationSuggestion {
-  const LocationSuggestion({
-    required this.label,
-    this.isHistory = false,
-  });
+  const LocationSuggestion({required this.label, this.isHistory = false});
 
   final String label;
   final bool isHistory;
@@ -48,17 +45,10 @@ class LocationAutocompleteHelper {
 
   factory LocationAutocompleteHelper.fromSeeds(Iterable<String> seeds) {
     final unique = <String>{
-      ...seeds.map((value) => value.trim()).where(
-            (value) => value.isNotEmpty,
-          )
+      ...seeds.map((value) => value.trim()).where((value) => value.isNotEmpty),
     };
     final entries = <_LocationEntry>[
-      ...unique.map(
-        (value) => _LocationEntry(
-          label: value,
-          isHistory: true,
-        ),
-      ),
+      ...unique.map((value) => _LocationEntry(label: value, isHistory: true)),
     ];
 
     for (final fallback in _fallbackCorpus) {

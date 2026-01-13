@@ -141,9 +141,7 @@ class ResponsiveHelper {
   }
 
   /// Returns the descriptor for a specific size class.
-  static CalendarResponsiveSpec specForSizeClass(
-    CalendarSizeClass sizeClass,
-  ) {
+  static CalendarResponsiveSpec specForSizeClass(CalendarSizeClass sizeClass) {
     return _specs.firstWhere(
       (spec) => spec.sizeClass == sizeClass,
       orElse: () => _specs.last,

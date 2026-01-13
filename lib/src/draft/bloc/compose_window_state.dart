@@ -22,13 +22,7 @@ class ComposeDraftSeed extends Equatable {
   final List<String> attachmentMetadataIds;
 
   @override
-  List<Object?> get props => [
-        id,
-        jids,
-        body,
-        subject,
-        attachmentMetadataIds,
-      ];
+  List<Object?> get props => [id, jids, body, subject, attachmentMetadataIds];
 }
 
 @immutable
@@ -37,12 +31,8 @@ class ComposeWindowState extends Equatable {
 
   final List<ComposeWindowEntry> windows;
 
-  ComposeWindowState copyWith({
-    List<ComposeWindowEntry>? windows,
-  }) {
-    return ComposeWindowState(
-      windows: windows ?? this.windows,
-    );
+  ComposeWindowState copyWith({List<ComposeWindowEntry>? windows}) {
+    return ComposeWindowState(windows: windows ?? this.windows);
   }
 
   @override
@@ -85,11 +75,5 @@ class ComposeWindowEntry extends Equatable {
   }
 
   @override
-  List<Object?> get props => [
-        id,
-        view,
-        seed,
-        session,
-        offset,
-      ];
+  List<Object?> get props => [id, view, seed, session, offset];
 }

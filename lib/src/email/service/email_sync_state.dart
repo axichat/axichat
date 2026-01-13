@@ -18,10 +18,8 @@ class EmailSyncState extends Equatable {
   const EmailSyncState.ready()
       : this._(EmailSyncStatus.ready, message: null, exception: null);
 
-  const EmailSyncState.offline(
-    String message, {
-    DeltaChatException? exception,
-  }) : this._(
+  const EmailSyncState.offline(String message, {DeltaChatException? exception})
+      : this._(
           EmailSyncStatus.offline,
           message: message,
           exception: exception,
@@ -29,15 +27,10 @@ class EmailSyncState extends Equatable {
         );
 
   const EmailSyncState.recovering(String message)
-      : this._(
-          EmailSyncStatus.recovering,
-          message: message,
-        );
+      : this._(EmailSyncStatus.recovering, message: message);
 
-  const EmailSyncState.error(
-    String message, {
-    DeltaChatException? exception,
-  }) : this._(
+  const EmailSyncState.error(String message, {DeltaChatException? exception})
+      : this._(
           EmailSyncStatus.error,
           message: message,
           exception: exception,

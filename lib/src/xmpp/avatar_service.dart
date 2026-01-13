@@ -25,10 +25,7 @@ class AvatarUploadPayload {
 }
 
 class AvatarUploadResult {
-  const AvatarUploadResult({
-    required this.path,
-    required this.hash,
-  });
+  const AvatarUploadResult({required this.path, required this.hash});
 
   final String path;
   final String hash;
@@ -65,15 +62,18 @@ mixin AvatarService on XmppBase, MucService {
   static const int _safeAvatarBytesCacheLimit = _avatarBytesCacheLimit;
   static const int _conversationAvatarChatStart = 0;
   static const int _conversationAvatarChatEnd = 0;
-  static const Duration _conversationAvatarRefreshCooldown =
-      Duration(minutes: 2);
+  static const Duration _conversationAvatarRefreshCooldown = Duration(
+    minutes: 2,
+  );
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
   static const int _avatarPublishVerificationAttempts = 2;
-  static const Duration _avatarPublishVerificationDelay =
-      Duration(milliseconds: 350);
-  static const Duration _avatarPublishVerificationTimeout =
-      Duration(seconds: 5);
+  static const Duration _avatarPublishVerificationDelay = Duration(
+    milliseconds: 350,
+  );
+  static const Duration _avatarPublishVerificationTimeout = Duration(
+    seconds: 5,
+  );
   static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
   static const bool _allowAvatarPublisherFallback = true;
   static const bool _avatarSkipDefault = true;
@@ -152,9 +152,7 @@ mixin AvatarService on XmppBase, MucService {
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
-      SafeUserAvatarManager(
-        shouldSkipJid: _shouldSkipUserAvatarJid,
-      ),
+      SafeUserAvatarManager(shouldSkipJid: _shouldSkipUserAvatarJid),
       SafeVCardManager(),
     ]);
 
@@ -169,10 +167,7 @@ mixin AvatarService on XmppBase, MucService {
           return;
         }
 
-        await _refreshAvatarForJid(
-          bareJid,
-          metadata: event.metadata,
-        );
+        await _refreshAvatarForJid(bareJid, metadata: event.metadata);
       })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
@@ -278,20 +273,14 @@ mixin AvatarService on XmppBase, MucService {
 
   void _startSelfAvatarRefreshTimer() {
     _selfAvatarRefreshTimer?.cancel();
-    _selfAvatarRefreshTimer = Timer.periodic(
-      _selfAvatarRefreshInterval,
-      (_) {
-        if (connectionState != ConnectionState.connected) return;
-        if (avatarEncryptionKey == null) return;
-        unawaited(refreshSelfAvatarIfNeeded());
-      },
-    );
+    _selfAvatarRefreshTimer = Timer.periodic(_selfAvatarRefreshInterval, (_) {
+      if (connectionState != ConnectionState.connected) return;
+      if (avatarEncryptionKey == null) return;
+      unawaited(refreshSelfAvatarIfNeeded());
+    });
   }
 
-  void scheduleAvatarRefresh(
-    Iterable<String> jids, {
-    bool force = false,
-  }) {
+  void scheduleAvatarRefresh(Iterable<String> jids, {bool force = false}) {
     for (final jid in jids) {
       if (_isMucAvatarJid(jid)) continue;
       unawaited(_refreshAvatarForJid(jid, force: force));
@@ -421,10 +410,7 @@ mixin AvatarService on XmppBase, MucService {
 
     switch (await _loadMetadata(bareJid)) {
       case final _AvatarMetadataLoaded loaded:
-        await _refreshAvatarForJid(
-          bareJid,
-          metadata: [loaded.metadata],
-        );
+        await _refreshAvatarForJid(bareJid, metadata: [loaded.metadata]);
       case _AvatarMetadataMissing():
         await _refreshAvatarFromVCardRequest(bareJid);
       case _AvatarMetadataLoadFailed():
@@ -445,14 +431,14 @@ mixin AvatarService on XmppBase, MucService {
     if (avatarEncryptionKey == null) return;
 
     try {
-      final stored = await _dbOpReturning<XmppStateStore, StoredAvatar?>(
-        (ss) async {
-          final path = ss.read(key: selfAvatarPathKey) as String?;
-          final hash = ss.read(key: selfAvatarHashKey) as String?;
-          if (path == null && hash == null) return null;
-          return StoredAvatar(path: path, hash: hash);
-        },
-      );
+      final stored = await _dbOpReturning<XmppStateStore, StoredAvatar?>((
+        ss,
+      ) async {
+        final path = ss.read(key: selfAvatarPathKey) as String?;
+        final hash = ss.read(key: selfAvatarHashKey) as String?;
+        if (path == null && hash == null) return null;
+        return StoredAvatar(path: path, hash: hash);
+      });
       if (stored == null || stored.isEmpty) return;
       final path = stored.path?.trim();
       if (path == null || path.isEmpty) return;
@@ -485,8 +471,9 @@ mixin AvatarService on XmppBase, MucService {
       final manager = _connection.getManager<mox.VCardManager>();
       if (manager == null) return;
 
-      final vcardResult =
-          await manager.requestVCard(mox.JID.fromString(normalizedJid));
+      final vcardResult = await manager.requestVCard(
+        mox.JID.fromString(normalizedJid),
+      );
       if (vcardResult.isType<mox.VCardError>()) return;
       final vcard = vcardResult.get<mox.VCard>();
       final rawEncoded = vcard.photo?.binval?.trim();
@@ -620,15 +607,9 @@ mixin AvatarService on XmppBase, MucService {
       if (bytes.isEmpty) return;
       if (bytes.length > _maxAvatarBytes) return;
 
-      final path = await _writeAvatarFile(
-        bytes: bytes,
-      );
+      final path = await _writeAvatarFile(bytes: bytes);
 
-      await _storeAvatar(
-        jid: bareJid,
-        path: path,
-        hash: avatarData.hash,
-      );
+      await _storeAvatar(jid: bareJid, path: path, hash: avatarData.hash);
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh avatar.', error, stackTrace);
     } finally {
@@ -658,8 +639,9 @@ mixin AvatarService on XmppBase, MucService {
       final manager = _connection.getManager<mox.VCardManager>();
       if (manager == null) return;
 
-      final vcardResult =
-          await manager.requestVCard(mox.JID.fromString(bareJid));
+      final vcardResult = await manager.requestVCard(
+        mox.JID.fromString(bareJid),
+      );
       if (vcardResult.isType<mox.VCardError>()) return;
       final vcard = vcardResult.get<mox.VCard>();
       final rawEncoded = vcard.photo?.binval?.trim();
@@ -673,15 +655,9 @@ mixin AvatarService on XmppBase, MucService {
       if (bytes.isEmpty) return;
       if (bytes.length > _maxAvatarBytes) return;
 
-      final path = await _writeAvatarFile(
-        bytes: bytes,
-      );
+      final path = await _writeAvatarFile(bytes: bytes);
 
-      await _storeAvatar(
-        jid: bareJid,
-        path: path,
-        hash: hash,
-      );
+      await _storeAvatar(jid: bareJid, path: path, hash: hash);
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
     } finally {
@@ -751,31 +727,28 @@ mixin AvatarService on XmppBase, MucService {
     List<mox.UserAvatarMetadata> metadata,
   ) {
     if (metadata.isEmpty) return null;
-    final filtered = metadata
-        .where((item) => item.length > 0 && item.length <= _maxAvatarBytes);
+    final filtered = metadata.where(
+      (item) => item.length > 0 && item.length <= _maxAvatarBytes,
+    );
     if (filtered.isEmpty) return null;
-    final sorted = [...filtered]..sort(
-        (a, b) {
-          final sizeA = (a.width ?? 0) * (a.height ?? 0);
-          final sizeB = (b.width ?? 0) * (b.height ?? 0);
-          final dimensionCompare = sizeB.compareTo(sizeA);
-          if (dimensionCompare != 0) return dimensionCompare;
-          return b.length.compareTo(a.length);
-        },
-      );
+    final sorted = [...filtered]..sort((a, b) {
+        final sizeA = (a.width ?? 0) * (a.height ?? 0);
+        final sizeB = (b.width ?? 0) * (b.height ?? 0);
+        final dimensionCompare = sizeB.compareTo(sizeA);
+        if (dimensionCompare != 0) return dimensionCompare;
+        return b.length.compareTo(a.length);
+      });
     return sorted.first;
   }
 
   Future<String?> _storedAvatarHash(String jid) async {
     try {
-      final hash = await _dbOpReturning<XmppDatabase, String?>(
-        (db) async {
-          final roster = await db.getRosterItem(jid);
-          if (roster?.avatarHash != null) return roster!.avatarHash;
-          final chat = await db.getChat(jid);
-          return chat?.avatarHash ?? chat?.contactAvatarHash;
-        },
-      );
+      final hash = await _dbOpReturning<XmppDatabase, String?>((db) async {
+        final roster = await db.getRosterItem(jid);
+        if (roster?.avatarHash != null) return roster!.avatarHash;
+        final chat = await db.getChat(jid);
+        return chat?.avatarHash ?? chat?.contactAvatarHash;
+      });
       if (hash != null) return hash;
       final myBareJid = _myJid?.toBare().toString();
       if (myBareJid != null && myBareJid == jid && isStateStoreReady) {
@@ -791,14 +764,12 @@ mixin AvatarService on XmppBase, MucService {
 
   Future<String?> _storedAvatarPath(String jid) async {
     try {
-      final path = await _dbOpReturning<XmppDatabase, String?>(
-        (db) async {
-          final roster = await db.getRosterItem(jid);
-          if (roster?.avatarPath != null) return roster!.avatarPath;
-          final chat = await db.getChat(jid);
-          return chat?.avatarPath ?? chat?.contactAvatarPath;
-        },
-      );
+      final path = await _dbOpReturning<XmppDatabase, String?>((db) async {
+        final roster = await db.getRosterItem(jid);
+        if (roster?.avatarPath != null) return roster!.avatarPath;
+        final chat = await db.getChat(jid);
+        return chat?.avatarPath ?? chat?.contactAvatarPath;
+      });
       if (path != null) return path;
       final myBareJid = _myJid?.toBare().toString();
       if (myBareJid != null && myBareJid == jid && isStateStoreReady) {
@@ -817,37 +788,31 @@ mixin AvatarService on XmppBase, MucService {
     if (bareJid == null) return;
     final existingPath = await _storedAvatarPath(bareJid);
 
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final rosterItem = await db.getRosterItem(bareJid);
-        final chat = await db.getChat(bareJid);
-        if (rosterItem != null) {
-          await db.updateRosterAvatar(
-            jid: bareJid,
-            avatarPath: null,
-            avatarHash: null,
-          );
-        }
-        if (chat != null) {
-          await db.updateChatAvatar(
-            jid: bareJid,
-            avatarPath: null,
-            avatarHash: null,
-          );
-        }
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final rosterItem = await db.getRosterItem(bareJid);
+      final chat = await db.getChat(bareJid);
+      if (rosterItem != null) {
+        await db.updateRosterAvatar(
+          jid: bareJid,
+          avatarPath: null,
+          avatarHash: null,
+        );
+      }
+      if (chat != null) {
+        await db.updateChatAvatar(
+          jid: bareJid,
+          avatarPath: null,
+          avatarHash: null,
+        );
+      }
+    }, awaitDatabase: true);
 
     final myBareJid = _myJid?.toBare().toString();
     if (myBareJid != null && myBareJid == bareJid && isStateStoreReady) {
-      await _dbOp<XmppStateStore>(
-        (ss) async {
-          await ss.write(key: selfAvatarPathKey, value: null);
-          await ss.write(key: selfAvatarHashKey, value: null);
-        },
-        awaitDatabase: true,
-      );
+      await _dbOp<XmppStateStore>((ss) async {
+        await ss.write(key: selfAvatarPathKey, value: null);
+        await ss.write(key: selfAvatarHashKey, value: null);
+      }, awaitDatabase: true);
       owner._notifySelfAvatarUpdated(null);
     }
 
@@ -858,8 +823,9 @@ mixin AvatarService on XmppBase, MucService {
         cacheDirectory: cacheDirectory,
         filePath: existingPath,
       )) {
-        _avatarLog
-            .warning('Refusing to delete avatar outside cache directory.');
+        _avatarLog.warning(
+          'Refusing to delete avatar outside cache directory.',
+        );
         return;
       }
       final file = File(existingPath);
@@ -879,27 +845,20 @@ mixin AvatarService on XmppBase, MucService {
     required String hash,
   }) async {
     final myBareJid = _myJid?.toBare().toString();
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final rosterItem = await db.getRosterItem(jid);
-        final chat = await db.getChat(jid);
-        if (rosterItem != null) {
-          await db.updateRosterAvatar(
-            jid: jid,
-            avatarPath: path,
-            avatarHash: hash,
-          );
-        }
-        if (chat != null) {
-          await db.updateChatAvatar(
-            jid: jid,
-            avatarPath: path,
-            avatarHash: hash,
-          );
-        }
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final rosterItem = await db.getRosterItem(jid);
+      final chat = await db.getChat(jid);
+      if (rosterItem != null) {
+        await db.updateRosterAvatar(
+          jid: jid,
+          avatarPath: path,
+          avatarHash: hash,
+        );
+      }
+      if (chat != null) {
+        await db.updateChatAvatar(jid: jid, avatarPath: path, avatarHash: hash);
+      }
+    }, awaitDatabase: true);
     if (myBareJid != null && myBareJid == jid) {
       await _persistOwnAvatar(path, hash);
       owner._notifySelfAvatarUpdated(StoredAvatar(path: path, hash: hash));
@@ -909,13 +868,10 @@ mixin AvatarService on XmppBase, MucService {
   Future<void> _persistOwnAvatar(String path, String hash) async {
     if (!isStateStoreReady) return;
     try {
-      await _dbOp<XmppStateStore>(
-        (ss) async {
-          await ss.write(key: selfAvatarPathKey, value: path);
-          await ss.write(key: selfAvatarHashKey, value: hash);
-        },
-        awaitDatabase: true,
-      );
+      await _dbOp<XmppStateStore>((ss) async {
+        await ss.write(key: selfAvatarPathKey, value: path);
+        await ss.write(key: selfAvatarHashKey, value: hash);
+      }, awaitDatabase: true);
     } on XmppAbortedException {
       return;
     }
@@ -960,7 +916,10 @@ mixin AvatarService on XmppBase, MucService {
           rethrow;
         } catch (retryError, retryStackTrace) {
           _avatarLog.severe(
-              'Failed to publish avatar', retryError, retryStackTrace);
+            'Failed to publish avatar',
+            retryError,
+            retryStackTrace,
+          );
           throw XmppAvatarException(retryError);
         }
       }
@@ -1057,10 +1016,11 @@ mixin AvatarService on XmppBase, MucService {
       _base64EncodeAvatarPublishPayload,
       payload.bytes,
     );
-    final dataPayload =
-        (mox.XmlBuilder.withNamespace('data', mox.userAvatarDataXmlns)
-              ..text(encodedData))
-            .build();
+    final dataPayload = (mox.XmlBuilder.withNamespace(
+      'data',
+      mox.userAvatarDataXmlns,
+    )..text(encodedData))
+        .build();
     final metadataPayload =
         (mox.XmlBuilder.withNamespace('metadata', mox.userAvatarMetadataXmlns)
               ..child(
@@ -1099,11 +1059,7 @@ mixin AvatarService on XmppBase, MucService {
 
       try {
         await pubsub
-            .createNodeWithConfig(
-              host,
-              config.toNodeConfig(),
-              nodeId: node,
-            )
+            .createNodeWithConfig(host, config.toNodeConfig(), nodeId: node)
             .timeout(_avatarPublishTimeout);
         final confirmed = await pubsub
             .configureNode(host, node, config)
@@ -1277,9 +1233,7 @@ mixin AvatarService on XmppBase, MucService {
       }
     }
 
-    final path = await _writeAvatarFile(
-      bytes: payload.bytes,
-    );
+    final path = await _writeAvatarFile(bytes: payload.bytes);
     await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
     final vCardManager = _connection.getManager<mox.VCardManager>();
     vCardManager?.setLastHash(targetJid, payload.hash);
@@ -1409,11 +1363,7 @@ mixin AvatarService on XmppBase, MucService {
         nonce.length + secretBox.cipherText.length,
         secretBox.cipherText,
       )
-      ..setRange(
-        combinedLength - macBytes.length,
-        combinedLength,
-        macBytes,
-      );
+      ..setRange(combinedLength - macBytes.length, combinedLength, macBytes);
     return combined;
   }
 
@@ -1429,23 +1379,16 @@ mixin AvatarService on XmppBase, MucService {
     }
     final nonce = encrypted.sublist(0, nonceLength);
     final macBytes = encrypted.sublist(encrypted.length - macLength);
-    final cipherText =
-        encrypted.sublist(nonceLength, encrypted.length - macLength);
-    final box = SecretBox(
-      cipherText,
-      nonce: nonce,
-      mac: Mac(macBytes),
+    final cipherText = encrypted.sublist(
+      nonceLength,
+      encrypted.length - macLength,
     );
-    final decrypted = await _avatarCipher.decrypt(
-      box,
-      secretKey: key,
-    );
+    final box = SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes));
+    final decrypted = await _avatarCipher.decrypt(box, secretKey: key);
     return Uint8List.fromList(decrypted);
   }
 
-  Future<String> _writeAvatarFile({
-    required List<int> bytes,
-  }) async {
+  Future<String> _writeAvatarFile({required List<int> bytes}) async {
     final directory = await _avatarCacheDirectory();
     final contentHash = sha256.convert(bytes).toString();
     final filename = '$contentHash.enc';

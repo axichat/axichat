@@ -51,10 +51,7 @@ class CutoutSurface extends StatelessWidget {
             shadows: shadows,
             shadowOpacity: resolvedShadowOpacity,
           ),
-          child: ClipPath(
-            clipper: clipper,
-            child: child,
-          ),
+          child: ClipPath(clipper: clipper, child: child),
         ),
         if (resolvedCutouts.isNotEmpty)
           for (final spec in resolvedCutouts) _CutoutAttachment(spec: spec),
@@ -174,20 +171,15 @@ class _CutoutClipper extends CustomClipper<Path> {
   }
 }
 
-Path _cutoutPath(
-  Size size,
-  OutlinedBorder shape,
-  List<CutoutSpec> cutouts,
-) {
+Path _cutoutPath(Size size, OutlinedBorder shape, List<CutoutSpec> cutouts) {
   final rect = Offset.zero & size;
   final outerPath = shape.getOuterPath(rect);
   var fillPath = Path()..addPath(outerPath, Offset.zero);
   for (final spec in cutouts) {
     final cutoutRect = _cutoutRect(size, spec);
-    final cutoutPath =
-        SquircleBorder(cornerRadius: spec.cornerRadius).getOuterPath(
-      cutoutRect,
-    );
+    final cutoutPath = SquircleBorder(
+      cornerRadius: spec.cornerRadius,
+    ).getOuterPath(cutoutRect);
     fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
   }
   return fillPath;
@@ -216,10 +208,9 @@ class _CutoutAttachmentDelegate extends SingleChildLayoutDelegate {
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(Size(
-      constraints.maxWidth,
-      constraints.maxHeight,
-    ));
+    return BoxConstraints.loose(
+      Size(constraints.maxWidth, constraints.maxHeight),
+    );
   }
 
   @override
@@ -228,11 +219,7 @@ class _CutoutAttachmentDelegate extends SingleChildLayoutDelegate {
     final direction = _insideNormal(spec.edge);
     final inset = _resolvedInset(childSize);
     final target = rect.center + direction * inset;
-    final topLeft = target -
-        Offset(
-          childSize.width / 2,
-          childSize.height / 2,
-        );
+    final topLeft = target - Offset(childSize.width / 2, childSize.height / 2);
     return topLeft;
   }
 
@@ -244,8 +231,10 @@ class _CutoutAttachmentDelegate extends SingleChildLayoutDelegate {
   double _autoInset(Size childSize) {
     final normalExtent = _extentAlongNormal(childSize);
     final perpendicularExtent = _extentPerpendicular(childSize);
-    final targetClearance =
-        math.max(0.0, (spec.thickness - perpendicularExtent) / 2);
+    final targetClearance = math.max(
+      0.0,
+      (spec.thickness - perpendicularExtent) / 2,
+    );
     final inset = spec.depth - normalExtent / 2 - targetClearance;
     if (inset <= 0) {
       return 0;

@@ -16,10 +16,7 @@ const Set<String> _safeLinkSchemes = <String>{
   _mailtoScheme,
   _xmppScheme,
 };
-const Set<String> _safeAttachmentSchemes = <String>{
-  _httpScheme,
-  _httpsScheme,
-};
+const Set<String> _safeAttachmentSchemes = <String>{_httpScheme, _httpsScheme};
 const int _nullCharCodeUnit = 0x00;
 const int _lineFeedCodeUnit = 0x0a;
 const int _carriageReturnCodeUnit = 0x0d;
@@ -88,17 +85,14 @@ const Set<String> _shortenerHosts = <String>{
   'trib.al',
 };
 
-enum LinkSafetyKind {
-  message,
-  attachment;
-}
+enum LinkSafetyKind { message, attachment }
 
 enum LinkSafetyWarning {
   punycode,
   mixedScript,
   bidiControl,
   zeroWidth,
-  shortener;
+  shortener,
 }
 
 class LinkSafetyReport {
@@ -208,10 +202,7 @@ LinkSafetyReport? assessLinkSafety({
   final normalizedHost = host.toLowerCase();
   final effectiveDomain =
       normalizedHost.isEmpty ? '' : _effectiveDomain(normalizedHost);
-  final warnings = _detectLinkWarnings(
-    rawUri: trimmed,
-    host: normalizedHost,
-  );
+  final warnings = _detectLinkWarnings(rawUri: trimmed, host: normalizedHost);
   final displayHost = _formatHostLabel(
     host: host,
     effectiveDomain: effectiveDomain,

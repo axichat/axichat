@@ -43,9 +43,7 @@ class DragFeedbackHint {
 }
 
 typedef TaskContextMenuBuilder = List<Widget> Function(
-  BuildContext context,
-  TaskContextMenuRequest request,
-);
+    BuildContext context, TaskContextMenuRequest request);
 
 class TaskContextMenuRequest {
   const TaskContextMenuRequest({
@@ -408,10 +406,7 @@ class _ResizableTaskBody extends StatelessWidget {
         decoration: decoration,
         child: Stack(
           children: [
-            _TaskAccentStripe(
-              color: stripeColor,
-              accentWidth: accentWidth,
-            ),
+            _TaskAccentStripe(color: stripeColor, accentWidth: accentWidth),
           ],
         ),
       );
@@ -428,8 +423,10 @@ class _ResizableTaskBody extends StatelessWidget {
       padding = 2;
     }
 
-    final innerHeight =
-        (availableHeight - padding * 2).clamp(0.0, double.infinity);
+    final innerHeight = (availableHeight - padding * 2).clamp(
+      0.0,
+      double.infinity,
+    );
 
     if (innerHeight <= 10) {
       final Widget compactBody = Container(
@@ -437,10 +434,7 @@ class _ResizableTaskBody extends StatelessWidget {
         decoration: decoration,
         child: Stack(
           children: [
-            _TaskAccentStripe(
-              color: stripeColor,
-              accentWidth: accentWidth,
-            ),
+            _TaskAccentStripe(color: stripeColor, accentWidth: accentWidth),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 padding + accentWidth + accentPadding,
@@ -467,10 +461,7 @@ class _ResizableTaskBody extends StatelessWidget {
           ],
         ),
       );
-      return _ResizableTaskOverlay(
-        overlay: overlay,
-        child: compactBody,
-      );
+      return _ResizableTaskOverlay(overlay: overlay, child: compactBody);
     }
 
     final stackedTime = innerHeight >= 36;
@@ -538,9 +529,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: title),
-        ],
+        children: [Expanded(child: title)],
       );
     }
 
@@ -574,11 +563,7 @@ class _ResizableTaskBody extends StatelessWidget {
           maxLines: descriptionLines,
           overflow: descriptionOverflow,
           softWrap: true,
-          style: TextStyle(
-            color: secondaryColor,
-            fontSize: 10,
-            height: 1.2,
-          ),
+          style: TextStyle(color: secondaryColor, fontSize: 10, height: 1.2),
         ),
       );
     }
@@ -602,10 +587,7 @@ class _ResizableTaskBody extends StatelessWidget {
       decoration: decoration,
       child: Stack(
         children: [
-          _TaskAccentStripe(
-            color: stripeColor,
-            accentWidth: accentWidth,
-          ),
+          _TaskAccentStripe(color: stripeColor, accentWidth: accentWidth),
           ClipRect(
             child: Padding(
               padding: EdgeInsets.fromLTRB(
@@ -629,18 +611,12 @@ class _ResizableTaskBody extends StatelessWidget {
         ],
       ),
     );
-    return _ResizableTaskOverlay(
-      overlay: overlay,
-      child: detailedBody,
-    );
+    return _ResizableTaskOverlay(overlay: overlay, child: detailedBody);
   }
 }
 
 class _ResizableTaskOverlay extends StatelessWidget {
-  const _ResizableTaskOverlay({
-    required this.child,
-    required this.overlay,
-  });
+  const _ResizableTaskOverlay({required this.child, required this.overlay});
 
   static const double _overlayInset = 4.0;
 
@@ -655,21 +631,14 @@ class _ResizableTaskOverlay extends StatelessWidget {
     return Stack(
       children: [
         child,
-        Positioned(
-          top: _overlayInset,
-          right: _overlayInset,
-          child: overlay!,
-        ),
+        Positioned(top: _overlayInset, right: _overlayInset, child: overlay!),
       ],
     );
   }
 }
 
 class _TaskAccentStripe extends StatelessWidget {
-  const _TaskAccentStripe({
-    required this.color,
-    required this.accentWidth,
-  });
+  const _TaskAccentStripe({required this.color, required this.accentWidth});
 
   final Color color;
   final double accentWidth;
@@ -714,11 +683,7 @@ class _TaskDeadlineBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.calendar_today_outlined,
-            size: 12,
-            color: color,
-          ),
+          Icon(Icons.calendar_today_outlined, size: 12, color: color),
           const SizedBox(width: calendarInsetMd),
           Text(
             _deadlineLabel(deadline),
@@ -750,10 +715,7 @@ class _TaskLocationRow extends StatelessWidget {
             location,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              color: calendarSubtitleColor,
-            ),
+            style: TextStyle(fontSize: 11, color: calendarSubtitleColor),
           ),
         ),
       ],

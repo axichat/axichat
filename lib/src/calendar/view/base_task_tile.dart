@@ -203,10 +203,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     setState(() => _isUpdating = true);
     final String baseId = widget.task.baseId;
     context.read<T>().add(
-          CalendarEvent.taskCompleted(
-            taskId: baseId,
-            completed: completed,
-          ),
+          CalendarEvent.taskCompleted(taskId: baseId, completed: completed),
         );
   }
 
@@ -463,10 +460,7 @@ class _MediumTaskTile extends StatelessWidget {
                       ),
                       if (showActions) ...[
                         const Spacer(),
-                        _TaskActionMenu(
-                          onEdit: onEdit,
-                          onDelete: onDelete,
-                        ),
+                        _TaskActionMenu(onEdit: onEdit, onDelete: onDelete),
                       ],
                     ],
                   ),
@@ -541,9 +535,7 @@ class _FullTaskTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(calendarEventRadius - 1),
         child: Container(
           decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: indicatorColor, width: 4),
-            ),
+            border: Border(left: BorderSide(color: indicatorColor, width: 4)),
           ),
           child: Padding(
             padding: calendarPaddingXl,
@@ -561,8 +553,9 @@ class _FullTaskTile extends StatelessWidget {
                           padding: calendarPaddingMd,
                           decoration: BoxDecoration(
                             color: calendarSelectedDayColor,
-                            borderRadius:
-                                BorderRadius.circular(calendarEventRadius),
+                            borderRadius: BorderRadius.circular(
+                              calendarEventRadius,
+                            ),
                           ),
                           child: Text(
                             task.description!,
@@ -621,10 +614,7 @@ class _FullTaskTile extends StatelessWidget {
                       const SizedBox(height: calendarGutterMd),
                       Row(
                         children: [
-                          _TaskStatusChip(
-                            color: statusColor,
-                            text: statusText,
-                          ),
+                          _TaskStatusChip(color: statusColor, text: statusText),
                           if (showActions) ...[
                             const Spacer(),
                             if (onEdit != null)
@@ -841,9 +831,7 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
       controller: _controller,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,
-      popover: (context) => AxiMenu(
-        actions: actions,
-      ),
+      popover: (context) => AxiMenu(actions: actions),
       child: IconButton(
         iconSize: widget.iconSize,
         tooltip: l10n.calendarActions,
@@ -855,10 +843,7 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
 }
 
 class _TaskStatusChip extends StatelessWidget {
-  const _TaskStatusChip({
-    required this.color,
-    required this.text,
-  });
+  const _TaskStatusChip({required this.color, required this.text});
 
   final Color color;
   final String text;

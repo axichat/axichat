@@ -29,28 +29,12 @@ class AxiVersion extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox.square(
-                    dimension: 16.0,
-                  ),
-                  Text(
-                    'Current features:',
-                    style: context.textTheme.table,
-                  ),
-                  Text(
-                    'Messaging, presence',
-                    style: context.textTheme.list,
-                  ),
-                  const SizedBox.square(
-                    dimension: 16.0,
-                  ),
-                  Text(
-                    'Coming next:',
-                    style: context.textTheme.table,
-                  ),
-                  Text(
-                    'Groupchat, multimedia',
-                    style: context.textTheme.list,
-                  ),
+                  const SizedBox.square(dimension: 16.0),
+                  Text('Current features:', style: context.textTheme.table),
+                  Text('Messaging, presence', style: context.textTheme.list),
+                  const SizedBox.square(dimension: 16.0),
+                  Text('Coming next:', style: context.textTheme.table),
+                  Text('Groupchat, multimedia', style: context.textTheme.list),
                 ],
               ),
             ),
@@ -67,10 +51,16 @@ class AxiVersion extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: ShadBadge(
                   padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  backgroundColor:
-                      Color.lerp(Colors.deepOrangeAccent, Colors.white, 0.77),
-                  hoverBackgroundColor:
-                      Color.lerp(Colors.deepOrangeAccent, Colors.white, 0.90),
+                  backgroundColor: Color.lerp(
+                    Colors.deepOrangeAccent,
+                    Colors.white,
+                    0.77,
+                  ),
+                  hoverBackgroundColor: Color.lerp(
+                    Colors.deepOrangeAccent,
+                    Colors.white,
+                    0.90,
+                  ),
                   foregroundColor: Colors.deepOrange,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(7.0),

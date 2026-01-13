@@ -66,10 +66,7 @@ class AxiInputDialog extends StatelessWidget {
           onPressed: loading ? null : callback,
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              spinnerSlot,
-              Text(resolvedCallbackText),
-            ],
+            children: [spinnerSlot, Text(resolvedCallbackText)],
           ),
         ).withTapBounce(enabled: callback != null && !loading),
       ],

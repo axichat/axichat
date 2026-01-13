@@ -101,7 +101,7 @@ main() {
               (index) => ChatsService.sortChats(
                 chats.sublist(0, index),
               ).map((e) => ChatMatcher(e)).toList(),
-            )
+            ),
           ]),
         );
 
@@ -125,10 +125,9 @@ main() {
 
         await pumpEventQueue();
 
-        final chats = ChatsService.sortChats(await database.getChats(
-          start: 0,
-          end: double.maxFinite.toInt(),
-        ));
+        final chats = ChatsService.sortChats(
+          await database.getChats(start: 0, end: double.maxFinite.toInt()),
+        );
 
         final chats0 = chats[0].copyWith(
           lastMessage: 'text',
@@ -197,10 +196,12 @@ main() {
     () async {
       await connectSuccessfully(xmppService);
 
-      when(() => mockConnection.sendChatState(
-            jid: any(named: 'jid'),
-            state: any(named: 'state'),
-          )).thenAnswer((_) async {});
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
 
       const state = mox.ChatState.active;
       await xmppService.sendChatState(jid: jid, state: state);
@@ -215,10 +216,12 @@ main() {
     test('Opens the given chat.', () async {
       await connectSuccessfully(xmppService);
 
-      when(() => mockConnection.sendChatState(
-            jid: any(named: 'jid'),
-            state: any(named: 'state'),
-          )).thenAnswer((_) async {});
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
 
       await xmppService.openChat(jid);
 
@@ -227,78 +230,78 @@ main() {
       final chat = await database.getChat(jid);
       expect(chat?.open, isTrue);
 
-      verify(() => mockConnection.sendChatState(
-            jid: jid,
-            state: mox.ChatState.active,
-          )).called(1);
+      verify(
+        () =>
+            mockConnection.sendChatState(jid: jid, state: mox.ChatState.active),
+      ).called(1);
     });
 
-    test(
-      'If a different chat is already open, closes it.',
-      () async {
-        await connectSuccessfully(xmppService);
-
-        when(() => mockConnection.sendChatState(
-              jid: any(named: 'jid'),
-              state: any(named: 'state'),
-            )).thenAnswer((_) async {});
-
-        final existingChatJid = generateRandomJid();
-
-        await database.createChat(Chat.fromJid(existingChatJid));
-        await database.openChat(existingChatJid);
-
-        final beforeOpen = await database.getChat(jid);
-        expect(beforeOpen, isNull);
-
-        var existingChat = await database.getChat(existingChatJid);
-        expect(existingChat?.open, isTrue);
-
-        await xmppService.openChat(jid);
-
-        await pumpEventQueue();
-
-        final afterOpen = await database.getChat(jid);
-        expect(afterOpen?.open, isTrue);
-
-        existingChat = await database.getChat(existingChatJid);
-        expect(existingChat?.open, isFalse);
-
-        verify(() => mockConnection.sendChatState(
-              jid: existingChatJid,
-              state: mox.ChatState.inactive,
-            )).called(1);
-      },
-    );
-  });
-
-  test(
-    'closeChat closes any open chats.',
-    () async {
+    test('If a different chat is already open, closes it.', () async {
       await connectSuccessfully(xmppService);
 
-      when(() => mockConnection.sendChatState(
-            jid: any(named: 'jid'),
-            state: any(named: 'state'),
-          )).thenAnswer((_) async {});
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
 
-      await database.createChat(Chat.fromJid(jid));
-      await database.openChat(jid);
+      final existingChatJid = generateRandomJid();
 
-      final beforeClose = await database.getChat(jid);
-      expect(beforeClose?.open, isTrue);
+      await database.createChat(Chat.fromJid(existingChatJid));
+      await database.openChat(existingChatJid);
 
-      await xmppService.closeChat();
+      final beforeOpen = await database.getChat(jid);
+      expect(beforeOpen, isNull);
+
+      var existingChat = await database.getChat(existingChatJid);
+      expect(existingChat?.open, isTrue);
+
+      await xmppService.openChat(jid);
 
       await pumpEventQueue();
 
-      final afterClose = await database.getChat(jid);
-      expect(afterClose?.open, isFalse);
+      final afterOpen = await database.getChat(jid);
+      expect(afterOpen?.open, isTrue);
 
-      verify(() => mockConnection.sendChatState(
-            jid: jid,
-            state: mox.ChatState.inactive,
-          )).called(1);
-    },
-  );
+      existingChat = await database.getChat(existingChatJid);
+      expect(existingChat?.open, isFalse);
+
+      verify(
+        () => mockConnection.sendChatState(
+          jid: existingChatJid,
+          state: mox.ChatState.inactive,
+        ),
+      ).called(1);
+    });
+  });
+
+  test('closeChat closes any open chats.', () async {
+    await connectSuccessfully(xmppService);
+
+    when(
+      () => mockConnection.sendChatState(
+        jid: any(named: 'jid'),
+        state: any(named: 'state'),
+      ),
+    ).thenAnswer((_) async {});
+
+    await database.createChat(Chat.fromJid(jid));
+    await database.openChat(jid);
+
+    final beforeClose = await database.getChat(jid);
+    expect(beforeClose?.open, isTrue);
+
+    await xmppService.closeChat();
+
+    await pumpEventQueue();
+
+    final afterClose = await database.getChat(jid);
+    expect(afterClose?.open, isFalse);
+
+    verify(
+      () =>
+          mockConnection.sendChatState(jid: jid, state: mox.ChatState.inactive),
+    ).called(1);
+  });
 }

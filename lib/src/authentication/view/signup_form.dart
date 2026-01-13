@@ -159,9 +159,10 @@ class _SignupFormState extends State<SignupForm>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    context
-        .read<SignupAvatarCubit>()
-        .setVisible(widget.visible, context.colorScheme);
+    context.read<SignupAvatarCubit>().setVisible(
+          widget.visible,
+          context.colorScheme,
+        );
     if (_captchaSrcInitialized) {
       return;
     }
@@ -226,9 +227,10 @@ class _SignupFormState extends State<SignupForm>
   void didUpdateWidget(covariant SignupForm oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.visible != widget.visible) {
-      context
-          .read<SignupAvatarCubit>()
-          .setVisible(widget.visible, context.colorScheme);
+      context.read<SignupAvatarCubit>().setVisible(
+            widget.visible,
+            context.colorScheme,
+          );
     }
   }
 
@@ -481,9 +483,9 @@ class _SignupFormState extends State<SignupForm>
     setState(() {
       _pwnedCheckInProgress = true;
     });
-    final notPwned = await context
-        .read<AuthenticationCubit>()
-        .checkNotPwned(password: password);
+    final notPwned = await context.read<AuthenticationCubit>().checkNotPwned(
+          password: password,
+        );
     if (!mounted) return;
     setState(() {
       _pwnedCheckInProgress = false;
@@ -610,7 +612,8 @@ class _SignupFormState extends State<SignupForm>
                                 child: Text(
                                   _errorText!,
                                   key: const ValueKey(
-                                      'signup-global-error-text'),
+                                    'signup-global-error-text',
+                                  ),
                                   style: TextStyle(
                                     color: context.colorScheme.destructive,
                                   ),
@@ -684,22 +687,26 @@ class _SignupFormState extends State<SignupForm>
                                                   const EdgeInsets.symmetric(
                                                 horizontal: 6.0,
                                               ),
-                                              child: Text(l10n
-                                                  .authUsernameCaseInsensitive),
+                                              child: Text(
+                                                l10n.authUsernameCaseInsensitive,
+                                              ),
                                             ),
-                                            placeholder:
-                                                Text(l10n.authUsername),
+                                            placeholder: Text(
+                                              l10n.authUsername,
+                                            ),
                                             enabled: !loading,
                                             controller: _jidTextController,
                                             trailing: EndpointSuffix(
-                                                server: state.server),
+                                              server: state.server,
+                                            ),
                                             validator: (text) {
                                               if (text.isEmpty) {
                                                 return l10n
                                                     .authUsernameRequired;
                                               }
-                                              if (!_usernamePattern
-                                                  .hasMatch(text)) {
+                                              if (!_usernamePattern.hasMatch(
+                                                text,
+                                              )) {
                                                 return l10n.authUsernameRules;
                                               }
                                               return null;
@@ -719,14 +726,16 @@ class _SignupFormState extends State<SignupForm>
                                       ),
                                     if (_showAvatarEditor)
                                       Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 12.0),
+                                        padding: const EdgeInsets.only(
+                                          top: 12.0,
+                                        ),
                                         child: Center(
                                           child: ConstrainedBox(
                                             constraints: BoxConstraints(
                                               maxWidth: math.min(
-                                                MediaQuery.sizeOf(context)
-                                                    .width,
+                                                MediaQuery.sizeOf(
+                                                  context,
+                                                ).width,
                                                 960,
                                               ),
                                             ),
@@ -979,8 +988,9 @@ class _SignupFormState extends State<SignupForm>
                                       child: AxiTextFormField(
                                         autocorrect: false,
                                         keyboardType: TextInputType.number,
-                                        placeholder:
-                                            Text(l10n.signupCaptchaPlaceholder),
+                                        placeholder: Text(
+                                          l10n.signupCaptchaPlaceholder,
+                                        ),
                                         enabled: !loading,
                                         controller: _captchaTextController,
                                         validator: (text) {
@@ -994,9 +1004,7 @@ class _SignupFormState extends State<SignupForm>
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
-                                    child: TermsCheckbox(
-                                      enabled: !loading,
-                                    ),
+                                    child: TermsCheckbox(enabled: !loading),
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
@@ -1004,8 +1012,9 @@ class _SignupFormState extends State<SignupForm>
                                       key: _rememberMeFieldKey,
                                       enabled: !loading,
                                       initialValue: rememberMe,
-                                      inputLabel:
-                                          Text(l10n.authRememberMeLabel),
+                                      inputLabel: Text(
+                                        l10n.authRememberMeLabel,
+                                      ),
                                       onChanged: (value) {
                                         setState(() {
                                           rememberMe = value;

@@ -43,8 +43,13 @@ class FanOutSendReport extends Equatable {
   bool get hasFailures => statuses.any((status) => status.isFailure);
 
   @override
-  List<Object?> get props =>
-      [shareId, subjectToken, subject, attachmentWarning, statuses];
+  List<Object?> get props => [
+        shareId,
+        subjectToken,
+        subject,
+        attachmentWarning,
+        statuses,
+      ];
 }
 
 class FanOutTarget extends Equatable {
@@ -95,8 +100,12 @@ class FanOutTarget extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [chat?.jid, address, displayName, shareSignatureEnabled];
+  List<Object?> get props => [
+        chat?.jid,
+        address,
+        displayName,
+        shareSignatureEnabled,
+      ];
 }
 
 class ShareContext extends Equatable {
@@ -124,6 +133,11 @@ class ShareContext extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [shareId, participants, subject, originatorDeltaMsgId, participantCount];
+  List<Object?> get props => [
+        shareId,
+        participants,
+        subject,
+        originatorDeltaMsgId,
+        participantCount,
+      ];
 }

@@ -22,9 +22,7 @@ const double _emailImageLoadingStroke = 2.0;
 const String _emailImageMimePrefix = 'image/';
 const String _emailImageMimeDetectPlaceholder = 'email-image';
 const String _emailImageHttpsScheme = 'https';
-const Set<String> _emailImageAllowedSchemes = <String>{
-  _emailImageHttpsScheme,
-};
+const Set<String> _emailImageAllowedSchemes = <String>{_emailImageHttpsScheme};
 const ImageDecodeLimits _emailImageDecodeLimits = ImageDecodeLimits(
   maxBytes: _emailImageMaxBytes,
   maxPixels: _emailImageMaxPixels,
@@ -122,8 +120,9 @@ Uri? _safeEmailImageUri(String src) {
 }
 
 Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
-  final safeHost = await isSafeHostForRemoteConnection(uri.host)
-      .timeout(_emailImageDownloadTimeout);
+  final safeHost = await isSafeHostForRemoteConnection(
+    uri.host,
+  ).timeout(_emailImageDownloadTimeout);
   if (!safeHost) return null;
 
   final client = HttpClient()..connectionTimeout = _emailImageDownloadTimeout;
@@ -136,8 +135,9 @@ Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
             ..followRedirects = false
             ..maxRedirects = 0
             ..headers.removeAll(HttpHeaders.cookieHeader);
-      final response =
-          await request.close().timeout(_emailImageDownloadTimeout);
+      final response = await request.close().timeout(
+            _emailImageDownloadTimeout,
+          );
       final statusCode = response.statusCode;
 
       if (_isRedirectStatusCode(statusCode)) {
@@ -220,11 +220,7 @@ bool _isRedirectStatusCode(int statusCode) => switch (statusCode) {
 
 /// Placeholder widget shown when external images are blocked.
 class EmailImagePlaceholder extends StatelessWidget {
-  const EmailImagePlaceholder({
-    super.key,
-    this.onTap,
-    this.isError = false,
-  });
+  const EmailImagePlaceholder({super.key, this.onTap, this.isError = false});
 
   final VoidCallback? onTap;
   final bool isError;

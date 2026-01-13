@@ -188,16 +188,18 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final bool allowEdits = _allowEdits && !selected.defaultTransport.isEmail;
     final bool readOnly = !allowEdits;
     final XmppService? xmppService = _maybeReadXmppService(context);
-    final EmailService? emailService =
-        RepositoryProvider.of<EmailService?>(context);
+    final EmailService? emailService = RepositoryProvider.of<EmailService?>(
+      context,
+    );
     try {
       if (selected.defaultTransport.isEmail) {
         if (emailService == null) {
           FeedbackSystem.showInfo(context, _taskShareMissingServiceMessage);
           return;
         }
-        final EmailAttachment? attachment =
-            await _buildCalendarTaskAttachment(widget.task);
+        final EmailAttachment? attachment = await _buildCalendarTaskAttachment(
+          widget.task,
+        );
         if (!mounted) {
           return;
         }
@@ -205,8 +207,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           FeedbackSystem.showError(context, _taskShareSendFailureMessage);
           return;
         }
-        final EmailAttachment resolvedAttachment =
-            attachment.copyWith(caption: shareText);
+        final EmailAttachment resolvedAttachment = attachment.copyWith(
+          caption: shareText,
+        );
         await emailService.sendAttachment(
           chat: selected,
           attachment: resolvedAttachment,
@@ -370,10 +373,7 @@ class _TaskShareActionRow extends StatelessWidget {
               duration: baseAnimationDuration,
             ),
             if (!isBusy) ...[
-              const Icon(
-                LucideIcons.share2,
-                size: _taskShareHeaderIconSize,
-              ),
+              const Icon(LucideIcons.share2, size: _taskShareHeaderIconSize),
               const SizedBox(width: _taskShareSectionGap),
             ],
             Text(label),
@@ -403,9 +403,7 @@ class _TaskShareEmptyMessage extends StatelessWidget {
   }
 }
 
-Future<EmailAttachment?> _buildCalendarTaskAttachment(
-  CalendarTask task,
-) async {
+Future<EmailAttachment?> _buildCalendarTaskAttachment(CalendarTask task) async {
   try {
     const CalendarTransferService transferService = CalendarTransferService();
     final File file = await transferService.exportTaskIcs(task: task);
@@ -424,10 +422,7 @@ Future<EmailAttachment?> _buildCalendarTaskAttachment(
 
 XmppService? _maybeReadXmppService(BuildContext context) {
   try {
-    return RepositoryProvider.of<XmppService>(
-      context,
-      listen: false,
-    );
+    return RepositoryProvider.of<XmppService>(context, listen: false);
   } on FlutterError {
     return null;
   }

@@ -17,10 +17,7 @@ final class DraftsAvailable extends DraftState {
 }
 
 final class DraftSaveComplete extends DraftState {
-  const DraftSaveComplete({
-    required super.items,
-    this.autoSaved = false,
-  });
+  const DraftSaveComplete({required super.items, this.autoSaved = false});
 
   final bool autoSaved;
 

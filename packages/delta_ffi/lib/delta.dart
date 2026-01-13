@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:ffi' as ffi;
-import 'dart:io' show Directory, File, Platform;
+import 'dart:io' show Directory, File, Platform, stderr;
 
 import 'src/bindings.dart';
 
@@ -9,192 +9,129 @@ const _libraryName = 'deltachat_wrap';
 const _deltaLoadFailureMessage = 'Failed to load deltachat native library.';
 const _deltaLoadFailureDetailsPrefix = ' (lastError: ';
 const _deltaLoadFailureDetailsSuffix = ')';
+const _dartToolDirectoryName = '.dart_tool';
+const _libDirectoryName = 'lib';
+const _dataDirectoryName = 'data';
+const _flutterAssetsDirectoryName = 'flutter_assets';
+const _nativeAssetsFileName = 'native_assets.yaml';
+const _nativeAssetsKey = 'native-assets';
+const _appDirEnvName = 'APPDIR';
+const _snapDirEnvName = 'SNAP';
+const _pwdEnvName = 'PWD';
+const _flutterAssetsEnvName = 'FLUTTER_ASSETS';
+const _traceEnvName = 'DELTA_FFI_TRACE';
+const _procSelfExePath = '/proc/self/exe';
+const int _bundleSearchDepth = 5;
 
 @ffi.DefaultAsset(_assetId)
 final DeltaChatBindings deltaBindings = DeltaChatBindings(loadDeltaLibrary());
 
-const bool _isProduct = bool.fromEnvironment('dart.vm.product');
-const List<String> _requiredDeltaSymbols = [
-  'dc_accounts_add_account',
-  'dc_accounts_add_closed_account',
-  'dc_accounts_background_fetch',
-  'dc_accounts_get_account',
-  'dc_accounts_get_all',
-  'dc_accounts_get_event_emitter',
-  'dc_accounts_maybe_network',
-  'dc_accounts_maybe_network_lost',
-  'dc_accounts_migrate_account',
-  'dc_accounts_new',
-  'dc_accounts_remove_account',
-  'dc_accounts_set_push_device_token',
-  'dc_accounts_start_io',
-  'dc_accounts_stop_io',
-  'dc_accounts_unref',
-  'dc_array_get_cnt',
-  'dc_array_get_id',
-  'dc_array_unref',
-  'dc_block_contact',
-  'dc_chat_get_contact_id',
-  'dc_chat_get_mailinglist_addr',
-  'dc_chat_get_name',
-  'dc_chat_get_type',
-  'dc_chat_unref',
-  'dc_chatlist_get_chat_id',
-  'dc_chatlist_get_cnt',
-  'dc_chatlist_get_msg_id',
-  'dc_chatlist_unref',
-  'dc_configure',
-  'dc_contact_get_addr',
-  'dc_contact_get_name',
-  'dc_contact_unref',
-  'dc_context_change_passphrase',
-  'dc_context_is_open',
-  'dc_context_new',
-  'dc_context_new_closed',
-  'dc_context_open',
-  'dc_context_unref',
-  'dc_create_chat_by_contact_id',
-  'dc_create_contact',
-  'dc_delete_contact',
-  'dc_delete_msgs',
-  'dc_download_full_msg',
-  'dc_event_emitter_unref',
-  'dc_event_get_account_id',
-  'dc_event_get_data1_int',
-  'dc_event_get_data1_str',
-  'dc_event_get_data2_int',
-  'dc_event_get_data2_str',
-  'dc_event_get_id',
-  'dc_event_unref',
-  'dc_forward_msgs',
-  'dc_get_blocked_contacts',
-  'dc_get_chat',
-  'dc_get_chat_contacts',
-  'dc_get_chat_msgs',
-  'dc_get_chatlist',
-  'dc_get_connectivity',
-  'dc_get_contact',
-  'dc_get_contacts',
-  'dc_get_draft',
-  'dc_get_event_emitter',
-  'dc_get_fresh_msg_cnt',
-  'dc_get_fresh_msgs',
-  'dc_get_last_error',
-  'dc_get_msg',
-  'dc_get_msg_cnt',
-  'dc_get_next_event',
-  'dc_is_configured',
-  'dc_lookup_contact_id_by_addr',
-  'dc_marknoticed_chat',
-  'dc_markseen_msgs',
-  'dc_maybe_network',
-  'dc_msg_get_chat_id',
-  'dc_msg_get_download_state',
-  'dc_msg_get_error',
-  'dc_msg_get_file',
-  'dc_msg_get_filebytes',
-  'dc_msg_get_filename',
-  'dc_msg_get_filemime',
-  'dc_msg_get_height',
-  'dc_msg_get_html',
-  'dc_msg_get_id',
-  'dc_msg_get_quoted_msg',
-  'dc_msg_get_quoted_text',
-  'dc_msg_get_state',
-  'dc_msg_get_subject',
-  'dc_msg_get_text',
-  'dc_msg_get_timestamp',
-  'dc_msg_get_viewtype',
-  'dc_msg_get_width',
-  'dc_msg_is_outgoing',
-  'dc_msg_new',
-  'dc_msg_set_file_and_deduplicate',
-  'dc_msg_set_html',
-  'dc_msg_set_quote',
-  'dc_msg_set_subject',
-  'dc_msg_set_text',
-  'dc_msg_unref',
-  'dc_resend_msgs',
-  'dc_search_msgs',
-  'dc_send_msg',
-  'dc_send_text_msg',
-  'dc_set_chat_visibility',
-  'dc_set_config',
-  'dc_set_draft',
-  'dc_start_io',
-  'dc_stop_io',
-  'dc_str_unref',
-  'dc_unblock_contact',
-];
-
 ffi.DynamicLibrary loadDeltaLibrary() {
   Object? lastError;
+  final bool traceEnabled = _isTraceEnabled();
+  final List<String> trace = <String>[];
 
-  ffi.DynamicLibrary? finalizeLibrary(ffi.DynamicLibrary? library) {
-    if (library == null) return null;
-    if (_isProduct) {
-      _assertRequiredSymbols(library);
+  void recordTrace(String message) {
+    if (!traceEnabled) {
+      return;
     }
-    return library;
+    trace.add(message);
   }
 
-  ffi.DynamicLibrary? tryLoad(ffi.DynamicLibrary Function() loader) {
+  ffi.DynamicLibrary? tryLoad(
+    ffi.DynamicLibrary Function() loader, {
+    required String label,
+  }) {
     try {
       final library = loader();
       library.lookup<ffi.NativeFunction<ffi.Pointer<ffi.Void> Function()>>(
         'dc_context_new',
       );
-      return finalizeLibrary(library);
+      recordTrace('loaded: $label');
+      return library;
     } catch (error) {
+      recordTrace('failed: $label -> $error');
       lastError = error;
       return null;
     }
   }
 
-  final assetLibrary = tryLoad(() => ffi.DynamicLibrary.open(_assetId));
+  final assetLibrary = tryLoad(
+    () => ffi.DynamicLibrary.open(_assetId),
+    label: _assetId,
+  );
   if (assetLibrary != null) {
     return assetLibrary;
   }
 
   final configPath = _pathFromNativeAssetsConfig();
   if (configPath != null) {
-    final configLibrary = tryLoad(() => ffi.DynamicLibrary.open(configPath));
+    final configLibrary = tryLoad(
+      () => ffi.DynamicLibrary.open(configPath),
+      label: configPath,
+    );
     if (configLibrary != null) {
       return configLibrary;
     }
   }
 
-  final processLibrary = tryLoad(ffi.DynamicLibrary.process);
+  final processLibrary = tryLoad(
+    ffi.DynamicLibrary.process,
+    label: 'process',
+  );
   if (processLibrary != null) {
     return processLibrary;
   }
 
   final envOverride = Platform.environment['DELTA_FFI_LIBRARY_PATH'];
   if (envOverride != null && envOverride.isNotEmpty) {
-    final envLibrary = tryLoad(() => ffi.DynamicLibrary.open(envOverride));
+    final envLibrary = tryLoad(
+      () => ffi.DynamicLibrary.open(envOverride),
+      label: envOverride,
+    );
     if (envLibrary != null) {
       return envLibrary;
     }
   }
 
-  for (final candidate in _bundledLibraryFiles()) {
-    final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+  for (final candidate in _bundledLibraryFiles(
+    includeMissing: traceEnabled,
+  )) {
+    final library = tryLoad(
+      () => ffi.DynamicLibrary.open(candidate),
+      label: candidate,
+    );
     if (library != null) {
       return library;
     }
   }
 
-  for (final candidate in _candidateLibraryFiles()) {
-    final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+  for (final candidate in _candidateLibraryFiles(
+    includeMissing: traceEnabled,
+  )) {
+    final library = tryLoad(
+      () => ffi.DynamicLibrary.open(candidate),
+      label: candidate,
+    );
     if (library != null) {
       return library;
     }
   }
 
   for (final name in _platformLibraryNames()) {
-    final library = tryLoad(() => ffi.DynamicLibrary.open(name));
+    final library = tryLoad(
+      () => ffi.DynamicLibrary.open(name),
+      label: name,
+    );
     if (library != null) {
       return library;
+    }
+  }
+
+  if (traceEnabled && trace.isNotEmpty) {
+    stderr.writeln('[delta_ffi] loadDeltaLibrary trace:');
+    for (final entry in trace) {
+      stderr.writeln('  $entry');
     }
   }
 
@@ -209,28 +146,19 @@ ffi.DynamicLibrary loadDeltaLibrary() {
   );
 }
 
-void _assertRequiredSymbols(ffi.DynamicLibrary library) {
-  for (final symbol in _requiredDeltaSymbols) {
-    try {
-      library.lookup<ffi.NativeFunction<ffi.Void Function()>>(symbol);
-    } on ArgumentError {
-      throw ArgumentError.value(
-        symbol,
-        'symbol',
-        'Missing required DeltaChat symbol in bundled library.',
-      );
-    }
-  }
+bool _isTraceEnabled() {
+  final String? value = Platform.environment[_traceEnvName];
+  return value != null && value.isNotEmpty && value != '0';
 }
 
-List<String> _candidateLibraryFiles() {
+List<String> _candidateLibraryFiles({bool includeMissing = false}) {
   final results = <String>[];
   final seen = <String>{};
 
   void addPath(String? path) {
     if (path == null || path.isEmpty) return;
     if (!seen.add(path)) return;
-    if (File(path).existsSync()) {
+    if (includeMissing || File(path).existsSync()) {
       results.add(path);
     }
   }
@@ -248,14 +176,14 @@ List<String> _candidateLibraryFiles() {
   return results;
 }
 
-List<String> _bundledLibraryFiles() {
+List<String> _bundledLibraryFiles({bool includeMissing = false}) {
   final results = <String>[];
   final seen = <String>{};
 
   void addPath(String? path) {
     if (path == null || path.isEmpty) return;
     if (!seen.add(path)) return;
-    if (File(path).existsSync()) {
+    if (includeMissing || File(path).existsSync()) {
       results.add(path);
     }
   }
@@ -264,13 +192,109 @@ List<String> _bundledLibraryFiles() {
     addPath(framework);
   }
 
-  final exeDir = File(Platform.resolvedExecutable).parent;
-  for (final name in _platformLibraryNames()) {
-    addPath(_joinPath(exeDir.path, [name]));
-    addPath(_joinPath(exeDir.path, ['lib', name]));
+  for (final Directory directory in _bundleSearchDirectories()) {
+    for (final name in _platformLibraryNames()) {
+      addPath(_joinPath(directory.path, [name]));
+      addPath(_joinPath(directory.path, [_libDirectoryName, name]));
+    }
   }
 
   return results;
+}
+
+Set<Directory> _bundleSearchDirectories() {
+  final Set<Directory> results = <Directory>{};
+
+  void addDirectory(Directory directory) {
+    results.add(directory);
+  }
+
+  void addDirectoryWithParents(Directory directory) {
+    Directory current = directory;
+    for (var i = 0; i < _bundleSearchDepth; i++) {
+      addDirectory(current);
+      current = current.parent;
+    }
+  }
+
+  addDirectoryWithParents(Directory.current);
+
+  final String executablePath = Platform.resolvedExecutable;
+  if (executablePath.isNotEmpty) {
+    addDirectoryWithParents(File(executablePath).parent);
+    final String resolvedPath = _resolveSymbolicPath(executablePath);
+    if (resolvedPath.isNotEmpty) {
+      addDirectoryWithParents(File(resolvedPath).parent);
+    }
+  }
+
+  final scriptUri = Platform.script;
+  if (scriptUri.scheme == 'file') {
+    addDirectoryWithParents(File.fromUri(scriptUri).parent);
+  }
+
+  final String? pwd = Platform.environment[_pwdEnvName];
+  if (pwd != null && pwd.isNotEmpty) {
+    addDirectoryWithParents(Directory(pwd));
+  }
+
+  final String? appDir = Platform.environment[_appDirEnvName];
+  if (appDir != null && appDir.isNotEmpty) {
+    addDirectoryWithParents(Directory(appDir));
+  }
+
+  final String? snapDir = Platform.environment[_snapDirEnvName];
+  if (snapDir != null && snapDir.isNotEmpty) {
+    addDirectoryWithParents(Directory(snapDir));
+  }
+
+  final String? flutterAssets = Platform.environment[_flutterAssetsEnvName];
+  if (flutterAssets != null && flutterAssets.isNotEmpty) {
+    final assetsDir = Directory(flutterAssets);
+    if (assetsDir.existsSync()) {
+      addDirectoryWithParents(assetsDir);
+      addDirectoryWithParents(assetsDir.parent);
+      addDirectoryWithParents(assetsDir.parent.parent);
+    }
+  }
+
+  final String? procExecutablePath = _resolveProcSelfExecutablePath();
+  if (procExecutablePath != null && procExecutablePath.isNotEmpty) {
+    addDirectoryWithParents(File(procExecutablePath).parent);
+  }
+
+  return results;
+}
+
+String _resolveSymbolicPath(String path) {
+  if (path.isEmpty) {
+    return path;
+  }
+  try {
+    final resolved = File(path).resolveSymbolicLinksSync();
+    if (resolved.isNotEmpty) {
+      return resolved;
+    }
+  } catch (_) {
+    // Ignore missing symlink support.
+  }
+  return path;
+}
+
+String? _resolveProcSelfExecutablePath() {
+  if (!Platform.isLinux && !Platform.isAndroid) {
+    return null;
+  }
+  try {
+    final file = File(_procSelfExePath);
+    if (!file.existsSync()) {
+      return null;
+    }
+    final resolved = file.resolveSymbolicLinksSync();
+    return resolved.isEmpty ? null : resolved;
+  } catch (_) {
+    return null;
+  }
 }
 
 List<Directory> _probableLibraryDirectories() {
@@ -286,20 +310,11 @@ List<Directory> _probableLibraryDirectories() {
     }
   }
 
-  final cwd = Directory.current.path;
-  addDirectory(cwd);
-  addDirectory(_joinPath(cwd, ['.dart_tool', 'lib']));
-
-  final executable = Platform.resolvedExecutable;
-  final exeDir = File(executable).parent.path;
-  addDirectory(exeDir);
-  addDirectory(_joinPath(exeDir, ['.dart_tool', 'lib']));
-
-  final scriptUri = Platform.script;
-  if (scriptUri.scheme == 'file') {
-    final scriptDir = File.fromUri(scriptUri).parent;
-    addDirectory(scriptDir.path);
-    addDirectory(_joinPath(scriptDir.path, ['.dart_tool', 'lib']));
+  for (final directory in _bundleSearchDirectories()) {
+    addDirectory(directory.path);
+    addDirectory(
+      _joinPath(directory.path, [_dartToolDirectoryName, _libDirectoryName]),
+    );
   }
 
   return results;
@@ -388,41 +403,119 @@ List<String> _platformLibraryNames() {
 }
 
 String? _pathFromNativeAssetsConfig() {
-  final configPath =
-      _joinPath(Directory.current.path, ['.dart_tool', 'native_assets.yaml']);
-  if (configPath == null) {
-    return null;
-  }
-  final configFile = File(configPath);
-  if (!configFile.existsSync()) {
-    return null;
+  final configPaths = <String>[];
+  final seen = <String>{};
+
+  void addConfigPath(String? base, List<String> segments) {
+    final path = _joinPath(base, segments);
+    if (path == null || path.isEmpty) {
+      return;
+    }
+    if (seen.add(path)) {
+      configPaths.add(path);
+    }
   }
 
-  try {
-    final filtered = configFile
-        .readAsLinesSync()
-        .where((line) => !line.trimLeft().startsWith('#'))
-        .join('\n')
-        .trim();
-    if (filtered.isEmpty) {
-      return null;
+  addConfigPath(
+    Directory.current.path,
+    [_dartToolDirectoryName, _nativeAssetsFileName],
+  );
+
+  final String? flutterAssets = Platform.environment[_flutterAssetsEnvName];
+  if (flutterAssets != null && flutterAssets.isNotEmpty) {
+    addConfigPath(
+      flutterAssets,
+      [_dartToolDirectoryName, _nativeAssetsFileName],
+    );
+  }
+
+  for (final directory in _bundleSearchDirectories()) {
+    addConfigPath(
+      directory.path,
+      [_dartToolDirectoryName, _nativeAssetsFileName],
+    );
+    addConfigPath(
+      directory.path,
+      [
+        _dataDirectoryName,
+        _flutterAssetsDirectoryName,
+        _dartToolDirectoryName,
+        _nativeAssetsFileName,
+      ],
+    );
+    addConfigPath(
+      directory.path,
+      [
+        _flutterAssetsDirectoryName,
+        _dartToolDirectoryName,
+        _nativeAssetsFileName,
+      ],
+    );
+  }
+
+  for (final path in configPaths) {
+    final configFile = File(path);
+    if (!configFile.existsSync()) {
+      continue;
     }
-    final data = jsonDecode(filtered) as Map<String, dynamic>;
-    final targetKey = _currentTargetKey();
-    if (targetKey == null) {
-      return null;
+    try {
+      final filtered = configFile
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('#'))
+          .join('\n')
+          .trim();
+      if (filtered.isEmpty) {
+        continue;
+      }
+      final data = jsonDecode(filtered) as Map<String, dynamic>;
+      final targetKey = _currentTargetKey();
+      if (targetKey == null) {
+        continue;
+      }
+      final nativeAssets = data[_nativeAssetsKey];
+      if (nativeAssets is! Map) {
+        continue;
+      }
+
+      final String? resolved = _resolveAssetPathFromConfig(
+        nativeAssets: nativeAssets,
+        targetKey: targetKey,
+        basePath: configFile.parent.path,
+      );
+      if (resolved != null) {
+        return resolved;
+      }
+    } catch (_) {
+      continue;
     }
-    final nativeAssets = data['native-assets'];
-    if (nativeAssets is! Map) {
-      return null;
-    }
+  }
+
+  return null;
+}
+
+String? _resolveAssetPathFromConfig({
+  required Map nativeAssets,
+  required String? targetKey,
+  required String basePath,
+}) {
+  final candidates = <Map>[];
+  if (targetKey != null) {
     final targetAssets = nativeAssets[targetKey];
-    if (targetAssets is! Map) {
-      return null;
+    if (targetAssets is Map) {
+      candidates.add(targetAssets);
     }
+  }
+
+  for (final value in nativeAssets.values) {
+    if (value is Map && value.containsKey(_assetId)) {
+      candidates.add(value);
+    }
+  }
+
+  for (final targetAssets in candidates) {
     final assetEntry = targetAssets[_assetId];
     if (assetEntry is! List || assetEntry.isEmpty) {
-      return null;
+      continue;
     }
     final locationType = assetEntry[0];
     final value = assetEntry.length > 1 ? assetEntry[1] : null;
@@ -430,7 +523,7 @@ String? _pathFromNativeAssetsConfig() {
       return value;
     }
     if (locationType == 'relative' && value is String) {
-      return _joinPath(Directory.current.path, [value]);
+      return _joinPath(basePath, [value]);
     }
     if (locationType == 'system' && value is String) {
       return value;
@@ -438,9 +531,8 @@ String? _pathFromNativeAssetsConfig() {
     if (locationType == 'executable') {
       return Platform.resolvedExecutable;
     }
-  } catch (_) {
-    return null;
   }
+
   return null;
 }
 

@@ -22,18 +22,18 @@ class DisplayFingerprint extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalized = fingerprint.trim();
     if (normalized.isEmpty) {
-      return Text(
-        'Fingerprint unavailable',
-        style: context.textTheme.small,
-      );
+      return Text('Fingerprint unavailable', style: context.textTheme.small);
     }
 
     final chunks = <String>[];
     for (var i = 0; i < normalized.length; i += blockLength) {
       final end = math.min(i + blockLength, normalized.length);
       if (end <= i) {
-        _logger.warning('Skipping fingerprint slice due to invalid bounds',
-            null, StackTrace.current);
+        _logger.warning(
+          'Skipping fingerprint slice due to invalid bounds',
+          null,
+          StackTrace.current,
+        );
         continue;
       }
       try {

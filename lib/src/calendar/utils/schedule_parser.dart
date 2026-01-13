@@ -28,8 +28,9 @@ final RegExp _streetSuffixPattern = RegExp(
   caseSensitive: false,
 );
 
-final RegExp _addressLeadingNumberPattern =
-    RegExp(r'^\d{1,6}(?:[-/]\d{1,4})?\b');
+final RegExp _addressLeadingNumberPattern = RegExp(
+  r'^\d{1,6}(?:[-/]\d{1,4})?\b',
+);
 
 final RegExp _addressTailPattern = RegExp(
   '\\s*,\\s*(?!$_locationConnectorWordsPattern\\b)([A-Za-z0-9.\\- ]{2,})',
@@ -77,10 +78,7 @@ _AddressTailCapture? _captureAddressTail(String source, int startIndex) {
   if (buffer.isEmpty) {
     return null;
   }
-  return _AddressTailCapture(
-    appendedText: buffer.toString(),
-    newEnd: index,
-  );
+  return _AddressTailCapture(appendedText: buffer.toString(), newEnd: index);
 }
 
 bool _looksLikeExactPostalAddress(String candidate) {
@@ -158,8 +156,12 @@ class Recurrence {
   final String text;
   final tz.TZDateTime? until;
   final int? count;
-  const Recurrence(
-      {required this.rrule, required this.text, this.until, this.count});
+  const Recurrence({
+    required this.rrule,
+    required this.text,
+    this.until,
+    this.count,
+  });
 }
 
 class ScheduleItem {
@@ -275,7 +277,7 @@ class FuzzyPolicy {
       'p1',
       'high priority',
       'key',
-      'blocker'
+      'blocker',
     ],
     this.urgentWords = const [
       'urgent',
@@ -284,20 +286,20 @@ class FuzzyPolicy {
       'immediately',
       'right away',
       'stat',
-      '!!!'
+      '!!!',
     ],
     this.notImportantWords = const [
       'optional',
       'nice to have',
       'someday',
-      'maybe'
+      'maybe',
     ],
     this.notUrgentWords = const [
       'no rush',
       'not urgent',
       'whenever',
       'when you can',
-      'later'
+      'later',
     ],
   });
 }
@@ -446,11 +448,16 @@ class ScheduleParser {
 
       // Strict "next <weekday>"
       if (opts.policy.strictNextWeekday &&
-          RegExp(r'\bnext\s+(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
-                  caseSensitive: false)
-              .hasMatch(s)) {
-        final baseDay =
-            tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day);
+          RegExp(
+            r'\bnext\s+(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+            caseSensitive: false,
+          ).hasMatch(s)) {
+        final baseDay = tz.TZDateTime(
+          opts.tzLocation,
+          base.year,
+          base.month,
+          base.day,
+        );
         final diff = local.difference(baseDay).inDays;
         if (diff > 0 && diff <= 7) {
           local = local.add(const Duration(days: 7));
@@ -461,11 +468,7 @@ class ScheduleParser {
 
       start = local;
       final matchIndex = best.index.toInt();
-      s = _removeSpanByIndex(
-        s,
-        matchIndex,
-        best.text.length,
-      );
+      s = _removeSpanByIndex(s, matchIndex, best.text.length);
       consumed.add(best.text);
     } else {
       // Use relative fallback from normalization ("in N days/hours")
@@ -474,10 +477,13 @@ class ScheduleParser {
         allDay = false;
         flags.add(AmbiguityFlag.relativeDate);
         assumptions.add(
-            'Interpreted relative duration "${normal.relativeFallbackLabel}".');
+          'Interpreted relative duration "${normal.relativeFallbackLabel}".',
+        );
         if (relativeLabel != null && relativeLabel.isNotEmpty) {
-          final pattern =
-              RegExp(RegExp.escape(relativeLabel), caseSensitive: false);
+          final pattern = RegExp(
+            RegExp.escape(relativeLabel),
+            caseSensitive: false,
+          );
           s = s.replaceFirst(pattern, ' ');
           consumed.add(relativeLabel);
         }
@@ -497,11 +503,15 @@ class ScheduleParser {
     }
 
     if (recurrence != null && start != null) {
-      final _RecurrenceSpec? snapSpec =
-          _RecurrenceMath.tryParse(recurrence, start.location);
+      final _RecurrenceSpec? snapSpec = _RecurrenceMath.tryParse(
+        recurrence,
+        start.location,
+      );
       if (snapSpec != null) {
-        final tz.TZDateTime aligned =
-            _RecurrenceMath.alignStart(start, snapSpec);
+        final tz.TZDateTime aligned = _RecurrenceMath.alignStart(
+          start,
+          snapSpec,
+        );
         if (!aligned.isAtSameMomentAs(start)) {
           start = aligned;
           assumptions.add('Aligned start to recurrence cadence.');
@@ -515,20 +525,33 @@ class ScheduleParser {
       flags.add(AmbiguityFlag.vaguePartOfDay);
       if (start != null && !vague.overrideDateOnly) {
         start = tz.TZDateTime(
-            opts.tzLocation, start.year, start.month, start.day, vague.hour);
+          opts.tzLocation,
+          start.year,
+          start.month,
+          start.day,
+          vague.hour,
+        );
         allDay = false;
         assumptions.add('Mapped "${vague.hit}" to ${_hhmm(vague.hour)}.');
       } else if (start == null) {
         final day = base;
         start = tz.TZDateTime(
-            opts.tzLocation, day.year, day.month, day.day, vague.hour);
+          opts.tzLocation,
+          day.year,
+          day.month,
+          day.day,
+          vague.hour,
+        );
         allDay = false;
         assumptions.add(
-            'No explicit date; used ${DateFormat('y-MM-dd').format(start)} for "${vague.hit}".');
+          'No explicit date; used ${DateFormat('y-MM-dd').format(start)} for "${vague.hit}".',
+        );
       }
       confidence -= 0.1;
-      final vaguePattern =
-          RegExp(RegExp.escape(vague.hit), caseSensitive: false);
+      final vaguePattern = RegExp(
+        RegExp.escape(vague.hit),
+        caseSensitive: false,
+      );
       if (vaguePattern.hasMatch(s)) {
         s = s.replaceFirst(vaguePattern, ' ');
       }
@@ -536,19 +559,26 @@ class ScheduleParser {
     }
 
     // Weekend shorthand
-    final weekendPattern =
-        RegExp(r'\b(?:(this|next)\s+)?weekend\b', caseSensitive: false);
+    final weekendPattern = RegExp(
+      r'\b(?:(this|next)\s+)?weekend\b',
+      caseSensitive: false,
+    );
     final weekendMatch = weekendPattern.firstMatch(s);
     if (weekendMatch != null) {
       flags.add(AmbiguityFlag.relativeDate);
       final addAWeek = (weekendMatch.group(1)?.toLowerCase() == 'next');
-      final sat =
-          _startOfWeekend(base, opts.policy.weekendDefaultDay, addAWeek);
+      final sat = _startOfWeekend(
+        base,
+        opts.policy.weekendDefaultDay,
+        addAWeek,
+      );
       final weekendStart = start ?? sat;
       start = weekendStart;
       if (allDay) allDay = false;
-      assumptions.add('Interpreted "${weekendMatch.group(0)}" as '
-          '${DateFormat('EEE HH:mm').format(weekendStart)}.');
+      assumptions.add(
+        'Interpreted "${weekendMatch.group(0)}" as '
+        '${DateFormat('EEE HH:mm').format(weekendStart)}.',
+      );
       confidence -= 0.1;
       s = s.replaceRange(weekendMatch.start, weekendMatch.end, ' ');
       consumed.add(weekendMatch.group(0));
@@ -616,8 +646,9 @@ class ScheduleParser {
     if (location == null && opts.policy.allowAtSignLocation) {
       final atSig = RegExp(r"\B@\s*([A-Za-z0-9#&+\-' ]{2,})").firstMatch(s);
       if (atSig != null) {
-        final candidate =
-            _pruneTemporalSuffix(_normalizeLocation(_clean(atSig.group(1)!)));
+        final candidate = _pruneTemporalSuffix(
+          _normalizeLocation(_clean(atSig.group(1)!)),
+        );
         if (candidate != null &&
             !_looksLikeHandle(candidate) &&
             !consumed.overlaps(candidate) &&
@@ -671,12 +702,7 @@ class ScheduleParser {
       if (start != null && explicitRange.end != null) {
         var candidate = _materializeClockToken(
           explicitRange.end!,
-          tz.TZDateTime(
-            opts.tzLocation,
-            start.year,
-            start.month,
-            start.day,
-          ),
+          tz.TZDateTime(opts.tzLocation, start.year, start.month, start.day),
           reference: start,
         );
         if (!candidate.isAfter(start)) {
@@ -702,8 +728,10 @@ class ScheduleParser {
         final eH = int.parse(range.group(3)!);
         final eM = range.group(4) == null ? 0 : int.parse(range.group(4)!);
         var sh = sH, eh = eH;
-        final hasAmPm =
-            RegExp(r'(am|pm)', caseSensitive: false).hasMatch(range.group(0)!);
+        final hasAmPm = RegExp(
+          r'(am|pm)',
+          caseSensitive: false,
+        ).hasMatch(range.group(0)!);
         if (!hasAmPm) {
           if (sh <= 12 && eh <= 12) {
             if (start.hour >= 12) {
@@ -714,10 +742,22 @@ class ScheduleParser {
           }
         }
         end = tz.TZDateTime(
-            opts.tzLocation, start.year, start.month, start.day, eh, eM);
+          opts.tzLocation,
+          start.year,
+          start.month,
+          start.day,
+          eh,
+          eM,
+        );
         if (allDay && sh != 0) {
           start = tz.TZDateTime(
-              opts.tzLocation, start.year, start.month, start.day, sh, sM);
+            opts.tzLocation,
+            start.year,
+            start.month,
+            start.day,
+            sh,
+            sM,
+          );
           allDay = false;
         }
         flags.add(AmbiguityFlag.rangeParsed);
@@ -801,8 +841,10 @@ class ScheduleParser {
       assumptions.add('Encountered ambiguous numeric date (DMY vs MDY).');
     }
     if (deadline != null &&
-        !RegExp(r'\b\d{1,2}(:\d{2})?\s*(am|pm)\b', caseSensitive: false)
-            .hasMatch(original)) {
+        !RegExp(
+          r'\b\d{1,2}(:\d{2})?\s*(am|pm)\b',
+          caseSensitive: false,
+        ).hasMatch(original)) {
       confidence -= 0.05; // we assumed EOD for a date-only deadline
     }
     if (confidence < 0.2) confidence = 0.2;
@@ -836,8 +878,9 @@ class ScheduleParser {
 
     final replacements = <RegExp, String>{
       RegExp(
-          r'\btmrw\b|\btmw\b|\btmo\b|\btom\b|\b2moro\b|\b2morrow\b|\btomm?or?ow\b',
-          caseSensitive: false): ' tomorrow ',
+        r'\btmrw\b|\btmw\b|\btmo\b|\btom\b|\b2moro\b|\b2morrow\b|\btomm?or?ow\b',
+        caseSensitive: false,
+      ): ' tomorrow ',
       RegExp(r'\btonite\b', caseSensitive: false): ' tonight ',
       RegExp(r'\bw\/\b', caseSensitive: false): ' with ',
       RegExp(r'\bnoon-ish\b|\bnoonish\b', caseSensitive: false): ' noon ',
@@ -856,9 +899,9 @@ class ScheduleParser {
     tz.TZDateTime? relative;
     String? relativeLabel;
     final rel = RegExp(
-            r'\bin\s+(\d+(?:\.\d+)?)\s+(minute|minutes|hour|hours|day|days|week|weeks)\b',
-            caseSensitive: false)
-        .firstMatch(s);
+      r'\bin\s+(\d+(?:\.\d+)?)\s+(minute|minutes|hour|hours|day|days|week|weeks)\b',
+      caseSensitive: false,
+    ).firstMatch(s);
     if (rel != null) {
       final double amount = double.parse(rel.group(1)!);
       final unit = rel.group(2)!.toLowerCase();
@@ -960,7 +1003,12 @@ class ScheduleParser {
     final assumptions = <String>[];
 
     tz.TZDateTime endOfDayFor(tz.TZDateTime d) => tz.TZDateTime(
-        opts.tzLocation, d.year, d.month, d.day, opts.policy.endOfDayHour);
+          opts.tzLocation,
+          d.year,
+          d.month,
+          d.day,
+          opts.policy.endOfDayHour,
+        );
 
     // Explicit phrases: by/before/no later than/due
     final m = RegExp(
@@ -987,10 +1035,15 @@ class ScheduleParser {
       }
 
       if (!interpretedDeadline) {
-        final ref =
-            ParsingReference(instant: base.toUtc(), timezone: opts.tzName);
-        final rs = Chrono.parse(' $target ',
-            ref: ref, option: ParsingOption(forwardDate: true));
+        final ref = ParsingReference(
+          instant: base.toUtc(),
+          timezone: opts.tzName,
+        );
+        final rs = Chrono.parse(
+          ' $target ',
+          ref: ref,
+          option: ParsingOption(forwardDate: true),
+        );
         if (rs.isNotEmpty) {
           var dt = tz.TZDateTime.from(rs.last.date(), opts.tzLocation);
           final hadTime = rs.last.start.isCertain(Component.hour);
@@ -1025,33 +1078,60 @@ class ScheduleParser {
         if (tag.contains('eod') ||
             tag.contains('cob') ||
             tag.contains('end of day')) {
-          d = tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day,
-              opts.policy.endOfDayHour);
+          d = tz.TZDateTime(
+            opts.tzLocation,
+            base.year,
+            base.month,
+            base.day,
+            opts.policy.endOfDayHour,
+          );
           assumptions.add(
-              'EOD/COB → today ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.');
+            'EOD/COB → today ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.',
+          );
         } else if (tag.contains('eow') || tag.contains('end of week')) {
           final friDelta = (DateTime.friday - base.weekday + 7) % 7;
-          final fri =
-              tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day)
-                  .add(Duration(days: friDelta));
-          d = tz.TZDateTime(opts.tzLocation, fri.year, fri.month, fri.day,
-              opts.policy.endOfDayHour);
+          final fri = tz.TZDateTime(
+            opts.tzLocation,
+            base.year,
+            base.month,
+            base.day,
+          ).add(Duration(days: friDelta));
+          d = tz.TZDateTime(
+            opts.tzLocation,
+            fri.year,
+            fri.month,
+            fri.day,
+            opts.policy.endOfDayHour,
+          );
           assumptions.add(
-              'EOW → Friday ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.');
+            'EOW → Friday ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.',
+          );
         } else if (tag.contains('eom') || tag.contains('end of month')) {
           final firstNext = (base.month == 12)
               ? tz.TZDateTime(opts.tzLocation, base.year + 1, 1, 1)
               : tz.TZDateTime(opts.tzLocation, base.year, base.month + 1, 1);
           final lastDay = firstNext.subtract(const Duration(seconds: 1));
-          d = tz.TZDateTime(opts.tzLocation, lastDay.year, lastDay.month,
-              lastDay.day, opts.policy.endOfDayHour);
+          d = tz.TZDateTime(
+            opts.tzLocation,
+            lastDay.year,
+            lastDay.month,
+            lastDay.day,
+            opts.policy.endOfDayHour,
+          );
           assumptions.add(
-              'EOM → last day ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.');
+            'EOM → last day ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.',
+          );
         } else {
           d = tz.TZDateTime(
-              opts.tzLocation, base.year, 12, 31, opts.policy.endOfDayHour);
+            opts.tzLocation,
+            base.year,
+            12,
+            31,
+            opts.policy.endOfDayHour,
+          );
           assumptions.add(
-              'EOY → Dec 31 ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.');
+            'EOY → Dec 31 ${opts.policy.endOfDayHour.toString().padLeft(2, '0')}:00 deadline.',
+          );
         }
 
         deadline = d;
@@ -1073,14 +1153,19 @@ class ScheduleParser {
   }
 
   tz.TZDateTime _nextWeekMondayDeadline(tz.TZDateTime base) {
-    final tz.TZDateTime anchor =
-        tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day);
+    final tz.TZDateTime anchor = tz.TZDateTime(
+      opts.tzLocation,
+      base.year,
+      base.month,
+      base.day,
+    );
     var daysUntilMonday = (DateTime.monday - anchor.weekday + 7) % 7;
     if (daysUntilMonday == 0) {
       daysUntilMonday = 7;
     }
-    final tz.TZDateTime nextMonday =
-        anchor.add(Duration(days: daysUntilMonday));
+    final tz.TZDateTime nextMonday = anchor.add(
+      Duration(days: daysUntilMonday),
+    );
     return tz.TZDateTime(
       opts.tzLocation,
       nextMonday.year,
@@ -1179,8 +1264,9 @@ class ScheduleParser {
       freq = 'YEARLY';
     }
 
-    final mEveryN =
-        RegExp(r'\b(?:every|each)\s+(other|\d+)\b').firstMatch(phrase);
+    final mEveryN = RegExp(
+      r'\b(?:every|each)\s+(other|\d+)\b',
+    ).firstMatch(phrase);
     if (mEveryN != null) {
       if (mEveryN.group(1)!.toLowerCase() == 'other') {
         interval = 2;
@@ -1189,8 +1275,8 @@ class ScheduleParser {
       }
     }
     final mEveryNUnits = RegExp(
-            r'\b(?:every|each)\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)\b')
-        .firstMatch(phrase);
+      r'\b(?:every|each)\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)\b',
+    ).firstMatch(phrase);
     if (mEveryNUnits != null) {
       final n = int.parse(mEveryNUnits.group(1)!);
       final unit = mEveryNUnits.group(2)!.toLowerCase();
@@ -1274,7 +1360,7 @@ class ScheduleParser {
         'second' => 2,
         'third' => 3,
         'fourth' => 4,
-        _ => -1
+        _ => -1,
       };
     }
 
@@ -1303,40 +1389,72 @@ class ScheduleParser {
     }
 
     tz.TZDateTime? untilLocal;
-    final mUntil =
-        RegExp(r'\b(until|till|til|through)\s+([^,.;]+)', caseSensitive: false)
-            .firstMatch(phrase);
+    final mUntil = RegExp(
+      r'\b(until|till|til|through)\s+([^,.;]+)',
+      caseSensitive: false,
+    ).firstMatch(phrase);
     if (mUntil != null) {
       final untilText = mUntil.group(2)!.trim();
-      if (RegExp(r'\bEOY\b|\bend of (the )?year\b', caseSensitive: false)
-          .hasMatch(untilText)) {
-        untilLocal =
-            tz.TZDateTime(opts.tzLocation, base.year, 12, 31, 23, 59, 59);
-      } else if (RegExp(r'\bEOM\b|\bend of (the )?month\b',
-              caseSensitive: false)
-          .hasMatch(untilText)) {
+      if (RegExp(
+        r'\bEOY\b|\bend of (the )?year\b',
+        caseSensitive: false,
+      ).hasMatch(untilText)) {
+        untilLocal = tz.TZDateTime(
+          opts.tzLocation,
+          base.year,
+          12,
+          31,
+          23,
+          59,
+          59,
+        );
+      } else if (RegExp(
+        r'\bEOM\b|\bend of (the )?month\b',
+        caseSensitive: false,
+      ).hasMatch(untilText)) {
         final firstNext = (base.month == 12)
             ? tz.TZDateTime(opts.tzLocation, base.year + 1, 1, 1)
             : tz.TZDateTime(opts.tzLocation, base.year, base.month + 1, 1);
         final lastDay = firstNext.subtract(const Duration(seconds: 1));
         untilLocal = lastDay;
       } else {
-        final ref =
-            ParsingReference(instant: base.toUtc(), timezone: opts.tzName);
-        final rs = Chrono.parse(' $untilText ',
-            ref: ref, option: ParsingOption(forwardDate: true));
+        final ref = ParsingReference(
+          instant: base.toUtc(),
+          timezone: opts.tzName,
+        );
+        final rs = Chrono.parse(
+          ' $untilText ',
+          ref: ref,
+          option: ParsingOption(forwardDate: true),
+        );
         if (rs.isNotEmpty) {
           var dt = tz.TZDateTime.from(rs.last.date(), opts.tzLocation);
           final hadTime = rs.last.start.isCertain(Component.hour);
           if (!hadTime) {
             dt = tz.TZDateTime(
-                opts.tzLocation, dt.year, dt.month, dt.day, 23, 59, 59);
-            if (RegExp(r'\bnext year\b', caseSensitive: false)
-                    .hasMatch(untilText) &&
+              opts.tzLocation,
+              dt.year,
+              dt.month,
+              dt.day,
+              23,
+              59,
+              59,
+            );
+            if (RegExp(
+                  r'\bnext year\b',
+                  caseSensitive: false,
+                ).hasMatch(untilText) &&
                 dt.month == 1 &&
                 dt.day == 1) {
               dt = tz.TZDateTime(
-                  opts.tzLocation, dt.year - 1, 12, 31, 23, 59, 59);
+                opts.tzLocation,
+                dt.year - 1,
+                12,
+                31,
+                23,
+                59,
+                59,
+              );
             }
           }
           untilLocal = dt;
@@ -1392,24 +1510,29 @@ class ScheduleParser {
     if (untilLocal != null) rrule += ';UNTIL=${_formatIcsUtc(untilLocal)}';
     if (count != null) rrule += ';COUNT=$count';
 
-    final anchorTextBase = (byday.isNotEmpty ||
-            bymonthday != null ||
-            bysetpos != null)
-        ? phrase
-            .replaceAll(
-                RegExp(
+    final anchorTextBase =
+        (byday.isNotEmpty || bymonthday != null || bysetpos != null)
+            ? phrase
+                .replaceAll(
+                  RegExp(
                     r'\b(every|each|everyday|weekly|monthly|yearly|annually|biweekly|weekday|weekdays|weekend|weekends|mwf|tth)\b',
-                    caseSensitive: false),
-                '')
-            .replaceAll(
-                RegExp(r'\b(until|through)\s+[^,.;]+', caseSensitive: false),
-                '')
-            .replaceAll(
-                RegExp(r'\bfor\s+\d+\s+(times|occurrences)\b',
-                    caseSensitive: false),
-                '')
-            .trim()
-        : '';
+                    caseSensitive: false,
+                  ),
+                  '',
+                )
+                .replaceAll(
+                  RegExp(r'\b(until|through)\s+[^,.;]+', caseSensitive: false),
+                  '',
+                )
+                .replaceAll(
+                  RegExp(
+                    r'\bfor\s+\d+\s+(times|occurrences)\b',
+                    caseSensitive: false,
+                  ),
+                  '',
+                )
+                .trim()
+            : '';
     String anchorText = anchorTextBase;
     final timeAnchorMatch = RegExp(
       '\\b(?:at|@|around)\\s+$_timeSnippetPattern',
@@ -1419,9 +1542,10 @@ class ScheduleParser {
       final snippet =
           phrase.substring(timeAnchorMatch.start, timeAnchorMatch.end).trim();
       if (!anchorText.contains(snippet)) {
-        anchorText = [anchorText, snippet]
-            .where((part) => part.trim().isNotEmpty)
-            .join(' ');
+        anchorText = [
+          anchorText,
+          snippet,
+        ].where((part) => part.trim().isNotEmpty).join(' ');
       }
     }
 
@@ -1431,9 +1555,9 @@ class ScheduleParser {
         .trim();
 
     return _RecurrenceParse(
-        cleaned,
-        Recurrence(
-            rrule: rrule, text: phrase, until: untilLocal, count: count));
+      cleaned,
+      Recurrence(rrule: rrule, text: phrase, until: untilLocal, count: count),
+    );
   }
 
   String _formatIcsUtc(tz.TZDateTime local) {
@@ -1446,7 +1570,9 @@ class ScheduleParser {
     var working = text.trim();
     if (working.isEmpty) return null;
     working = working.replaceAll(
-        RegExp(r'(\d)(st|nd|rd|th)\b', caseSensitive: false), r'$1');
+      RegExp(r'(\d)(st|nd|rd|th)\b', caseSensitive: false),
+      r'$1',
+    );
     final patterns = [
       DateFormat('MMMM d'),
       DateFormat('MMM d'),
@@ -1491,8 +1617,10 @@ class ScheduleParser {
     if (recurrence == null || start == null) {
       return recurrence;
     }
-    final _RecurrenceSpec? spec =
-        _RecurrenceMath.tryParse(recurrence, start.location);
+    final _RecurrenceSpec? spec = _RecurrenceMath.tryParse(
+      recurrence,
+      start.location,
+    );
     if (spec == null) {
       return recurrence;
     }
@@ -1525,11 +1653,7 @@ class ScheduleParser {
     );
   }
 
-  String _rewriteRrule(
-    String rrule, {
-    tz.TZDateTime? until,
-    int? count,
-  }) {
+  String _rewriteRrule(String rrule, {tz.TZDateTime? until, int? count}) {
     final Map<String, String> fields = {};
     for (final token in rrule.split(';')) {
       final idx = token.indexOf('=');
@@ -1576,19 +1700,27 @@ class ScheduleParser {
     var text = working;
     final assumptions = <String>[];
     final flags = <AmbiguityFlag>{};
-    final dayStart =
-        tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day);
+    final dayStart = tz.TZDateTime(
+      opts.tzLocation,
+      base.year,
+      base.month,
+      base.day,
+    );
     var anchor = dayStart;
     var anchorExplicit = false;
     var useReferenceTime = false;
     final lowerOriginal = original.toLowerCase();
-    final bool hasMorningCue =
-        RegExp(r'\b(morning|sunrise|dawn)\b').hasMatch(lowerOriginal);
-    final bool hasEveningCue = RegExp(r'\b(tonight|evening|night|afternoon)\b')
-        .hasMatch(lowerOriginal);
+    final bool hasMorningCue = RegExp(
+      r'\b(morning|sunrise|dawn)\b',
+    ).hasMatch(lowerOriginal);
+    final bool hasEveningCue = RegExp(
+      r'\b(tonight|evening|night|afternoon)\b',
+    ).hasMatch(lowerOriginal);
 
-    Match? match = RegExp(r'\bthis time tomorrow\b', caseSensitive: false)
-        .firstMatch(text);
+    Match? match = RegExp(
+      r'\bthis time tomorrow\b',
+      caseSensitive: false,
+    ).firstMatch(text);
     if (match != null) {
       anchor = anchor.add(const Duration(days: 1));
       anchorExplicit = true;
@@ -1596,17 +1728,21 @@ class ScheduleParser {
       text = text.replaceRange(match.start, match.end, ' ');
       flags.add(AmbiguityFlag.relativeDate);
       assumptions.add(
-          'Mapped "${match.group(0)}" to ${_fmtDate(anchor)} at ${_hhmm(base.hour)}.');
+        'Mapped "${match.group(0)}" to ${_fmtDate(anchor)} at ${_hhmm(base.hour)}.',
+      );
     } else {
-      match = RegExp(r'\bday after tomorrow\b', caseSensitive: false)
-          .firstMatch(text);
+      match = RegExp(
+        r'\bday after tomorrow\b',
+        caseSensitive: false,
+      ).firstMatch(text);
       if (match != null) {
         anchor = anchor.add(const Duration(days: 2));
         anchorExplicit = true;
         text = text.replaceRange(match.start, match.end, ' ');
         flags.add(AmbiguityFlag.relativeDate);
-        assumptions
-            .add('Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.');
+        assumptions.add(
+          'Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.',
+        );
       } else {
         match = RegExp(r'\btomorrow\b', caseSensitive: false).firstMatch(text);
         if (match != null) {
@@ -1614,8 +1750,9 @@ class ScheduleParser {
           anchorExplicit = true;
           text = text.replaceRange(match.start, match.end, ' ');
           flags.add(AmbiguityFlag.relativeDate);
-          assumptions
-              .add('Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.');
+          assumptions.add(
+            'Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.',
+          );
         }
       }
     }
@@ -1631,8 +1768,9 @@ class ScheduleParser {
         anchorExplicit = true;
         text = text.replaceRange(match.start, match.end, ' ');
         flags.add(AmbiguityFlag.relativeDate);
-        assumptions
-            .add('Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.');
+        assumptions.add(
+          'Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.',
+        );
       }
     }
 
@@ -1647,8 +1785,10 @@ class ScheduleParser {
     consumeAnchor(RegExp(r'\btoday\b', caseSensitive: false));
     consumeAnchor(RegExp(r'\btonight\b', caseSensitive: false));
     consumeAnchor(
-      RegExp(r'\bthis\s+(morning|afternoon|evening|night)\b',
-          caseSensitive: false),
+      RegExp(
+        r'\bthis\s+(morning|afternoon|evening|night)\b',
+        caseSensitive: false,
+      ),
     );
 
     Match? timeMatch = RegExp(
@@ -1684,8 +1824,10 @@ class ScheduleParser {
           minute = minutes;
           explicit24h = true;
           text = text.replaceRange(compactMatch.start, compactMatch.end, ' ');
-          assumptions.add('Interpreted "${compactMatch.group(0)}" '
-              'as ${_hhmm(hour)}.');
+          assumptions.add(
+            'Interpreted "${compactMatch.group(0)}" '
+            'as ${_hhmm(hour)}.',
+          );
         }
       }
     }
@@ -1702,9 +1844,13 @@ class ScheduleParser {
           minute = 0;
           ambiguousNoMeridiem = true;
           text = text.replaceRange(
-              simpleHourMatch.start, simpleHourMatch.end, ' ');
+            simpleHourMatch.start,
+            simpleHourMatch.end,
+            ' ',
+          );
           assumptions.add(
-              'Interpreted "${simpleHourMatch.group(0)}" as ${_hhmm(value)}.');
+            'Interpreted "${simpleHourMatch.group(0)}" as ${_hhmm(value)}.',
+          );
         }
       }
     }
@@ -1735,8 +1881,10 @@ class ScheduleParser {
         RegExp(r'\bmidnight\b', caseSensitive: false).hasMatch(text)) {
       hour = 0;
       minute = 0;
-      text =
-          text.replaceFirst(RegExp(r'\bmidnight\b', caseSensitive: false), ' ');
+      text = text.replaceFirst(
+        RegExp(r'\bmidnight\b', caseSensitive: false),
+        ' ',
+      );
       assumptions.add('Mapped "midnight" to 00:00.');
     } else if (hour == null && useReferenceTime) {
       hour = base.hour;
@@ -1767,7 +1915,13 @@ class ScheduleParser {
     minute ??= 0;
 
     var candidate = tz.TZDateTime(
-        opts.tzLocation, anchor.year, anchor.month, anchor.day, hour, minute);
+      opts.tzLocation,
+      anchor.year,
+      anchor.month,
+      anchor.day,
+      hour,
+      minute,
+    );
     if (!anchorExplicit && candidate.isBefore(base)) {
       candidate = candidate.add(const Duration(days: 1));
     }
@@ -1890,8 +2044,9 @@ class ScheduleParser {
   bool _looksLikeNumericAmbiguity(String s, bool preferDMY) {
     final m = RegExp(r'\b(\d{1,2})[\/\-](\d{1,2})(?!\d)').firstMatch(s);
     if (m == null) {
-      final y =
-          RegExp(r'\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b').firstMatch(s);
+      final y = RegExp(
+        r'\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b',
+      ).firstMatch(s);
       if (y == null) return false;
       final aa = int.parse(y.group(1)!);
       final bb = int.parse(y.group(2)!);
@@ -1937,8 +2092,10 @@ class ScheduleParser {
     if (location != null && location.isNotEmpty) {
       final escaped = RegExp.escape(location);
       cleaned = cleaned.replaceAll(
-        RegExp(r'\b(?:at|in|to)\s+(?:the\s+)?' + escaped + r'\b',
-            caseSensitive: false),
+        RegExp(
+          r'\b(?:at|in|to)\s+(?:the\s+)?' + escaped + r'\b',
+          caseSensitive: false,
+        ),
         ' ',
       );
       cleaned = cleaned.replaceAll(
@@ -1979,7 +2136,9 @@ class ScheduleParser {
     var value = raw.trim();
     if (value.isEmpty) return null;
     value = value.replaceFirst(
-        RegExp(r'^(?:at|in|to)\s+', caseSensitive: false), '');
+      RegExp(r'^(?:at|in|to)\s+', caseSensitive: false),
+      '',
+    );
     value = value.trim();
     return value.isEmpty ? null : value;
   }
@@ -2017,22 +2176,24 @@ class ScheduleParser {
       return true;
     }
     if (RegExp(
-            r'\bthis\s+(time|morning|afternoon|evening|night|week|weekend|month|year)\b')
-        .hasMatch(lower)) {
+      r'\bthis\s+(time|morning|afternoon|evening|night|week|weekend|month|year)\b',
+    ).hasMatch(lower)) {
       return true;
     }
     if (RegExp(
-            r'\bnext\s+(week|weekend|month|year|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun'
-            r'|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b')
-        .hasMatch(lower)) {
+      r'\bnext\s+(week|weekend|month|year|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun'
+      r'|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+    ).hasMatch(lower)) {
       return true;
     }
-    if (RegExp(r'\b\d{1,2}(:\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)\b')
-        .hasMatch(lower)) {
+    if (RegExp(
+      r'\b\d{1,2}(:\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)\b',
+    ).hasMatch(lower)) {
       return true;
     }
-    if (RegExp(r'\b\d+\s+(minute|hour|day|week|month|year)s?\b')
-        .hasMatch(lower)) {
+    if (RegExp(
+      r'\b\d+\s+(minute|hour|day|week|month|year)s?\b',
+    ).hasMatch(lower)) {
       return true;
     }
     return false;
@@ -2047,8 +2208,10 @@ class ScheduleParser {
     if (trimmed.startsWith('#')) return true;
     if (trimmed.length <= 2) return true;
     final hasDigits = RegExp(r'\d').hasMatch(trimmed);
-    final isAlphaNum =
-        RegExp(r'^[a-z0-9_\-]+$', caseSensitive: false).hasMatch(trimmed);
+    final isAlphaNum = RegExp(
+      r'^[a-z0-9_\-]+$',
+      caseSensitive: false,
+    ).hasMatch(trimmed);
     if (!hasDigits && isAlphaNum && trimmed.length <= 20) {
       return true;
     }
@@ -2117,14 +2280,26 @@ class ScheduleParser {
       DateFormat('HH:mm').format(DateTime(2000, 1, 1, hour));
 
   tz.TZDateTime _startOfWeekend(
-      tz.TZDateTime base, int weekendDefaultDay, bool addAWeek) {
-    final startOfDay =
-        tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day);
+    tz.TZDateTime base,
+    int weekendDefaultDay,
+    bool addAWeek,
+  ) {
+    final startOfDay = tz.TZDateTime(
+      opts.tzLocation,
+      base.year,
+      base.month,
+      base.day,
+    );
     int goal = weekendDefaultDay;
     int delta = (goal - startOfDay.weekday + 7) % 7;
     if (addAWeek || delta == 0) delta += 7;
-    return tz.TZDateTime(opts.tzLocation, startOfDay.year, startOfDay.month,
-        startOfDay.day + delta, opts.policy.defaultMorningHour);
+    return tz.TZDateTime(
+      opts.tzLocation,
+      startOfDay.year,
+      startOfDay.month,
+      startOfDay.day + delta,
+      opts.policy.defaultMorningHour,
+    );
   }
 }
 
@@ -2159,7 +2334,10 @@ _ExplicitRange? _extractExplicitRange(String text) {
         endRaw != null ? _parseClockToken(endRaw) : null;
     if (startToken == null && endToken == null) continue;
     return _ExplicitRange(
-        start: startToken, end: endToken, raw: match.group(0)!);
+      start: startToken,
+      end: endToken,
+      raw: match.group(0)!,
+    );
   }
   return null;
 }
@@ -2206,10 +2384,14 @@ _ClockToken? _parseClockToken(String raw) {
     );
   }
 
-  final bool isPm =
-      RegExp(r'p\.?m\.?|\bpm\b', caseSensitive: false).hasMatch(value);
-  final bool isAm =
-      RegExp(r'a\.?m\.?|\bam\b', caseSensitive: false).hasMatch(value);
+  final bool isPm = RegExp(
+    r'p\.?m\.?|\bpm\b',
+    caseSensitive: false,
+  ).hasMatch(value);
+  final bool isAm = RegExp(
+    r'a\.?m\.?|\bam\b',
+    caseSensitive: false,
+  ).hasMatch(value);
   final bool hasMeridiem = isPm || isAm;
   value =
       value.replaceAll(RegExp(r'p\.?m\.?|a\.?m\.?|\bpm\b|\bam\b'), ' ').trim();
@@ -2272,7 +2454,13 @@ tz.TZDateTime _materializeClockToken(
     if (token.isAm && hour == 12) hour = 0;
   }
   var candidate = tz.TZDateTime(
-      loc, anchor.year, anchor.month, anchor.day, hour, token.minute);
+    loc,
+    anchor.year,
+    anchor.month,
+    anchor.day,
+    hour,
+    token.minute,
+  );
   if (reference != null) {
     if (!token.hasMeridiem &&
         !token.was24Hour &&
@@ -2350,15 +2538,21 @@ _DurationExtraction? _extractDurationPhrase(String text) {
   );
   final compositeMatch = composite.firstMatch(text);
   if (compositeMatch != null) {
-    final double hours =
-        double.parse(compositeMatch.namedGroup('hours') ?? '0');
-    final double minutes =
-        double.parse(compositeMatch.namedGroup('minutes') ?? '0');
-    final Duration duration =
-        Duration(minutes: ((hours * 60) + minutes).round());
+    final double hours = double.parse(
+      compositeMatch.namedGroup('hours') ?? '0',
+    );
+    final double minutes = double.parse(
+      compositeMatch.namedGroup('minutes') ?? '0',
+    );
+    final Duration duration = Duration(
+      minutes: ((hours * 60) + minutes).round(),
+    );
     if (duration.inMinutes > 0) {
-      final cleaned =
-          text.replaceRange(compositeMatch.start, compositeMatch.end, ' ');
+      final cleaned = text.replaceRange(
+        compositeMatch.start,
+        compositeMatch.end,
+        ' ',
+      );
       final phrase =
           text.substring(compositeMatch.start, compositeMatch.end).trim();
       return _DurationExtraction(
@@ -2614,7 +2808,9 @@ class _RecurrenceMath {
   static const int _maxIterations = 5000;
 
   static _RecurrenceSpec? tryParse(
-      Recurrence recurrence, tz.Location location) {
+    Recurrence recurrence,
+    tz.Location location,
+  ) {
     final Map<String, String> fields = {};
     for (final token in recurrence.rrule.split(';')) {
       final idx = token.indexOf('=');
@@ -2631,8 +2827,10 @@ class _RecurrenceMath {
       _ => null,
     };
     if (frequency == null) return null;
-    final interval =
-        (int.tryParse(fields['INTERVAL'] ?? '1') ?? 1).clamp(1, 1000);
+    final interval = (int.tryParse(fields['INTERVAL'] ?? '1') ?? 1).clamp(
+      1,
+      1000,
+    );
     final List<int> byWeekdays = [];
     final byDayRaw = fields['BYDAY'];
     if (byDayRaw != null && byDayRaw.isNotEmpty) {
@@ -2776,8 +2974,8 @@ class _RecurrenceMath {
     _RecurrenceSpec spec,
   ) {
     final List<int> targets = List<int>.from(
-        spec.byWeekdays.isEmpty ? [current.weekday] : spec.byWeekdays)
-      ..sort();
+      spec.byWeekdays.isEmpty ? [current.weekday] : spec.byWeekdays,
+    )..sort();
     for (final day in targets) {
       if (day > current.weekday) {
         final delta = day - current.weekday;
@@ -2951,8 +3149,10 @@ class _RecurrenceMath {
   }
 
   static int? _weekdayFromIcs(String token) {
-    final match = RegExp(r'(MO|TU|WE|TH|FR|SA|SU)', caseSensitive: false)
-        .firstMatch(token.toUpperCase());
+    final match = RegExp(
+      r'(MO|TU|WE|TH|FR|SA|SU)',
+      caseSensitive: false,
+    ).firstMatch(token.toUpperCase());
     if (match == null) return null;
     return switch (match.group(1)) {
       'MO' => DateTime.monday,

@@ -151,8 +151,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ScrollController _verticalController;
   late final ScrollController _horizontalHeaderController;
   late final ScrollController _horizontalGridController;
-  final GlobalKey _scrollableKey =
-      GlobalKey(debugLabel: 'CalendarVerticalScroll');
+  final GlobalKey _scrollableKey = GlobalKey(
+    debugLabel: 'CalendarVerticalScroll',
+  );
   final FocusNode _focusNode = FocusNode(debugLabel: 'CalendarGridFocus');
   Timer? _clockTimer;
   bool _hasAutoScrolled = false;
@@ -175,8 +176,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final TaskInteractionController _taskInteractionController;
   late final TaskPopoverController _taskPopoverController;
   late final ZoomControlsController _zoomControlsController;
-  static const ValueKey<String> _contextMenuGroupId =
-      ValueKey<String>('calendar-grid-context');
+  static const ValueKey<String> _contextMenuGroupId = ValueKey<String>(
+    'calendar-grid-context',
+  );
   static const double _desktopHandleExtent = 8.0;
   static const double _touchHandleExtent = 28.0;
   static const Duration _touchDragLongPressDelay = Duration(milliseconds: 260);
@@ -244,9 +246,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _horizontalGridController.addListener(_handleHorizontalGridScroll);
     _taskInteractionController = TaskInteractionController();
     _gridContextMenuController = ShadPopoverController();
-    _taskInteractionController.clipboard.addListener(
-      _handleClipboardChanged,
-    );
+    _taskInteractionController.clipboard.addListener(_handleClipboardChanged);
     _taskPopoverController = TaskPopoverController();
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
@@ -289,8 +289,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
             const _ZoomIntent(_ZoomAction.zoomOut),
         LogicalKeySet(
-                LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
-            const _ZoomIntent(_ZoomAction.zoomOut),
+          LogicalKeyboardKey.control,
+          LogicalKeyboardKey.numpadSubtract,
+        ): const _ZoomIntent(
+          _ZoomAction.zoomOut,
+        ),
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
             const _ZoomIntent(_ZoomAction.zoomOut),
         LogicalKeySet(
@@ -769,8 +772,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
-    _taskInteractionController.clipboard
-        .removeListener(_handleClipboardChanged);
+    _taskInteractionController.clipboard.removeListener(
+      _handleClipboardChanged,
+    );
     _horizontalHeaderController.removeListener(_handleHorizontalHeaderScroll);
     _horizontalGridController.removeListener(_handleHorizontalGridScroll);
     _horizontalHeaderController.dispose();
@@ -827,10 +831,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Future<void> _shareTaskIcs(CalendarTask task) async {
-    await showCalendarTaskShareSheet(
-      context: context,
-      task: task,
-    );
+    await showCalendarTaskShareSheet(context: context, task: task);
   }
 
   Future<void> _exportTaskIcs(CalendarTask task) async {
@@ -864,10 +865,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       if (!mounted) {
         return;
       }
-      FeedbackSystem.showError(
-        context,
-        l10n.calendarExportFailed('$error'),
-      );
+      FeedbackSystem.showError(context, l10n.calendarExportFailed('$error'));
     }
   }
 
@@ -882,9 +880,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _pasteTemplate(CalendarTask template, DateTime slotTime) {
     context.read<T>().add(
           CalendarEvent.taskRepeated(
-            template: template,
-            scheduledTime: slotTime,
-          ),
+              template: template, scheduledTime: slotTime),
         );
   }
 
@@ -1004,8 +1000,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _handleTaskPointerDown(CalendarTask task, Offset normalizedOffset) {
     double? pointerOffset;
-    final CalendarTaskGeometry? geometry =
-        _surfaceController.geometryForTask(task.id);
+    final CalendarTaskGeometry? geometry = _surfaceController.geometryForTask(
+      task.id,
+    );
     final double normalizedDy =
         (normalizedOffset.dy.clamp(0.0, 1.0) as num).toDouble();
     if (geometry != null) {
@@ -1042,10 +1039,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _splitTask(CalendarTask task, DateTime splitTime) {
     context.read<T>().add(
-          CalendarEvent.taskSplit(
-            target: task,
-            splitTime: splitTime,
-          ),
+          CalendarEvent.taskSplit(target: task, splitTime: splitTime),
         );
   }
 
@@ -1135,8 +1129,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (startLeft == null || baseWidth <= 0) {
       return;
     }
-    _taskInteractionController
-        .updateDragPointerGlobalPosition(details.globalPosition);
+    _taskInteractionController.updateDragPointerGlobalPosition(
+      details.globalPosition,
+    );
     _notifyDragSessionStarted();
     _notifyDragGlobalPosition(details.globalPosition);
     final double widthForNormalization =
@@ -1183,16 +1178,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         details.globalPosition,
         implicitView.viewId,
       );
-      final bool hitSurface =
-          hitTest.path.any((entry) => identical(entry.target, surfaceObject));
+      final bool hitSurface = hitTest.path.any(
+        (entry) => identical(entry.target, surfaceObject),
+      );
       if (!hitSurface) {
         _handleSurfaceDragExit();
         return;
       }
     }
     if (surfaceObject is RenderCalendarSurface) {
-      final DragPreview? preview =
-          surfaceObject.previewForGlobalPosition(details.globalPosition);
+      final DragPreview? preview = surfaceObject.previewForGlobalPosition(
+        details.globalPosition,
+      );
       if (preview != null) {
         _updateDragPreview(preview.start, preview.duration);
       }
@@ -1267,7 +1264,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _hasAutoScrolled = false;
       _scheduleAutoScroll();
     } else if (!_isSameDay(
-        oldWidget.state.selectedDate, widget.state.selectedDate)) {
+      oldWidget.state.selectedDate,
+      widget.state.selectedDate,
+    )) {
       _viewTransitionController.reset();
       _viewTransitionController.forward();
       _hasAutoScrolled = false;
@@ -1373,16 +1372,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 scaffoldMessenger: scaffoldMessenger,
                 locationHelper: locationHelper,
                 onTaskUpdated: (updatedTask) {
-                  locate<T>().add(
-                    CalendarEvent.taskUpdated(
-                      task: updatedTask,
-                    ),
-                  );
+                  locate<T>().add(CalendarEvent.taskUpdated(task: updatedTask));
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask, scope,
-                        {required bool scheduleTouched,
-                        required bool checklistTouched}) {
+                    ? (
+                        updatedTask,
+                        scope, {
+                        required bool scheduleTouched,
+                        required bool checklistTouched,
+                      }) {
                         if (scheduleTouched || checklistTouched) {
                           locate<T>().add(
                             CalendarEvent.taskOccurrenceUpdated(
@@ -1405,11 +1403,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                       }
                     : null,
                 onTaskDeleted: (taskId) {
-                  locate<T>().add(
-                    CalendarEvent.taskDeleted(
-                      taskId: taskId,
-                    ),
-                  );
+                  locate<T>().add(CalendarEvent.taskDeleted(taskId: taskId));
                   Navigator.of(sheetContext).maybePop();
                 },
               ),
@@ -1470,19 +1464,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _updateCompactState(context);
     return ResponsiveHelper.layoutBuilder(
       context,
-      mobile: _CalendarWeekView(
-        gridState: this,
-        compact: true,
-      ),
+      mobile: _CalendarWeekView(gridState: this, compact: true),
       tablet: _CalendarWeekView(
         gridState: this,
         compact: true,
         allowWeekViewInCompact: true,
       ),
-      desktop: _CalendarWeekView(
-        gridState: this,
-        compact: false,
-      ),
+      desktop: _CalendarWeekView(gridState: this, compact: false),
     );
   }
 
@@ -1494,8 +1482,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       allowDayViewZoom: _shouldUseCompactZoom,
     );
     if (_shouldUseCompactZoom && _zoomIndex == 0) {
-      final double compactHourHeight =
-          math.min(metrics.hourHeight, _mobileCompactHourHeight);
+      final double compactHourHeight = math.min(
+        metrics.hourHeight,
+        _mobileCompactHourHeight,
+      );
       if (compactHourHeight != metrics.hourHeight) {
         final double compactSlotHeight =
             compactHourHeight / metrics.slotsPerHour;
@@ -1697,13 +1687,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     final int step = _minutesPerStep;
     final int snappedMinute = (slot.minute ~/ step) * step;
-    return DateTime(
-      slot.year,
-      slot.month,
-      slot.day,
-      slot.hour,
-      snappedMinute,
-    );
+    return DateTime(slot.year, slot.month, slot.day, slot.hour, snappedMinute);
   }
 
   void _updateHoveredSlot(DateTime? slot) {
@@ -1737,9 +1721,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _gridContextMenuController.hide();
   }
 
-  void _handleSurfaceDragUpdate(
-    CalendarSurfaceDragUpdateDetails details,
-  ) {
+  void _handleSurfaceDragUpdate(CalendarSurfaceDragUpdateDetails details) {
     final CalendarTask? dragging =
         _taskInteractionController.draggingTaskSnapshot;
     if (dragging == null) {
@@ -1822,8 +1804,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _refreshPopoverLayouts() {
-    final Iterable<String> trackedIds =
-        List<String>.from(_taskPopoverController.layouts.keys);
+    final Iterable<String> trackedIds = List<String>.from(
+      _taskPopoverController.layouts.keys,
+    );
     for (final String taskId in trackedIds) {
       _updateActivePopoverLayoutForTask(taskId);
     }
@@ -2080,8 +2063,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     return;
                   }
 
-                  final popoverLayout =
-                      _taskPopoverController.layoutFor(currentId);
+                  final popoverLayout = _taskPopoverController.layoutFor(
+                    currentId,
+                  );
                   final Offset topLeft = popoverLayout.topLeft;
                   final Rect popoverRect = Rect.fromLTWH(
                     topLeft.dx,
@@ -2090,8 +2074,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     popoverLayout.maxHeight,
                   );
 
-                  final Offset localPosition =
-                      overlayBox.globalToLocal(event.position);
+                  final Offset localPosition = overlayBox.globalToLocal(
+                    event.position,
+                  );
 
                   if (!popoverRect.contains(localPosition)) {
                     _closeTaskPopover(currentId, reason: 'outside-tap');
@@ -2155,22 +2140,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                             maxHeight: layout.maxHeight,
                             inlineActions: inlineActions,
                             collectionMethod: state.model.collection?.method,
-                            onClose: () => _closeTaskPopover(taskId,
-                                reason: 'dropdown-close'),
+                            onClose: () => _closeTaskPopover(
+                              taskId,
+                              reason: 'dropdown-close',
+                            ),
                             scaffoldMessenger: scaffoldMessenger,
                             locationHelper:
                                 LocationAutocompleteHelper.fromState(state),
                             onTaskUpdated: (updatedTask) {
                               context.read<T>().add(
                                     CalendarEvent.taskUpdated(
-                                      task: updatedTask,
-                                    ),
+                                        task: updatedTask),
                                   );
                             },
                             onOccurrenceUpdated: shouldUpdateOccurrence
-                                ? (updatedTask, scope,
-                                    {required bool scheduleTouched,
-                                    required bool checklistTouched}) {
+                                ? (
+                                    updatedTask,
+                                    scope, {
+                                    required bool scheduleTouched,
+                                    required bool checklistTouched,
+                                  }) {
                                     if (scheduleTouched || checklistTouched) {
                                       context.read<T>().add(
                                             CalendarEvent.taskOccurrenceUpdated(
@@ -2341,10 +2330,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 
-  void _scrollToSlot(
-    DateTime slotTime, {
-    bool allowDeferral = true,
-  }) {
+  void _scrollToSlot(DateTime slotTime, {bool allowDeferral = true}) {
     if (!_verticalController.hasClients) {
       if (allowDeferral) {
         _pendingScrollSlot = slotTime;
@@ -2400,10 +2386,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarTask? directTask = widget.state.model.tasks[taskId];
     if (directTask != null) {
       context.read<T>().add(
-            CalendarEvent.taskDropped(
-              taskId: taskId,
-              time: targetStart,
-            ),
+            CalendarEvent.taskDropped(taskId: taskId, time: targetStart),
           );
       return;
     }
@@ -2426,10 +2409,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     if (baseTask != null) {
       context.read<T>().add(
-            CalendarEvent.taskDropped(
-              taskId: baseId,
-              time: targetStart,
-            ),
+            CalendarEvent.taskDropped(taskId: baseId, time: targetStart),
           );
       return;
     }
@@ -2569,13 +2549,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required bool important,
     required bool urgent,
   }) {
-    final TaskPriority next =
-        _priorityFromFlags(important: important, urgent: urgent);
+    final TaskPriority next = _priorityFromFlags(
+      important: important,
+      urgent: urgent,
+    );
     context.read<T>().add(
           CalendarEvent.taskPriorityChanged(
-            taskId: task.baseId,
-            priority: next,
-          ),
+              taskId: task.baseId, priority: next),
         );
   }
 
@@ -2591,9 +2571,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _setTaskCompletion(CalendarTask task, bool completed) {
     context.read<T>().add(
           CalendarEvent.taskCompleted(
-            taskId: task.baseId,
-            completed: completed,
-          ),
+              taskId: task.baseId, completed: completed),
         );
   }
 
@@ -2815,9 +2793,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           label: 'Delete Task',
           destructive: true,
           onSelected: () {
-            context.read<T>().add(
-                  CalendarEvent.taskDeleted(taskId: task.id),
-                );
+            context.read<T>().add(CalendarEvent.taskDeleted(taskId: task.id));
             onTaskDeleted?.call();
           },
         ),
@@ -2883,9 +2859,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               menuController.hide();
               _splitTask(task, splitTime);
             },
-            child: Text(
-              'Split at ${TimeFormatter.formatTime(splitTime)}',
-            ),
+            child: Text('Split at ${TimeFormatter.formatTime(splitTime)}'),
           ),
         );
       }
@@ -3076,9 +3050,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       icsMeta: draft.icsMeta,
       modifiedAt: DateTime.now(),
     );
-    context.read<T>().add(
-          CalendarEvent.dayEventUpdated(event: updated),
-        );
+    context.read<T>().add(CalendarEvent.dayEventUpdated(event: updated));
   }
 
   String _getDayOfWeekShort(DateTime date) {
@@ -3089,7 +3061,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       'WEDNESDAY',
       'THURSDAY',
       'FRIDAY',
-      'SATURDAY'
+      'SATURDAY',
     ];
     return dayNames[date.weekday % 7];
   }
@@ -3133,8 +3105,9 @@ class _CalendarWeekView extends StatelessWidget {
         return AnimatedBuilder(
           animation: gridState._taskInteractionController,
           builder: (context, __) {
-            final weekDates =
-                gridState._getWeekDates(gridState.widget.state.selectedDate);
+            final weekDates = gridState._getWeekDates(
+              gridState.widget.state.selectedDate,
+            );
             final bool isWeekView =
                 gridState.widget.state.viewMode == CalendarView.week &&
                     (!compact || allowWeekViewInCompact);
@@ -3145,8 +3118,9 @@ class _CalendarWeekView extends StatelessWidget {
                 isWeekView ? weekDates : [gridState.widget.state.selectedDate];
             final List<DayEvent> selectedDayEvents = isWeekView
                 ? const <DayEvent>[]
-                : gridState.widget.state
-                    .dayEventsForDate(gridState.widget.state.selectedDate);
+                : gridState.widget.state.dayEventsForDate(
+                    gridState.widget.state.selectedDate,
+                  );
             final double horizontalPadding =
                 compact ? 0 : responsive.gridHorizontalPadding;
 
@@ -3245,7 +3219,8 @@ class _CalendarWeekView extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: calendarDangerColor.withValues(
-                                        alpha: 0.08),
+                                      alpha: 0.08,
+                                    ),
                                     borderRadius: BorderRadius.circular(
                                       calendarBorderRadius,
                                     ),
@@ -3465,10 +3440,8 @@ class DayEventsStrip extends StatelessWidget {
             )
           else ...[
             ...events.map(
-              (DayEvent event) => _DayEventBulletRow(
-                event: event,
-                onTap: () => onEdit(event),
-              ),
+              (DayEvent event) =>
+                  _DayEventBulletRow(event: event, onTap: () => onEdit(event)),
             ),
           ],
         ],
@@ -3478,10 +3451,7 @@ class DayEventsStrip extends StatelessWidget {
 }
 
 class _DayEventBulletRow extends StatelessWidget {
-  const _DayEventBulletRow({
-    required this.event,
-    required this.onTap,
-  });
+  const _DayEventBulletRow({required this.event, required this.onTap});
 
   static const double _bulletSize = 6;
 
@@ -3511,9 +3481,7 @@ class _DayEventBulletRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const WidgetSpan(
-                child: SizedBox(width: calendarGutterSm),
-              ),
+              const WidgetSpan(child: SizedBox(width: calendarGutterSm)),
               TextSpan(text: event.title),
             ],
           ),
@@ -3550,19 +3518,11 @@ class _CalendarDateSlideTransition extends StatelessWidget {
     final Animation<Offset> offsetAnimation = Tween<Offset>(
       begin: begin,
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
 
     return FadeTransition(
       opacity: animation,
-      child: SlideTransition(
-        position: offsetAnimation,
-        child: child,
-      ),
+      child: SlideTransition(position: offsetAnimation, child: child),
     );
   }
 }
@@ -3601,8 +3561,9 @@ class _CalendarGridContent extends StatelessWidget {
     gridState._visibleTasks.clear();
     final CalendarLayoutMetrics? resolvedMetrics =
         gridState._surfaceController.resolvedMetrics;
-    final double resolvedHourHeight =
-        gridState._effectiveHourHeight(resolvedMetrics);
+    final double resolvedHourHeight = gridState._effectiveHourHeight(
+      resolvedMetrics,
+    );
     final double stepHeight = gridState._effectiveStepHeight(resolvedMetrics);
     final List<Widget> taskEntries = <Widget>[];
     for (final DateTime date in columns) {
@@ -3711,10 +3672,7 @@ class _CalendarGridContent extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         controller:
             horizontalScrollController ?? gridState._horizontalGridController,
-        child: SizedBox(
-          width: totalWidth,
-          child: dragAwareSurface,
-        ),
+        child: SizedBox(width: totalWidth, child: dragAwareSurface),
       );
     }
 
@@ -3860,8 +3818,10 @@ class _CalendarDayHeaderRow extends StatelessWidget {
         enableHorizontalScroll && compactWeekDayWidth != null;
     final double devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
     final l10n = context.l10n;
-    final String unitLabel =
-        calendarUnitLabel(gridState.widget.state.viewMode, l10n);
+    final String unitLabel = calendarUnitLabel(
+      gridState.widget.state.viewMode,
+      l10n,
+    );
     final Widget? leadingNav = showNavigationControls
         ? _HeaderNavButton(
             icon: Icons.chevron_left,
@@ -3978,10 +3938,7 @@ class _HeaderNavButton extends StatelessWidget {
       width: _headerNavButtonExtent,
       height: calendarWeekHeaderHeight,
       child: Center(
-        child: AxiTooltip(
-          builder: (_) => Text(tooltip),
-          child: button,
-        ),
+        child: AxiTooltip(builder: (_) => Text(tooltip), child: button),
       ),
     );
   }
@@ -4086,9 +4043,9 @@ class _CalendarZoomControls extends StatelessWidget {
     final theme = ShadTheme.of(context);
     final colors = theme.colorScheme;
     const double zoomControlsShadowAlpha = 0.12;
-    final Color zoomControlsShadowColor = Theme.of(context)
-        .shadowColor
-        .withValues(alpha: zoomControlsShadowAlpha);
+    final Color zoomControlsShadowColor = Theme.of(
+      context,
+    ).shadowColor.withValues(alpha: zoomControlsShadowAlpha);
     final labelStyle = calendarZoomLabelTextStyle.copyWith(
       color: colors.foreground,
       fontFamily: theme.textTheme.small.fontFamily,
@@ -4108,10 +4065,7 @@ class _CalendarZoomControls extends StatelessWidget {
         onPressed: onPressed,
         enabled: onPressed != null,
       );
-      return AxiTooltip(
-        builder: (_) => Text(tooltip),
-        child: button,
-      );
+      return AxiTooltip(builder: (_) => Text(tooltip), child: button);
     }
 
     return Material(
@@ -4139,10 +4093,7 @@ class _CalendarZoomControls extends StatelessWidget {
               padding: EdgeInsets.symmetric(
                 horizontal: gridState._zoomControlsLabelPaddingHorizontal + 2,
               ),
-              child: Text(
-                gridState._zoomLabel,
-                style: labelStyle,
-              ),
+              child: Text(gridState._zoomLabel, style: labelStyle),
             ),
             buildButton(
               tooltip: context.l10n.calendarZoomIn,
@@ -4279,12 +4230,7 @@ class _DayHeaderDividerPainter extends CustomPainter {
     final double snappedRight =
         ((size.width - halfStroke) * devicePixelRatio).roundToDouble() /
             devicePixelRatio;
-    final Rect rect = Rect.fromLTWH(
-      snappedRight,
-      0,
-      strokeWidth,
-      size.height,
-    );
+    final Rect rect = Rect.fromLTWH(snappedRight, 0, strokeWidth, size.height);
     canvas.drawRect(rect, paint);
   }
 

@@ -255,8 +255,10 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     });
     _trackedPointerId = event.pointer;
     _startPointerTracking();
-    widget.interactionController
-        .setDragPointerOffsetFromTop(pointerOffsetY, notify: false);
+    widget.interactionController.setDragPointerOffsetFromTop(
+      pointerOffsetY,
+      notify: false,
+    );
   }
 
   void _handlePointerUp(PointerUpEvent event) {
@@ -322,8 +324,10 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       return false;
     }
 
-    final double available =
-        (height - _resizeHandleVisibilityPadding).clamp(0.0, double.infinity);
+    final double available = (height - _resizeHandleVisibilityPadding).clamp(
+      0.0,
+      double.infinity,
+    );
     if (available < _minTaskHeightForResizeHandles) {
       return false;
     }
@@ -336,7 +340,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       final double handleWidth = math.max(
         _touchHandleHorizontalMin,
         math.min(
-            width * _touchHandleHorizontalFraction, _touchHandleHorizontalMax),
+          width * _touchHandleHorizontalFraction,
+          _touchHandleHorizontalMax,
+        ),
       );
       final double left = (width - handleWidth) / 2;
       final double right = left + handleWidth;
@@ -366,8 +372,10 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
 
   CalendarDragPayload _dragPayload() {
     final Rect? bounds = _sourceBounds ?? _resolveGlobalBounds();
-    final double pointerNormalized =
-        (_pointerNormalized ?? 0.5).clamp(0.0, 1.0);
+    final double pointerNormalized = (_pointerNormalized ?? 0.5).clamp(
+      0.0,
+      1.0,
+    );
     final double pointerOffsetY = _pointerOffsetY ??
         (_geometry.rect.height.isFinite && _geometry.rect.height > 0
             ? _geometry.rect.height / 2

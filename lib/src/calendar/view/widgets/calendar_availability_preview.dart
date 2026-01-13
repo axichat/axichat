@@ -34,10 +34,13 @@ class CalendarAvailabilityPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<_AvailabilityPreviewInterval> intervals =
-        _intervalPreviewFor(overlay.intervals);
-    final _IntervalPreviewResult preview =
-        _limitIntervalPreview(intervals, limit);
+    final List<_AvailabilityPreviewInterval> intervals = _intervalPreviewFor(
+      overlay.intervals,
+    );
+    final _IntervalPreviewResult preview = _limitIntervalPreview(
+      intervals,
+      limit,
+    );
     final bool hasMore = preview.remainingCount > 0;
     final TextStyle labelStyle = context.textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
@@ -57,7 +60,8 @@ class CalendarAvailabilityPreview extends StatelessWidget {
             for (final interval in preview.intervals)
               Padding(
                 padding: const EdgeInsets.only(
-                    bottom: _availabilityPreviewRowSpacing),
+                  bottom: _availabilityPreviewRowSpacing,
+                ),
                 child: _AvailabilityIntervalRow(interval: interval),
               ),
           ],
@@ -180,11 +184,7 @@ List<_AvailabilityPreviewInterval> _intervalPreviewFor(
       continue;
     }
     merged.add(
-      _AvailabilityPreviewInterval(
-        type: interval.type,
-        start: start,
-        end: end,
-      ),
+      _AvailabilityPreviewInterval(type: interval.type, start: start, end: end),
     );
   }
   return merged;

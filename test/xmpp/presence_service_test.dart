@@ -103,32 +103,26 @@ void main() {
     },
   );
 
-  test(
-    'receivePresence prefers English status text when available.',
-    () async {
-      await connectSuccessfully(xmppService);
+  test('receivePresence prefers English status text when available.', () async {
+    await connectSuccessfully(xmppService);
 
-      final contactJid = generateRandomJid();
-      await database.saveRosterItem(
-        RosterItem.fromJid(contactJid).copyWith(
-          subscription: Subscription.both,
-          presence: Presence.unavailable,
-        ),
-      );
+    final contactJid = generateRandomJid();
+    await database.saveRosterItem(
+      RosterItem.fromJid(contactJid).copyWith(
+        subscription: Subscription.both,
+        presence: Presence.unavailable,
+      ),
+    );
 
-      await xmppService.receivePresence(
-        contactJid,
-        Presence.chat,
-        statuses: {
-          'es': 'Conectado',
-          'en': 'Online',
-        },
-      );
+    await xmppService.receivePresence(
+      contactJid,
+      Presence.chat,
+      statuses: {'es': 'Conectado', 'en': 'Online'},
+    );
 
-      final updated = await database.getRosterItem(contactJid);
-      expect(updated?.status, equals('Online'));
-    },
-  );
+    final updated = await database.getRosterItem(contactJid);
+    expect(updated?.status, equals('Online'));
+  });
 
   test(
     'receivePresence stores self presence and status in state store.',
@@ -136,11 +130,7 @@ void main() {
       await connectSuccessfully(xmppService);
 
       final selfJid = xmppService.myJid!;
-      await xmppService.receivePresence(
-        selfJid,
-        Presence.dnd,
-        status: 'Busy',
-      );
+      await xmppService.receivePresence(selfJid, Presence.dnd, status: 'Busy');
 
       final storedPresence =
           stateStore.read(key: xmppService.presenceStorageKey) as Presence?;

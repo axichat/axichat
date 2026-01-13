@@ -344,8 +344,10 @@ class DynamicInlineTextRenderObject extends RenderBox {
       _detailsWidth,
     );
 
-    final messageSize =
-        Size(_maxLineWidth, hasBodyText ? _textPainter.height : 0.0);
+    final messageSize = Size(
+      _maxLineWidth,
+      hasBodyText ? _textPainter.height : 0.0,
+    );
 
     _finalLineWidth = textLines.isEmpty ? 0.0 : textLines.last.width;
 
@@ -367,10 +369,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
                 : max(_maxLineWidth, combinedWidth),
             messageSize.height,
           )
-        : Size(
-            messageSize.width,
-            messageSize.height + _detailsHeight,
-          );
+        : Size(messageSize.width, messageSize.height + _detailsHeight);
   }
 
   @override

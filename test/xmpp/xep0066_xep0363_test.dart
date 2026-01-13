@@ -110,9 +110,9 @@ class RecordingHttpHeaders extends Mock implements HttpHeaders {
   @override
   void add(String name, Object value, {bool preserveHeaderCase = false}) {
     final normalized = name.toLowerCase();
-    _valuesByName.putIfAbsent(normalized, () => <String>[]).add(
-          value.toString(),
-        );
+    _valuesByName
+        .putIfAbsent(normalized, () => <String>[])
+        .add(value.toString());
     _order.add(name);
   }
 
@@ -194,10 +194,8 @@ class RecordingHttpRequest extends Mock implements HttpClientRequest {
   }
 
   @override
-  Future<HttpClientResponse> close() async => RecordingHttpResponse(
-        statusCode: responseStatusCode,
-        body: responseBody,
-      );
+  Future<HttpClientResponse> close() async =>
+      RecordingHttpResponse(statusCode: responseStatusCode, body: responseBody);
 }
 
 class RecordingHttpClient extends Mock implements HttpClient {
@@ -234,10 +232,7 @@ class RecordingHttpClient extends Mock implements HttpClient {
 }
 
 class _AttachmentFixture {
-  _AttachmentFixture({
-    required this.directory,
-    required this.attachment,
-  });
+  _AttachmentFixture({required this.directory, required this.attachment});
 
   final Directory directory;
   final EmailAttachment attachment;
@@ -271,15 +266,10 @@ mox.MessageEvent _buildOobMessageEvent({
   );
 }
 
-mox.XMLNode _buildHeaderNode({
-  required String name,
-  required String value,
-}) {
+mox.XMLNode _buildHeaderNode({required String name, required String value}) {
   return mox.XMLNode(
     tag: _headerTag,
-    attributes: {
-      _headerNameAttr: name,
-    },
+    attributes: {_headerNameAttr: name},
     text: value,
   );
 }
@@ -291,31 +281,16 @@ mox.Stanza _buildUploadSlotResult({
 }) {
   final putNode = mox.XMLNode(
     tag: _putTag,
-    attributes: {
-      _urlAttr: putUrl,
-    },
+    attributes: {_urlAttr: putUrl},
     children: headers,
   );
-  final getNode = mox.XMLNode(
-    tag: _getTag,
-    attributes: {
-      _urlAttr: getUrl,
-    },
-  );
+  final getNode = mox.XMLNode(tag: _getTag, attributes: {_urlAttr: getUrl});
   final slotNode = mox.XMLNode.xmlns(
     tag: _slotTag,
     xmlns: mox.httpFileUploadXmlns,
-    children: [
-      putNode,
-      getNode,
-    ],
+    children: [putNode, getNode],
   );
-  return mox.Stanza.iq(
-    type: _iqTypeResult,
-    children: [
-      slotNode,
-    ],
-  );
+  return mox.Stanza.iq(type: _iqTypeResult, children: [slotNode]);
 }
 
 mox.Stanza _buildUploadErrorResult({required String conditionTag}) {
@@ -325,10 +300,7 @@ mox.Stanza _buildUploadErrorResult({required String conditionTag}) {
       mox.XMLNode(
         tag: _errorTag,
         children: [
-          mox.XMLNode.xmlns(
-            tag: conditionTag,
-            xmlns: mox.fullStanzaXmlns,
-          ),
+          mox.XMLNode.xmlns(tag: conditionTag, xmlns: mox.fullStanzaXmlns),
         ],
       ),
     ],
@@ -344,9 +316,7 @@ mox.DiscoInfo _buildUploadDiscoInfo({
       : <mox.DataFormField>[
           mox.DataFormField(
             options: _noOptions,
-            values: [
-              maxFileSizeBytes.toString(),
-            ],
+            values: [maxFileSizeBytes.toString()],
             isRequired: false,
             varAttr: _maxFileSizeFieldVar,
           ),
@@ -359,18 +329,9 @@ mox.DiscoInfo _buildUploadDiscoInfo({
     items: _noFormItems,
   );
   return mox.DiscoInfo(
-    const [
-      mox.httpFileUploadXmlns,
-    ],
-    const [
-      mox.Identity(
-        category: _identityCategory,
-        type: _identityType,
-      ),
-    ],
-    [
-      form,
-    ],
+    const [mox.httpFileUploadXmlns],
+    const [mox.Identity(category: _identityCategory, type: _identityType)],
+    [form],
     null,
     mox.JID.fromString(jid),
   );
@@ -386,9 +347,7 @@ mox.DiscoInfo _buildEmptyDiscoInfo({required String jid}) {
   );
 }
 
-Future<_AttachmentFixture> _createAttachmentFixture({
-  int? sizeBytes,
-}) async {
+Future<_AttachmentFixture> _createAttachmentFixture({int? sizeBytes}) async {
   final directory = await Directory.systemTemp.createTemp(_tempDirPrefix);
   final file = File(p.join(directory.path, _fileName));
   await file.writeAsBytes(_attachmentBytes, flush: true);
@@ -398,10 +357,7 @@ Future<_AttachmentFixture> _createAttachmentFixture({
     sizeBytes: sizeBytes ?? _attachmentBytes.length,
     mimeType: _mimeType,
   );
-  return _AttachmentFixture(
-    directory: directory,
-    attachment: attachment,
-  );
+  return _AttachmentFixture(directory: directory, attachment: attachment);
 }
 
 Future<void> _configureHttpUploadSupport({
@@ -413,17 +369,16 @@ Future<void> _configureHttpUploadSupport({
   when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
   when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
   when(() => mockConnection.requestBlocklist()).thenAnswer((_) async => null);
-  when(() => mockConnection.getManager<mox.HttpFileUploadManager>())
-      .thenReturn(uploadManager);
-  when(() => mockConnection.getManager<mox.DiscoManager>())
-      .thenReturn(discoManager);
+  when(
+    () => mockConnection.getManager<mox.HttpFileUploadManager>(),
+  ).thenReturn(uploadManager);
+  when(
+    () => mockConnection.getManager<mox.DiscoManager>(),
+  ).thenReturn(discoManager);
   when(() => uploadManager.isSupported()).thenAnswer((_) async => true);
   when(() => discoManager.performDiscoSweep()).thenAnswer(
-    (_) async => moxlib.Result<mox.DiscoError, List<mox.DiscoInfo>>(
-      [
-        uploadInfo,
-      ],
-    ),
+    (_) async =>
+        moxlib.Result<mox.DiscoError, List<mox.DiscoInfo>>([uploadInfo]),
   );
   when(() => discoManager.discoInfoQuery(any())).thenAnswer(
     (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
@@ -439,10 +394,7 @@ Future<T> _runWithHttpClient<T>({
   required RecordingHttpClient client,
   required Future<T> Function() body,
 }) {
-  return HttpOverrides.runZoned(
-    body,
-    createHttpClient: (_) => client,
-  );
+  return HttpOverrides.runZoned(body, createHttpClient: (_) => client);
 }
 
 void main() {
@@ -474,8 +426,9 @@ void main() {
 
     prepareMockConnection();
 
-    when(() => mockConnection.asBroadcastStream())
-        .thenAnswer((_) => eventStreamController.stream);
+    when(
+      () => mockConnection.asBroadcastStream(),
+    ).thenAnswer((_) => eventStreamController.stream);
     when(
       () => mockNotificationService.sendNotification(
         title: any(named: 'title'),
@@ -671,22 +624,21 @@ void main() {
       );
 
       mox.StanzaDetails? capturedDetails;
-      when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (invocation) async {
-          capturedDetails =
-              invocation.positionalArguments.first as mox.StanzaDetails;
-          return _buildUploadSlotResult(
-            putUrl: _slotPutUrl,
-            getUrl: _slotGetUrl,
-          );
-        },
-      );
+      when(() => mockConnection.sendStanza(any())).thenAnswer((
+        invocation,
+      ) async {
+        capturedDetails =
+            invocation.positionalArguments.first as mox.StanzaDetails;
+        return _buildUploadSlotResult(putUrl: _slotPutUrl, getUrl: _slotGetUrl);
+      });
       when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-      when(() => mockConnection.sendMessage(any()))
-          .thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-      final client =
-          RecordingHttpClient(responseStatusCode: _httpStatusCreated);
+      final client = RecordingHttpClient(
+        responseStatusCode: _httpStatusCreated,
+      );
       await _runWithHttpClient(
         client: client,
         body: () => xmppService.sendAttachment(
@@ -734,22 +686,21 @@ void main() {
       );
 
       mox.StanzaDetails? capturedDetails;
-      when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (invocation) async {
-          capturedDetails =
-              invocation.positionalArguments.first as mox.StanzaDetails;
-          return _buildUploadSlotResult(
-            putUrl: _slotPutUrl,
-            getUrl: _slotGetUrl,
-          );
-        },
-      );
+      when(() => mockConnection.sendStanza(any())).thenAnswer((
+        invocation,
+      ) async {
+        capturedDetails =
+            invocation.positionalArguments.first as mox.StanzaDetails;
+        return _buildUploadSlotResult(putUrl: _slotPutUrl, getUrl: _slotGetUrl);
+      });
       when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-      when(() => mockConnection.sendMessage(any()))
-          .thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-      final client =
-          RecordingHttpClient(responseStatusCode: _httpStatusCreated);
+      final client = RecordingHttpClient(
+        responseStatusCode: _httpStatusCreated,
+      );
       await _runWithHttpClient(
         client: client,
         body: () => xmppService.sendAttachment(
@@ -847,26 +798,18 @@ void main() {
 
       final putNode = mox.XMLNode(
         tag: _putTag,
-        attributes: {
-          _urlAttr: _slotPutUrl,
-        },
+        attributes: {_urlAttr: _slotPutUrl},
       );
       final slotNode = mox.XMLNode.xmlns(
         tag: _slotTag,
         xmlns: mox.httpFileUploadXmlns,
-        children: [
-          putNode,
-        ],
+        children: [putNode],
       );
-      final stanza = mox.Stanza.iq(
-        type: _iqTypeResult,
-        children: [
-          slotNode,
-        ],
-      );
+      final stanza = mox.Stanza.iq(type: _iqTypeResult, children: [slotNode]);
 
-      when(() => mockConnection.sendStanza(any()))
-          .thenAnswer((_) async => stanza);
+      when(
+        () => mockConnection.sendStanza(any()),
+      ).thenAnswer((_) async => stanza);
 
       expect(
         () => xmppService.sendAttachment(
@@ -896,26 +839,18 @@ void main() {
 
       final getNode = mox.XMLNode(
         tag: _getTag,
-        attributes: {
-          _urlAttr: _slotGetUrl,
-        },
+        attributes: {_urlAttr: _slotGetUrl},
       );
       final slotNode = mox.XMLNode.xmlns(
         tag: _slotTag,
         xmlns: mox.httpFileUploadXmlns,
-        children: [
-          getNode,
-        ],
+        children: [getNode],
       );
-      final stanza = mox.Stanza.iq(
-        type: _iqTypeResult,
-        children: [
-          slotNode,
-        ],
-      );
+      final stanza = mox.Stanza.iq(type: _iqTypeResult, children: [slotNode]);
 
-      when(() => mockConnection.sendStanza(any()))
-          .thenAnswer((_) async => stanza);
+      when(
+        () => mockConnection.sendStanza(any()),
+      ).thenAnswer((_) async => stanza);
 
       expect(
         () => xmppService.sendAttachment(
@@ -947,29 +882,15 @@ void main() {
         tag: _slotTag,
         xmlns: _invalidSlotXmlns,
         children: [
-          mox.XMLNode(
-            tag: _putTag,
-            attributes: {
-              _urlAttr: _slotPutUrl,
-            },
-          ),
-          mox.XMLNode(
-            tag: _getTag,
-            attributes: {
-              _urlAttr: _slotGetUrl,
-            },
-          ),
+          mox.XMLNode(tag: _putTag, attributes: {_urlAttr: _slotPutUrl}),
+          mox.XMLNode(tag: _getTag, attributes: {_urlAttr: _slotGetUrl}),
         ],
       );
-      final stanza = mox.Stanza.iq(
-        type: _iqTypeResult,
-        children: [
-          slotNode,
-        ],
-      );
+      final stanza = mox.Stanza.iq(type: _iqTypeResult, children: [slotNode]);
 
-      when(() => mockConnection.sendStanza(any()))
-          .thenAnswer((_) async => stanza);
+      when(
+        () => mockConnection.sendStanza(any()),
+      ).thenAnswer((_) async => stanza);
 
       expect(
         () => xmppService.sendAttachment(
@@ -1033,10 +954,8 @@ void main() {
       );
 
       when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (_) async => _buildUploadSlotResult(
-          putUrl: _invalidUrl,
-          getUrl: _slotGetUrl,
-        ),
+        (_) async =>
+            _buildUploadSlotResult(putUrl: _invalidUrl, getUrl: _slotGetUrl),
       );
 
       expect(
@@ -1068,14 +987,8 @@ void main() {
       );
 
       final headers = <mox.XMLNode>[
-        _buildHeaderNode(
-          name: _headerNameAuth,
-          value: _headerValueAuth,
-        ),
-        _buildHeaderNode(
-          name: _headerNameExpires,
-          value: _headerValueExpires,
-        ),
+        _buildHeaderNode(name: _headerNameAuth, value: _headerValueAuth),
+        _buildHeaderNode(name: _headerNameExpires, value: _headerValueExpires),
         _buildHeaderNode(
           name: _headerNameCookieRaw,
           value: _headerValueCookieRaw,
@@ -1094,11 +1007,13 @@ void main() {
         ),
       );
       when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-      when(() => mockConnection.sendMessage(any()))
-          .thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-      final client =
-          RecordingHttpClient(responseStatusCode: _httpStatusCreated);
+      final client = RecordingHttpClient(
+        responseStatusCode: _httpStatusCreated,
+      );
       await _runWithHttpClient(
         client: client,
         body: () => xmppService.sendAttachment(
@@ -1141,17 +1056,17 @@ void main() {
       );
 
       when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (_) async => _buildUploadSlotResult(
-          putUrl: _slotPutUrl,
-          getUrl: _slotGetUrl,
-        ),
+        (_) async =>
+            _buildUploadSlotResult(putUrl: _slotPutUrl, getUrl: _slotGetUrl),
       );
       when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-      when(() => mockConnection.sendMessage(any()))
-          .thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-      final client =
-          RecordingHttpClient(responseStatusCode: _httpStatusCreated);
+      final client = RecordingHttpClient(
+        responseStatusCode: _httpStatusCreated,
+      );
       await _runWithHttpClient(
         client: client,
         body: () => xmppService.sendAttachment(
@@ -1185,23 +1100,21 @@ void main() {
       );
 
       when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (_) async => _buildUploadSlotResult(
-          putUrl: _slotPutUrl,
-          getUrl: _slotGetUrl,
-        ),
+        (_) async =>
+            _buildUploadSlotResult(putUrl: _slotPutUrl, getUrl: _slotGetUrl),
       );
       when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
       mox.MessageEvent? sentMessage;
-      when(() => mockConnection.sendMessage(any())).thenAnswer(
-        (invocation) async {
-          sentMessage =
-              invocation.positionalArguments.first as mox.MessageEvent;
-          return true;
-        },
-      );
+      when(() => mockConnection.sendMessage(any())).thenAnswer((
+        invocation,
+      ) async {
+        sentMessage = invocation.positionalArguments.first as mox.MessageEvent;
+        return true;
+      });
 
-      final client =
-          RecordingHttpClient(responseStatusCode: _httpStatusCreated);
+      final client = RecordingHttpClient(
+        responseStatusCode: _httpStatusCreated,
+      );
       await _runWithHttpClient(
         client: client,
         body: () => xmppService.sendAttachment(
@@ -1234,10 +1147,8 @@ void main() {
       );
 
       when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (_) async => _buildUploadSlotResult(
-          putUrl: _slotPutUrl,
-          getUrl: _slotGetUrl,
-        ),
+        (_) async =>
+            _buildUploadSlotResult(putUrl: _slotPutUrl, getUrl: _slotGetUrl),
       );
 
       final stanzaId = uuid.v4();
@@ -1251,11 +1162,13 @@ void main() {
         }
         return uuid.v4();
       });
-      when(() => mockConnection.sendMessage(any()))
-          .thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-      final client =
-          RecordingHttpClient(responseStatusCode: _httpStatusCreated);
+      final client = RecordingHttpClient(
+        responseStatusCode: _httpStatusCreated,
+      );
       await _runWithHttpClient(
         client: client,
         body: () => xmppService.sendAttachment(
@@ -1291,10 +1204,8 @@ void main() {
       );
 
       when(() => mockConnection.sendStanza(any())).thenAnswer(
-        (_) async => _buildUploadSlotResult(
-          putUrl: _slotPutUrl,
-          getUrl: _slotGetUrl,
-        ),
+        (_) async =>
+            _buildUploadSlotResult(putUrl: _slotPutUrl, getUrl: _slotGetUrl),
       );
 
       final stanzaId = uuid.v4();
@@ -1308,8 +1219,9 @@ void main() {
         }
         return uuid.v4();
       });
-      when(() => mockConnection.sendMessage(any()))
-          .thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
       final client = RecordingHttpClient(
         responseStatusCode: _httpStatusServerError,

@@ -78,10 +78,8 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
       );
     };
   } else {
-    defaultHandler = (CalendarTask task) => task_input.showTaskInput(
-          context,
-          editingTask: task,
-        );
+    defaultHandler = (CalendarTask task) =>
+        task_input.showTaskInput(context, editingTask: task);
   }
 
   await showAdaptiveBottomSheet<void>(
@@ -194,8 +192,9 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                               ),
                               AxiIconButton(
                                 iconData: LucideIcons.x,
-                                tooltip: MaterialLocalizations.of(context)
-                                    .closeButtonTooltip,
+                                tooltip: MaterialLocalizations.of(
+                                  context,
+                                ).closeButtonTooltip,
                                 iconSize: 16,
                                 buttonSize: 34,
                                 tapTargetSize: 40,
@@ -208,10 +207,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                             ],
                           ),
                           const SizedBox(height: calendarInsetSm),
-                          Text(
-                            subtitle,
-                            style: context.textTheme.muted,
-                          ),
+                          Text(subtitle, style: context.textTheme.muted),
                           const SizedBox(height: calendarGutterSm),
                           TaskTextField(
                             controller: _queryController,
@@ -253,34 +249,34 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                           bottom: calendarInsetMd + keyboardInset,
                         ),
                         sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (index.isOdd) {
-                                return const SizedBox(height: calendarInsetSm);
-                              }
-                              final CalendarTask task = results[index ~/ 2];
-                              final Widget trailing = _ResultMetadata(task);
-                              final bool useCustomTile =
-                                  widget.taskTileBuilder != null;
-                              final Widget tile = useCustomTile
-                                  ? widget.taskTileBuilder!.call(
-                                      task,
-                                      trailing: trailing,
-                                      requiresLongPress:
-                                          widget.requiresLongPressForDrag,
-                                      onTap: () => _handleTaskSelected(task),
-                                      onDragStart: () =>
-                                          Navigator.of(context).maybePop(),
-                                      allowContextMenu: false,
-                                    )
-                                  : _SearchResultTile(
-                                      task: task,
-                                      onTap: () => _handleTaskSelected(task),
-                                    );
-                              return tile;
-                            },
-                            childCount: (results.length * 2) - 1,
-                          ),
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            if (index.isOdd) {
+                              return const SizedBox(height: calendarInsetSm);
+                            }
+                            final CalendarTask task = results[index ~/ 2];
+                            final Widget trailing = _ResultMetadata(task);
+                            final bool useCustomTile =
+                                widget.taskTileBuilder != null;
+                            final Widget tile = useCustomTile
+                                ? widget.taskTileBuilder!.call(
+                                    task,
+                                    trailing: trailing,
+                                    requiresLongPress:
+                                        widget.requiresLongPressForDrag,
+                                    onTap: () => _handleTaskSelected(task),
+                                    onDragStart: () =>
+                                        Navigator.of(context).maybePop(),
+                                    allowContextMenu: false,
+                                  )
+                                : _SearchResultTile(
+                                    task: task,
+                                    onTap: () => _handleTaskSelected(task),
+                                  );
+                            return tile;
+                          }, childCount: (results.length * 2) - 1),
                         ),
                       ),
                   ],
@@ -348,10 +344,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
 }
 
 class _FilterRow extends StatelessWidget {
-  const _FilterRow({
-    required this.filters,
-    required this.onFilterToggled,
-  });
+  const _FilterRow({required this.filters, required this.onFilterToggled});
 
   final Set<_QuickFilter> filters;
   final void Function(_QuickFilter filter, bool enabled) onFilterToggled;
@@ -386,11 +379,7 @@ class _FilterRow extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  filter.icon,
-                  size: 14,
-                  color: textColor,
-                ),
+                Icon(filter.icon, size: 14, color: textColor),
                 const SizedBox(width: calendarInsetSm),
                 Text(
                   filter.label(context),
@@ -458,10 +447,7 @@ class _ResultMetadata extends StatelessWidget {
 }
 
 class _MetadataTag extends StatelessWidget {
-  const _MetadataTag({
-    required this.icon,
-    required this.label,
-  });
+  const _MetadataTag({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -524,11 +510,7 @@ class _EmptySearchState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.search,
-              size: 32,
-              color: colors.mutedForeground,
-            ),
+            Icon(Icons.search, size: 32, color: colors.mutedForeground),
             const SizedBox(height: calendarGutterSm),
             Text(
               showHint
@@ -552,10 +534,7 @@ class _EmptySearchState extends StatelessWidget {
 }
 
 class _SearchResultTile extends StatelessWidget {
-  const _SearchResultTile({
-    required this.task,
-    required this.onTap,
-  });
+  const _SearchResultTile({required this.task, required this.onTap});
 
   final CalendarTask task;
   final VoidCallback onTap;
@@ -585,10 +564,7 @@ class _SearchResultTile extends StatelessWidget {
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: calendarInsetSm),
-                  Text(
-                    subtitle,
-                    style: context.textTheme.muted,
-                  ),
+                  Text(subtitle, style: context.textTheme.muted),
                 ],
               ],
             ),
@@ -694,10 +670,7 @@ class _ParsedQuery {
   final List<String> pathTerms;
   final List<String> idTerms;
 
-  static _ParsedQuery parse(
-    String raw, {
-    CalendarCriticalPath? targetPath,
-  }) {
+  static _ParsedQuery parse(String raw, {CalendarCriticalPath? targetPath}) {
     final String normalized = raw.trim().toLowerCase();
     if (normalized.isEmpty) {
       return const _ParsedQuery(
@@ -942,10 +915,7 @@ class _QueryMatcher {
     return completed == query;
   }
 
-  static bool _scheduledMatches(
-    CalendarTask task,
-    _ScheduledFilter? filter,
-  ) {
+  static bool _scheduledMatches(CalendarTask task, _ScheduledFilter? filter) {
     if (filter == null) {
       return true;
     }
@@ -982,9 +952,9 @@ class _QueryMatcher {
       case _DeadlineFilter.today:
         return DateUtils.isSameDay(deadline, now);
       case _DeadlineFilter.tomorrow:
-        final DateTime tomorrow = DateUtils.dateOnly(now).add(
-          const Duration(days: 1),
-        );
+        final DateTime tomorrow = DateUtils.dateOnly(
+          now,
+        ).add(const Duration(days: 1));
         return DateUtils.isSameDay(deadline, tomorrow);
       case _DeadlineFilter.thisWeek:
         final DateTime today = DateUtils.dateOnly(now);
@@ -993,10 +963,7 @@ class _QueryMatcher {
     }
   }
 
-  static bool _recurrenceMatches(
-    CalendarTask task,
-    _RecurrenceFilter? filter,
-  ) {
+  static bool _recurrenceMatches(CalendarTask task, _RecurrenceFilter? filter) {
     if (filter == null) {
       return true;
     }

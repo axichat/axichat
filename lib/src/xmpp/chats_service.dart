@@ -151,38 +151,37 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   Future<MessageTransport> _defaultTransportForChat(String jid) async {
     try {
-      return await _dbOpReturning<XmppDatabase, MessageTransport>(
-        (db) async {
-          final chat = await db.getChat(jid);
-          return chat?.defaultTransport ?? MessageTransport.xmpp;
-        },
-      );
+      return await _dbOpReturning<XmppDatabase, MessageTransport>((db) async {
+        final chat = await db.getChat(jid);
+        return chat?.defaultTransport ?? MessageTransport.xmpp;
+      });
     } on XmppAbortedException {
       return MessageTransport.xmpp;
     }
   }
 
   Future<ChatTransportPreference> loadChatTransportPreference(
-      String jid) async {
+    String jid,
+  ) async {
     final defaultTransport = await _defaultTransportForChat(jid);
     try {
-      return await _dbOpReturning<XmppStateStore, ChatTransportPreference>(
-        (store) {
-          final stored = _transportFrom(store.read(key: _transportKeyFor(jid)));
-          if (stored == null) {
-            return ChatTransportPreference(
-              transport: defaultTransport,
-              defaultTransport: defaultTransport,
-              isExplicit: false,
-            );
-          }
+      return await _dbOpReturning<XmppStateStore, ChatTransportPreference>((
+        store,
+      ) {
+        final stored = _transportFrom(store.read(key: _transportKeyFor(jid)));
+        if (stored == null) {
           return ChatTransportPreference(
-            transport: stored,
+            transport: defaultTransport,
             defaultTransport: defaultTransport,
-            isExplicit: true,
+            isExplicit: false,
           );
-        },
-      );
+        }
+        return ChatTransportPreference(
+          transport: stored,
+          defaultTransport: defaultTransport,
+          isExplicit: true,
+        );
+      });
     } on XmppAbortedException {
       return ChatTransportPreference(
         transport: defaultTransport,
@@ -197,10 +196,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     required MessageTransport transport,
   }) async {
     await _dbOp<XmppStateStore>(
-      (store) => store.write(
-        key: _transportKeyFor(jid),
-        value: transport.name,
-      ),
+      (store) => store.write(key: _transportKeyFor(jid), value: transport.name),
       awaitDatabase: true,
     );
   }
@@ -227,10 +223,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     required MessageTimelineFilter filter,
   }) async {
     await _dbOp<XmppStateStore>(
-      (store) => store.write(
-        key: _viewFilterKeyFor(jid),
-        value: filter.name,
-      ),
+      (store) => store.write(key: _viewFilterKeyFor(jid), value: filter.name),
       awaitDatabase: true,
     );
   }
@@ -430,10 +423,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     });
 
   @override
-  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([
-      mox.ChatStateManager(),
-    ]);
+  List<mox.XmppManagerBase> get featureManagers =>
+      super.featureManagers..addAll([mox.ChatStateManager()]);
 
   Future<void> sendChatState({
     required String jid,
@@ -462,10 +453,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     );
   }
 
-  Future<void> sendTyping({
-    required String jid,
-    required bool typing,
-  }) async {
+  Future<void> sendTyping({required String jid, required bool typing}) async {
     await sendChatState(
       state: typing ? mox.ChatState.composing : mox.ChatState.paused,
       jid: jid,
@@ -484,22 +472,18 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<void> closeChat() async {
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final closed = await db.closeChat();
-        if (closed == null) return;
-        await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final closed = await db.closeChat();
+      if (closed == null) return;
+      await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
+    });
   }
 
   Future<void> toggleChatMuted({
     required String jid,
     required bool muted,
   }) async {
-    await _dbOp<XmppDatabase>(
-      (db) => db.markChatMuted(jid: jid, muted: muted),
-    );
+    await _dbOp<XmppDatabase>((db) => db.markChatMuted(jid: jid, muted: muted));
     await _syncConversationIndexMeta(jid: jid);
   }
 
@@ -508,10 +492,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     required NotificationPreviewSetting setting,
   }) async {
     await _dbOp<XmppDatabase>(
-      (db) => db.setChatNotificationPreviewSetting(
-        jid: jid,
-        setting: setting,
-      ),
+      (db) => db.setChatNotificationPreviewSetting(jid: jid, setting: setting),
     );
   }
 
@@ -565,13 +546,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     );
   }
 
-  Future<void> toggleChatSpam({
-    required String jid,
-    required bool spam,
-  }) async {
-    await _dbOp<XmppDatabase>(
-      (db) => db.markChatSpam(jid: jid, spam: spam),
-    );
+  Future<void> toggleChatSpam({required String jid, required bool spam}) async {
+    await _dbOp<XmppDatabase>((db) => db.markChatSpam(jid: jid, spam: spam));
   }
 
   Future<List<Message>> loadCompleteChatHistory({
@@ -584,9 +560,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<Chat?> loadOpenChat() async {
-    return _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.getOpenChat(),
-    );
+    return _dbOpReturning<XmppDatabase, Chat?>((db) => db.getOpenChat());
   }
 
   Future<void> preloadChatWindow({
@@ -621,8 +595,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     );
   }
 
-  Future<void> toggleAllChatsMarkerResponsive(
-      {required bool responsive}) async {
+  Future<void> toggleAllChatsMarkerResponsive({
+    required bool responsive,
+  }) async {
     if (_lastMarkerResponsive == responsive) return;
     _lastMarkerResponsive = responsive;
     await _dbOp<XmppDatabase>(
@@ -655,15 +630,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<void> deleteChat({required String jid}) async {
-    await _dbOp<XmppDatabase>(
-      (db) => db.removeChat(jid),
-    );
+    await _dbOp<XmppDatabase>((db) => db.removeChat(jid));
   }
 
   Future<void> deleteChatMessages({required String jid}) async {
-    await _dbOp<XmppDatabase>(
-      (db) => db.removeChatMessages(jid),
-    );
+    await _dbOp<XmppDatabase>((db) => db.removeChatMessages(jid));
   }
 
   Future<void> renameChatContact({
@@ -673,29 +644,27 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     final trimmed = displayName.trim();
     MessageTransport? transport;
     String? rosterTitle;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final chat = await db.getChat(jid);
-        transport = chat?.transport;
-        if (chat != null) {
-          rosterTitle = chat.title.trim().isNotEmpty ? chat.title : null;
-          final updated = chat.copyWith(
-            contactDisplayName: trimmed.isNotEmpty ? trimmed : null,
-          );
-          await db.updateChat(updated);
+    await _dbOp<XmppDatabase>((db) async {
+      final chat = await db.getChat(jid);
+      transport = chat?.transport;
+      if (chat != null) {
+        rosterTitle = chat.title.trim().isNotEmpty ? chat.title : null;
+        final updated = chat.copyWith(
+          contactDisplayName: trimmed.isNotEmpty ? trimmed : null,
+        );
+        await db.updateChat(updated);
+      }
+      final rosterItem = await db.getRosterItem(jid);
+      if (rosterItem != null) {
+        rosterTitle ??= rosterItem.title;
+        if (trimmed.isNotEmpty) {
+          rosterTitle = trimmed;
+          await db.updateRosterItem(rosterItem.copyWith(title: trimmed));
+        } else if (rosterTitle != null) {
+          await db.updateRosterItem(rosterItem.copyWith(title: rosterTitle!));
         }
-        final rosterItem = await db.getRosterItem(jid);
-        if (rosterItem != null) {
-          rosterTitle ??= rosterItem.title;
-          if (trimmed.isNotEmpty) {
-            rosterTitle = trimmed;
-            await db.updateRosterItem(rosterItem.copyWith(title: trimmed));
-          } else if (rosterTitle != null) {
-            await db.updateRosterItem(rosterItem.copyWith(title: rosterTitle!));
-          }
-        }
-      },
-    );
+      }
+    });
     rosterTitle ??= mox.JID.fromString(jid).local;
     if (transport?.isXmpp == true && rosterTitle != null) {
       final renamed = await _connection.addToRoster(jid, title: rosterTitle);
@@ -708,73 +677,70 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<void> applyConversationIndexItems(List<ConvItem> items) async {
     if (items.isEmpty) return;
     final now = DateTime.timestamp();
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        for (final item in items) {
-          final peerJid = item.peerBare.toBare().toString();
-          if (peerJid.isEmpty) continue;
-          if (_isMucChatJid(peerJid)) continue;
+    await _dbOp<XmppDatabase>((db) async {
+      for (final item in items) {
+        final peerJid = item.peerBare.toBare().toString();
+        if (peerJid.isEmpty) continue;
+        if (_isMucChatJid(peerJid)) continue;
 
-          final archived = item.archived;
-          final pinned = item.pinned;
-          final muted = item.mutedUntil?.toLocal().isAfter(now) ?? false;
-          final lastChangeCandidate = item.lastTimestamp.toLocal();
+        final archived = item.archived;
+        final pinned = item.pinned;
+        final muted = item.mutedUntil?.toLocal().isAfter(now) ?? false;
+        final lastChangeCandidate = item.lastTimestamp.toLocal();
 
-          final existing = await db.getChat(peerJid);
-          if (existing == null) {
-            final isSelfChat = peerJid == myJid;
-            await db.createChat(
-              Chat(
-                jid: peerJid,
-                title: isSelfChat
-                    ? 'Saved Messages'
-                    : mox.JID.fromString(peerJid).local,
-                type: ChatType.chat,
-                lastChangeTimestamp: lastChangeCandidate,
-                muted: muted,
-                favorited: pinned,
-                archived: archived,
-                contactJid: peerJid,
-              ),
-            );
-            continue;
-          }
-
-          if (existing.type != ChatType.chat) continue;
-
-          final effectiveLastChange =
-              lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
-                  ? lastChangeCandidate
-                  : existing.lastChangeTimestamp;
-
-          final shouldUpdateMuted = existing.muted != muted;
-          final shouldUpdatePinned = existing.favorited != pinned;
-          final shouldUpdateArchived = existing.archived != archived;
-          final shouldUpdateTimestamp =
-              effectiveLastChange != existing.lastChangeTimestamp;
-          final shouldUpdateContactJid = existing.contactJid != peerJid;
-
-          if (!shouldUpdateMuted &&
-              !shouldUpdatePinned &&
-              !shouldUpdateArchived &&
-              !shouldUpdateTimestamp &&
-              !shouldUpdateContactJid) {
-            continue;
-          }
-
-          await db.updateChat(
-            existing.copyWith(
-              lastChangeTimestamp: effectiveLastChange,
+        final existing = await db.getChat(peerJid);
+        if (existing == null) {
+          final isSelfChat = peerJid == myJid;
+          await db.createChat(
+            Chat(
+              jid: peerJid,
+              title: isSelfChat
+                  ? 'Saved Messages'
+                  : mox.JID.fromString(peerJid).local,
+              type: ChatType.chat,
+              lastChangeTimestamp: lastChangeCandidate,
               muted: muted,
               favorited: pinned,
               archived: archived,
               contactJid: peerJid,
             ),
           );
+          continue;
         }
-      },
-      awaitDatabase: true,
-    );
+
+        if (existing.type != ChatType.chat) continue;
+
+        final effectiveLastChange =
+            lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
+                ? lastChangeCandidate
+                : existing.lastChangeTimestamp;
+
+        final shouldUpdateMuted = existing.muted != muted;
+        final shouldUpdatePinned = existing.favorited != pinned;
+        final shouldUpdateArchived = existing.archived != archived;
+        final shouldUpdateTimestamp =
+            effectiveLastChange != existing.lastChangeTimestamp;
+        final shouldUpdateContactJid = existing.contactJid != peerJid;
+
+        if (!shouldUpdateMuted &&
+            !shouldUpdatePinned &&
+            !shouldUpdateArchived &&
+            !shouldUpdateTimestamp &&
+            !shouldUpdateContactJid) {
+          continue;
+        }
+
+        await db.updateChat(
+          existing.copyWith(
+            lastChangeTimestamp: effectiveLastChange,
+            muted: muted,
+            favorited: pinned,
+            archived: archived,
+            contactJid: peerJid,
+          ),
+        );
+      }
+    }, awaitDatabase: true);
   }
 
   Future<void> applyConversationIndexSnapshot(
@@ -788,47 +754,39 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     }
   }
 
-  Future<void> _reconcileConversationIndexRemovals(
-    List<ConvItem> items,
-  ) async {
+  Future<void> _reconcileConversationIndexRemovals(List<ConvItem> items) async {
     final knownPeers =
         items.map((item) => item.peerBare.toBare().toString()).toSet();
     final selfJid = myJid;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final chats = await db.getChats(
-          start: _conversationIndexSnapshotStart,
-          end: _conversationIndexSnapshotEnd,
-        );
-        for (final chat in chats) {
-          if (chat.type != ChatType.chat) continue;
-          if (!chat.defaultTransport.isXmpp) continue;
-          final normalized = _normalizeBareChatJid(chat.jid);
-          if (normalized == null || normalized.isEmpty) continue;
-          if (normalized == selfJid) continue;
-          if (_isMucChatJid(normalized)) continue;
-          if (knownPeers.contains(normalized)) continue;
-          if (chat.archived) continue;
-          await db.updateChat(chat.copyWith(archived: true));
-        }
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final chats = await db.getChats(
+        start: _conversationIndexSnapshotStart,
+        end: _conversationIndexSnapshotEnd,
+      );
+      for (final chat in chats) {
+        if (chat.type != ChatType.chat) continue;
+        if (!chat.defaultTransport.isXmpp) continue;
+        final normalized = _normalizeBareChatJid(chat.jid);
+        if (normalized == null || normalized.isEmpty) continue;
+        if (normalized == selfJid) continue;
+        if (_isMucChatJid(normalized)) continue;
+        if (knownPeers.contains(normalized)) continue;
+        if (chat.archived) continue;
+        await db.updateChat(chat.copyWith(archived: true));
+      }
+    }, awaitDatabase: true);
   }
 
   Future<void> _applyConversationIndexRetraction(mox.JID peerBare) async {
     final peer = peerBare.toBare().toString();
     if (peer.isEmpty) return;
     if (_isMucChatJid(peer)) return;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        final existing = await db.getChat(peer);
-        if (existing == null || existing.type != ChatType.chat) return;
-        if (existing.archived) return;
-        await db.updateChat(existing.copyWith(archived: true));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      final existing = await db.getChat(peer);
+      if (existing == null || existing.type != ChatType.chat) return;
+      if (existing.archived) return;
+      await db.updateChat(existing.copyWith(archived: true));
+    }, awaitDatabase: true);
   }
 
   Future<void> _syncConversationIndexMeta({required String jid}) async {

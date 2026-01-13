@@ -116,10 +116,8 @@ class ChatMessageDetails extends StatelessWidget {
             final showReactions = (transport == null || transport.isXmpp) &&
                 message.reactionsPreview.isNotEmpty;
             final copyLabel = l10n.chatActionCopy;
-            final String? resolvedSenderAddress =
-                message.senderJid.resolveDeltaPlaceholderJid(
-              resolvedEmailSelfJid,
-            );
+            final String? resolvedSenderAddress = message.senderJid
+                .resolveDeltaPlaceholderJid(resolvedEmailSelfJid);
             final senderAddress = resolvedSenderAddress?.trim() ?? '';
             final String? rawHeaders = deltaMessageId == null
                 ? null
@@ -202,8 +200,9 @@ class ChatMessageDetails extends StatelessWidget {
                                   .state
                                   .autoLoadEmailImages ||
                               (messageId != null &&
-                                  state.loadedImageMessageIds
-                                      .contains(messageId));
+                                  state.loadedImageMessageIds.contains(
+                                    messageId,
+                                  ));
                           return html_widget.Html(
                             data: HtmlContentCodec.sanitizeHtml(
                               message.htmlBody ?? '',
@@ -246,16 +245,13 @@ class ChatMessageDetails extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            'Subject',
-                            style: context.textTheme.muted,
-                          ),
+                          Text('Subject', style: context.textTheme.muted),
                           Text(
                             shareContext!.subject!,
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w600),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -265,10 +261,7 @@ class ChatMessageDetails extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            'Recipients',
-                            style: context.textTheme.muted,
-                          ),
+                          Text('Recipients', style: context.textTheme.muted),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -292,10 +285,7 @@ class ChatMessageDetails extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            'Also sent to',
-                            style: context.textTheme.muted,
-                          ),
+                          Text('Also sent to', style: context.textTheme.muted),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -320,9 +310,7 @@ class ChatMessageDetails extends StatelessWidget {
                         recipients: shareParticipants,
                       ),
                     if (showReactions)
-                      _ReactionsRow(
-                        reactions: message.reactionsPreview,
-                      ),
+                      _ReactionsRow(reactions: message.reactionsPreview),
                     if (isFromSelf)
                       Wrap(
                         spacing: 12.0,
@@ -542,8 +530,9 @@ class ChatMessageDetails extends StatelessWidget {
                     final recipientName =
                         recipient.contactDisplayName ?? recipient.title;
                     try {
-                      final ensured =
-                          await emailService.ensureChatForEmailChat(recipient);
+                      final ensured = await emailService.ensureChatForEmailChat(
+                        recipient,
+                      );
                       if (!context.mounted) return;
                       Navigator.of(dialogContext).pop();
                       context.read<ChatsCubit?>()?.openChat(jid: ensured.jid);
@@ -570,24 +559,15 @@ class ChatMessageDetails extends StatelessWidget {
   Future<void> _handleLinkTap(BuildContext context, String url) async {
     if (!context.mounted) return;
     final l10n = context.l10n;
-    final report = assessLinkSafety(
-      raw: url,
-      kind: LinkSafetyKind.message,
-    );
+    final report = assessLinkSafety(raw: url, kind: LinkSafetyKind.message);
     if (report == null || !report.isSafe) {
       _showSnackbar(context, l10n.chatInvalidLink(url.trim()));
       return;
     }
     final hostLabel = formatLinkSchemeHostLabel(report);
     final baseMessage = report.needsWarning
-        ? l10n.chatOpenLinkWarningMessage(
-            report.displayUri,
-            hostLabel,
-          )
-        : l10n.chatOpenLinkMessage(
-            report.displayUri,
-            hostLabel,
-          );
+        ? l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel)
+        : l10n.chatOpenLinkMessage(report.displayUri, hostLabel);
     final warningBlock = formatLinkWarningText(report.warnings);
     final action = await showLinkActionDialog(
       context,
@@ -600,9 +580,7 @@ class ChatMessageDetails extends StatelessWidget {
     if (!context.mounted) return;
     if (action == null) return;
     if (action == LinkAction.copy) {
-      await Clipboard.setData(
-        ClipboardData(text: report.displayUri),
-      );
+      await Clipboard.setData(ClipboardData(text: report.displayUri));
       return;
     }
     final launched = await launchUrl(
@@ -618,9 +596,7 @@ class ChatMessageDetails extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -660,20 +636,14 @@ class _MessageHeadersSection extends StatelessWidget {
       spacing: _messageDetailsSectionSpacing,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          style: context.textTheme.muted,
-        ),
+        Text(title, style: context.textTheme.muted),
         ShadButton.secondary(
           size: ShadButtonSize.sm,
           onPressed: _canOpen ? () => _showHeadersDialog(context) : null,
           child: Text(buttonLabel),
         ).withTapBounce(),
         if (statusLabel != null)
-          Text(
-            statusLabel,
-            style: context.textTheme.muted,
-          ),
+          Text(statusLabel, style: context.textTheme.muted),
       ],
     );
   }
@@ -717,17 +687,12 @@ class _RawHeadersDialog extends StatelessWidget {
     final trimmedNote = note.trim();
     final hasNote = trimmedNote.isNotEmpty;
     return ShadDialog(
-      title: Text(
-        title,
-        style: context.modalHeaderTextStyle,
-      ),
+      title: Text(title, style: context.modalHeaderTextStyle),
       actions: [
         ShadButton.secondary(
           size: ShadButtonSize.sm,
           onPressed: () async {
-            await Clipboard.setData(
-              ClipboardData(text: headers),
-            );
+            await Clipboard.setData(ClipboardData(text: headers));
           },
           child: Text(copyLabel),
         ).withTapBounce(),
@@ -745,18 +710,12 @@ class _RawHeadersDialog extends StatelessWidget {
             spacing: _messageDetailsSectionSpacing,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (hasNote)
-                Text(
-                  trimmedNote,
-                  style: context.textTheme.muted,
-                ),
+              if (hasNote) Text(trimmedNote, style: context.textTheme.muted),
               ShadCard(
-                padding:
-                    const EdgeInsets.all(_messageDetailsHeadersCardPadding),
-                child: SelectableText(
-                  headers,
-                  style: context.textTheme.small,
+                padding: const EdgeInsets.all(
+                  _messageDetailsHeadersCardPadding,
                 ),
+                child: SelectableText(headers, style: context.textTheme.small),
               ),
             ],
           ),
@@ -791,9 +750,7 @@ class _MessageDetailsInfo extends StatelessWidget {
             builder: (context) => Text(resolvedCopyLabel),
             child: ShadIconButton.ghost(
               onPressed: () async {
-                await Clipboard.setData(
-                  ClipboardData(text: trimmedCopyValue!),
-                );
+                await Clipboard.setData(ClipboardData(text: trimmedCopyValue!));
               },
               icon: Icon(
                 LucideIcons.copy,
@@ -820,10 +777,7 @@ class _MessageDetailsInfo extends StatelessWidget {
           leading!,
           const SizedBox(width: _messageDetailsCopySpacing),
         ],
-        Flexible(
-          fit: FlexFit.loose,
-          child: valueText,
-        ),
+        Flexible(fit: FlexFit.loose, child: valueText),
         if (copyButton != null) ...[
           const SizedBox(width: _messageDetailsCopySpacing),
           copyButton,
@@ -834,10 +788,7 @@ class _MessageDetailsInfo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          label,
-          style: context.textTheme.muted,
-        ),
+        Text(label, style: context.textTheme.muted),
         valueRow,
       ],
     );
@@ -845,10 +796,7 @@ class _MessageDetailsInfo extends StatelessWidget {
 }
 
 class _RecipientChip extends StatelessWidget {
-  const _RecipientChip({
-    required this.chat,
-    required this.onPressed,
-  });
+  const _RecipientChip({required this.chat, required this.onPressed});
 
   final Chat chat;
   final VoidCallback onPressed;
@@ -894,15 +842,9 @@ class _ReactionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              reaction.emoji,
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text(reaction.emoji, style: const TextStyle(fontSize: 16)),
             const SizedBox(width: 6),
-            Text(
-              '${reaction.count}',
-              style: context.textTheme.small,
-            ),
+            Text('${reaction.count}', style: context.textTheme.small),
           ],
         ),
       ),
@@ -911,10 +853,7 @@ class _ReactionChip extends StatelessWidget {
 }
 
 class _RecipientsRow extends StatelessWidget {
-  const _RecipientsRow({
-    required this.sender,
-    required this.recipients,
-  });
+  const _RecipientsRow({required this.sender, required this.recipients});
 
   final String? sender;
   final List<Chat> recipients;
@@ -929,10 +868,7 @@ class _RecipientsRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (sender != null)
-          Text(
-            'From $sender',
-            style: context.textTheme.muted,
-          ),
+          Text('From $sender', style: context.textTheme.muted),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -965,10 +901,7 @@ class _ReactionsRow extends StatelessWidget {
       spacing: 8,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          'Reactions',
-          style: context.textTheme.muted,
-        ),
+        Text('Reactions', style: context.textTheme.muted),
         Wrap(
           spacing: 8,
           runSpacing: 8,

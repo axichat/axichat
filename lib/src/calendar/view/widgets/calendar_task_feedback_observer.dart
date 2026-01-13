@@ -32,8 +32,9 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _lastTasks =
-        Map<String, CalendarTask>.from(context.read<B>().state.model.tasks);
+    _lastTasks = Map<String, CalendarTask>.from(
+      context.read<B>().state.model.tasks,
+    );
     _initialized = true;
   }
 
@@ -54,10 +55,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     );
   }
 
-  void _handleModelChanges(
-    BuildContext context,
-    CalendarState state,
-  ) {
+  void _handleModelChanges(BuildContext context, CalendarState state) {
     final currentTasks = state.model.tasks;
     final added = <CalendarTask>[];
     final removed = <CalendarTask>[];
@@ -84,10 +82,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     _lastTasks = Map<String, CalendarTask>.from(currentTasks);
   }
 
-  void _showAddedFeedback(
-    BuildContext context,
-    List<CalendarTask> tasks,
-  ) {
+  void _showAddedFeedback(BuildContext context, List<CalendarTask> tasks) {
     final message = tasks.length == 1
         ? 'Task "${tasks.first.title}" added'
         : '${tasks.length} tasks added';
@@ -103,10 +98,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     );
   }
 
-  void _showRemovedFeedback(
-    BuildContext context,
-    List<CalendarTask> tasks,
-  ) {
+  void _showRemovedFeedback(BuildContext context, List<CalendarTask> tasks) {
     final removedIds = tasks.map((task) => task.id).toSet();
     final removalMatchesUndo = _awaitingUndoRemoval &&
         removedIds.containsAll(_expectedRemovalIds) &&

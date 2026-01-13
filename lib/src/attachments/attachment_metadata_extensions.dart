@@ -52,18 +52,9 @@ const Set<String> _attachmentArchiveMimeTypes = <String>{
   'application/java-archive',
 };
 
-enum AttachmentMediaKind {
-  image,
-  video,
-  file,
-}
+enum AttachmentMediaKind { image, video, file }
 
-enum AttachmentDownloadCategory {
-  image,
-  video,
-  document,
-  archive,
-}
+enum AttachmentDownloadCategory { image, video, document, archive }
 
 extension AttachmentMetadataKind on FileMetadataData {
   bool get isImage {

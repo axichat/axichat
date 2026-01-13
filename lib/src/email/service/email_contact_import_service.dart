@@ -133,8 +133,10 @@ class EmailContactImportService {
         EmailContactImportFailureReason.emptyFile,
       );
     }
-    final List<EmailContactImportContact> contacts =
-        _parseContacts(content, format: format);
+    final List<EmailContactImportContact> contacts = _parseContacts(
+      content,
+      format: format,
+    );
     if (contacts.isEmpty) {
       throw const EmailContactImportException(
         EmailContactImportFailureReason.noContacts,
@@ -187,10 +189,7 @@ class EmailContactImportService {
       );
     }
     if (_startsWithBytes(bytes, _utf16BeBomBytes)) {
-      return _decodeUtf16(
-        bytes.sublist(_utf16BeBomBytes.length),
-        Endian.big,
-      );
+      return _decodeUtf16(bytes.sublist(_utf16BeBomBytes.length), Endian.big);
     }
     return utf8.decode(bytes, allowMalformed: true);
   }
@@ -215,8 +214,9 @@ class EmailContactImportService {
     if (length <= _startIndex) {
       return _emptyValue;
     }
-    final Uint8List data =
-        Uint8List.fromList(bytes.sublist(_startIndex, length));
+    final Uint8List data = Uint8List.fromList(
+      bytes.sublist(_startIndex, length),
+    );
     final ByteData byteData = ByteData.sublistView(data);
     final int codeUnitCount = length ~/ _utf16CodeUnitSize;
     final List<int> codeUnits = List<int>.filled(codeUnitCount, _startIndex);
@@ -249,8 +249,9 @@ class EmailContactImportService {
 
   List<EmailContactImportContact> _parseCsvContacts(String content) {
     final String delimiter = _detectCsvDelimiter(content);
-    final List<List<String>> rows =
-        _CsvParser(delimiter: delimiter).parse(content);
+    final List<List<String>> rows = _CsvParser(
+      delimiter: delimiter,
+    ).parse(content);
     if (rows.isEmpty) {
       return const <EmailContactImportContact>[];
     }
@@ -343,10 +344,7 @@ class EmailContactImportService {
       nameParts.add(trimmed);
     }
     final String? displayName = nameParts.isEmpty ? null : nameParts.first;
-    return _HeaderlessRowParseResult(
-      emails: emails,
-      displayName: displayName,
-    );
+    return _HeaderlessRowParseResult(emails: emails, displayName: displayName);
   }
 
   List<String> _extractEmailCandidates(String value) {
@@ -405,10 +403,7 @@ class EmailContactImportService {
     if (atIndex <= _startIndex || atIndex >= normalized.length - _nextIndex) {
       return false;
     }
-    final int dotIndex = normalized.indexOf(
-      _dotValue,
-      atIndex + _nextIndex,
-    );
+    final int dotIndex = normalized.indexOf(_dotValue, atIndex + _nextIndex);
     if (dotIndex <= atIndex + _nextIndex) {
       return false;
     }
@@ -421,8 +416,10 @@ class EmailContactImportService {
         ? content
         : content.substring(_startIndex, lineBreakIndex);
     final int commaCount = _countOccurrences(sample, _csvDelimiter);
-    final int semicolonCount =
-        _countOccurrences(sample, _csvAlternateDelimiter);
+    final int semicolonCount = _countOccurrences(
+      sample,
+      _csvAlternateDelimiter,
+    );
     return semicolonCount > commaCount ? _csvAlternateDelimiter : _csvDelimiter;
   }
 
@@ -458,10 +455,7 @@ class EmailContactImportService {
       }
       for (final String email in currentEmails) {
         contacts.add(
-          EmailContactImportContact(
-            address: email,
-            displayName: currentName,
-          ),
+          EmailContactImportContact(address: email, displayName: currentName),
         );
       }
       currentName = null;
@@ -807,10 +801,7 @@ class _CsvParser {
 }
 
 class _HeaderlessRowParseResult {
-  const _HeaderlessRowParseResult({
-    required this.emails,
-    this.displayName,
-  });
+  const _HeaderlessRowParseResult({required this.emails, this.displayName});
 
   final List<String> emails;
   final String? displayName;

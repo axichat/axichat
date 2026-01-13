@@ -14,10 +14,7 @@ typedef ResizeAutoScrollHandler = void Function(double delta);
 
 @immutable
 class DragPreview {
-  const DragPreview({
-    required this.start,
-    required this.duration,
-  });
+  const DragPreview({required this.start, required this.duration});
 
   final DateTime start;
   final Duration duration;
@@ -36,18 +33,12 @@ class DragPreview {
 
 @immutable
 class TaskClipboardState {
-  const TaskClipboardState({
-    this.template,
-    this.pasteSlot,
-  });
+  const TaskClipboardState({this.template, this.pasteSlot});
 
   final CalendarTask? template;
   final DateTime? pasteSlot;
 
-  TaskClipboardState copyWith({
-    CalendarTask? template,
-    DateTime? pasteSlot,
-  }) {
+  TaskClipboardState copyWith({CalendarTask? template, DateTime? pasteSlot}) {
     return TaskClipboardState(
       template: template ?? this.template,
       pasteSlot: pasteSlot ?? this.pasteSlot,
@@ -68,21 +59,13 @@ class TaskClipboardState {
 
 @immutable
 class TaskResizeInteraction {
-  const TaskResizeInteraction({
-    required this.taskId,
-    required this.handle,
-  });
+  const TaskResizeInteraction({required this.taskId, required this.handle});
 
   final String taskId;
   final String handle;
 
-  TaskResizeInteraction copyWith({
-    String? handle,
-  }) {
-    return TaskResizeInteraction(
-      taskId: taskId,
-      handle: handle ?? this.handle,
-    );
+  TaskResizeInteraction copyWith({String? handle}) {
+    return TaskResizeInteraction(taskId: taskId, handle: handle ?? this.handle);
   }
 
   @override
@@ -100,9 +83,8 @@ class TaskResizeInteraction {
 class TaskInteractionController extends ChangeNotifier {
   TaskInteractionController()
       : preview = ValueNotifier<DragPreview?>(null),
-        clipboard = ValueNotifier<TaskClipboardState>(
-          const TaskClipboardState(),
-        ),
+        clipboard =
+            ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
         feedbackHint = ValueNotifier<DragFeedbackHint>(
           const DragFeedbackHint(
             width: 0,
@@ -226,8 +208,10 @@ class TaskInteractionController extends ChangeNotifier {
     required String taskId,
     required String handle,
   }) {
-    final TaskResizeInteraction next =
-        TaskResizeInteraction(taskId: taskId, handle: handle);
+    final TaskResizeInteraction next = TaskResizeInteraction(
+      taskId: taskId,
+      handle: handle,
+    );
     if (resizeInteraction.value == next) {
       return;
     }
@@ -273,8 +257,9 @@ class TaskInteractionController extends ChangeNotifier {
     _dragStartScheduledTime = task.scheduledTime;
     final double resolvedHeight =
         bounds.height.isFinite && bounds.height > 0 ? bounds.height : 0.0;
-    final double? pointerOffsetFraction =
-        consumePendingPointerOffsetFraction(taskId: task.id);
+    final double? pointerOffsetFraction = consumePendingPointerOffsetFraction(
+      taskId: task.id,
+    );
     double pointerOffset;
     if (dragPointerOffsetFromTop != null) {
       pointerOffset = dragPointerOffsetFromTop!;
@@ -369,9 +354,7 @@ class TaskInteractionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void registerResizeAutoScrollHandler(
-    ResizeAutoScrollHandler? handler,
-  ) {
+  void registerResizeAutoScrollHandler(ResizeAutoScrollHandler? handler) {
     _resizeAutoScrollHandler = handler;
   }
 
@@ -387,10 +370,7 @@ class TaskInteractionController extends ChangeNotifier {
     dragPointerNormalized = normalized;
   }
 
-  void setDragPointerOffsetFromTop(
-    double? value, {
-    bool notify = true,
-  }) {
+  void setDragPointerOffsetFromTop(double? value, {bool notify = true}) {
     final double? previous = dragPointerOffsetFromTop;
     final bool changed = previous != value;
     dragPointerOffsetFromTop = value;
@@ -406,10 +386,7 @@ class TaskInteractionController extends ChangeNotifier {
     }
   }
 
-  void setPendingPointerOffsetFraction(
-    double? fraction, {
-    String? taskId,
-  }) {
+  void setPendingPointerOffsetFraction(double? fraction, {String? taskId}) {
     if (fraction == null || fraction.isNaN) {
       _pendingPointerOffsetFraction = null;
       if (taskId != null && _pendingPointerTaskId == taskId) {

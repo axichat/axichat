@@ -60,10 +60,7 @@ class AxiTransportChip extends StatelessWidget {
 }
 
 class AxiCompatibilityBadge extends StatelessWidget {
-  const AxiCompatibilityBadge({
-    super.key,
-    this.compact = false,
-  });
+  const AxiCompatibilityBadge({super.key, this.compact = false});
 
   final bool compact;
 
@@ -77,10 +74,7 @@ class AxiCompatibilityBadge extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: colors.primary,
-        border: Border.all(
-          color: colors.background,
-          width: borderWidth,
-        ),
+        border: Border.all(color: colors.background, width: borderWidth),
       ),
       child: SizedBox(
         width: size,

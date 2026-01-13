@@ -85,10 +85,7 @@ extension CalendarLayerPositionLabelX on CalendarLayerPosition {
 }
 
 class CalendarLayerSetting {
-  const CalendarLayerSetting({
-    required this.isVisible,
-    required this.layer,
-  });
+  const CalendarLayerSetting({required this.isVisible, required this.layer});
 
   final bool isVisible;
   final CalendarLayerPosition layer;
@@ -190,10 +187,7 @@ class _CalendarCollectionsButtonState extends State<CalendarCollectionsButton> {
 
     return CompositedTransformTarget(
       link: _link,
-      child: SizedBox(
-        height: 40,
-        child: button,
-      ),
+      child: SizedBox(height: 40, child: button),
     );
   }
 
@@ -468,15 +462,13 @@ class CalendarCollectionsPanel extends StatelessWidget {
       );
     }
 
-    final Color shadowColor = Theme.of(context)
-        .shadowColor
-        .withValues(alpha: _collectionsPanelShadowAlpha);
+    final Color shadowColor = Theme.of(
+      context,
+    ).shadowColor.withValues(alpha: _collectionsPanelShadowAlpha);
 
     return Container(
       width: _collectionsPanelWidth,
-      constraints: const BoxConstraints(
-        maxHeight: _collectionsPanelMaxHeight,
-      ),
+      constraints: const BoxConstraints(maxHeight: _collectionsPanelMaxHeight),
       decoration: BoxDecoration(
         color: calendarContainerColor,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
@@ -498,9 +490,7 @@ class CalendarCollectionsPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _CollectionsPanelHeader(
-              onClose: onClose,
-            ),
+            _CollectionsPanelHeader(onClose: onClose),
             Flexible(
               fit: FlexFit.loose,
               child: SingleChildScrollView(
@@ -619,9 +609,7 @@ class CalendarCollectionsContent extends StatelessWidget {
 }
 
 class _CollectionsPanelHeader extends StatelessWidget {
-  const _CollectionsPanelHeader({
-    required this.onClose,
-  });
+  const _CollectionsPanelHeader({required this.onClose});
 
   final VoidCallback onClose;
 
@@ -726,8 +714,9 @@ class _CollectionCard extends StatelessWidget {
     final String timeZoneLabel = _safeValueLabel(collection?.timeZone);
     final String methodLabel =
         collection?.method?.label ?? _collectionDefaultLabel;
-    final String sharingLabel =
-        _safeValueLabel(collection?.sharingPolicy?.value);
+    final String sharingLabel = _safeValueLabel(
+      collection?.sharingPolicy?.value,
+    );
     final String colorLabel = _safeValueLabel(collection?.color);
 
     return Container(
@@ -785,9 +774,7 @@ class _CollectionHeaderRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: Text(name, style: titleStyle),
-        ),
+        Expanded(child: Text(name, style: titleStyle)),
         const SizedBox(width: _collectionsPanelToggleSpacing),
         ShadSwitch(
           label: const Text(_collectionVisibilityLabel),
@@ -852,9 +839,7 @@ class _OverlayCard extends StatelessWidget {
 }
 
 class _OverlayPreviewSection extends StatelessWidget {
-  const _OverlayPreviewSection({
-    required this.overlay,
-  });
+  const _OverlayPreviewSection({required this.overlay});
 
   final CalendarAvailabilityOverlay overlay;
 
@@ -899,9 +884,7 @@ class _OverlayHeaderRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: Text(_overlayItemLabel, style: titleStyle),
-        ),
+        Expanded(child: Text(_overlayItemLabel, style: titleStyle)),
         const SizedBox(width: _collectionsPanelToggleSpacing),
         ShadSwitch(
           label: const Text(_overlayVisibleLabel),
@@ -914,10 +897,7 @@ class _OverlayHeaderRow extends StatelessWidget {
 }
 
 class _MetaRow extends StatelessWidget {
-  const _MetaRow({
-    required this.label,
-    required this.value,
-  });
+  const _MetaRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -965,10 +945,7 @@ class _LayerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!allowSelect) {
-      return _MetaRow(
-        label: label,
-        value: value.label,
-      );
+      return _MetaRow(label: label, value: value.label);
     }
 
     final List<ShadOption<CalendarLayerPosition>> options =
@@ -1054,9 +1031,7 @@ class _LayerSelectField extends StatelessWidget {
 }
 
 class _ChatAccessCard extends StatelessWidget {
-  const _ChatAccessCard({
-    required this.acl,
-  });
+  const _ChatAccessCard({required this.acl});
 
   final CalendarChatAcl acl;
 

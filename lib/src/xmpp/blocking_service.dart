@@ -21,10 +21,7 @@ const String _stanzaIdIdAttr = 'id';
 const String _blockingIqTypeSet = 'set';
 const String _blockingIqTypeResult = 'result';
 
-enum SpamReportReason {
-  spam,
-  abuse;
-}
+enum SpamReportReason { spam, abuse }
 
 extension SpamReportReasonExtension on SpamReportReason {
   String get urn => switch (this) {
@@ -34,10 +31,7 @@ extension SpamReportReasonExtension on SpamReportReason {
 }
 
 final class SpamReportStanzaId {
-  const SpamReportStanzaId({
-    required this.by,
-    required this.id,
-  });
+  const SpamReportStanzaId({required this.by, required this.id});
 
   final String by;
   final String id;
@@ -45,10 +39,7 @@ final class SpamReportStanzaId {
   mox.XMLNode toXml() => mox.XMLNode.xmlns(
         tag: _stanzaIdTag,
         xmlns: _stanzaIdXmlns,
-        attributes: {
-          _stanzaIdByAttr: by,
-          _stanzaIdIdAttr: id,
-        },
+        attributes: {_stanzaIdByAttr: by, _stanzaIdIdAttr: id},
       );
 }
 
@@ -91,17 +82,15 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return;
     }
     unawaited(
-      _dbOp<XmppDatabase>(
-        (db) async {
-          for (final jid in newlyBlocked) {
-            await db.updatePresence(
-              jid: jid,
-              presence: Presence.unavailable,
-              status: null,
-            );
-          }
-        },
-      ),
+      _dbOp<XmppDatabase>((db) async {
+        for (final jid in newlyBlocked) {
+          await db.updatePresence(
+            jid: jid,
+            presence: Presence.unavailable,
+            status: null,
+          );
+        }
+      }),
     );
   }
 
@@ -135,19 +124,13 @@ mixin BlockingService on XmppBase, BaseStreamService {
         requestBlocklist();
       })
       ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
-        await _dbOp<XmppDatabase>(
-          (db) => db.blockJids(event.items),
-        );
+        await _dbOp<XmppDatabase>((db) => db.blockJids(event.items));
       })
       ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
-        await _dbOp<XmppDatabase>(
-          (db) => db.unblockJids(event.items),
-        );
+        await _dbOp<XmppDatabase>((db) => db.unblockJids(event.items));
       })
       ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
-        await _dbOp<XmppDatabase>(
-          (db) => db.deleteBlocklist(),
-        );
+        await _dbOp<XmppDatabase>((db) => db.deleteBlocklist());
       });
   }
 
@@ -161,16 +144,12 @@ mixin BlockingService on XmppBase, BaseStreamService {
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([
-      mox.BlockingManager(),
-    ]);
+  List<mox.XmppManagerBase> get featureManagers =>
+      super.featureManagers..addAll([mox.BlockingManager()]);
 
   Future<void> requestBlocklist() async {
     if (await _connection.requestBlocklist() case final blocked?) {
-      await _dbOp<XmppDatabase>(
-        (db) => db.replaceBlocklist(blocked),
-      );
+      await _dbOp<XmppDatabase>((db) => db.replaceBlocklist(blocked));
     }
   }
 
@@ -223,10 +202,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     );
     final result = await _connection.sendStanza(
       mox.StanzaDetails(
-        mox.Stanza.iq(
-          type: _blockingIqTypeSet,
-          children: [blockNode],
-        ),
+        mox.Stanza.iq(type: _blockingIqTypeSet, children: [blockNode]),
         shouldEncrypt: false,
       ),
     );

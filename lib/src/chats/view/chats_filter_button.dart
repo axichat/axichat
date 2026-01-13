@@ -10,10 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatsFilterButton extends StatefulWidget {
-  const ChatsFilterButton({
-    super.key,
-    this.compact = false,
-  });
+  const ChatsFilterButton({super.key, this.compact = false});
 
   final bool compact;
 
@@ -90,8 +87,10 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                 icon: option.id == selectedFilter.id ? LucideIcons.check : null,
                 label: option.label,
                 onPressed: () {
-                  locate<HomeSearchCubit?>()
-                      ?.updateFilter(option.id, tab: HomeTab.chats);
+                  locate<HomeSearchCubit?>()?.updateFilter(
+                    option.id,
+                    tab: HomeTab.chats,
+                  );
                   popoverController.hide();
                 },
               ),

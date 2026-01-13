@@ -137,10 +137,12 @@ class OperationProgressBar extends StatelessWidget {
                           height: 6,
                           child: LinearProgressIndicator(
                             value: animation.value.clamp(0.0, 1.0),
-                            backgroundColor:
-                                colors.muted.withValues(alpha: 0.24),
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(colors.primary),
+                            backgroundColor: colors.muted.withValues(
+                              alpha: 0.24,
+                            ),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              colors.primary,
+                            ),
                             borderRadius: borderRadius,
                           ),
                         ),

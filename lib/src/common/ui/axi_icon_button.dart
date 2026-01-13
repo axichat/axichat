@@ -92,17 +92,10 @@ class AxiIconButton extends StatelessWidget {
     final double resolvedBorderWidth = borderWidth ?? (isGhost ? 0 : 1.0);
     final paintShape = SquircleBorder(
       cornerRadius: resolvedCornerRadius,
-      side: BorderSide(
-        color: resolvedBorder,
-        width: resolvedBorderWidth,
-      ),
+      side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),
     );
     final Widget baseIcon = icon ??
-        Icon(
-          iconData,
-          size: resolvedIconSize,
-          color: resolvedForeground,
-        );
+        Icon(iconData, size: resolvedIconSize, color: resolvedForeground);
     final Widget iconWidget = icon == null
         ? baseIcon
         : IconTheme.merge(
@@ -152,10 +145,7 @@ class AxiIconButton extends StatelessWidget {
 
     if (tooltip != null) {
       tappable = AxiTooltip(
-        builder: (context) => Text(
-          tooltip!,
-          style: context.textTheme.muted,
-        ),
+        builder: (context) => Text(tooltip!, style: context.textTheme.muted),
         child: tappable,
       );
     }

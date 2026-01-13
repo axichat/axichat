@@ -34,8 +34,9 @@ const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
   8,
   0,
 );
-const EdgeInsets _recipientChipLabelPadding =
-    EdgeInsets.symmetric(horizontal: 2);
+const EdgeInsets _recipientChipLabelPadding = EdgeInsets.symmetric(
+  horizontal: 2,
+);
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -86,8 +87,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
   List<FanOutTarget> _suggestions = const <FanOutTarget>[];
-  final ValueNotifier<int?> _highlightedSuggestionIndex =
-      ValueNotifier<int?>(null);
+  final ValueNotifier<int?> _highlightedSuggestionIndex = ValueNotifier<int?>(
+    null,
+  );
   String? _pendingRemovalKey;
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
@@ -205,8 +207,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final barBackground = chipsBarBackground(colors);
     final availableAutocompleteChats = widget.availableChats
         .where(
-          (chat) => !widget.recipients
-              .any((recipient) => recipient.target.chat?.jid == chat.jid),
+          (chat) => !widget.recipients.any(
+            (recipient) => recipient.target.chat?.jid == chat.jid,
+          ),
         )
         .toList();
     final knownDomains = _knownDomains();
@@ -215,8 +218,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       horizontal: widget.horizontalPadding,
       vertical: calendarInsetMd,
     );
-    final bodyPadding =
-        EdgeInsets.symmetric(horizontal: widget.horizontalPadding);
+    final bodyPadding = EdgeInsets.symmetric(
+      horizontal: widget.horizontalPadding,
+    );
     final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
@@ -225,10 +229,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return ChipsBarSurface(
       backgroundColor: barBackground,
       padding: bodyPadding,
-      borderSide: BorderSide(
-        color: context.colorScheme.border,
-        width: 1,
-      ),
+      borderSide: BorderSide(color: context.colorScheme.border, width: 1),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -273,13 +274,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                     curve: Curves.easeInOutCubic,
                     padding: headerPadding,
                     decoration: BoxDecoration(
-                      borderRadius:
-                          BorderRadius.circular(chipsBarHeaderBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        chipsBarHeaderBorderRadius,
+                      ),
                       border: _headerFocused
-                          ? Border.all(
-                              color: colors.primary,
-                              width: 1.5,
-                            )
+                          ? Border.all(color: colors.primary, width: 1.5)
                           : null,
                     ),
                     child: Row(
@@ -786,14 +785,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
             )
             .toList()
-          ..sort(
-            (a, b) {
-              if (a.hasExactAddress != b.hasExactAddress) {
-                return a.hasExactAddress ? -1 : 1;
-              }
-              return a.domain.compareTo(b.domain);
-            },
-          );
+          ..sort((a, b) {
+            if (a.hasExactAddress != b.hasExactAddress) {
+              return a.hasExactAddress ? -1 : 1;
+            }
+            return a.domain.compareTo(b.domain);
+          });
         for (final entry in domainEntries) {
           final suggestion = '$localPart@${entry.domain}';
           if (addTarget(FanOutTarget.address(address: suggestion))) {
@@ -886,9 +883,7 @@ class _RecipientChip extends StatelessWidget {
         ),
         label: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(child: Text(_label(context))),
-          ],
+          children: [Flexible(child: Text(_label(context)))],
         ),
         onPressed: onToggle,
         selected: included,
@@ -897,11 +892,7 @@ class _RecipientChip extends StatelessWidget {
         labelStyle: TextStyle(color: effectiveForeground),
         deleteIcon: onRemove == null
             ? null
-            : Icon(
-                Icons.close,
-                size: 16,
-                color: effectiveForeground,
-              ),
+            : Icon(Icons.close, size: 16, color: effectiveForeground),
         onDeleted: onRemove,
         side: BorderSide(
           color: borderColor,
@@ -1050,10 +1041,7 @@ class _ActionChip extends StatelessWidget {
       child: ActionChip(
         shape: const StadiumBorder(),
         avatar: Icon(icon, size: 14, color: foreground),
-        label: Text(
-          label,
-          style: TextStyle(color: foreground),
-        ),
+        label: Text(label, style: TextStyle(color: foreground)),
         onPressed: onPressed,
         backgroundColor: Color.alphaBlend(
           colors.primary.withValues(alpha: 0.05),
@@ -1279,10 +1267,14 @@ final class _RecipientAutocompleteOverlayState
         : (triggerBox?.localToGlobal(Offset.zero) ?? Offset.zero);
 
     final view = View.of(overlayContext);
-    final viewPadding =
-        EdgeInsets.fromViewPadding(view.padding, view.devicePixelRatio);
-    final viewInsets =
-        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final viewPadding = EdgeInsets.fromViewPadding(
+      view.padding,
+      view.devicePixelRatio,
+    );
+    final viewInsets = EdgeInsets.fromViewPadding(
+      view.viewInsets,
+      view.devicePixelRatio,
+    );
     final fallbackScreenSize = view.physicalSize / view.devicePixelRatio;
 
     final screenSize = overlayBox?.size ?? fallbackScreenSize;
@@ -1309,8 +1301,10 @@ final class _RecipientAutocompleteOverlayState
     final placeBelow = belowHeight >= aboveHeight;
     final maxHeight = placeBelow ? belowHeight : aboveHeight;
 
-    final maxAllowedWidth =
-        math.max(0.0, screenSize.width - _overlayHorizontalMargin * 2);
+    final maxAllowedWidth = math.max(
+      0.0,
+      screenSize.width - _overlayHorizontalMargin * 2,
+    );
     final maxWidth = math.min(_overlayPreferredMaxWidth, maxAllowedWidth);
     final minWidth = math.min(_overlayPreferredMinWidth, maxWidth);
 
@@ -1445,8 +1439,9 @@ final class _RecipientAutocompleteOverlayState
           final subtitleStyle = theme.bodySmall?.copyWith(
             color: colors.mutedForeground,
           );
-          final dividerColor =
-              context.colorScheme.border.withValues(alpha: 0.55);
+          final dividerColor = context.colorScheme.border.withValues(
+            alpha: 0.55,
+          );
           final hoverColor = colors.muted.withValues(alpha: 0.08);
           final highlightColor = colors.primary.withValues(alpha: 0.12);
           final trailingIconColor = colors.muted.withValues(alpha: 0.9);
@@ -1492,8 +1487,9 @@ final class _RecipientAutocompleteOverlayState
                               color: colors.card,
                               borderRadius: overlayRadius,
                               border: Border.all(
-                                color: context.colorScheme.border
-                                    .withValues(alpha: 0.9),
+                                color: context.colorScheme.border.withValues(
+                                  alpha: 0.9,
+                                ),
                                 width: 1,
                               ),
                               boxShadow: [
@@ -1590,9 +1586,7 @@ final class _RecipientAutocompleteOverlayState
                         smartQuotesType: SmartQuotesType.disabled,
                         autofillHints: const [AutofillHints.email],
                         inputFormatters: [
-                          FilteringTextInputFormatter.deny(
-                            RegExp(r'\s'),
-                          ),
+                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
                         ],
                         decoration: InputDecoration(
                           hintText: context.l10n.recipientsAddHint,
@@ -1681,10 +1675,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
     if (options.isEmpty) {
       return const SizedBox.shrink();
     }
-    final height = math.min(
-      options.length * _suggestionTileHeight,
-      maxHeight,
-    );
+    final height = math.min(options.length * _suggestionTileHeight, maxHeight);
     final scrollable = options.length * _suggestionTileHeight > height;
     return SizedBox(
       height: height,
@@ -1723,8 +1714,10 @@ class _AutocompleteOptionsList extends StatelessWidget {
                   color: highlighted ? highlightColor : null,
                   border: Border(bottom: border),
                 ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     _SuggestionAvatar(
@@ -1754,11 +1747,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Icon(
-                      Icons.north_east,
-                      size: 16,
-                      color: trailingIconColor,
-                    ),
+                    Icon(Icons.north_east, size: 16, color: trailingIconColor),
                   ],
                 ),
               ),

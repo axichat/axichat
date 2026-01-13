@@ -113,10 +113,7 @@ class CalendarIcsDiagnosticsSection extends StatelessWidget {
 }
 
 class _DiagnosticsGroup extends StatelessWidget {
-  const _DiagnosticsGroup({
-    required this.label,
-    required this.child,
-  });
+  const _DiagnosticsGroup({required this.label, required this.child});
 
   final String label;
   final Widget child;
@@ -135,9 +132,7 @@ class _DiagnosticsGroup extends StatelessWidget {
 }
 
 class _DiagnosticsGroupLabel extends StatelessWidget {
-  const _DiagnosticsGroupLabel({
-    required this.label,
-  });
+  const _DiagnosticsGroupLabel({required this.label});
 
   final String label;
 
@@ -154,10 +149,7 @@ class _DiagnosticsGroupLabel extends StatelessWidget {
 }
 
 class _IcsMetaEntry {
-  const _IcsMetaEntry({
-    required this.label,
-    required this.value,
-  });
+  const _IcsMetaEntry({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -213,9 +205,7 @@ String _formatDateTime(DateTime value) {
 }
 
 class _IcsMetadataList extends StatelessWidget {
-  const _IcsMetadataList({
-    required this.entries,
-  });
+  const _IcsMetadataList({required this.entries});
 
   final List<_IcsMetaEntry> entries;
 
@@ -236,9 +226,7 @@ class _IcsMetadataList extends StatelessWidget {
 }
 
 class _IcsMetaRow extends StatelessWidget {
-  const _IcsMetaRow({
-    required this.entry,
-  });
+  const _IcsMetaRow({required this.entry});
 
   final _IcsMetaEntry entry;
 
@@ -267,9 +255,7 @@ class _IcsMetaRow extends StatelessWidget {
 }
 
 class _RawPropertiesList extends StatelessWidget {
-  const _RawPropertiesList({
-    required this.properties,
-  });
+  const _RawPropertiesList({required this.properties});
 
   final List<CalendarRawProperty> properties;
 
@@ -290,10 +276,7 @@ class _RawPropertiesList extends StatelessWidget {
 }
 
 class _RawPropertyTile extends StatelessWidget {
-  const _RawPropertyTile({
-    required this.property,
-    this.isCompact = false,
-  });
+  const _RawPropertyTile({required this.property, this.isCompact = false});
 
   final CalendarRawProperty property;
   final bool isCompact;
@@ -363,9 +346,7 @@ class _RawPropertyTile extends StatelessWidget {
 }
 
 class _ParameterChip extends StatelessWidget {
-  const _ParameterChip({
-    required this.label,
-  });
+  const _ParameterChip({required this.label});
 
   final String label;
 
@@ -391,10 +372,7 @@ class _ParameterChip extends StatelessWidget {
 }
 
 class _RawComponentsList extends StatelessWidget {
-  const _RawComponentsList({
-    required this.components,
-    this.depth = 0,
-  });
+  const _RawComponentsList({required this.components, this.depth = 0});
 
   final List<CalendarRawComponent> components;
   final int depth;
@@ -407,10 +385,7 @@ class _RawComponentsList extends StatelessWidget {
           .map(
             (component) => Padding(
               padding: const EdgeInsets.only(bottom: calendarInsetLg),
-              child: _RawComponentTile(
-                component: component,
-                depth: depth,
-              ),
+              child: _RawComponentTile(component: component, depth: depth),
             ),
           )
           .toList(),
@@ -419,10 +394,7 @@ class _RawComponentsList extends StatelessWidget {
 }
 
 class _RawComponentTile extends StatelessWidget {
-  const _RawComponentTile({
-    required this.component,
-    required this.depth,
-  });
+  const _RawComponentTile({required this.component, required this.depth});
 
   final CalendarRawComponent component;
   final int depth;
@@ -463,10 +435,7 @@ class _RawComponentTile extends StatelessWidget {
               ...properties.map(
                 (property) => Padding(
                   padding: const EdgeInsets.only(bottom: calendarInsetSm),
-                  child: _RawPropertyTile(
-                    property: property,
-                    isCompact: true,
-                  ),
+                  child: _RawPropertyTile(property: property, isCompact: true),
                 ),
               ),
             ],
@@ -476,10 +445,7 @@ class _RawComponentTile extends StatelessWidget {
                 label: _icsDiagnosticsComponentChildrenLabel,
               ),
               const SizedBox(height: calendarInsetSm),
-              _RawComponentsList(
-                components: children,
-                depth: depth + 1,
-              ),
+              _RawComponentsList(components: children, depth: depth + 1),
             ],
           ],
         ),

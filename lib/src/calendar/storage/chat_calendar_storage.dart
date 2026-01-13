@@ -9,10 +9,8 @@ import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 class ChatCalendarStorage {
-  ChatCalendarStorage({
-    Storage? storage,
-    String? storagePrefix,
-  })  : _storage = storage ?? HydratedBloc.storage,
+  ChatCalendarStorage({Storage? storage, String? storagePrefix})
+      : _storage = storage ?? HydratedBloc.storage,
         _storagePrefix = storagePrefix ?? authStoragePrefix;
 
   final Storage _storage;
@@ -28,9 +26,7 @@ class ChatCalendarStorage {
     if (raw is! Map) {
       return null;
     }
-    return CalendarStateStorageCodec.decode(
-      Map<String, dynamic>.from(raw),
-    );
+    return CalendarStateStorageCodec.decode(Map<String, dynamic>.from(raw));
   }
 
   Future<void> writeModel(String chatJid, CalendarModel model) async {

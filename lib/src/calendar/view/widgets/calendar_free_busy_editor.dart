@@ -118,8 +118,10 @@ class CalendarFreeBusyEditor extends StatefulWidget {
   final bool isReadOnly;
   final ValueChanged<CalendarFreeBusyInterval>? onIntervalTapped;
   final String Function(
-          CalendarFreeBusyType type, DateTime start, DateTime end)?
-      segmentTitleBuilder;
+    CalendarFreeBusyType type,
+    DateTime start,
+    DateTime end,
+  )? segmentTitleBuilder;
 
   static void _noopIntervalsChanged(List<CalendarFreeBusyInterval> _) {}
 
@@ -137,8 +139,9 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   late final TaskInteractionController _interactionController =
       TaskInteractionController();
   final ShadPopoverController _contextMenuController = ShadPopoverController();
-  final ValueKey<String> _contextMenuGroupId =
-      const ValueKey<String>('free-busy-context-menu');
+  final ValueKey<String> _contextMenuGroupId = const ValueKey<String>(
+    'free-busy-context-menu',
+  );
   List<_FreeBusySegment> _segments = <_FreeBusySegment>[];
   String? _activeSegmentId;
   int? _activePointerId;
@@ -274,10 +277,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
         }
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: resolvedWidth,
-            child: content,
-          ),
+          child: SizedBox(width: resolvedWidth, child: content),
         );
       },
     );
@@ -319,8 +319,9 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     if (span <= _freeBusyMinimumDuration * 2) {
       return;
     }
-    final DateTime midpoint =
-        start.add(Duration(minutes: (span.inMinutes / 2).round()));
+    final DateTime midpoint = start.add(
+      Duration(minutes: (span.inMinutes / 2).round()),
+    );
     final DateTime snapped = _snapToStep(midpoint);
     if (!snapped.isAfter(start.add(_freeBusyMinimumDuration)) ||
         !snapped.isBefore(end.subtract(_freeBusyMinimumDuration))) {
@@ -350,19 +351,13 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
       );
       _segments
         ..removeAt(index)
-        ..insertAll(
-          index,
-          [left, right],
-        );
+        ..insertAll(index, [left, right]);
       _segments = _mergeAdjacent(_segments);
     });
     _emitIntervals();
   }
 
-  void _handleSplitSegmentAt(
-    _FreeBusySegment segment,
-    DateTime splitTime,
-  ) {
+  void _handleSplitSegmentAt(_FreeBusySegment segment, DateTime splitTime) {
     if (widget.isReadOnly) {
       return;
     }
@@ -405,10 +400,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
       );
       _segments
         ..removeAt(index)
-        ..insertAll(
-          index,
-          [left, right],
-        );
+        ..insertAll(index, [left, right]);
       _segments = _mergeAdjacent(_segments);
     });
     _emitIntervals();
@@ -428,10 +420,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     _applyTaskResize(task, emit: true);
   }
 
-  void _applyTaskResize(
-    CalendarTask task, {
-    required bool emit,
-  }) {
+  void _applyTaskResize(CalendarTask task, {required bool emit}) {
     final int index = _segmentIndexFor(task.id);
     if (index == -1) {
       return;
@@ -756,9 +745,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     return !isDesktop || !hasMouse;
   }
 
-  TaskContextMenuBuilder? _contextMenuBuilderFor(
-    _FreeBusySegment segment,
-  ) {
+  TaskContextMenuBuilder? _contextMenuBuilderFor(_FreeBusySegment segment) {
     if (widget.isReadOnly || _shouldUseEditSheet()) {
       return null;
     }
@@ -787,9 +774,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
               _contextMenuController.hide();
               _handleSplitSegmentAt(segment, splitTime);
             },
-            child: Text(
-              'Split at ${TimeFormatter.formatTime(splitTime)}',
-            ),
+            child: Text('Split at ${TimeFormatter.formatTime(splitTime)}'),
           ),
         );
       }
@@ -852,10 +837,7 @@ class _FreeBusyGridFrame extends StatelessWidget {
           width: width,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              header,
-              body,
-            ],
+            children: [header, body],
           ),
         ),
       ),
@@ -1093,8 +1075,10 @@ class _FreeBusyTileStack extends StatelessWidget {
       contextMenuBuilderFactory;
   final bool enableContextMenuLongPress;
   final String Function(
-          CalendarFreeBusyType type, DateTime start, DateTime end)?
-      segmentTitleBuilder;
+    CalendarFreeBusyType type,
+    DateTime start,
+    DateTime end,
+  )? segmentTitleBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -1188,8 +1172,10 @@ class _FreeBusyTaskTile extends StatelessWidget {
   final TaskContextMenuBuilder? contextMenuBuilder;
   final bool enableContextMenuLongPress;
   final String Function(
-          CalendarFreeBusyType type, DateTime start, DateTime end)?
-      segmentTitleBuilder;
+    CalendarFreeBusyType type,
+    DateTime start,
+    DateTime end,
+  )? segmentTitleBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -1245,23 +1231,14 @@ class _FreeBusyTaskTile extends StatelessWidget {
       title: customTitle,
     );
     if (canShowPopover) {
-      return _FreeBusyTilePopover(
-        label: customTitle!.trim(),
-        child: tile,
-      );
+      return _FreeBusyTilePopover(label: customTitle!.trim(), child: tile);
     }
-    return _FreeBusyReadOnlyTapRegion(
-      onTap: onSelect,
-      child: tile,
-    );
+    return _FreeBusyReadOnlyTapRegion(onTap: onSelect, child: tile);
   }
 }
 
 class _FreeBusyReadOnlyTapRegion extends StatelessWidget {
-  const _FreeBusyReadOnlyTapRegion({
-    required this.onTap,
-    required this.child,
-  });
+  const _FreeBusyReadOnlyTapRegion({required this.onTap, required this.child});
 
   final VoidCallback onTap;
   final Widget child;
@@ -1277,10 +1254,7 @@ class _FreeBusyReadOnlyTapRegion extends StatelessWidget {
 }
 
 class _FreeBusyTilePopover extends StatefulWidget {
-  const _FreeBusyTilePopover({
-    required this.label,
-    required this.child,
-  });
+  const _FreeBusyTilePopover({required this.label, required this.child});
 
   final String label;
   final Widget child;
@@ -1394,10 +1368,7 @@ class _FreeBusyTileControls extends StatelessWidget {
             children: [
               Transform.scale(
                 scale: _freeBusySwitchScale,
-                child: ShadSwitch(
-                  value: isFree,
-                  onChanged: (_) => onToggle(),
-                ),
+                child: ShadSwitch(value: isFree, onChanged: (_) => onToggle()),
               ),
               const SizedBox(width: _freeBusyTileOverlayGap),
               AxiIconButton.ghost(
@@ -1674,8 +1645,9 @@ List<_FreeBusyTileGeometry> _segmentGeometry({
       continue;
     }
     final int minutesFromStart = clippedStart.difference(dayStart).inMinutes;
-    final double top =
-        metrics.verticalOffsetForMinutes(minutesFromStart.toDouble());
+    final double top = metrics.verticalOffsetForMinutes(
+      minutesFromStart.toDouble(),
+    );
     final double height = metrics.heightForDuration(duration);
     final double left = timeColumnWidth + (dayWidth * i);
     geometry.add(
@@ -1803,8 +1775,9 @@ class _FreeBusySheetActions extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: context.colorScheme.card,
-              borderRadius:
-                  BorderRadius.circular(_freeBusySheetActionCornerRadius),
+              borderRadius: BorderRadius.circular(
+                _freeBusySheetActionCornerRadius,
+              ),
               border: Border.all(color: context.colorScheme.border),
             ),
             child: Padding(
@@ -1822,10 +1795,7 @@ class _FreeBusySheetActions extends StatelessWidget {
                       color: context.colorScheme.mutedForeground,
                     ),
                   ),
-                  ShadSwitch(
-                    value: isFree,
-                    onChanged: (_) => onToggle(),
-                  ),
+                  ShadSwitch(value: isFree, onChanged: (_) => onToggle()),
                 ],
               ),
             ),
@@ -1898,8 +1868,11 @@ DateTime _startOfDay(DateTime value) {
 }
 
 DateTime _endOfDay(DateTime value, DateTime rangeEnd) {
-  final DateTime dayEnd =
-      DateTime(value.year, value.month, value.day).add(_freeBusyDayStep);
+  final DateTime dayEnd = DateTime(
+    value.year,
+    value.month,
+    value.day,
+  ).add(_freeBusyDayStep);
   return dayEnd.isBefore(rangeEnd) ? dayEnd : rangeEnd;
 }
 
@@ -1921,13 +1894,7 @@ DateTime _snapToStep(DateTime value) {
   const int stepMinutes = _freeBusyMinutesPerStep;
   final int minutes = value.minute;
   final int snapped = (minutes / stepMinutes).round() * stepMinutes;
-  return DateTime(
-    value.year,
-    value.month,
-    value.day,
-    value.hour,
-    snapped,
-  );
+  return DateTime(value.year, value.month, value.day, value.hour, snapped);
 }
 
 CalendarFreeBusyType _sanitizeType(CalendarFreeBusyType type) {

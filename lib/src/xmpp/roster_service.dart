@@ -36,36 +36,29 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
         final requester = event.from.toBare().toString();
         _rosterLog.info('Subscription request received');
-        await _dbOp<XmppDatabase>(
-          (db) async {
-            final item = await db.getRosterItem(requester);
-            if (item != null) {
-              _rosterLog.info('Accepting subscription request...');
-              try {
-                await _acceptSubscriptionRequest(item);
-              } on XmppRosterException catch (error, stackTrace) {
-                _rosterLog.severe(
-                  'Failed to auto-accept subscription request',
-                  error,
-                  stackTrace,
-                );
-              }
-              return;
+        await _dbOp<XmppDatabase>((db) async {
+          final item = await db.getRosterItem(requester);
+          if (item != null) {
+            _rosterLog.info('Accepting subscription request...');
+            try {
+              await _acceptSubscriptionRequest(item);
+            } on XmppRosterException catch (error, stackTrace) {
+              _rosterLog.severe(
+                'Failed to auto-accept subscription request',
+                error,
+                stackTrace,
+              );
             }
-            await db.saveInvite(Invite(
-              jid: requester,
-              title: event.from.local,
-            ));
-          },
-        );
+            return;
+          }
+          await db.saveInvite(Invite(jid: requester, title: event.from.local));
+        });
       });
   }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([
-      mox.RosterManager(XmppRosterStateManager(owner: this)),
-    ]);
+    ..addAll([mox.RosterManager(XmppRosterStateManager(owner: this))]);
 
   Future<void> requestRoster() async {
     final result = await _connection.requestRoster();
@@ -81,8 +74,9 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       awaitDatabase: true,
     );
     if (this is AvatarService) {
-      (this as AvatarService)
-          .scheduleAvatarRefresh(items.map((item) => item.jid));
+      (this as AvatarService).scheduleAvatarRefresh(
+        items.map((item) => item.jid),
+      );
     }
     await _publishConversationIndexForRoster(items);
 
@@ -141,9 +135,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
     if (existing == null) {
       await _dbOp<XmppDatabase>(
         (db) => db.createChat(
-          Chat.fromJid(normalized).copyWith(
-            lastChangeTimestamp: createdAt,
-          ),
+          Chat.fromJid(normalized).copyWith(lastChangeTimestamp: createdAt),
         ),
       );
     }
@@ -160,9 +152,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       case mox.RosterRemovalResult.okay:
         return;
       case mox.RosterRemovalResult.itemNotFound:
-        await _dbOp<XmppDatabase>(
-          (db) => db.removeRosterItem(jid),
-        );
+        await _dbOp<XmppDatabase>((db) => db.removeRosterItem(jid));
       case mox.RosterRemovalResult.error:
         throw XmppRosterException();
     }
@@ -220,19 +210,13 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       final rejected = await _connection.rejectSubscriptionRequest(jid);
 
       if (rejected) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.deleteInvite(jid),
-        );
+        await _dbOp<XmppDatabase>((db) => db.deleteInvite(jid));
         return;
       }
 
       throw XmppRosterException();
     } catch (error, stackTrace) {
-      _rosterLog.severe(
-        'Failed to reject subscription.',
-        error,
-        stackTrace,
-      );
+      _rosterLog.severe('Failed to reject subscription.', error, stackTrace);
       throw XmppRosterException();
     }
   }
@@ -246,8 +230,9 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   final XmppBase owner;
 
   static const keyPrefix = 'roster_state';
-  static final versionStateKey =
-      XmppStateStore.registerKey('${keyPrefix}_last_version');
+  static final versionStateKey = XmppStateStore.registerKey(
+    '${keyPrefix}_last_version',
+  );
 
   @override
   Future<void> commitRoster(
@@ -257,24 +242,21 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> added,
   ) async {
     final updatedJids = <String>{};
-    await owner._dbOp<XmppDatabase>(
-      (db) async {
-        for (final jid in removed) {
-          await db.removeRosterItem(jid);
-        }
+    await owner._dbOp<XmppDatabase>((db) async {
+      for (final jid in removed) {
+        await db.removeRosterItem(jid);
+      }
 
-        for (final item in added) {
-          await db.saveRosterItem(RosterItem.fromMox(item));
-          updatedJids.add(item.jid);
-        }
+      for (final item in added) {
+        await db.saveRosterItem(RosterItem.fromMox(item));
+        updatedJids.add(item.jid);
+      }
 
-        for (final item in modified) {
-          await db.updateRosterItem(RosterItem.fromMox(item));
-          updatedJids.add(item.jid);
-        }
-      },
-      awaitDatabase: true,
-    );
+      for (final item in modified) {
+        await db.updateRosterItem(RosterItem.fromMox(item));
+        updatedJids.add(item.jid);
+      }
+    }, awaitDatabase: true);
     if (owner is AvatarService && updatedJids.isNotEmpty) {
       (owner as AvatarService).scheduleAvatarRefresh(updatedJids);
     }

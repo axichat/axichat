@@ -6,10 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-enum LinkAction {
-  open,
-  copy,
-}
+enum LinkAction { open, copy }
 
 Future<LinkAction?> showLinkActionDialog(
   BuildContext context, {
@@ -24,10 +21,7 @@ Future<LinkAction?> showLinkActionDialog(
     builder: (dialogContext) {
       final pop = Navigator.of(dialogContext).pop;
       return ShadDialog(
-        title: Text(
-          title,
-          style: context.modalHeaderTextStyle,
-        ),
+        title: Text(title, style: context.modalHeaderTextStyle),
         actions: [
           ShadButton.outline(
             onPressed: () => pop(null),

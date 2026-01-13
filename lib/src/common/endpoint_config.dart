@@ -177,13 +177,7 @@ class EndpointOverride extends Equatable {
   }
 
   @override
-  List<Object?> get props => [
-        host,
-        port,
-        usedDns,
-        usedSrv,
-        dnssecValidated,
-      ];
+  List<Object?> get props => [host, port, usedDns, usedSrv, dnssecValidated];
 }
 
 class EndpointResolutionException implements Exception {
@@ -196,9 +190,7 @@ class EndpointResolutionException implements Exception {
 }
 
 class EndpointResolver {
-  const EndpointResolver({
-    this.lookup = InternetAddress.lookup,
-  });
+  const EndpointResolver({this.lookup = InternetAddress.lookup});
 
   final Future<List<InternetAddress>> Function(String host) lookup;
 
@@ -240,15 +232,8 @@ class EndpointResolver {
     final fallbackPort = fallback?.port ?? defaultPort;
     final selectedPort = defaultPort > 0 ? defaultPort : fallbackPort;
     if (!config.useDns) {
-      final host = _chooseHost(
-        preferredHost,
-        fallbackHost,
-        config.domain,
-      );
-      return EndpointOverride(
-        host: host,
-        port: selectedPort,
-      );
+      final host = _chooseHost(preferredHost, fallbackHost, config.domain);
+      return EndpointOverride(host: host, port: selectedPort);
     }
     if (config.requireDnssec) {
       throw const EndpointResolutionException(
@@ -267,15 +252,8 @@ class EndpointResolver {
         usedSrv: false,
       );
     } on SocketException {
-      final host = _chooseHost(
-        preferredHost,
-        fallbackHost,
-        config.domain,
-      );
-      return EndpointOverride(
-        host: host,
-        port: selectedPort,
-      );
+      final host = _chooseHost(preferredHost, fallbackHost, config.domain);
+      return EndpointOverride(host: host, port: selectedPort);
     }
   }
 

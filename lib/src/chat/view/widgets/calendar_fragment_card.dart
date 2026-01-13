@@ -29,14 +29,18 @@ const int _fragmentChecklistMaxLines = 4;
 const int _fragmentChecklistPreviewLimit = 4;
 const int _fragmentCriticalPathPreviewLimit = 4;
 
-const EdgeInsets _fragmentCardPadding =
-    EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+const EdgeInsets _fragmentCardPadding = EdgeInsets.symmetric(
+  horizontal: 12,
+  vertical: 10,
+);
 const EdgeInsets _fragmentFooterPadding = EdgeInsets.only(top: 4);
 const EdgeInsets _fragmentChecklistBulletPadding = EdgeInsets.only(top: 2);
-const EdgeInsets _fragmentChecklistMorePadding =
-    EdgeInsets.only(left: _fragmentChecklistIndent);
-const EdgeInsets _fragmentCriticalPathMorePadding =
-    EdgeInsets.only(left: _fragmentCriticalPathIndent);
+const EdgeInsets _fragmentChecklistMorePadding = EdgeInsets.only(
+  left: _fragmentChecklistIndent,
+);
+const EdgeInsets _fragmentCriticalPathMorePadding = EdgeInsets.only(
+  left: _fragmentCriticalPathIndent,
+);
 
 const String _fragmentLabelTask = 'Task';
 const String _fragmentLabelChecklist = 'Checklist';
@@ -161,10 +165,8 @@ class _CalendarFragmentBody extends StatelessWidget {
       checklist: (value) => _ChecklistFragmentBody(checklist: value.checklist),
       reminder: (value) => _ReminderFragmentBody(reminders: value.reminders),
       dayEvent: (value) => _DayEventFragmentBody(event: value.event),
-      criticalPath: (value) => _CriticalPathFragmentBody(
-        path: value.path,
-        tasks: value.tasks,
-      ),
+      criticalPath: (value) =>
+          _CriticalPathFragmentBody(path: value.path, tasks: value.tasks),
       freeBusy: (value) => _FreeBusyFragmentBody(interval: value.interval),
       availability: (value) => _AvailabilityFragmentBody(window: value.window),
     );
@@ -213,10 +215,7 @@ class _TaskFragmentBody extends StatelessWidget {
             spacing: _fragmentInfoSpacing,
             children: [
               for (final item in info)
-                _FragmentInfoLine(
-                  label: item.label,
-                  value: item.value,
-                ),
+                _FragmentInfoLine(label: item.label, value: item.value),
             ],
           ),
       ],
@@ -239,10 +238,7 @@ class _TaskFragmentBody extends StatelessWidget {
               '$_fragmentRangeSeparator'
               '${TimeFormatter.formatFriendlyDateTime(endTime)}';
       info.add(
-        _FragmentInfo(
-          label: _fragmentScheduleLabel,
-          value: scheduleValue,
-        ),
+        _FragmentInfo(label: _fragmentScheduleLabel, value: scheduleValue),
       );
     }
     final deadline = task.deadline;
@@ -291,10 +287,7 @@ class _ChecklistFragmentBody extends StatelessWidget {
       children: [
         const _FragmentLabel(text: _fragmentLabelChecklist),
         if (visibleItems.isEmpty)
-          Text(
-            _fragmentFallbackTitle,
-            style: textStyle,
-          )
+          Text(_fragmentFallbackTitle, style: textStyle)
         else
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,10 +317,7 @@ class _ChecklistFragmentBody extends StatelessWidget {
 }
 
 class _ChecklistItemRow extends StatelessWidget {
-  const _ChecklistItemRow({
-    required this.label,
-    required this.completed,
-  });
+  const _ChecklistItemRow({required this.label, required this.completed});
 
   final String label;
   final bool completed;
@@ -345,10 +335,7 @@ class _ChecklistItemRow extends StatelessWidget {
       children: [
         Padding(
           padding: _fragmentChecklistBulletPadding,
-          child: Text(
-            _fragmentChecklistBullet,
-            style: textStyle,
-          ),
+          child: Text(_fragmentChecklistBullet, style: textStyle),
         ),
         Expanded(
           child: Text(
@@ -364,10 +351,7 @@ class _ChecklistItemRow extends StatelessWidget {
 }
 
 class _CriticalPathFragmentBody extends StatelessWidget {
-  const _CriticalPathFragmentBody({
-    required this.path,
-    required this.tasks,
-  });
+  const _CriticalPathFragmentBody({required this.path, required this.tasks});
 
   final CalendarCriticalPath path;
   final List<CalendarTask> tasks;
@@ -389,9 +373,7 @@ class _CriticalPathFragmentBody extends StatelessWidget {
         const _FragmentLabel(text: _fragmentLabelCriticalPath),
         Text(
           title,
-          style: context.textTheme.large.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.textTheme.large.copyWith(fontWeight: FontWeight.w600),
         ),
         if (total > 0)
           _FragmentInfoLine(
@@ -399,14 +381,8 @@ class _CriticalPathFragmentBody extends StatelessWidget {
             value: '$completed$_fragmentCriticalPathProgressSeparator$total',
           )
         else
-          Text(
-            _fragmentCriticalPathEmptyLabel,
-            style: emptyStyle,
-          ),
-        if (total > 0)
-          _CriticalPathTaskList(
-            tasks: orderedTasks,
-          ),
+          Text(_fragmentCriticalPathEmptyLabel, style: emptyStyle),
+        if (total > 0) _CriticalPathTaskList(tasks: orderedTasks),
       ],
     );
   }
@@ -434,9 +410,7 @@ class _CriticalPathFragmentBody extends StatelessWidget {
 }
 
 class _CriticalPathTaskList extends StatelessWidget {
-  const _CriticalPathTaskList({
-    required this.tasks,
-  });
+  const _CriticalPathTaskList({required this.tasks});
 
   final List<CalendarTask> tasks;
 
@@ -453,10 +427,7 @@ class _CriticalPathTaskList extends StatelessWidget {
       spacing: _fragmentChecklistSpacing,
       children: [
         for (final task in visible)
-          _CriticalPathTaskRow(
-            title: task.title,
-            completed: task.isCompleted,
-          ),
+          _CriticalPathTaskRow(title: task.title, completed: task.isCompleted),
         if (remaining > 0)
           Padding(
             padding: _fragmentCriticalPathMorePadding,
@@ -474,10 +445,7 @@ class _CriticalPathTaskList extends StatelessWidget {
 }
 
 class _CriticalPathTaskRow extends StatelessWidget {
-  const _CriticalPathTaskRow({
-    required this.title,
-    required this.completed,
-  });
+  const _CriticalPathTaskRow({required this.title, required this.completed});
 
   final String title;
   final bool completed;
@@ -496,10 +464,7 @@ class _CriticalPathTaskRow extends StatelessWidget {
       children: [
         Padding(
           padding: _fragmentChecklistBulletPadding,
-          child: Text(
-            _fragmentCriticalPathBullet,
-            style: textStyle,
-          ),
+          child: Text(_fragmentCriticalPathBullet, style: textStyle),
         ),
         Expanded(
           child: Text(
@@ -587,9 +552,7 @@ class _DayEventFragmentBody extends StatelessWidget {
         const _FragmentLabel(text: _fragmentLabelDayEvent),
         Text(
           title,
-          style: context.textTheme.large.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.textTheme.large.copyWith(fontWeight: FontWeight.w600),
         ),
         if (description != null && description.isNotEmpty)
           Text(
@@ -600,10 +563,7 @@ class _DayEventFragmentBody extends StatelessWidget {
             maxLines: _fragmentDescriptionMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
-        _FragmentInfoLine(
-          label: _fragmentScheduleLabel,
-          value: dateLabel,
-        ),
+        _FragmentInfoLine(label: _fragmentScheduleLabel, value: dateLabel),
       ],
     );
   }
@@ -625,10 +585,7 @@ class _FreeBusyFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rangeLabel = _dateTimeRange(
-      interval.start.value,
-      interval.end.value,
-    );
+    final rangeLabel = _dateTimeRange(interval.start.value, interval.end.value);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
@@ -640,10 +597,7 @@ class _FreeBusyFragmentBody extends StatelessWidget {
             color: context.colorScheme.foreground,
           ),
         ),
-        _FragmentInfoLine(
-          label: _fragmentScheduleLabel,
-          value: rangeLabel,
-        ),
+        _FragmentInfoLine(label: _fragmentScheduleLabel, value: rangeLabel),
       ],
     );
   }
@@ -689,10 +643,7 @@ class _AvailabilityFragmentBody extends StatelessWidget {
             maxLines: _fragmentDescriptionMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
-        _FragmentInfoLine(
-          label: _fragmentScheduleLabel,
-          value: rangeLabel,
-        ),
+        _FragmentInfoLine(label: _fragmentScheduleLabel, value: rangeLabel),
       ],
     );
   }
@@ -727,10 +678,7 @@ class _FragmentLabel extends StatelessWidget {
 }
 
 class _FragmentInfoLine extends StatelessWidget {
-  const _FragmentInfoLine({
-    required this.label,
-    required this.value,
-  });
+  const _FragmentInfoLine({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -749,22 +697,14 @@ class _FragmentInfoLine extends StatelessWidget {
       TextSpan(
         text: '$label$_fragmentInfoSeparator',
         style: labelStyle,
-        children: [
-          TextSpan(
-            text: value,
-            style: valueStyle,
-          ),
-        ],
+        children: [TextSpan(text: value, style: valueStyle)],
       ),
     );
   }
 }
 
 class _FragmentInfo {
-  const _FragmentInfo({
-    required this.label,
-    required this.value,
-  });
+  const _FragmentInfo({required this.label, required this.value});
 
   final String label;
   final String value;

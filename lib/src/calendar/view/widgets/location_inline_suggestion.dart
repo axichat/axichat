@@ -129,10 +129,7 @@ class _LocationInlineSuggestionState extends State<LocationInlineSuggestion> {
 
   TextStyle _resolvedTextStyle(BuildContext context) {
     return widget.textStyle ??
-        TextStyle(
-          fontSize: 14,
-          color: calendarTitleColor,
-        );
+        TextStyle(fontSize: 14, color: calendarTitleColor);
   }
 
   Color _resolvedSuggestionColor(BuildContext context) {
@@ -202,10 +199,7 @@ class _SuggestionText extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: onTap,
-        child: Text(
-          remainingText,
-          style: textStyle.copyWith(color: color),
-        ),
+        child: Text(remainingText, style: textStyle.copyWith(color: color)),
       ),
     );
   }
@@ -227,5 +221,7 @@ class _InlineSuggestion {
   final String replacementText;
 }
 
-final RegExp _locationTriggerPattern =
-    RegExp(r'(?:^|[\s,.;])(at|in|@)\s+([^\n]*)$', caseSensitive: false);
+final RegExp _locationTriggerPattern = RegExp(
+  r'(?:^|[\s,.;])(at|in|@)\s+([^\n]*)$',
+  caseSensitive: false,
+);

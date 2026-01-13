@@ -16,8 +16,10 @@ const double _availabilitySectionSpacing = 8.0;
 const int _availabilityRequestDescriptionMaxLines = 3;
 const double _availabilityActionSpacing = 8.0;
 
-const EdgeInsets _availabilityCardPadding =
-    EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+const EdgeInsets _availabilityCardPadding = EdgeInsets.symmetric(
+  horizontal: 12,
+  vertical: 10,
+);
 const EdgeInsets _availabilityFooterPadding = EdgeInsets.only(top: 4);
 const EdgeInsets _availabilityActionPadding = EdgeInsets.only(top: 6);
 
@@ -62,10 +64,7 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
       side: BorderSide(color: colors.border),
     );
     final Widget card = Ink(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: cardShape,
-      ),
+      decoration: ShapeDecoration(color: colors.card, shape: cardShape),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -78,17 +77,15 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
                 spacing: _availabilityContentSpacing,
                 children: [
                   message.map(
-                    share: (value) => _AvailabilityShareBody(
-                      share: value.share,
-                    ),
+                    share: (value) =>
+                        _AvailabilityShareBody(share: value.share),
                     request: (value) => _AvailabilityRequestBody(
                       request: value.request,
                       onAccept: onAccept,
                       onDecline: onDecline,
                     ),
-                    response: (value) => _AvailabilityResponseBody(
-                      response: value.response,
-                    ),
+                    response: (value) =>
+                        _AvailabilityResponseBody(response: value.response),
                   ),
                   if (footerDetails.isNotEmpty)
                     Padding(
@@ -107,11 +104,7 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
     }
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onOpen,
-        customBorder: cardShape,
-        child: card,
-      ),
+      child: InkWell(onTap: onOpen, customBorder: cardShape, child: card),
     );
   }
 }
@@ -136,9 +129,7 @@ class _AvailabilityAccent extends StatelessWidget {
 }
 
 class _AvailabilityShareBody extends StatelessWidget {
-  const _AvailabilityShareBody({
-    required this.share,
-  });
+  const _AvailabilityShareBody({required this.share});
 
   final CalendarAvailabilityShare share;
 
@@ -149,16 +140,12 @@ class _AvailabilityShareBody extends StatelessWidget {
       overlay.rangeStart.value,
       overlay.rangeEnd.value,
     );
-    return _AvailabilityShareContent(
-      rangeLabel: rangeLabel,
-    );
+    return _AvailabilityShareContent(rangeLabel: rangeLabel);
   }
 }
 
 class _AvailabilityShareContent extends StatelessWidget {
-  const _AvailabilityShareContent({
-    required this.rangeLabel,
-  });
+  const _AvailabilityShareContent({required this.rangeLabel});
 
   final String rangeLabel;
 
@@ -224,10 +211,7 @@ class _AvailabilityRequestBody extends StatelessWidget {
           ),
         ),
         Text(
-          _formatRange(
-            request.start.value,
-            request.end.value,
-          ),
+          _formatRange(request.start.value, request.end.value),
           style: textTheme.small.copyWith(
             color: context.colorScheme.mutedForeground,
           ),
@@ -269,9 +253,7 @@ class _AvailabilityRequestBody extends StatelessWidget {
 }
 
 class _AvailabilityResponseBody extends StatelessWidget {
-  const _AvailabilityResponseBody({
-    required this.response,
-  });
+  const _AvailabilityResponseBody({required this.response});
 
   final CalendarAvailabilityResponse response;
 

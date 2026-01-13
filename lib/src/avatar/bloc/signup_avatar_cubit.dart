@@ -159,11 +159,13 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         super(const SignupAvatarState(backgroundColor: Colors.transparent)) {
     _abstractTemplates = _templates
         .where(
-            (template) => template.category == AvatarTemplateCategory.abstract)
+          (template) => template.category == AvatarTemplateCategory.abstract,
+        )
         .toList();
     _nonAbstractTemplates = _templates
         .where(
-            (template) => template.category != AvatarTemplateCategory.abstract)
+          (template) => template.category != AvatarTemplateCategory.abstract,
+        )
         .toList();
   }
 
@@ -223,12 +225,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (_initialized) return;
     _initialized = true;
     _abstractOnlyUntil = DateTime.now().add(_abstractWarmupDuration);
-    emit(
-      state.copyWith(
-        backgroundColor: colors.accent,
-        clearError: true,
-      ),
-    );
+    emit(state.copyWith(backgroundColor: colors.accent, clearError: true));
     if (_carouselEnabled) {
       unawaited(_startAvatarCarousel());
     }
@@ -312,16 +309,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     }
     final background = _randomAvatarBackgroundColor(colors);
     emit(
-      state.copyWith(
-        backgroundLocked: true,
-        lockedBackgroundColor: background,
-      ),
+      state.copyWith(backgroundLocked: true, lockedBackgroundColor: background),
     );
-    await selectTemplate(
-      template,
-      background: background,
-      colors: colors,
-    );
+    await selectTemplate(template, background: background, colors: colors);
   }
 
   Future<void> selectTemplate(
@@ -383,8 +373,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       emit(
         state.copyWith(
           processing: false,
-          error:
-              const SignupAvatarError(SignupAvatarErrorType.processingFailed),
+          error: const SignupAvatarError(
+            SignupAvatarErrorType.processingFailed,
+          ),
         ),
       );
       _resumeAvatarCarouselIfNeeded();
@@ -448,11 +439,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final constrained = _constrainCropRect(rect, image);
     if (state.cropRect == constrained) return;
     emit(
-      state.copyWith(
-        cropRect: constrained,
-        processing: true,
-        clearError: true,
-      ),
+      state.copyWith(cropRect: constrained, processing: true, clearError: true),
     );
     _scheduleRebuild();
   }
@@ -464,13 +451,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       imageWidth: image.width.toDouble(),
       imageHeight: image.height.toDouble(),
     );
-    emit(
-      state.copyWith(
-        cropRect: reset,
-        processing: true,
-        clearError: true,
-      ),
-    );
+    emit(state.copyWith(cropRect: reset, processing: true, clearError: true));
     _scheduleRebuild();
   }
 
@@ -510,10 +491,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
           sourceBytes: preparedBytes,
           imageWidth: width,
           imageHeight: height,
-          cropRect: _fallbackCropRect(
-            imageWidth: width,
-            imageHeight: height,
-          ),
+          cropRect: _fallbackCropRect(imageWidth: width, imageHeight: height),
           activeTemplate: null,
           activeCategory: null,
           backgroundColor: Colors.transparent,
@@ -592,8 +570,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       emit(
         state.copyWith(
           processing: false,
-          error:
-              const SignupAvatarError(SignupAvatarErrorType.processingFailed),
+          error: const SignupAvatarError(
+            SignupAvatarErrorType.processingFailed,
+          ),
         ),
       );
       _resumeAvatarCarouselIfNeeded();
@@ -716,10 +695,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (colors == null) return;
 
     if (state.carouselPreviewBytes == null && _currentCarouselAvatar == null) {
-      await _prefillCarousel(
-        targetSize: 1,
-        preferAbstract: true,
-      );
+      await _prefillCarousel(targetSize: 1, preferAbstract: true);
       if (isClosed ||
           !_carouselEnabled ||
           state.hasUserSelectedAvatar ||
@@ -746,23 +722,20 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       return;
     }
 
-    _avatarCarouselTimer = Timer.periodic(
-      _avatarCarouselInterval,
-      (_) {
-        if (!_carouselEnabled ||
-            state.hasUserSelectedAvatar ||
-            state.processing) {
-          return;
-        }
-        _showNextCarouselAvatar(colors, allowFallback: false);
-        unawaited(
-          _prefillCarousel(
-            targetSize: _avatarCarouselSustainBuffer,
-            preferAbstract: !_nonAbstractAvatarsReady,
-          ),
-        );
-      },
-    );
+    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) {
+      if (!_carouselEnabled ||
+          state.hasUserSelectedAvatar ||
+          state.processing) {
+        return;
+      }
+      _showNextCarouselAvatar(colors, allowFallback: false);
+      unawaited(
+        _prefillCarousel(
+          targetSize: _avatarCarouselSustainBuffer,
+          preferAbstract: !_nonAbstractAvatarsReady,
+        ),
+      );
+    });
   }
 
   void _stopAvatarCarousel() {
@@ -896,10 +869,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
             (warmupActive || (preferAbstract && !_nonAbstractAvatarsReady)) &&
                 _abstractTemplates.isNotEmpty;
         AvatarTemplate? template = useAbstractOnly
-            ? _pickFromPool(
-                _abstractTemplates,
-                bag: _abstractCarouselBag,
-              )
+            ? _pickFromPool(_abstractTemplates, bag: _abstractCarouselBag)
             : null;
         template ??= _pickCarouselTemplate();
         if (template == null) break;
@@ -995,16 +965,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       return null;
     }
     if (!hasOther) {
-      return _pickFromPool(
-        _abstractTemplates,
-        bag: _abstractCarouselBag,
-      );
+      return _pickFromPool(_abstractTemplates, bag: _abstractCarouselBag);
     }
     if (!hasAbstract) {
-      return _pickFromPool(
-        _nonAbstractTemplates,
-        bag: _nonAbstractCarouselBag,
-      );
+      return _pickFromPool(_nonAbstractTemplates, bag: _nonAbstractCarouselBag);
     }
     final useAbstract = _random.nextBool();
     return _pickFromPool(
@@ -1149,10 +1113,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     }
     final maxSide = math.min(width, height);
     final safeMinSide = math.min(minCropSide, maxSide);
-    final fallback = _fallbackCropRect(
-      imageWidth: width,
-      imageHeight: height,
-    );
+    final fallback = _fallbackCropRect(imageWidth: width, imageHeight: height);
     if (!rect.isFinite || rect.width <= 0 || rect.height <= 0) {
       return fallback;
     }
@@ -1172,10 +1133,7 @@ class _AvatarSizeException implements Exception {
 }
 
 class _AvatarSelection {
-  const _AvatarSelection({
-    required this.template,
-    required this.background,
-  });
+  const _AvatarSelection({required this.template, required this.background});
 
   final AvatarTemplate template;
   final Color background;

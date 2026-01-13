@@ -3,6 +3,8 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
@@ -27,6 +29,7 @@ const int _deltaChatLastSpecialId = DeltaChatId.lastSpecial;
 const int _deltaChatIdUnset = DeltaChatId.none;
 const _bootstrapYieldEveryMessages = 40;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
+const int _emptyUnreadCount = 0;
 const int _minimumHistoryWindow = 1;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _deltaAttachmentFallbackPrefix = 'attachment-';
@@ -37,19 +40,14 @@ const String _emptyHtml = '';
 const int _emailChatInitialTimestampMillis = 0;
 const int _attachmentSizeUnitBase = 1024;
 const double _attachmentSizePrecisionThreshold = 10;
-const List<String> _attachmentSizeUnits = <String>[
-  'B',
-  'KB',
-  'MB',
-  'GB',
-  'TB',
-];
+const List<String> _attachmentSizeUnits = <String>['B', 'KB', 'MB', 'GB', 'TB'];
 const int _originIdHydrationDelayMs = 1000;
 const int _originIdHydrationMaxAttempts = 60;
 const int _originIdHydrationAttemptStart = 0;
 const int _originIdHydrationAttemptStep = 1;
-const Duration _originIdHydrationDelay =
-    Duration(milliseconds: _originIdHydrationDelayMs);
+const Duration _originIdHydrationDelay = Duration(
+  milliseconds: _originIdHydrationDelayMs,
+);
 const String _messageUpdateDiffLogPrefix = 'Message update diff';
 const String _messageUpdateDiffSeparator = ', ';
 const String _messageUpdateDiffUnknown = 'unknown';
@@ -145,41 +143,17 @@ class DeltaMessageDeliveryStatus {
 }
 
 const DeltaMessageDeliveryStatus _deltaOutgoingPendingStatus =
-    DeltaMessageDeliveryStatus(
-  acked: false,
-  received: false,
-  displayed: false,
-);
+    DeltaMessageDeliveryStatus(acked: false, received: false, displayed: false);
 const DeltaMessageDeliveryStatus _deltaOutgoingDeliveredStatus =
-    DeltaMessageDeliveryStatus(
-  acked: true,
-  received: true,
-  displayed: false,
-);
+    DeltaMessageDeliveryStatus(acked: true, received: true, displayed: false);
 const DeltaMessageDeliveryStatus _deltaOutgoingReadStatus =
-    DeltaMessageDeliveryStatus(
-  acked: true,
-  received: true,
-  displayed: true,
-);
+    DeltaMessageDeliveryStatus(acked: true, received: true, displayed: true);
 const DeltaMessageDeliveryStatus _deltaOutgoingUnknownStatus =
-    DeltaMessageDeliveryStatus(
-  acked: true,
-  received: false,
-  displayed: false,
-);
+    DeltaMessageDeliveryStatus(acked: true, received: false, displayed: false);
 const DeltaMessageDeliveryStatus _deltaIncomingUnseenStatus =
-    DeltaMessageDeliveryStatus(
-  acked: false,
-  received: true,
-  displayed: false,
-);
+    DeltaMessageDeliveryStatus(acked: false, received: true, displayed: false);
 const DeltaMessageDeliveryStatus _deltaIncomingSeenStatus =
-    DeltaMessageDeliveryStatus(
-  acked: false,
-  received: true,
-  displayed: true,
-);
+    DeltaMessageDeliveryStatus(acked: false, received: true, displayed: true);
 
 extension DeltaMessageStateChecks on DeltaMessage {
   bool get hasKnownState => state != null;
@@ -262,10 +236,7 @@ extension MessageDiffX on Message {
       fileDownloading != other.fileDownloading,
       MessageDiffField.fileDownloading,
     );
-    addIf(
-      fileUploading != other.fileUploading,
-      MessageDiffField.fileUploading,
-    );
+    addIf(fileUploading != other.fileUploading, MessageDiffField.fileUploading);
     addIf(
       fileMetadataID != other.fileMetadataID,
       MessageDiffField.fileMetadataId,
@@ -464,8 +435,9 @@ class DeltaEventConsumer {
           accountId: deltaAccountId,
         );
         if (stored != null && stored.lastChangeTimestamp != lastTimestamp) {
-          await db
-              .updateChat(stored.copyWith(lastChangeTimestamp: lastTimestamp));
+          await db.updateChat(
+            stored.copyWith(lastChangeTimestamp: lastTimestamp),
+          );
         }
       }
     }
@@ -733,10 +705,11 @@ class DeltaEventConsumer {
     }
   }
 
-  Future<void> _hydrateMessage(int chatId, int msgId) async {
+  Future<DeltaMessage?> _hydrateMessage(int chatId, int msgId) async {
     final msg = await _context.getMessage(msgId);
-    if (msg == null) return;
+    if (msg == null) return null;
     await _ingestDeltaMessage(chatId: chatId, msg: msg);
+    return msg;
   }
 
   Future<void> _handleMessagesChanged(int chatId, int msgId) async {
@@ -775,7 +748,13 @@ class DeltaEventConsumer {
     if (_isDeltaMessageMarkerId(msgId)) {
       return;
     }
-    await _hydrateMessage(chatId, msgId);
+    final msg = await _hydrateMessage(chatId, msgId);
+    if (msg != null && !msg.isOutgoing) {
+      await _updateChatSummaryForIncomingMessage(
+        chatId: chatId,
+        messageId: msgId,
+      );
+    }
     await _updateUnreadCount(chatId);
   }
 
@@ -834,6 +813,12 @@ class DeltaEventConsumer {
       accountId: _deltaAccountId,
     );
     if (chat == null) return;
+    if (chat.open) {
+      if (chat.unreadCount != _emptyUnreadCount) {
+        await db.updateChat(chat.copyWith(unreadCount: _emptyUnreadCount));
+      }
+      return;
+    }
     final freshCount = await _context.getFreshMessageCount(chatId);
     if (freshCount != chat.unreadCount) {
       await db.updateChat(chat.copyWith(unreadCount: freshCount));
@@ -1052,15 +1037,8 @@ class DeltaEventConsumer {
       chatId: chatId,
       msg: msg,
     );
-    await _storeMessage(
-      db: db,
-      message: message,
-      chatJid: resolvedChat.jid,
-    );
-    _scheduleOriginIdHydration(
-      msgId: msg.id,
-      accountId: deltaAccountId,
-    );
+    await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
+    _scheduleOriginIdHydration(msgId: msg.id, accountId: deltaAccountId);
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
     if (!isOutgoing &&
@@ -1234,8 +1212,9 @@ class DeltaEventConsumer {
     if (updatedFields.first != MessageDiffField.htmlBody) {
       return false;
     }
-    final String? existingHtml =
-        HtmlContentCodec.normalizeHtml(existing.htmlBody);
+    final String? existingHtml = HtmlContentCodec.normalizeHtml(
+      existing.htmlBody,
+    );
     return existingHtml != null;
   }
 
@@ -1264,12 +1243,7 @@ class DeltaEventConsumer {
     required int msgId,
     required int accountId,
   }) {
-    unawaited(
-      _hydrateOriginId(
-        msgId: msgId,
-        accountId: accountId,
-      ),
-    );
+    unawaited(_hydrateOriginId(msgId: msgId, accountId: accountId));
   }
 
   void _scheduleOriginIdHydrationIfNeeded({
@@ -1281,10 +1255,7 @@ class DeltaEventConsumer {
     if (existingOrigin != null && existingOrigin.isNotEmpty) {
       return;
     }
-    _scheduleOriginIdHydration(
-      msgId: msgId,
-      accountId: accountId,
-    );
+    _scheduleOriginIdHydration(msgId: msgId, accountId: accountId);
   }
 
   Future<void> _hydrateOriginId({
@@ -1301,11 +1272,9 @@ class DeltaEventConsumer {
       final originId = await _resolveOriginId(msgId);
       if (originId != null) {
         final db = await _db();
-        final existing = await db.getMessageByDeltaId(
-              msgId,
-              deltaAccountId: accountId,
-            ) ??
-            await db.getMessageByStanzaID(stanzaId);
+        final existing =
+            await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
+                await db.getMessageByStanzaID(stanzaId);
         if (existing == null) {
           return;
         }
@@ -1315,10 +1284,7 @@ class DeltaEventConsumer {
         }
         final duplicate = await db.getMessageByOriginID(originId);
         if (duplicate != null &&
-            canMergeOriginMessages(
-              existing: existing,
-              duplicate: duplicate,
-            )) {
+            canMergeOriginMessages(existing: existing, duplicate: duplicate)) {
           final primary = resolveOriginMergePrimary(
             existing: existing,
             duplicate: duplicate,
@@ -1349,6 +1315,73 @@ class DeltaEventConsumer {
     return parseEmailMessageId(headers);
   }
 
+  Future<void> _updateChatSummaryForIncomingMessage({
+    required int chatId,
+    required int messageId,
+  }) async {
+    final db = await _db();
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: _deltaAccountId,
+    );
+    if (chat == null) {
+      return;
+    }
+    final stored = await db.getMessageByDeltaId(
+      messageId,
+      deltaAccountId: _deltaAccountId,
+    );
+    if (stored == null) {
+      return;
+    }
+    if (await _isInternalMessagePreview(db: db, message: stored)) {
+      return;
+    }
+    final preview = _previewTextForStoredMessage(stored);
+    if (preview == null) {
+      return;
+    }
+    final DateTime now = DateTime.timestamp();
+    final DateTime nextTimestamp =
+        now.isAfter(chat.lastChangeTimestamp) ? now : chat.lastChangeTimestamp;
+    final updated = chat.copyWith(
+      lastMessage: preview,
+      lastChangeTimestamp: nextTimestamp,
+    );
+    if (updated != chat) {
+      await db.updateChat(updated);
+    }
+  }
+
+  String? _previewTextForStoredMessage(Message message) {
+    final String? trimmedBody = message.body?.trim();
+    if (trimmedBody?.isNotEmpty == true) {
+      return trimmedBody;
+    }
+    final String? trimmedSubject = message.subject?.trim();
+    if (trimmedSubject?.isNotEmpty == true) {
+      return trimmedSubject;
+    }
+    return null;
+  }
+
+  Future<bool> _isInternalMessagePreview({
+    required XmppDatabase db,
+    required Message message,
+  }) async {
+    final String? trimmedBody = message.body?.trim();
+    if (trimmedBody?.isNotEmpty == true &&
+        CalendarSyncMessage.looksLikeEnvelope(trimmedBody!)) {
+      return true;
+    }
+    final String? metadataId = message.fileMetadataID?.trim();
+    if (metadataId == null || metadataId.isEmpty) {
+      return false;
+    }
+    final metadata = await db.getFileMetadata(metadataId);
+    return metadata?.isCalendarSnapshot == true;
+  }
+
   String? _previewTextForDeltaMessage(DeltaMessage? message) {
     if (message == null) {
       return null;
@@ -1359,7 +1392,15 @@ class DeltaEventConsumer {
     }
     final String? trimmedSubject = message.subject?.trim();
     if (trimmedSubject?.isNotEmpty == true) {
-      return trimmedSubject;
+      return sanitizeEmailHeaderValue(trimmedSubject);
+    }
+    if (message.hasFile) {
+      final metadataId = deltaFileMetadataId(message.id);
+      final metadata = _metadataFromDelta(
+        delta: message,
+        metadataId: metadataId,
+      );
+      return deltaAttachmentLabel(metadata);
     }
     return null;
   }
@@ -1417,17 +1458,15 @@ class DeltaEventConsumer {
     required DeltaChat? remote,
     String? emailFromAddress,
   }) {
-    final emailAddress = _normalizedAddress(
-      remote?.contactAddress,
-      chatId,
-    );
+    final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
     final title = remote?.name ?? remote?.contactName ?? emailAddress;
     return Chat(
       jid: emailAddress,
       title: title,
       type: _mapChatType(remote?.type),
-      lastChangeTimestamp:
-          DateTime.fromMillisecondsSinceEpoch(_emailChatInitialTimestampMillis),
+      lastChangeTimestamp: DateTime.fromMillisecondsSinceEpoch(
+        _emailChatInitialTimestampMillis,
+      ),
       encryptionProtocol: EncryptionProtocol.none,
       contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,
@@ -1583,8 +1622,10 @@ class DeltaEventConsumer {
     }
     final metadataId = deltaFileMetadataId(delta.id);
     final existing = await db.getFileMetadata(metadataId);
-    final resolvedMetadata =
-        _metadataFromDelta(delta: delta, metadataId: metadataId);
+    final resolvedMetadata = _metadataFromDelta(
+      delta: delta,
+      metadataId: metadataId,
+    );
     final merged = _mergeMetadata(existing, resolvedMetadata);
     if (merged != null && (existing == null || merged != existing)) {
       await db.saveFileMetadata(merged);
@@ -1594,8 +1635,9 @@ class DeltaEventConsumer {
     );
     final normalizedBody = next.body?.trim() ?? '';
     if (normalizedBody.isEmpty) {
-      next =
-          next.copyWith(body: deltaAttachmentLabel(merged ?? resolvedMetadata));
+      next = next.copyWith(
+        body: deltaAttachmentLabel(merged ?? resolvedMetadata),
+      );
     }
     return next;
   }
@@ -1672,8 +1714,9 @@ class DeltaEventConsumer {
     final cleanedBody = share?.subject?.isNotEmpty == true
         ? _stripSubjectHeader(match.cleanedBody, share!.subject!)
         : match.cleanedBody;
-    final cleanedHtml =
-        ShareTokenHtmlCodec.stripInjectedToken(message.htmlBody);
+    final cleanedHtml = ShareTokenHtmlCodec.stripInjectedToken(
+      message.htmlBody,
+    );
     final sanitized = message.copyWith(
       body: cleanedBody,
       htmlBody: cleanedHtml,

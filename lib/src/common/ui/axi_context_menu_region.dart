@@ -108,8 +108,9 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
   ShadContextMenuController? _attachedController;
   ShadContextMenuController get controller =>
       widget.controller ??
-      (_controller ??=
-          ShadContextMenuController(isOpen: widget.visible ?? false));
+      (_controller ??= ShadContextMenuController(
+        isOpen: widget.visible ?? false,
+      ));
 
   ShadAnchorBase? _anchor;
   Offset? _pendingLongPress;
@@ -277,19 +278,13 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     );
   }
 
-  Alignment _targetAlignment(
-    bool preferBelow,
-    _MenuHorizontal horizontal,
-  ) {
+  Alignment _targetAlignment(bool preferBelow, _MenuHorizontal horizontal) {
     final y = preferBelow ? 1.0 : -1.0;
     final x = _alignmentX(horizontal);
     return Alignment(x, y);
   }
 
-  Alignment _followerAlignment(
-    bool preferBelow,
-    _MenuHorizontal horizontal,
-  ) {
+  Alignment _followerAlignment(bool preferBelow, _MenuHorizontal horizontal) {
     final y = preferBelow ? -1.0 : 1.0;
     final x = _alignmentX(horizontal);
     return Alignment(x, y);

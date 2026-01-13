@@ -68,17 +68,13 @@ class ChatsList extends StatelessWidget {
           );
           context.read<ChatsCubit>().clearCreationStatus();
         } else if (state.creationStatus.isFailure) {
-          showToast?.call(
-            FeedbackToast.error(message: creationFailureMessage),
-          );
+          showToast?.call(FeedbackToast.error(message: creationFailureMessage));
           context.read<ChatsCubit>().clearCreationStatus();
         }
         if (state.refreshStatus.isSuccess) {
           context.read<ChatsCubit>().clearRefreshStatus();
         } else if (state.refreshStatus.isFailure) {
-          showToast?.call(
-            FeedbackToast.error(message: refreshFailureMessage),
-          );
+          showToast?.call(FeedbackToast.error(message: refreshFailureMessage));
           context.read<ChatsCubit>().clearRefreshStatus();
         }
       },
@@ -136,10 +132,12 @@ class ChatsList extends StatelessWidget {
 
                     visibleItems.sort(
                       (a, b) => sortOrder.isNewestFirst
-                          ? b.lastChangeTimestamp
-                              .compareTo(a.lastChangeTimestamp)
-                          : a.lastChangeTimestamp
-                              .compareTo(b.lastChangeTimestamp),
+                          ? b.lastChangeTimestamp.compareTo(
+                              a.lastChangeTimestamp,
+                            )
+                          : a.lastChangeTimestamp.compareTo(
+                              b.lastChangeTimestamp,
+                            ),
                     );
                     Widget body;
                     if (visibleItems.isEmpty) {
@@ -148,8 +146,9 @@ class ChatsList extends StatelessWidget {
                           ListItemPadding(
                             child: BlocBuilder<CalendarBloc, CalendarState>(
                               builder: (context, state) {
-                                final currentTask =
-                                    state.currentTaskAt(DateTime.now());
+                                final currentTask = state.currentTaskAt(
+                                  DateTime.now(),
+                                );
                                 return CalendarTile(
                                   onTap: () => context
                                       .read<ChatsCubit>()
@@ -172,8 +171,9 @@ class ChatsList extends StatelessWidget {
                       );
                     } else {
                       final scrollPhysics = AlwaysScrollableScrollPhysics(
-                        parent: ScrollConfiguration.of(context)
-                            .getScrollPhysics(context),
+                        parent: ScrollConfiguration.of(
+                          context,
+                        ).getScrollPhysics(context),
                       );
                       body = ColoredBox(
                         color: context.colorScheme.background,
@@ -186,8 +186,9 @@ class ChatsList extends StatelessWidget {
                               return ListItemPadding(
                                 child: BlocBuilder<CalendarBloc, CalendarState>(
                                   builder: (context, state) {
-                                    final currentTask =
-                                        state.currentTaskAt(DateTime.now());
+                                    final currentTask = state.currentTaskAt(
+                                      DateTime.now(),
+                                    );
                                     return CalendarTile(
                                       onTap: () => context
                                           .read<ChatsCubit>()
@@ -221,8 +222,9 @@ class ChatsList extends StatelessWidget {
                                 builder: (context, constraints) {
                                   final scrollPhysics =
                                       AlwaysScrollableScrollPhysics(
-                                    parent: ScrollConfiguration.of(context)
-                                        .getScrollPhysics(context),
+                                    parent: ScrollConfiguration.of(
+                                      context,
+                                    ).getScrollPhysics(context),
                                   );
                                   return ListView(
                                     physics: scrollPhysics,
@@ -252,10 +254,12 @@ class ChatsList extends StatelessWidget {
               final offsetAnimation = Tween<Offset>(
                 begin: const Offset(0, 0.08),
                 end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ));
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              );
               return FadeTransition(
                 opacity: animation,
                 child: SlideTransition(
@@ -360,11 +364,7 @@ class ChatsList extends StatelessWidget {
   }
 }
 
-bool _chatMatchesFilter(
-  Chat chat,
-  String? filterId,
-  Set<String> contacts,
-) {
+bool _chatMatchesFilter(Chat chat, String? filterId, Set<String> contacts) {
   final normalized = filterId ?? 'all';
   switch (normalized) {
     case 'contacts':
@@ -421,15 +421,12 @@ class _ChatListTileState extends State<ChatListTile> {
     super.initState();
     _focusNode = FocusNode(debugLabel: 'chat-tile-${widget.item.jid}');
     _timestampNow = DateTime.now();
-    _timestampTicker = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) {
-        if (!mounted) return;
-        setState(() {
-          _timestampNow = DateTime.now();
-        });
-      },
-    );
+    _timestampTicker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _timestampNow = DateTime.now();
+      });
+    });
   }
 
   @override
@@ -464,18 +461,10 @@ class _ChatListTileState extends State<ChatListTile> {
     final displayName = item.displayName;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
-    final double unreadThickness = showUnreadBadge
-        ? _measureUnreadBadgeWidth(
-            context,
-            unreadCount,
-          )
-        : 0.0;
-    final double unreadHeight = showUnreadBadge
-        ? _measureUnreadBadgeHeight(
-            context,
-            unreadCount,
-          )
-        : 0.0;
+    final double unreadThickness =
+        showUnreadBadge ? _measureUnreadBadgeWidth(context, unreadCount) : 0.0;
+    final double unreadHeight =
+        showUnreadBadge ? _measureUnreadBadgeHeight(context, unreadCount) : 0.0;
     final double unreadDepth = showUnreadBadge
         ? math.max(
             _unreadBadgeMinDepth,
@@ -492,11 +481,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ? 0.0
         : math.max(
             scaled(32.0),
-            _measureLabelWidth(
-                  context,
-                  timestampLabel,
-                ) +
-                scaled(16.0),
+            _measureLabelWidth(context, timestampLabel) + scaled(16.0),
           );
     ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
     ChatsCubit? chatsCubit() => context.read<ChatsCubit?>();
@@ -577,10 +562,7 @@ class _ChatListTileState extends State<ChatListTile> {
           cornerRadius: _unreadBadgeCornerRadius,
           child: Transform.translate(
             offset: Offset(0, scaled(_unreadBadgeCutoutChildVerticalOffset)),
-            child: _UnreadBadge(
-              count: unreadCount,
-              highlight: showUnreadBadge,
-            ),
+            child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
           ),
         ),
       CutoutSpec(
@@ -858,8 +840,9 @@ class _ChatListTileState extends State<ChatListTile> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _exportChatFromContextMenu(Chat chat) async {
@@ -919,9 +902,7 @@ class _ChatListTileState extends State<ChatListTile> {
         child: Text(l10n.commonExport),
       ),
       ShadContextMenuItem(
-        leading: Icon(
-          chat.favorited ? LucideIcons.starOff : LucideIcons.star,
-        ),
+        leading: Icon(chat.favorited ? LucideIcons.starOff : LucideIcons.star),
         onPressed: disabled
             ? null
             : () async {
@@ -935,9 +916,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       ),
       ShadContextMenuItem(
-        leading: Icon(
-          chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
-        ),
+        leading: Icon(chat.archived ? LucideIcons.undo2 : LucideIcons.archive),
         onPressed: disabled
             ? null
             : () async {
@@ -946,9 +925,7 @@ class _ChatListTileState extends State<ChatListTile> {
                       archived: !chat.archived,
                     );
               },
-        child: Text(
-          chat.archived ? l10n.commonUnarchive : l10n.commonArchive,
-        ),
+        child: Text(chat.archived ? l10n.commonUnarchive : l10n.commonArchive),
       ),
       if (!widget.archivedContext)
         ShadContextMenuItem(
@@ -1010,9 +987,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () {
-                  context
-                      .read<ChatsCubit>()
-                      .ensureChatSelected(widget.chat.jid);
+                  context.read<ChatsCubit>().ensureChatSelected(
+                        widget.chat.jid,
+                      );
                   widget.onClose();
                 },
         ),
@@ -1171,8 +1148,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -1255,10 +1233,7 @@ double _measureUnreadBadgeHeight(BuildContext context, int count) {
 }
 
 class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({
-    required this.count,
-    required this.highlight,
-  });
+  const _UnreadBadge({required this.count, required this.highlight});
 
   final int count;
   final bool highlight;
@@ -1286,10 +1261,7 @@ class _UnreadBadge extends StatelessWidget {
           color: background,
           shape: SquircleBorder(
             cornerRadius: cornerRadius,
-            side: BorderSide(
-              color: borderColor,
-              width: borderWidth,
-            ),
+            side: BorderSide(color: borderColor, width: borderWidth),
           ),
         ),
         child: Padding(

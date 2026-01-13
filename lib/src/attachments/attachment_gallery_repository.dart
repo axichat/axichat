@@ -13,10 +13,7 @@ final DateTime _attachmentGalleryFallbackTimestamp =
     DateTime.fromMillisecondsSinceEpoch(_attachmentGalleryFallbackEpochMs);
 
 class AttachmentGalleryItem {
-  const AttachmentGalleryItem({
-    required this.message,
-    required this.metadata,
-  });
+  const AttachmentGalleryItem({required this.message, required this.metadata});
 
   final Message message;
   final FileMetadataData metadata;
@@ -27,9 +24,7 @@ final class AttachmentGalleryRepository {
 
   final XmppDrift _database;
 
-  Stream<List<AttachmentGalleryItem>> watch({
-    String? chatJid,
-  }) {
+  Stream<List<AttachmentGalleryItem>> watch({String? chatJid}) {
     final messages = _database.messages;
     final messageAttachments = _database.messageAttachments;
     final fileMetadata = _database.fileMetadata;
@@ -75,28 +70,22 @@ final class AttachmentGalleryRepository {
         multi.add(List.unmodifiable(combined));
       }
 
-      final attachmentSubscription = attachmentQuery.watch().listen(
-        (rows) {
-          attachmentItems = _mapItems(
-            rows: rows,
-            messages: messages,
-            fileMetadata: fileMetadata,
-          );
-          emit();
-        },
-        onError: multi.addError,
-      );
-      final fallbackSubscription = fallbackQuery.watch().listen(
-        (rows) {
-          fallbackItems = _mapItems(
-            rows: rows,
-            messages: messages,
-            fileMetadata: fileMetadata,
-          );
-          emit();
-        },
-        onError: multi.addError,
-      );
+      final attachmentSubscription = attachmentQuery.watch().listen((rows) {
+        attachmentItems = _mapItems(
+          rows: rows,
+          messages: messages,
+          fileMetadata: fileMetadata,
+        );
+        emit();
+      }, onError: multi.addError);
+      final fallbackSubscription = fallbackQuery.watch().listen((rows) {
+        fallbackItems = _mapItems(
+          rows: rows,
+          messages: messages,
+          fileMetadata: fileMetadata,
+        );
+        emit();
+      }, onError: multi.addError);
       multi.onCancel = () {
         unawaited(attachmentSubscription.cancel());
         unawaited(fallbackSubscription.cancel());

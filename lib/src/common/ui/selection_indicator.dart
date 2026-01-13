@@ -66,11 +66,7 @@ class SelectionIndicator extends StatelessWidget {
         duration: _animationDuration,
         scale: visible ? 1 : 0.94,
         curve: Curves.easeInOut,
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: child,
-        ),
+        child: SizedBox(width: size, height: size, child: child),
       ),
     );
   }

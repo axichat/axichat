@@ -65,19 +65,14 @@ const int _originIdHydrationDelayMs = 1000;
 const int _originIdHydrationMaxAttempts = 60;
 const int _originIdHydrationAttemptStart = 0;
 const int _originIdHydrationAttemptStep = 1;
-const Duration _originIdHydrationDelay =
-    Duration(milliseconds: _originIdHydrationDelayMs);
+const Duration _originIdHydrationDelay = Duration(
+  milliseconds: _originIdHydrationDelayMs,
+);
 const String _pendingOutgoingStanzaPrefix = 'dc-pending';
 const String _pendingOutgoingStanzaSeparator = '-';
 const bool _defaultScheduleAccountHydration = true;
 
-enum _DeltaSecurityModeResolution {
-  auto,
-  ssl,
-  startTls,
-  plain,
-  unknown,
-}
+enum _DeltaSecurityModeResolution { auto, ssl, startTls, plain, unknown }
 
 const _deltaCredentialConfigKeys = <String>[
   _deltaConfigKeyAddress,
@@ -156,10 +151,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   String? get selfJid => _selfJidForAccount(_defaultAccountId);
 
-  void hydrateAccountAddress({
-    required String address,
-    int? accountId,
-  }) {
+  void hydrateAccountAddress({required String address, int? accountId}) {
     if (address.isEmpty) return;
     final resolvedAccountId = _resolveAccountId(accountId);
     if (resolvedAccountId == null) return;
@@ -172,10 +164,7 @@ class EmailDeltaTransport implements ChatTransport {
     required int accountId,
   }) {
     unawaited(
-      _hydrateAccountAddressFromCore(
-        context: context,
-        accountId: accountId,
-      ),
+      _hydrateAccountAddressFromCore(context: context, accountId: accountId),
     );
   }
 
@@ -188,10 +177,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (normalizedAddress.isEmpty || normalizedAddress.isDeltaPlaceholderJid) {
       return;
     }
-    hydrateAccountAddress(
-      address: normalizedAddress,
-      accountId: accountId,
-    );
+    hydrateAccountAddress(address: normalizedAddress, accountId: accountId);
     final db = await _databaseBuilder();
     await db.replaceDeltaPlaceholderSelfJids(
       deltaAccountId: accountId,
@@ -342,10 +328,12 @@ class EmailDeltaTransport implements ChatTransport {
         displayName: displayName,
         additional: additional,
       );
-      await completer.future.timeout(const Duration(seconds: 60),
-          onTimeout: () {
-        throw const DeltaSafeException('Email configuration timed out');
-      });
+      await completer.future.timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          throw const DeltaSafeException('Email configuration timed out');
+        },
+      );
       await _enforceTransportSecurity(context: context);
     } finally {
       await subscription.cancel();
@@ -371,9 +359,7 @@ class EmailDeltaTransport implements ChatTransport {
     _ioRunning = true;
   }
 
-  Future<void> _enforceTransportSecurity({
-    DeltaContextHandle? context,
-  }) async {
+  Future<void> _enforceTransportSecurity({DeltaContextHandle? context}) async {
     final resolvedContext = context ?? _context;
     if (resolvedContext == null) {
       return;
@@ -703,10 +689,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (context == null) {
       return null;
     }
-    return context.getOauth2Url(
-      address: address,
-      redirectUri: redirectUri,
-    );
+    return context.getOauth2Url(address: address, redirectUri: redirectUri);
   }
 
   Future<void> setCoreConfig({
@@ -822,10 +805,7 @@ class EmailDeltaTransport implements ChatTransport {
     );
     _accountSessions[accountId] = session;
     if (scheduleHydration) {
-      _scheduleAccountAddressHydration(
-        context: context,
-        accountId: accountId,
-      );
+      _scheduleAccountAddressHydration(context: context, accountId: accountId);
     }
     if (_ioRunning) {
       _attachEventSubscription(session);
@@ -859,10 +839,7 @@ class EmailDeltaTransport implements ChatTransport {
       }
       final context = accounts.contextFor(accountId);
       await context.open(passphrase: passphrase);
-      final session = _registerSession(
-        accountId: accountId,
-        context: context,
-      );
+      final session = _registerSession(accountId: accountId, context: context);
       _context ??= context;
       completer.complete();
       return session;
@@ -908,9 +885,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
-  Future<List<_DeltaAccountSession>> _resolveSessions({
-    int? accountId,
-  }) async {
+  Future<List<_DeltaAccountSession>> _resolveSessions({int? accountId}) async {
     if (accountId != null) {
       final session = await _ensureSession(accountId: accountId);
       return session == null ? const [] : <_DeltaAccountSession>[session];
@@ -969,10 +944,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
-  Future<bool> _tryOpenAccountsContext(
-    String prefix,
-    String passphrase,
-  ) async {
+  Future<bool> _tryOpenAccountsContext(String prefix, String passphrase) async {
     var firstFailure = true;
     bool shouldRetry(Exception error) {
       final message = error.toString();
@@ -1277,10 +1249,7 @@ class EmailDeltaTransport implements ChatTransport {
       await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
       rethrow;
     }
-    final FileMetadataData metadata = _metadataForAttachment(
-      attachment,
-      msgId,
-    );
+    final FileMetadataData metadata = _metadataForAttachment(attachment, msgId);
     await _markOutgoingMessageSent(
       stanzaId: pendingStanzaId,
       msgId: msgId,
@@ -1323,11 +1292,7 @@ class EmailDeltaTransport implements ChatTransport {
               : trimmedAddress,
         );
     final chatId = await context.createChatByContactId(contactId);
-    await _ensureChat(
-      chatId,
-      accountId: session.accountId,
-      context: context,
-    );
+    await _ensureChat(chatId, accountId: session.accountId, context: context);
     return chatId;
   }
 
@@ -1351,10 +1316,7 @@ class EmailDeltaTransport implements ChatTransport {
         context: context,
         accountId: accountId,
       );
-      senderJid = _resolveOutgoingSenderJid(
-        chat: chat,
-        accountId: accountId,
-      );
+      senderJid = _resolveOutgoingSenderJid(chat: chat, accountId: accountId);
       normalizedSender = senderJid.trim();
     }
     if (normalizedSender.isEmpty || normalizedSender.isDeltaPlaceholderJid) {
@@ -1385,11 +1347,8 @@ class EmailDeltaTransport implements ChatTransport {
     DateTime? timestamp,
   }) async {
     final XmppDatabase db = await _databaseBuilder();
-    final Chat resolvedChat = chat ??
-        await _ensureChat(
-          chatId,
-          accountId: accountId,
-        );
+    final Chat resolvedChat =
+        chat ?? await _ensureChat(chatId, accountId: accountId);
     final int deltaAccountId = accountId;
     final int? resolvedMsgId = msgId;
     final String resolvedStanzaId = stanzaId ??
@@ -1521,9 +1480,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
-  Future<void> _markOutgoingMessageFailed({
-    required String stanzaId,
-  }) async {
+  Future<void> _markOutgoingMessageFailed({required String stanzaId}) async {
     final XmppDatabase db = await _databaseBuilder();
     await db.saveMessageError(
       stanzaID: stanzaId,
@@ -1655,11 +1612,7 @@ class EmailDeltaTransport implements ChatTransport {
     required int accountId,
   }) {
     unawaited(
-      _hydrateOriginId(
-        context: context,
-        msgId: msgId,
-        accountId: accountId,
-      ),
+      _hydrateOriginId(context: context, msgId: msgId, accountId: accountId),
     );
   }
 
@@ -1716,11 +1669,9 @@ class EmailDeltaTransport implements ChatTransport {
       final originId = await _resolveMessageOriginId(context, msgId);
       if (originId != null) {
         final db = await _databaseBuilder();
-        final existing = await db.getMessageByDeltaId(
-              msgId,
-              deltaAccountId: accountId,
-            ) ??
-            await db.getMessageByStanzaID(stanzaId);
+        final existing =
+            await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
+                await db.getMessageByStanzaID(stanzaId);
         if (existing == null) {
           return;
         }
@@ -1729,10 +1680,7 @@ class EmailDeltaTransport implements ChatTransport {
           return;
         }
         final duplicate = await db.getMessageByOriginID(originId);
-        if (canMergeOriginMessages(
-          existing: existing,
-          duplicate: duplicate,
-        )) {
+        if (canMergeOriginMessages(existing: existing, duplicate: duplicate)) {
           final Message duplicateMessage = duplicate!;
           final primary = resolveOriginMergePrimary(
             existing: existing,
@@ -1773,10 +1721,7 @@ class EmailDeltaTransport implements ChatTransport {
     required DeltaChat? remote,
     String? emailFromAddress,
   }) {
-    final emailAddress = _normalizedAddress(
-      remote?.contactAddress,
-      chatId,
-    );
+    final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
     final title = remote?.name ?? remote?.contactName ?? emailAddress;
     return Chat(
       jid: emailAddress,
@@ -1964,10 +1909,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Marks messages as seen, triggering MDN if enabled.
   ///
   /// Returns true if the operation succeeded.
-  Future<bool> markSeenMessages(
-    List<int> messageIds, {
-    int? accountId,
-  }) async {
+  Future<bool> markSeenMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return true;
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -1979,10 +1921,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Returns the count of fresh (unread) messages in a chat.
-  Future<int> getFreshMessageCount(
-    int chatId, {
-    int? accountId,
-  }) async {
+  Future<int> getFreshMessageCount(int chatId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
     final context = session?.context;
@@ -2006,10 +1945,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Deletes messages from core and server.
   ///
   /// Returns true if the operation succeeded.
-  Future<bool> deleteMessages(
-    List<int> messageIds, {
-    int? accountId,
-  }) async {
+  Future<bool> deleteMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return true;
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2055,10 +1991,7 @@ class EmailDeltaTransport implements ChatTransport {
     return context.searchMessages(chatId: chatId, query: query);
   }
 
-  Future<void> hydrateMessages(
-    List<int> messageIds, {
-    int? accountId,
-  }) async {
+  Future<void> hydrateMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return;
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2104,10 +2037,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Resends failed messages.
   ///
   /// Returns true if the resend was initiated.
-  Future<bool> resendMessages(
-    List<int> messageIds, {
-    int? accountId,
-  }) async {
+  Future<bool> resendMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return true;
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);

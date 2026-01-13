@@ -16,10 +16,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const ShortcutActivator _nextItemActivator =
-    SingleActivator(LogicalKeyboardKey.arrowDown);
-const ShortcutActivator _previousItemActivator =
-    SingleActivator(LogicalKeyboardKey.arrowUp);
+const ShortcutActivator _nextItemActivator = SingleActivator(
+  LogicalKeyboardKey.arrowDown,
+);
+const ShortcutActivator _previousItemActivator = SingleActivator(
+  LogicalKeyboardKey.arrowUp,
+);
 const ShortcutActivator _nextGroupActivator = SingleActivator(
   LogicalKeyboardKey.arrowDown,
   shift: true,
@@ -36,20 +38,26 @@ final LogicalKeySet _previousGroupKeySet = LogicalKeySet(
   LogicalKeyboardKey.shift,
   LogicalKeyboardKey.arrowUp,
 );
-const ShortcutActivator _firstItemActivator =
-    SingleActivator(LogicalKeyboardKey.home);
-const ShortcutActivator _lastItemActivator =
-    SingleActivator(LogicalKeyboardKey.end);
-const ShortcutActivator _activateItemActivator =
-    SingleActivator(LogicalKeyboardKey.enter);
+const ShortcutActivator _firstItemActivator = SingleActivator(
+  LogicalKeyboardKey.home,
+);
+const ShortcutActivator _lastItemActivator = SingleActivator(
+  LogicalKeyboardKey.end,
+);
+const ShortcutActivator _activateItemActivator = SingleActivator(
+  LogicalKeyboardKey.enter,
+);
 const bool _accessibilityAutoDownloadAllowed = false;
-const ShortcutActivator _escapeActivator =
-    SingleActivator(LogicalKeyboardKey.escape);
+const ShortcutActivator _escapeActivator = SingleActivator(
+  LogicalKeyboardKey.escape,
+);
 
-const MenuSerializableShortcut _nextItemShortcut =
-    SingleActivator(LogicalKeyboardKey.arrowDown);
-const MenuSerializableShortcut _previousItemShortcut =
-    SingleActivator(LogicalKeyboardKey.arrowUp);
+const MenuSerializableShortcut _nextItemShortcut = SingleActivator(
+  LogicalKeyboardKey.arrowDown,
+);
+const MenuSerializableShortcut _previousItemShortcut = SingleActivator(
+  LogicalKeyboardKey.arrowUp,
+);
 const MenuSerializableShortcut _nextGroupShortcut = SingleActivator(
   LogicalKeyboardKey.arrowDown,
   shift: true,
@@ -58,18 +66,22 @@ const MenuSerializableShortcut _previousGroupShortcut = SingleActivator(
   LogicalKeyboardKey.arrowUp,
   shift: true,
 );
-const MenuSerializableShortcut _nextFocusShortcut =
-    SingleActivator(LogicalKeyboardKey.tab);
+const MenuSerializableShortcut _nextFocusShortcut = SingleActivator(
+  LogicalKeyboardKey.tab,
+);
 const MenuSerializableShortcut _previousFocusShortcut = SingleActivator(
   LogicalKeyboardKey.tab,
   shift: true,
 );
-const MenuSerializableShortcut _firstItemShortcut =
-    SingleActivator(LogicalKeyboardKey.home);
-const MenuSerializableShortcut _lastItemShortcut =
-    SingleActivator(LogicalKeyboardKey.end);
-const MenuSerializableShortcut _activateShortcut =
-    SingleActivator(LogicalKeyboardKey.enter);
+const MenuSerializableShortcut _firstItemShortcut = SingleActivator(
+  LogicalKeyboardKey.home,
+);
+const MenuSerializableShortcut _lastItemShortcut = SingleActivator(
+  LogicalKeyboardKey.end,
+);
+const MenuSerializableShortcut _activateShortcut = SingleActivator(
+  LogicalKeyboardKey.enter,
+);
 
 const double _modalMaxWidth = 720;
 const double _modalMinHeight = 420;
@@ -81,10 +93,7 @@ const double _rootListMinHeight = 240;
 const double _rootListMaxHeight = 520;
 const double _rootListHeightShare = 0.6;
 
-String _stepLabelFor(
-  BuildContext context,
-  AccessibilityStepEntry entry,
-) {
+String _stepLabelFor(BuildContext context, AccessibilityStepEntry entry) {
   final l10n = context.l10n;
   switch (entry.kind) {
     case AccessibilityStepKind.root:
@@ -208,27 +217,34 @@ class _AccessibilityMenuScaffold extends StatefulWidget {
 
 class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     with WidgetsBindingObserver {
-  final FocusScopeNode _focusScopeNode =
-      FocusScopeNode(debugLabel: 'accessibility_menu_scope');
+  final FocusScopeNode _focusScopeNode = FocusScopeNode(
+    debugLabel: 'accessibility_menu_scope',
+  );
   final GlobalKey<_AccessibilitySectionListState> _sectionsListKey =
       GlobalKey();
   final GlobalKey<_AccessibilitySectionListState> _actionsListKey = GlobalKey();
   final GlobalKey<_MessageCarouselState> _messageCarouselKey = GlobalKey();
   final GlobalKey _legendGroupKey = GlobalKey(debugLabel: 'legend_group');
   final GlobalKey _composerGroupKey = GlobalKey(debugLabel: 'composer_group');
-  final GlobalKey _newContactGroupKey =
-      GlobalKey(debugLabel: 'new_contact_group');
+  final GlobalKey _newContactGroupKey = GlobalKey(
+    debugLabel: 'new_contact_group',
+  );
   final GlobalKey _actionsGroupKey = GlobalKey(debugLabel: 'actions_group');
-  final FocusNode _shortcutLegendFocusNode =
-      FocusNode(debugLabel: 'accessibility_shortcut_legend');
-  final FocusNode _messageFocusNode =
-      FocusNode(debugLabel: 'accessibility_message_view');
-  final FocusNode _composerFocusNode =
-      FocusNode(debugLabel: 'accessibility_composer_field');
-  final FocusNode _newContactFocusNode =
-      FocusNode(debugLabel: 'accessibility_new_contact_field');
-  final FocusNode _actionsFocusNode =
-      FocusNode(debugLabel: 'accessibility_actions_group');
+  final FocusNode _shortcutLegendFocusNode = FocusNode(
+    debugLabel: 'accessibility_shortcut_legend',
+  );
+  final FocusNode _messageFocusNode = FocusNode(
+    debugLabel: 'accessibility_message_view',
+  );
+  final FocusNode _composerFocusNode = FocusNode(
+    debugLabel: 'accessibility_composer_field',
+  );
+  final FocusNode _newContactFocusNode = FocusNode(
+    debugLabel: 'accessibility_new_contact_field',
+  );
+  final FocusNode _actionsFocusNode = FocusNode(
+    debugLabel: 'accessibility_actions_group',
+  );
   final ScrollController _scrollController = ScrollController();
   final Map<Object, VoidCallback> _groupFocusHandlers =
       <Object, VoidCallback>{};
@@ -334,12 +350,10 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       children: [
         Positioned.fill(
           child: GestureDetector(
-            onTap: () => context
-                .read<AccessibilityActionBloc>()
-                .add(const AccessibilityMenuClosed()),
-            child: ColoredBox(
-              color: Colors.black.withValues(alpha: 0.45),
-            ),
+            onTap: () => context.read<AccessibilityActionBloc>().add(
+                  const AccessibilityMenuClosed(),
+                ),
+            child: ColoredBox(color: Colors.black.withValues(alpha: 0.45)),
           ),
         ),
         Center(
@@ -358,13 +372,13 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                       return null;
                     }
                     if (widget.state.stack.length > 1) {
-                      context
-                          .read<AccessibilityActionBloc>()
-                          .add(const AccessibilityMenuBack());
+                      context.read<AccessibilityActionBloc>().add(
+                            const AccessibilityMenuBack(),
+                          );
                     } else {
-                      context
-                          .read<AccessibilityActionBloc>()
-                          .add(const AccessibilityMenuClosed());
+                      context.read<AccessibilityActionBloc>().add(
+                            const AccessibilityMenuClosed(),
+                          );
                     }
                     return null;
                   },
@@ -414,84 +428,89 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
               child: FocusScope(
                 node: _focusScopeNode,
                 autofocus: true,
-                child: Builder(builder: (context) {
-                  final viewSize = MediaQuery.sizeOf(context);
-                  final modalMinHeight = viewSize.height < _modalMinHeight
-                      ? viewSize.height
-                      : _modalMinHeight;
-                  final rawTargetHeight =
-                      viewSize.height - _modalVerticalMargin;
-                  final modalHeight = rawTargetHeight
-                      .clamp(modalMinHeight, viewSize.height)
-                      .toDouble();
-                  return ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: _modalMaxWidth,
-                    ),
-                    child: SizedBox(
-                      height: modalHeight,
-                      child: AxiModalSurface(
-                        padding: const EdgeInsets.all(20),
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final viewportHeight = constraints.maxHeight;
-                              return Semantics(
-                                scopesRoute: true,
-                                namesRoute: true,
-                                label: context.l10n.accessibilityDialogLabel,
-                                hint: context.l10n.accessibilityDialogHint,
-                                explicitChildNodes: true,
-                                child: Scrollbar(
-                                  controller: _scrollController,
-                                  child: SingleChildScrollView(
+                child: Builder(
+                  builder: (context) {
+                    final viewSize = MediaQuery.sizeOf(context);
+                    final modalMinHeight = viewSize.height < _modalMinHeight
+                        ? viewSize.height
+                        : _modalMinHeight;
+                    final rawTargetHeight =
+                        viewSize.height - _modalVerticalMargin;
+                    final modalHeight = rawTargetHeight
+                        .clamp(modalMinHeight, viewSize.height)
+                        .toDouble();
+                    return ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _modalMaxWidth,
+                      ),
+                      child: SizedBox(
+                        height: modalHeight,
+                        child: AxiModalSurface(
+                          padding: const EdgeInsets.all(20),
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final viewportHeight = constraints.maxHeight;
+                                return Semantics(
+                                  scopesRoute: true,
+                                  namesRoute: true,
+                                  label: context.l10n.accessibilityDialogLabel,
+                                  hint: context.l10n.accessibilityDialogHint,
+                                  explicitChildNodes: true,
+                                  child: Scrollbar(
                                     controller: _scrollController,
-                                    physics: const ClampingScrollPhysics(),
-                                    padding: const EdgeInsets.only(bottom: 16),
-                                    clipBehavior: Clip.hardEdge,
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: viewportHeight,
+                                    child: SingleChildScrollView(
+                                      controller: _scrollController,
+                                      physics: const ClampingScrollPhysics(),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16,
                                       ),
-                                      child: FocusTraversalGroup(
-                                        policy: OrderedTraversalPolicy(),
-                                        child: _AccessibilityActionContent(
-                                          state: widget.state,
-                                          sectionsListKey: _sectionsListKey,
-                                          actionsListKey: _actionsListKey,
-                                          enableActivationShortcut:
-                                              !_isEditingText,
-                                          registerGroup: _registerGroup,
-                                          unregisterGroup: _unregisterGroup,
-                                          legendFocusNode:
-                                              _shortcutLegendFocusNode,
-                                          messageFocusNode: _messageFocusNode,
-                                          composerFocusNode: _composerFocusNode,
-                                          newContactFocusNode:
-                                              _newContactFocusNode,
-                                          legendGroupKey: _legendGroupKey,
-                                          messageCarouselKey:
-                                              _messageCarouselKey,
-                                          composerGroupKey: _composerGroupKey,
-                                          actionsGroupKey: _actionsGroupKey,
-                                          actionsFocusNode: _actionsFocusNode,
-                                          newContactGroupKey:
-                                              _newContactGroupKey,
-                                          viewportHeight: viewportHeight,
+                                      clipBehavior: Clip.hardEdge,
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minHeight: viewportHeight,
+                                        ),
+                                        child: FocusTraversalGroup(
+                                          policy: OrderedTraversalPolicy(),
+                                          child: _AccessibilityActionContent(
+                                            state: widget.state,
+                                            sectionsListKey: _sectionsListKey,
+                                            actionsListKey: _actionsListKey,
+                                            enableActivationShortcut:
+                                                !_isEditingText,
+                                            registerGroup: _registerGroup,
+                                            unregisterGroup: _unregisterGroup,
+                                            legendFocusNode:
+                                                _shortcutLegendFocusNode,
+                                            messageFocusNode: _messageFocusNode,
+                                            composerFocusNode:
+                                                _composerFocusNode,
+                                            newContactFocusNode:
+                                                _newContactFocusNode,
+                                            legendGroupKey: _legendGroupKey,
+                                            messageCarouselKey:
+                                                _messageCarouselKey,
+                                            composerGroupKey: _composerGroupKey,
+                                            actionsGroupKey: _actionsGroupKey,
+                                            actionsFocusNode: _actionsFocusNode,
+                                            newContactGroupKey:
+                                                _newContactGroupKey,
+                                            viewportHeight: viewportHeight,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -566,10 +585,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     }
   }
 
-  void _registerGroup(
-    Object group,
-    VoidCallback focusCallback,
-  ) {
+  void _registerGroup(Object group, VoidCallback focusCallback) {
     if (!_groupOrderList.contains(group)) {
       _groupOrderList.add(group);
     }
@@ -657,8 +673,10 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
           _lastFocusedGroup != null && groups.contains(_lastFocusedGroup)
               ? _lastFocusedGroup
               : null;
-      target ??= groups.firstWhere((group) => group != _legendGroupKey,
-          orElse: () => _legendGroupKey);
+      target ??= groups.firstWhere(
+        (group) => group != _legendGroupKey,
+        orElse: () => _legendGroupKey,
+      );
       if (target == _legendGroupKey && groups.isNotEmpty) {
         target = groups.first;
       }
@@ -748,10 +766,7 @@ bool _isTextInputFocused() {
 }
 
 class _AccessibilityGroupMarker extends InheritedWidget {
-  const _AccessibilityGroupMarker({
-    required this.group,
-    required super.child,
-  });
+  const _AccessibilityGroupMarker({required this.group, required super.child});
 
   final Object group;
 
@@ -789,10 +804,7 @@ class _AccessibilityActionContent extends StatelessWidget {
   final GlobalKey<_AccessibilitySectionListState> sectionsListKey;
   final GlobalKey<_AccessibilitySectionListState> actionsListKey;
   final bool enableActivationShortcut;
-  final void Function(
-    Object group,
-    VoidCallback focus,
-  ) registerGroup;
+  final void Function(Object group, VoidCallback focus) registerGroup;
   final void Function(Object group) unregisterGroup;
   final FocusNode legendFocusNode;
   final FocusNode messageFocusNode;
@@ -843,10 +855,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     const actionsListOrder = NumericFocusOrder(6);
     const sectionsOrder = NumericFocusOrder(4);
 
-    registerGroup(
-      legendGroupKey,
-      () => legendFocusNode.requestFocus(),
-    );
+    registerGroup(legendGroupKey, () => legendFocusNode.requestFocus());
     if (hasMessages) {
       registerGroup(
         messageCarouselKey,
@@ -854,17 +863,11 @@ class _AccessibilityActionContent extends StatelessWidget {
       );
     }
     if (hasComposer) {
-      registerGroup(
-        composerGroupKey,
-        () => composerFocusNode.requestFocus(),
-      );
+      registerGroup(composerGroupKey, () => composerFocusNode.requestFocus());
     }
     final shouldShowActionsGroup = isConversation;
     if (shouldShowActionsGroup) {
-      registerGroup(
-        actionsGroupKey,
-        () => actionsFocusNode.requestFocus(),
-      );
+      registerGroup(actionsGroupKey, () => actionsFocusNode.requestFocus());
     }
     if (isConversation && hasSections) {
       registerGroup(
@@ -897,13 +900,13 @@ class _AccessibilityActionContent extends StatelessWidget {
                 .read<AccessibilityActionBloc>()
                 .add(AccessibilityMenuJumpedTo(index)),
             onBack: state.stack.length > 1
-                ? () => context
-                    .read<AccessibilityActionBloc>()
-                    .add(const AccessibilityMenuBack())
+                ? () => context.read<AccessibilityActionBloc>().add(
+                      const AccessibilityMenuBack(),
+                    )
                 : null,
-            onClose: () => context
-                .read<AccessibilityActionBloc>()
-                .add(const AccessibilityMenuClosed()),
+            onClose: () => context.read<AccessibilityActionBloc>().add(
+                  const AccessibilityMenuClosed(),
+                ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1085,10 +1088,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     return boundedHeight.toDouble();
   }
 
-  String _entryLabel(
-    AccessibilityStepEntry entry,
-    BuildContext context,
-  ) {
+  String _entryLabel(AccessibilityStepEntry entry, BuildContext context) {
     return _stepLabelFor(context, entry);
   }
 
@@ -1131,10 +1131,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
             children: [
               Semantics(
                 header: true,
-                child: Text(
-                  breadcrumb,
-                  style: context.textTheme.h3,
-                ),
+                child: Text(breadcrumb, style: context.textTheme.h3),
               ),
               const SizedBox(height: 4),
               if (breadcrumbs.isNotEmpty)
@@ -1148,12 +1145,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
-                children: [
-                  ShortcutHint(
-                    shortcut: findShortcut,
-                    dense: true,
-                  ),
-                ],
+                children: [ShortcutHint(shortcut: findShortcut, dense: true)],
               ),
             ],
           ),
@@ -1165,10 +1157,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
             children: [
               Icon(Icons.close),
               SizedBox(width: 6),
-              ShortcutHint(
-                shortcut: escapeShortcut,
-                dense: true,
-              ),
+              ShortcutHint(shortcut: escapeShortcut, dense: true),
             ],
           ),
         ),
@@ -1178,10 +1167,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
 }
 
 class _BreadcrumbChain extends StatelessWidget {
-  const _BreadcrumbChain({
-    required this.labels,
-    required this.onSelected,
-  });
+  const _BreadcrumbChain({required this.labels, required this.onSelected});
 
   final List<String> labels;
   final ValueChanged<int>? onSelected;
@@ -1238,17 +1224,17 @@ class _BreadcrumbChip extends StatelessWidget {
           return Semantics(
             button: true,
             focusable: true,
-            label: context.l10n
-                .accessibilityBreadcrumbLabel(index + 1, total, label),
+            label: context.l10n.accessibilityBreadcrumbLabel(
+              index + 1,
+              total,
+              label,
+            ),
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
                 color: colors.card,
                 borderRadius: radius,
-                border: Border.all(
-                  color: borderColor,
-                  width: borderWidth,
-                ),
+                border: Border.all(color: borderColor, width: borderWidth),
               ),
               child: Material(
                 type: MaterialType.transparency,
@@ -1459,8 +1445,9 @@ class _ShortcutLegendEntry extends StatelessWidget {
           final borderColor = hasFocus ? colors.primary : colors.border;
           final borderWidth = hasFocus ? 2.5 : 1.0;
           return Semantics(
-            label: context.l10n
-                .accessibilityKeyboardShortcutAnnouncement(description),
+            label: context.l10n.accessibilityKeyboardShortcutAnnouncement(
+              description,
+            ),
             focusable: true,
             readOnly: true,
             child: AnimatedContainer(
@@ -1539,17 +1526,17 @@ class _ComposerSection extends StatelessWidget {
                       .map(
                         (recipient) => Semantics(
                           label: context.l10n.accessibilityRecipientLabel(
-                              recipient.displayName),
+                            recipient.displayName,
+                          ),
                           button: true,
                           hint: context.l10n.accessibilityRecipientRemoveHint,
                           child: InputChip(
                             label: Text(recipient.displayName),
-                            onDeleted: () =>
-                                context.read<AccessibilityActionBloc>().add(
-                                      AccessibilityRecipientRemoved(
-                                        recipient.jid,
-                                      ),
-                                    ),
+                            onDeleted: () => context
+                                .read<AccessibilityActionBloc>()
+                                .add(
+                                  AccessibilityRecipientRemoved(recipient.jid),
+                                ),
                           ),
                         ),
                       )
@@ -1606,10 +1593,7 @@ class _ActionButtonsGroup extends StatelessWidget {
                 children: [
                   Text(context.l10n.commonSend),
                   const SizedBox(width: 8),
-                  const ShortcutHint(
-                    shortcut: _activateShortcut,
-                    dense: true,
-                  ),
+                  const ShortcutHint(shortcut: _activateShortcut, dense: true),
                 ],
               ),
             );
@@ -1767,8 +1751,9 @@ class _AccessibilityTextField extends StatefulWidget {
 }
 
 class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.text);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.text,
+  );
   late FocusNode _focusNode = widget.focusNode ??
       FocusNode(debugLabel: 'accessibility-text-${widget.label}');
   late bool _ownsFocusNode = widget.focusNode == null;
@@ -1795,8 +1780,9 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
     }
     if (oldWidget.text != widget.text && _controller.text != widget.text) {
       _controller.text = widget.text;
-      _controller.selection =
-          TextSelection.collapsed(offset: widget.text.length);
+      _controller.selection = TextSelection.collapsed(
+        offset: widget.text.length,
+      );
     }
   }
 
@@ -1832,10 +1818,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.label,
-          style: context.textTheme.small,
-        ),
+        Text(widget.label, style: context.textTheme.small),
         const SizedBox(height: 6),
         Semantics(
           textField: true,
@@ -1998,8 +1981,10 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     final textTheme = Theme.of(context).textTheme;
     final hasFocus = widget.focusNode.hasFocus;
     final hasItems = items.isNotEmpty;
-    final clampedIndex =
-        _currentIndex.clamp(0, hasItems ? items.length - 1 : 0);
+    final clampedIndex = _currentIndex.clamp(
+      0,
+      hasItems ? items.length - 1 : 0,
+    );
     final currentItem = hasItems ? items[clampedIndex] : null;
     final currentMessage = currentItem?.message;
     final attachment = currentItem?.attachment;
@@ -2016,8 +2001,10 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         : context.l10n.accessibilityNoMessages;
     final metadataValue = showMetadata && senderLabel.isNotEmpty
         ? (timestampLabel.isNotEmpty
-            ? context.l10n
-                .accessibilityMessageMetadata(senderLabel, timestampLabel)
+            ? context.l10n.accessibilityMessageMetadata(
+                senderLabel,
+                timestampLabel,
+              )
             : context.l10n.accessibilityMessageFrom(senderLabel))
         : null;
     final borderColor = hasFocus ? scheme.primary : scheme.border;
@@ -2076,10 +2063,8 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                       child: Text(
                         metadataValue ??
                             context.l10n.accessibilityMessageFrom(senderLabel),
-                        style:
-                            (textTheme.bodySmall ?? const TextStyle()).copyWith(
-                          color: scheme.mutedForeground,
-                        ),
+                        style: (textTheme.bodySmall ?? const TextStyle())
+                            .copyWith(color: scheme.mutedForeground),
                       ),
                     ),
                   if (rawBody.isNotEmpty)
@@ -2100,8 +2085,9 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                           context.l10n.accessibilityAttachmentGeneric,
                       child: ChatAttachmentPreview(
                         stanzaId: currentMessage?.stanzaID ?? '',
-                        metadataStream:
-                            Stream<FileMetadataData?>.value(attachment),
+                        metadataStream: Stream<FileMetadataData?>.value(
+                          attachment,
+                        ),
                         allowed: true,
                         autoDownloadSettings: context
                             .read<SettingsCubit>()
@@ -2124,10 +2110,8 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                       (attachmentLabel == null || attachmentLabel.isEmpty))
                     Text(
                       context.l10n.accessibilityMessageNoContent,
-                      style:
-                          (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                        color: scheme.mutedForeground,
-                      ),
+                      style: (textTheme.bodyMedium ?? const TextStyle())
+                          .copyWith(color: scheme.mutedForeground),
                     ),
                 ],
               ),
@@ -2263,9 +2247,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
               onFocused: () => _lastFocusedIndex = nodeIndex,
               onFocusChanged: (hasFocus) =>
                   _handleFocusChanged(nodeIndex, hasFocus),
-              onTap: () => context
-                  .read<AccessibilityActionBloc>()
-                  .add(AccessibilityMenuActionTriggered(item.action)),
+              onTap: () => context.read<AccessibilityActionBloc>().add(
+                    AccessibilityMenuActionTriggered(item.action),
+                  ),
               onDismiss: item.dismissId == null
                   ? null
                   : () => context.read<AccessibilityActionBloc>().add(
@@ -2336,8 +2320,10 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         _lastFocusedIndex == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          final target =
-              (widget.initialIndex ?? 0).clamp(0, _itemNodes.length - 1);
+          final target = (widget.initialIndex ?? 0).clamp(
+            0,
+            _itemNodes.length - 1,
+          );
           _focusIndex(target);
         }
       });
@@ -2427,12 +2413,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
       final position = _scrollController.position;
       final movingUp = previousIndex != null && index < previousIndex;
       final alignment = movingUp ? 0.05 : 0.95;
-      final target = viewport
-          .getOffsetToReveal(
-            renderObject,
-            alignment,
-          )
-          .offset;
+      final target = viewport.getOffsetToReveal(renderObject, alignment).offset;
       final clampedTarget = target.clamp(
         position.minScrollExtent,
         position.maxScrollExtent,
@@ -2542,10 +2523,7 @@ class _AccessibilityActionTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: tileColor,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: borderColor,
-                  width: borderWidth,
-                ),
+                border: Border.all(color: borderColor, width: borderWidth),
                 boxShadow: [
                   if (hasFocus)
                     BoxShadow(
@@ -2564,16 +2542,15 @@ class _AccessibilityActionTile extends StatelessWidget {
                   focusColor: scheme.primary.withValues(alpha: 0.1),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         if (item.icon != null)
                           Padding(
                             padding: const EdgeInsets.only(right: 12),
-                            child: Icon(
-                              item.icon,
-                              color: foreground,
-                            ),
+                            child: Icon(item.icon, color: foreground),
                           ),
                         Expanded(
                           child: Column(

@@ -8,11 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ShortcutHint extends StatelessWidget {
-  const ShortcutHint({
-    super.key,
-    required this.shortcut,
-    this.dense = false,
-  });
+  const ShortcutHint({super.key, required this.shortcut, this.dense = false});
 
   final MenuSerializableShortcut shortcut;
   final bool dense;
@@ -42,10 +38,7 @@ class ShortcutHint extends StatelessWidget {
   }
 }
 
-String shortcutLabel(
-  BuildContext context,
-  MenuSerializableShortcut shortcut,
-) =>
+String shortcutLabel(BuildContext context, MenuSerializableShortcut shortcut) =>
     shortcutParts(
       shortcut,
       MaterialLocalizations.of(context),
@@ -112,37 +105,22 @@ List<ShortcutActivator> findActionActivators(TargetPlatform platform) {
   final isApple =
       platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
   return <ShortcutActivator>[
-    SingleActivator(
-      LogicalKeyboardKey.keyK,
-      meta: isApple,
-      control: !isApple,
-    ),
-    const SingleActivator(
-      LogicalKeyboardKey.keyK,
-      meta: true,
-    ),
-    const SingleActivator(
-      LogicalKeyboardKey.keyK,
-      control: true,
-    ),
+    SingleActivator(LogicalKeyboardKey.keyK, meta: isApple, control: !isApple),
+    const SingleActivator(LogicalKeyboardKey.keyK, meta: true),
+    const SingleActivator(LogicalKeyboardKey.keyK, control: true),
     LogicalKeySet(
       isApple ? LogicalKeyboardKey.meta : LogicalKeyboardKey.control,
       LogicalKeyboardKey.keyK,
     ),
     // Allow either modifier set in case the platform reports both.
-    LogicalKeySet(
-      LogicalKeyboardKey.meta,
-      LogicalKeyboardKey.keyK,
-    ),
-    LogicalKeySet(
-      LogicalKeyboardKey.control,
-      LogicalKeyboardKey.keyK,
-    ),
+    LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyK),
+    LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyK),
   ];
 }
 
-const MenuSerializableShortcut escapeShortcut =
-    SingleActivator(LogicalKeyboardKey.escape);
+const MenuSerializableShortcut escapeShortcut = SingleActivator(
+  LogicalKeyboardKey.escape,
+);
 
 String _modifierLabel(
   LogicalKeyboardKey modifier,
@@ -286,10 +264,7 @@ List<Widget> _buildKeycaps({
             ),
             child: Padding(
               padding: padding,
-              child: Opacity(
-                opacity: 0,
-                child: Text(label, style: keyStyle),
-              ),
+              child: Opacity(opacity: 0, child: Text(label, style: keyStyle)),
             ),
           ),
         ),
@@ -298,11 +273,7 @@ List<Widget> _buildKeycaps({
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                topSheen,
-                midTone,
-                colors.card,
-              ],
+              colors: [topSheen, midTone, colors.card],
               stops: const [0, 0.45, 1],
             ),
             border: Border.all(

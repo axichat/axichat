@@ -41,10 +41,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-enum _AuthFlow {
-  login,
-  signup,
-}
+enum _AuthFlow { login, signup }
 
 const double _primaryPanePadding = 12.0;
 const double _secondaryPaneGutter = 0.0;
@@ -89,10 +86,7 @@ class _LoginScreenState extends State<LoginScreen>
     _handleAuthState(context.read<AuthenticationCubit>().state);
   }
 
-  void _handleSubmissionRequested(
-    _AuthFlow flow, {
-    required String label,
-  }) {
+  void _handleSubmissionRequested(_AuthFlow flow, {required String label}) {
     final shouldRestartProgress =
         _activeFlow != flow || !_operationProgressController.isActive;
     _startAuthTimeout(flow);
@@ -515,9 +509,7 @@ class _LoginScreenState extends State<LoginScreen>
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: colors.background,
-                    border: Border(
-                      top: BorderSide(color: colors.border),
-                    ),
+                    border: Border(top: BorderSide(color: colors.border)),
                   ),
                   child: AxiAdaptiveLayout(
                     primaryFlex: 4,
@@ -525,8 +517,9 @@ class _LoginScreenState extends State<LoginScreen>
                     primaryPadding: const EdgeInsets.symmetric(
                       horizontal: _primaryPanePadding,
                     ),
-                    secondaryPadding:
-                        const EdgeInsets.only(left: _secondaryPaneGutter),
+                    secondaryPadding: const EdgeInsets.only(
+                      left: _secondaryPaneGutter,
+                    ),
                     centerSecondary: false,
                     secondaryAlignment: Alignment.topLeft,
                     primaryChild: Center(
@@ -611,8 +604,9 @@ class _LoginScreenState extends State<LoginScreen>
                                     .animationDuration,
                                 child: showProgressBar
                                     ? Center(
-                                        key:
-                                            const ValueKey('auth-progress-bar'),
+                                        key: const ValueKey(
+                                          'auth-progress-bar',
+                                        ),
                                         child: ConstrainedBox(
                                           constraints: const BoxConstraints(
                                             maxWidth: 480,
@@ -633,7 +627,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       )
                                     : KeyedSubtree(
                                         key: const ValueKey(
-                                            'auth-toggle-button'),
+                                          'auth-toggle-button',
+                                        ),
                                         child: ShadButton.ghost(
                                           onPressed: () {
                                             final nextLogin = !_login;
@@ -813,7 +808,9 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
         final baseWidth = widget.width;
         final expandedWidth = math.max(baseWidth, scaled(baseWidth));
         final compactWidth = math.max(
-            expandedWidth * 0.55, scaled(_MorphingAuthButton._primaryHeight));
+          expandedWidth * 0.55,
+          scaled(_MorphingAuthButton._primaryHeight),
+        );
         final currentWidth =
             lerpDouble(compactWidth, expandedWidth, t) ?? expandedWidth;
         final compactHeight = scaled(_MorphingAuthButton._compactHeight);
@@ -823,7 +820,10 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
         final borderRadius =
             lerpDouble(scaled(18), scaled(26), t) ?? scaled(26);
         final baseBorderColor = Color.lerp(
-                colors.border.withValues(alpha: 0.9), colors.primary, t) ??
+              colors.border.withValues(alpha: 0.9),
+              colors.primary,
+              t,
+            ) ??
             colors.border;
         final borderColor = _focused ? colors.primary : baseBorderColor;
         final borderWidth =

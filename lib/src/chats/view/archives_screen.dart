@@ -103,9 +103,7 @@ class _ArchivesView extends StatelessWidget {
                       ),
                     ),
           bottomNavigationBar: selectionActive
-              ? ChatSelectionActionBar(
-                  selectedChats: selectedChats,
-                )
+              ? ChatSelectionActionBar(selectedChats: selectedChats)
               : null,
         );
       },

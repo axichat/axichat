@@ -28,7 +28,8 @@ Future<void> main(List<String> args) async {
 
   if (source.width != source.height) {
     stderr.writeln(
-        'Source icon must be square. Got ${source.width}x${source.height}.');
+      'Source icon must be square. Got ${source.width}x${source.height}.',
+    );
     exit(1);
   }
 
@@ -83,7 +84,8 @@ Future<void> main(List<String> args) async {
   );
 
   stdout.writeln(
-      'Generated platform-specific icon variants in ${outDirectory.path}');
+    'Generated platform-specific icon variants in ${outDirectory.path}',
+  );
 }
 
 img.Image? _tryLoadMask(String path) {
@@ -127,15 +129,9 @@ class _IconGenerator {
     _writePng(variant, fileName);
   }
 
-  void writeSolidColor({
-    required String fileName,
-    required _RgbaColor color,
-  }) {
+  void writeSolidColor({required String fileName, required _RgbaColor color}) {
     final image = img.Image(width: source.width, height: source.height);
-    img.fill(
-      image,
-      color: img.ColorRgba8(color.r, color.g, color.b, color.a),
-    );
+    img.fill(image, color: img.ColorRgba8(color.r, color.g, color.b, color.a));
     _writePng(image, fileName);
   }
 
@@ -148,8 +144,10 @@ class _IconGenerator {
 
 void _applyImageMask(img.Image image, img.Image mask) {
   if (mask.width != image.width || mask.height != image.height) {
-    throw ArgumentError('Mask size ${mask.width}x${mask.height} does not match '
-        '${image.width}x${image.height}');
+    throw ArgumentError(
+      'Mask size ${mask.width}x${mask.height} does not match '
+      '${image.width}x${image.height}',
+    );
   }
   for (var y = 0; y < image.height; y++) {
     for (var x = 0; x < image.width; x++) {
@@ -176,8 +174,10 @@ void _applySuperellipseMask(
     for (var x = 0; x < width; x++) {
       final nx = (x - half) / scale;
       final ny = (y - half) / scale;
-      final radius =
-          pow(pow(nx.abs(), exponent) + pow(ny.abs(), exponent), 1 / exponent);
+      final radius = pow(
+        pow(nx.abs(), exponent) + pow(ny.abs(), exponent),
+        1 / exponent,
+      );
       if (radius > 1) {
         final pixel = image.getPixel(x, y);
         image.setPixelRgba(x, y, pixel.r, pixel.g, pixel.b, 0);

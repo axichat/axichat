@@ -132,8 +132,9 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
       _log.info('Deleting state store box from disk...');
       await Hive.box(boxName).deleteFromDisk();
     } else {
-      await Hive.box(boxName)
-          .deleteAll(RegisteredStateKey._registeredKeys.map((k) => k.value));
+      await Hive.box(
+        boxName,
+      ).deleteAll(RegisteredStateKey._registeredKeys.map((k) => k.value));
     }
     return true;
   }

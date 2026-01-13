@@ -130,10 +130,7 @@ class _CalendarTaskCopyDecisionSheetState
 
   void _handleConfirmPressed() {
     if (!_addToPersonal && !_addToChat) {
-      FeedbackSystem.showError(
-        context,
-        _taskCopyMissingSelectionMessage,
-      );
+      FeedbackSystem.showError(context, _taskCopyMissingSelectionMessage);
       return;
     }
     Navigator.of(context).pop(
@@ -179,11 +176,7 @@ class _TaskCopyToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadSwitch(
-      label: Text(label),
-      value: value,
-      onChanged: onChanged,
-    );
+    return ShadSwitch(label: Text(label), value: value, onChanged: onChanged);
   }
 }
 

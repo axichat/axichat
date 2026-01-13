@@ -41,9 +41,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Local timezone app'),
-        ),
+        appBar: AppBar(title: const Text('Local timezone app')),
         body: Column(
           children: <Widget>[
             Text('Local timezone: $_timezone\n'),
@@ -53,7 +51,7 @@ class _MyAppState extends State<MyApp> {
                 itemCount: _availableTimezones.length,
                 itemBuilder: (_, index) => Text(_availableTimezones[index]),
               ),
-            )
+            ),
           ],
         ),
       ),

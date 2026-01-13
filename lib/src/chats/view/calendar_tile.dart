@@ -53,20 +53,13 @@ class CalendarTile extends StatelessWidget {
     final scheduledTime = displayTask?.scheduledTime;
     final List<Widget>? trailingActions = scheduledTime == null
         ? null
-        : <Widget>[
-            _TaskTimestamp(dateTime: scheduledTime),
-          ];
+        : <Widget>[_TaskTimestamp(dateTime: scheduledTime)];
 
     final tile = AxiListTile(
       onTap: onTap,
       paintSurface: false,
-      leadingConstraints: const BoxConstraints(
-        maxHeight: 56,
-        maxWidth: 56,
-      ),
-      leading: _CalendarAvatar(
-        highlight: showBadge,
-      ),
+      leadingConstraints: const BoxConstraints(maxHeight: 56, maxWidth: 56),
+      leading: _CalendarAvatar(highlight: showBadge),
       title: l10n.homeRailCalendar,
       subtitle: subtitleText,
       subtitlePlaceholder: l10n.calendarTileNone,
@@ -187,9 +180,7 @@ double _measureBadgeWidth(BuildContext context, int count) {
   final painter = TextPainter(
     text: TextSpan(
       text: '$count',
-      style: context.textTheme.small.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
+      style: context.textTheme.small.copyWith(fontWeight: FontWeight.w700),
     ),
     textDirection: Directionality.of(context),
   )..layout();

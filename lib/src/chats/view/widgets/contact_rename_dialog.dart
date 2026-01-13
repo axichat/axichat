@@ -7,10 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ContactRenameDialog extends StatefulWidget {
-  const ContactRenameDialog({
-    required this.initialValue,
-    super.key,
-  });
+  const ContactRenameDialog({required this.initialValue, super.key});
 
   final String initialValue;
 
@@ -105,8 +102,6 @@ Future<String?> showContactRenameDialog({
 }) {
   return showFadeScaleDialog<String>(
     context: context,
-    builder: (dialogContext) => ContactRenameDialog(
-      initialValue: initialValue,
-    ),
+    builder: (dialogContext) => ContactRenameDialog(initialValue: initialValue),
   );
 }

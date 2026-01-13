@@ -67,9 +67,7 @@ class ChatCalendarSyncCoordinator {
     );
   }
 
-  void unregisterBloc({
-    required String chatJid,
-  }) {
+  void unregisterBloc({required String chatJid}) {
     final context = _contexts[_chatKey(chatJid)];
     if (context == null) {
       return;
@@ -105,8 +103,10 @@ class ChatCalendarSyncCoordinator {
     final normalizedJid = _normalizeChatJid(chatJid);
     final key = _chatKey(normalizedJid);
     return _managers.putIfAbsent(key, () {
-      final context =
-          _ensureContext(chatJid: normalizedJid, chatType: chatType);
+      final context = _ensureContext(
+        chatJid: normalizedJid,
+        chatType: chatType,
+      );
       return CalendarSyncManager(
         readModel: context.readModel,
         applyModel: context.applyModel,
@@ -196,11 +196,7 @@ class _ChatCalendarSyncContext {
     if (_chatType == ChatType.note) {
       return;
     }
-    await _sendMessage(
-      jid: chatJid,
-      outbound: outbound,
-      chatType: _chatType,
-    );
+    await _sendMessage(jid: chatJid, outbound: outbound, chatType: _chatType);
   }
 
   void _resetToStorage() {

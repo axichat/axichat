@@ -48,10 +48,7 @@ extension OmemoPublicKey on omemo.OmemoPublicKey {
 
   Future<Map<String, String>> toMap() async {
     final publicKeyBase64 = await asBase64();
-    return <String, String>{
-      'publicKey': publicKeyBase64,
-      'type': type.name,
-    };
+    return <String, String>{'publicKey': publicKeyBase64, 'type': type.name};
   }
 
   Future<String> toJson() async {
@@ -77,10 +74,7 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
 
   Future<Map<String, dynamic>> toMap() async {
     // Parallel execution of cryptographic operations
-    final results = await Future.wait([
-      pk.getBytes(),
-      sk.getBytes(),
-    ]);
+    final results = await Future.wait([pk.getBytes(), sk.getBytes()]);
 
     return <String, String>{
       'publicKey': base64Encode(results[0]),
@@ -116,10 +110,7 @@ class SignedPreKey extends omemo.OmemoKeyPair implements AsyncJsonSerializable {
   @override
   Future<Map<String, dynamic>> toMap() async {
     // Parallel execution of cryptographic operations
-    final results = await Future.wait([
-      pk.getBytes(),
-      sk.getBytes(),
-    ]);
+    final results = await Future.wait([pk.getBytes(), sk.getBytes()]);
 
     return <String, dynamic>{
       'publicKey': base64Encode(results[0]),
@@ -401,25 +392,25 @@ class OmemoDevice extends omemo.OmemoDevice {
     );
   }
 
-// @override
-// Future<OmemoBundle> toBundle() async {
-//   final encodedOpks = <int, String>{};
-//
-//   for (final opkKey in opks.keys) {
-//     encodedOpks[opkKey] =
-//         base64.encode(injectDjbType(await opks[opkKey]!.pk.getBytes()));
-//   }
-//
-//   return OmemoBundle(
-//     jid,
-//     id,
-//     base64.encode(injectDjbType(await spk.pk.getBytes())),
-//     spkId,
-//     base64.encode(spkSignature),
-//     base64.encode(injectDjbType(await ik.pk.getBytes())),
-//     encodedOpks,
-//   );
-// }
+  // @override
+  // Future<OmemoBundle> toBundle() async {
+  //   final encodedOpks = <int, String>{};
+  //
+  //   for (final opkKey in opks.keys) {
+  //     encodedOpks[opkKey] =
+  //         base64.encode(injectDjbType(await opks[opkKey]!.pk.getBytes()));
+  //   }
+  //
+  //   return OmemoBundle(
+  //     jid,
+  //     id,
+  //     base64.encode(injectDjbType(await spk.pk.getBytes())),
+  //     spkId,
+  //     base64.encode(spkSignature),
+  //     base64.encode(injectDjbType(await ik.pk.getBytes())),
+  //     encodedOpks,
+  //   );
+  // }
 }
 
 @UseRowClass(OmemoDevice, constructor: 'fromDb')
@@ -597,11 +588,7 @@ class OmemoRatchet {
     required int device,
     required String serialized,
   }) =>
-      OmemoRatchet(
-        jid: jid,
-        device: device,
-        serialized: serialized,
-      );
+      OmemoRatchet(jid: jid, device: device, serialized: serialized);
 
   Insertable<OmemoRatchet> toDb() {
     return OmemoRatchetsCompanion.insert(
@@ -682,9 +669,7 @@ class OmemoBundleCache {
   static Map<String, dynamic> _normalizeBundlePayload(
     Map<String, dynamic> payload,
   ) {
-    return payload.map(
-      (key, value) => MapEntry(key, _encodeJsonValue(value)),
-    );
+    return payload.map((key, value) => MapEntry(key, _encodeJsonValue(value)));
   }
 
   static dynamic _encodeJsonValue(dynamic value) {

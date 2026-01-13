@@ -129,8 +129,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   @override
   void onChange(Change<SettingsState> change) {
     super.onChange(change);
-    _syncAttachmentAutoDownloadSettings(change.nextState,
-        previous: change.currentState);
+    _syncAttachmentAutoDownloadSettings(
+      change.nextState,
+      previous: change.currentState,
+    );
   }
 
   void _syncAttachmentAutoDownloadSettings(

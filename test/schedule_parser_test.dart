@@ -62,12 +62,20 @@ void main() {
     });
 
     test('handles "this time tomorrow" without hijacking location', () {
-      final parser =
-          buildParser(DateTime.utc(2024, 5, 1, 13, 30)); // 09:30 local
-      final result =
-          parser.parse('cool meeting at this time tomorrow at the lodge');
-      final expected =
-          tz.TZDateTime(location, 2024, 5, 2, 9, 30); // next day same time
+      final parser = buildParser(
+        DateTime.utc(2024, 5, 1, 13, 30),
+      ); // 09:30 local
+      final result = parser.parse(
+        'cool meeting at this time tomorrow at the lodge',
+      );
+      final expected = tz.TZDateTime(
+        location,
+        2024,
+        5,
+        2,
+        9,
+        30,
+      ); // next day same time
 
       expect(result.start, isNotNull);
       expect(result.start!.isAtSameMomentAs(expected), isTrue);
@@ -113,8 +121,9 @@ void main() {
 
     test('extracts composite durations like "1h 30m"', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 8));
-      final result =
-          parser.parse('briefing at 9am lasting 1h 30m with Alice and Bob');
+      final result = parser.parse(
+        'briefing at 9am lasting 1h 30m with Alice and Bob',
+      );
 
       expect(result.start!.hour, 9);
       expect(result.end, isNotNull);
@@ -125,8 +134,9 @@ void main() {
 
     test('applies "going for <duration>" phrasing to end time', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result =
-          parser.parse('deep work block at 3pm going for 3 hours in lab');
+      final result = parser.parse(
+        'deep work block at 3pm going for 3 hours in lab',
+      );
 
       expect(result.start!.hour, 15);
       expect(result.end, isNotNull);
@@ -167,8 +177,9 @@ void main() {
       final result = parser.parse('follow up in a couple hours');
 
       expect(result.start, isNotNull);
-      final difference =
-          result.start!.difference(tz.TZDateTime(location, 2024, 5, 1, 10));
+      final difference = result.start!.difference(
+        tz.TZDateTime(location, 2024, 5, 1, 10),
+      );
       expect(difference.inHours, 2);
     });
 
@@ -185,8 +196,9 @@ void main() {
 
     test('relative phrases can still apply explicit durations', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result =
-          parser.parse('focus block in 2 hours for 45 minutes with Sam');
+      final result = parser.parse(
+        'focus block in 2 hours for 45 minutes with Sam',
+      );
 
       final expectedStart = tz.TZDateTime(location, 2024, 5, 1, 10);
       expect(result.start, isNotNull);
@@ -324,14 +336,12 @@ void main() {
 
     test('parses ordinal weekday phrases with digits', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result = parser
-          .parse('budget review on the 2nd Tuesday of every month at noon');
+      final result = parser.parse(
+        'budget review on the 2nd Tuesday of every month at noon',
+      );
 
       expect(result.recurrence, isNotNull);
-      expect(
-        result.recurrence!.rrule,
-        'FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2',
-      );
+      expect(result.recurrence!.rrule, 'FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2');
     });
 
     test('parses weekday sets without explicit keyword', () {
@@ -345,8 +355,9 @@ void main() {
 
     test('derives count and until for duration phrasing', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result =
-          parser.parse('journaling every day for 10 days at 7am in nook');
+      final result = parser.parse(
+        'journaling every day for 10 days at 7am in nook',
+      );
 
       expect(result.recurrence, isNotNull);
       expect(result.recurrence!.count, 10);
@@ -360,8 +371,9 @@ void main() {
 
     test('derives count when only until is specified', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result =
-          parser.parse('team sync every Friday at 10am until June 1');
+      final result = parser.parse(
+        'team sync every Friday at 10am until June 1',
+      );
 
       expect(result.recurrence, isNotNull);
       expect(result.start, isNotNull);

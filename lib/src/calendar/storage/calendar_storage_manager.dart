@@ -55,8 +55,9 @@ class CalendarStorageManager extends ChangeNotifier {
       return _guestStorageCompleter!.future;
     }
 
-    final ImpatientCompleter<Storage> completer =
-        ImpatientCompleter<Storage>(Completer<Storage>());
+    final ImpatientCompleter<Storage> completer = ImpatientCompleter<Storage>(
+      Completer<Storage>(),
+    );
     _guestStorageCompleter = completer;
 
     try {
@@ -77,15 +78,14 @@ class CalendarStorageManager extends ChangeNotifier {
   ///
   /// The [passphrase] is used to derive an AES encryption key for the storage.
   /// Returns a future that completes when storage is ready.
-  Future<Storage> ensureAuthStorage({
-    required String passphrase,
-  }) async {
+  Future<Storage> ensureAuthStorage({required String passphrase}) async {
     if (_authStorageCompleter != null) {
       return _authStorageCompleter!.future;
     }
 
-    final ImpatientCompleter<Storage> completer =
-        ImpatientCompleter<Storage>(Completer<Storage>());
+    final ImpatientCompleter<Storage> completer = ImpatientCompleter<Storage>(
+      Completer<Storage>(),
+    );
     _authStorageCompleter = completer;
 
     try {

@@ -129,10 +129,7 @@ class CredentialStore
   }) async {
     try {
       for (final entry in data.entries) {
-        await _secureStorage.write(
-          key: entry.key.value,
-          value: entry.value,
-        );
+        await _secureStorage.write(key: entry.key.value, value: entry.value);
       }
       return true;
     } on Exception catch (e) {

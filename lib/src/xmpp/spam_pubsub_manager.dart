@@ -58,10 +58,7 @@ final class SpamSyncPayload {
     );
   }
 
-  static SpamSyncPayload? fromXml(
-    mox.XMLNode node, {
-    String? itemId,
-  }) {
+  static SpamSyncPayload? fromXml(mox.XMLNode node, {String? itemId}) {
     if (node.tag != _spamTag) return null;
     if (node.attributes['xmlns']?.toString() != spamPubSubNode) {
       return null;
@@ -71,8 +68,9 @@ final class SpamSyncPayload {
     final resolvedJid =
         rawJid == null || rawJid.isEmpty ? itemId?.trim() : rawJid;
     if (resolvedJid == null || resolvedJid.isEmpty) return null;
-    final normalizedJid =
-        resolvedJid.toBareJidOrNull(maxBytes: syncAddressMaxBytes);
+    final normalizedJid = resolvedJid.toBareJidOrNull(
+      maxBytes: syncAddressMaxBytes,
+    );
     if (normalizedJid == null) return null;
 
     final rawUpdatedAt = node.attributes[_spamUpdatedAtAttr]?.toString().trim();
@@ -142,9 +140,8 @@ final class SpamSyncRetractedEvent extends mox.XmppEvent {
 }
 
 final class SpamPubSubManager extends mox.XmppManagerBase {
-  SpamPubSubManager({
-    String? maxItems,
-  })  : _maxItems = maxItems ?? _defaultMaxItems,
+  SpamPubSubManager({String? maxItems})
+      : _maxItems = maxItems ?? _defaultMaxItems,
         super(managerId);
 
   static const String managerId = 'axi.spam';
@@ -259,10 +256,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     return int.parse(_defaultMaxItems);
   }
 
-  bool _isSnapshotComplete({
-    required int itemsCount,
-    required int maxItems,
-  }) =>
+  bool _isSnapshotComplete({required int itemsCount, required int maxItems}) =>
       itemsCount < maxItems;
 
   void _setAccessModel(mox.AccessModel accessModel) {
@@ -421,11 +415,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       );
     }
 
-    final result = await pubsub.getItems(
-      host,
-      spamPubSubNode,
-      maxItems: limit,
-    );
+    final result = await pubsub.getItems(host, spamPubSubNode, maxItems: limit);
     if (result.isType<mox.PubSubError>()) {
       return const PubSubFetchResult(
         items: <SpamSyncPayload>[],
@@ -449,10 +439,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         hadParseFailure = true;
         continue;
       }
-      final parsedPayload = SpamSyncPayload.fromXml(
-        payload,
-        itemId: item.id,
-      );
+      final parsedPayload = SpamSyncPayload.fromXml(payload, itemId: item.id);
       if (parsedPayload == null) {
         hadParseFailure = true;
         continue;
@@ -460,10 +447,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       parsed.add(parsedPayload);
     }
     final isComplete = !hadParseFailure &&
-        _isSnapshotComplete(
-          itemsCount: items.length,
-          maxItems: limit,
-        );
+        _isSnapshotComplete(itemsCount: items.length, maxItems: limit);
 
     return PubSubFetchResult(
       items: List<SpamSyncPayload>.unmodifiable(parsed),
@@ -553,10 +537,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
           final item = itemResult.get<mox.PubSubItem>();
           final payload = item.payload;
           if (payload != null) {
-            parsed = SpamSyncPayload.fromXml(
-              payload,
-              itemId: itemId,
-            );
+            parsed = SpamSyncPayload.fromXml(payload, itemId: itemId);
           }
         }
       }

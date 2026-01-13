@@ -29,9 +29,7 @@ List<Effect<dynamic>> fadeScaleEffectsFor(BuildContext context) {
   if (duration == Duration.zero) {
     return const <Effect<dynamic>>[];
   }
-  return <Effect<dynamic>>[
-    FadeScaleTransitionEffect(duration: duration),
-  ];
+  return <Effect<dynamic>>[FadeScaleTransitionEffect(duration: duration)];
 }
 
 class FadeScaleTransitionEffect extends Effect<double> {
@@ -50,9 +48,6 @@ class FadeScaleTransitionEffect extends Effect<double> {
     EffectEntry entry,
   ) {
     final animation = buildAnimation(controller, entry);
-    return FadeScaleTransition(
-      animation: animation,
-      child: child,
-    );
+    return FadeScaleTransition(animation: animation, child: child);
   }
 }

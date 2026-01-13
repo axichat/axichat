@@ -60,10 +60,8 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
         ),
       );
 
-  void updateOffset(int id, Offset offset) => _updateWindow(
-        id,
-        (entry) => entry.copyWith(offset: offset),
-      );
+  void updateOffset(int id, Offset offset) =>
+      _updateWindow(id, (entry) => entry.copyWith(offset: offset));
 
   void initializeOffset(int id, Offset offset) => _updateWindow(
         id,

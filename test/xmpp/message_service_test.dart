@@ -93,18 +93,18 @@ main() {
       () async {
         expectLater(
           xmppService.messageStreamForChat(messagesByTimestamp[0].chatJid),
-          emitsInOrder(List.filled(
-            messagesByTimestamp.length,
-            predicate<List<Message>>(
-              (items) => items.reversed.indexed.every(
-                (e) {
+          emitsInOrder(
+            List.filled(
+              messagesByTimestamp.length,
+              predicate<List<Message>>(
+                (items) => items.reversed.indexed.every((e) {
                   final (index, message) = e;
                   final original = messagesByTimestamp[index];
                   return compareMessages(original, message);
-                },
+                }),
               ),
             ),
-          )),
+          ),
         );
 
         await connectSuccessfully(xmppService);
@@ -128,22 +128,24 @@ main() {
 
         expectLater(
           xmppService.messageStreamForChat(messagesByTimestamp[0].chatJid),
-          emitsInOrder(List.filled(
-            messagesByTimestamp.length,
-            predicate<List<Message>>(
-              (items) => items.reversed.indexed.every(
-                (e) {
+          emitsInOrder(
+            List.filled(
+              messagesByTimestamp.length,
+              predicate<List<Message>>(
+                (items) => items.reversed.indexed.every((e) {
                   final (index, message) = e;
                   final original = messagesByTimestamp[index];
                   return compareMessages(original, message);
-                },
+                }),
               ),
             ),
-          )),
+          ),
         );
 
-        messagesByTimestamp[0] =
-            messagesByTimestamp[0].copyWith(body: '', edited: true);
+        messagesByTimestamp[0] = messagesByTimestamp[0].copyWith(
+          body: '',
+          edited: true,
+        );
         await database.saveMessageEdit(
           stanzaID: messagesByTimestamp[0].stanzaID,
           body: '',
@@ -154,80 +156,80 @@ main() {
         await database.markMessageAcked(messagesByTimestamp[0].stanzaID);
 
         await pumpEventQueue();
-        messagesByTimestamp[1] =
-            messagesByTimestamp[1].copyWith(received: true);
+        messagesByTimestamp[1] = messagesByTimestamp[1].copyWith(
+          received: true,
+        );
 
         await pumpEventQueue();
         await database.markMessageReceived(messagesByTimestamp[1].stanzaID);
 
         await pumpEventQueue();
-        messagesByTimestamp[2] =
-            messagesByTimestamp[2].copyWith(displayed: true);
+        messagesByTimestamp[2] = messagesByTimestamp[2].copyWith(
+          displayed: true,
+        );
         await database.markMessageDisplayed(messagesByTimestamp[2].stanzaID);
       },
     );
 
-    test(
-      'Self chat stream hides calendar sync envelopes',
-      () async {
-        await connectSuccessfully(xmppService);
-        final selfJid = xmppService.myJid!;
-        final syncEnvelope = jsonEncode({
-          'calendar_sync': CalendarSyncMessage.request().toJson(),
-        });
-        final syncEvent = mox.MessageEvent(
-          mox.JID.fromString(selfJid),
-          mox.JID.fromString(selfJid),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            mox.MessageBodyData(syncEnvelope),
-            mox.MessageIdData(uuid.v4()),
-          ]),
-          id: uuid.v4(),
-        );
-        final normalEvent = mox.MessageEvent(
-          mox.JID.fromString(selfJid),
-          mox.JID.fromString(selfJid),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            const mox.MessageBodyData('hello'),
-            mox.MessageIdData(uuid.v4()),
-          ]),
-          id: uuid.v4(),
-        );
+    test('Self chat stream hides calendar sync envelopes', () async {
+      await connectSuccessfully(xmppService);
+      final selfJid = xmppService.myJid!;
+      final syncEnvelope = jsonEncode({
+        'calendar_sync': CalendarSyncMessage.request().toJson(),
+      });
+      final syncEvent = mox.MessageEvent(
+        mox.JID.fromString(selfJid),
+        mox.JID.fromString(selfJid),
+        false,
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          mox.MessageBodyData(syncEnvelope),
+          mox.MessageIdData(uuid.v4()),
+        ]),
+        id: uuid.v4(),
+      );
+      final normalEvent = mox.MessageEvent(
+        mox.JID.fromString(selfJid),
+        mox.JID.fromString(selfJid),
+        false,
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          const mox.MessageBodyData('hello'),
+          mox.MessageIdData(uuid.v4()),
+        ]),
+        id: uuid.v4(),
+      );
 
-        final calendarMessage = Message.fromMox(syncEvent).copyWith(
-          timestamp: DateTime.timestamp().toLocal(),
-        );
-        final normalMessage = Message.fromMox(normalEvent).copyWith(
-          timestamp:
-              DateTime.timestamp().toLocal().add(const Duration(seconds: 1)),
-        );
+      final calendarMessage = Message.fromMox(
+        syncEvent,
+      ).copyWith(timestamp: DateTime.timestamp().toLocal());
+      final normalMessage = Message.fromMox(normalEvent).copyWith(
+        timestamp: DateTime.timestamp().toLocal().add(
+              const Duration(seconds: 1),
+            ),
+      );
 
-        final emissions = <List<Message>>[];
-        final subscription =
-            xmppService.messageStreamForChat(selfJid).listen(emissions.add);
+      final emissions = <List<Message>>[];
+      final subscription =
+          xmppService.messageStreamForChat(selfJid).listen(emissions.add);
 
-        await database.saveMessage(calendarMessage);
-        await database.saveMessage(normalMessage);
-        await pumpEventQueue();
-        await subscription.cancel();
+      await database.saveMessage(calendarMessage);
+      await database.saveMessage(normalMessage);
+      await pumpEventQueue();
+      await subscription.cancel();
 
-        final latest = emissions.isEmpty ? <Message>[] : emissions.last;
-        expect(
-          latest,
-          isA<List<Message>>()
-              .having((items) => items.length, 'length', 1)
-              .having((items) => items.first.body, 'body', normalMessage.body),
-        );
-        expect(
-          emissions.expand((items) => items).any(
-                (message) => message.body == syncEnvelope,
-              ),
-          isFalse,
-        );
-      },
-    );
+      final latest = emissions.isEmpty ? <Message>[] : emissions.last;
+      expect(
+        latest,
+        isA<List<Message>>()
+            .having((items) => items.length, 'length', 1)
+            .having((items) => items.first.body, 'body', normalMessage.body),
+      );
+      expect(
+        emissions
+            .expand((items) => items)
+            .any((message) => message.body == syncEnvelope),
+        isFalse,
+      );
+    });
   });
 
   group('sendMessage', () {
@@ -235,30 +237,28 @@ main() {
     final jid = generateRandomJid();
     const text = 'text';
 
-    test(
-      'Given a valid message, saves it to the database.',
-      () async {
-        await connectSuccessfully(xmppService);
+    test('Given a valid message, saves it to the database.', () async {
+      await connectSuccessfully(xmppService);
 
-        final beforeMessage = await database.getMessageByStanzaID(messageID);
-        expect(beforeMessage, isNull);
+      final beforeMessage = await database.getMessageByStanzaID(messageID);
+      expect(beforeMessage, isNull);
 
-        when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => true);
+      when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-        await xmppService.sendMessage(jid: jid, text: text);
+      await xmppService.sendMessage(jid: jid, text: text);
 
-        final afterMessage = await database.getMessageByStanzaID(messageID);
-        expect(
-          afterMessage,
-          isA<Message>()
-              .having((m) => m.stanzaID, 'stanzaID', messageID)
-              .having((m) => m.chatJid, 'chatJid', jid)
-              .having((m) => m.body, 'body', text),
-        );
-      },
-    );
+      final afterMessage = await database.getMessageByStanzaID(messageID);
+      expect(
+        afterMessage,
+        isA<Message>()
+            .having((m) => m.stanzaID, 'stanzaID', messageID)
+            .having((m) => m.chatJid, 'chatJid', jid)
+            .having((m) => m.body, 'body', text),
+      );
+    });
 
     test(
       'Given a valid message, sends a message packet to the connection.',
@@ -266,8 +266,9 @@ main() {
         await connectSuccessfully(xmppService);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => true);
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
 
         const text = 'text';
         await xmppService.sendMessage(jid: jid, text: text);
@@ -284,24 +285,22 @@ main() {
       },
     );
 
-    test(
-      'Given an invalid message, throws an XmppMessageException.',
-      () async {
-        await connectSuccessfully(xmppService);
+    test('Given an invalid message, throws an XmppMessageException.', () async {
+      await connectSuccessfully(xmppService);
 
-        final beforeMessage = await database.getMessageByStanzaID(messageID);
-        expect(beforeMessage, isNull);
+      final beforeMessage = await database.getMessageByStanzaID(messageID);
+      expect(beforeMessage, isNull);
 
-        when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => false);
+      when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => false);
 
-        expectLater(
-          () => xmppService.sendMessage(jid: jid, text: text),
-          throwsA(isA<XmppMessageException>()),
-        );
-      },
-    );
+      expectLater(
+        () => xmppService.sendMessage(jid: jid, text: text),
+        throwsA(isA<XmppMessageException>()),
+      );
+    });
 
     test(
       'Given an invalid message, saves the message with an error to the database.',
@@ -312,8 +311,9 @@ main() {
         expect(beforeMessage, isNull);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => false);
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => false);
 
         try {
           await xmppService.sendMessage(jid: jid, text: text);
@@ -335,83 +335,81 @@ main() {
   });
 
   group('_acknowledgeMessage', () {
-    test(
-      'Caches disco capabilities per peer',
-      () async {
-        final controller = StreamController<mox.XmppEvent>();
-        when(() => mockConnection.asBroadcastStream())
-            .thenAnswer((_) => controller.stream);
-        when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
-            mox.ServiceUnavailableError(),
-          ),
-        );
-        when(
-          () => mockConnection.sendChatMarker(
-            to: any(named: 'to'),
-            stanzaID: any(named: 'stanzaID'),
-            marker: any(named: 'marker'),
-          ),
-        ).thenAnswer((_) async => true);
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => true);
+    test('Caches disco capabilities per peer', () async {
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+      when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.ServiceUnavailableError(),
+        ),
+      );
+      when(
+        () => mockConnection.sendChatMarker(
+          to: any(named: 'to'),
+          stanzaID: any(named: 'stanzaID'),
+          marker: any(named: 'marker'),
+        ),
+      ).thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-        await connectSuccessfully(xmppService);
+      await connectSuccessfully(xmppService);
 
-        final event = generateRandomMessageEvent();
-        controller.add(event);
-        await pumpEventQueue();
-        await pumpEventQueue();
+      final event = generateRandomMessageEvent();
+      controller.add(event);
+      await pumpEventQueue();
+      await pumpEventQueue();
 
-        controller.add(
-          generateRandomMessageEvent(senderJid: event.from.toString()),
-        );
-        await pumpEventQueue();
-        await pumpEventQueue();
+      controller.add(
+        generateRandomMessageEvent(senderJid: event.from.toString()),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
 
-        verify(
-          () => mockConnection.discoInfoQuery(event.from.toBare().toString()),
-        ).called(1);
+      verify(
+        () => mockConnection.discoInfoQuery(event.from.toBare().toString()),
+      ).called(1);
 
-        await controller.close();
-      },
-    );
+      await controller.close();
+    });
 
-    test(
-      'Skips carbon echoes',
-      () async {
-        final controller = StreamController<mox.XmppEvent>();
-        when(() => mockConnection.asBroadcastStream())
-            .thenAnswer((_) => controller.stream);
-        when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
-          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
-            mox.ServiceUnavailableError(),
-          ),
-        );
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => true);
+    test('Skips carbon echoes', () async {
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+      when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.ServiceUnavailableError(),
+        ),
+      );
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-        await connectSuccessfully(xmppService);
+      await connectSuccessfully(xmppService);
 
-        final carbonEvent = mox.MessageEvent(
-          mox.JID.fromString(jid),
-          mox.JID.fromString(jid),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            const mox.CarbonsData(true),
-            const mox.MarkableData(true),
-            mox.MessageIdData(uuid.v4()),
-          ]),
-          id: uuid.v4(),
-        );
+      final carbonEvent = mox.MessageEvent(
+        mox.JID.fromString(jid),
+        mox.JID.fromString(jid),
+        false,
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          const mox.CarbonsData(true),
+          const mox.MarkableData(true),
+          mox.MessageIdData(uuid.v4()),
+        ]),
+        id: uuid.v4(),
+      );
 
-        controller.add(carbonEvent);
-        await pumpEventQueue();
-        await pumpEventQueue();
+      controller.add(carbonEvent);
+      await pumpEventQueue();
+      await pumpEventQueue();
 
-        await controller.close();
-      },
-    );
+      await controller.close();
+    });
   });
 
   group('calendar sync handling', () {
@@ -419,8 +417,9 @@ main() {
       'Calendar sync envelopes are handled without storing chat messages',
       () async {
         final controller = StreamController<mox.XmppEvent>();
-        when(() => mockConnection.asBroadcastStream())
-            .thenAnswer((_) => controller.stream);
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
         when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
           (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
             mox.ServiceUnavailableError(),
@@ -465,8 +464,9 @@ main() {
         xmppService.updateMessageStorageMode(MessageStorageMode.serverOnly);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-        when(() => mockConnection.sendMessage(any()))
-            .thenAnswer((_) async => true);
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
 
         await connectSuccessfully(xmppService);
 
@@ -478,10 +478,7 @@ main() {
         const targetCount = serverOnlyChatMessageCap + 10;
         try {
           for (var i = 0; i < targetCount; i++) {
-            await xmppService.sendMessage(
-              jid: targetJid,
-              text: 'message $i',
-            );
+            await xmppService.sendMessage(jid: targetJid, text: 'message $i');
           }
         } on XmppUnknownException catch (error, stackTrace) {
           fail(
@@ -491,8 +488,10 @@ main() {
           );
         }
 
-        final storedCount = await memoryDb.countChatMessages(targetJid,
-            includePseudoMessages: true);
+        final storedCount = await memoryDb.countChatMessages(
+          targetJid,
+          includePseudoMessages: true,
+        );
         expect(storedCount, serverOnlyChatMessageCap);
       },
     );

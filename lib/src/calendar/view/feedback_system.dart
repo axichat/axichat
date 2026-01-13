@@ -40,16 +40,17 @@ class FeedbackSystem {
     VoidCallback? onAction,
   }) {
     _showFeedback(
-        context,
-        FeedbackMessage(
-          title: title,
-          message: message,
-          tone: FeedbackTone.success,
-          duration: duration ?? const Duration(seconds: 3),
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-        ));
+      context,
+      FeedbackMessage(
+        title: title,
+        message: message,
+        tone: FeedbackTone.success,
+        duration: duration ?? const Duration(seconds: 3),
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+    );
   }
 
   static void showInfo(
@@ -62,16 +63,17 @@ class FeedbackSystem {
     VoidCallback? onAction,
   }) {
     _showFeedback(
-        context,
-        FeedbackMessage(
-          title: title,
-          message: message,
-          tone: FeedbackTone.info,
-          duration: duration ?? const Duration(seconds: 3),
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-        ));
+      context,
+      FeedbackMessage(
+        title: title,
+        message: message,
+        tone: FeedbackTone.info,
+        duration: duration ?? const Duration(seconds: 3),
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+    );
   }
 
   static void showWarning(
@@ -84,16 +86,17 @@ class FeedbackSystem {
     VoidCallback? onAction,
   }) {
     _showFeedback(
-        context,
-        FeedbackMessage(
-          title: title,
-          message: message,
-          tone: FeedbackTone.warning,
-          duration: duration ?? const Duration(seconds: 4),
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-        ));
+      context,
+      FeedbackMessage(
+        title: title,
+        message: message,
+        tone: FeedbackTone.warning,
+        duration: duration ?? const Duration(seconds: 4),
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+    );
   }
 
   static void showError(
@@ -106,16 +109,17 @@ class FeedbackSystem {
     VoidCallback? onAction,
   }) {
     _showFeedback(
-        context,
-        FeedbackMessage(
-          title: title,
-          message: message,
-          tone: FeedbackTone.error,
-          duration: duration ?? const Duration(seconds: 5),
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-        ));
+      context,
+      FeedbackMessage(
+        title: title,
+        message: message,
+        tone: FeedbackTone.error,
+        duration: duration ?? const Duration(seconds: 5),
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+    );
   }
 
   static void _showFeedback(BuildContext context, FeedbackMessage feedback) {
@@ -137,10 +141,7 @@ class FeedbackSystem {
     _showSnackBar(context, feedback);
   }
 
-  static void _showSnackBar(
-    BuildContext context,
-    FeedbackMessage feedback,
-  ) {
+  static void _showSnackBar(BuildContext context, FeedbackMessage feedback) {
     final colorsForTone = _getColorsForTone(context, feedback.tone);
 
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -172,9 +173,7 @@ class FeedbackSystem {
         backgroundColor: colorsForTone.background,
         duration: feedback.duration ?? const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         action: feedback.actionLabel != null && feedback.onAction != null
             ? SnackBarAction(
                 label: feedback.actionLabel!,
@@ -262,21 +261,14 @@ class InlineFeedback extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: colors.background,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: colors.background, fontSize: 14),
             ),
           ),
           if (onDismiss != null) ...[
             const SizedBox(width: calendarGutterSm),
             GestureDetector(
               onTap: onDismiss,
-              child: Icon(
-                Icons.close,
-                color: colors.background,
-                size: 16,
-              ),
+              child: Icon(Icons.close, color: colors.background, size: 16),
             ),
           ],
         ],
@@ -306,10 +298,7 @@ class ProgressIndicator extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
             if (showPercentage && progress != null)
               Text(
                 '${(progress! * 100).toInt()}%',
@@ -320,8 +309,9 @@ class ProgressIndicator extends StatelessWidget {
         const SizedBox(height: calendarGutterSm),
         LinearProgressIndicator(
           value: progress,
-          backgroundColor:
-              Theme.of(context).colorScheme.surfaceContainerHighest,
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.surfaceContainerHighest,
           valueColor: AlwaysStoppedAnimation<Color>(
             Theme.of(context).colorScheme.primary,
           ),

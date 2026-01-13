@@ -151,7 +151,8 @@ class XmppConnection extends mox.XmppConnection {
       getManager<XmppStreamManagementManager>()?.loadState();
 
   Future<moxlib.Result<mox.StanzaError, mox.DiscoInfo>>? discoInfoQuery(
-          String jid) =>
+    String jid,
+  ) =>
       getManager<mox.DiscoManager>()?.discoInfoQuery(mox.JID.fromString(jid));
 
   bool? get carbonsEnabled => getManager<mox.CarbonsManager>()?.isEnabled;
@@ -217,11 +218,7 @@ class XmppConnection extends mox.XmppConnection {
     String messageType = 'chat',
   }) async {
     if (getManager<mox.ChatStateManager>() case final cm?) {
-      return await cm.sendChatState(
-        state,
-        jid,
-        messageType: messageType,
-      );
+      return await cm.sendChatState(state, jid, messageType: messageType);
     }
   }
 
@@ -453,9 +450,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _backoffTimer = null;
   }
 
-  Future<void> _runReconnectAction(
-    Future<void> Function() action,
-  ) async {
+  Future<void> _runReconnectAction(Future<void> Function() action) async {
     final existing = _reconnectAction;
     if (existing != null) {
       await existing;

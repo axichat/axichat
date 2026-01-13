@@ -18,8 +18,9 @@ const int _emailHeaderSeparatorMissingIndex = 0;
 const int _emailNextLineOffset = 1;
 const int _emailStartIndex = 0;
 
-final RegExp _emailHeaderContinuationRegex =
-    RegExp(_emailHeaderContinuationPattern);
+final RegExp _emailHeaderContinuationRegex = RegExp(
+  _emailHeaderContinuationPattern,
+);
 final RegExp _emailMessageIdTokenRegex = RegExp(_emailMessageIdTokenPattern);
 
 String? parseEmailMessageId(String? rawHeaders) {
@@ -39,8 +40,9 @@ String? parseEmailMessageId(String? rawHeaders) {
     String value =
         line.substring(separatorIndex + _emailHeaderSeparatorOffset).trim();
     while (index + _emailNextLineOffset < lines.length &&
-        _emailHeaderContinuationRegex
-            .hasMatch(lines[index + _emailNextLineOffset])) {
+        _emailHeaderContinuationRegex.hasMatch(
+          lines[index + _emailNextLineOffset],
+        )) {
       value = '$value$_emailHeaderContinuationSeparator'
           '${lines[index + _emailNextLineOffset].trim()}';
       index += _emailNextLineOffset;

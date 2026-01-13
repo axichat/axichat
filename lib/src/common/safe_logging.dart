@@ -34,10 +34,13 @@ class SafeLogging {
   static const String _xmppErrorTextTagName = 'text';
   static const String _calendarSyncTag = 'calendar_sync';
 
-  static final RegExp _xmppTrafficFirstTagPattern =
-      RegExp(r'^<\s*([A-Za-z0-9:_-]+)');
-  static final RegExp _xmppTrafficTypeAttrPattern =
-      RegExp(r'''\btype\s*=\s*['"]([^'"]+)['"]''', caseSensitive: false);
+  static final RegExp _xmppTrafficFirstTagPattern = RegExp(
+    r'^<\s*([A-Za-z0-9:_-]+)',
+  );
+  static final RegExp _xmppTrafficTypeAttrPattern = RegExp(
+    r'''\btype\s*=\s*['"]([^'"]+)['"]''',
+    caseSensitive: false,
+  );
   static final RegExp _xmppErrorTypeAttrPattern = RegExp(
     r'''<error\b[^>]*\btype\s*=\s*['"]([^'"]+)['"]''',
     caseSensitive: false,
@@ -74,13 +77,16 @@ class SafeLogging {
   static final RegExp _absolutePathTokenPattern = RegExp(
     r'''(^|[\s\(\[\{<'"=,:])(?:~/|/|[A-Za-z]:\\|\\\\)\S+''',
   );
-  static final RegExp _pathTrailingPunctuationPattern =
-      RegExp(r'''[)\]\},;.'"]+$''');
+  static final RegExp _pathTrailingPunctuationPattern = RegExp(
+    r'''[)\]\},;.'"]+$''',
+  );
   static final RegExp _accountIdentifierTokenPattern = RegExp(r'\S*@\S*');
-  static final RegExp _hexSecretPattern =
-      RegExp('\\b[a-fA-F0-9]{$_minSecretLength,}\\b');
-  static final RegExp _tokenSecretPattern =
-      RegExp('\\b[A-Za-z0-9_-]{$_minSecretLength,}\\b');
+  static final RegExp _hexSecretPattern = RegExp(
+    '\\b[a-fA-F0-9]{$_minSecretLength,}\\b',
+  );
+  static final RegExp _tokenSecretPattern = RegExp(
+    '\\b[A-Za-z0-9_-]{$_minSecretLength,}\\b',
+  );
   static const Set<String> _xmppErrorIgnoredTags = <String>{
     _xmppErrorTagName,
     _xmppErrorTextTagName,
@@ -162,19 +168,16 @@ class SafeLogging {
       (m) => '${m.group(1)}$redactedSecret',
     );
     output = output.replaceAll(_fileUriPattern, redactedPath);
-    output = output.replaceAllMapped(
-      _absolutePathTokenPattern,
-      (m) {
-        final matchText = m.group(0) ?? '';
-        final leading = m.group(1) ?? '';
-        final pathWithSuffix = matchText.substring(leading.length);
-        final suffixMatch = _pathTrailingPunctuationPattern.firstMatch(
-          pathWithSuffix,
-        );
-        final suffix = suffixMatch?.group(0) ?? '';
-        return '$leading$redactedPath$suffix';
-      },
-    );
+    output = output.replaceAllMapped(_absolutePathTokenPattern, (m) {
+      final matchText = m.group(0) ?? '';
+      final leading = m.group(1) ?? '';
+      final pathWithSuffix = matchText.substring(leading.length);
+      final suffixMatch = _pathTrailingPunctuationPattern.firstMatch(
+        pathWithSuffix,
+      );
+      final suffix = suffixMatch?.group(0) ?? '';
+      return '$leading$redactedPath$suffix';
+    });
     output = output.replaceAllMapped(
       _accountIdentifierTokenPattern,
       (_) => redactedAccount,
@@ -238,8 +241,10 @@ class SafeLogging {
       return _xmppErrorTypeValue;
     }
     final errorEnd = input.indexOf(_xmppErrorTagEnd, errorStart);
-    final errorLimit =
-        (errorStart + _xmppErrorScanLimit).clamp(0, input.length);
+    final errorLimit = (errorStart + _xmppErrorScanLimit).clamp(
+      0,
+      input.length,
+    );
     final segmentEnd = errorEnd == _notFoundIndex
         ? errorLimit
         : errorEnd.clamp(0, input.length);
@@ -291,9 +296,7 @@ extension SafeLogger on Logger {
     final safeError = SafeLogging.sanitizeError(error);
     final safeStackTrace = stackTrace == null
         ? null
-        : StackTrace.fromString(
-            SafeLogging.sanitizeStackTrace(stackTrace),
-          );
+        : StackTrace.fromString(SafeLogging.sanitizeStackTrace(stackTrace));
     log(
       level,
       safeMessage,
