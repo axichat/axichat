@@ -45,6 +45,7 @@ const int _participantMaxAvatars = 7;
 const String _participantOverflowLabel = '...';
 const double _chatCalendarShareActionSpacing = 8.0;
 const String _chatCalendarAvailabilityShareTooltip = 'Send availability';
+const bool _chatCalendarAvailabilityShareVisible = false;
 const double _chatCalendarParticipantsSpacing = 12.0;
 const String _chatCalendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
@@ -462,7 +463,8 @@ class _ChatCalendarActionRow extends StatelessWidget {
           compact: true,
           showTransferMenu: _chatCalendarActionShowTransferMenu,
         ),
-        if (onShareAvailability != null)
+        if (onShareAvailability != null &&
+            _chatCalendarAvailabilityShareVisible)
           AxiIconButton.ghost(
             iconData: LucideIcons.send,
             tooltip: _chatCalendarAvailabilityShareTooltip,

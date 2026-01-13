@@ -165,6 +165,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         _allowEdits = _taskShareAllowEditsDefault;
       }
     });
+    _handleSharePressed();
   }
 
   void _handleAllowEditsChanged(bool value) {
