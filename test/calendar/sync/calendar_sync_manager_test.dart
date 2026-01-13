@@ -58,10 +58,7 @@ void main() {
       );
 
       await manager.onCalendarMessage(
-        CalendarSyncInbound(
-          message: message,
-          receivedAt: remoteModifiedAt,
-        ),
+        CalendarSyncInbound(message: message, receivedAt: remoteModifiedAt),
       );
 
       expect(applyCalls, equals(0));
@@ -101,10 +98,7 @@ void main() {
       );
 
       await manager.onCalendarMessage(
-        CalendarSyncInbound(
-          message: message,
-          receivedAt: remoteModifiedAt,
-        ),
+        CalendarSyncInbound(message: message, receivedAt: remoteModifiedAt),
       );
 
       expect(applyCalls, equals(1));

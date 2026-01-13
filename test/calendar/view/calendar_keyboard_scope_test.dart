@@ -39,20 +39,24 @@ void main() {
     );
 
     await sendShortcut(
-      tester,
-      const [LogicalKeyboardKey.controlLeft],
-      LogicalKeyboardKey.keyZ,
-    );
+        tester,
+        const [
+          LogicalKeyboardKey.controlLeft,
+        ],
+        LogicalKeyboardKey.keyZ);
     await sendShortcut(
-      tester,
-      const [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftLeft],
-      LogicalKeyboardKey.keyZ,
-    );
+        tester,
+        const [
+          LogicalKeyboardKey.controlLeft,
+          LogicalKeyboardKey.shiftLeft,
+        ],
+        LogicalKeyboardKey.keyZ);
     await sendShortcut(
-      tester,
-      const [LogicalKeyboardKey.controlLeft],
-      LogicalKeyboardKey.keyY,
-    );
+        tester,
+        const [
+          LogicalKeyboardKey.controlLeft,
+        ],
+        LogicalKeyboardKey.keyY);
 
     expect(undoCount, 1);
     expect(redoCount, 2);
@@ -70,10 +74,7 @@ void main() {
           onUndo: () => undoCount++,
           onRedo: () {},
           child: const Scaffold(
-            body: Padding(
-              padding: EdgeInsets.all(12),
-              child: TextField(),
-            ),
+            body: Padding(padding: EdgeInsets.all(12), child: TextField()),
           ),
         ),
       ),
@@ -83,10 +84,11 @@ void main() {
     await tester.pump();
 
     await sendShortcut(
-      tester,
-      const [LogicalKeyboardKey.controlLeft],
-      LogicalKeyboardKey.keyZ,
-    );
+        tester,
+        const [
+          LogicalKeyboardKey.controlLeft,
+        ],
+        LogicalKeyboardKey.keyZ);
 
     expect(undoCount, 0);
   });

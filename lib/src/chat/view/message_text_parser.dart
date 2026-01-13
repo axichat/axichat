@@ -5,10 +5,7 @@ import 'package:axichat/src/common/ui/dynamic_inline_text.dart';
 import 'package:flutter/material.dart';
 
 class ParsedMessageText {
-  const ParsedMessageText({
-    required this.body,
-    required this.links,
-  });
+  const ParsedMessageText({required this.body, required this.links});
 
   final TextSpan body;
   final List<DynamicTextLink> links;
@@ -39,10 +36,9 @@ ParsedMessageText parseMessageText({
 
   for (final match in _linkPattern.allMatches(text)) {
     if (match.start > index) {
-      spans.add(TextSpan(
-        text: text.substring(index, match.start),
-        style: baseStyle,
-      ));
+      spans.add(
+        TextSpan(text: text.substring(index, match.start), style: baseStyle),
+      );
     }
 
     final matchText = match.group(0)!;
@@ -62,12 +58,7 @@ ParsedMessageText parseMessageText({
     }
 
     final normalized = _normalizeLink(linkText);
-    spans.add(
-      TextSpan(
-        text: linkText,
-        style: linkStyle,
-      ),
-    );
+    spans.add(TextSpan(text: linkText, style: linkStyle));
     links.add(
       DynamicTextLink(
         range: TextRange(start: linkStart, end: linkEnd),
@@ -77,10 +68,7 @@ ParsedMessageText parseMessageText({
 
     if (linkEnd < match.end) {
       spans.add(
-        TextSpan(
-          text: matchText.substring(linkText.length),
-          style: baseStyle,
-        ),
+        TextSpan(text: matchText.substring(linkText.length), style: baseStyle),
       );
     }
 
@@ -88,10 +76,7 @@ ParsedMessageText parseMessageText({
   }
 
   if (index < text.length) {
-    spans.add(TextSpan(
-      text: text.substring(index),
-      style: baseStyle,
-    ));
+    spans.add(TextSpan(text: text.substring(index), style: baseStyle));
   }
 
   return ParsedMessageText(

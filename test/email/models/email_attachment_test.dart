@@ -3,17 +3,19 @@ import 'package:test/test.dart';
 
 void main() {
   group('EmailAttachment', () {
-    test('treats common image extensions as images when mimeType is missing',
-        () {
-      const attachment = EmailAttachment(
-        path: '/tmp/photo.png',
-        fileName: 'photo.png',
-        sizeBytes: 1,
-      );
+    test(
+      'treats common image extensions as images when mimeType is missing',
+      () {
+        const attachment = EmailAttachment(
+          path: '/tmp/photo.png',
+          fileName: 'photo.png',
+          sizeBytes: 1,
+        );
 
-      expect(attachment.isImage, isTrue);
-      expect(attachment.isGif, isFalse);
-    });
+        expect(attachment.isImage, isTrue);
+        expect(attachment.isGif, isFalse);
+      },
+    );
 
     test('falls back to path extension when fileName lacks an extension', () {
       const attachment = EmailAttachment(

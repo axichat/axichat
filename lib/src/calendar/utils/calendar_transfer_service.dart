@@ -82,12 +82,12 @@ class CalendarTransferService {
         .toIso8601String()
         .replaceAll(':', '')
         .replaceAll('-', '');
-    final String path =
-        p.join(directory.path, '$prefix-$timestamp.${format.extension}');
+    final String path = p.join(
+      directory.path,
+      '$prefix-$timestamp.${format.extension}',
+    );
     final String contents = switch (format) {
-      CalendarExportFormat.ics => _icsCodec.encode(
-          _modelFromTasks(tasks),
-        ),
+      CalendarExportFormat.ics => _icsCodec.encode(_modelFromTasks(tasks)),
       CalendarExportFormat.json => jsonEncode({
           'version': 1,
           'generatedAt': DateTime.now().toIso8601String(),

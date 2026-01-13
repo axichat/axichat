@@ -93,8 +93,9 @@ class _ContactExportOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = ShadTheme.of(context).colorScheme;
-    final iconBackground =
-        colors.muted.withValues(alpha: _contactExportIconAlpha);
+    final iconBackground = colors.muted.withValues(
+      alpha: _contactExportIconAlpha,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: AxiListTile(

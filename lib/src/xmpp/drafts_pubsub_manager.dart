@@ -50,39 +50,28 @@ const bool _presenceBasedDeliveryDisabled = false;
 const Duration _ensureNodeBackoff = Duration(minutes: 5);
 
 final class DraftRecipient {
-  const DraftRecipient({
-    required this.jid,
-    required this.role,
-  });
+  const DraftRecipient({required this.jid, required this.role});
 
   final String jid;
   final String role;
 
-  DraftRecipient copyWith({
-    String? jid,
-    String? role,
-  }) {
-    return DraftRecipient(
-      jid: jid ?? this.jid,
-      role: role ?? this.role,
-    );
+  DraftRecipient copyWith({String? jid, String? role}) {
+    return DraftRecipient(jid: jid ?? this.jid, role: role ?? this.role);
   }
 
   static DraftRecipient? fromXml(mox.XMLNode node) {
     if (node.tag != _recipientTag) return null;
     final rawJid = node.attributes[_recipientJidAttr]?.toString();
-    final normalizedJid =
-        rawJid?.toBareJidOrNull(maxBytes: draftSyncMaxRecipientBytes);
+    final normalizedJid = rawJid?.toBareJidOrNull(
+      maxBytes: draftSyncMaxRecipientBytes,
+    );
     if (normalizedJid == null) return null;
     final rawRole = node.attributes[_recipientRoleAttr]?.toString().trim();
     final normalizedRole = rawRole?.toLowerCase();
     final resolvedRole = draftSyncAllowedRecipientRoles.contains(normalizedRole)
         ? normalizedRole!
         : _recipientRoleDefault;
-    return DraftRecipient(
-      jid: normalizedJid,
-      role: resolvedRole,
-    );
+    return DraftRecipient(jid: normalizedJid, role: resolvedRole);
   }
 
   mox.XMLNode toXml() {
@@ -92,10 +81,7 @@ final class DraftRecipient {
         : _recipientRoleDefault;
     return mox.XMLNode(
       tag: _recipientTag,
-      attributes: {
-        _recipientJidAttr: jid,
-        _recipientRoleAttr: resolvedRole,
-      },
+      attributes: {_recipientJidAttr: jid, _recipientRoleAttr: resolvedRole},
     );
   }
 }
@@ -157,8 +143,9 @@ final class DraftAttachmentRef {
       maxValue: draftSyncMaxAttachmentSizeBytes,
     );
     final width = _parsePositiveIntAttr(node.attributes[_attachmentWidthAttr]);
-    final height =
-        _parsePositiveIntAttr(node.attributes[_attachmentHeightAttr]);
+    final height = _parsePositiveIntAttr(
+      node.attributes[_attachmentHeightAttr],
+    );
     return DraftAttachmentRef(
       id: rawId,
       url: url,
@@ -301,10 +288,7 @@ final class DraftSyncPayload {
     );
   }
 
-  static DraftSyncPayload? fromXml(
-    mox.XMLNode node, {
-    String? itemId,
-  }) {
+  static DraftSyncPayload? fromXml(mox.XMLNode node, {String? itemId}) {
     if (node.tag != _draftTag) return null;
     if (node.attributes['xmlns']?.toString() != draftsPubSubNode) {
       return null;
@@ -325,11 +309,9 @@ final class DraftSyncPayload {
     if (parsedUpdatedAt == null) return null;
 
     final rawSourceId = node.attributes[_draftSourceIdAttr]?.toString().trim();
-    final resolvedSourceId = _normalizeText(
-          rawSourceId,
-          maxBytes: draftSyncMaxIdBytes,
-        ) ??
-        _draftSourceIdFallback;
+    final resolvedSourceId =
+        _normalizeText(rawSourceId, maxBytes: draftSyncMaxIdBytes) ??
+            _draftSourceIdFallback;
 
     final recipientsNode = node.firstTag(_recipientsTag);
     final recipients = recipientsNode
@@ -469,9 +451,8 @@ final class DraftSyncRetractedEvent extends mox.XmppEvent {
 }
 
 final class DraftsPubSubManager extends mox.XmppManagerBase {
-  DraftsPubSubManager({
-    String? maxItems,
-  })  : _maxItems = maxItems ?? _defaultMaxItems,
+  DraftsPubSubManager({String? maxItems})
+      : _maxItems = maxItems ?? _defaultMaxItems,
         super(managerId);
 
   static const String managerId = 'axi.drafts';
@@ -586,10 +567,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     return int.parse(_defaultMaxItems);
   }
 
-  bool _isSnapshotComplete({
-    required int itemsCount,
-    required int maxItems,
-  }) =>
+  bool _isSnapshotComplete({required int itemsCount, required int maxItems}) =>
       itemsCount < maxItems;
 
   void _setAccessModel(mox.AccessModel accessModel) {
@@ -774,10 +752,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         hadParseFailure = true;
         continue;
       }
-      final parsedPayload = DraftSyncPayload.fromXml(
-        payload,
-        itemId: item.id,
-      );
+      final parsedPayload = DraftSyncPayload.fromXml(payload, itemId: item.id);
       if (parsedPayload == null) {
         hadParseFailure = true;
         continue;
@@ -785,10 +760,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       parsed.add(parsedPayload);
     }
     final isComplete = !hadParseFailure &&
-        _isSnapshotComplete(
-          itemsCount: items.length,
-          maxItems: fetchLimit,
-        );
+        _isSnapshotComplete(itemsCount: items.length, maxItems: fetchLimit);
     return PubSubFetchResult(
       items: List<DraftSyncPayload>.unmodifiable(parsed),
       isSuccess: true,
@@ -879,10 +851,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
           final item = itemResult.get<mox.PubSubItem>();
           final payload = item.payload;
           if (payload != null) {
-            parsed = DraftSyncPayload.fromXml(
-              payload,
-              itemId: itemId,
-            );
+            parsed = DraftSyncPayload.fromXml(payload, itemId: itemId);
           }
         }
       }

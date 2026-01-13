@@ -47,8 +47,10 @@ const String _availabilityEditorInvalidRangeMessage =
 const String _availabilityEditorEmptyWindowsMessage =
     'Add at least one availability window.';
 
-const EdgeInsets _availabilityEditorCardPadding =
-    EdgeInsets.symmetric(horizontal: 16, vertical: 12);
+const EdgeInsets _availabilityEditorCardPadding = EdgeInsets.symmetric(
+  horizontal: 16,
+  vertical: 12,
+);
 
 const Uuid _availabilityEditorIdGenerator = Uuid();
 
@@ -212,18 +214,16 @@ class _CalendarAvailabilityEditorSheetState
           !draft.end!.isAfter(draft.start!),
     );
     if (hasInvalid) {
-      FeedbackSystem.showError(
-        context,
-        _availabilityEditorInvalidRangeMessage,
-      );
+      FeedbackSystem.showError(context, _availabilityEditorInvalidRangeMessage);
       return;
     }
     setState(() {
       _isSaving = true;
     });
     try {
-      final CalendarAvailability availability =
-          _buildAvailabilityFromDrafts(drafts);
+      final CalendarAvailability availability = _buildAvailabilityFromDrafts(
+        drafts,
+      );
       if (!mounted) {
         return;
       }
@@ -257,8 +257,9 @@ class _CalendarAvailabilityEditorSheetState
     ends.sort();
     final DateTime rangeStart = starts.first;
     final DateTime rangeEnd = ends.last;
-    final CalendarIcsMeta nextMeta =
-        _updatedAvailabilityMeta(_baseAvailability?.icsMeta);
+    final CalendarIcsMeta nextMeta = _updatedAvailabilityMeta(
+      _baseAvailability?.icsMeta,
+    );
     return CalendarAvailability(
       id: _availabilityId,
       start: _wrapDateTime(rangeStart, tzid),
@@ -352,9 +353,7 @@ class _AvailabilityWindowCard extends StatelessWidget {
 }
 
 class _AvailabilityWindowRemoveButton extends StatelessWidget {
-  const _AvailabilityWindowRemoveButton({
-    required this.onPressed,
-  });
+  const _AvailabilityWindowRemoveButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -376,9 +375,7 @@ class _AvailabilityWindowRemoveButton extends StatelessWidget {
 }
 
 class _AvailabilityEditorAddButton extends StatelessWidget {
-  const _AvailabilityEditorAddButton({
-    required this.onPressed,
-  });
+  const _AvailabilityEditorAddButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -390,10 +387,7 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            LucideIcons.plus,
-            size: _availabilityEditorHeaderIconSize,
-          ),
+          Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
           SizedBox(width: calendarInsetSm),
           Text(_availabilityEditorAddWindowLabel),
         ],
@@ -472,14 +466,16 @@ class _AvailabilityWindowDraft {
   }
 
   factory _AvailabilityWindowDraft.fromWindow(
-      CalendarAvailabilityWindow window) {
+    CalendarAvailabilityWindow window,
+  ) {
     return _AvailabilityWindowDraft(
       id: _availabilityEditorIdGenerator.v4(),
       start: window.start.value,
       end: window.end.value,
       summaryController: TextEditingController(text: window.summary ?? ''),
-      descriptionController:
-          TextEditingController(text: window.description ?? ''),
+      descriptionController: TextEditingController(
+        text: window.description ?? '',
+      ),
     );
   }
 
@@ -521,8 +517,9 @@ List<_AvailabilityWindowDraft> _seedWindowDrafts(
   if (availability == null) {
     return <_AvailabilityWindowDraft>[];
   }
-  final List<CalendarAvailabilityWindow> windows =
-      _availabilityWindowsFor(availability);
+  final List<CalendarAvailabilityWindow> windows = _availabilityWindowsFor(
+    availability,
+  );
   return windows
       .map(_AvailabilityWindowDraft.fromWindow)
       .toList(growable: false);
@@ -545,20 +542,11 @@ List<CalendarAvailabilityWindow> _availabilityWindowsFor(
 }
 
 CalendarDateTime _wrapDateTime(DateTime value, String? tzid) {
-  return CalendarDateTime(
-    value: value,
-    tzid: tzid,
-  );
+  return CalendarDateTime(value: value, tzid: tzid);
 }
 
 DateTime _normalizeDateTime(DateTime now) {
-  return DateTime(
-    now.year,
-    now.month,
-    now.day,
-    now.hour,
-    now.minute,
-  );
+  return DateTime(now.year, now.month, now.day, now.hour, now.minute);
 }
 
 String? _resolveTimeZone(CalendarModel model) {

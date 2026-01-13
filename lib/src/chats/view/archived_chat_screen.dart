@@ -57,9 +57,7 @@ class ArchivedChatScreen extends StatelessWidget {
         if (rosterCubit != null)
           BlocProvider.value(value: rosterCubit)
         else
-          BlocProvider(
-            create: (_) => RosterCubit(rosterService: xmppService),
-          ),
+          BlocProvider(create: (_) => RosterCubit(rosterService: xmppService)),
         BlocProvider(
           create: (_) => ChatBloc(
             jid: jid,
@@ -113,16 +111,10 @@ class _ArchivedChatBody extends StatelessWidget {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: colors.border,
-          ),
+          child: Divider(height: 1, thickness: 1, color: colors.border),
         ),
       ),
-      body: const SafeArea(
-        child: Chat(readOnly: true),
-      ),
+      body: const SafeArea(child: Chat(readOnly: true)),
     );
   }
 }

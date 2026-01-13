@@ -73,20 +73,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     22,
     23,
   ];
-  static const _minuteValues = [
-    0,
-    5,
-    10,
-    15,
-    20,
-    25,
-    30,
-    35,
-    40,
-    45,
-    50,
-    55,
-  ];
+  static const _minuteValues = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   static const double _timePickerDesiredHeight = 660.0;
   static const double _datePickerExpandedHeight = 428.0;
 
@@ -343,10 +330,16 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 closeSheet();
               }
 
-              final previousMonth =
-                  DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
-              final nextMonth =
-                  DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
+              final previousMonth = DateTime(
+                _visibleMonth.year,
+                _visibleMonth.month - 1,
+                1,
+              );
+              final nextMonth = DateTime(
+                _visibleMonth.year,
+                _visibleMonth.month + 1,
+                1,
+              );
               final VoidCallback? handlePrevious =
                   _canNavigateToMonth(previousMonth)
                       ? () => updateVisibleMonth(previousMonth)
@@ -638,7 +631,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterLg, vertical: 14),
+          horizontal: calendarGutterLg,
+          vertical: 14,
+        ),
         decoration: BoxDecoration(
           border: Border.all(
             color: borderColor,
@@ -649,11 +644,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.calendar_today_outlined,
-              size: 20,
-              color: iconColor,
-            ),
+            Icon(Icons.calendar_today_outlined, size: 20, color: iconColor),
             const SizedBox(width: calendarGutterMd),
             Expanded(
               child: Align(
@@ -683,10 +674,16 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       overlayChildBuilder: (overlayContext) {
         if (!_isOpen) return const SizedBox.shrink();
         final geometry = _computeGeometry(overlayContext);
-        final previousMonth =
-            DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
-        final nextMonth =
-            DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
+        final previousMonth = DateTime(
+          _visibleMonth.year,
+          _visibleMonth.month - 1,
+          1,
+        );
+        final nextMonth = DateTime(
+          _visibleMonth.year,
+          _visibleMonth.month + 1,
+          1,
+        );
         final VoidCallback? handlePrevious = _canNavigateToMonth(previousMonth)
             ? () => _updateVisibleMonth(previousMonth)
             : null;
@@ -750,10 +747,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           ],
         );
       },
-      child: CompositedTransformTarget(
-        link: _layerLink,
-        child: trigger,
-      ),
+      child: CompositedTransformTarget(link: _layerLink, child: trigger),
     );
   }
 
@@ -847,10 +841,7 @@ class _DeadlineAnchoredDropdown extends StatelessWidget {
 
     final groupId = tapRegionGroupId;
     if (groupId != null) {
-      anchored = TapRegion(
-        groupId: groupId,
-        child: anchored,
-      );
+      anchored = TapRegion(groupId: groupId, child: anchored);
     }
 
     return anchored;
@@ -883,10 +874,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
     return KeyedSubtree(
       key: dropdownKey,
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: maxHeight,
-          minWidth: minWidth,
-        ),
+        constraints: BoxConstraints(maxHeight: maxHeight, minWidth: minWidth),
         child: Material(
           borderRadius: BorderRadius.circular(12),
           color: calendarContainerColor,
@@ -923,10 +911,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
                           physics: const ClampingScrollPhysics(),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              calendarGrid,
-                              timeSelectors,
-                            ],
+                            children: [calendarGrid, timeSelectors],
                           ),
                         ),
                       ),
@@ -1000,12 +985,7 @@ class _DeadlineSheetContent extends StatelessWidget {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: showTimeSelectors
-                    ? [
-                        monthHeader,
-                        calendarGrid,
-                        timeSelectors,
-                        actions,
-                      ]
+                    ? [monthHeader, calendarGrid, timeSelectors, actions]
                     : [monthHeader, calendarGrid, actions],
               );
             }
@@ -1021,10 +1001,7 @@ class _DeadlineSheetContent extends StatelessWidget {
                       physics: const ClampingScrollPhysics(),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
-                          calendarGrid,
-                          timeSelectors,
-                        ],
+                        children: [calendarGrid, timeSelectors],
                       ),
                     ),
                   ),
@@ -1363,9 +1340,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
         vertical: 10,
       ),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: calendarBorderColor, width: 1),
-        ),
+        border: Border(top: BorderSide(color: calendarBorderColor, width: 1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1509,9 +1484,7 @@ class _DeadlinePickerActions extends StatelessWidget {
         vertical: verticalPadding,
       ),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: calendarBorderColor, width: 1),
-        ),
+        border: Border(top: BorderSide(color: calendarBorderColor, width: 1)),
       ),
       child: Row(
         children: [
@@ -1544,11 +1517,6 @@ class _DeadlinePickerActions extends StatelessWidget {
     if (!includeBottomSafeArea) {
       return content;
     }
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      child: content,
-    );
+    return SafeArea(top: false, left: false, right: false, child: content);
   }
 }

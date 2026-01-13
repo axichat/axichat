@@ -22,10 +22,7 @@ class AxiFadePageRoute<T> extends PageRouteBuilder<T> {
               curve: _fadePageCurve,
               reverseCurve: _fadePageCurve,
             );
-            return FadeTransition(
-              opacity: curved,
-              child: child,
-            );
+            return FadeTransition(opacity: curved, child: child);
           },
         );
 }

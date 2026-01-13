@@ -29,15 +29,10 @@ class ChatCalendarBloc extends CalendarBloc {
                 if (bloc.isClosed) {
                   return;
                 }
-                bloc.add(
-                  CalendarEvent.remoteModelApplied(model: model),
-                );
+                bloc.add(CalendarEvent.remoteModelApplied(model: model));
               },
             );
-            return coordinator.managerFor(
-              chatJid: chatJid,
-              chatType: chatType,
-            );
+            return coordinator.managerFor(chatJid: chatJid, chatType: chatType);
           },
           onDispose: () => coordinator.unregisterBloc(chatJid: chatJid),
         );

@@ -40,10 +40,12 @@ class BlocklistCubit extends Cubit<BlocklistState>
   BlocklistCubit({required XmppService xmppService})
       : _xmppService = xmppService,
         super(const BlocklistAvailable(items: null)) {
-    _xmppBlocklistSubscription =
-        _xmppService.blocklistStream().listen(_handleXmppBlocklist);
-    _emailBlocklistSubscription =
-        _xmppService.emailBlocklistStream().listen(_handleEmailBlocklist);
+    _xmppBlocklistSubscription = _xmppService.blocklistStream().listen(
+          _handleXmppBlocklist,
+        );
+    _emailBlocklistSubscription = _xmppService.emailBlocklistStream().listen(
+          _handleEmailBlocklist,
+        );
   }
 
   final XmppService _xmppService;
@@ -104,10 +106,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
       return;
     }
     try {
-      await _blockXmpp(
-        address: normalized,
-        reportReason: reportReason,
-      );
+      await _blockXmpp(address: normalized, reportReason: reportReason);
     } on XmppBlockUnsupportedException catch (_) {
       emit(const BlocklistFailure(_blockingUnsupportedMessage));
       return;
@@ -127,10 +126,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
       return;
     }
     try {
-      await _xmppService.blockAndReport(
-        jid: address,
-        reason: reportReason,
-      );
+      await _xmppService.blockAndReport(jid: address, reason: reportReason);
     } on XmppSpamReportUnsupportedException catch (_) {
       await _xmppService.block(jid: address);
     } on XmppSpamReportException catch (_) {

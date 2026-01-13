@@ -47,9 +47,7 @@ void main() {
     late String undoOccurrenceId;
 
     setUpAll(() {
-      registerFallbackValue(
-        CalendarTask.create(title: 'fallback'),
-      );
+      registerFallbackValue(CalendarTask.create(title: 'fallback'));
     });
 
     setUp(() {
@@ -59,8 +57,9 @@ void main() {
       HydratedBloc.storage = registry;
       syncManager = _MockCalendarSyncManager();
 
-      when(() => syncManager.sendTaskUpdate(any(), any()))
-          .thenAnswer((_) async {});
+      when(
+        () => syncManager.sendTaskUpdate(any(), any()),
+      ).thenAnswer((_) async {});
       when(() => syncManager.requestFullSync()).thenAnswer((_) async {});
       when(() => syncManager.pushFullSync()).thenAnswer((_) async {});
 
@@ -148,9 +147,10 @@ void main() {
           (state) =>
               state.isSelectionMode &&
               state.selectedTaskIds.length == 2 &&
-              state.selectedTaskIds.containsAll(
-                {undoBaseTaskId, undoOccurrenceId},
-              ),
+              state.selectedTaskIds.containsAll({
+                undoBaseTaskId,
+                undoOccurrenceId,
+              }),
         ),
         predicate<CalendarState>((state) {
           final CalendarTask base = state.model.tasks[undoBaseTaskId]!;
@@ -159,17 +159,19 @@ void main() {
           final String key = undoOccurrenceId.split('::').last;
           final TaskOccurrenceOverride? override = overrides[key];
           return state.isSelectionMode &&
-              state.selectedTaskIds.containsAll(
-                {undoBaseTaskId, undoOccurrenceId},
-              ) &&
+              state.selectedTaskIds.containsAll({
+                undoBaseTaskId,
+                undoOccurrenceId,
+              }) &&
               override?.title == 'Updated title';
         }),
         predicate<CalendarState>((state) {
           final CalendarTask base = state.model.tasks[undoBaseTaskId]!;
           return state.isSelectionMode &&
-              state.selectedTaskIds.containsAll(
-                {undoBaseTaskId, undoOccurrenceId},
-              ) &&
+              state.selectedTaskIds.containsAll({
+                undoBaseTaskId,
+                undoOccurrenceId,
+              }) &&
               base.occurrenceOverrides.isEmpty &&
               base.title == 'Recurring base';
         }),
@@ -283,8 +285,9 @@ void main() {
           ),
           occurrenceOverrides: const {},
         );
-        final DateTime secondOccurrenceStart =
-            start.add(const Duration(days: 1));
+        final DateTime secondOccurrenceStart = start.add(
+          const Duration(days: 1),
+        );
         final String occurrenceId =
             '${recurring.id}::${secondOccurrenceStart.microsecondsSinceEpoch}';
         final model = CalendarModel.empty().addTask(recurring);
@@ -345,8 +348,9 @@ void main() {
           startMinute,
           startSecond,
         );
-        final DateTime occurrenceStart =
-            start.add(const Duration(days: oneDay));
+        final DateTime occurrenceStart = start.add(
+          const Duration(days: oneDay),
+        );
         final String occurrenceKey =
             occurrenceStart.microsecondsSinceEpoch.toString();
         final String occurrenceId =
@@ -359,10 +363,10 @@ void main() {
           name: rawComponentName,
         );
         const List<CalendarRawProperty> rawProperties = <CalendarRawProperty>[
-          rawProperty
+          rawProperty,
         ];
         const List<CalendarRawComponent> rawComponents = <CalendarRawComponent>[
-          rawComponent
+          rawComponent,
         ];
         const TaskOccurrenceOverride override = TaskOccurrenceOverride(
           rawProperties: rawProperties,
@@ -411,8 +415,9 @@ void main() {
           if (baseStart == null) {
             return false;
           }
-          final DateTime occurrenceStart =
-              baseStart.add(const Duration(days: oneDay));
+          final DateTime occurrenceStart = baseStart.add(
+            const Duration(days: oneDay),
+          );
           final String occurrenceKey =
               occurrenceStart.microsecondsSinceEpoch.toString();
           final TaskOccurrenceOverride? override =
@@ -427,11 +432,13 @@ void main() {
     blocTest<CalendarBloc, CalendarState>(
       'taskAdded inserts task and triggers sync',
       build: () => bloc,
-      act: (bloc) => bloc.add(const CalendarEvent.taskAdded(
-        title: 'New Task',
-        description: 'details',
-        duration: Duration(hours: 1),
-      )),
+      act: (bloc) => bloc.add(
+        const CalendarEvent.taskAdded(
+          title: 'New Task',
+          description: 'details',
+          duration: Duration(hours: 1),
+        ),
+      ),
       verify: (_) {
         verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
       },
@@ -442,8 +449,9 @@ void main() {
           true,
         ),
         predicate<CalendarState>((state) {
-          return state.model.tasks.values
-              .any((task) => task.title == 'New Task');
+          return state.model.tasks.values.any(
+            (task) => task.title == 'New Task',
+          );
         }),
       ],
     );
@@ -465,9 +473,11 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        bloc.add(CalendarEvent.taskUpdated(
-          task: seededTask.copyWith(title: 'Updated'),
-        ));
+        bloc.add(
+          CalendarEvent.taskUpdated(
+            task: seededTask.copyWith(title: 'Updated'),
+          ),
+        );
       },
       verify: (_) {
         verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
@@ -550,10 +560,9 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        bloc.add(CalendarEvent.taskCompleted(
-          taskId: seededTask.id,
-          completed: true,
-        ));
+        bloc.add(
+          CalendarEvent.taskCompleted(taskId: seededTask.id, completed: true),
+        );
       },
       verify: (_) {
         verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
@@ -600,13 +609,11 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime newStart = seededTask.scheduledTime!
-            .add(const Duration(days: 1, hours: 1, minutes: 30));
+        final DateTime newStart = seededTask.scheduledTime!.add(
+          const Duration(days: 1, hours: 1, minutes: 30),
+        );
         bloc.add(
-          CalendarEvent.taskDropped(
-            taskId: seededTask.id,
-            time: newStart,
-          ),
+          CalendarEvent.taskDropped(taskId: seededTask.id, time: newStart),
         );
       },
       verify: (_) {
@@ -615,8 +622,9 @@ void main() {
       expect: () => [
         predicate<CalendarState>((state) {
           final updated = state.model.tasks[seededTask.id]!;
-          final DateTime newStart = seededTask.scheduledTime!
-              .add(const Duration(days: 1, hours: 1, minutes: 30));
+          final DateTime newStart = seededTask.scheduledTime!.add(
+            const Duration(days: 1, hours: 1, minutes: 30),
+          );
           final Duration duration = seededTask.duration!;
           final double expectedStartHour =
               newStart.hour + (newStart.minute / 60.0);
@@ -645,8 +653,9 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime newStart =
-            seededTask.scheduledTime!.add(const Duration(hours: 2));
+        final DateTime newStart = seededTask.scheduledTime!.add(
+          const Duration(hours: 2),
+        );
         bloc.add(
           CalendarEvent.taskRepeated(
             template: seededTask,
@@ -663,9 +672,7 @@ void main() {
           final clones = tasks.where((task) => task.id != seededTask.id);
           return clones.length == 1 &&
               clones.first.scheduledTime ==
-                  seededTask.scheduledTime!.add(
-                    const Duration(hours: 2),
-                  );
+                  seededTask.scheduledTime!.add(const Duration(hours: 2));
         }),
       ],
     );
@@ -731,9 +738,7 @@ void main() {
         predicate<CalendarState>((state) {
           final updated = state.model.tasks[seededTask.id];
           return updated?.scheduledTime ==
-                  seededTask.scheduledTime!.add(
-                    const Duration(hours: 1),
-                  ) &&
+                  seededTask.scheduledTime!.add(const Duration(hours: 1)) &&
               updated?.duration?.inHours == 2;
         }),
       ],
@@ -758,8 +763,9 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime occurrenceStart =
-            seededTask.scheduledTime!.add(const Duration(days: 1));
+        final DateTime occurrenceStart = seededTask.scheduledTime!.add(
+          const Duration(days: 1),
+        );
         final String occurrenceId =
             '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}';
         final CalendarTask occurrence = seededTask.copyWith(
@@ -767,8 +773,9 @@ void main() {
           scheduledTime: occurrenceStart,
         );
         final DateTime newStart = occurrenceStart.add(const Duration(hours: 1));
-        final CalendarTask normalized =
-            occurrence.normalizedForInteraction(newStart);
+        final CalendarTask normalized = occurrence.normalizedForInteraction(
+          newStart,
+        );
         bloc.commitTaskInteraction(normalized);
       },
       verify: (_) {
@@ -780,10 +787,12 @@ void main() {
           if (base == null) {
             return false;
           }
-          final DateTime occurrenceStart =
-              seededTask.scheduledTime!.add(const Duration(days: 1));
+          final DateTime occurrenceStart = seededTask.scheduledTime!.add(
+            const Duration(days: 1),
+          );
           final String occurrenceKey = occurrenceKeyFrom(
-                  '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}') ??
+                '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}',
+              ) ??
               '';
           final TaskOccurrenceOverride? override =
               base.occurrenceOverrides[occurrenceKey];
@@ -864,9 +873,7 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        bloc.add(
-          CalendarEvent.selectionModeEntered(taskId: seededTask.id),
-        );
+        bloc.add(CalendarEvent.selectionModeEntered(taskId: seededTask.id));
       },
       expect: () => [
         predicate<CalendarState>((state) {
@@ -896,17 +903,14 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime occurrenceStart =
-            seededTask.scheduledTime!.add(const Duration(days: 1));
+        final DateTime occurrenceStart = seededTask.scheduledTime!.add(
+          const Duration(days: 1),
+        );
         occurrenceId =
             '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}';
         bloc
-          ..add(
-            CalendarEvent.selectionModeEntered(taskId: seededTask.id),
-          )
-          ..add(
-            CalendarEvent.selectionToggled(taskId: occurrenceId),
-          );
+          ..add(CalendarEvent.selectionModeEntered(taskId: seededTask.id))
+          ..add(CalendarEvent.selectionToggled(taskId: occurrenceId));
       },
       expect: () => [
         predicate<CalendarState>(
@@ -956,10 +960,7 @@ void main() {
       act: (bloc) {
         final DateTime target = DateTime(2024, 6, 12, 10, 15);
         bloc.add(
-          CalendarEvent.taskDropped(
-            taskId: seededTask.id,
-            time: target,
-          ),
+          CalendarEvent.taskDropped(taskId: seededTask.id, time: target),
         );
       },
       verify: (_) {
@@ -1007,13 +1008,11 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime splitTime =
-            seededTask.scheduledTime!.add(const Duration(minutes: 30));
+        final DateTime splitTime = seededTask.scheduledTime!.add(
+          const Duration(minutes: 30),
+        );
         bloc.add(
-          CalendarEvent.taskSplit(
-            target: seededTask,
-            splitTime: splitTime,
-          ),
+          CalendarEvent.taskSplit(target: seededTask, splitTime: splitTime),
         );
       },
       verify: (_) {
@@ -1030,8 +1029,9 @@ void main() {
             return false;
           }
           final CalendarTask clone = additions.first;
-          final DateTime splitMoment =
-              seededTask.scheduledTime!.add(const Duration(minutes: 30));
+          final DateTime splitMoment = seededTask.scheduledTime!.add(
+            const Duration(minutes: 30),
+          );
           return base.duration == const Duration(minutes: 30) &&
               clone.duration == const Duration(minutes: 30) &&
               clone.scheduledTime == splitMoment &&
@@ -1074,14 +1074,18 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime rangeStart =
-            seededTask.scheduledTime!.add(const Duration(days: 1));
+        final DateTime rangeStart = seededTask.scheduledTime!.add(
+          const Duration(days: 1),
+        );
         final DateTime rangeEnd = rangeStart.add(const Duration(hours: 4));
-        final List<CalendarTask> occurrences =
-            seededTask.occurrencesWithin(rangeStart, rangeEnd);
+        final List<CalendarTask> occurrences = seededTask.occurrencesWithin(
+          rangeStart,
+          rangeEnd,
+        );
         splitOccurrence = occurrences.first;
-        splitMoment =
-            splitOccurrence.scheduledTime!.add(const Duration(hours: 1));
+        splitMoment = splitOccurrence.scheduledTime!.add(
+          const Duration(hours: 1),
+        );
 
         bloc.add(
           CalendarEvent.taskSplit(
@@ -1103,16 +1107,19 @@ void main() {
           if (override == null) {
             return false;
           }
-          final Iterable<CalendarTask> extras = state.model.tasks.values
-              .where((task) => task.id != 'series-task');
+          final Iterable<CalendarTask> extras = state.model.tasks.values.where(
+            (task) => task.id != 'series-task',
+          );
           if (extras.length != 1) {
             return false;
           }
           final CalendarTask clone = extras.first;
-          final DateTime expectedLeftEnd =
-              override.scheduledTime!.add(const Duration(hours: 1));
-          final DateTime expectedRightEnd =
-              clone.scheduledTime!.add(const Duration(hours: 1));
+          final DateTime expectedLeftEnd = override.scheduledTime!.add(
+            const Duration(hours: 1),
+          );
+          final DateTime expectedRightEnd = clone.scheduledTime!.add(
+            const Duration(hours: 1),
+          );
           return override.duration == const Duration(hours: 1) &&
               clone.duration == const Duration(hours: 1) &&
               clone.scheduledTime == splitMoment &&
@@ -1155,8 +1162,9 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        pasteStart =
-            seededTask.scheduledTime!.add(const Duration(days: 5, hours: 2));
+        pasteStart = seededTask.scheduledTime!.add(
+          const Duration(days: 5, hours: 2),
+        );
         bloc.add(
           CalendarEvent.taskRepeated(
             template: seededTask,
@@ -1169,16 +1177,19 @@ void main() {
       },
       expect: () => [
         predicate<CalendarState>((state) {
-          final Iterable<CalendarTask> extras = state.model.tasks.values
-              .where((task) => task.id != 'multi-day-task');
+          final Iterable<CalendarTask> extras = state.model.tasks.values.where(
+            (task) => task.id != 'multi-day-task',
+          );
           if (extras.length != 1) {
             return false;
           }
           final CalendarTask clone = extras.first;
-          final DateTime pasteStart =
-              seededTask.scheduledTime!.add(const Duration(days: 5, hours: 2));
-          final Duration offset =
-              seededTask.endDate!.difference(seededTask.scheduledTime!);
+          final DateTime pasteStart = seededTask.scheduledTime!.add(
+            const Duration(days: 5, hours: 2),
+          );
+          final Duration offset = seededTask.endDate!.difference(
+            seededTask.scheduledTime!,
+          );
           final DateTime expectedEnd = pasteStart.add(offset);
           return clone.scheduledTime == pasteStart &&
               clone.duration == offset &&
@@ -1208,8 +1219,9 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime newEnd =
-            seededTask.scheduledTime!.add(const Duration(hours: 2));
+        final DateTime newEnd = seededTask.scheduledTime!.add(
+          const Duration(hours: 2),
+        );
         bloc.add(
           CalendarEvent.taskResized(
             taskId: seededTask.id,
@@ -1250,8 +1262,9 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime shifted =
-            seededTask.scheduledTime!.add(const Duration(minutes: 45));
+        final DateTime shifted = seededTask.scheduledTime!.add(
+          const Duration(minutes: 45),
+        );
         bloc.add(
           CalendarEvent.taskResized(
             taskId: seededTask.id,

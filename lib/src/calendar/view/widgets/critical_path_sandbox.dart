@@ -54,10 +54,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
   void didUpdateWidget(covariant CriticalPathSandbox oldWidget) {
     super.didUpdateWidget(oldWidget);
     final bool pathChanged = oldWidget.path.id != widget.path.id;
-    final bool orderChanged = !listEquals(
-      _deriveOrder(),
-      widget.path.taskIds,
-    );
+    final bool orderChanged = !listEquals(_deriveOrder(), widget.path.taskIds);
     if (pathChanged || orderChanged) {
       _bootstrap();
     }
@@ -95,9 +92,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
           padding: calendarMarginLarge,
           decoration: BoxDecoration(
             color: colors.card,
-            border: Border(
-              bottom: BorderSide(color: colors.border),
-            ),
+            border: Border(bottom: BorderSide(color: colors.border)),
           ),
           child: Row(
             children: [
@@ -189,19 +184,14 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
     return taskId != null ? widget.tasks[taskId] : null;
   }
 
-  Future<void> _handleAddToSlot(
-    _SlotLocation location,
-    bool isDesktop,
-  ) async {
+  Future<void> _handleAddToSlot(_SlotLocation location, bool isDesktop) async {
     final List<CalendarTask> available = widget.tasks.values
         .where((task) => !_taskLocations.containsKey(task.id))
         .toList()
       ..sort((a, b) => a.title.compareTo(b.title));
 
     if (!mounted) return;
-    final CalendarTask? selected = await _showTaskPicker(
-      available: available,
-    );
+    final CalendarTask? selected = await _showTaskPicker(available: available);
 
     if (selected == null) {
       return;
@@ -262,10 +252,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
     _commitOrder();
   }
 
-  void _placeTask({
-    required String taskId,
-    required _SlotLocation location,
-  }) {
+  void _placeTask({required String taskId, required _SlotLocation location}) {
     final _SlotLocation? previousLocation = _taskLocations[taskId];
     final String? displaced = _slotOccupants[location];
 
@@ -349,11 +336,7 @@ class _SlotActionTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 18,
-              color: colors.mutedForeground,
-            ),
+            Icon(icon, size: 18, color: colors.mutedForeground),
             const SizedBox(width: calendarGutterSm),
             Expanded(
               child: Column(
@@ -367,19 +350,12 @@ class _SlotActionTile extends StatelessWidget {
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: calendarInsetSm),
-                    Text(
-                      subtitle!,
-                      style: textTheme.muted,
-                    ),
+                    Text(subtitle!, style: textTheme.muted),
                   ],
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: colors.mutedForeground,
-            ),
+            Icon(Icons.chevron_right, size: 18, color: colors.mutedForeground),
           ],
         ),
       ),
@@ -684,10 +660,7 @@ class _DraggableTaskCard extends StatelessWidget {
           child: card,
         ),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.3,
-        child: card,
-      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: card),
       child: card,
     );
   }
@@ -847,10 +820,7 @@ class _DashedBorderPainter extends CustomPainter {
 }
 
 class _SlotLocation {
-  const _SlotLocation({
-    required this.columnIndex,
-    required this.alignment,
-  });
+  const _SlotLocation({required this.columnIndex, required this.alignment});
 
   final int columnIndex;
   final _SlotAlignment alignment;
@@ -910,8 +880,9 @@ extension on _CriticalPathSandboxState {
                   ),
                   AxiIconButton(
                     iconData: LucideIcons.x,
-                    tooltip: MaterialLocalizations.of(sheetContext)
-                        .closeButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      sheetContext,
+                    ).closeButtonTooltip,
                     iconSize: 16,
                     buttonSize: 34,
                     tapTargetSize: 40,
@@ -935,10 +906,7 @@ extension on _CriticalPathSandboxState {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'All tasks are placed already',
-                        style: textTheme.h4,
-                      ),
+                      Text('All tasks are placed already', style: textTheme.h4),
                       const SizedBox(height: calendarInsetMd),
                       Text(
                         'Drag a task off a slot first, then try again.',
@@ -963,8 +931,9 @@ extension on _CriticalPathSandboxState {
                           title: task.title,
                           child: InkWell(
                             onTap: () => Navigator.of(sheetContext).pop(task),
-                            borderRadius:
-                                BorderRadius.circular(calendarBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              calendarBorderRadius,
+                            ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: calendarGutterMd,
@@ -1065,8 +1034,9 @@ extension on _CriticalPathSandboxState {
                   ),
                   AxiIconButton(
                     iconData: LucideIcons.x,
-                    tooltip: MaterialLocalizations.of(sheetContext)
-                        .closeButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      sheetContext,
+                    ).closeButtonTooltip,
                     iconSize: 16,
                     buttonSize: 34,
                     tapTargetSize: 40,
@@ -1082,17 +1052,15 @@ extension on _CriticalPathSandboxState {
                 icon: Icons.swap_horiz,
                 title: 'Replace task',
                 subtitle: context.l10n.calendarPickDifferentTask,
-                onTap: () => Navigator.of(sheetContext).pop(
-                  _SlotTapAction.replace,
-                ),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_SlotTapAction.replace),
               ),
               const SizedBox(height: calendarInsetSm),
               _SlotActionTile(
                 icon: Icons.remove_circle_outline,
                 title: 'Remove from path',
-                onTap: () => Navigator.of(sheetContext).pop(
-                  _SlotTapAction.remove,
-                ),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_SlotTapAction.remove),
               ),
             ],
           ),

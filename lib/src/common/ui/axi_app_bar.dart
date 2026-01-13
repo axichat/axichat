@@ -34,20 +34,14 @@ class AxiAppBar extends StatelessWidget {
       height: 56.0,
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: context.colorScheme.border),
-        ),
+        border: Border(bottom: BorderSide(color: context.colorScheme.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (hasLeading) leading!,
           if (hasLeading && hasTitle) const SizedBox(width: 12),
-          if (hasTitle)
-            Text(
-              appDisplayName,
-              style: titleStyle,
-            ),
+          if (hasTitle) Text(appDisplayName, style: titleStyle),
           if (hasTitle || hasLeading) const Spacer(),
           if (!hasTitle && !hasLeading) const Spacer(),
           trailing ?? const AxiVersion(),

@@ -47,10 +47,8 @@ mox.XmppManagerAttributes _testAttributes({
     sendNonza: (_) {},
     getManagerById: <T extends mox.XmppManagerBase>(_) => null,
     sendEvent: sentEvents.add,
-    getConnectionSettings: () => mox.ConnectionSettings(
-      jid: fullJid,
-      password: _authPassword,
-    ),
+    getConnectionSettings: () =>
+        mox.ConnectionSettings(jid: fullJid, password: _authPassword),
     getFullJID: () => fullJid,
     getSocket: () => throw UnimplementedError(),
     getConnection: () => throw UnimplementedError(),
@@ -67,11 +65,7 @@ void main() {
     () async {
       final sentEvents = <mox.XmppEvent>[];
       final manager = ConversationIndexManager()
-        ..register(
-          _testAttributes(
-            sentEvents: sentEvents,
-          ),
-        );
+        ..register(_testAttributes(sentEvents: sentEvents));
 
       final lastTimestamp = DateTime.utc(
         _lastTsYear,
@@ -98,10 +92,7 @@ void main() {
         node: conversationIndexNode,
         payload: payload,
       );
-      final event = mox.PubSubNotificationEvent(
-        item: item,
-        from: _fromJid,
-      );
+      final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
 
       await manager.onXmppEvent(event);
 
@@ -117,52 +108,37 @@ void main() {
     },
   );
 
-  test(
-    'BookmarksManager emits update from pubsub notification',
-    () async {
-      final sentEvents = <mox.XmppEvent>[];
-      final manager = BookmarksManager()
-        ..register(
-          _testAttributes(
-            sentEvents: sentEvents,
-          ),
-        );
+  test('BookmarksManager emits update from pubsub notification', () async {
+    final sentEvents = <mox.XmppEvent>[];
+    final manager = BookmarksManager()
+      ..register(_testAttributes(sentEvents: sentEvents));
 
-      final payload = mox.XMLNode.xmlns(
-        tag: _conferenceTag,
-        xmlns: _bookmarksNode,
-        attributes: {
-          _conferenceNameAttr: _roomName,
-          _conferenceAutojoinAttr: _autojoinValue,
-          _conferenceJidAttr: _roomJid,
-        },
-        children: [
-          mox.XMLNode(
-            tag: _nickTag,
-            text: _roomNick,
-          ),
-        ],
-      );
-      final item = mox.PubSubItem(
-        id: _roomJid,
-        node: _bookmarksNode,
-        payload: payload,
-      );
-      final event = mox.PubSubNotificationEvent(
-        item: item,
-        from: _fromJid,
-      );
+    final payload = mox.XMLNode.xmlns(
+      tag: _conferenceTag,
+      xmlns: _bookmarksNode,
+      attributes: {
+        _conferenceNameAttr: _roomName,
+        _conferenceAutojoinAttr: _autojoinValue,
+        _conferenceJidAttr: _roomJid,
+      },
+      children: [mox.XMLNode(tag: _nickTag, text: _roomNick)],
+    );
+    final item = mox.PubSubItem(
+      id: _roomJid,
+      node: _bookmarksNode,
+      payload: payload,
+    );
+    final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
 
-      await manager.onXmppEvent(event);
+    await manager.onXmppEvent(event);
 
-      expect(sentEvents, hasLength(1));
-      expect(sentEvents.single, isA<MucBookmarkUpdatedEvent>());
+    expect(sentEvents, hasLength(1));
+    expect(sentEvents.single, isA<MucBookmarkUpdatedEvent>());
 
-      final update = sentEvents.single as MucBookmarkUpdatedEvent;
-      expect(update.bookmark.roomBare.toString(), equals(_roomJid));
-      expect(update.bookmark.name, equals(_roomName));
-      expect(update.bookmark.autojoin, isTrue);
-      expect(update.bookmark.nick, equals(_roomNick));
-    },
-  );
+    final update = sentEvents.single as MucBookmarkUpdatedEvent;
+    expect(update.bookmark.roomBare.toString(), equals(_roomJid));
+    expect(update.bookmark.name, equals(_roomName));
+    expect(update.bookmark.autojoin, isTrue);
+    expect(update.bookmark.nick, equals(_roomNick));
+  });
 }

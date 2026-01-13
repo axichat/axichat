@@ -48,23 +48,24 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
   Widget build(BuildContext context) {
     final pop = Navigator.of(context).pop;
     return ShadDialog(
-      title: Text(
-        widget.title,
-        style: context.modalHeaderTextStyle,
-      ),
+      title: Text(widget.title, style: context.modalHeaderTextStyle),
       actions: [
         ShadButton.outline(
-          onPressed: () => pop(const AttachmentApprovalDecision(
-            approved: false,
-            alwaysAllow: false,
-          )),
+          onPressed: () => pop(
+            const AttachmentApprovalDecision(
+              approved: false,
+              alwaysAllow: false,
+            ),
+          ),
           child: Text(widget.cancelLabel),
         ).withTapBounce(),
         ShadButton(
-          onPressed: () => pop(AttachmentApprovalDecision(
-            approved: true,
-            alwaysAllow: _alwaysAllow,
-          )),
+          onPressed: () => pop(
+            AttachmentApprovalDecision(
+              approved: true,
+              alwaysAllow: _alwaysAllow,
+            ),
+          ),
           child: Text(widget.confirmLabel),
         ).withTapBounce(),
       ],
@@ -73,10 +74,7 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: _attachmentApprovalSpacing,
         children: [
-          Text(
-            widget.message,
-            style: context.textTheme.muted,
-          ),
+          Text(widget.message, style: context.textTheme.muted),
           if (widget.showAutoTrustToggle)
             AxiCheckboxFormField(
               initialValue: _alwaysAllow,

@@ -33,8 +33,9 @@ class TaskChecklist extends StatefulWidget {
 
 class _TaskChecklistState extends State<TaskChecklist> {
   final TextEditingController _newItemController = TextEditingController();
-  final FocusNode _newItemFocusNode =
-      FocusNode(debugLabel: 'taskChecklistAddItem');
+  final FocusNode _newItemFocusNode = FocusNode(
+    debugLabel: 'taskChecklistAddItem',
+  );
   final Map<String, TextEditingController> _itemControllers = {};
   bool _syncingPendingEntry = false;
 
@@ -133,10 +134,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
             TaskSectionHeader(
               title: widget.label,
               trailing: total > 0
-                  ? Text(
-                      '$completed / $total',
-                      style: textTheme.muted,
-                    )
+                  ? Text('$completed / $total', style: textTheme.muted)
                   : null,
             ),
             if (items.isNotEmpty) ...[
@@ -156,16 +154,14 @@ class _TaskChecklistState extends State<TaskChecklist> {
                 switchOutCurve: Curves.easeIn,
                 transitionBuilder: (child, animation) => SizeTransition(
                   sizeFactor: animation,
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
+                  child: FadeTransition(opacity: animation, child: child),
                 ),
                 child: items.isEmpty
                     ? const SizedBox.shrink()
                     : Padding(
                         padding: const EdgeInsets.symmetric(
-                            vertical: calendarInsetSm),
+                          vertical: calendarInsetSm,
+                        ),
                         child: ReorderableListView.builder(
                           key: ValueKey<String>(membership.join(';')),
                           shrinkWrap: true,
@@ -209,9 +205,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
         if (widget.enabled) {
           return content;
         }
-        return IgnorePointer(
-          child: content,
-        );
+        return IgnorePointer(child: content);
       },
     );
   }
@@ -256,10 +250,7 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       duration: baseAnimationDuration,
-      tween: Tween<double>(
-        begin: _previousProgress,
-        end: _targetProgress,
-      ),
+      tween: Tween<double>(begin: _previousProgress, end: _targetProgress),
       builder: (context, value, _) {
         final borderRadius = BorderRadius.circular(999);
         final colors = context.colorScheme;
@@ -369,8 +360,9 @@ class _ChecklistItemRow extends StatelessWidget {
             child: ReorderableDragStartListener(
               index: index,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: calendarInsetSm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: calendarInsetSm,
+                ),
                 child: Icon(
                   Icons.drag_indicator,
                   size: 18,

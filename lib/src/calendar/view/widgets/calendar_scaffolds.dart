@@ -47,10 +47,7 @@ class CalendarMobileSplitScaffold extends StatelessWidget {
               TabBarView(
                 controller: tabController,
                 physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  primaryPane,
-                  secondaryPane,
-                ],
+                children: [primaryPane, secondaryPane],
               ),
               dragOverlay,
             ],

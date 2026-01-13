@@ -18,22 +18,13 @@ const String _draftRecipientRoleKey = 'role';
 const String _draftRecipientRoleFallback = 'to';
 
 final class DraftRecipientData {
-  const DraftRecipientData({
-    required this.jid,
-    required this.role,
-  });
+  const DraftRecipientData({required this.jid, required this.role});
 
   final String jid;
   final String role;
 
-  DraftRecipientData copyWith({
-    String? jid,
-    String? role,
-  }) {
-    return DraftRecipientData(
-      jid: jid ?? this.jid,
-      role: role ?? this.role,
-    );
+  DraftRecipientData copyWith({String? jid, String? role}) {
+    return DraftRecipientData(jid: jid ?? this.jid, role: role ?? this.role);
   }
 
   Map<String, dynamic> toJson() => {
@@ -51,10 +42,7 @@ final class DraftRecipientData {
     final role = rawRole is String && rawRole.trim().isNotEmpty
         ? rawRole.trim()
         : _draftRecipientRoleFallback;
-    return DraftRecipientData(
-      jid: trimmedJid,
-      role: role,
-    );
+    return DraftRecipientData(jid: trimmedJid, role: role);
   }
 }
 

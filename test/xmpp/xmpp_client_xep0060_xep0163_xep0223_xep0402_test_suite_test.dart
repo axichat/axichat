@@ -94,13 +94,7 @@ List<_PlanCase> _loadPlanCases() {
     if (id == _emptyString || description == _emptyString) {
       continue;
     }
-    cases.add(
-      _PlanCase(
-        id: id,
-        label: label,
-        description: description,
-      ),
-    );
+    cases.add(_PlanCase(id: id, label: label, description: description));
   }
   return cases;
 }

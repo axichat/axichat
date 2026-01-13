@@ -30,8 +30,10 @@ class ProfileTile extends StatelessWidget {
       builder: (context, connectivityState) {
         final demoOffline =
             context.read<XmppService?>()?.demoOfflineMode ?? false;
-        final connectionState =
-            _xmppStateFor(connectivityState, demoOffline: demoOffline);
+        final connectionState = _xmppStateFor(
+          connectivityState,
+          demoOffline: demoOffline,
+        );
         return BlocBuilder<EmailSyncCubit, EmailSyncState>(
           builder: (context, emailSyncState) {
             final sessionEmailState =

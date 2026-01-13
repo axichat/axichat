@@ -114,9 +114,7 @@ class _AxichatState extends State<Axichat> {
             create: (context) => XmppService(
               buildConnection: () =>
                   withForeground && foregroundServiceActive.value
-                      ? XmppConnection(
-                          socketWrapper: ForegroundSocketWrapper(),
-                        )
+                      ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
                       : XmppConnection(),
               buildStateStore: (prefix, passphrase) async {
                 final Logger logger = Logger('XmppStateStore');
@@ -146,9 +144,7 @@ class _AxichatState extends State<Axichat> {
             ),
           )
         else
-          RepositoryProvider<XmppService>.value(
-            value: widget._xmppService!,
-          ),
+          RepositoryProvider<XmppService>.value(value: widget._xmppService!),
         RepositoryProvider<MessageService>(
           create: (context) => context.read<XmppService>(),
         ),
@@ -195,13 +191,10 @@ class _AxichatState extends State<Axichat> {
             ),
           ),
           BlocProvider(
-            create: (context) => OmemoActivityCubit(
-              xmppBase: context.read<XmppService>(),
-            ),
+            create: (context) =>
+                OmemoActivityCubit(xmppBase: context.read<XmppService>()),
           ),
-          BlocProvider(
-            create: (context) => ShareIntentCubit()..initialize(),
-          ),
+          BlocProvider(create: (context) => ShareIntentCubit()..initialize()),
           BlocProvider(
             create: (context) => ChatsCubit(
               xmppService: context.read<XmppService>(),
@@ -216,9 +209,7 @@ class _AxichatState extends State<Axichat> {
               settingsCubit: context.read<SettingsCubit>(),
             ),
           ),
-          BlocProvider(
-            create: (context) => ComposeWindowCubit(),
-          ),
+          BlocProvider(create: (context) => ComposeWindowCubit()),
           if (widget._storageManager.guestStorage != null)
             BlocProvider(
               create: (context) => GuestCalendarBloc(
@@ -302,9 +293,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
         final xmppService = context.read<XmppService>();
         xmppService.updateMessageStorageMode(state.messageStorageMode);
-        context
-            .read<EmailService>()
-            .updateMessageStorageMode(xmppService.messageStorageMode);
+        context.read<EmailService>().updateMessageStorageMode(
+              xmppService.messageStorageMode,
+            );
         xmppService.toggleAllChatsMarkerResponsive(
           responsive: state.chatReadReceipts,
         );
@@ -337,8 +328,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             );
             final materialColors = shadTheme.colorScheme;
             final globalRadius = shadTheme.radius;
-            final buttonShape =
-                ContinuousRectangleBorder(borderRadius: globalRadius);
+            final buttonShape = ContinuousRectangleBorder(
+              borderRadius: globalRadius,
+            );
             final listTileShape = buttonShape;
             final outlineInputBorder = OutlineInputBorder(
               borderRadius: globalRadius,
@@ -348,8 +340,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               borderSide: BorderSide(color: materialColors.primary, width: 1.5),
             );
             final errorBorder = outlineInputBorder.copyWith(
-              borderSide:
-                  BorderSide(color: materialColors.destructive, width: 1),
+              borderSide: BorderSide(
+                color: materialColors.destructive,
+                width: 1,
+              ),
             );
             final selectionOverlay = materialColors.primary.withValues(
               alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
@@ -464,20 +458,19 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               scrollbarTheme: ScrollbarThemeData(
                 thickness: const WidgetStatePropertyAll<double>(4),
                 radius: const Radius.circular(999),
-                thumbColor: WidgetStateProperty.resolveWith(
-                  (states) {
-                    final hovered = states.contains(WidgetState.hovered) ||
-                        states.contains(WidgetState.focused) ||
-                        states.contains(WidgetState.dragged);
-                    return hovered
-                        ? chatTokens.scrollbarHover
-                        : chatTokens.scrollbar;
-                  },
-                ),
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  final hovered = states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.focused) ||
+                      states.contains(WidgetState.dragged);
+                  return hovered
+                      ? chatTokens.scrollbarHover
+                      : chatTokens.scrollbar;
+                }),
               ),
               extensions: [
-                ...theme.extensions.values
-                    .where((extension) => extension is! ChatThemeTokens),
+                ...theme.extensions.values.where(
+                  (extension) => extension is! ChatThemeTokens,
+                ),
                 chatTokens,
               ],
             );
@@ -537,8 +530,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       if (authCompletionDuration == Duration.zero) {
                         navigateHome();
                       } else {
-                        _pendingAuthNavigation =
-                            Timer(authCompletionDuration, navigateHome);
+                        _pendingAuthNavigation = Timer(
+                          authCompletionDuration,
+                          navigateHome,
+                        );
                       }
                     }
                     unawaited(_handleShareIntent(context));
@@ -706,8 +701,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     }
     final List<EmailAttachment> prepared = <EmailAttachment>[];
     for (final ShareAttachmentPayload attachment in attachments) {
-      final String normalizedPath =
-          _normalizeSharedAttachmentPath(attachment.path);
+      final String normalizedPath = _normalizeSharedAttachmentPath(
+        attachment.path,
+      );
       if (normalizedPath.isEmpty) {
         continue;
       }
@@ -732,8 +728,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         mimeType: mimeType,
       );
       if (optimize) {
-        emailAttachment =
-            await EmailAttachmentOptimizer.optimize(emailAttachment);
+        emailAttachment = await EmailAttachmentOptimizer.optimize(
+          emailAttachment,
+        );
       }
       prepared.add(emailAttachment);
     }
@@ -796,9 +793,7 @@ extension ThemeExtension on BuildContext {
 
   ChatThemeTokens get chatTheme =>
       Theme.of(this).extension<ChatThemeTokens>() ??
-      AppTheme.tokens(
-        brightness: Theme.of(this).brightness,
-      );
+      AppTheme.tokens(brightness: Theme.of(this).brightness);
 }
 
 extension TargetPlatformExtension on TargetPlatform {
@@ -826,10 +821,7 @@ class OpenFindActionIntent extends Intent {
 }
 
 class _ShortcutBindings extends StatelessWidget {
-  const _ShortcutBindings({
-    required this.enabled,
-    required this.child,
-  });
+  const _ShortcutBindings({required this.enabled, required this.child});
 
   final bool enabled;
   final Widget child;
@@ -844,10 +836,7 @@ class _ShortcutBindings extends StatelessWidget {
       actions: {
         ComposeIntent: CallbackAction<ComposeIntent>(
           onInvoke: (_) {
-            openComposeDraft(
-              context,
-              attachmentMetadataIds: const <String>[],
-            );
+            openComposeDraft(context, attachmentMetadataIds: const <String>[]);
             return null;
           },
         ),
@@ -857,18 +846,12 @@ class _ShortcutBindings extends StatelessWidget {
     final shortcuts = <ShortcutActivator, Intent>{
       _composeActivator(env.platform): const ComposeIntent(),
     };
-    return Shortcuts(
-      shortcuts: shortcuts,
-      child: routedChild,
-    );
+    return Shortcuts(shortcuts: shortcuts, child: routedChild);
   }
 }
 
 class _DesktopMenuShell extends StatelessWidget {
-  const _DesktopMenuShell({
-    required this.actionsEnabled,
-    required this.child,
-  });
+  const _DesktopMenuShell({required this.actionsEnabled, required this.child});
 
   final bool actionsEnabled;
   final Widget child;

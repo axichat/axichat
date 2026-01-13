@@ -34,10 +34,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 class _AttachmentSpinner extends StatelessWidget {
-  const _AttachmentSpinner({
-    required this.size,
-    required this.color,
-  });
+  const _AttachmentSpinner({required this.size, required this.color});
 
   static const double _strokeWidth = 2;
 
@@ -49,19 +46,13 @@ class _AttachmentSpinner extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CircularProgressIndicator(
-        strokeWidth: _strokeWidth,
-        color: color,
-      ),
+      child: CircularProgressIndicator(strokeWidth: _strokeWidth, color: color),
     );
   }
 }
 
 class _AttachmentFileNameText extends StatelessWidget {
-  const _AttachmentFileNameText({
-    required this.filename,
-    required this.style,
-  });
+  const _AttachmentFileNameText({required this.filename, required this.style});
 
   final String filename;
   final TextStyle style;
@@ -203,8 +194,9 @@ void _registerHighRiskAcknowledgement(String? attachmentId) {
 void _evictAcknowledgedHighRiskAttachmentIdsIfNeeded() {
   while (_acknowledgedHighRiskAttachmentIds.length >
       _acknowledgedHighRiskAttachmentMaxEntries) {
-    _acknowledgedHighRiskAttachmentIds
-        .remove(_acknowledgedHighRiskAttachmentIds.first);
+    _acknowledgedHighRiskAttachmentIds.remove(
+      _acknowledgedHighRiskAttachmentIds.first,
+    );
   }
 }
 
@@ -401,9 +393,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                   ),
                 );
               }
-              return _AttachmentError(
-                message: l10n.chatAttachmentUnavailable,
-              );
+              return _AttachmentError(message: l10n.chatAttachmentUnavailable);
             }
             final FileTypeReport declaredReport = metadata.declaredTypeReport;
 
@@ -514,10 +504,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
 }
 
 class _BlockedAttachment extends StatelessWidget {
-  const _BlockedAttachment({
-    required this.metadata,
-    this.onAllowPressed,
-  });
+  const _BlockedAttachment({required this.metadata, this.onAllowPressed});
 
   final FileMetadataData metadata;
   final VoidCallback? onAllowPressed;
@@ -729,20 +716,14 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     );
   }
 
-  Future<bool> _resolvePreviewAllowed(
-    File file, {
-    required String metadataId,
-  }) {
+  Future<bool> _resolvePreviewAllowed(File file, {required String metadataId}) {
     final path = file.path;
     final cachedFuture = _previewAllowed;
     if (cachedFuture != null && _previewPath == path) {
       return cachedFuture;
     }
     _previewPath = path;
-    final nextFuture = _isImagePreviewAllowed(
-      file,
-      metadataId: metadataId,
-    );
+    final nextFuture = _isImagePreviewAllowed(file, metadataId: metadataId);
     _previewAllowed = nextFuture;
     return nextFuture;
   }
@@ -1376,10 +1357,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                   height: targetSize.height,
                   child: InteractiveViewer(
                     maxScale: 4,
-                    child: Image.file(
-                      file,
-                      fit: BoxFit.contain,
-                    ),
+                    child: Image.file(file, fit: BoxFit.contain),
                   ),
                 ),
               ),
@@ -1606,10 +1584,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
       child: const SizedBox(
         width: _attachmentFileIconWidth,
         height: _attachmentFileIconHeight,
-        child: Icon(
-          LucideIcons.paperclip,
-          size: _attachmentFileIconSize,
-        ),
+        child: Icon(LucideIcons.paperclip, size: _attachmentFileIconSize),
       ),
     );
     final sizeLabel = _formatAttachmentSize(
@@ -1624,9 +1599,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
       children: [
         _AttachmentFileNameText(
           filename: metadata.filename,
-          style: context.textTheme.small.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
         ),
         Text(
           sizeLabel,
@@ -1641,10 +1614,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
             width: 48,
             height: 48,
             child: Center(
-              child: _AttachmentSpinner(
-                size: 18,
-                color: colors.primary,
-              ),
+              child: _AttachmentSpinner(size: 18, color: colors.primary),
             ),
           )
         : Wrap(
@@ -2272,8 +2242,9 @@ class _AttachmentSurface extends StatelessWidget {
     final scope = _AttachmentSurfaceScope.maybeOf(context);
     final OutlinedBorder baseShape =
         scope?.shape ?? _attachmentSurfaceDefaultShape;
-    final OutlinedBorder resolvedShape =
-        baseShape.copyWith(side: resolvedBorder);
+    final OutlinedBorder resolvedShape = baseShape.copyWith(
+      side: resolvedBorder,
+    );
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: resolvedBackground,
@@ -2282,10 +2253,7 @@ class _AttachmentSurface extends StatelessWidget {
       child: ClipPath(
         clipper: ShapeBorderClipper(shape: baseShape),
         clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }
@@ -2402,10 +2370,7 @@ Future<void> _openAttachment(
     );
     return;
   }
-  final report = assessLinkSafety(
-    raw: rawUrl,
-    kind: LinkSafetyKind.attachment,
-  );
+  final report = assessLinkSafety(raw: rawUrl, kind: LinkSafetyKind.attachment);
   if (report == null || !report.isSafe) {
     _showToast(
       l10n,
@@ -2417,14 +2382,8 @@ Future<void> _openAttachment(
   }
   final hostLabel = formatLinkSchemeHostLabel(report);
   final baseMessage = report.needsWarning
-      ? l10n.chatOpenLinkWarningMessage(
-          report.displayUri,
-          hostLabel,
-        )
-      : l10n.chatOpenLinkMessage(
-          report.displayUri,
-          hostLabel,
-        );
+      ? l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel)
+      : l10n.chatOpenLinkMessage(report.displayUri, hostLabel);
   final warningBlock = formatLinkWarningText(report.warnings);
   final action = await showLinkActionDialog(
     context,
@@ -2436,13 +2395,13 @@ Future<void> _openAttachment(
   );
   if (action == null) return;
   if (action == LinkAction.copy) {
-    await Clipboard.setData(
-      ClipboardData(text: report.displayUri),
-    );
+    await Clipboard.setData(ClipboardData(text: report.displayUri));
     return;
   }
-  final launched =
-      await launchUrl(report.uri, mode: LaunchMode.externalApplication);
+  final launched = await launchUrl(
+    report.uri,
+    mode: LaunchMode.externalApplication,
+  );
   if (!launched) {
     final target = report.displayHost;
     _showToast(
@@ -2577,9 +2536,7 @@ Future<void> _saveAttachmentToDevice(
     fallbackName: fallbackName,
     maxLength: _attachmentSaveNameMaxLength,
   );
-  final savePath = await FilePicker.platform.saveFile(
-    fileName: resolvedName,
-  );
+  final savePath = await FilePicker.platform.saveFile(fileName: resolvedName);
   if (savePath == null || savePath.trim().isEmpty) return;
   try {
     final destination = File(savePath);
@@ -2606,10 +2563,7 @@ Future<File?> _prepareShareAttachmentFile({
   if (!await file.exists()) {
     return null;
   }
-  final entityType = await FileSystemEntity.type(
-    file.path,
-    followLinks: false,
-  );
+  final entityType = await FileSystemEntity.type(file.path, followLinks: false);
   if (entityType != FileSystemEntityType.file) {
     return null;
   }
@@ -2733,15 +2687,12 @@ Future<void> _applyDownloadProtections(File destination) async {
 Future<void> _applyMacOsQuarantine(File destination) async {
   try {
     final value = _buildMacOsQuarantineValue();
-    await Process.run(
-      _attachmentMacOsQuarantineCommand,
-      [
-        _attachmentMacOsQuarantineWriteArg,
-        _attachmentMacOsQuarantineAttribute,
-        value,
-        destination.path,
-      ],
-    );
+    await Process.run(_attachmentMacOsQuarantineCommand, [
+      _attachmentMacOsQuarantineWriteArg,
+      _attachmentMacOsQuarantineAttribute,
+      value,
+      destination.path,
+    ]);
   } on Exception {
     return;
   }
@@ -2761,8 +2712,9 @@ Future<void> _applyWindowsZoneIdentifier(File destination) async {
 String _buildMacOsQuarantineValue() {
   final timestampSeconds =
       DateTime.now().millisecondsSinceEpoch ~/ _attachmentMillisecondsPerSecond;
-  final timestampHex =
-      timestampSeconds.toRadixString(_attachmentMacOsQuarantineRadix);
+  final timestampHex = timestampSeconds.toRadixString(
+    _attachmentMacOsQuarantineRadix,
+  );
   final parts = <String>[
     _attachmentMacOsQuarantineFlags,
     timestampHex,
@@ -2779,14 +2731,8 @@ void _showToast(
   bool destructive = false,
 }) {
   final toast = destructive
-      ? FeedbackToast.error(
-          title: l10n.toastWhoopsTitle,
-          message: message,
-        )
-      : FeedbackToast.info(
-          title: l10n.toastHeadsUpTitle,
-          message: message,
-        );
+      ? FeedbackToast.error(title: l10n.toastWhoopsTitle, message: message)
+      : FeedbackToast.info(title: l10n.toastHeadsUpTitle, message: message);
   toaster?.show(toast);
 }
 
@@ -2815,10 +2761,7 @@ String _formatSize(int? bytes, AppLocalizations l10n) {
   return '${value.toStringAsFixed(value >= 10 || unit == 0 ? 0 : 1)} ${units[unit]}';
 }
 
-String _attachmentTooLargeMessage(
-  AppLocalizations l10n,
-  int? maxBytes,
-) {
+String _attachmentTooLargeMessage(AppLocalizations l10n, int? maxBytes) {
   final resolvedLimit =
       maxBytes == null || maxBytes <= 0 ? null : _formatSize(maxBytes, l10n);
   if (resolvedLimit == null) {

@@ -48,11 +48,7 @@ const String _accountJidKey = 'account_jid';
 const String _expectValidKey = 'expect_valid';
 const String _expectAuthorizedKey = 'expect_authorized';
 
-enum LinkSafetyExpectation {
-  safe,
-  warn,
-  unsafe;
-}
+enum LinkSafetyExpectation { safe, warn, unsafe }
 
 enum MessageOriginExpectation {
   valid,
@@ -129,8 +125,9 @@ class AttachmentRiskCase {
       declaredMimeType: json[_declaredMimeTypeKey] as String?,
       detectedMimeType: json[_detectedMimeTypeKey] as String?,
       extensionMimeType: json[_extensionMimeTypeKey] as String?,
-      expectedRisk:
-          FileOpenRiskParsing.parse(json[_expectedRiskKey] as String? ?? ''),
+      expectedRisk: FileOpenRiskParsing.parse(
+        json[_expectedRiskKey] as String? ?? '',
+      ),
       expectMismatch: json[_expectMismatchKey] as bool? ?? false,
       expectedPreferredMimeType: json[_expectedPreferredMimeTypeKey] as String?,
     );
@@ -330,26 +327,17 @@ class SecurityCorpus {
       ..._parseList(
         links,
         _linksSafeKey,
-        (entry) => LinkCorpusCase.fromJson(
-          entry,
-          LinkSafetyExpectation.safe,
-        ),
+        (entry) => LinkCorpusCase.fromJson(entry, LinkSafetyExpectation.safe),
       ),
       ..._parseList(
         links,
         _linksWarnKey,
-        (entry) => LinkCorpusCase.fromJson(
-          entry,
-          LinkSafetyExpectation.warn,
-        ),
+        (entry) => LinkCorpusCase.fromJson(entry, LinkSafetyExpectation.warn),
       ),
       ..._parseList(
         links,
         _linksUnsafeKey,
-        (entry) => LinkCorpusCase.fromJson(
-          entry,
-          LinkSafetyExpectation.unsafe,
-        ),
+        (entry) => LinkCorpusCase.fromJson(entry, LinkSafetyExpectation.unsafe),
       ),
     ];
     return SecurityCorpus(
@@ -373,11 +361,7 @@ class SecurityCorpus {
         _htmlUnsafeKey,
         HtmlCorpusCase.fromJson,
       ),
-      htmlSafeCases: _parseList(
-        html,
-        _htmlSafeKey,
-        HtmlCorpusCase.fromJson,
-      ),
+      htmlSafeCases: _parseList(html, _htmlSafeKey, HtmlCorpusCase.fromJson),
       mediaDecodeCases: _parseList(
         media,
         _mediaDecodeKey,

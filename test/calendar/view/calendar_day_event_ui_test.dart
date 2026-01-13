@@ -72,14 +72,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
     HydratedBloc.storage = await HydratedStorage.build(
-      storageDirectory:
-          Directory.systemTemp.createTempSync('calendar_day_event_tests'),
+      storageDirectory: Directory.systemTemp.createTempSync(
+        'calendar_day_event_tests',
+      ),
     );
     registerCalendarFallbackValues();
   });
 
-  testWidgets('Month view renders overflow pill and taps edit callback',
-      (tester) async {
+  testWidgets('Month view renders overflow pill and taps edit callback', (
+    tester,
+  ) async {
     final DateTime anchor = DateTime(2024, 1, 15);
     const List<String> eventTitles = <String>[
       'Birthday',
@@ -90,9 +92,7 @@ void main() {
       'Workshop',
     ];
     final List<DayEvent> events = eventTitles
-        .map(
-          (title) => DayEvent.create(title: title, startDate: anchor),
-        )
+        .map((title) => DayEvent.create(title: title, startDate: anchor))
         .toList();
     const String expectedOverflowLabel = '+1 more';
 
@@ -163,8 +163,9 @@ void main() {
     expect(badgeFinder, findsOneWidget);
   });
 
-  testWidgets('Day view renders bullet strip with day-level events',
-      (tester) async {
+  testWidgets('Day view renders bullet strip with day-level events', (
+    tester,
+  ) async {
     final DateTime selected = DateTime(2024, 2, 2);
     const String eventTitle = 'Conference';
     final DayEvent event = DayEvent.create(
@@ -187,9 +188,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Day events'), findsOneWidget);
-    expect(
-      find.textContaining(eventTitle, findRichText: true),
-      findsOneWidget,
-    );
+    expect(find.textContaining(eventTitle, findRichText: true), findsOneWidget);
   });
 }

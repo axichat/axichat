@@ -71,10 +71,7 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
   final Map<String, String> _roomPasswords = {};
   final Map<String, String> _roomNicknames = {};
 
-  void rememberPassword({
-    required String roomJid,
-    required String password,
-  }) {
+  void rememberPassword({required String roomJid, required String password}) {
     final normalizedRoom = _normalizeRoomKey(roomJid);
     if (normalizedRoom == null || password.trim().isEmpty) return;
     _roomPasswords[normalizedRoom] = password.trim();
@@ -86,10 +83,7 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     _roomPasswords.remove(normalizedRoom);
   }
 
-  void rememberNickname({
-    required String roomJid,
-    required String nickname,
-  }) {
+  void rememberNickname({required String roomJid, required String nickname}) {
     final normalizedRoom = _normalizeRoomKey(roomJid);
     final normalizedNick = nickname.trim();
     if (normalizedRoom == null || normalizedNick.isEmpty) return;
@@ -237,10 +231,7 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     if (!isSelfPresence) return state;
     final resolvedStatuses = statuses.contains(mucStatusSelfPresence)
         ? statuses
-        : <String>{
-            ...statuses,
-            ..._selfPresenceFallbackStatusCodes,
-          };
+        : <String>{...statuses, ..._selfPresenceFallbackStatusCodes};
     final bool isError = presenceType == _presenceTypeError;
     final bool isUnavailable = presenceType == _presenceTypeUnavailable;
     final bool isAvailable = !isUnavailable && !isError;
@@ -255,8 +246,9 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final reason = item.firstTag('reason')?.innerText().trim();
 
     if (isAvailable) {
-      final mucManager =
-          getAttributes().getManagerById<MUCManager>(mox.mucManager);
+      final mucManager = getAttributes().getManagerById<MUCManager>(
+        mox.mucManager,
+      );
       final roomState = await mucManager?.getRoomState(roomBare);
       if (roomState != null && !roomState.joined) {
         roomState.joined = true;

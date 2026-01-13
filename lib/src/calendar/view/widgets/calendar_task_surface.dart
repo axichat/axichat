@@ -17,9 +17,7 @@ import 'calendar_task_draggable.dart';
 // Completion checkbox intentionally omitted on scheduled grid items.
 
 typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder?
-    Function(
-  ShadPopoverController controller,
-);
+    Function(ShadPopoverController controller);
 
 class CalendarTaskTileCallbacks {
   const CalendarTaskTileCallbacks({
@@ -344,17 +342,18 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
               enableInteractions: !isDraggingTask,
             );
             if (isDraggingTask) {
-              baseTask = Opacity(
-                opacity: 0.0,
-                child: baseTask,
-              );
+              baseTask = Opacity(opacity: 0.0, child: baseTask);
             }
 
             if (previewTaskCandidate != null && !isDraggingTask) {
-              final double occupantWidth =
-                  math.min(primaryWidth, geometry.rect.width);
-              final double ghostWidth =
-                  math.max(geometry.rect.width - occupantWidth, 0.0);
+              final double occupantWidth = math.min(
+                primaryWidth,
+                geometry.rect.width,
+              );
+              final double ghostWidth = math.max(
+                geometry.rect.width - occupantWidth,
+                0.0,
+              );
               final bool widthAllowsSplit =
                   ghostWidth >= _minSideBySideGhostWidth &&
                       occupantWidth >= _minSideBySideGhostWidth;
@@ -394,11 +393,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                         width: occupantWidth,
                         child: occupant,
                       ),
-                      Positioned(
-                        right: 0,
-                        width: ghostWidth,
-                        child: ghost,
-                      ),
+                      Positioned(right: 0, width: ghostWidth, child: ghost),
                     ],
                   ),
                 );

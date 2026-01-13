@@ -67,10 +67,7 @@ void main() {
 
       final String shareText = task.toShareText(now: reference);
 
-      expect(
-        shareText,
-        contains('on Mar 15, 2025 from 9:00 AM to 10:30 AM'),
-      );
+      expect(shareText, contains('on Mar 15, 2025 from 9:00 AM to 10:30 AM'));
     });
   });
 
@@ -129,12 +126,18 @@ void main() {
     expect(parsed.displayEnd, task.displayEnd);
     expect(parsed.deadline, task.deadline);
     expect(parsed.location, task.location);
-    expect(parsed.effectiveRecurrence.frequency,
-        task.effectiveRecurrence.frequency);
-    expect(parsed.effectiveRecurrence.byWeekdays,
-        task.effectiveRecurrence.byWeekdays);
-    expect(parsed.effectiveRecurrence.until?.toUtc(),
-        task.effectiveRecurrence.until?.toUtc());
+    expect(
+      parsed.effectiveRecurrence.frequency,
+      task.effectiveRecurrence.frequency,
+    );
+    expect(
+      parsed.effectiveRecurrence.byWeekdays,
+      task.effectiveRecurrence.byWeekdays,
+    );
+    expect(
+      parsed.effectiveRecurrence.until?.toUtc(),
+      task.effectiveRecurrence.until?.toUtc(),
+    );
     expect(parsed.effectiveRecurrence.count, task.effectiveRecurrence.count);
     expect(parsed.description, task.description);
     expect(parsed.occurrenceOverrides.length, overrides.length);
@@ -182,7 +185,9 @@ void main() {
     expect(result.task.scheduledTime, task.scheduledTime);
     expect(result.task.title, task.title);
     expect(
-        result.task.effectiveRecurrence.frequency, RecurrenceFrequency.yearly);
+      result.task.effectiveRecurrence.frequency,
+      RecurrenceFrequency.yearly,
+    );
     expect(result.task.effectiveRecurrence.interval, interval);
   });
 

@@ -10,9 +10,7 @@ const String _spamSyncPendingRetractionsKeyName =
 const String _spamSyncSnapshotAtKeyName = 'spam_sync_last_snapshot_at';
 const String _spamSyncSnapshotIdsKeyName = 'spam_sync_last_snapshot_ids';
 
-final _spamSyncSourceKey = XmppStateStore.registerKey(
-  _spamSyncSourceKeyName,
-);
+final _spamSyncSourceKey = XmppStateStore.registerKey(_spamSyncSourceKeyName);
 final _spamSyncPendingPublishesKey = XmppStateStore.registerKey(
   _spamSyncPendingPublishesKeyName,
 );
@@ -26,11 +24,7 @@ final _spamSyncSnapshotIdsKey = XmppStateStore.registerKey(
   _spamSyncSnapshotIdsKeyName,
 );
 
-enum _SpamSyncDecision {
-  applyRemote,
-  publishLocal,
-  skip,
-}
+enum _SpamSyncDecision { applyRemote, publishLocal, skip }
 
 mixin SpamSyncService on XmppBase, BaseStreamService {
   bool _spamSnapshotInFlight = false;
@@ -209,10 +203,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     }
   }
 
-  Future<void> setSpamStatus({
-    required String jid,
-    required bool spam,
-  }) async {
+  Future<void> setSpamStatus({required String jid, required bool spam}) async {
     final normalized = jid.trim().toLowerCase();
     if (normalized.isEmpty) {
       return;
@@ -401,24 +392,22 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (normalized.isEmpty) {
       return;
     }
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        if (spam) {
-          await db.addEmailSpam(
-            normalized,
-            flaggedAt: updatedAt,
-            sourceId: sourceId,
-          );
-        } else {
-          await db.removeEmailSpam(normalized);
-        }
-        await db.markChatSpam(
-          jid: normalized,
-          spam: spam,
-          spamUpdatedAt: spam ? updatedAt : null,
+    await _dbOp<XmppDatabase>((db) async {
+      if (spam) {
+        await db.addEmailSpam(
+          normalized,
+          flaggedAt: updatedAt,
+          sourceId: sourceId,
         );
-      },
-    );
+      } else {
+        await db.removeEmailSpam(normalized);
+      }
+      await db.markChatSpam(
+        jid: normalized,
+        spam: spam,
+        spamUpdatedAt: spam ? updatedAt : null,
+      );
+    });
     final callback = emailSpamSyncCallback;
     if (callback != null) {
       await callback(
@@ -456,10 +445,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     }
     final generated = uuid.v4();
     await _dbOp<XmppStateStore>(
-      (ss) async => ss.write(
-        key: _spamSyncSourceKey,
-        value: generated,
-      ),
+      (ss) async => ss.write(key: _spamSyncSourceKey, value: generated),
     );
     _spamSourceId = generated;
     return generated;
@@ -469,23 +455,19 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (_pendingSpamSyncLoaded) {
       return;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final rawPublishes =
-            (ss.read(key: _spamSyncPendingPublishesKey) as List?)
-                ?.cast<Object?>();
-        final rawRetractions =
-            (ss.read(key: _spamSyncPendingRetractionsKey) as List?)
-                ?.cast<Object?>();
-        _pendingSpamPublishes
-          ..clear()
-          ..addAll(_normalizeSpamSyncIds(rawPublishes));
-        _pendingSpamRetractions
-          ..clear()
-          ..addAll(_normalizeSpamSyncIds(rawRetractions));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawPublishes = (ss.read(key: _spamSyncPendingPublishesKey) as List?)
+          ?.cast<Object?>();
+      final rawRetractions =
+          (ss.read(key: _spamSyncPendingRetractionsKey) as List?)
+              ?.cast<Object?>();
+      _pendingSpamPublishes
+        ..clear()
+        ..addAll(_normalizeSpamSyncIds(rawPublishes));
+      _pendingSpamRetractions
+        ..clear()
+        ..addAll(_normalizeSpamSyncIds(rawRetractions));
+    }, awaitDatabase: true);
     _pendingSpamSyncLoaded = true;
   }
 
@@ -493,18 +475,15 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (_spamSnapshotMetaLoaded) {
       return;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final rawTimestamp = ss.read(key: _spamSyncSnapshotAtKey);
-        final rawIds =
-            (ss.read(key: _spamSyncSnapshotIdsKey) as List?)?.cast<Object?>();
-        _spamLastSnapshotAt = _parseSpamSnapshotAt(rawTimestamp);
-        _spamLastSnapshotIds
-          ..clear()
-          ..addAll(_normalizeSpamSyncIds(rawIds));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawTimestamp = ss.read(key: _spamSyncSnapshotAtKey);
+      final rawIds =
+          (ss.read(key: _spamSyncSnapshotIdsKey) as List?)?.cast<Object?>();
+      _spamLastSnapshotAt = _parseSpamSnapshotAt(rawTimestamp);
+      _spamLastSnapshotIds
+        ..clear()
+        ..addAll(_normalizeSpamSyncIds(rawIds));
+    }, awaitDatabase: true);
     _spamSnapshotMetaLoaded = true;
   }
 
@@ -583,10 +562,12 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     await _dbOp<XmppStateStore>(
       (ss) async => ss.writeAll(
         data: {
-          _spamSyncPendingPublishesKey:
-              _pendingSpamPublishes.toList(growable: false),
-          _spamSyncPendingRetractionsKey:
-              _pendingSpamRetractions.toList(growable: false),
+          _spamSyncPendingPublishesKey: _pendingSpamPublishes.toList(
+            growable: false,
+          ),
+          _spamSyncPendingRetractionsKey: _pendingSpamRetractions.toList(
+            growable: false,
+          ),
         },
       ),
       awaitDatabase: true,

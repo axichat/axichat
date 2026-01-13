@@ -29,11 +29,14 @@ class CalendarMonthView extends StatelessWidget {
   Widget build(BuildContext context) {
     final DateTime monthAnchor = state.selectedDate;
     final _MonthGrid grid = _MonthGrid.forMonth(monthAnchor);
-    final Map<DateTime, List<DayEvent>> eventsByDate =
-        _eventsForGrid(grid, visibleEvents);
+    final Map<DateTime, List<DayEvent>> eventsByDate = _eventsForGrid(
+      grid,
+      visibleEvents,
+    );
     final ShadColorScheme colors = context.colorScheme;
-    final BorderSide border =
-        BorderSide(color: colors.border.withValues(alpha: 0.35));
+    final BorderSide border = BorderSide(
+      color: colors.border.withValues(alpha: 0.35),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -113,8 +116,9 @@ class _MonthGrid {
   factory _MonthGrid.forMonth(DateTime anchor) {
     final DateTime firstOfMonth = DateTime(anchor.year, anchor.month, 1);
     final DateTime lastOfMonth = DateTime(anchor.year, anchor.month + 1, 0);
-    final DateTime start = firstOfMonth
-        .subtract(Duration(days: firstOfMonth.weekday - DateTime.monday));
+    final DateTime start = firstOfMonth.subtract(
+      Duration(days: firstOfMonth.weekday - DateTime.monday),
+    );
     final DateTime end = lastOfMonth.add(
       Duration(days: DateTime.sunday - lastOfMonth.weekday),
     );
@@ -185,12 +189,7 @@ class _WeekdayHeaderRow extends StatelessWidget {
                   bottom: BorderSide(color: divider, width: 1),
                 ),
               ),
-              child: Center(
-                child: Text(
-                  entry.value,
-                  style: labelStyle,
-                ),
-              ),
+              child: Center(child: Text(entry.value, style: labelStyle)),
             ),
           );
         }).toList(growable: false),
@@ -287,9 +286,7 @@ class _MonthDayTile extends StatelessWidget {
             : colors.mutedForeground.withValues(alpha: 0.55));
     final bool highlightDay = isToday || isSelected;
     final Color badgeBackground = highlightDay
-        ? calendarPrimaryColor.withValues(
-            alpha: isToday ? 0.18 : 0.12,
-          )
+        ? calendarPrimaryColor.withValues(alpha: isToday ? 0.18 : 0.12)
         : Colors.transparent;
     const EdgeInsets dayPadding = EdgeInsets.symmetric(
       horizontal: 8,

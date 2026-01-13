@@ -42,8 +42,9 @@ void main() {
     });
 
     test('matches corpus unsafe schemes', () {
-      final unsafeCases = corpus.linkCases
-          .where((entry) => entry.expectation == LinkSafetyExpectation.unsafe);
+      final unsafeCases = corpus.linkCases.where(
+        (entry) => entry.expectation == LinkSafetyExpectation.unsafe,
+      );
       for (final entry in unsafeCases) {
         final report = assessLinkSafety(
           raw: entry.url,
@@ -57,7 +58,9 @@ void main() {
   group('isSafeAttachmentUri', () {
     test('allows https attachment links', () {
       expect(
-          isSafeAttachmentUri(Uri.parse('https://example.com/file')), isTrue);
+        isSafeAttachmentUri(Uri.parse('https://example.com/file')),
+        isTrue,
+      );
     });
 
     test('rejects attachments with credentials', () {
@@ -111,8 +114,9 @@ void main() {
     });
 
     test('matches corpus warnings', () {
-      final warnCases = corpus.linkCases
-          .where((entry) => entry.expectation == LinkSafetyExpectation.warn);
+      final warnCases = corpus.linkCases.where(
+        (entry) => entry.expectation == LinkSafetyExpectation.warn,
+      );
       for (final entry in warnCases) {
         final report = assessLinkSafety(
           raw: entry.url,
@@ -125,8 +129,9 @@ void main() {
     });
 
     test('matches corpus safe links', () {
-      final safeCases = corpus.linkCases
-          .where((entry) => entry.expectation == LinkSafetyExpectation.safe);
+      final safeCases = corpus.linkCases.where(
+        (entry) => entry.expectation == LinkSafetyExpectation.safe,
+      );
       for (final entry in safeCases) {
         final report = assessLinkSafety(
           raw: entry.url,

@@ -14,9 +14,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 
 typedef TaskTileContextMenuCallback = void Function(
-  Offset localPosition,
-  Offset normalizedPosition,
-);
+    Offset localPosition, Offset normalizedPosition);
 
 extension PointerDeviceKindX on PointerDeviceKind {
   bool get usesResizeLongPress => switch (this) {
@@ -157,8 +155,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   double _handleExtent;
   static const double _tapSlop = 3.0;
-  static const Duration _touchResizeLongPressDelay =
-      Duration(milliseconds: 200);
+  static const Duration _touchResizeLongPressDelay = Duration(
+    milliseconds: 200,
+  );
   static const double _touchHandleHorizontalFraction = 0.45;
   static const double _touchHandleHorizontalMax = 56.0;
   static const double _touchHandleHorizontalMin = 28.0;
@@ -508,30 +507,26 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     return true;
   }
 
-  void _startResizeLongPressRecognizer(
-    String handle,
-    PointerDownEvent event,
-  ) {
+  void _startResizeLongPressRecognizer(String handle, PointerDownEvent event) {
     _pendingResizeHandle = handle;
-    final LongPressGestureRecognizer recognizer = LongPressGestureRecognizer(
-      duration: _touchResizeLongPressDelay,
-    )
-      ..onLongPressStart = (details) {
-        final String? pendingHandle = _pendingResizeHandle;
-        if (pendingHandle == null || _resizeActive) {
-          return;
-        }
-        _useLongPressMoveUpdates = true;
-        _lastLongPressLocalPosition = details.localPosition;
-        _beginResize(pendingHandle);
-      }
-      ..onLongPressMoveUpdate = _handleLongPressMoveUpdate
-      ..onLongPressEnd = (_) {
-        _cancelResizeLongPressRecognizer();
-      }
-      ..onLongPressUp = () {
-        _cancelResizeLongPressRecognizer();
-      };
+    final LongPressGestureRecognizer recognizer =
+        LongPressGestureRecognizer(duration: _touchResizeLongPressDelay)
+          ..onLongPressStart = (details) {
+            final String? pendingHandle = _pendingResizeHandle;
+            if (pendingHandle == null || _resizeActive) {
+              return;
+            }
+            _useLongPressMoveUpdates = true;
+            _lastLongPressLocalPosition = details.localPosition;
+            _beginResize(pendingHandle);
+          }
+          ..onLongPressMoveUpdate = _handleLongPressMoveUpdate
+          ..onLongPressEnd = (_) {
+            _cancelResizeLongPressRecognizer();
+          }
+          ..onLongPressUp = () {
+            _cancelResizeLongPressRecognizer();
+          };
     _resizeLongPressRecognizer = recognizer;
     recognizer.addPointer(event);
   }
@@ -657,10 +652,14 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       final DateTime scheduled = task.scheduledTime!;
       final double currentEndHour =
           (_currentStartHour + _currentDurationHours).clamp(0.0, 24.0);
-      double newStartHour = (_currentStartHour + hoursDelta)
-          .clamp(0.0, currentEndHour - minDurationHours);
-      final double newDuration =
-          (currentEndHour - newStartHour).clamp(minDurationHours, 24.0);
+      double newStartHour = (_currentStartHour + hoursDelta).clamp(
+        0.0,
+        currentEndHour - minDurationHours,
+      );
+      final double newDuration = (currentEndHour - newStartHour).clamp(
+        minDurationHours,
+        24.0,
+      );
       _currentStartHour = newStartHour;
       _currentDurationHours = newDuration;
       final int startMinutes = (_currentStartHour * 60).round();
@@ -675,8 +674,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       _tempDuration = Duration(minutes: (_currentDurationHours * 60).round());
     } else if (_activeHandle == 'bottom') {
       final double maxDuration = 24.0 - _currentStartHour;
-      final double nextDuration = (_currentDurationHours + hoursDelta)
-          .clamp(minDurationHours, maxDuration);
+      final double nextDuration = (_currentDurationHours + hoursDelta).clamp(
+        minDurationHours,
+        maxDuration,
+      );
       _currentDurationHours = nextDuration;
       _tempScheduled = task.scheduledTime;
       _tempDuration = Duration(minutes: (_currentDurationHours * 60).round());
@@ -729,7 +730,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       final double handleWidth = math.max(
         _touchHandleHorizontalMin,
         math.min(
-            width * _touchHandleHorizontalFraction, _touchHandleHorizontalMax),
+          width * _touchHandleHorizontalFraction,
+          _touchHandleHorizontalMax,
+        ),
       );
       final double left = (width - handleWidth) / 2;
       final double right = left + handleWidth;
@@ -816,8 +819,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _activeHandle = 'bottom';
     final int baseMinutes =
         (task.duration ?? const Duration(minutes: 30)).inMinutes;
-    final int nextMinutes =
-        math.max(minutesPerStep.clamp(1, 60), baseMinutes - minutesPerStep);
+    final int nextMinutes = math.max(
+      minutesPerStep.clamp(1, 60),
+      baseMinutes - minutesPerStep,
+    );
     _tempDuration = Duration(minutes: nextMinutes);
     final CalendarTask? preview = _resizePreview();
     if (preview != null) {

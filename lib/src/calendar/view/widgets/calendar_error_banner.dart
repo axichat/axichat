@@ -26,11 +26,7 @@ class CalendarErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: margin ?? calendarPaddingXl,
-      child: ErrorDisplay(
-        error: error,
-        onRetry: onRetry,
-        onDismiss: onDismiss,
-      ),
+      child: ErrorDisplay(error: error, onRetry: onRetry, onDismiss: onDismiss),
     );
   }
 }

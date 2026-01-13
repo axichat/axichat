@@ -227,20 +227,14 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
 }
 
 final class StanzaErrorConditionData implements mox.StanzaHandlerExtension {
-  const StanzaErrorConditionData({
-    required this.condition,
-    this.type,
-  });
+  const StanzaErrorConditionData({required this.condition, this.type});
 
   final String condition;
   final String? type;
 }
 
 final class OutboundGroupchatStanzaEvent extends mox.XmppEvent {
-  OutboundGroupchatStanzaEvent({
-    required this.stanzaId,
-    required this.roomJid,
-  });
+  OutboundGroupchatStanzaEvent({required this.stanzaId, required this.roomJid});
 
   final String stanzaId;
   final String roomJid;
@@ -259,12 +253,7 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
       attributes: const {
         _calendarFragmentVersionAttr: _calendarFragmentVersionValue,
       },
-      children: [
-        mox.XMLNode(
-          tag: _calendarFragmentPayloadTag,
-          text: payload,
-        ),
-      ],
+      children: [mox.XMLNode(tag: _calendarFragmentPayloadTag, text: payload)],
     );
   }
 
@@ -317,12 +306,7 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
         if (readOnly != _calendarTaskIcsReadOnlyDefault)
           _calendarTaskIcsReadOnlyAttr: _calendarTaskIcsReadOnlyFalseValue,
       },
-      children: [
-        mox.XMLNode(
-          tag: _calendarTaskIcsPayloadTag,
-          text: payload,
-        ),
-      ],
+      children: [mox.XMLNode(tag: _calendarTaskIcsPayloadTag, text: payload)],
     );
   }
 
@@ -345,10 +329,7 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     final readOnlyAttr =
         node.attributes[_calendarTaskIcsReadOnlyAttr]?.toString();
     final bool readOnly = _parseReadOnly(readOnlyAttr);
-    return CalendarTaskIcsPayload(
-      ics: payloadText,
-      readOnly: readOnly,
-    );
+    return CalendarTaskIcsPayload(ics: payloadText, readOnly: readOnly);
   }
 
   static bool _parseReadOnly(String? raw) {
@@ -376,10 +357,7 @@ final class CalendarAvailabilityMessagePayload
         _calendarAvailabilityVersionAttr: _calendarAvailabilityVersionValue,
       },
       children: [
-        mox.XMLNode(
-          tag: _calendarAvailabilityPayloadTag,
-          text: payload,
-        ),
+        mox.XMLNode(tag: _calendarAvailabilityPayloadTag, text: payload),
       ],
     );
   }
@@ -459,10 +437,7 @@ StanzaErrorConditionData? _parseStanzaErrorCondition(mox.Stanza stanza) {
   final String? normalizedType = _normalizeStanzaErrorType(
     errorNode.attributes[_errorTypeAttr]?.toString(),
   );
-  return StanzaErrorConditionData(
-    condition: condition,
-    type: normalizedType,
-  );
+  return StanzaErrorConditionData(condition: condition, type: normalizedType);
 }
 
 class MessageSanitizerManager extends mox.XmppManagerBase {
@@ -547,10 +522,7 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     final roomJid = _normalizeMucRoomJidCandidate(toRaw);
     if (roomJid == null) return state;
     getAttributes().sendEvent(
-      OutboundGroupchatStanzaEvent(
-        stanzaId: stanzaId,
-        roomJid: roomJid,
-      ),
+      OutboundGroupchatStanzaEvent(stanzaId: stanzaId, roomJid: roomJid),
     );
     return state;
   }
@@ -566,8 +538,9 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
       return state;
     }
 
-    final StanzaErrorConditionData? errorCondition =
-        _parseStanzaErrorCondition(stanza);
+    final StanzaErrorConditionData? errorCondition = _parseStanzaErrorCondition(
+      stanza,
+    );
     if (errorCondition != null) {
       state.extensions.set(errorCondition);
     }
@@ -611,10 +584,7 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
         );
         final roomJid = mox.JID.fromString(fromAttr!).toBare().toString();
         getAttributes().sendEvent(
-          MucSubjectChangedEvent(
-            roomJid: roomJid,
-            subject: subject,
-          ),
+          MucSubjectChangedEvent(roomJid: roomJid, subject: subject),
         );
       }
     }

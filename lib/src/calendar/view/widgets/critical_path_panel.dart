@@ -94,16 +94,12 @@ class CriticalPathPanel extends StatelessWidget {
         reorderTarget != null ? _tasksForPath(reorderTarget) : const [];
     final Iterable<CalendarCriticalPath> visiblePaths = orderingPath != null
         ? <CalendarCriticalPath>[orderingPath]
-        : paths.where(
-            (path) => !(hideCompleted && _isPathCompleted(path)),
-          );
+        : paths.where((path) => !(hideCompleted && _isPathCompleted(path)));
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: BorderRadius.zero,
-        border: Border(
-          bottom: BorderSide(color: colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       padding: calendarPaddingLg,
       child: Column(
@@ -216,15 +212,11 @@ class CriticalPathPanel extends StatelessWidget {
                         isFocused: focusedPathId == path.id,
                         isActive: orderingPathId == path.id,
                         progress: _progressFor(path),
-                        onFocus: () => onFocusPath(
-                          focusedPathId == path.id ? null : path,
-                        ),
+                        onFocus: () =>
+                            onFocusPath(focusedPathId == path.id ? null : path),
                         onRename: () => onRenamePath(path),
                         onDelete: () => onDeletePath(path),
-                        onShare: () => onSharePath(
-                          path,
-                          _tasksForPath(path),
-                        ),
+                        onShare: () => onSharePath(path, _tasksForPath(path)),
                         onOpen: () {
                           _handleExpand();
                           onOpenPath(path);
@@ -242,11 +234,8 @@ class CriticalPathPanel extends StatelessWidget {
                         taskTileBuilder: taskTileBuilder,
                         requiresLongPressForReorder:
                             requiresLongPressForReorder,
-                        onReorder: (oldIndex, newIndex) => _handleReorder(
-                          reorderTarget,
-                          oldIndex,
-                          newIndex,
-                        ),
+                        onReorder: (oldIndex, newIndex) =>
+                            _handleReorder(reorderTarget, oldIndex, newIndex),
                         onAddTask: onAddTaskToFocusedPath,
                       ),
                   ],
@@ -261,10 +250,7 @@ class CriticalPathPanel extends StatelessWidget {
   }
 
   CriticalPathProgress _progressFor(CalendarCriticalPath path) {
-    return computeCriticalPathProgress(
-      path: path,
-      tasks: tasks,
-    );
+    return computeCriticalPathProgress(path: path, tasks: tasks);
   }
 
   CalendarTask? _taskForId(String id) {
@@ -301,11 +287,7 @@ class CriticalPathPanel extends StatelessWidget {
         progress.completed >= progress.total;
   }
 
-  void _handleReorder(
-    CalendarCriticalPath path,
-    int oldIndex,
-    int newIndex,
-  ) {
+  void _handleReorder(CalendarCriticalPath path, int oldIndex, int newIndex) {
     final List<String> ordered = List<String>.from(path.taskIds);
     if (newIndex > oldIndex) {
       newIndex -= 1;
@@ -376,10 +358,7 @@ class CriticalPathCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: radius,
-          border: Border.all(
-            color: borderColor,
-            width: borderWidth,
-          ),
+          border: Border.all(color: borderColor, width: borderWidth),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -704,10 +683,7 @@ class _FocusedPathTasks extends StatelessWidget {
           ],
         ),
         const SizedBox(height: calendarInsetSm),
-        Text(
-          context.l10n.calendarCriticalPathDragHint,
-          style: textTheme.muted,
-        ),
+        Text(context.l10n.calendarCriticalPathDragHint, style: textTheme.muted),
         const SizedBox(height: calendarGutterSm),
         if (tasks.isEmpty)
           Container(
@@ -731,10 +707,7 @@ class _FocusedPathTasks extends StatelessWidget {
             buildDefaultDragHandles: false,
             onReorder: onReorder,
             proxyDecorator: (child, __, ___) {
-              return Material(
-                color: Colors.transparent,
-                child: child,
-              );
+              return Material(color: Colors.transparent, child: child);
             },
             itemBuilder: (context, index) {
               final CalendarTask task = tasks[index];
@@ -830,8 +803,10 @@ CriticalPathProgress computeCriticalPathProgress({
     }
     break;
   }
-  final double progressValue = (completed / total)
-      .clamp(_criticalPathZeroProgress, _criticalPathMaxProgress);
+  final double progressValue = (completed / total).clamp(
+    _criticalPathZeroProgress,
+    _criticalPathMaxProgress,
+  );
   return CriticalPathProgress(
     total: total,
     completed: completed,
@@ -879,11 +854,7 @@ class CriticalPathMembershipList extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.route,
-                    size: 14,
-                    color: colors.mutedForeground,
-                  ),
+                  Icon(Icons.route, size: 14, color: colors.mutedForeground),
                   const SizedBox(width: calendarInsetSm),
                   Text(
                     path.name,
@@ -951,8 +922,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
               ? constraints.maxHeight
               : screenHeight;
           final listViewportHeight = availableHeight * 0.7;
-          final ValueNotifier<String?> statusNotifier =
-              ValueNotifier<String?>(null);
+          final ValueNotifier<String?> statusNotifier = ValueNotifier<String?>(
+            null,
+          );
           final ValueNotifier<bool> busyNotifier = ValueNotifier<bool>(false);
 
           return SafeArea(
@@ -979,8 +951,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                       const Spacer(),
                       AxiIconButton(
                         iconData: LucideIcons.x,
-                        tooltip: MaterialLocalizations.of(sheetContext)
-                            .closeButtonTooltip,
+                        tooltip: MaterialLocalizations.of(
+                          sheetContext,
+                        ).closeButtonTooltip,
                         iconSize: 16,
                         buttonSize: 34,
                         tapTargetSize: 40,
@@ -1064,8 +1037,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                                             color: colors.muted.withValues(
                                               alpha: 0.12,
                                             ),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                           child: const Icon(
                                             Icons.route,
@@ -1111,8 +1085,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                           padding: const EdgeInsets.all(calendarInsetMd),
                           decoration: BoxDecoration(
                             color: colors.primary.withValues(alpha: 0.08),
-                            borderRadius:
-                                BorderRadius.circular(calendarBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              calendarBorderRadius,
+                            ),
                             border: Border.all(color: colors.primary),
                           ),
                           child: Row(
@@ -1157,9 +1132,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                         }
                         return;
                       }
-                      Navigator.of(sheetContext).pop(
-                        const CriticalPathPickerResult.createNew(),
-                      );
+                      Navigator.of(
+                        sheetContext,
+                      ).pop(const CriticalPathPickerResult.createNew());
                     },
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1224,8 +1199,9 @@ Future<String?> promptCriticalPathName({
                       ),
                       AxiIconButton(
                         iconData: LucideIcons.x,
-                        tooltip: MaterialLocalizations.of(dialogContext)
-                            .closeButtonTooltip,
+                        tooltip: MaterialLocalizations.of(
+                          dialogContext,
+                        ).closeButtonTooltip,
                         iconSize: 16,
                         buttonSize: 34,
                         tapTargetSize: 40,
@@ -1288,8 +1264,9 @@ Future<String?> promptCriticalPathName({
                             focusNode.requestFocus();
                             return;
                           }
-                          Navigator.of(dialogContext)
-                              .pop(controller.text.trim());
+                          Navigator.of(
+                            dialogContext,
+                          ).pop(controller.text.trim());
                         },
                         child: Text(context.l10n.commonSave),
                       ).withTapBounce(),
@@ -1352,11 +1329,7 @@ Future<void> addTaskToCriticalPath({
   required BaseCalendarBloc bloc,
   required CalendarTask task,
 }) async {
-  await addTasksToCriticalPath(
-    context: context,
-    bloc: bloc,
-    tasks: [task],
-  );
+  await addTasksToCriticalPath(context: context, bloc: bloc, tasks: [task]);
 }
 
 Future<void> addTasksToCriticalPath({
@@ -1379,10 +1352,7 @@ Future<void> addTasksToCriticalPath({
     onPathSelected: (path) async {
       for (final CalendarTask task in tasks) {
         bloc.add(
-          CalendarEvent.criticalPathTaskAdded(
-            pathId: path.id,
-            taskId: task.id,
-          ),
+          CalendarEvent.criticalPathTaskAdded(pathId: path.id, taskId: task.id),
         );
       }
       final bool added = await _waitForTasksInCriticalPath(
@@ -1428,10 +1398,7 @@ Future<void> addTasksToCriticalPath({
       final Set<String> previousIds = <String>{}
         ..addAll(bloc.state.criticalPaths.map((path) => path.id));
       bloc.add(
-        CalendarEvent.criticalPathCreated(
-          name: name,
-          taskId: tasks.first.id,
-        ),
+        CalendarEvent.criticalPathCreated(name: name, taskId: tasks.first.id),
       );
       final String? createdId = await waitForNewPathId(
         bloc: bloc,
@@ -1447,8 +1414,9 @@ Future<void> addTasksToCriticalPath({
         );
         return null;
       }
-      for (final CalendarTask task
-          in tasks.skip(_criticalPathSingleTaskCount)) {
+      for (final CalendarTask task in tasks.skip(
+        _criticalPathSingleTaskCount,
+      )) {
         bloc.add(
           CalendarEvent.criticalPathTaskAdded(
             pathId: createdId,
@@ -1482,9 +1450,7 @@ Future<String?> waitForNewPathId({
 }) async {
   try {
     final Set<String> updatedIds = await bloc.stream
-        .map(
-          (state) => state.criticalPaths.map((path) => path.id).toSet(),
-        )
+        .map((state) => state.criticalPaths.map((path) => path.id).toSet())
         .firstWhere((ids) => ids.length > previousIds.length)
         .timeout(_criticalPathUpdateTimeout);
     final Set<String> difference = updatedIds.difference(previousIds);

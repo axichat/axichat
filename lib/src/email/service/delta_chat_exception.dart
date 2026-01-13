@@ -35,54 +35,38 @@ class DeltaNetworkException extends DeltaChatException {
   const DeltaNetworkException({
     required super.operation,
     required super.message,
-  }) : super(
-          code: DeltaChatErrorCode.network,
-        );
+  }) : super(code: DeltaChatErrorCode.network);
 }
 
 class DeltaAuthException extends DeltaChatException {
-  const DeltaAuthException({
-    required super.operation,
-    required super.message,
-  }) : super(
-          code: DeltaChatErrorCode.auth,
-        );
+  const DeltaAuthException({required super.operation, required super.message})
+      : super(code: DeltaChatErrorCode.auth);
 }
 
 class DeltaServerException extends DeltaChatException {
-  const DeltaServerException({
-    required super.operation,
-    required super.message,
-  }) : super(
-          code: DeltaChatErrorCode.server,
-        );
+  const DeltaServerException({required super.operation, required super.message})
+      : super(code: DeltaChatErrorCode.server);
 }
 
 class DeltaAttachmentTooLargeException extends DeltaChatException {
   const DeltaAttachmentTooLargeException({
     required super.operation,
     required super.message,
-  }) : super(
-          code: DeltaChatErrorCode.attachmentTooLarge,
-        );
+  }) : super(code: DeltaChatErrorCode.attachmentTooLarge);
 }
 
 class DeltaPermissionException extends DeltaChatException {
   const DeltaPermissionException({
     required super.operation,
     required super.message,
-  }) : super(
-          code: DeltaChatErrorCode.permission,
-        );
+  }) : super(code: DeltaChatErrorCode.permission);
 }
 
 class DeltaInternalException extends DeltaChatException {
   const DeltaInternalException({
     required super.operation,
     required super.message,
-  }) : super(
-          code: DeltaChatErrorCode.internal,
-        );
+  }) : super(code: DeltaChatErrorCode.internal);
 }
 
 class DeltaChatExceptionMapper {
@@ -92,10 +76,7 @@ class DeltaChatExceptionMapper {
     DeltaSafeException error, {
     required String operation,
   }) {
-    return fromCoreMessage(
-      operation: operation,
-      message: error.message,
-    );
+    return fromCoreMessage(operation: operation, message: error.message);
   }
 
   static DeltaChatException fromCoreMessage({
@@ -127,8 +108,13 @@ class DeltaChatExceptionMapper {
         message: resolvedMessage,
       );
     }
-    if (_matchesAny(
-        lower, const ['server', 'imap', 'smtp', 'timeout', 'remote'])) {
+    if (_matchesAny(lower, const [
+      'server',
+      'imap',
+      'smtp',
+      'timeout',
+      'remote',
+    ])) {
       return DeltaServerException(
         operation: operation,
         message: resolvedMessage,

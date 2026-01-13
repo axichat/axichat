@@ -97,13 +97,7 @@ final class XhtmlImManager extends mox.XmppManagerBase {
     if (data == null) return const [];
     final nodes = <mox.XMLNode>[data.toXml()];
     if (_shouldIncludePlainBody(extensions)) {
-      nodes.insert(
-        0,
-        mox.XMLNode(
-          tag: _xhtmlImBodyTag,
-          text: data.plainText,
-        ),
-      );
+      nodes.insert(0, mox.XMLNode(tag: _xhtmlImBodyTag, text: data.plainText));
     }
     return nodes;
   }

@@ -12,9 +12,7 @@ void main() {
     final sanitized = HtmlContentCodec.sanitizeHtml(_rawHtml);
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: html_widget.Html(data: sanitized),
-        ),
+        home: Scaffold(body: html_widget.Html(data: sanitized)),
       ),
     );
     await tester.pumpAndSettle();

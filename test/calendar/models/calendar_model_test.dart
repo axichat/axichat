@@ -55,10 +55,7 @@ void main() {
     group('checksum calculation', () {
       test('produces consistent checksum for identical models', () {
         // Create a base model with fixed timestamp
-        final baseModel = CalendarModel(
-          lastModified: testTime,
-          checksum: '',
-        );
+        final baseModel = CalendarModel(lastModified: testTime, checksum: '');
 
         final model1 = baseModel.addTask(testTask1);
         // Create identical model by copying from the first
@@ -68,10 +65,7 @@ void main() {
       });
 
       test('produces different checksums for different data', () {
-        final baseModel = CalendarModel(
-          lastModified: testTime,
-          checksum: '',
-        );
+        final baseModel = CalendarModel(lastModified: testTime, checksum: '');
 
         final model1 = baseModel.addTask(testTask1);
         final model2 = baseModel.addTask(testTask2);
@@ -139,8 +133,10 @@ void main() {
 
           expect(finalModel.tasks, hasLength(1));
           expect(finalModel.tasks['task-1']?.title, equals('Updated Task'));
-          expect(finalModel.lastModified,
-              isNot(equals(initialModel.lastModified)));
+          expect(
+            finalModel.lastModified,
+            isNot(equals(initialModel.lastModified)),
+          );
         });
 
         test('preserves immutability', () {
@@ -164,7 +160,9 @@ void main() {
 
           expect(result.tasks['task-1']?.title, equals('Updated Title'));
           expect(
-              result.lastModified, isNot(equals(modelWithTask.lastModified)));
+            result.lastModified,
+            isNot(equals(modelWithTask.lastModified)),
+          );
           expect(result.checksum, isNot(equals(modelWithTask.checksum)));
         });
 
@@ -197,7 +195,9 @@ void main() {
           expect(result.tasks, isNot(contains('task-1')));
           expect(result.tasks, contains('task-2'));
           expect(
-              result.lastModified, isNot(equals(modelWithTasks.lastModified)));
+            result.lastModified,
+            isNot(equals(modelWithTasks.lastModified)),
+          );
           expect(result.checksum, isNot(equals(modelWithTasks.checksum)));
         });
 
@@ -214,7 +214,9 @@ void main() {
 
           expect(result.tasks, isEmpty);
           expect(
-              result.lastModified, isNot(equals(modelWithTasks.lastModified)));
+            result.lastModified,
+            isNot(equals(modelWithTasks.lastModified)),
+          );
         });
 
         test('preserves immutability', () {
@@ -266,8 +268,9 @@ void main() {
 
         expect(updated.dayEvents[birthday.id]?.title, 'Updated birthday');
         expect(
-          updated.dayEvents[birthday.id]?.normalizedEnd
-              .isAfter(updated.dayEvents[birthday.id]!.normalizedStart),
+          updated.dayEvents[birthday.id]?.normalizedEnd.isAfter(
+            updated.dayEvents[birthday.id]!.normalizedStart,
+          ),
           isTrue,
         );
         expect(
@@ -292,9 +295,9 @@ void main() {
           startDate: DateTime(2024, 5, 20),
         );
 
-        final CalendarModel merged = withTask.replaceDayEvents(
-          {holiday.id: holiday},
-        );
+        final CalendarModel merged = withTask.replaceDayEvents({
+          holiday.id: holiday,
+        });
 
         expect(merged.dayEvents, hasLength(2));
         expect(merged.tasks, contains(testTask1.id));
@@ -324,8 +327,10 @@ void main() {
 
         expect(reconstructed.tasks, hasLength(2));
         expect(reconstructed.checksum, equals(model.checksum));
-        expect(reconstructed.lastModified.millisecondsSinceEpoch,
-            equals(model.lastModified.millisecondsSinceEpoch));
+        expect(
+          reconstructed.lastModified.millisecondsSinceEpoch,
+          equals(model.lastModified.millisecondsSinceEpoch),
+        );
 
         // Verify tasks are correctly reconstructed
         expect(reconstructed.tasks.keys, containsAll(['task-1', 'task-2']));
@@ -410,7 +415,9 @@ void main() {
 
         // Original model should be unchanged
         expect(
-            originalModel.tasks[testTask1.id]?.title, equals(testTask1.title));
+          originalModel.tasks[testTask1.id]?.title,
+          equals(testTask1.title),
+        );
         // Result should have updated task
         expect(result.tasks[testTask1.id]?.title, equals('Updated'));
       });
@@ -500,8 +507,9 @@ void main() {
         final CalendarModel localModel = CalendarModel.empty().copyWith(
           deletedTaskIds: {taskId: deletedAt},
         );
-        final CalendarModel remoteModel =
-            CalendarModel.empty().addTask(remoteTask);
+        final CalendarModel remoteModel = CalendarModel.empty().addTask(
+          remoteTask,
+        );
 
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
@@ -518,8 +526,9 @@ void main() {
           createdAt: taskModifiedAt,
           modifiedAt: taskModifiedAt,
         );
-        final CalendarModel localModel =
-            CalendarModel.empty().addTask(localTask);
+        final CalendarModel localModel = CalendarModel.empty().addTask(
+          localTask,
+        );
         final CalendarModel remoteModel = CalendarModel.empty().copyWith(
           deletedTaskIds: {taskId: deletedAt},
         );
@@ -543,13 +552,16 @@ void main() {
         final CalendarModel localModel = CalendarModel.empty().copyWith(
           deletedDayEventIds: {dayEventId: deletedAt},
         );
-        final CalendarModel remoteModel =
-            CalendarModel.empty().addDayEvent(remoteEvent);
+        final CalendarModel remoteModel = CalendarModel.empty().addDayEvent(
+          remoteEvent,
+        );
 
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
-        expect(merged.dayEvents[dayEventId]?.title,
-            equals(dayEventResurrectedTitle));
+        expect(
+          merged.dayEvents[dayEventId]?.title,
+          equals(dayEventResurrectedTitle),
+        );
         expect(merged.deletedDayEventIds.containsKey(dayEventId), isFalse);
       });
 
@@ -563,8 +575,9 @@ void main() {
           createdAt: eventModifiedAt,
           modifiedAt: eventModifiedAt,
         );
-        final CalendarModel localModel =
-            CalendarModel.empty().addDayEvent(localEvent);
+        final CalendarModel localModel = CalendarModel.empty().addDayEvent(
+          localEvent,
+        );
         final CalendarModel remoteModel = CalendarModel.empty().copyWith(
           deletedDayEventIds: {dayEventId: deletedAt},
         );
@@ -589,13 +602,16 @@ void main() {
         final CalendarModel localModel = CalendarModel.empty().copyWith(
           deletedJournalIds: {journalId: deletedAt},
         );
-        final CalendarModel remoteModel =
-            CalendarModel.empty().addJournal(remoteJournal);
+        final CalendarModel remoteModel = CalendarModel.empty().addJournal(
+          remoteJournal,
+        );
 
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
         expect(
-            merged.journals[journalId]?.title, equals(journalResurrectedTitle));
+          merged.journals[journalId]?.title,
+          equals(journalResurrectedTitle),
+        );
         expect(merged.deletedJournalIds.containsKey(journalId), isFalse);
       });
 
@@ -610,8 +626,9 @@ void main() {
           createdAt: journalModifiedAt,
           modifiedAt: journalModifiedAt,
         );
-        final CalendarModel localModel =
-            CalendarModel.empty().addJournal(localJournal);
+        final CalendarModel localModel = CalendarModel.empty().addJournal(
+          localJournal,
+        );
         final CalendarModel remoteModel = CalendarModel.empty().copyWith(
           deletedJournalIds: {journalId: deletedAt},
         );
@@ -634,15 +651,20 @@ void main() {
         final CalendarModel localModel = CalendarModel.empty().copyWith(
           deletedCriticalPathIds: {criticalPathId: deletedAt},
         );
-        final CalendarModel remoteModel =
-            CalendarModel.empty().addCriticalPath(remotePath);
+        final CalendarModel remoteModel = CalendarModel.empty().addCriticalPath(
+          remotePath,
+        );
 
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
-        expect(merged.criticalPaths[criticalPathId]?.name,
-            equals(criticalPathResurrectedName));
         expect(
-            merged.deletedCriticalPathIds.containsKey(criticalPathId), isFalse);
+          merged.criticalPaths[criticalPathId]?.name,
+          equals(criticalPathResurrectedName),
+        );
+        expect(
+          merged.deletedCriticalPathIds.containsKey(criticalPathId),
+          isFalse,
+        );
       });
 
       test('keeps critical path tombstone when newer than path', () {
@@ -654,8 +676,9 @@ void main() {
           createdAt: pathModifiedAt,
           modifiedAt: pathModifiedAt,
         );
-        final CalendarModel localModel =
-            CalendarModel.empty().addCriticalPath(localPath);
+        final CalendarModel localModel = CalendarModel.empty().addCriticalPath(
+          localPath,
+        );
         final CalendarModel remoteModel = CalendarModel.empty().copyWith(
           deletedCriticalPathIds: {criticalPathId: deletedAt},
         );
@@ -664,7 +687,9 @@ void main() {
 
         expect(merged.criticalPaths.containsKey(criticalPathId), isFalse);
         expect(
-            merged.deletedCriticalPathIds[criticalPathId], equals(deletedAt));
+          merged.deletedCriticalPathIds[criticalPathId],
+          equals(deletedAt),
+        );
       });
     });
   });

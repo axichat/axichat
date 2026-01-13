@@ -31,14 +31,9 @@ class SelectionPanelShell extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.background,
-          border: Border(
-            top: BorderSide(color: colors.border, width: 1),
-          ),
+          border: Border(top: BorderSide(color: colors.border, width: 1)),
         ),
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }
@@ -63,12 +58,7 @@ class SelectionSummaryHeader extends StatelessWidget {
     final resolvedStyle = textStyle ?? context.textTheme.muted;
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            '$count selected',
-            style: resolvedStyle,
-          ),
-        ),
+        Expanded(child: Text('$count selected', style: resolvedStyle)),
         AxiIconButton(
           iconData: LucideIcons.x,
           tooltip: tooltip,

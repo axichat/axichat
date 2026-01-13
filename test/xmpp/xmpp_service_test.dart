@@ -46,8 +46,9 @@ void main() {
 
     prepareMockConnection();
 
-    when(() => mockConnection.asBroadcastStream())
-        .thenAnswer((_) => eventStreamController.stream);
+    when(
+      () => mockConnection.asBroadcastStream(),
+    ).thenAnswer((_) => eventStreamController.stream);
   });
 
   tearDown(() async {
@@ -69,13 +70,15 @@ void main() {
       );
       await connectSuccessfully(xmppService);
 
-      when(() => mockNotificationService.sendNotification(
-            title: any(named: 'title'),
-            body: any(named: 'body'),
-            extraConditions: any(named: 'extraConditions'),
-            allowForeground: any(named: 'allowForeground'),
-            payload: any(named: 'payload'),
-          )).thenAnswer((_) async {});
+      when(
+        () => mockNotificationService.sendNotification(
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+        ),
+      ).thenAnswer((_) async {});
 
       messageEvent = generateRandomMessageEvent();
       message = Message.fromMox(messageEvent);
@@ -91,33 +94,32 @@ void main() {
       resetMocktailState();
     });
 
-    test(
-      'When stream negotiations complete, requests the roster.',
-      () async {
-        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
+    test('When stream negotiations complete, requests the roster.', () async {
+      when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+      when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
+      when(
+        () => mockConnection.requestBlocklist(),
+      ).thenAnswer((_) async => null);
 
-        verifyNever(() => mockConnection.requestRoster());
+      verifyNever(() => mockConnection.requestRoster());
 
-        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+      eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
 
-        await pumpEventQueue();
+      await pumpEventQueue();
 
-        verify(() => mockConnection.requestRoster()).called(1);
-      },
-    );
+      verify(() => mockConnection.requestRoster()).called(1);
+    });
 
     test(
       'When stream negotiations resume, does not request the roster.',
       () async {
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestRoster(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestBlocklist(),
+        ).thenAnswer((_) async => null);
 
         verifyNever(() => mockConnection.requestRoster());
 
@@ -133,10 +135,12 @@ void main() {
       'When stream negotiations complete, requests the blocklist.',
       () async {
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestRoster(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestBlocklist(),
+        ).thenAnswer((_) async => null);
 
         verifyNever(() => mockConnection.requestBlocklist());
 
@@ -148,38 +152,39 @@ void main() {
       },
     );
 
-    test(
-      'When stream negotiations resume, requests the blocklist.',
-      () async {
-        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
+    test('When stream negotiations resume, requests the blocklist.', () async {
+      when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+      when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
+      when(
+        () => mockConnection.requestBlocklist(),
+      ).thenAnswer((_) async => null);
 
-        verifyNever(() => mockConnection.requestBlocklist());
+      verifyNever(() => mockConnection.requestBlocklist());
 
-        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+      eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
 
-        await pumpEventQueue();
+      await pumpEventQueue();
 
-        verify(() => mockConnection.requestBlocklist()).called(1);
-      },
-    );
+      verify(() => mockConnection.requestBlocklist()).called(1);
+    });
 
     test(
       'When stream negotiations complete, sends initial presence.',
       () async {
         final presenceManager = MockPresenceManager();
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.getManager<XmppPresenceManager>())
-            .thenReturn(presenceManager);
-        when(() => presenceManager.sendInitialPresence())
-            .thenAnswer((_) async {});
+        when(
+          () => mockConnection.requestRoster(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestBlocklist(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.getManager<XmppPresenceManager>(),
+        ).thenReturn(presenceManager);
+        when(
+          () => presenceManager.sendInitialPresence(),
+        ).thenAnswer((_) async {});
 
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
 
@@ -194,14 +199,18 @@ void main() {
       () async {
         final presenceManager = MockPresenceManager();
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.getManager<XmppPresenceManager>())
-            .thenReturn(presenceManager);
-        when(() => presenceManager.sendInitialPresence())
-            .thenAnswer((_) async {});
+        when(
+          () => mockConnection.requestRoster(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestBlocklist(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.getManager<XmppPresenceManager>(),
+        ).thenReturn(presenceManager);
+        when(
+          () => presenceManager.sendInitialPresence(),
+        ).thenAnswer((_) async {});
 
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
 
@@ -211,65 +220,58 @@ void main() {
       },
     );
 
-    test(
-      'When a resource is bound, stores the bound resource.',
-      () async {
-        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-        when(() => mockConnection.requestRoster())
-            .thenAnswer((_) async => null);
-        when(() => mockConnection.requestBlocklist())
-            .thenAnswer((_) async => null);
+    test('When a resource is bound, stores the bound resource.', () async {
+      when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+      when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
+      when(
+        () => mockConnection.requestBlocklist(),
+      ).thenAnswer((_) async => null);
 
-        eventStreamController.add(mox.ResourceBoundEvent('axi-res'));
+      eventStreamController.add(mox.ResourceBoundEvent('axi-res'));
 
-        await pumpEventQueue();
+      await pumpEventQueue();
 
-        verify(
-          () => mockStateStore.write(
-            key: xmppService.resourceStorageKey,
-            value: 'axi-res',
-          ),
-        ).called(1);
-      },
-    );
+      verify(
+        () => mockStateStore.write(
+          key: xmppService.resourceStorageKey,
+          value: 'axi-res',
+        ),
+      ).called(1);
+    });
 
-    test(
-      'Given a standard text message, writes it to the database.',
-      () async {
-        final beforeMessage =
-            await database.getMessageByStanzaID(messageEvent.id!);
-        expect(beforeMessage, isNull);
+    test('Given a standard text message, writes it to the database.', () async {
+      final beforeMessage = await database.getMessageByStanzaID(
+        messageEvent.id!,
+      );
+      expect(beforeMessage, isNull);
 
-        eventStreamController.add(messageEvent);
+      eventStreamController.add(messageEvent);
 
-        await pumpEventQueue();
+      await pumpEventQueue();
 
-        final afterMessage =
-            await database.getMessageByStanzaID(messageEvent.id!);
-        expect(afterMessage?.stanzaID, equals(messageEvent.id!));
-        expect(afterMessage?.body, equals(messageEvent.text));
-      },
-    );
+      final afterMessage = await database.getMessageByStanzaID(
+        messageEvent.id!,
+      );
+      expect(afterMessage?.stanzaID, equals(messageEvent.id!));
+      expect(afterMessage?.body, equals(messageEvent.text));
+    });
 
-    test(
-      'Given a standard text message, notifies the user.',
-      () async {
-        eventStreamController.add(messageEvent);
+    test('Given a standard text message, notifies the user.', () async {
+      eventStreamController.add(messageEvent);
 
-        await pumpEventQueue();
+      await pumpEventQueue();
 
-        verify(
-          () => mockNotificationService.sendMessageNotification(
-            title: any(named: 'title'),
-            body: messageEvent.text,
-            extraConditions: any(named: 'extraConditions'),
-            allowForeground: any(named: 'allowForeground'),
-            payload: messageEvent.from.toBare().toString(),
-            threadKey: messageEvent.from.toBare().toString(),
-          ),
-        ).called(1);
-      },
-    );
+      verify(
+        () => mockNotificationService.sendMessageNotification(
+          title: any(named: 'title'),
+          body: messageEvent.text,
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: messageEvent.from.toBare().toString(),
+          threadKey: messageEvent.from.toBare().toString(),
+        ),
+      ).called(1);
+    });
 
     test(
       'Given a connection change, emits the corresponding connection state.',
@@ -288,38 +290,54 @@ void main() {
           ]),
         );
 
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.notConnected,
-          mox.XmppConnectionState.notConnected,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.connecting,
-          mox.XmppConnectionState.notConnected,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.connected,
-          mox.XmppConnectionState.connecting,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.error,
-          mox.XmppConnectionState.connected,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.notConnected,
-          mox.XmppConnectionState.error,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.error,
-          mox.XmppConnectionState.notConnected,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.connected,
-          mox.XmppConnectionState.error,
-        ));
-        eventStreamController.add(mox.ConnectionStateChangedEvent(
-          mox.XmppConnectionState.connecting,
-          mox.XmppConnectionState.connected,
-        ));
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.connecting,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.error,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.error,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.error,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.error,
+          ),
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.connected,
+          ),
+        );
       },
     );
 
@@ -328,17 +346,22 @@ void main() {
       () async {
         await database.saveMessage(message);
 
-        final beforeAcked =
-            await database.getMessageByStanzaID(message.stanzaID);
+        final beforeAcked = await database.getMessageByStanzaID(
+          message.stanzaID,
+        );
         expect(beforeAcked?.acked, isFalse);
 
-        eventStreamController.add(mox.StanzaAckedEvent(
-            mox.Stanza(tag: 'message', id: message.stanzaID)));
+        eventStreamController.add(
+          mox.StanzaAckedEvent(
+            mox.Stanza(tag: 'message', id: message.stanzaID),
+          ),
+        );
 
         await pumpEventQueue();
 
-        final afterAcked =
-            await database.getMessageByStanzaID(message.stanzaID);
+        final afterAcked = await database.getMessageByStanzaID(
+          message.stanzaID,
+        );
         expect(afterAcked?.acked, isTrue);
       },
     );
@@ -348,19 +371,24 @@ void main() {
       () async {
         await database.saveMessage(message);
 
-        final beforeDisplayed =
-            await database.getMessageByStanzaID(message.stanzaID);
+        final beforeDisplayed = await database.getMessageByStanzaID(
+          message.stanzaID,
+        );
         expect(beforeDisplayed?.acked, isFalse);
 
-        eventStreamController.add(mox.ChatMarkerEvent(
+        eventStreamController.add(
+          mox.ChatMarkerEvent(
             mox.JID.fromString(message.senderJid),
             mox.ChatMarker.displayed,
-            message.stanzaID));
+            message.stanzaID,
+          ),
+        );
 
         await pumpEventQueue();
 
-        final afterDisplayed =
-            await database.getMessageByStanzaID(message.stanzaID);
+        final afterDisplayed = await database.getMessageByStanzaID(
+          message.stanzaID,
+        );
         expect(afterDisplayed?.displayed, isTrue);
         expect(afterDisplayed?.received, isTrue);
         expect(afterDisplayed?.acked, isTrue);
@@ -372,19 +400,23 @@ void main() {
       () async {
         await database.saveMessage(message);
 
-        final beforeReceived =
-            await database.getMessageByStanzaID(message.stanzaID);
+        final beforeReceived = await database.getMessageByStanzaID(
+          message.stanzaID,
+        );
         expect(beforeReceived?.received, isFalse);
 
-        eventStreamController.add(mox.DeliveryReceiptReceivedEvent(
-          from: mox.JID.fromString(message.senderJid),
-          id: message.stanzaID,
-        ));
+        eventStreamController.add(
+          mox.DeliveryReceiptReceivedEvent(
+            from: mox.JID.fromString(message.senderJid),
+            id: message.stanzaID,
+          ),
+        );
 
         await pumpEventQueue();
 
-        final afterReceived =
-            await database.getMessageByStanzaID(message.stanzaID);
+        final afterReceived = await database.getMessageByStanzaID(
+          message.stanzaID,
+        );
         expect(afterReceived?.received, isTrue);
       },
     );
@@ -423,23 +455,19 @@ void main() {
       resetMocktailState();
     });
 
-    test(
-      'Given valid credentials, initialises the databases.',
-      () async {
-        await connectSuccessfully(xmppService);
+    test('Given valid credentials, initialises the databases.', () async {
+      await connectSuccessfully(xmppService);
 
-        expect(builtStateStore, true);
-        expect(builtDatabase, true);
-      },
-    );
+      expect(builtStateStore, true);
+      expect(builtDatabase, true);
+    });
 
-    test(
-      'Given valid credentials, registers all feature managers.',
-      () async {
-        await connectSuccessfully(xmppService);
+    test('Given valid credentials, registers all feature managers.', () async {
+      await connectSuccessfully(xmppService);
 
-        verify(
-          () => mockConnection.registerManagers(any(
+      verify(
+        () => mockConnection.registerManagers(
+          any(
             that: predicate<List<mox.XmppManagerBase>>(
               (items) => items.indexed.every((e) {
                 final (index, manager) = e;
@@ -447,10 +475,10 @@ void main() {
                     xmppService.featureManagers[index].runtimeType;
               }),
             ),
-          )),
-        ).called(1);
-      },
-    );
+          ),
+        ),
+      ).called(1);
+    });
 
     test(
       'Given invalid credentials, throws an XmppAuthenticationException.',

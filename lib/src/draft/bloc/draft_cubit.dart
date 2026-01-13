@@ -25,8 +25,10 @@ const int _coreDraftRecipientLimit = 1;
 const int _emailAttachmentBundleMinimumCount = 2;
 const String _jidSeparator = '@';
 const String _axiDomainPatternSource = r'@(?:[\\w-]+\\.)*axi\\.im$';
-final RegExp _axiDomainPattern =
-    RegExp(_axiDomainPatternSource, caseSensitive: false);
+final RegExp _axiDomainPattern = RegExp(
+  _axiDomainPatternSource,
+  caseSensitive: false,
+);
 
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   DraftCubit({
@@ -108,20 +110,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       );
       return false;
     } on XmppMessageException catch (_) {
-      emit(
-        DraftFailure(
-          l10n.draftSendFailed,
-          items: _items,
-        ),
-      );
+      emit(DraftFailure(l10n.draftSendFailed, items: _items));
       return false;
     } on Exception catch (_) {
-      emit(
-        DraftFailure(
-          l10n.draftSendFailed,
-          items: _items,
-        ),
-      );
+      emit(DraftFailure(l10n.draftSendFailed, items: _items));
       return false;
     }
     if (id != null) {
@@ -156,19 +148,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     } on Exception {
       // Best-effort: core draft syncing should not block local saves.
     }
-    emit(
-      DraftSaveComplete(
-        items: _items,
-        autoSaved: autoSave,
-      ),
-    );
+    emit(DraftSaveComplete(items: _items, autoSaved: autoSave));
     return result;
   }
 
-  String _mapFanOutValidationMessage(
-    String message,
-    AppLocalizations l10n,
-  ) {
+  String _mapFanOutValidationMessage(String message, AppLocalizations l10n) {
     switch (message) {
       case 'Select at least one recipient.':
         return l10n.draftNoRecipients;
@@ -324,10 +308,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         useSubjectToken: includeSignatureToken,
         tokenAsSignature: includeSignatureToken,
       );
-      _throwIfFanOutFailed(
-        report,
-        failureContext: 'Message',
-      );
+      _throwIfFanOutFailed(report, failureContext: 'Message');
     }
     if (hasAttachments) {
       final caption = trimmedBody.isNotEmpty ? trimmedBody : null;
@@ -353,10 +334,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
             useSubjectToken: includeSignatureToken,
             tokenAsSignature: includeSignatureToken,
           );
-          _throwIfFanOutFailed(
-            report,
-            failureContext: attachment.fileName,
-          );
+          _throwIfFanOutFailed(report, failureContext: attachment.fileName);
         }
       } finally {
         if (shouldBundle) {
@@ -385,8 +363,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final db = await _messageService.database;
     final attachmentGroupId =
         hasAttachments && attachments.length > 1 ? uuid.v4() : null;
-    final uploads =
-        List<XmppAttachmentUpload?>.filled(attachments.length, null);
+    final uploads = List<XmppAttachmentUpload?>.filled(
+      attachments.length,
+      null,
+    );
     for (final jid in jids) {
       final chat = await db.getChat(jid);
       final encryption = chat?.encryptionProtocol ?? EncryptionProtocol.omemo;
@@ -443,9 +423,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     }
     final failedRecipients = report.statuses
         .where((status) => status.state == FanOutRecipientState.failed)
-        .map((status) => status.chat.contactDisplayName?.isNotEmpty == true
-            ? status.chat.contactDisplayName!
-            : status.chat.jid)
+        .map(
+          (status) => status.chat.contactDisplayName?.isNotEmpty == true
+              ? status.chat.contactDisplayName!
+              : status.chat.jid,
+        )
         .toList();
     final recipientList = failedRecipients.join(', ');
     final message = failedRecipients.length == 1

@@ -49,8 +49,9 @@ class ReminderPreferences with _$ReminderPreferences {
 
   ReminderPreferences normalized({bool? forceEnabled}) {
     final List<Duration> normalizedStart = _normalizeOffsets(startOffsets);
-    final List<Duration> normalizedDeadline =
-        _normalizeOffsets(deadlineOffsets);
+    final List<Duration> normalizedDeadline = _normalizeOffsets(
+      deadlineOffsets,
+    );
     final bool hasOffsets =
         normalizedStart.isNotEmpty || normalizedDeadline.isNotEmpty;
     final bool resolvedEnabled = (forceEnabled ?? enabled) && hasOffsets;

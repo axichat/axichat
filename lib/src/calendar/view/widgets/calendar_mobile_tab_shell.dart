@@ -38,20 +38,14 @@ class CalendarMobileTabShell extends StatelessWidget {
       decoration: BoxDecoration(
         color: effectiveBackground,
         border: showTopBorder
-            ? Border(
-                top: BorderSide(color: effectiveBorder, width: 1),
-              )
+            ? Border(top: BorderSide(color: effectiveBorder, width: 1))
             : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (showDivider)
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: effectiveDivider,
-            ),
+            Divider(height: 1, thickness: 1, color: effectiveDivider),
           tabBar,
           cancelBucket,
         ],
@@ -123,10 +117,7 @@ class TasksTabLabel extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
-                      colors: [
-                        badgeColor.withValues(alpha: 0.9),
-                        badgeColor,
-                      ],
+                      colors: [badgeColor.withValues(alpha: 0.9), badgeColor],
                     ),
                     boxShadow: [
                       BoxShadow(

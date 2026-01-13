@@ -16,13 +16,17 @@ void main() {
       ];
       for (final address in blocked) {
         expect(
-            isSafeInternetAddress(InternetAddress.tryParse(address)!), isFalse);
+          isSafeInternetAddress(InternetAddress.tryParse(address)!),
+          isFalse,
+        );
       }
     });
 
     test('allows publicly routable IPv4 addresses', () {
       expect(
-          isSafeInternetAddress(InternetAddress.tryParse('1.1.1.1')!), isTrue);
+        isSafeInternetAddress(InternetAddress.tryParse('1.1.1.1')!),
+        isTrue,
+      );
     });
 
     test('rejects unique-local and link-local IPv6 ranges', () {
@@ -35,7 +39,9 @@ void main() {
       ];
       for (final address in blocked) {
         expect(
-            isSafeInternetAddress(InternetAddress.tryParse(address)!), isFalse);
+          isSafeInternetAddress(InternetAddress.tryParse(address)!),
+          isFalse,
+        );
       }
     });
   });

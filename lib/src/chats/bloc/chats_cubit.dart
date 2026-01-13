@@ -35,8 +35,9 @@ class ChatsCubit extends Cubit<ChatsState> {
             creationStatus: RequestStatus.none,
           ),
         ) {
-    _chatsSubscription =
-        _chatsService.chatsStream().listen((items) => _updateChats(items));
+    _chatsSubscription = _chatsService.chatsStream().listen(
+          (items) => _updateChats(items),
+        );
   }
 
   final ChatsService _chatsService;
@@ -233,10 +234,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsService.toggleChatArchived(jid: jid, archived: archived);
   }
 
-  Future<void> toggleHidden({
-    required String jid,
-    required bool hidden,
-  }) async {
+  Future<void> toggleHidden({required String jid, required bool hidden}) async {
     if (hidden && state.openJid == jid) {
       await _chatsService.closeChat();
     }
@@ -339,10 +337,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     required String jid,
     required String displayName,
   }) {
-    return _chatsService.renameChatContact(
-      jid: jid,
-      displayName: displayName,
-    );
+    return _chatsService.renameChatContact(jid: jid, displayName: displayName);
   }
 
   void ensureChatSelected(String jid) {
@@ -368,10 +363,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
     for (final jid in targets) {
-      await _chatsService.toggleChatFavorited(
-        jid: jid,
-        favorited: favorited,
-      );
+      await _chatsService.toggleChatFavorited(jid: jid, favorited: favorited);
     }
     clearSelection();
   }

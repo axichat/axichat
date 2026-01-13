@@ -153,8 +153,10 @@ class CalendarAvailabilityShareCoordinator {
       if (record.chatType == ChatType.note || record.lockOverlay) {
         continue;
       }
-      final CalendarAvailabilityOverlay overlay =
-          deriveAvailabilityOverlay(model: model, base: record.overlay);
+      final CalendarAvailabilityOverlay overlay = deriveAvailabilityOverlay(
+        model: model,
+        base: record.overlay,
+      );
       if (overlay == record.overlay) {
         continue;
       }
@@ -184,12 +186,10 @@ CalendarAvailabilityOverlay deriveAvailabilityOverlay({
   if (!rangeEnd.isAfter(rangeStart)) {
     return base.copyWith(intervals: const <CalendarFreeBusyInterval>[]);
   }
-  final busyRanges = _mergeRanges(
-    [
-      ..._taskBusyRanges(model, rangeStart, rangeEnd),
-      ..._dayEventBusyRanges(model, rangeStart, rangeEnd),
-    ],
-  );
+  final busyRanges = _mergeRanges([
+    ..._taskBusyRanges(model, rangeStart, rangeEnd),
+    ..._dayEventBusyRanges(model, rangeStart, rangeEnd),
+  ]);
   final availabilityRanges = _availabilityWindows(model, rangeStart, rangeEnd);
   final typedRanges = _buildTypedRanges(
     rangeStart: rangeStart,
@@ -322,7 +322,9 @@ List<_TypedRange> _buildTypedRanges({
       ..addAll(
         unavailable.map(
           (range) => _TypedRange(
-              range: range, type: CalendarFreeBusyType.busyUnavailable),
+            range: range,
+            type: CalendarFreeBusyType.busyUnavailable,
+          ),
         ),
       )
       ..addAll(
@@ -345,10 +347,7 @@ List<_TypedRange> _buildTypedRanges({
   return typedRanges;
 }
 
-List<_TypedRange> _applyBusyRange(
-  List<_TypedRange> current,
-  _TimeRange busy,
-) {
+List<_TypedRange> _applyBusyRange(List<_TypedRange> current, _TimeRange busy) {
   final next = <_TypedRange>[];
   for (final segment in current) {
     if (!segment.range.overlaps(busy)) {
@@ -413,10 +412,7 @@ List<_TypedRange> _mergeTypedRanges(List<_TypedRange> ranges) {
   return merged;
 }
 
-CalendarFreeBusyInterval _toInterval(
-  _TypedRange range,
-  CalendarDateTime base,
-) {
+CalendarFreeBusyInterval _toInterval(_TypedRange range, CalendarDateTime base) {
   return CalendarFreeBusyInterval(
     start: _dateTimeWithRangeMeta(base, range.range.start),
     end: _dateTimeWithRangeMeta(base, range.range.end),
@@ -424,10 +420,7 @@ CalendarFreeBusyInterval _toInterval(
   );
 }
 
-CalendarDateTime _dateTimeWithRangeMeta(
-  CalendarDateTime base,
-  DateTime value,
-) {
+CalendarDateTime _dateTimeWithRangeMeta(CalendarDateTime base, DateTime value) {
   return CalendarDateTime(
     value: value,
     tzid: base.tzid,
@@ -503,10 +496,7 @@ _TimeRange? _clipRange(
   return _TimeRange(start: start, end: end);
 }
 
-_TimeRange? _intersectRange(
-  _TimeRange first,
-  _TimeRange second,
-) {
+_TimeRange? _intersectRange(_TimeRange first, _TimeRange second) {
   final DateTime start = _maxDateTime(first.start, second.start);
   final DateTime end = _minDateTime(first.end, second.end);
   if (!end.isAfter(start)) {
@@ -520,10 +510,7 @@ DateTime _maxDateTime(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
 DateTime _minDateTime(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
 
 class _TimeRange {
-  const _TimeRange({
-    required this.start,
-    required this.end,
-  });
+  const _TimeRange({required this.start, required this.end});
 
   final DateTime start;
   final DateTime end;
@@ -533,20 +520,11 @@ class _TimeRange {
 }
 
 class _TypedRange {
-  const _TypedRange({
-    required this.range,
-    required this.type,
-  });
+  const _TypedRange({required this.range, required this.type});
 
   final _TimeRange range;
   final CalendarFreeBusyType type;
 
-  _TypedRange copyWith({
-    _TimeRange? range,
-    CalendarFreeBusyType? type,
-  }) =>
-      _TypedRange(
-        range: range ?? this.range,
-        type: type ?? this.type,
-      );
+  _TypedRange copyWith({_TimeRange? range, CalendarFreeBusyType? type}) =>
+      _TypedRange(range: range ?? this.range, type: type ?? this.type);
 }

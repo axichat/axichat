@@ -22,7 +22,7 @@ class AxiSystemContextMenu extends StatefulWidget {
   }) {
     final (
       startGlyphHeight: double startGlyphHeight,
-      endGlyphHeight: double endGlyphHeight
+      endGlyphHeight: double endGlyphHeight,
     ) = editableTextState.getGlyphHeights();
 
     return AxiSystemContextMenu._(
@@ -98,12 +98,11 @@ class _AxiSystemContextMenuState extends State<AxiSystemContextMenu> {
     assert(AxiSystemContextMenu.isSupported(context));
 
     if (widget.items.isNotEmpty) {
-      final WidgetsLocalizations localizations =
-          WidgetsLocalizations.of(context);
+      final WidgetsLocalizations localizations = WidgetsLocalizations.of(
+        context,
+      );
       final List<IOSSystemContextMenuItemData> itemDatas = widget.items
-          .map(
-            (IOSSystemContextMenuItem item) => item.getData(localizations),
-          )
+          .map((IOSSystemContextMenuItem item) => item.getData(localizations))
           .toList();
       _controller.showWithItems(widget.anchor, itemDatas);
     }

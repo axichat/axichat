@@ -23,12 +23,7 @@ const int _negativeIndexOffset = 1;
 const Duration _weekDuration = Duration(days: _daysPerWeek);
 const Duration _zeroDuration = Duration.zero;
 
-enum RecurrenceEndUnit {
-  days,
-  weeks,
-  months,
-  years,
-}
+enum RecurrenceEndUnit { days, weeks, months, years }
 
 extension RecurrenceEndUnitX on RecurrenceEndUnit {
   String get label {
@@ -125,8 +120,9 @@ extension CalendarTaskInstanceX on CalendarTask {
     final key = baseOccurrenceKey;
     if (key == null) return null;
 
-    final Set<String> exDateKeys =
-        _calendarDateTimeKeys(effectiveRecurrence.exDates);
+    final Set<String> exDateKeys = _calendarDateTimeKeys(
+      effectiveRecurrence.exDates,
+    );
     final _OverrideResolution resolution = _resolveOccurrenceOverride(
       originalStart: scheduled,
       occurrenceKey: key,
@@ -159,8 +155,9 @@ extension CalendarTaskInstanceX on CalendarTask {
       return null;
     }
 
-    final Set<String> exDateKeys =
-        _calendarDateTimeKeys(effectiveRecurrence.exDates);
+    final Set<String> exDateKeys = _calendarDateTimeKeys(
+      effectiveRecurrence.exDates,
+    );
     final _OverrideResolution resolution = _resolveOccurrenceOverride(
       originalStart: originalStart,
       occurrenceKey: key,
@@ -392,11 +389,7 @@ extension CalendarTaskInstanceX on CalendarTask {
         scheduledTime!.month,
         scheduledTime!.day,
       );
-      final baseEnd = DateTime(
-        endDate!.year,
-        endDate!.month,
-        endDate!.day,
-      );
+      final baseEnd = DateTime(endDate!.year, endDate!.month, endDate!.day);
       final span = baseEnd.difference(baseStart);
       shiftedEndDate = DateTime(
         actualStart.year,
@@ -477,7 +470,10 @@ DateTime? _nextOccurrence(
       return _nextWeeklyOccurrence(current, rule, baseStart);
     case RecurrenceFrequency.monthly:
       return _addMonths(
-          current, max(_minInterval, rule.interval), baseStart.day);
+        current,
+        max(_minInterval, rule.interval),
+        baseStart.day,
+      );
     case RecurrenceFrequency.yearly:
       return _addMonths(
         current,
@@ -485,6 +481,7 @@ DateTime? _nextOccurrence(
         baseStart.day,
       );
   }
+  return null;
 }
 
 Iterable<DateTime> _simpleOccurrencesWithin({
@@ -661,15 +658,19 @@ void _addYearDayCandidates({
   required DateTime baseStart,
 }) {
   final List<int> byYearDays = rule.byYearDays ?? const <int>[];
-  final Set<int>? allowedWeekdays =
-      _weekdaySetFromByDays(rule.byDays ?? const <RecurrenceWeekday>[]);
+  final Set<int>? allowedWeekdays = _weekdaySetFromByDays(
+    rule.byDays ?? const <RecurrenceWeekday>[],
+  );
   for (final int yearDay in byYearDays) {
     final int? resolved = _resolveYearDay(yearDay, year);
     if (resolved == null) {
       continue;
     }
-    final DateTime date = DateTime(year, DateTime.january, _firstDayOfYear)
-        .add(Duration(days: resolved - _firstDayOfYear));
+    final DateTime date = DateTime(
+      year,
+      DateTime.january,
+      _firstDayOfYear,
+    ).add(Duration(days: resolved - _firstDayOfYear));
     if (hasByMonths && !months.contains(date.month)) {
       continue;
     }
@@ -906,10 +907,7 @@ bool _dayMatchesMonthDay(List<int>? byMonthDays, DateTime date) {
 }
 
 List<int> _allDaysInMonth(int daysInMonth) {
-  return List<int>.generate(
-    daysInMonth,
-    (index) => index + _firstDayOfMonth,
-  );
+  return List<int>.generate(daysInMonth, (index) => index + _firstDayOfMonth);
 }
 
 DateTime _withBaseTime(DateTime date, DateTime baseStart) {
@@ -939,10 +937,7 @@ List<DateTime> _uniqueSortedDates(List<DateTime> dates) {
   return unique;
 }
 
-List<DateTime> _applySetPositions(
-  List<DateTime> sorted,
-  List<int> positions,
-) {
+List<DateTime> _applySetPositions(List<DateTime> sorted, List<int> positions) {
   if (sorted.isEmpty || positions.isEmpty) {
     return sorted;
   }
@@ -967,10 +962,7 @@ List<DateTime> _applySetPositions(
   return selected;
 }
 
-List<DateTime> _filterByWeekNumbers(
-  List<DateTime> dates,
-  RecurrenceRule rule,
-) {
+List<DateTime> _filterByWeekNumbers(List<DateTime> dates, RecurrenceRule rule) {
   if (dates.isEmpty || !_hasRuleValues(rule.byWeekNumbers)) {
     return dates;
   }
@@ -1061,10 +1053,7 @@ int _weekNumberForDate({
   required CalendarWeekday weekStart,
   required DateTime week1Start,
 }) {
-  final DateTime weekStartDate = _startOfWeek(
-    date: date,
-    weekStart: weekStart,
-  );
+  final DateTime weekStartDate = _startOfWeek(date: date, weekStart: weekStart);
   final int diffDays = weekStartDate.difference(week1Start).inDays;
   final int weekIndex = diffDays ~/ _daysPerWeek;
   return weekIndex + _setPositionBase;
@@ -1138,10 +1127,7 @@ DateTime? calculateRecurrenceEndDate({
       return (amount: effective, unit: RecurrenceEndUnit.weeks);
     case RecurrenceFrequency.monthly:
       if (effective % 12 == 0) {
-        return (
-          amount: effective ~/ 12,
-          unit: RecurrenceEndUnit.years,
-        );
+        return (amount: effective ~/ 12, unit: RecurrenceEndUnit.years);
       }
       return (amount: effective, unit: RecurrenceEndUnit.months);
     case RecurrenceFrequency.yearly:
@@ -1149,6 +1135,7 @@ DateTime? calculateRecurrenceEndDate({
     case RecurrenceFrequency.none:
       return null;
   }
+  return null;
 }
 
 DateTime _inclusiveLimitForUnit(
@@ -1262,15 +1249,7 @@ int _daysInMonth(int year, int month) {
     final isLeap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
     return isLeap ? 29 : 28;
   }
-  const monthLengths = <int>{
-    1,
-    3,
-    5,
-    7,
-    8,
-    10,
-    12,
-  };
+  const monthLengths = <int>{1, 3, 5, 7, 8, 10, 12};
   if (monthLengths.contains(month)) {
     return 31;
   }
@@ -1342,10 +1321,7 @@ Set<String> _calendarDateTimeKeys(List<CalendarDateTime> dates) {
 bool _hasRuleValues<T>(List<T>? values) => values != null && values.isNotEmpty;
 
 class _OverrideResolution {
-  const _OverrideResolution({
-    required this.isExcluded,
-    required this.override,
-  });
+  const _OverrideResolution({required this.isExcluded, required this.override});
 
   final bool isExcluded;
   final TaskOccurrenceOverride? override;
@@ -1362,10 +1338,14 @@ class _RangeOverrideSelection {
 }
 
 const TaskOccurrenceOverride _emptyOverride = TaskOccurrenceOverride();
-const _OverrideResolution _excludedResolution =
-    _OverrideResolution(isExcluded: true, override: null);
-const _OverrideResolution _noOverrideResolution =
-    _OverrideResolution(isExcluded: false, override: null);
+const _OverrideResolution _excludedResolution = _OverrideResolution(
+  isExcluded: true,
+  override: null,
+);
+const _OverrideResolution _noOverrideResolution = _OverrideResolution(
+  isExcluded: false,
+  override: null,
+);
 
 _OverrideResolution _resolveOccurrenceOverride({
   required DateTime originalStart,
@@ -1383,8 +1363,10 @@ _OverrideResolution _resolveOccurrenceOverride({
     return _excludedResolution;
   }
 
-  final _RangeOverrideSelection? range =
-      _selectRangeOverride(overrides, originalStart);
+  final _RangeOverrideSelection? range = _selectRangeOverride(
+    overrides,
+    originalStart,
+  );
   if (direct == null && range?.override.isCancelled == true) {
     return _excludedResolution;
   }
@@ -1475,10 +1457,14 @@ _RangeOverrideSelection? _selectRangeOverride(
   if (priorCandidate == null) {
     return futureCandidate;
   }
-  final int futureDistance =
-      _distanceMicros(occurrenceStart, futureCandidate!.originalStart);
-  final int priorDistance =
-      _distanceMicros(occurrenceStart, priorCandidate!.originalStart);
+  final int futureDistance = _distanceMicros(
+    occurrenceStart,
+    futureCandidate!.originalStart,
+  );
+  final int priorDistance = _distanceMicros(
+    occurrenceStart,
+    priorCandidate!.originalStart,
+  );
   return futureDistance <= priorDistance ? futureCandidate : priorCandidate;
 }
 

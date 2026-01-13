@@ -51,10 +51,12 @@ void main() {
     const String alarmTriggerBeforeEndLine = 'TRIGGER;RELATED=END:-PT30M';
     const int reminderStartOffsetMinutes = 15;
     const int reminderDeadlineOffsetMinutes = 30;
-    const Duration startReminderOffset =
-        Duration(minutes: reminderStartOffsetMinutes);
-    const Duration deadlineReminderOffset =
-        Duration(minutes: reminderDeadlineOffsetMinutes);
+    const Duration startReminderOffset = Duration(
+      minutes: reminderStartOffsetMinutes,
+    );
+    const Duration deadlineReminderOffset = Duration(
+      minutes: reminderDeadlineOffsetMinutes,
+    );
     const int reminderOffsetCount = 1;
     const String checklistTaskUid = 'todo-checklist';
     const String checklistSummary = 'Checklist Task';
@@ -381,47 +383,48 @@ void main() {
     });
 
     test(
-        'parses meta fields for status/transparency/categories/url/geo/attachments',
-        () {
-      final String ics = <String>[
-        calendarStart,
-        versionLine,
-        prodIdLine,
-        eventStart,
-        '$uidLabel$metaEventUid',
-        dtStampLine,
-        allDayStartLine,
-        allDayEndLine,
-        '$summaryLabel$metaEventSummary',
-        metaStatusLine,
-        metaTransparencyLine,
-        metaCategoriesLine,
-        metaUrlLine,
-        metaGeoLine,
-        metaAttachmentLine,
-        eventEnd,
-        calendarEnd,
-      ].join(lineBreak);
+      'parses meta fields for status/transparency/categories/url/geo/attachments',
+      () {
+        final String ics = <String>[
+          calendarStart,
+          versionLine,
+          prodIdLine,
+          eventStart,
+          '$uidLabel$metaEventUid',
+          dtStampLine,
+          allDayStartLine,
+          allDayEndLine,
+          '$summaryLabel$metaEventSummary',
+          metaStatusLine,
+          metaTransparencyLine,
+          metaCategoriesLine,
+          metaUrlLine,
+          metaGeoLine,
+          metaAttachmentLine,
+          eventEnd,
+          calendarEnd,
+        ].join(lineBreak);
 
-      final CalendarModel model = const CalendarIcsCodec().decode(ics);
+        final CalendarModel model = const CalendarIcsCodec().decode(ics);
 
-      expect(model.dayEvents, hasLength(singleItemCount));
-      final DayEvent event = model.dayEvents.values.first;
-      final CalendarIcsMeta? meta = event.icsMeta;
-      expect(meta, isNotNull);
-      expect(meta!.status, CalendarIcsStatus.confirmed);
-      expect(meta.transparency, CalendarTransparency.transparent);
-      expect(meta.categories, equals(metaCategories));
-      expect(meta.url, metaUrl);
-      expect(meta.geo?.latitude, double.parse(metaGeoLatText));
-      expect(meta.geo?.longitude, double.parse(metaGeoLonText));
-      expect(meta.attachments, hasLength(singleItemCount));
-      final CalendarAttachment attachment = meta.attachments.first;
-      expect(attachment.value, metaAttachmentValue);
-      expect(attachment.formatType, metaAttachmentFmtType);
-      expect(attachment.encoding, metaAttachmentEncoding);
-      expect(attachment.label, metaAttachmentLabel);
-    });
+        expect(model.dayEvents, hasLength(singleItemCount));
+        final DayEvent event = model.dayEvents.values.first;
+        final CalendarIcsMeta? meta = event.icsMeta;
+        expect(meta, isNotNull);
+        expect(meta!.status, CalendarIcsStatus.confirmed);
+        expect(meta.transparency, CalendarTransparency.transparent);
+        expect(meta.categories, equals(metaCategories));
+        expect(meta.url, metaUrl);
+        expect(meta.geo?.latitude, double.parse(metaGeoLatText));
+        expect(meta.geo?.longitude, double.parse(metaGeoLonText));
+        expect(meta.attachments, hasLength(singleItemCount));
+        final CalendarAttachment attachment = meta.attachments.first;
+        expect(attachment.value, metaAttachmentValue);
+        expect(attachment.formatType, metaAttachmentFmtType);
+        expect(attachment.encoding, metaAttachmentEncoding);
+        expect(attachment.label, metaAttachmentLabel);
+      },
+    );
   });
 
   group('CalendarIcsCodec encode', () {
@@ -464,13 +467,13 @@ void main() {
     const String reminderEndTriggerLine = 'TRIGGER;RELATED=END:-PT30M';
     const int reminderStartOffsetMinutes = 15;
     const int reminderDeadlineOffsetMinutes = 30;
-    const Duration reminderStartOffset =
-        Duration(minutes: reminderStartOffsetMinutes);
-    const Duration reminderDeadlineOffset =
-        Duration(minutes: reminderDeadlineOffsetMinutes);
-    const List<Duration> reminderStartOffsets = <Duration>[
-      reminderStartOffset,
-    ];
+    const Duration reminderStartOffset = Duration(
+      minutes: reminderStartOffsetMinutes,
+    );
+    const Duration reminderDeadlineOffset = Duration(
+      minutes: reminderDeadlineOffsetMinutes,
+    );
+    const List<Duration> reminderStartOffsets = <Duration>[reminderStartOffset];
     const List<Duration> reminderDeadlineOffsets = <Duration>[
       reminderDeadlineOffset,
     ];
@@ -544,12 +547,14 @@ void main() {
         startMinute,
         startSecond,
       );
-      final DateTime cancelledStart =
-          scheduledStart.add(const Duration(days: oneDay));
+      final DateTime cancelledStart = scheduledStart.add(
+        const Duration(days: oneDay),
+      );
       final String occurrenceKey =
           cancelledStart.microsecondsSinceEpoch.toString();
-      const TaskOccurrenceOverride override =
-          TaskOccurrenceOverride(isCancelled: true);
+      const TaskOccurrenceOverride override = TaskOccurrenceOverride(
+        isCancelled: true,
+      );
       final Map<String, TaskOccurrenceOverride> overrides =
           <String, TaskOccurrenceOverride>{occurrenceKey: override};
       final CalendarTask task = CalendarTask(
@@ -566,9 +571,7 @@ void main() {
         priority: null,
         startHour: null,
         endDate: null,
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.daily,
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.daily),
         occurrenceOverrides: overrides,
         reminders: null,
         checklist: emptyChecklist,
@@ -595,12 +598,14 @@ void main() {
         startMinute,
         startSecond,
       );
-      final DateTime overrideStart =
-          scheduledStart.add(const Duration(days: oneDay));
+      final DateTime overrideStart = scheduledStart.add(
+        const Duration(days: oneDay),
+      );
       final String occurrenceKey =
           overrideStart.microsecondsSinceEpoch.toString();
-      const TaskOccurrenceOverride override =
-          TaskOccurrenceOverride(title: overrideTitle);
+      const TaskOccurrenceOverride override = TaskOccurrenceOverride(
+        title: overrideTitle,
+      );
       final Map<String, TaskOccurrenceOverride> overrides =
           <String, TaskOccurrenceOverride>{occurrenceKey: override};
       final CalendarTask task = CalendarTask(
@@ -617,9 +622,7 @@ void main() {
         priority: null,
         startHour: null,
         endDate: null,
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.daily,
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.daily),
         occurrenceOverrides: overrides,
         reminders: null,
         checklist: emptyChecklist,
@@ -635,7 +638,9 @@ void main() {
       expect(encoded.contains(calendarStart), isTrue);
       expect(encoded.contains(calendarEnd), isTrue);
       expect(
-          encoded.contains(eventStart) || encoded.contains(todoStart), isTrue);
+        encoded.contains(eventStart) || encoded.contains(todoStart),
+        isTrue,
+      );
       expect(encoded.contains(eventEnd) || encoded.contains(todoEnd), isTrue);
       expect(encoded.contains(overrideSummary), isTrue);
       expect(encoded.contains(recurrenceId), isTrue);
@@ -650,12 +655,14 @@ void main() {
         startMinute,
         startSecond,
       );
-      final DateTime overrideStart =
-          scheduledStart.add(const Duration(days: oneDay));
+      final DateTime overrideStart = scheduledStart.add(
+        const Duration(days: oneDay),
+      );
       final String occurrenceKey =
           overrideStart.microsecondsSinceEpoch.toString();
-      const TaskOccurrenceOverride override =
-          TaskOccurrenceOverride(title: overrideTitle);
+      const TaskOccurrenceOverride override = TaskOccurrenceOverride(
+        title: overrideTitle,
+      );
       final Map<String, TaskOccurrenceOverride> overrides =
           <String, TaskOccurrenceOverride>{occurrenceKey: override};
       const CalendarRawProperty rawDtStart = CalendarRawProperty(
@@ -685,9 +692,7 @@ void main() {
         priority: null,
         startHour: null,
         endDate: null,
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.daily,
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.daily),
         occurrenceOverrides: overrides,
         reminders: null,
         checklist: emptyChecklist,
@@ -701,17 +706,15 @@ void main() {
     });
 
     test('writes all-day RECURRENCE-ID when DTSTART is date-only', () {
-      final DateTime scheduledStart = DateTime(
-        startYear,
-        startMonth,
-        startDay,
+      final DateTime scheduledStart = DateTime(startYear, startMonth, startDay);
+      final DateTime overrideStart = scheduledStart.add(
+        const Duration(days: oneDay),
       );
-      final DateTime overrideStart =
-          scheduledStart.add(const Duration(days: oneDay));
       final String occurrenceKey =
           overrideStart.microsecondsSinceEpoch.toString();
-      const TaskOccurrenceOverride override =
-          TaskOccurrenceOverride(title: overrideTitle);
+      const TaskOccurrenceOverride override = TaskOccurrenceOverride(
+        title: overrideTitle,
+      );
       final Map<String, TaskOccurrenceOverride> overrides =
           <String, TaskOccurrenceOverride>{occurrenceKey: override};
       const CalendarRawProperty rawDtStart = CalendarRawProperty(
@@ -741,9 +744,7 @@ void main() {
         priority: null,
         startHour: null,
         endDate: null,
-        recurrence: const RecurrenceRule(
-          frequency: RecurrenceFrequency.daily,
-        ),
+        recurrence: const RecurrenceRule(frequency: RecurrenceFrequency.daily),
         occurrenceOverrides: overrides,
         reminders: null,
         checklist: emptyChecklist,
@@ -924,9 +925,7 @@ void main() {
       );
       final CalendarModel model =
           CalendarModel.empty().addTask(firstTask).addTask(secondTask).copyWith(
-        criticalPaths: <String, CalendarCriticalPath>{
-          criticalPathId: path,
-        },
+        criticalPaths: <String, CalendarCriticalPath>{criticalPathId: path},
       );
 
       final String encoded = const CalendarIcsCodec().encode(model);
@@ -945,10 +944,7 @@ void main() {
       const CalendarIcsMeta meta = CalendarIcsMeta(
         status: CalendarIcsStatus.confirmed,
         transparency: CalendarTransparency.transparent,
-        categories: <String>[
-          metaCategoryWork,
-          metaCategoryPersonal,
-        ],
+        categories: <String>[metaCategoryWork, metaCategoryPersonal],
         url: metaUrl,
         geo: CalendarGeo(
           latitude: metaGeoLatitude,
@@ -987,8 +983,10 @@ void main() {
       expect(encoded.contains(metaCategoriesLine), isTrue);
       expect(encoded.contains(metaUrlLine), isTrue);
       expect(encoded.contains(metaGeoLine), isTrue);
-      final String normalized =
-          encoded.replaceAll(RegExp(icsFoldedLinePattern), '');
+      final String normalized = encoded.replaceAll(
+        RegExp(icsFoldedLinePattern),
+        '',
+      );
       const String attachmentLine = '$metaAttachmentPrefix$metaAttachmentValue';
       expect(normalized.contains(attachmentLine), isTrue);
     });
@@ -1016,11 +1014,7 @@ String _formatIcsUtc(DateTime value) {
 }
 
 String _formatIcsDate(DateTime value) {
-  final DateTime resolved = DateTime(
-    value.year,
-    value.month,
-    value.day,
-  );
+  final DateTime resolved = DateTime(value.year, value.month, value.day);
   return '${_pad(resolved.year, _icsYearWidth)}'
       '${_pad(resolved.month, _icsMonthWidth)}'
       '${_pad(resolved.day, _icsDayWidth)}';

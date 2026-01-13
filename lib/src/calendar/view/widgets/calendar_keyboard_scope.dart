@@ -74,8 +74,9 @@ class CalendarKeyboardScope extends StatefulWidget {
 }
 
 class _CalendarKeyboardScopeState extends State<CalendarKeyboardScope> {
-  late final FocusNode _focusNode =
-      FocusNode(debugLabel: _keyboardScopeFocusLabel);
+  late final FocusNode _focusNode = FocusNode(
+    debugLabel: _keyboardScopeFocusLabel,
+  );
 
   Map<ShortcutActivator, Intent> get _shortcuts {
     final Map<ShortcutActivator, Intent> shortcuts =

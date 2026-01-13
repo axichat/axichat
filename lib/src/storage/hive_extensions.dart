@@ -30,10 +30,7 @@ extension HiveInterfaceOpenBoxRetry on HiveInterface {
   }) async {
     for (var attempt = 0; attempt < lockRetryAttempts; attempt++) {
       try {
-        return await openBox<T>(
-          name,
-          encryptionCipher: encryptionCipher,
-        );
+        return await openBox<T>(name, encryptionCipher: encryptionCipher);
       } catch (error, stackTrace) {
         final bool shouldRetry =
             isHiveLockUnavailable(error) && attempt < lockRetryAttempts - 1;

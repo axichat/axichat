@@ -14,10 +14,7 @@ class AxiDeleteMenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShadContextMenuItem(
-      leading: Icon(
-        LucideIcons.trash,
-        color: context.colorScheme.destructive,
-      ),
+      leading: Icon(LucideIcons.trash, color: context.colorScheme.destructive),
       onPressed: onPressed,
       child: Text(context.l10n.commonDelete),
     );

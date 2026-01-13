@@ -17,25 +17,19 @@ class _SpyXmppConnection extends XmppConnection {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'XmppConnection.getManager resolves UserAvatarManager id',
-    () {
-      final connection = _SpyXmppConnection();
+  test('XmppConnection.getManager resolves UserAvatarManager id', () {
+    final connection = _SpyXmppConnection();
 
-      connection.getManager<mox.UserAvatarManager>();
+    connection.getManager<mox.UserAvatarManager>();
 
-      expect(connection.lastManagerId, equals(mox.userAvatarManager));
-    },
-  );
+    expect(connection.lastManagerId, equals(mox.userAvatarManager));
+  });
 
-  test(
-    'XmppConnection.getManager resolves VCardManager id',
-    () {
-      final connection = _SpyXmppConnection();
+  test('XmppConnection.getManager resolves VCardManager id', () {
+    final connection = _SpyXmppConnection();
 
-      connection.getManager<mox.VCardManager>();
+    connection.getManager<mox.VCardManager>();
 
-      expect(connection.lastManagerId, equals(mox.vcardManager));
-    },
-  );
+    expect(connection.lastManagerId, equals(mox.vcardManager));
+  });
 }

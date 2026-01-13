@@ -46,9 +46,7 @@ class _PasswordInputState extends State<PasswordInput> {
       label: semanticsLabel,
       textField: true,
       child: AxiTextFormField(
-        placeholder: Text(
-          widget.placeholder ?? defaultLabel,
-        ),
+        placeholder: Text(widget.placeholder ?? defaultLabel),
         enabled: widget.enabled,
         obscureText: obscure,
         controller: widget.controller,
@@ -62,10 +60,7 @@ class _PasswordInputState extends State<PasswordInput> {
             secondaryBorder: ShadBorder.none,
             secondaryFocusedBorder: ShadBorder.none,
           ),
-          icon: Icon(
-            obscure ? LucideIcons.eyeOff : LucideIcons.eye,
-            size: 16,
-          ),
+          icon: Icon(obscure ? LucideIcons.eyeOff : LucideIcons.eye, size: 16),
           onPressed: () {
             setState(() => obscure = !obscure);
           },
@@ -73,10 +68,7 @@ class _PasswordInputState extends State<PasswordInput> {
         validator: (text) {
           final localizations = context.l10n;
           final confirmationValidator = widget.confirmValidator ??
-              (value) => _defaultValidator(
-                    localizations,
-                    value,
-                  );
+              (value) => _defaultValidator(localizations, value);
           final baseResult = confirmationValidator(text);
           if (baseResult != null) {
             return baseResult;

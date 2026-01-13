@@ -477,15 +477,14 @@ class AxiInputState extends State<AxiInput>
     final theme = ShadTheme.of(context);
     final materialTheme = Theme.of(context);
     final effectiveTextStyle = theme.textTheme.muted
-        .copyWith(
-          color: theme.colorScheme.foreground,
-        )
+        .copyWith(color: theme.colorScheme.foreground)
         .merge(theme.inputTheme.style)
         .merge(widget.style);
 
     final effectiveDecoration =
-        (theme.inputTheme.decoration ?? const ShadDecoration())
-            .mergeWith(widget.decoration);
+        (theme.inputTheme.decoration ?? const ShadDecoration()).mergeWith(
+      widget.decoration,
+    );
 
     final effectivePadding = widget.padding ??
         theme.inputTheme.padding ??
@@ -544,8 +543,9 @@ class AxiInputState extends State<AxiInput>
         };
     final Color resolvedCursorColor =
         widget.cursorColor ?? theme.colorScheme.primary;
-    final Color transparentCursorColor =
-        resolvedCursorColor.withValues(alpha: _transparentCursorAlpha);
+    final Color transparentCursorColor = resolvedCursorColor.withValues(
+      alpha: _transparentCursorAlpha,
+    );
 
     final effectiveMaxLengthEnforcement = widget.maxLengthEnforcement ??
         LengthLimitingTextInputFormatter.getDefaultMaxLengthEnforcement(
@@ -576,10 +576,8 @@ class AxiInputState extends State<AxiInput>
     );
     final maxFontSizeScaled = textScaler.scale(maxFontSize);
 
-    final effectiveConstraints = widget.constraints ??
-        BoxConstraints(
-          minHeight: maxFontSizeScaled,
-        );
+    final effectiveConstraints =
+        widget.constraints ?? BoxConstraints(minHeight: maxFontSizeScaled);
 
     final effectiveGroupId = widget.groupId ?? _groupId;
 
@@ -605,8 +603,9 @@ class AxiInputState extends State<AxiInput>
                     crossAxisMargin:
                         materialTheme.scrollbarTheme.crossAxisMargin ?? 0,
                     radius: materialTheme.scrollbarTheme.radius,
-                    thickness:
-                        materialTheme.scrollbarTheme.thickness?.resolve({}),
+                    thickness: materialTheme.scrollbarTheme.thickness?.resolve(
+                      {},
+                    ),
                     thumbVisibility: isMultiline && isScrollable,
                     controller: effectiveScrollController,
                     padding: effectiveScrollbarPadding,
@@ -782,9 +781,8 @@ class AxiInputState extends State<AxiInput>
 
 class _AxiInputSelectionGestureDetectorBuilder
     extends AxiTextSelectionGestureDetectorBuilder {
-  _AxiInputSelectionGestureDetectorBuilder({
-    required AxiInputState state,
-  })  : _state = state,
+  _AxiInputSelectionGestureDetectorBuilder({required AxiInputState state})
+      : _state = state,
         super(delegate: state);
 
   final AxiInputState _state;

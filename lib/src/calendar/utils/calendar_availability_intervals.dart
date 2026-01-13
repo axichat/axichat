@@ -82,11 +82,7 @@ List<_AvailabilitySegment> _segmentsForOverlay(
   DateTime cursor = rangeStart;
   if (sorted.isEmpty) {
     return <_AvailabilitySegment>[
-      _AvailabilitySegment(
-        start: rangeStart,
-        end: rangeEnd,
-        type: gapType,
-      ),
+      _AvailabilitySegment(start: rangeStart, end: rangeEnd, type: gapType),
     ];
   }
   for (final CalendarFreeBusyInterval interval in sorted) {
@@ -102,11 +98,7 @@ List<_AvailabilitySegment> _segmentsForOverlay(
     }
     if (clippedStart.isAfter(cursor)) {
       segments.add(
-        _AvailabilitySegment(
-          start: cursor,
-          end: clippedStart,
-          type: gapType,
-        ),
+        _AvailabilitySegment(start: cursor, end: clippedStart, type: gapType),
       );
     }
     segments.add(
@@ -120,11 +112,7 @@ List<_AvailabilitySegment> _segmentsForOverlay(
   }
   if (cursor.isBefore(rangeEnd)) {
     segments.add(
-      _AvailabilitySegment(
-        start: cursor,
-        end: rangeEnd,
-        type: gapType,
-      ),
+      _AvailabilitySegment(start: cursor, end: rangeEnd, type: gapType),
     );
   }
   return segments;
@@ -140,10 +128,14 @@ List<_AvailabilitySegment> _mergeSegments({
   while (senderIndex < sender.length && comparisonIndex < comparison.length) {
     final _AvailabilitySegment senderSegment = sender[senderIndex];
     final _AvailabilitySegment comparisonSegment = comparison[comparisonIndex];
-    final DateTime maxStart =
-        _maxDateTime(senderSegment.start, comparisonSegment.start);
-    final DateTime minEnd =
-        _minDateTime(senderSegment.end, comparisonSegment.end);
+    final DateTime maxStart = _maxDateTime(
+      senderSegment.start,
+      comparisonSegment.start,
+    );
+    final DateTime minEnd = _minDateTime(
+      senderSegment.end,
+      comparisonSegment.end,
+    );
     if (!minEnd.isAfter(maxStart)) {
       if (senderSegment.end.isBefore(comparisonSegment.end)) {
         senderIndex += 1;
@@ -158,13 +150,7 @@ List<_AvailabilitySegment> _mergeSegments({
         : senderSegment.isFree
             ? CalendarFreeBusyType.free
             : CalendarFreeBusyType.busy;
-    merged.add(
-      _AvailabilitySegment(
-        start: maxStart,
-        end: minEnd,
-        type: type,
-      ),
-    );
+    merged.add(_AvailabilitySegment(start: maxStart, end: minEnd, type: type));
     if (senderSegment.end.isAtSameMomentAs(minEnd)) {
       senderIndex += 1;
     }

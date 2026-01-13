@@ -25,35 +25,29 @@ class _TestSafePubSubManager extends SafePubSubManager {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'SafePubSubManager treats MalformedResponseError as success',
-    () async {
-      final manager = _TestSafePubSubManager(
-        moxlib.Result(mox.MalformedResponseError()),
-      );
-      final jid = mox.JID.fromString('pubsub.example.com');
-      final payload = (mox.XmlBuilder('payload')..text('value')).build();
+  test('SafePubSubManager treats MalformedResponseError as success', () async {
+    final manager = _TestSafePubSubManager(
+      moxlib.Result(mox.MalformedResponseError()),
+    );
+    final jid = mox.JID.fromString('pubsub.example.com');
+    final payload = (mox.XmlBuilder('payload')..text('value')).build();
 
-      final result = await manager.publish(jid, 'node', payload);
+    final result = await manager.publish(jid, 'node', payload);
 
-      expect(result.isType<mox.PubSubError>(), isFalse);
-      expect(result.get<bool>(), isTrue);
-    },
-  );
+    expect(result.isType<mox.PubSubError>(), isFalse);
+    expect(result.get<bool>(), isTrue);
+  });
 
-  test(
-    'SafePubSubManager passes through non-malformed errors',
-    () async {
-      final manager = _TestSafePubSubManager(
-        moxlib.Result(mox.UnknownPubSubError()),
-      );
-      final jid = mox.JID.fromString('pubsub.example.com');
-      final payload = (mox.XmlBuilder('payload')..text('value')).build();
+  test('SafePubSubManager passes through non-malformed errors', () async {
+    final manager = _TestSafePubSubManager(
+      moxlib.Result(mox.UnknownPubSubError()),
+    );
+    final jid = mox.JID.fromString('pubsub.example.com');
+    final payload = (mox.XmlBuilder('payload')..text('value')).build();
 
-      final result = await manager.publish(jid, 'node', payload);
+    final result = await manager.publish(jid, 'node', payload);
 
-      expect(result.isType<mox.PubSubError>(), isTrue);
-      expect(result.get<mox.PubSubError>(), isA<mox.UnknownPubSubError>());
-    },
-  );
+    expect(result.isType<mox.PubSubError>(), isTrue);
+    expect(result.get<mox.PubSubError>(), isA<mox.UnknownPubSubError>());
+  });
 }

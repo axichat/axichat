@@ -166,11 +166,7 @@ class _ChatCalendarWidgetState
     _mobileInitialScrollSynced = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      calendarBloc.add(
-        CalendarEvent.dateSelected(
-          date: DateTime.now(),
-        ),
-      );
+      calendarBloc.add(CalendarEvent.dateSelected(date: DateTime.now()));
     });
   }
 
@@ -231,15 +227,10 @@ class _ChatCalendarWidgetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          children: [
-            navigation,
-            if (errorBanner != null) errorBanner,
-          ],
+          children: [navigation, if (errorBanner != null) errorBanner],
         ),
       );
-      headerChildren.add(
-        navContent,
-      );
+      headerChildren.add(navContent);
     } else if (errorBanner != null) {
       headerChildren.add(errorBanner);
     }
@@ -361,9 +352,7 @@ class _ChatCalendarWidgetState
     await showCalendarAvailabilityShareSheet(
       context: context,
       coordinator: coordinator,
-      source: CalendarAvailabilityShareSource.chat(
-        chatJid: widget.chat.jid,
-      ),
+      source: CalendarAvailabilityShareSource.chat(chatJid: widget.chat.jid),
       model: state.model,
       ownerJid: ownerJid,
       lockToChat: true,
@@ -408,14 +397,14 @@ class _ChatCalendarAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final Color background = CalendarNavSurface.backgroundColor(context);
-    final EdgeInsets toolbarPadding =
-        calendarMarginLarge.copyWith(top: 0, bottom: 0);
+    final EdgeInsets toolbarPadding = calendarMarginLarge.copyWith(
+      top: 0,
+      bottom: 0,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
-        border: Border(
-          bottom: BorderSide(color: colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SizedBox(
         height: _chatCalendarToolbarHeight,
@@ -456,10 +445,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
 }
 
 class _ChatCalendarActionRow extends StatelessWidget {
-  const _ChatCalendarActionRow({
-    required this.state,
-    this.onShareAvailability,
-  });
+  const _ChatCalendarActionRow({required this.state, this.onShareAvailability});
 
   final CalendarState state;
   final VoidCallback? onShareAvailability;
@@ -515,8 +501,10 @@ class ChatCalendarParticipantsStrip extends StatelessWidget {
                 constraints.maxWidth > 0
             ? constraints.maxWidth
             : double.infinity;
-        final double availableWidth =
-            math.max(0.0, maxWidth - _participantStripPadding.horizontal);
+        final double availableWidth = math.max(
+          0.0,
+          maxWidth - _participantStripPadding.horizontal,
+        );
         final layout = _layoutParticipantStrip(participants, availableWidth);
         final visible = layout.items;
         final overflowed = layout.overflowed;
@@ -559,10 +547,7 @@ class ChatCalendarParticipantsStrip extends StatelessWidget {
           height: paddedHeight,
           child: Padding(
             padding: _participantStripPadding,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: children,
-            ),
+            child: Stack(clipBehavior: Clip.none, children: children),
           ),
         );
       },
@@ -571,10 +556,7 @@ class ChatCalendarParticipantsStrip extends StatelessWidget {
 }
 
 class _ChatCalendarAvatar extends StatelessWidget {
-  const _ChatCalendarAvatar({
-    required this.jid,
-    this.avatarPath,
-  });
+  const _ChatCalendarAvatar({required this.jid, this.avatarPath});
 
   final String jid;
   final String? avatarPath;
@@ -586,10 +568,7 @@ class _ChatCalendarAvatar extends StatelessWidget {
       width: _participantAvatarSize,
       height: _participantAvatarSize,
       padding: const EdgeInsets.all(_participantAvatarBorderWidth),
-      decoration: BoxDecoration(
-        color: borderColor,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: borderColor, shape: BoxShape.circle),
       child: ClipOval(
         child: AxiAvatar(
           jid: jid,

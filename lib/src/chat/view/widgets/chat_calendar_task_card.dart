@@ -53,17 +53,15 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       builder: (context, state) {
         final CalendarTask resolvedTask =
             state.model.tasks[widget.task.id] ?? widget.task;
-        final bool taskInCalendar =
-            state.model.tasks.containsKey(widget.task.id);
+        final bool taskInCalendar = state.model.tasks.containsKey(
+          widget.task.id,
+        );
         final bool tileReadOnly = widget.readOnly || !taskInCalendar;
         final TaskEditMode editMode =
             widget.readOnly ? TaskEditMode.readOnly : TaskEditMode.full;
         final VoidCallback tapAction = widget.readOnly
-            ? () => _showTaskEditSheet(
-                  context,
-                  resolvedTask,
-                  editMode: editMode,
-                )
+            ? () =>
+                _showTaskEditSheet(context, resolvedTask, editMode: editMode)
             : () => _handleEditableTap(
                   resolvedTask,
                   taskInCalendar: taskInCalendar,
@@ -152,9 +150,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                     return;
                   }
                   locate<ChatCalendarBloc>().add(
-                    CalendarEvent.taskUpdated(
-                      task: updatedTask,
-                    ),
+                    CalendarEvent.taskUpdated(task: updatedTask),
                   );
                 },
                 onTaskDeleted: (taskId) {
@@ -167,9 +163,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                   Navigator.of(sheetContext).maybePop();
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask, scope,
-                        {required bool scheduleTouched,
-                        required bool checklistTouched}) {
+                    ? (
+                        updatedTask,
+                        scope, {
+                        required bool scheduleTouched,
+                        required bool checklistTouched,
+                      }) {
                         if (!editMode.allowsAnyEdits) {
                           return;
                         }
@@ -232,11 +231,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     if (!taskInCalendar) {
       _ensureTaskImported(task);
     }
-    await _showTaskEditSheet(
-      context,
-      task,
-      editMode: editMode,
-    );
+    await _showTaskEditSheet(context, task, editMode: editMode);
   }
 
   List<TaskContextAction> _inlineActionsForTask(
@@ -248,12 +243,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       TaskContextAction(
         icon: Icons.copy,
         label: l10n.chatCalendarTaskCopyActionLabel,
-        onSelected: () => unawaited(
-          _handleCopyTask(
-            task: task,
-            style: copyStyle,
-          ),
-        ),
+        onSelected: () =>
+            unawaited(_handleCopyTask(task: task, style: copyStyle)),
       ),
     ];
   }
@@ -352,11 +343,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return false;
     }
     final List<CalendarTask> tasks = <CalendarTask>[task];
-    dispatch(
-      CalendarEvent.tasksImported(
-        tasks: tasks,
-      ),
-    );
+    dispatch(CalendarEvent.tasksImported(tasks: tasks));
     return true;
   }
 
@@ -377,18 +364,13 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
   }
 
   void _ensureTaskImported(CalendarTask task) {
-    if (context
-        .read<ChatCalendarBloc>()
-        .state
-        .model
-        .tasks
-        .containsKey(task.id)) {
+    if (context.read<ChatCalendarBloc>().state.model.tasks.containsKey(
+          task.id,
+        )) {
       return;
     }
     context.read<ChatCalendarBloc>().add(
-          CalendarEvent.tasksImported(
-            tasks: <CalendarTask>[task],
-          ),
+          CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
         );
   }
 }
@@ -399,11 +381,7 @@ class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
     required super.task,
     super.onTap,
     bool readOnly = false,
-  }) : super(
-          isGuestMode: false,
-          compact: true,
-          isReadOnly: readOnly,
-        );
+  }) : super(isGuestMode: false, compact: true, isReadOnly: readOnly);
 
   @override
   State<ChatCalendarTaskTile> createState() => _ChatCalendarTaskTileState();

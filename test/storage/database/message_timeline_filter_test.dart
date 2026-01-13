@@ -115,18 +115,9 @@ void main() {
       filter: MessageTimelineFilter.allWithContact,
     );
 
-    expect(
-      directOnly.map((msg) => msg.stanzaID),
-      isNot(contains('share-1')),
-    );
-    expect(
-      allWithContact.map((msg) => msg.stanzaID),
-      contains('share-1'),
-    );
-    expect(
-      allWithContact.map((msg) => msg.stanzaID),
-      contains('direct-1'),
-    );
+    expect(directOnly.map((msg) => msg.stanzaID), isNot(contains('share-1')));
+    expect(allWithContact.map((msg) => msg.stanzaID), contains('share-1'));
+    expect(allWithContact.map((msg) => msg.stanzaID), contains('direct-1'));
   });
 
   test('countChatMessages can exclude pseudo messages', () async {

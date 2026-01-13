@@ -28,10 +28,7 @@ class AxiFab extends StatelessWidget {
     ).withTapBounce(enabled: onPressed != null);
 
     if (tooltip != null) {
-      button = AxiTooltip(
-        builder: (_) => Text(tooltip!),
-        child: button,
-      );
+      button = AxiTooltip(builder: (_) => Text(tooltip!), child: button);
     }
 
     return button;

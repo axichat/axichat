@@ -123,9 +123,7 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
         request.minJpegQuality,
         jpegStartQuality,
       );
-      jpgBytes = Uint8List.fromList(
-        img.encodeJpg(candidate, quality: quality),
-      );
+      jpgBytes = Uint8List.fromList(img.encodeJpg(candidate, quality: quality));
     }
     return ProcessedAvatar(
       bytes: jpgBytes,
@@ -141,10 +139,7 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
   final minimumSize = min(minDownscale, targetSize);
 
   while (encoded.bytes.length > request.maxBytes && targetSize > minimumSize) {
-    final nextSize = max(
-      minimumSize,
-      (targetSize * downscaleFactor).round(),
-    );
+    final nextSize = max(minimumSize, (targetSize * downscaleFactor).round());
     if (nextSize >= targetSize) break;
     targetSize = nextSize;
     candidate = img.copyResize(

@@ -154,8 +154,9 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     final earliestTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
     final ordered = List<Message>.of(results)
       ..sort(
-        (a, b) => (a.timestamp ?? earliestTimestamp)
-            .compareTo(b.timestamp ?? earliestTimestamp),
+        (a, b) => (a.timestamp ?? earliestTimestamp).compareTo(
+          b.timestamp ?? earliestTimestamp,
+        ),
       );
     if (state.sort == SearchSortOrder.newestFirst) {
       return ordered.reversed.toList(growable: false);
@@ -225,10 +226,7 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
           !state.excludeSubject;
       List<Message> results;
       if (shouldUseEmailSearch) {
-        results = await emailService.searchMessages(
-          chat: chat,
-          query: query,
-        );
+        results = await emailService.searchMessages(chat: chat, query: query);
         results = _sortResults(results);
         if (results.length > resultLimit) {
           results = results.sublist(0, resultLimit);
@@ -253,10 +251,7 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
       );
     } catch (error) {
       emit(
-        state.copyWith(
-          status: RequestStatus.failure,
-          error: error.toString(),
-        ),
+        state.copyWith(status: RequestStatus.failure, error: error.toString()),
       );
     }
   }

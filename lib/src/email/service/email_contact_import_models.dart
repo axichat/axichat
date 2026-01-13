@@ -13,13 +13,7 @@ const List<String> _vcardExtensions = <String>[
   _vcardAlternateExtension,
 ];
 
-enum EmailContactImportFormat {
-  gmail,
-  outlook,
-  yahoo,
-  genericCsv,
-  vcard,
-}
+enum EmailContactImportFormat { gmail, outlook, yahoo, genericCsv, vcard }
 
 extension EmailContactImportFormatMetadata on EmailContactImportFormat {
   bool get isVcard => this == EmailContactImportFormat.vcard;
@@ -40,10 +34,7 @@ enum EmailContactImportFailureReason {
 }
 
 class EmailContactImportContact extends Equatable {
-  const EmailContactImportContact({
-    required this.address,
-    this.displayName,
-  });
+  const EmailContactImportContact({required this.address, this.displayName});
 
   final String address;
   final String? displayName;
@@ -74,11 +65,5 @@ class EmailContactImportSummary extends Equatable {
   bool get hasImported => imported > _emptyCount;
 
   @override
-  List<Object?> get props => [
-        total,
-        imported,
-        duplicates,
-        invalid,
-        failed,
-      ];
+  List<Object?> get props => [total, imported, duplicates, invalid, failed];
 }

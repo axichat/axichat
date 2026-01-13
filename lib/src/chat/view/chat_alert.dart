@@ -35,11 +35,7 @@ class ChatAlert extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        iconData,
-                        color: Colors.white,
-                        size: 20.0,
-                      ),
+                      Icon(iconData, color: Colors.white, size: 20.0),
                       const SizedBox.square(dimension: 8.0),
                       Expanded(
                         child: Text(
@@ -50,9 +46,9 @@ class ChatAlert extends StatelessWidget {
                       const SizedBox.square(dimension: 4.0),
                       ShadButton.secondary(
                         child: Text(l10n.chatAlertHide),
-                        onPressed: () => context
-                            .read<ChatBloc>()
-                            .add(const ChatAlertHidden()),
+                        onPressed: () => context.read<ChatBloc>().add(
+                              const ChatAlertHidden(),
+                            ),
                       ).withTapBounce(),
                       const SizedBox.square(dimension: 4.0),
                       ShadButton.ghost(
@@ -60,9 +56,9 @@ class ChatAlert extends StatelessWidget {
                           l10n.chatAlertIgnore,
                           style: const TextStyle(color: Colors.white),
                         ),
-                        onPressed: () => context
-                            .read<ChatBloc>()
-                            .add(const ChatAlertHidden(forever: true)),
+                        onPressed: () => context.read<ChatBloc>().add(
+                              const ChatAlertHidden(forever: true),
+                            ),
                       ).withTapBounce(),
                     ],
                   ),

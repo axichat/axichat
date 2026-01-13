@@ -57,7 +57,9 @@ String? sanitizeNotificationPreview(String? body) {
   );
   sanitized = sanitized
       .replaceAll(
-          _notificationWhitespaceRegex, _notificationWhitespaceReplacement)
+        _notificationWhitespaceRegex,
+        _notificationWhitespaceReplacement,
+      )
       .trim();
   if (sanitized.isEmpty) return null;
   if (sanitized.length <= _notificationPreviewMaxLength) {

@@ -10,10 +10,8 @@ part 'verification_cubit.freezed.dart';
 part 'verification_state.dart';
 
 class VerificationCubit extends Cubit<VerificationState> {
-  VerificationCubit({
-    required this.jid,
-    required OmemoService omemoService,
-  })  : _omemoService = omemoService,
+  VerificationCubit({required this.jid, required OmemoService omemoService})
+      : _omemoService = omemoService,
         super(const VerificationState(loading: true)) {
     _omemoService.populateTrustCache(jid: jid).then((_) => loadFingerprints());
   }
@@ -24,13 +22,16 @@ class VerificationCubit extends Cubit<VerificationState> {
   Future<void> loadFingerprints() async {
     emit(state.copyWith(loading: true));
     final fingerprints = await _omemoService.getFingerprints(jid: jid);
-    final myFingerprints =
-        await _omemoService.getFingerprints(jid: _omemoService.myJid!);
-    emit(state.copyWith(
-      fingerprints: fingerprints,
-      myFingerprints: myFingerprints,
-      loading: false,
-    ));
+    final myFingerprints = await _omemoService.getFingerprints(
+      jid: _omemoService.myJid!,
+    );
+    emit(
+      state.copyWith(
+        fingerprints: fingerprints,
+        myFingerprints: myFingerprints,
+        loading: false,
+      ),
+    );
   }
 
   Future<void> setDeviceTrust({

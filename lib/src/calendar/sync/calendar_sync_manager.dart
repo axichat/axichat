@@ -23,8 +23,9 @@ import 'package:axichat/src/common/safe_logging.dart';
 /// Threshold of updates before sending a snapshot.
 const int kSnapshotThreshold = 50;
 const int _calendarSyncBatchIntervalSeconds = 30;
-const Duration _calendarSyncBatchInterval =
-    Duration(seconds: _calendarSyncBatchIntervalSeconds);
+const Duration _calendarSyncBatchInterval = Duration(
+  seconds: _calendarSyncBatchIntervalSeconds,
+);
 const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
@@ -85,18 +86,24 @@ class CalendarSyncManager {
           return await _handleSnapshotMessage(message, inbound: inbound);
         default:
           SafeLogging.debugLog(
-              'Unknown calendar sync message type: ${message.type}');
+            'Unknown calendar sync message type: ${message.type}',
+          );
           throw CalendarSyncException(
-              'Unknown sync message type: ${message.type}');
+            'Unknown sync message type: ${message.type}',
+          );
       }
     } catch (e) {
-      SafeLogging.debugLog('Error handling calendar message: $e',
-          name: 'CalendarSyncManager');
+      SafeLogging.debugLog(
+        'Error handling calendar message: $e',
+        name: 'CalendarSyncManager',
+      );
       if (e is CalendarException) {
         rethrow;
       }
       throw CalendarSyncException(
-          'Failed to process sync message', e.toString());
+        'Failed to process sync message',
+        e.toString(),
+      );
     }
   }
 
@@ -168,8 +175,10 @@ class CalendarSyncManager {
       await _flushPendingEnvelopes();
       return await _maybeSendSnapshot();
     } catch (e) {
-      SafeLogging.debugLog('Error handling request message: $e',
-          name: 'CalendarSyncManager');
+      SafeLogging.debugLog(
+        'Error handling request message: $e',
+        name: 'CalendarSyncManager',
+      );
       throw CalendarSyncException('Failed to send calendar data', e.toString());
     }
   }
@@ -196,7 +205,8 @@ class CalendarSyncManager {
       }
 
       SafeLogging.debugLog(
-          'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)');
+        'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)',
+      );
       final mergedModel = localModel.mergeWith(remoteModel);
       await _applyModel(mergedModel);
       await _recordAppliedMessage(message, inbound: inbound);
@@ -227,8 +237,9 @@ class CalendarSyncManager {
           applied = await _mergeCriticalPath(path, operation);
           break;
         case _calendarSyncEntityJournal:
-          final CalendarJournal journal =
-              CalendarJournal.fromJson(message.data!);
+          final CalendarJournal journal = CalendarJournal.fromJson(
+            message.data!,
+          );
           applied = await _mergeJournal(journal, operation);
           break;
         default:
@@ -308,20 +319,15 @@ class CalendarSyncManager {
           snapshotUrl: result.url,
         );
 
-        final messageJson = jsonEncode({
-          'calendar_sync': syncMessage.toJson(),
-        });
+        final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
 
         await _sendCalendarMessage(
-          CalendarSyncOutbound(
-            envelope: messageJson,
-            attachment: attachment,
-          ),
+          CalendarSyncOutbound(envelope: messageJson, attachment: attachment),
         );
 
-        final state = _readSyncState()
-            .resetCounter()
-            .copyWith(lastSnapshotChecksum: result.checksum);
+        final state = _readSyncState().resetCounter().copyWith(
+              lastSnapshotChecksum: result.checksum,
+            );
         await _writeSyncState(state);
 
         SafeLogging.debugLog(
@@ -335,8 +341,10 @@ class CalendarSyncManager {
         }
       }
     } catch (e) {
-      SafeLogging.debugLog('Error sending snapshot: $e',
-          name: 'CalendarSyncManager');
+      SafeLogging.debugLog(
+        'Error sending snapshot: $e',
+        name: 'CalendarSyncManager',
+      );
     }
     if (!sent) {
       return _sendInlineSnapshot(model);
@@ -357,17 +365,13 @@ class CalendarSyncManager {
         snapshotVersion: CalendarSnapshotCodec.currentVersion,
       );
 
-      final messageJson = jsonEncode({
-        'calendar_sync': syncMessage.toJson(),
-      });
+      final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
 
-      await _sendCalendarMessage(
-        CalendarSyncOutbound(envelope: messageJson),
-      );
+      await _sendCalendarMessage(CalendarSyncOutbound(envelope: messageJson));
 
-      final state = _readSyncState()
-          .resetCounter()
-          .copyWith(lastSnapshotChecksum: checksum);
+      final state = _readSyncState().resetCounter().copyWith(
+            lastSnapshotChecksum: checksum,
+          );
       await _writeSyncState(state);
 
       SafeLogging.debugLog(
@@ -376,8 +380,10 @@ class CalendarSyncManager {
       );
       return true;
     } catch (e) {
-      SafeLogging.debugLog('$_inlineSnapshotFailedLog: $e',
-          name: 'CalendarSyncManager');
+      SafeLogging.debugLog(
+        '$_inlineSnapshotFailedLog: $e',
+        name: 'CalendarSyncManager',
+      );
     }
     return false;
   }
@@ -435,9 +441,7 @@ class CalendarSyncManager {
     await _flushPendingEnvelopes();
     final syncMessage = CalendarSyncMessage.request();
 
-    final messageJson = jsonEncode({
-      'calendar_sync': syncMessage.toJson(),
-    });
+    final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
     await _sendEnvelope(CalendarSyncOutbound(envelope: messageJson));
   }
 

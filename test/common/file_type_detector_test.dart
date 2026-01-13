@@ -58,8 +58,9 @@ void main() {
 
   group('FileTypeReport.preferredMimeType', () {
     test('prefers declared mime types when detection is generic', () {
-      final preferredCases = corpus.attachmentRiskCases
-          .where((entry) => entry.expectedPreferredMimeType != null);
+      final preferredCases = corpus.attachmentRiskCases.where(
+        (entry) => entry.expectedPreferredMimeType != null,
+      );
       for (final entry in preferredCases) {
         final report = entry.toReport();
         expect(report.preferredMimeType, entry.expectedPreferredMimeType);
@@ -74,10 +75,7 @@ void main() {
         declaredMimeType: _safeJpegMimeType,
         extensionMimeType: _safeJpegMimeType,
       );
-      final risk = assessFileOpenRisk(
-        report: report,
-        fileName: _safeFileName,
-      );
+      final risk = assessFileOpenRisk(report: report, fileName: _safeFileName);
       expect(risk.isWarning, isTrue);
     });
 

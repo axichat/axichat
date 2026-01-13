@@ -25,10 +25,7 @@ class EmailContactImportCubit extends Cubit<EmailContactImportState> {
     emit(const EmailContactImportInProgress());
     try {
       final EmailContactImportSummary summary =
-          await _importService.importContacts(
-        file: file,
-        format: format,
-      );
+          await _importService.importContacts(file: file, format: format);
       emit(EmailContactImportSuccess(summary));
     } on EmailContactImportException catch (error) {
       emit(EmailContactImportFailure(error.reason));

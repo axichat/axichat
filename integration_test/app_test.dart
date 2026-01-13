@@ -77,116 +77,108 @@ void main() {
 
   group('End-to-end', () {
     testWidgets(
-      'Critical path: log in, add contact, send message, '
-      'remove contact, log out.',
-      (tester) async {
-        await app.main();
+        'Critical path: log in, add contact, send message, '
+        'remove contact, log out.', (tester) async {
+      await app.main();
 
-        await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-        await tester.pumpUntil(
-          find.text(AppLocalizationsEn().authLogin),
-        );
+      await tester.pumpUntil(find.text(AppLocalizationsEn().authLogin));
 
-        await tester.enterText(
-          find.byKey(loginUsernameKey),
-          username,
-        );
-        await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(loginUsernameKey), username);
+      await tester.pumpAndSettle();
 
-        await tester.enterText(
-          find.byKey(loginPasswordKey),
-          password,
-        );
-        await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(loginPasswordKey), password);
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.byKey(loginSubmitKey));
+      await tester.tap(find.byKey(loginSubmitKey));
 
-        final findProfileCard = find.byType(ProfileTile);
-        await tester.pumpUntil(findProfileCard);
+      final findProfileCard = find.byType(ProfileTile);
+      await tester.pumpUntil(findProfileCard);
 
-        final findContactsTab = find.widgetWithText(Tab, 'Contacts');
-        await tester.tap(findContactsTab);
+      final findContactsTab = find.widgetWithText(Tab, 'Contacts');
+      await tester.tap(findContactsTab);
 
-        final findRosterAddButton = find.byType(RosterAddButton);
-        await tester.pumpUntil(findRosterAddButton);
-        await tester.tap(findRosterAddButton);
+      final findRosterAddButton = find.byType(RosterAddButton);
+      await tester.pumpUntil(findRosterAddButton);
+      await tester.tap(findRosterAddButton);
 
-        final findJidInput = find.byType(JidInput);
-        await tester.pumpUntil(findJidInput);
-        await tester.enterText(findJidInput, contactJid);
+      final findJidInput = find.byType(JidInput);
+      await tester.pumpUntil(findJidInput);
+      await tester.enterText(findJidInput, contactJid);
 
-        await pumpEventQueue();
-        await tester.pumpAndSettle();
+      await pumpEventQueue();
+      await tester.pumpAndSettle();
 
-        final findContinueButton = find.widgetWithText(ShadButton, 'Continue');
-        await tester.tap(findContinueButton);
+      final findContinueButton = find.widgetWithText(ShadButton, 'Continue');
+      await tester.tap(findContinueButton);
 
-        final findRosterTile = find.widgetWithText(AxiListTile, contactJid);
-        await tester.pumpUntil(findRosterTile);
+      final findRosterTile = find.widgetWithText(AxiListTile, contactJid);
+      await tester.pumpUntil(findRosterTile);
 
-        final findChatsTab = find.widgetWithText(Tab, 'Chats');
-        await tester.pumpUntil(findChatsTab);
-        await tester.pumpUntilGone(find.byType(ShadToast));
-        await tester.tap(findChatsTab);
+      final findChatsTab = find.widgetWithText(Tab, 'Chats');
+      await tester.pumpUntil(findChatsTab);
+      await tester.pumpUntilGone(find.byType(ShadToast));
+      await tester.tap(findChatsTab);
 
-        await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.byKey(Key(contactJid)).first);
+      await tester.tap(find.byKey(Key(contactJid)).first);
 
-        await tester.pumpUntil(find.byType(DashChat));
-        await tester.pumpUntilGone(find.byType(ShadToast));
+      await tester.pumpUntil(find.byType(DashChat));
+      await tester.pumpUntilGone(find.byType(ShadToast));
 
-        const message = 'Hello';
-        await tester.enterText(find.byType(TextField), message);
-        await tester.pumpAndSettle();
+      const message = 'Hello';
+      await tester.enterText(find.byType(TextField), message);
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.widgetWithIcon(ShadButton, Icons.send));
-        await tester.pumpUntil(find.byWidgetPredicate((widget) =>
-            widget is DynamicInlineText && widget.text.text == message));
+      await tester.tap(find.widgetWithIcon(ShadButton, Icons.send));
+      await tester.pumpUntil(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is DynamicInlineText && widget.text.text == message,
+        ),
+      );
 
-        await tester.tap(
-          find.widgetWithIcon(ShadButton, LucideIcons.arrowLeft),
-        );
+      await tester.tap(find.widgetWithIcon(ShadButton, LucideIcons.arrowLeft));
 
-        await tester.pumpUntil(findContactsTab);
-        await tester.tap(findContactsTab);
+      await tester.pumpUntil(findContactsTab);
+      await tester.tap(findContactsTab);
 
-        await tester.pumpUntil(findRosterTile);
+      await tester.pumpUntil(findRosterTile);
 
-        await tester.longPress(findRosterTile);
+      await tester.longPress(findRosterTile);
 
-        final findDeleteMenuItem =
-            find.widgetWithText(ShadContextMenuItem, 'Delete');
-        await tester.pumpUntil(findDeleteMenuItem);
-        await tester.tap(findDeleteMenuItem);
+      final findDeleteMenuItem = find.widgetWithText(
+        ShadContextMenuItem,
+        'Delete',
+      );
+      await tester.pumpUntil(findDeleteMenuItem);
+      await tester.tap(findDeleteMenuItem);
 
-        await tester.pumpUntil(find.widgetWithText(ShadDialog, 'Confirm'));
+      await tester.pumpUntil(find.widgetWithText(ShadDialog, 'Confirm'));
 
-        await tester.tap(findContinueButton);
+      await tester.tap(findContinueButton);
 
-        await tester.pumpUntilGone(findRosterTile);
+      await tester.pumpUntilGone(findRosterTile);
 
-        await tester.pumpUntil(findProfileCard);
-        await tester.pumpUntilGone(find.byType(ShadToast));
-        await tester.tap(findProfileCard);
+      await tester.pumpUntil(findProfileCard);
+      await tester.pumpUntilGone(find.byType(ShadToast));
+      await tester.tap(findProfileCard);
 
-        final l10n = AppLocalizationsEn();
-        final findLogoutButton = find.byType(LogoutButton);
-        await tester.pumpUntil(findLogoutButton);
-        await tester.tap(findLogoutButton);
+      final l10n = AppLocalizationsEn();
+      final findLogoutButton = find.byType(LogoutButton);
+      await tester.pumpUntil(findLogoutButton);
+      await tester.tap(findLogoutButton);
 
-        await tester.pumpUntil(find.text(LogoutButton.title(l10n)));
-        await tester.tap(find.widgetWithText(ListTile, l10n.authLogoutBurn));
+      await tester.pumpUntil(find.text(LogoutButton.title(l10n)));
+      await tester.tap(find.widgetWithText(ListTile, l10n.authLogoutBurn));
 
-        await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-        await tester.tap(findContinueButton);
+      await tester.tap(findContinueButton);
 
-        await tester.pumpUntil(
-          find.text(l10n.authLogin),
-        );
-      },
-    );
+      await tester.pumpUntil(find.text(l10n.authLogin));
+    });
   });
 }

@@ -32,10 +32,7 @@ class LoadingIndicator extends StatelessWidget {
           SizedBox(
             width: size,
             height: size,
-            child: _CalendarSpinner(
-              size: size,
-              semanticsLabel: message,
-            ),
+            child: _CalendarSpinner(size: size, semanticsLabel: message),
           ),
           if (showMessage && message != null) ...[
             const SizedBox(height: calendarGutterLg),
@@ -52,10 +49,7 @@ class LoadingIndicator extends StatelessWidget {
 }
 
 class CalendarLoadingIndicator extends StatelessWidget {
-  const CalendarLoadingIndicator({
-    super.key,
-    this.message,
-  });
+  const CalendarLoadingIndicator({super.key, this.message});
 
   final String? message;
 
@@ -69,9 +63,7 @@ class CalendarLoadingIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(
-          color: colors.border.withValues(alpha: 0.9),
-        ),
+        border: Border.all(color: colors.border.withValues(alpha: 0.9)),
         boxShadow: calendarMediumShadow,
       ),
       child: Column(
@@ -143,11 +135,7 @@ class _CalendarSpinnerState extends State<_CalendarSpinner>
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final palette = <Color>[
-      colors.primary,
-      axiGreen,
-      colors.secondary,
-    ];
+    final palette = <Color>[colors.primary, axiGreen, colors.secondary];
     final double stroke =
         widget.strokeWidth ?? math.max(2.5, widget.size * 0.12);
     return Semantics(
@@ -188,12 +176,7 @@ class _CalendarSpinnerPainter extends CustomPainter {
     final shader = SweepGradient(
       startAngle: -math.pi / 2,
       endAngle: 3 * math.pi / 2,
-      colors: [
-        colors[0],
-        colors[1],
-        colors[2],
-        colors[0].withValues(alpha: 0),
-      ],
+      colors: [colors[0], colors[1], colors[2], colors[0].withValues(alpha: 0)],
       stops: const [0, 0.5, 0.85, 1],
       transform: GradientRotation(progress * math.pi * 2),
     ).createShader(Offset.zero & size);
@@ -209,13 +192,7 @@ class _CalendarSpinnerPainter extends CustomPainter {
       size.width - strokeWidth,
       size.height - strokeWidth,
     );
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      math.pi * 1.65,
-      false,
-      paint,
-    );
+    canvas.drawArc(rect, -math.pi / 2, math.pi * 1.65, false, paint);
   }
 
   @override
@@ -305,10 +282,7 @@ class TaskSkeletonTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: calendarContainerColor,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: calendarBorderColor,
-              width: 1,
-            ),
+            border: Border.all(color: calendarBorderColor, width: 1),
           ),
           child: Row(
             children: [
@@ -320,15 +294,9 @@ class TaskSkeletonTile extends StatelessWidget {
                   children: [
                     const SkeletonLoader(width: double.infinity, height: 16),
                     const SizedBox(height: calendarGutterSm),
-                    SkeletonLoader(
-                      width: primaryLineWidth,
-                      height: 12,
-                    ),
+                    SkeletonLoader(width: primaryLineWidth, height: 12),
                     const SizedBox(height: calendarInsetMd),
-                    SkeletonLoader(
-                      width: secondaryLineWidth,
-                      height: 12,
-                    ),
+                    SkeletonLoader(width: secondaryLineWidth, height: 12),
                   ],
                 ),
               ),
@@ -388,11 +356,7 @@ class _PulsatingIconState extends State<PulsatingIcon>
       builder: (context, child) {
         return Opacity(
           opacity: _animation.value,
-          child: Icon(
-            widget.icon,
-            color: widget.color,
-            size: widget.size,
-          ),
+          child: Icon(widget.icon, color: widget.color, size: widget.size),
         );
       },
     );

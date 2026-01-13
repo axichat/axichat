@@ -101,8 +101,9 @@ void main() {
     expect(removedKey, recipients.last.key);
   });
 
-  testWidgets('shows latest status for typed recipient via email key',
-      (tester) async {
+  testWidgets('shows latest status for typed recipient via email key', (
+    tester,
+  ) async {
     final recipient = ComposerRecipient(
       target: FanOutTarget.address(address: 'CaseSensitive@Example.com'),
     );
@@ -194,8 +195,9 @@ void main() {
 Widget _wrapWithTheme(Widget child) {
   final settingsCubit = _MockSettingsCubit();
   when(() => settingsCubit.state).thenReturn(const SettingsState());
-  when(() => settingsCubit.stream)
-      .thenAnswer((_) => const Stream<SettingsState>.empty());
+  when(
+    () => settingsCubit.stream,
+  ).thenAnswer((_) => const Stream<SettingsState>.empty());
   return MaterialApp(
     home: BlocProvider<SettingsCubit>.value(
       value: settingsCubit,

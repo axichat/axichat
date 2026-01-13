@@ -45,8 +45,10 @@ class TaskShareFormatter {
       buffer.write(' $schedule');
     }
 
-    final String? recurrence =
-        _recurrenceClause(task.effectiveRecurrence, reference);
+    final String? recurrence = _recurrenceClause(
+      task.effectiveRecurrence,
+      reference,
+    );
     if (recurrence != null && recurrence.isNotEmpty) {
       buffer.write(' $recurrence');
     }
@@ -168,28 +170,23 @@ class TaskShareFormatter {
     return parts.join(' ');
   }
 
-  static String? _overridesDescription(
-    CalendarTask task,
-    DateTime reference,
-  ) {
+  static String? _overridesDescription(CalendarTask task, DateTime reference) {
     if (task.occurrenceOverrides.isEmpty) {
       return null;
     }
 
     final List<MapEntry<String, TaskOccurrenceOverride>> sortedOverrides =
         task.occurrenceOverrides.entries.toList()
-          ..sort(
-            (a, b) {
-              final DateTime? aDate = _dateFromOccurrenceKey(a.key);
-              final DateTime? bDate = _dateFromOccurrenceKey(b.key);
-              if (aDate != null && bDate != null) {
-                return aDate.compareTo(bDate);
-              }
-              if (aDate != null) return -1;
-              if (bDate != null) return 1;
-              return a.key.compareTo(b.key);
-            },
-          );
+          ..sort((a, b) {
+            final DateTime? aDate = _dateFromOccurrenceKey(a.key);
+            final DateTime? bDate = _dateFromOccurrenceKey(b.key);
+            if (aDate != null && bDate != null) {
+              return aDate.compareTo(bDate);
+            }
+            if (aDate != null) return -1;
+            if (bDate != null) return 1;
+            return a.key.compareTo(b.key);
+          });
 
     final List<String> segments = [];
     for (final MapEntry<String, TaskOccurrenceOverride> entry
@@ -210,9 +207,7 @@ class TaskShareFormatter {
         actions.add('for ${TimeFormatter.formatDuration(override.duration!)}');
       }
       if (override.endDate != null) {
-        actions.add(
-          'end at ${_formatDateTime(override.endDate!, reference)}',
-        );
+        actions.add('end at ${_formatDateTime(override.endDate!, reference)}');
       }
       if (override.priority != null) {
         final String? label = _priorityWord(override.priority!);
@@ -261,6 +256,7 @@ class TaskShareFormatter {
       case TaskPriority.critical:
         return 'critical';
     }
+    return null;
   }
 
   static String _formatDateTime(DateTime dt, DateTime reference) =>
@@ -344,8 +340,10 @@ class TaskShareDecoder {
       task = task.copyWith(description: sections.notes);
     }
 
-    final _ShareSchedule? schedule =
-        _ShareSchedule.tryParse(sections.baseText, context);
+    final _ShareSchedule? schedule = _ShareSchedule.tryParse(
+      sections.baseText,
+      context,
+    );
     final DateTime? scheduledTime = schedule?.start ?? task.scheduledTime;
     final DateTime? endDate = schedule?.end ?? task.endDate;
     final DateTime? deadline =
@@ -366,8 +364,10 @@ class TaskShareDecoder {
       location: location,
     );
 
-    final Map<String, TaskOccurrenceOverride> overrides =
-        _parseOverrides(sections.changes, context);
+    final Map<String, TaskOccurrenceOverride> overrides = _parseOverrides(
+      sections.changes,
+      context,
+    );
     if (overrides.isNotEmpty &&
         (sections.changes?.toLowerCase().contains('cancel') ?? false)) {
       overrides.updateAll(
@@ -416,8 +416,10 @@ class TaskShareDecoder {
     );
   }
 
-  static final RegExp _titlePattern =
-      RegExp(r'Task\s+"([^"]+)"', caseSensitive: false);
+  static final RegExp _titlePattern = RegExp(
+    r'Task\s+"([^"]+)"',
+    caseSensitive: false,
+  );
 
   static bool _looksDone(String text) => RegExp(
         r'\b(done|completed|finished)\b',
@@ -452,9 +454,7 @@ class TaskShareDecoder {
     String? changes;
     if (changesIndex != -1) {
       final int start = changesIndex + 'changes:'.length;
-      changes = _trimTrailingPunctuation(
-        input.substring(start).trim(),
-      );
+      changes = _trimTrailingPunctuation(input.substring(start).trim());
     }
 
     return _ShareSections(
@@ -637,11 +637,7 @@ class TaskShareDecoder {
     if (start == null) return null;
     final Duration? span =
         end != null && end.isAfter(start) ? end.difference(start) : null;
-    return _ShareSchedule(
-      start: start,
-      end: end,
-      duration: span,
-    );
+    return _ShareSchedule(start: start, end: end, duration: span);
   }
 
   static NlZonedDateTime _toZonedDateTime(
@@ -664,10 +660,12 @@ class TaskShareDecoder {
 
   static Duration? _parseDuration(String action) {
     final String lower = action.toLowerCase();
-    final RegExpMatch? hourMatch =
-        RegExp(r'(\d+)\s*(hour|hours|hr|hrs|h)\b').firstMatch(lower);
-    final RegExpMatch? minuteMatch =
-        RegExp(r'(\d+)\s*(minute|minutes|min|mins|m)\b').firstMatch(lower);
+    final RegExpMatch? hourMatch = RegExp(
+      r'(\d+)\s*(hour|hours|hr|hrs|h)\b',
+    ).firstMatch(lower);
+    final RegExpMatch? minuteMatch = RegExp(
+      r'(\d+)\s*(minute|minutes|min|mins|m)\b',
+    ).firstMatch(lower);
 
     int minutes = 0;
     if (hourMatch != null) {
@@ -723,10 +721,7 @@ class TaskShareDecoder {
     return cleaned;
   }
 
-  static DateTime? _extractDeadline(
-    String baseText,
-    ParseContext context,
-  ) {
+  static DateTime? _extractDeadline(String baseText, ParseContext context) {
     final RegExpMatch? match = RegExp(
       r'due by\s+([^.]+)',
       caseSensitive: false,
@@ -749,8 +744,9 @@ class TaskShareDecoder {
 
     if (lower.contains('every weekday')) {
       frequency = RecurrenceFrequency.weekdays;
-      final RegExpMatch? intervalMatch =
-          RegExp(r'every\s+(\d+)\s+weekdays').firstMatch(lower);
+      final RegExpMatch? intervalMatch = RegExp(
+        r'every\s+(\d+)\s+weekdays',
+      ).firstMatch(lower);
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
@@ -759,15 +755,17 @@ class TaskShareDecoder {
       interval = 2;
     } else if (lower.contains('every day')) {
       frequency = RecurrenceFrequency.daily;
-      final RegExpMatch? intervalMatch =
-          RegExp(r'every\s+(\d+)\s+days').firstMatch(lower);
+      final RegExpMatch? intervalMatch = RegExp(
+        r'every\s+(\d+)\s+days',
+      ).firstMatch(lower);
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
     } else if (lower.contains('every week')) {
       frequency = RecurrenceFrequency.weekly;
-      final RegExpMatch? intervalMatch =
-          RegExp(r'every\s+(\d+)\s+weeks').firstMatch(lower);
+      final RegExpMatch? intervalMatch = RegExp(
+        r'every\s+(\d+)\s+weeks',
+      ).firstMatch(lower);
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
@@ -804,8 +802,9 @@ class TaskShareDecoder {
       }
     } else if (lower.contains('every month')) {
       frequency = RecurrenceFrequency.monthly;
-      final RegExpMatch? intervalMatch =
-          RegExp(r'every\s+(\d+)\s+months').firstMatch(lower);
+      final RegExpMatch? intervalMatch = RegExp(
+        r'every\s+(\d+)\s+months',
+      ).firstMatch(lower);
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
@@ -824,9 +823,10 @@ class TaskShareDecoder {
       return null;
     }
 
-    final RegExpMatch? countMatch =
-        RegExp(r'for\s+(\d+)\s+occurrences', caseSensitive: false)
-            .firstMatch(baseText);
+    final RegExpMatch? countMatch = RegExp(
+      r'for\s+(\d+)\s+occurrences',
+      caseSensitive: false,
+    ).firstMatch(baseText);
     final int? count =
         countMatch != null ? int.tryParse(countMatch.group(1) ?? '') : null;
 
@@ -894,10 +894,7 @@ class _ShareSchedule {
   static _ShareSchedule? tryParse(String text, ParseContext context) {
     final RegExpMatch? sameDayRange = _sameDayRangePattern.firstMatch(text);
     if (sameDayRange != null) {
-      return TaskShareDecoder._shareScheduleFromRange(
-        sameDayRange,
-        context,
-      );
+      return TaskShareDecoder._shareScheduleFromRange(sameDayRange, context);
     }
 
     final RegExpMatch? crossDayRange = _crossDayRangePattern.firstMatch(text);
@@ -907,28 +904,31 @@ class _ShareSchedule {
       final String endDate = crossDayRange.group(3)?.trim() ?? '';
       final String endTime = crossDayRange.group(4)?.trim() ?? '';
 
-      final DateTime? start =
-          TaskShareDecoder._parseDateTime('$startDate $startTime', context);
-      final DateTime? end =
-          TaskShareDecoder._parseDateTime('$endDate $endTime', context);
+      final DateTime? start = TaskShareDecoder._parseDateTime(
+        '$startDate $startTime',
+        context,
+      );
+      final DateTime? end = TaskShareDecoder._parseDateTime(
+        '$endDate $endTime',
+        context,
+      );
       if (start != null) {
         final Duration? span =
             end != null && end.isAfter(start) ? end.difference(start) : null;
-        return _ShareSchedule(
-          start: start,
-          end: end,
-          duration: span,
-        );
+        return _ShareSchedule(start: start, end: end, duration: span);
       }
     }
 
-    final RegExpMatch? startWithDuration =
-        _startWithDurationPattern.firstMatch(text);
+    final RegExpMatch? startWithDuration = _startWithDurationPattern.firstMatch(
+      text,
+    );
     if (startWithDuration != null) {
       final String date = startWithDuration.group(1)?.trim() ?? '';
       final String time = startWithDuration.group(2)?.trim() ?? '';
-      final DateTime? start =
-          TaskShareDecoder._parseDateTime('$date $time', context);
+      final DateTime? start = TaskShareDecoder._parseDateTime(
+        '$date $time',
+        context,
+      );
       final Duration? duration = TaskShareDecoder._parseDuration(
         startWithDuration.group(3)?.trim() ?? '',
       );
@@ -945,8 +945,10 @@ class _ShareSchedule {
     if (startOnly != null) {
       final String date = startOnly.group(1)?.trim() ?? '';
       final String time = startOnly.group(2)?.trim() ?? '';
-      final DateTime? start =
-          TaskShareDecoder._parseDateTime('$date $time', context);
+      final DateTime? start = TaskShareDecoder._parseDateTime(
+        '$date $time',
+        context,
+      );
       if (start != null) {
         return _ShareSchedule(start: start);
       }
@@ -956,8 +958,10 @@ class _ShareSchedule {
     if (endOnly != null) {
       final String date = endOnly.group(1)?.trim() ?? '';
       final String time = endOnly.group(2)?.trim() ?? '';
-      final DateTime? end =
-          TaskShareDecoder._parseDateTime('$date $time', context);
+      final DateTime? end = TaskShareDecoder._parseDateTime(
+        '$date $time',
+        context,
+      );
       if (end != null) {
         return _ShareSchedule(end: end);
       }
@@ -972,11 +976,7 @@ class _ShareSchedule {
 }
 
 class _ShareSections {
-  const _ShareSections({
-    required this.baseText,
-    this.notes,
-    this.changes,
-  });
+  const _ShareSections({required this.baseText, this.notes, this.changes});
 
   final String baseText;
   final String? notes;

@@ -9,11 +9,7 @@ import 'package:axichat/src/calendar/view/loading_indicator.dart';
 /// Semi-transparent overlay with a centered [CalendarLoadingIndicator].
 /// Used when the calendar or guest calendar blocks interactions during syncs.
 class CalendarLoadingOverlay extends StatelessWidget {
-  const CalendarLoadingOverlay({
-    super.key,
-    this.color,
-    this.indicator,
-  });
+  const CalendarLoadingOverlay({super.key, this.color, this.indicator});
 
   final Color? color;
   final Widget? indicator;
@@ -24,9 +20,7 @@ class CalendarLoadingOverlay extends StatelessWidget {
         color ?? context.colorScheme.background.withValues(alpha: 0.6);
     return Container(
       color: overlayColor,
-      child: Center(
-        child: indicator ?? const CalendarLoadingIndicator(),
-      ),
+      child: Center(child: indicator ?? const CalendarLoadingIndicator()),
     );
   }
 }

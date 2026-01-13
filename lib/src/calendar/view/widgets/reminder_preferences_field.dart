@@ -132,9 +132,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(
-          title: widget.title,
-        ),
+        TaskSectionHeader(title: widget.title),
         const SizedBox(height: calendarGutterSm),
         if (!widget.showBothAnchors)
           _ReminderSection(
@@ -241,8 +239,9 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
     required bool preserveOtherAnchors,
   }) {
     final List<Duration> nextStart = List<Duration>.from(prefs.startOffsets);
-    final List<Duration> nextDeadline =
-        List<Duration>.from(prefs.deadlineOffsets);
+    final List<Duration> nextDeadline = List<Duration>.from(
+      prefs.deadlineOffsets,
+    );
     final List<Duration> targetOffsets =
         anchor.isDeadline ? nextDeadline : nextStart;
 
@@ -409,10 +408,12 @@ class _ReminderChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final Color unselectedBackground =
-        colors.muted.withValues(alpha: 0.12); // light grey that adapts to theme
-    final Color unselectedHover =
-        colors.muted.withValues(alpha: 0.2); // slightly darker on hover
+    final Color unselectedBackground = colors.muted.withValues(
+      alpha: 0.12,
+    ); // light grey that adapts to theme
+    final Color unselectedHover = colors.muted.withValues(
+      alpha: 0.2,
+    ); // slightly darker on hover
     final Color selectedForeground = colors.primaryForeground;
     return ShadButton.raw(
       variant: selected ? ShadButtonVariant.primary : ShadButtonVariant.outline,

@@ -211,11 +211,7 @@ class ReactionPreview {
   final int count;
   final bool reactedBySelf;
 
-  ReactionPreview copyWith({
-    String? emoji,
-    int? count,
-    bool? reactedBySelf,
-  }) =>
+  ReactionPreview copyWith({String? emoji, int? count, bool? reactedBySelf}) =>
       ReactionPreview(
         emoji: emoji ?? this.emoji,
         count: count ?? this.count,
@@ -320,10 +316,7 @@ class Message with _$Message implements Insertable<Message> {
     required int? deltaMsgId,
   }) = _MessageFromDb;
 
-  factory Message.fromMox(
-    mox.MessageEvent event, {
-    String? accountJid,
-  }) {
+  factory Message.fromMox(mox.MessageEvent event, {String? accountJid}) {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
@@ -352,8 +345,9 @@ class Message with _$Message implements Insertable<Message> {
             readOnly: taskIcsReadOnly,
           );
     final availabilityPayload = get<CalendarAvailabilityMessagePayload>();
-    final PseudoMessageType? availabilityType =
-        _availabilityPseudoMessageType(availabilityPayload);
+    final PseudoMessageType? availabilityType = _availabilityPseudoMessageType(
+      availabilityPayload,
+    );
     final PseudoMessageType? pseudoMessageType = invite?.type ??
         availabilityType ??
         (calendarTaskIcs == null
@@ -408,10 +402,7 @@ class Message with _$Message implements Insertable<Message> {
   bool authorized(mox.JID jid) =>
       mox.JID.fromString(senderJid).toBare() == jid.toBare();
 
-  bool authorizedForMutation({
-    required mox.JID from,
-    String? occupantId,
-  }) {
+  bool authorizedForMutation({required mox.JID from, String? occupantId}) {
     final messageOccupantId = occupantID?.trim();
     if (messageOccupantId != null && messageOccupantId.isNotEmpty) {
       final resolvedOccupantId = occupantId?.trim();
@@ -481,12 +472,7 @@ class Message with _$Message implements Insertable<Message> {
     if (normalizedHtml != null) {
       final xhtml = HtmlContentCodec.toXhtml(normalizedHtml);
       if (xhtml != null) {
-        extensions.add(
-          XhtmlImData(
-            xhtmlBody: xhtml,
-            plainText: outgoingBody,
-          ),
-        );
+        extensions.add(XhtmlImData(xhtmlBody: xhtml, plainText: outgoingBody));
       }
     }
     if (replyData != null) {
@@ -495,9 +481,9 @@ class Message with _$Message implements Insertable<Message> {
 
     if (noStore) {
       extensions.add(
-        const mox.MessageProcessingHintData(
-          [mox.MessageProcessingHint.noStore],
-        ),
+        const mox.MessageProcessingHintData([
+          mox.MessageProcessingHint.noStore,
+        ]),
       );
     }
 
@@ -619,9 +605,7 @@ extension MessageCalendarFragmentX on Message {
       return null;
     }
     try {
-      return CalendarFragment.fromJson(
-        Map<String, dynamic>.from(payload),
-      );
+      return CalendarFragment.fromJson(Map<String, dynamic>.from(payload));
     } catch (_) {
       return null;
     }
@@ -637,9 +621,7 @@ extension MessageCalendarTaskIcsX on Message {
     if (payload == null || payload.isEmpty) {
       return null;
     }
-    return CalendarTaskIcsMessage.tryParse(
-      Map<String, dynamic>.from(payload),
-    );
+    return CalendarTaskIcsMessage.tryParse(Map<String, dynamic>.from(payload));
   }
 
   CalendarTask? get calendarTaskIcs => calendarTaskIcsMessage?.task;
@@ -752,54 +734,30 @@ class _ParsedInvite {
     final directInvite = event.get<DirectMucInviteData>();
     final axiInvite = event.get<AxiMucInvitePayload>();
     if (directInvite == null && axiInvite == null) {
-      return fromBody(
-        event.text,
-        to: recipientBare,
-        sender: senderBare,
-      );
+      return fromBody(event.text, to: recipientBare, sender: senderBare);
     }
 
-    final roomJid = _firstNonEmpty([
-      axiInvite?.roomJid,
-      directInvite?.roomJid,
-    ]);
+    final roomJid = _firstNonEmpty([axiInvite?.roomJid, directInvite?.roomJid]);
     if (roomJid == null) {
-      return fromBody(
-        event.text,
-        to: recipientBare,
-        sender: senderBare,
-      );
+      return fromBody(event.text, to: recipientBare, sender: senderBare);
     }
 
-    final payloadInviter = _firstNonEmpty([
-      axiInvite?.inviter,
-    ]);
+    final payloadInviter = _firstNonEmpty([axiInvite?.inviter]);
     if (payloadInviter != null &&
         !_matchesBareJid(payloadInviter, senderBare)) {
       return null;
     }
 
-    final payloadInvitee = _firstNonEmpty([
-      axiInvite?.invitee,
-    ]);
+    final payloadInvitee = _firstNonEmpty([axiInvite?.invitee]);
     if (payloadInvitee != null &&
         !_matchesBareJid(payloadInvitee, recipientBare)) {
       return null;
     }
 
-    final inviter = _firstNonEmpty([
-      payloadInviter,
-      senderBare,
-    ]);
-    final invitee = _firstNonEmpty([
-      payloadInvitee,
-      recipientBare,
-    ]);
+    final inviter = _firstNonEmpty([payloadInviter, senderBare]);
+    final invitee = _firstNonEmpty([payloadInvitee, recipientBare]);
     final roomName = _firstNonEmpty([axiInvite?.roomName]);
-    final reason = _firstNonEmpty([
-      axiInvite?.reason,
-      directInvite?.reason,
-    ]);
+    final reason = _firstNonEmpty([axiInvite?.reason, directInvite?.reason]);
     final password = _firstNonEmpty([
       axiInvite?.password,
       directInvite?.password,
@@ -971,8 +929,9 @@ class MessageAttachments extends Table {
   TextColumn get transportGroupId => text().nullable()();
 
   @override
-  List<String> get customConstraints =>
-      const ['UNIQUE(message_id, file_metadata_id)'];
+  List<String> get customConstraints => const [
+        'UNIQUE(message_id, file_metadata_id)',
+      ];
 
   List<Index> get indexes => [
         Index('idx_message_attachments_message', 'message_id'),
@@ -1014,10 +973,7 @@ class MessageParticipants extends Table {
   Set<Column> get primaryKey => {shareId, contactJid};
 
   List<Index> get indexes => [
-        Index(
-          'idx_message_participants_contact',
-          'contact_jid, share_id',
-        ),
+        Index('idx_message_participants_contact', 'contact_jid, share_id'),
       ];
 }
 
@@ -1035,8 +991,9 @@ class MessageCopies extends Table {
       integer().withDefault(const Constant(deltaAccountIdLegacy))();
 
   @override
-  List<String> get customConstraints =>
-      const ['UNIQUE(dc_msg_id, dc_account_id)'];
+  List<String> get customConstraints => const [
+        'UNIQUE(dc_msg_id, dc_account_id)',
+      ];
 
   List<Index> get indexes => [
         Index('idx_message_copies_share', 'share_id, dc_chat_id'),

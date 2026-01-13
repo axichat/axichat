@@ -10,10 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlockMenuItem extends StatelessWidget {
-  const BlockMenuItem({
-    super.key,
-    required this.jid,
-  });
+  const BlockMenuItem({super.key, required this.jid});
 
   final String jid;
 
@@ -39,10 +36,7 @@ class BlockMenuItem extends StatelessWidget {
 }
 
 class ReportSpamMenuItem extends StatelessWidget {
-  const ReportSpamMenuItem({
-    super.key,
-    required this.jid,
-  });
+  const ReportSpamMenuItem({super.key, required this.jid});
 
   final String jid;
 

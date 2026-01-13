@@ -38,10 +38,7 @@ class NlScheduleParserService {
   /// Parses [input] and returns the mapped adapter result. Consumers may supply
   /// an explicit [context] (useful for tests); otherwise the service will
   /// derive one from the current device timezone.
-  Future<NlAdapterResult> parse(
-    String input, {
-    ParseContext? context,
-  }) async {
+  Future<NlAdapterResult> parse(String input, {ParseContext? context}) async {
     final ctx = context ?? await _parseContext();
     final NlAdapterResult? shared = TaskShareDecoder.tryDecode(
       input: input,
@@ -64,10 +61,7 @@ class NlScheduleParserService {
     final tzName = await _resolveTimezone();
     final location = _lookupLocation(tzName);
     tz.setLocalLocation(location);
-    return ParseContext(
-      location: location,
-      timezoneId: location.name,
-    );
+    return ParseContext(location: location, timezoneId: location.name);
   }
 
   void _maybeLogNotes(NlAdapterResult result) {

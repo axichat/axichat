@@ -62,10 +62,15 @@ class InlineTaskComposerController extends ChangeNotifier {
     DateTime? parsedDate;
     TimeOfDay? parsedTime;
     if (scheduledTime != null) {
-      parsedDate =
-          DateTime(scheduledTime.year, scheduledTime.month, scheduledTime.day);
-      parsedTime =
-          TimeOfDay(hour: scheduledTime.hour, minute: scheduledTime.minute);
+      parsedDate = DateTime(
+        scheduledTime.year,
+        scheduledTime.month,
+        scheduledTime.day,
+      );
+      parsedTime = TimeOfDay(
+        hour: scheduledTime.hour,
+        minute: scheduledTime.minute,
+      );
     }
 
     bool changed = false;

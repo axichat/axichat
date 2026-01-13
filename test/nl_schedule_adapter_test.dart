@@ -133,9 +133,7 @@ void main() {
 
     test('uses default duration when only start provided', () {
       const adapter = NlScheduleAdapter(
-        config: NlAdapterConfig(
-          defaultDuration: Duration(minutes: 90),
-        ),
+        config: NlAdapterConfig(defaultDuration: Duration(minutes: 90)),
       );
       final item = buildItem(start: zoned(2024, 2, 3, 9));
       final result = adapter.mapToAppTypes(item, ctx: context);
@@ -148,10 +146,7 @@ void main() {
       const adapter = NlScheduleAdapter(
         config: NlAdapterConfig(allDaySpan: Duration(hours: 36)),
       );
-      final item = buildItem(
-        start: zoned(2024, 12, 24),
-        allDay: true,
-      );
+      final item = buildItem(start: zoned(2024, 12, 24), allDay: true);
       final result = adapter.mapToAppTypes(item, ctx: context);
       expect(result.task.duration, const Duration(hours: 36));
     });
@@ -197,8 +192,10 @@ void main() {
       expect(mapped, isNotNull);
       expect(mapped!.frequency, RecurrenceFrequency.weekly);
       expect(mapped.interval, 2);
-      expect(mapped.byWeekdays,
-          unorderedEquals([DateTime.monday, DateTime.wednesday]));
+      expect(
+        mapped.byWeekdays,
+        unorderedEquals([DateTime.monday, DateTime.wednesday]),
+      );
       expect(mapped.until, wallTime(recurrence.until!));
     });
 
@@ -282,10 +279,7 @@ void main() {
     });
 
     test('toEvent returns null for reminder bucket', () {
-      final item = buildItem(
-        start: null,
-        deadline: zoned(2025, 1, 1, 8),
-      );
+      final item = buildItem(start: null, deadline: zoned(2025, 1, 1, 8));
       final task = baseAdapter.toEvent(item, ctx: context);
       expect(task, isNull);
     });

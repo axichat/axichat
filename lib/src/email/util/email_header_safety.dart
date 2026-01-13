@@ -76,7 +76,9 @@ String? sanitizeEmailMimeType(String? value) {
 String? sanitizeRawEmailHeaders(String? value) {
   if (value == null) return null;
   final normalized = value.replaceAll(
-      _emailRawHeaderLineBreakPattern, _emailRawHeaderLineBreak);
+    _emailRawHeaderLineBreakPattern,
+    _emailRawHeaderLineBreak,
+  );
   final trimmed = normalized.trim();
   if (trimmed.isEmpty) return null;
   final clamped = clampUtf8Value(trimmed, maxBytes: _emailRawHeadersMaxBytes);

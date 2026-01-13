@@ -59,6 +59,7 @@ const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
 const int _lastMessagePageSize = 25;
 const int _emptyTimestampMillis = 0;
+const int _emptyMessageLength = 0;
 const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 const int _messageStatusSyncEnvelopeVersion = 1;
 const String _messageStatusSyncEnvelopeVersionKey = 'v';
@@ -182,9 +183,7 @@ abstract interface class XmppDatabase implements Database {
   Future<List<MessageAttachmentData>> getMessageAttachments(String messageId);
 
   Future<Map<String, List<MessageAttachmentData>>>
-      getMessageAttachmentsForMessages(
-    Iterable<String> messageIds,
-  );
+      getMessageAttachmentsForMessages(Iterable<String> messageIds);
 
   Future<List<MessageAttachmentData>> getMessageAttachmentsForGroup(
     String transportGroupId,
@@ -383,15 +382,9 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Chat?> getOpenChat();
 
-  Future<Chat?> getChatByDeltaChatId(
-    int deltaChatId, {
-    int? accountId,
-  });
+  Future<Chat?> getChatByDeltaChatId(int deltaChatId, {int? accountId});
 
-  Stream<Chat?> watchChatByDeltaChatId(
-    int deltaChatId, {
-    int? accountId,
-  });
+  Stream<Chat?> watchChatByDeltaChatId(int deltaChatId, {int? accountId});
 
   Future<void> upsertEmailChatAccount({
     required String chatJid,
@@ -425,10 +418,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Chat?> closeChat();
 
-  Future<void> markChatMuted({
-    required String jid,
-    required bool muted,
-  });
+  Future<void> markChatMuted({required String jid, required bool muted});
 
   Future<void> setChatNotificationPreviewSetting({
     required String jid,
@@ -450,15 +440,9 @@ abstract interface class XmppDatabase implements Database {
     required bool favorited,
   });
 
-  Future<void> markChatArchived({
-    required String jid,
-    required bool archived,
-  });
+  Future<void> markChatArchived({required String jid, required bool archived});
 
-  Future<void> markChatHidden({
-    required String jid,
-    required bool hidden,
-  });
+  Future<void> markChatHidden({required String jid, required bool hidden});
 
   Future<void> markChatSpam({
     required String jid,
@@ -525,10 +509,7 @@ abstract interface class XmppDatabase implements Database {
     required Subscription subscription,
   });
 
-  Future<void> updateRosterAsk({
-    required String jid,
-    Ask? ask,
-  });
+  Future<void> updateRosterAsk({required String jid, Ask? ask});
 
   Future<void> updateRosterAvatar({
     required String jid,
@@ -650,7 +631,7 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
               (t) => OrderingTerm(
                     expression: t.timestamp,
                     mode: OrderingMode.desc,
-                  )
+                  ),
             ])
             ..limit(limit))
           .watch();
@@ -661,22 +642,25 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
           (t) => OrderingTerm(
                 expression: t.timestamp,
                 mode: OrderingMode.desc,
-              )
+              ),
         ]))
       .get();
 
   @override
-  Future<Message?> selectOne(String stanzaID) =>
-      (select(table)..where((table) => table.stanzaID.equals(stanzaID)))
+  Future<Message?> selectOne(String stanzaID) => (select(
+        table,
+      )..where((table) => table.stanzaID.equals(stanzaID)))
           .getSingleOrNull();
 
-  Future<Message?> selectOneByOriginID(String originID) =>
-      (select(table)..where((table) => table.originID.equals(originID)))
+  Future<Message?> selectOneByOriginID(String originID) => (select(
+        table,
+      )..where((table) => table.originID.equals(originID)))
           .getSingleOrNull();
 
   Future<void> updateTrust(int device, BTBVTrustState trust, bool trusted) =>
-      (update(table)..where((table) => table.deviceID.equals(device)))
-          .write(MessagesCompanion(trust: Value(trust)));
+      (update(table)..where((table) => table.deviceID.equals(device))).write(
+        MessagesCompanion(trust: Value(trust)),
+      );
 
   @override
   Future<void> deleteOne(String stanzaID) =>
@@ -696,8 +680,9 @@ class MessageAttachmentsAccessor
   $MessageAttachmentsTable get table => messageAttachments;
 
   @override
-  Future<MessageAttachmentData?> selectOne(Object value) =>
-      (select(table)..where((tbl) => tbl.id.equals(value as int)))
+  Future<MessageAttachmentData?> selectOne(Object value) => (select(
+        table,
+      )..where((tbl) => tbl.id.equals(value as int)))
           .getSingleOrNull();
 
   Future<List<MessageAttachmentData>> selectForMessage(String messageId) =>
@@ -719,10 +704,8 @@ class MessageAttachmentsAccessor
     return (select(table)
           ..where((tbl) => tbl.messageId.isIn(ids))
           ..orderBy([
-            (tbl) => OrderingTerm(
-                  expression: tbl.sortOrder,
-                  mode: OrderingMode.asc,
-                ),
+            (tbl) =>
+                OrderingTerm(expression: tbl.sortOrder, mode: OrderingMode.asc),
           ]))
         .get();
   }
@@ -765,26 +748,24 @@ class MessageSharesAccessor
   $MessageSharesTable get table => messageShares;
 
   @override
-  Future<MessageShareData?> selectOne(String shareId) =>
-      (select(table)..where((tbl) => tbl.shareId.equals(shareId)))
+  Future<MessageShareData?> selectOne(String shareId) => (select(
+        table,
+      )..where((tbl) => tbl.shareId.equals(shareId)))
           .getSingleOrNull();
 
-  Future<MessageShareData?> selectByToken(String token) =>
-      (select(table)..where((tbl) => tbl.subjectToken.equals(token)))
+  Future<MessageShareData?> selectByToken(String token) => (select(
+        table,
+      )..where((tbl) => tbl.subjectToken.equals(token)))
           .getSingleOrNull();
 
   Future<void> updateOriginator(String shareId, int originatorDcMsgId) =>
       (update(table)..where((tbl) => tbl.shareId.equals(shareId))).write(
-        MessageSharesCompanion(
-          originatorDcMsgId: Value(originatorDcMsgId),
-        ),
+        MessageSharesCompanion(originatorDcMsgId: Value(originatorDcMsgId)),
       );
 
   Future<void> updateSubject(String shareId, String? subject) =>
       (update(table)..where((tbl) => tbl.shareId.equals(shareId))).write(
-        MessageSharesCompanion(
-          subject: Value(subject),
-        ),
+        MessageSharesCompanion(subject: Value(subject)),
       );
 
   @override
@@ -804,14 +785,17 @@ class MessageParticipantsAccessor
   @override
   Future<MessageParticipantData?> selectOne((String, String) key) =>
       (select(table)
-            ..where((tbl) =>
-                tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2)))
+            ..where(
+              (tbl) =>
+                  tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2),
+            ))
           .getSingleOrNull();
 
   @override
   Future<void> deleteOne((String, String) key) => (delete(table)
-        ..where((tbl) =>
-            tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2)))
+        ..where(
+          (tbl) => tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2),
+        ))
       .go();
 
   Future<List<MessageParticipantData>> selectByShare(String shareId) =>
@@ -871,9 +855,9 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
       innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
     ])
       ..where(messages.chatJid.equals(jid));
-    return query
-        .watch()
-        .map((rows) => rows.map((row) => row.readTable(reactions)).toList());
+    return query.watch().map(
+          (rows) => rows.map((row) => row.readTable(reactions)).toList(),
+        );
   }
 
   Future<List<Reaction>> selectByChat(String jid) {
@@ -881,9 +865,9 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
       innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
     ])
       ..where(messages.chatJid.equals(jid));
-    return query
-        .get()
-        .then((rows) => rows.map((row) => row.readTable(reactions)).toList());
+    return query.get().then(
+          (rows) => rows.map((row) => row.readTable(reactions)).toList(),
+        );
   }
 
   Future<List<Reaction>> selectByMessageAndSender({
@@ -898,8 +882,9 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
             ))
           .get();
 
-  Future<void> deleteByMessage(String messageId) =>
-      (delete(reactions)..where((table) => table.messageID.equals(messageId)))
+  Future<void> deleteByMessage(String messageId) => (delete(
+        reactions,
+      )..where((table) => table.messageID.equals(messageId)))
           .go();
 
   Future<void> deleteByMessageAndSender({
@@ -941,12 +926,14 @@ class OmemoDevicesAccessor extends BaseAccessor<OmemoDevice, $OmemoDevicesTable>
   $OmemoDevicesTable get table => omemoDevices;
 
   @override
-  Future<OmemoDevice?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
+  Future<OmemoDevice?> selectOne(String value) => (select(
+        table,
+      )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
-  Future<OmemoDevice?> selectByID(int value) =>
-      (select(table)..where((table) => table.id.equals(value)))
+  Future<OmemoDevice?> selectByID(int value) => (select(
+        table,
+      )..where((table) => table.id.equals(value)))
           .getSingleOrNull();
 
   Future<List<OmemoDevice>> selectByJid(String jid) =>
@@ -987,8 +974,9 @@ class OmemoDeviceListsAccessor
   $OmemoDeviceListsTable get table => omemoDeviceLists;
 
   @override
-  Future<OmemoDeviceList?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
+  Future<OmemoDeviceList?> selectOne(String value) => (select(
+        table,
+      )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
@@ -1008,7 +996,8 @@ class OmemoRatchetsAccessor
   @override
   Future<OmemoRatchet?> selectOne((String, int) key) => (select(table)
         ..where(
-            (table) => table.jid.equals(key.$1) & table.device.equals(key.$2)))
+          (table) => table.jid.equals(key.$1) & table.device.equals(key.$2),
+        ))
       .getSingleOrNull();
 
   Future<List<OmemoRatchet>> selectByJid(String jid) =>
@@ -1017,7 +1006,8 @@ class OmemoRatchetsAccessor
   @override
   Future<void> deleteOne((String, int) key) => (delete(table)
         ..where(
-            (table) => table.jid.equals(key.$1) & table.device.equals(key.$2)))
+          (table) => table.jid.equals(key.$1) & table.device.equals(key.$2),
+        ))
       .go();
 }
 
@@ -1034,14 +1024,16 @@ class OmemoBundleCachesAccessor
       selectOne((jid, device));
 
   @override
-  Future<OmemoBundleCache?> selectOne((String, int) key) => (select(table)
-        ..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
-      .getSingleOrNull();
+  Future<OmemoBundleCache?> selectOne((String, int) key) => (select(
+        table,
+      )..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
+          .getSingleOrNull();
 
   @override
-  Future<void> deleteOne((String, int) key) => (delete(table)
-        ..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
-      .go();
+  Future<void> deleteOne((String, int) key) => (delete(
+        table,
+      )..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
+          .go();
 
   Future<void> clear() => delete(table).go();
 }
@@ -1056,16 +1048,19 @@ class FileMetadataAccessor
   $FileMetadataTable get table => fileMetadata;
 
   @override
-  Future<FileMetadataData?> selectOne(Object value) =>
-      (select(table)..where((table) => table.id.equals(value as String)))
+  Future<FileMetadataData?> selectOne(Object value) => (select(
+        table,
+      )..where((table) => table.id.equals(value as String)))
           .getSingleOrNull();
 
-  Stream<FileMetadataData?> watchOne(String id) =>
-      (select(table)..where((table) => table.id.equals(id)))
+  Stream<FileMetadataData?> watchOne(String id) => (select(
+        table,
+      )..where((table) => table.id.equals(id)))
           .watchSingleOrNull();
 
   Future<FileMetadataData?> selectOneByPlaintextHashes(
-          Map<HashFunction, String> hashes) =>
+    Map<HashFunction, String> hashes,
+  ) =>
       (select(table)
             ..where((table) => table.plainTextHashes.equalsValue(hashes)))
           .getSingleOrNull();
@@ -1086,10 +1081,7 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   @override
   Stream<List<Chat>> watchAll() => (select(table)
         ..orderBy([
-          (t) => OrderingTerm(
-                expression: t.favorited,
-                mode: OrderingMode.desc,
-              ),
+          (t) => OrderingTerm(expression: t.favorited, mode: OrderingMode.desc),
           (t) => OrderingTerm(
                 expression: t.lastChangeTimestamp,
                 mode: OrderingMode.desc,
@@ -1097,23 +1089,29 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
         ]))
       .watch();
 
-  Stream<Chat?> watchOne(String jid) =>
-      (select(table)..where((table) => table.jid.equals(jid)))
+  Stream<Chat?> watchOne(String jid) => (select(
+        table,
+      )..where((table) => table.jid.equals(jid)))
           .watchSingleOrNull();
 
   @override
-  Future<Chat?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
+  Future<Chat?> selectOne(String value) => (select(
+        table,
+      )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
-  Future<Chat?> selectOpen() =>
-      (select(table)..where((table) => table.open.equals(true)))
+  Future<Chat?> selectOpen() => (select(
+        table,
+      )..where((table) => table.open.equals(true)))
           .getSingleOrNull();
 
   Future<List<Chat>> closeOpen() =>
       (update(table)..where((table) => table.open.equals(true))).writeReturning(
-          const ChatsCompanion(
-              open: Value(false), chatState: Value(mox.ChatState.gone)));
+        const ChatsCompanion(
+          open: Value(false),
+          chatState: Value(mox.ChatState.gone),
+        ),
+      );
 
   @override
   Future<void> deleteOne(String value) =>
@@ -1129,8 +1127,9 @@ class RosterAccessor extends BaseAccessor<RosterItem, $RosterTable>
   $RosterTable get table => roster;
 
   @override
-  Future<RosterItem?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
+  Future<RosterItem?> selectOne(String value) => (select(
+        table,
+      )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
@@ -1147,8 +1146,9 @@ class InvitesAccessor extends BaseAccessor<Invite, $InvitesTable>
   $InvitesTable get table => invites;
 
   @override
-  Future<Invite?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
+  Future<Invite?> selectOne(String value) => (select(
+        table,
+      )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
@@ -1165,8 +1165,9 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   $BlocklistTable get table => blocklist;
 
   @override
-  Future<BlocklistData?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
+  Future<BlocklistData?> selectOne(String value) => (select(
+        table,
+      )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
@@ -1186,8 +1187,9 @@ class EmailBlocklistAccessor
   $EmailBlocklistTable get table => emailBlocklist;
 
   @override
-  Future<EmailBlocklistEntry?> selectOne(String address) =>
-      (select(table)..where((tbl) => tbl.address.equals(address)))
+  Future<EmailBlocklistEntry?> selectOne(String address) => (select(
+        table,
+      )..where((tbl) => tbl.address.equals(address)))
           .getSingleOrNull();
 
   @override
@@ -1209,8 +1211,9 @@ class EmailSpamlistAccessor
   $EmailSpamlistTable get table => emailSpamlist;
 
   @override
-  Future<EmailSpamEntry?> selectOne(String address) =>
-      (select(table)..where((tbl) => tbl.address.equals(address)))
+  Future<EmailSpamEntry?> selectOne(String address) => (select(
+        table,
+      )..where((tbl) => tbl.address.equals(address)))
           .getSingleOrNull();
 
   @override
@@ -1222,53 +1225,56 @@ class EmailSpamlistAccessor
   Future<List<EmailSpamEntry>> selectEntries() => select(table).get();
 }
 
-@DriftDatabase(tables: [
-  Messages,
-  PinnedMessages,
-  MessageAttachments,
-  MessageShares,
-  MessageParticipants,
-  MessageCopies,
-  Drafts,
-  OmemoDevices,
-  OmemoTrusts,
-  OmemoDeviceLists,
-  OmemoRatchets,
-  OmemoBundleCaches,
-  Reactions,
-  Notifications,
-  FileMetadata,
-  Roster,
-  Invites,
-  Chats,
-  EmailChatAccounts,
-  Contacts,
-  Blocklist,
-  Stickers,
-  StickerPacks,
-  EmailBlocklist,
-  EmailSpamlist,
-], daos: [
-  MessagesAccessor,
-  MessageAttachmentsAccessor,
-  MessageSharesAccessor,
-  MessageParticipantsAccessor,
-  MessageCopiesAccessor,
-  ReactionsAccessor,
-  DraftsAccessor,
-  OmemoDevicesAccessor,
-  OmemoTrustsAccessor,
-  OmemoDeviceListsAccessor,
-  OmemoRatchetsAccessor,
-  OmemoBundleCachesAccessor,
-  FileMetadataAccessor,
-  ChatsAccessor,
-  RosterAccessor,
-  InvitesAccessor,
-  BlocklistAccessor,
-  EmailBlocklistAccessor,
-  EmailSpamlistAccessor,
-])
+@DriftDatabase(
+  tables: [
+    Messages,
+    PinnedMessages,
+    MessageAttachments,
+    MessageShares,
+    MessageParticipants,
+    MessageCopies,
+    Drafts,
+    OmemoDevices,
+    OmemoTrusts,
+    OmemoDeviceLists,
+    OmemoRatchets,
+    OmemoBundleCaches,
+    Reactions,
+    Notifications,
+    FileMetadata,
+    Roster,
+    Invites,
+    Chats,
+    EmailChatAccounts,
+    Contacts,
+    Blocklist,
+    Stickers,
+    StickerPacks,
+    EmailBlocklist,
+    EmailSpamlist,
+  ],
+  daos: [
+    MessagesAccessor,
+    MessageAttachmentsAccessor,
+    MessageSharesAccessor,
+    MessageParticipantsAccessor,
+    MessageCopiesAccessor,
+    ReactionsAccessor,
+    DraftsAccessor,
+    OmemoDevicesAccessor,
+    OmemoTrustsAccessor,
+    OmemoDeviceListsAccessor,
+    OmemoRatchetsAccessor,
+    OmemoBundleCachesAccessor,
+    FileMetadataAccessor,
+    ChatsAccessor,
+    RosterAccessor,
+    InvitesAccessor,
+    BlocklistAccessor,
+    EmailBlocklistAccessor,
+    EmailSpamlistAccessor,
+  ],
+)
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
   XmppDrift._(this._file, super.e, {bool inMemory = false})
       : _inMemory = inMemory,
@@ -1289,8 +1295,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required String passphrase,
     QueryExecutor? executor,
   }) =>
-      _instance ??=
-          XmppDrift._(file, executor ?? _openDatabase(file, passphrase));
+      _instance ??= XmppDrift._(
+        file,
+        executor ?? _openDatabase(file, passphrase),
+      );
 
   final _log = Logger('XmppDrift');
   final File _file;
@@ -1356,18 +1364,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           await m.addColumn(chats, chats.hidden);
         }
         if (from < 8) {
-          await customStatement(
-            '''
+          await customStatement('''
 CREATE TABLE drafts_new (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   jids TEXT NOT NULL,
   body TEXT,
   attachment_metadata_ids TEXT NOT NULL DEFAULT '[]'
 )
-''',
-          );
-          await customStatement(
-            '''
+''');
+          await customStatement('''
 INSERT INTO drafts_new (id, jids, body, attachment_metadata_ids)
 SELECT
   id,
@@ -1378,8 +1383,7 @@ SELECT
     ELSE json_array(file_metadata_i_d)
   END
 FROM drafts
-''',
-          );
+''');
           await customStatement('DROP TABLE drafts');
           await customStatement('ALTER TABLE drafts_new RENAME TO drafts');
         }
@@ -1387,20 +1391,16 @@ FROM drafts
           await m.createTable(reactions);
         }
         if (from < 9) {
-          await customStatement(
-            '''
+          await customStatement('''
 UPDATE message_shares
 SET subject_token = UPPER(share_id)
 WHERE subject_token IS NOT NULL
-''',
-          );
-          await customStatement(
-            '''
+''');
+          await customStatement('''
 CREATE UNIQUE INDEX IF NOT EXISTS idx_message_shares_subject_token
 ON message_shares(subject_token)
 WHERE subject_token IS NOT NULL
-''',
-          );
+''');
         }
         if (from < 10) {
           await m.addColumn(messageShares, messageShares.subject);
@@ -1429,15 +1429,13 @@ WHERE subject_token IS NOT NULL
         }
         if (from < 18) {
           await m.createTable(messageAttachments);
-          await customStatement(
-            '''
+          await customStatement('''
 INSERT INTO message_attachments(message_id, file_metadata_id, sort_order)
 SELECT id, file_metadata_i_d, 0
 FROM messages
 WHERE file_metadata_i_d IS NOT NULL
   AND trim(file_metadata_i_d) != ''
-''',
-          );
+''');
         }
         if (from < 19) {
           await m.addColumn(drafts, drafts.draftSyncId);
@@ -1458,20 +1456,16 @@ WHERE file_metadata_i_d IS NOT NULL
           await m.addColumn(blocklist, blocklist.blockedAt);
           await m.addColumn(emailBlocklist, emailBlocklist.sourceId);
           await m.addColumn(emailSpamlist, emailSpamlist.sourceId);
-          await customStatement(
-            '''
+          await customStatement('''
 UPDATE chats
 SET spam_updated_at = last_change_timestamp
 WHERE spam = 1 AND spam_updated_at IS NULL
-''',
-          );
-          await customStatement(
-            '''
+''');
+          await customStatement('''
 UPDATE blocklist
 SET blocked_at = CURRENT_TIMESTAMP
 WHERE blocked_at IS NULL
-''',
-          );
+''');
           await customStatement(
             '''
 UPDATE email_blocklist
@@ -1480,13 +1474,11 @@ WHERE source_id IS NULL OR trim(source_id) = ''
 ''',
             [syncLegacySourceId],
           );
-          await customStatement(
-            '''
+          await customStatement('''
 UPDATE email_blocklist
 SET blocked_at = CURRENT_TIMESTAMP
 WHERE blocked_at IS NULL
-''',
-          );
+''');
           await customStatement(
             '''
 UPDATE email_spamlist
@@ -1589,12 +1581,7 @@ WHERE delta_chat_id IS NOT NULL
         Variable<int>(includePseudoMessages ? 1 : 0),
         Variable<int>(filterValue),
       ],
-      readsFrom: {
-        messages,
-        messageCopies,
-        messageShares,
-        messageParticipants,
-      },
+      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
     ).getSingle();
 
     return query.read<int>('count');
@@ -1636,12 +1623,7 @@ WHERE delta_chat_id IS NOT NULL
         Variable<int>(limit),
         Variable<int>(offset),
       ],
-      readsFrom: {
-        messages,
-        messageCopies,
-        messageShares,
-        messageParticipants,
-      },
+      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
     );
     return query.map((row) => messages.map(row.data));
   }
@@ -1654,10 +1636,8 @@ WHERE delta_chat_id IS NOT NULL
     final query = select(messages)
       ..where((tbl) => tbl.chatJid.equals(jid))
       ..orderBy([
-        (tbl) => OrderingTerm(
-              expression: tbl.timestamp,
-              mode: OrderingMode.asc,
-            ),
+        (tbl) =>
+            OrderingTerm(expression: tbl.timestamp, mode: OrderingMode.asc),
       ]);
     return query.get();
   }
@@ -1675,10 +1655,8 @@ WHERE delta_chat_id IS NOT NULL
             tbl.deltaAccountId.equals(deltaAccountId),
       )
       ..orderBy([
-        (tbl) => OrderingTerm(
-              expression: tbl.timestamp,
-              mode: OrderingMode.desc,
-            ),
+        (tbl) =>
+            OrderingTerm(expression: tbl.timestamp, mode: OrderingMode.desc),
       ]);
     return query.get();
   }
@@ -1750,12 +1728,7 @@ WHERE delta_chat_id IS NOT NULL
         Variable<String>(subjectPattern),
         Variable<int>(limit),
       ],
-      readsFrom: {
-        messages,
-        messageCopies,
-        messageShares,
-        messageParticipants,
-      },
+      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
     );
     return selectable.map((row) => messages.map(row.data)).get();
   }
@@ -1776,11 +1749,7 @@ WHERE delta_chat_id IS NOT NULL
       ORDER BY LOWER(TRIM(ms.subject)) ASC
       ''',
       variables: [Variable<String>(jid)],
-      readsFrom: {
-        messageShares,
-        messageCopies,
-        messages,
-      },
+      readsFrom: {messageShares, messageCopies, messages},
     );
     final rows = await selectable.get();
     return rows
@@ -1858,7 +1827,9 @@ WHERE delta_chat_id IS NOT NULL
     if (normalized.isEmpty) {
       return const <Message>[];
     }
-    return (select(messages)..where((tbl) => tbl.stanzaID.isIn(normalized)))
+    return (select(
+      messages,
+    )..where((tbl) => tbl.stanzaID.isIn(normalized)))
         .get();
   }
 
@@ -1925,8 +1896,9 @@ WHERE delta_chat_id IS NOT NULL
     if (trimmedMetadataId == null || trimmedMetadataId.isEmpty) {
       return false;
     }
-    final FileMetadataData? metadata =
-        await fileMetadataAccessor.selectOne(trimmedMetadataId);
+    final FileMetadataData? metadata = await fileMetadataAccessor.selectOne(
+      trimmedMetadataId,
+    );
     if (metadata == null) {
       return false;
     }
@@ -2005,8 +1977,9 @@ WHERE delta_chat_id IS NOT NULL
           lastMessage: Value.absentIfNull(lastMessagePreview),
           lastChangeTimestamp: resolvedLastChangeTimestamp,
           encryptionProtocol: Value(message.encryptionProtocol),
-          contactJid:
-              Value(chatType == ChatType.groupChat ? null : message.chatJid),
+          contactJid: Value(
+            chatType == ChatType.groupChat ? null : message.chatJid,
+          ),
         ),
         onConflict: DoUpdate.withExcluded(
           (old, excluded) => ChatsCompanion.custom(
@@ -2023,8 +1996,9 @@ WHERE delta_chat_id IS NOT NULL
       BTBVTrustState? trust;
       bool? trusted;
       if (message.deviceID case final int deviceID) {
-        final trustData = await omemoTrustsAccessor
-            .selectOne(OmemoTrust(jid: message.senderJid, device: deviceID));
+        final trustData = await omemoTrustsAccessor.selectOne(
+          OmemoTrust(jid: message.senderJid, device: deviceID),
+        );
         trust = trustData?.state;
         trusted = trustData?.trusted;
       }
@@ -2036,9 +2010,7 @@ WHERE delta_chat_id IS NOT NULL
       await messagesAccessor.insertOne(messageToSave);
       final persisted = await messagesAccessor.selectOne(message.stanzaID);
       if (persisted == null) {
-        _log.warning(
-          'Message insert ignored; retrying with upsert',
-        );
+        _log.warning('Message insert ignored; retrying with upsert');
         await into(messages).insertOnConflictUpdate(messageToSave);
         if (shouldUpdateChatSummary) {
           await _updateChatSummaryIfNewer(
@@ -2092,8 +2064,9 @@ WHERE delta_chat_id IS NOT NULL
         return;
       }
 
-      await (update(messages)
-            ..where((tbl) => tbl.stanzaID.equals(message.stanzaID)))
+      await (update(
+        messages,
+      )..where((tbl) => tbl.stanzaID.equals(message.stanzaID)))
           .write(
         MessagesCompanion(
           body: shouldMergeBody
@@ -2188,6 +2161,7 @@ SET last_change_timestamp = CASE
     END,
     last_message = CASE
       WHEN ? = 0 THEN last_message
+      WHEN last_message IS NULL OR LENGTH(TRIM(last_message)) <= ? THEN ?
       WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
       ELSE last_message
     END
@@ -2197,6 +2171,8 @@ WHERE jid = ?
         serializedTimestamp,
         serializedTimestamp,
         hasLastMessage.toBinary,
+        _emptyMessageLength,
+        resolvedLastMessage,
         serializedTimestamp,
         resolvedLastMessage,
         jid,
@@ -2210,10 +2186,9 @@ WHERE jid = ?
     required MessageError error,
   }) async {
     _log.info('Updating message error');
-    await messagesAccessor.updateOne(MessagesCompanion(
-      stanzaID: Value(stanzaID),
-      error: Value(error),
-    ));
+    await messagesAccessor.updateOne(
+      MessagesCompanion(stanzaID: Value(stanzaID), error: Value(error)),
+    );
   }
 
   @override
@@ -2223,11 +2198,13 @@ WHERE jid = ?
     required String to,
   }) async {
     _log.info('Updating message device');
-    await messagesAccessor.updateOne(MessagesCompanion(
-      stanzaID: Value(stanzaID),
-      deviceID: Value(deviceID),
-      trusted: const Value(true),
-    ));
+    await messagesAccessor.updateOne(
+      MessagesCompanion(
+        stanzaID: Value(stanzaID),
+        deviceID: Value(deviceID),
+        trusted: const Value(true),
+      ),
+    );
   }
 
   @override
@@ -2236,11 +2213,13 @@ WHERE jid = ?
     required String? body,
   }) async {
     _log.fine('Editing message');
-    await messagesAccessor.updateOne(MessagesCompanion(
-      stanzaID: Value(stanzaID),
-      edited: const Value(true),
-      body: Value(body),
-    ));
+    await messagesAccessor.updateOne(
+      MessagesCompanion(
+        stanzaID: Value(stanzaID),
+        edited: const Value(true),
+        body: Value(body),
+      ),
+    );
   }
 
   @override
@@ -2260,7 +2239,9 @@ WHERE jid = ?
           fileMetadataId: metadata.id,
         );
       }
-      await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaID)))
+      await (update(
+        messages,
+      )..where((tbl) => tbl.stanzaID.equals(stanzaID)))
           .write(
         MessagesCompanion(
           fileMetadataID:
@@ -2282,15 +2263,18 @@ WHERE jid = ?
       metadataIds.add(directMetadataId);
     }
     await transaction(() async {
-      await (update(messages)
-            ..where((messages) => messages.stanzaID.equals(stanzaID)))
-          .write(const MessagesCompanion(
-        retracted: Value(true),
-        body: Value(null),
-        fileMetadataID: Value(null),
-        error: Value(MessageError.none),
-        warning: Value(MessageWarning.none),
-      ));
+      await (update(
+        messages,
+      )..where((messages) => messages.stanzaID.equals(stanzaID)))
+          .write(
+        const MessagesCompanion(
+          retracted: Value(true),
+          body: Value(null),
+          fileMetadataID: Value(null),
+          error: Value(MessageError.none),
+          warning: Value(MessageWarning.none),
+        ),
+      );
       if (existing.id != null) {
         metadataIds.addAll(await deleteMessageAttachments(existing.id!));
       }
@@ -2308,11 +2292,7 @@ WHERE jid = ?
             (tbl) =>
                 tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
           ))
-        .write(
-      const MessagesCompanion(
-        acked: Value(true),
-      ),
-    );
+        .write(const MessagesCompanion(acked: Value(true)));
   }
 
   @override
@@ -2323,11 +2303,7 @@ WHERE jid = ?
             (tbl) =>
                 tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
           ))
-        .write(
-      const MessagesCompanion(
-        received: Value(true),
-      ),
-    );
+        .write(const MessagesCompanion(received: Value(true)));
   }
 
   @override
@@ -2338,11 +2314,7 @@ WHERE jid = ?
             (tbl) =>
                 tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
           ))
-        .write(
-      const MessagesCompanion(
-        displayed: Value(true),
-      ),
-    );
+        .write(const MessagesCompanion(displayed: Value(true)));
   }
 
   @override
@@ -2386,11 +2358,14 @@ WHERE jid = ?
           : shouldDecrementUnread && chat.unreadCount > 0
               ? chat.unreadCount - 1
               : chat.unreadCount;
-      await chatsAccessor.updateOne(chat.copyWith(
-        lastMessage: lastMessagePreview,
-        lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
-        unreadCount: nextUnreadCount,
-      ));
+      await chatsAccessor.updateOne(
+        chat.copyWith(
+          lastMessage: lastMessagePreview,
+          lastChangeTimestamp:
+              lastMessage?.timestamp ?? chat.lastChangeTimestamp,
+          unreadCount: nextUnreadCount,
+        ),
+      );
     });
     for (final metadataId in metadataIds) {
       await _deleteFileMetadataIfOrphaned(metadataId);
@@ -2427,14 +2402,11 @@ SET sender_jid = ?
 WHERE delta_account_id = ?
   AND sender_jid IN ($placeholderClause)
 ''';
-    await customStatement(
-      updateMessagesSql,
-      [
-        normalizedAddress,
-        deltaAccountId,
-        ...normalizedPlaceholders,
-      ],
-    );
+    await customStatement(updateMessagesSql, [
+      normalizedAddress,
+      deltaAccountId,
+      ...normalizedPlaceholders,
+    ]);
     final updateChatsSql = '''
 UPDATE chats
 SET email_from_address = ?
@@ -2445,14 +2417,11 @@ WHERE email_from_address IN ($placeholderClause)
     WHERE delta_account_id = ?
   )
 ''';
-    await customStatement(
-      updateChatsSql,
-      [
-        normalizedAddress,
-        ...normalizedPlaceholders,
-        deltaAccountId,
-      ],
-    );
+    await customStatement(updateChatsSql, [
+      normalizedAddress,
+      ...normalizedPlaceholders,
+      deltaAccountId,
+    ]);
   }
 
   @override
@@ -2681,12 +2650,15 @@ WHERE email_from_address IN ($placeholderClause)
 
       if (stanzaIds.isNotEmpty) {
         for (final batch in chunked(stanzaIds)) {
-          await (delete(reactions)..where((tbl) => tbl.messageID.isIn(batch)))
+          await (delete(
+            reactions,
+          )..where((tbl) => tbl.messageID.isIn(batch)))
               .go();
         }
         for (final batch in chunked(messageIds)) {
-          await (delete(messageAttachments)
-                ..where((tbl) => tbl.messageId.isIn(batch)))
+          await (delete(
+            messageAttachments,
+          )..where((tbl) => tbl.messageId.isIn(batch)))
               .go();
         }
         for (final batch in chunked(stanzaIds)) {
@@ -2696,7 +2668,9 @@ WHERE email_from_address IN ($placeholderClause)
               .go();
         }
         for (final batch in chunked(stanzaIds)) {
-          await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(batch)))
+          await (delete(
+            messages,
+          )..where((tbl) => tbl.stanzaID.isIn(batch)))
               .go();
         }
       }
@@ -2720,13 +2694,15 @@ WHERE email_from_address IN ($placeholderClause)
             shareIds.difference(remainingShareIds).toList(growable: false);
         if (expiredShares.isNotEmpty) {
           for (final batch in chunked(expiredShares)) {
-            await (delete(messageParticipants)
-                  ..where((tbl) => tbl.shareId.isIn(batch)))
+            await (delete(
+              messageParticipants,
+            )..where((tbl) => tbl.shareId.isIn(batch)))
                 .go();
           }
           for (final batch in chunked(expiredShares)) {
-            await (delete(messageShares)
-                  ..where((tbl) => tbl.shareId.isIn(batch)))
+            await (delete(
+              messageShares,
+            )..where((tbl) => tbl.shareId.isIn(batch)))
                 .go();
           }
         }
@@ -2748,10 +2724,7 @@ WHERE email_from_address IN ($placeholderClause)
     const summaryFilter = MessageTimelineFilter.allWithContact;
     final chat = await getChat(jid);
     if (chat == null) return;
-    final lastMessage = await getLastMessageForChat(
-      jid,
-      filter: summaryFilter,
-    );
+    final lastMessage = await getLastMessageForChat(jid, filter: summaryFilter);
     final bool hasVisibleMessage = lastMessage != null;
     final bool hasAnyMessages = hasVisibleMessage ||
         (await getChatMessages(
@@ -2773,8 +2746,9 @@ WHERE email_from_address IN ($placeholderClause)
             pseudoMessageType: lastMessage.pseudoMessageType,
             pseudoMessageData: lastMessage.pseudoMessageData,
           );
-    final DateTime emptyTimestamp =
-        DateTime.fromMillisecondsSinceEpoch(_emptyTimestampMillis);
+    final DateTime emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(
+      _emptyTimestampMillis,
+    );
     final DateTime nextTimestamp = lastMessage?.timestamp ??
         (hasAnyMessages ? chat.lastChangeTimestamp : emptyTimestamp);
     final int nextUnreadCount =
@@ -2849,7 +2823,8 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<List<MessageParticipantData>> getParticipantsForShare(
-          String shareId) =>
+    String shareId,
+  ) =>
       messageParticipantsAccessor.selectByShare(shareId);
 
   @override
@@ -2866,9 +2841,9 @@ WHERE email_from_address IN ($placeholderClause)
       ),
     ])
       ..where(messageCopies.shareId.equals(shareId));
-    return query
-        .get()
-        .then((rows) => rows.map((row) => row.readTable(messages)).toList());
+    return query.get().then(
+          (rows) => rows.map((row) => row.readTable(messages)).toList(),
+        );
   }
 
   @override
@@ -2927,17 +2902,19 @@ WHERE email_from_address IN ($placeholderClause)
     String? subject,
     List<String> attachmentMetadataIds = const [],
   }) =>
-      draftsAccessor.insertOrUpdateOne(DraftsCompanion(
-        id: Value.absentIfNull(id),
-        jids: Value(jids),
-        body: Value(body),
-        draftSyncId: Value(draftSyncId),
-        draftUpdatedAt: Value(draftUpdatedAt),
-        draftSourceId: Value(draftSourceId),
-        draftRecipients: Value(draftRecipients),
-        subject: Value.absentIfNull(subject),
-        attachmentMetadataIds: Value(attachmentMetadataIds),
-      ));
+      draftsAccessor.insertOrUpdateOne(
+        DraftsCompanion(
+          id: Value.absentIfNull(id),
+          jids: Value(jids),
+          body: Value(body),
+          draftSyncId: Value(draftSyncId),
+          draftUpdatedAt: Value(draftUpdatedAt),
+          draftSourceId: Value(draftSourceId),
+          draftRecipients: Value(draftRecipients),
+          subject: Value.absentIfNull(subject),
+          attachmentMetadataIds: Value(attachmentMetadataIds),
+        ),
+      );
 
   @override
   Future<void> updateDraftSyncMetadata({
@@ -3050,13 +3027,15 @@ WHERE email_from_address IN ($placeholderClause)
         trust.state,
         trust.trusted,
       );
-      return omemoTrustsAccessor.insertOrUpdateOne(OmemoTrust(
-        device: trust.device,
-        jid: trust.jid,
-        trust: trust.state,
-        enabled: trust.enabled,
-        trusted: trust.trusted,
-      ));
+      return omemoTrustsAccessor.insertOrUpdateOne(
+        OmemoTrust(
+          device: trust.device,
+          jid: trust.jid,
+          trust: trust.state,
+          enabled: trust.enabled,
+          trusted: trust.trusted,
+        ),
+      );
     });
   }
 
@@ -3066,17 +3045,20 @@ WHERE email_from_address IN ($placeholderClause)
     required int device,
     required String? label,
   }) =>
-      omemoTrustsAccessor.updateOne(OmemoTrustsCompanion(
-        device: Value(device),
-        jid: Value(jid),
-        label: Value(label),
-      ));
+      omemoTrustsAccessor.updateOne(
+        OmemoTrustsCompanion(
+          device: Value(device),
+          jid: Value(jid),
+          label: Value(label),
+        ),
+      );
 
   @override
   Future<void> resetOmemoTrust(String jid) async {
     await transaction(() async {
-      final trusts = await (delete(omemoTrusts)
-            ..where((table) => table.jid.equals(jid)))
+      final trusts = await (delete(
+        omemoTrusts,
+      )..where((table) => table.jid.equals(jid)))
           .goAndReturn();
       for (final trust in trusts) {
         await messagesAccessor.updateTrust(
@@ -3111,9 +3093,11 @@ WHERE email_from_address IN ($placeholderClause)
     await transaction(() async {
       for (final (jid, deviceID) in ratchets) {
         await (delete(omemoRatchets)
-              ..where((omemoRatchets) =>
-                  omemoRatchets.jid.equals(jid) &
-                  omemoRatchets.device.equals(deviceID)))
+              ..where(
+                (omemoRatchets) =>
+                    omemoRatchets.jid.equals(jid) &
+                    omemoRatchets.device.equals(deviceID),
+              ))
             .go();
       }
     });
@@ -3184,8 +3168,9 @@ WHERE email_from_address IN ($placeholderClause)
     if (path == null || path.isEmpty) {
       return;
     }
-    final hasSiblingMetadata = await (select(fileMetadata)
-          ..where((tbl) => tbl.path.equals(path)))
+    final hasSiblingMetadata = await (select(
+      fileMetadata,
+    )..where((tbl) => tbl.path.equals(path)))
         .get();
     if (hasSiblingMetadata.isNotEmpty) {
       return;
@@ -3224,9 +3209,7 @@ WHERE email_from_address IN ($placeholderClause)
 
   Future<Directory> _attachmentRootDirectory() async {
     final supportDir = await getApplicationSupportDirectory();
-    return Directory(
-      p.join(supportDir.path, _attachmentRootDirectoryName),
-    );
+    return Directory(p.join(supportDir.path, _attachmentRootDirectoryName));
   }
 
   String? _databasePrefixFromFilePath() {
@@ -3236,8 +3219,10 @@ WHERE email_from_address IN ($placeholderClause)
     if (!baseName.endsWith(_databaseFileSuffix)) {
       return null;
     }
-    final prefix =
-        baseName.substring(0, baseName.length - _databaseFileSuffix.length);
+    final prefix = baseName.substring(
+      0,
+      baseName.length - _databaseFileSuffix.length,
+    );
     final trimmed = prefix.trim();
     if (trimmed.isEmpty) {
       return null;
@@ -3271,9 +3256,7 @@ WHERE email_from_address IN ($placeholderClause)
     return p.isWithin(normalizedRoot, normalizedPath);
   }
 
-  Future<void> _deleteManagedAttachmentFile(
-    FileMetadataData metadata,
-  ) async {
+  Future<void> _deleteManagedAttachmentFile(FileMetadataData metadata) async {
     final path = metadata.path?.trim();
     if (path == null || path.isEmpty) return;
     if (!await _isManagedAttachmentPath(path)) return;
@@ -3303,9 +3286,11 @@ WHERE email_from_address IN ($placeholderClause)
     int? sortOrder,
   }) async {
     final existing = await (select(messageAttachments)
-          ..where((tbl) =>
-              tbl.messageId.equals(messageId) &
-              tbl.fileMetadataId.equals(fileMetadataId)))
+          ..where(
+            (tbl) =>
+                tbl.messageId.equals(messageId) &
+                tbl.fileMetadataId.equals(fileMetadataId),
+          ))
         .getSingleOrNull();
     if (existing != null) {
       final shouldUpdateGroup = transportGroupId != null &&
@@ -3313,8 +3298,9 @@ WHERE email_from_address IN ($placeholderClause)
       final shouldUpdateOrder =
           sortOrder != null && existing.sortOrder != sortOrder;
       if (shouldUpdateGroup || shouldUpdateOrder) {
-        await (update(messageAttachments)
-              ..where((tbl) => tbl.id.equals(existing.id)))
+        await (update(
+          messageAttachments,
+        )..where((tbl) => tbl.id.equals(existing.id)))
             .write(
           MessageAttachmentsCompanion(
             transportGroupId: shouldUpdateGroup
@@ -3327,10 +3313,8 @@ WHERE email_from_address IN ($placeholderClause)
       }
       return;
     }
-    final nextOrder = sortOrder ??
-        await messageAttachmentsAccessor.nextSortOrder(
-          messageId,
-        );
+    final nextOrder =
+        sortOrder ?? await messageAttachmentsAccessor.nextSortOrder(messageId);
     if (nextOrder >= _messageAttachmentMaxCount) {
       _log.warning('Skipping attachment insert after reaching max count.');
       return;
@@ -3478,8 +3462,9 @@ WHERE email_from_address IN ($placeholderClause)
 
   Future<List<Chat>> _mergeDeltaChats() async {
     final Map<String, Chat> resolved = <String, Chat>{};
-    final legacy = await (select(chats)
-          ..where((tbl) => tbl.deltaChatId.isNotNull()))
+    final legacy = await (select(
+      chats,
+    )..where((tbl) => tbl.deltaChatId.isNotNull()))
         .get();
     for (final chat in legacy) {
       resolved[chat.jid] = chat;
@@ -3500,8 +3485,9 @@ WHERE email_from_address IN ($placeholderClause)
   Future<List<Chat>> _mergeDeltaChatsForAccount(int accountId) async {
     final Map<String, Chat> resolved = <String, Chat>{};
     if (accountId == deltaAccountIdLegacy) {
-      final legacy = await (select(chats)
-            ..where((tbl) => tbl.deltaChatId.isNotNull()))
+      final legacy = await (select(
+        chats,
+      )..where((tbl) => tbl.deltaChatId.isNotNull()))
           .get();
       for (final chat in legacy) {
         resolved[chat.jid] = chat;
@@ -3554,9 +3540,7 @@ GROUP BY $addressColumn
 ORDER BY MAX(ts) DESC
 $limitClause
 ''',
-      variables: [
-        if (limit != null) Variable<int>(limit),
-      ],
+      variables: [if (limit != null) Variable<int>(limit)],
       readsFrom: {chats, messages},
     );
     return query.map((row) => row.read<String>(addressColumn));
@@ -3577,10 +3561,7 @@ $limitClause
   Future<Chat?> getOpenChat() => chatsAccessor.selectOpen();
 
   @override
-  Future<Chat?> getChatByDeltaChatId(
-    int deltaChatId, {
-    int? accountId,
-  }) async {
+  Future<Chat?> getChatByDeltaChatId(int deltaChatId, {int? accountId}) async {
     final resolvedAccountId = accountId ?? deltaAccountIdLegacy;
     final query = select(chats).join([
       innerJoin(
@@ -3599,15 +3580,14 @@ $limitClause
     if (accountId != null) {
       return null;
     }
-    return (select(chats)..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
+    return (select(
+      chats,
+    )..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
         .getSingleOrNull();
   }
 
   @override
-  Stream<Chat?> watchChatByDeltaChatId(
-    int deltaChatId, {
-    int? accountId,
-  }) {
+  Stream<Chat?> watchChatByDeltaChatId(int deltaChatId, {int? accountId}) {
     final resolvedAccountId = accountId ?? deltaAccountIdLegacy;
     final query = select(chats).join([
       innerJoin(
@@ -3619,8 +3599,9 @@ $limitClause
         emailChatAccounts.deltaChatId.equals(deltaChatId) &
             emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
       );
-    final mappedStream =
-        query.watchSingleOrNull().map((row) => row?.readTable(chats));
+    final mappedStream = query.watchSingleOrNull().map(
+          (row) => row?.readTable(chats),
+        );
     if (accountId != null) {
       return mappedStream;
     }
@@ -3628,8 +3609,9 @@ $limitClause
       if (mapped != null) {
         return mapped;
       }
-      return (select(chats)
-            ..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
+      return (select(
+        chats,
+      )..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
           .getSingleOrNull();
     });
   }
@@ -3680,8 +3662,9 @@ $limitClause
 
   @override
   Future<void> deleteEmailChatAccountsForAccount(int deltaAccountId) async {
-    await (delete(emailChatAccounts)
-          ..where((tbl) => tbl.deltaAccountId.equals(deltaAccountId)))
+    await (delete(
+      emailChatAccounts,
+    )..where((tbl) => tbl.deltaAccountId.equals(deltaAccountId)))
         .go();
   }
 
@@ -3707,10 +3690,12 @@ $limitClause
       pseudoMessageData: lastMessage?.pseudoMessageData,
     );
 
-    return await chatsAccessor.insertOne(chat.copyWith(
-      lastMessage: lastMessagePreview,
-      lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
-    ));
+    return await chatsAccessor.insertOne(
+      chat.copyWith(
+        lastMessage: lastMessagePreview,
+        lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
+      ),
+    );
   }
 
   @override
@@ -3778,13 +3763,11 @@ $limitClause
       (await chatsAccessor.closeOpen()).firstOrNull;
 
   @override
-  Future<void> markChatMuted({
-    required String jid,
-    required bool muted,
-  }) async {
+  Future<void> markChatMuted({required String jid, required bool muted}) async {
     _log.info('Updating chat muted state');
-    await (update(chats)..where((chats) => chats.jid.equals(jid)))
-        .write(ChatsCompanion(muted: Value(muted)));
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(muted: Value(muted)),
+    );
   }
 
   @override
@@ -3826,8 +3809,9 @@ $limitClause
     required bool favorited,
   }) async {
     _log.info('Updating chat favorite state');
-    await (update(chats)..where((chats) => chats.jid.equals(jid)))
-        .write(ChatsCompanion(favorited: Value(favorited)));
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(favorited: Value(favorited)),
+    );
   }
 
   @override
@@ -3877,9 +3861,7 @@ $limitClause
     );
     await chatsAccessor.insertOne(archivedChat);
     await (update(messages)..where((tbl) => tbl.chatJid.equals(chat.jid)))
-        .write(
-      MessagesCompanion(chatJid: Value(archivedJid)),
-    );
+        .write(MessagesCompanion(chatJid: Value(archivedJid)));
     await (update(notifications)..where((tbl) => tbl.chatJid.equals(chat.jid)))
         .write(NotificationsCompanion(chatJid: Value(archivedJid)));
     await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
@@ -3897,10 +3879,7 @@ $limitClause
       ];
       if (listEquals(updated, draft.jids)) continue;
       await draftsAccessor.updateOne(
-        DraftsCompanion(
-          id: Value(draft.id),
-          jids: Value(updated),
-        ),
+        DraftsCompanion(id: Value(draft.id), jids: Value(updated)),
       );
     }
   }
@@ -3911,8 +3890,9 @@ $limitClause
     required bool hidden,
   }) async {
     _log.info('Updating chat hidden state');
-    await (update(chats)..where((chats) => chats.jid.equals(jid)))
-        .write(ChatsCompanion(hidden: Value(hidden)));
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(hidden: Value(hidden)),
+    );
   }
 
   @override
@@ -3937,8 +3917,9 @@ $limitClause
     required String? avatarPath,
     required String? avatarHash,
   }) async {
-    await (update(chats)
-          ..where((tbl) => tbl.jid.equals(jid) | tbl.contactJid.equals(jid)))
+    await (update(
+      chats,
+    )..where((tbl) => tbl.jid.equals(jid) | tbl.contactJid.equals(jid)))
         .write(
       ChatsCompanion(
         avatarPath: Value(avatarPath),
@@ -3953,15 +3934,17 @@ $limitClause
     required bool responsive,
   }) async {
     _log.info('Updating chat marker responsiveness');
-    await (update(chats)..where((chats) => chats.jid.equals(jid)))
-        .write(ChatsCompanion(markerResponsive: Value(responsive)));
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(markerResponsive: Value(responsive)),
+    );
   }
 
   @override
   Future<void> markChatsMarkerResponsive({required bool responsive}) async {
     _log.info('Updating marker responsiveness for all chats');
-    await (update(chats))
-        .write(ChatsCompanion(markerResponsive: Value(responsive)));
+    await (update(
+      chats,
+    )).write(ChatsCompanion(markerResponsive: Value(responsive)));
   }
 
   @override
@@ -3970,10 +3953,9 @@ $limitClause
     required mox.ChatState state,
   }) async {
     _log.info('Updating chat state');
-    await chatsAccessor.updateOne(ChatsCompanion(
-      jid: Value(chatJid),
-      chatState: Value(state),
-    ));
+    await chatsAccessor.updateOne(
+      ChatsCompanion(jid: Value(chatJid), chatState: Value(state)),
+    );
   }
 
   @override
@@ -3982,10 +3964,9 @@ $limitClause
     required String? alert,
   }) async {
     _log.info('Updating chat alert');
-    await chatsAccessor.updateOne(ChatsCompanion(
-      jid: Value(chatJid),
-      alert: Value(alert),
-    ));
+    await chatsAccessor.updateOne(
+      ChatsCompanion(jid: Value(chatJid), alert: Value(alert)),
+    );
   }
 
   @override
@@ -3994,10 +3975,9 @@ $limitClause
     required EncryptionProtocol protocol,
   }) async {
     _log.info('Updating chat encryption protocol');
-    await chatsAccessor.updateOne(ChatsCompanion(
-      jid: Value(chatJid),
-      encryptionProtocol: Value(protocol),
-    ));
+    await chatsAccessor.updateOne(
+      ChatsCompanion(jid: Value(chatJid), encryptionProtocol: Value(protocol)),
+    );
   }
 
   @override
@@ -4090,11 +4070,13 @@ $limitClause
     String? status,
   }) async {
     _log.info('Updating presence');
-    await rosterAccessor.updateOne(RosterCompanion(
-      jid: Value(jid),
-      presence: Value(presence),
-      status: Value(status),
-    ));
+    await rosterAccessor.updateOne(
+      RosterCompanion(
+        jid: Value(jid),
+        presence: Value(presence),
+        status: Value(status),
+      ),
+    );
   }
 
   @override
@@ -4104,24 +4086,15 @@ $limitClause
   }) async {
     _log.info('Updating roster subscription');
     await rosterAccessor.updateOne(
-      RosterCompanion(
-        jid: Value(jid),
-        subscription: Value(subscription),
-      ),
+      RosterCompanion(jid: Value(jid), subscription: Value(subscription)),
     );
   }
 
   @override
-  Future<void> updateRosterAsk({
-    required String jid,
-    Ask? ask,
-  }) async {
+  Future<void> updateRosterAsk({required String jid, Ask? ask}) async {
     _log.info('Updating roster ask state');
     await rosterAccessor.updateOne(
-      RosterCompanion(
-        jid: Value(jid),
-        ask: Value(ask),
-      ),
+      RosterCompanion(jid: Value(jid), ask: Value(ask)),
     );
   }
 
@@ -4144,10 +4117,12 @@ $limitClause
   Future<void> markSubscriptionBoth(String jid) async {
     _log.info('Marking roster subscription as mutual');
     await transaction(() async {
-      await rosterAccessor.updateOne(RosterCompanion(
-        jid: Value(jid),
-        subscription: const Value(Subscription.both),
-      ));
+      await rosterAccessor.updateOne(
+        RosterCompanion(
+          jid: Value(jid),
+          subscription: const Value(Subscription.both),
+        ),
+      );
       await invitesAccessor.deleteOne(jid);
     });
   }
@@ -4159,8 +4134,10 @@ $limitClause
   }
 
   @override
-  Future<List<Invite>> getInvites(
-      {required int start, required int end}) async {
+  Future<List<Invite>> getInvites({
+    required int start,
+    required int end,
+  }) async {
     return await invitesAccessor.selectAll();
   }
 
@@ -4304,10 +4281,7 @@ $limitClause
         final blockedAt =
             (blockedAtByJid[blocked] ?? DateTime.timestamp()).toUtc();
         await blocklistAccessor.insertOne(
-          BlocklistCompanion.insert(
-            jid: blocked,
-            blockedAt: Value(blockedAt),
-          ),
+          BlocklistCompanion.insert(jid: blocked, blockedAt: Value(blockedAt)),
         );
       }
     });
@@ -4325,10 +4299,7 @@ $limitClause
       await delete(contacts).go();
       for (final entry in contactsByNativeId.entries) {
         await into(contacts).insert(
-          ContactsCompanion.insert(
-            nativeID: entry.key,
-            jid: entry.value,
-          ),
+          ContactsCompanion.insert(nativeID: entry.key, jid: entry.value),
           mode: InsertMode.insertOrIgnore,
         );
       }
@@ -4366,11 +4337,7 @@ ON CONFLICT(address) DO UPDATE SET
   blocked_at = excluded.blocked_at,
   source_id = COALESCE(excluded.source_id, email_blocklist.source_id)
 ''',
-      [
-        normalized,
-        resolvedBlockedAt.toIso8601String(),
-        sourceId,
-      ],
+      [normalized, resolvedBlockedAt.toIso8601String(), sourceId],
     );
   }
 
@@ -4448,11 +4415,7 @@ ON CONFLICT(address) DO UPDATE SET
   flagged_at = excluded.flagged_at,
   source_id = COALESCE(excluded.source_id, email_spamlist.source_id)
 ''',
-      [
-        normalized,
-        resolvedFlaggedAt.toIso8601String(),
-        sourceId,
-      ],
+      [normalized, resolvedFlaggedAt.toIso8601String(), sourceId],
     );
   }
 
@@ -4539,12 +4502,7 @@ ON CONFLICT(address) DO UPDATE SET
   Future<void> _rebuildMessageCopiesTable(Migrator m) async {
     final tableName = messageCopies.actualTableName;
     final tempTableName = '${tableName}_old';
-    const columnNames = <String>[
-      'id',
-      'share_id',
-      'dc_msg_id',
-      'dc_chat_id',
-    ];
+    const columnNames = <String>['id', 'share_id', 'dc_msg_id', 'dc_chat_id'];
     final columnList = columnNames.map((c) => '"$c"').join(', ');
     final tableExists = await customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -4573,8 +4531,9 @@ ON CONFLICT(address) DO UPDATE SET
   }
 
   Future<void> _mergeEmailChats() async {
-    final emailChats = await (select(chats)
-          ..where((tbl) => tbl.emailAddress.isNotNull()))
+    final emailChats = await (select(
+      chats,
+    )..where((tbl) => tbl.emailAddress.isNotNull()))
         .get();
     final canonical = <String, Chat>{};
     for (final chat in emailChats) {
@@ -4605,14 +4564,10 @@ ON CONFLICT(address) DO UPDATE SET
             .write(MessagesCompanion(chatJid: Value(normalized)));
         await (update(messageParticipants)
               ..where((tbl) => tbl.contactJid.equals(chat.jid)))
-            .write(
-          MessageParticipantsCompanion(contactJid: Value(normalized)),
-        );
+            .write(MessageParticipantsCompanion(contactJid: Value(normalized)));
         await (update(notifications)
               ..where((tbl) => tbl.chatJid.equals(chat.jid)))
-            .write(
-          NotificationsCompanion(chatJid: Value(normalized)),
-        );
+            .write(NotificationsCompanion(chatJid: Value(normalized)));
         final merged = target.copyWith(
           deltaChatId: chat.deltaChatId ?? target.deltaChatId,
           emailAddress: chat.emailAddress ?? target.emailAddress,
@@ -4634,19 +4589,12 @@ ON CONFLICT(address) DO UPDATE SET
             .write(MessagesCompanion(chatJid: Value(normalized)));
         await (update(messageParticipants)
               ..where((tbl) => tbl.contactJid.equals(chat.jid)))
-            .write(
-          MessageParticipantsCompanion(contactJid: Value(normalized)),
-        );
+            .write(MessageParticipantsCompanion(contactJid: Value(normalized)));
         await (update(notifications)
               ..where((tbl) => tbl.chatJid.equals(chat.jid)))
-            .write(
-          NotificationsCompanion(chatJid: Value(normalized)),
-        );
+            .write(NotificationsCompanion(chatJid: Value(normalized)));
         await (update(chats)..where((tbl) => tbl.jid.equals(chat.jid))).write(
-          ChatsCompanion(
-            jid: Value(normalized),
-            contactJid: Value(normalized),
-          ),
+          ChatsCompanion(jid: Value(normalized), contactJid: Value(normalized)),
         );
         canonical[normalized] = chat.copyWith(
           jid: normalized,

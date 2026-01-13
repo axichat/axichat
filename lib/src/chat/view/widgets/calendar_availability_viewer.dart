@@ -57,9 +57,7 @@ const int _availabilityViewerMinutesPerDay =
     _availabilityViewerMinutesPerHour * _availabilityViewerHoursPerDay;
 
 typedef AvailabilityRequestHandler = Future<void> Function(
-  DateTime start,
-  DateTime end,
-);
+    DateTime start, DateTime end);
 
 Future<void> showCalendarAvailabilityShareViewer({
   required BuildContext context,
@@ -75,9 +73,7 @@ Future<void> showCalendarAvailabilityShareViewer({
       duration: baseAnimationDuration,
       builder: (routeContext) => MultiBlocProvider(
         providers: [
-          BlocProvider<CalendarBloc>.value(
-            value: locate<CalendarBloc>(),
-          ),
+          BlocProvider<CalendarBloc>.value(value: locate<CalendarBloc>()),
           if (enableChatCalendar)
             BlocProvider<ChatCalendarBloc>.value(
               value: locate<ChatCalendarBloc>(),
@@ -273,10 +269,7 @@ class _AvailabilityViewerHeader extends StatelessWidget {
                 style: textTheme.h4.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: _availabilityViewerTitleSpacing),
-              _AvailabilityViewerRangeRow(
-                label: rangeLabel,
-                hint: rangeHint,
-              ),
+              _AvailabilityViewerRangeRow(label: rangeLabel, hint: rangeHint),
             ],
           ),
         ),
@@ -286,10 +279,7 @@ class _AvailabilityViewerHeader extends StatelessWidget {
 }
 
 class _AvailabilityViewerRangeRow extends StatelessWidget {
-  const _AvailabilityViewerRangeRow({
-    required this.label,
-    required this.hint,
-  });
+  const _AvailabilityViewerRangeRow({required this.label, required this.hint});
 
   final String label;
   final String? hint;
@@ -304,10 +294,7 @@ class _AvailabilityViewerRangeRow extends StatelessWidget {
       spacing: _availabilityViewerRangeHintSpacing,
       runSpacing: _availabilityViewerRangeHintSpacing,
       children: [
-        Text(
-          label,
-          style: context.textTheme.small.copyWith(color: muted),
-        ),
+        Text(label, style: context.textTheme.small.copyWith(color: muted)),
         if (hasHint)
           Text(
             '($trimmedHint)',
@@ -414,17 +401,12 @@ class _AvailabilityViewerSourceButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final button = isSelected
-        ? ShadButton.secondary(
-            onPressed: onPressed,
-            child: Text(label),
-          )
-        : ShadButton.outline(
-            onPressed: onPressed,
-            child: Text(label),
-          );
+        ? ShadButton.secondary(onPressed: onPressed, child: Text(label))
+        : ShadButton.outline(onPressed: onPressed, child: Text(label));
     return ConstrainedBox(
-      constraints:
-          const BoxConstraints(minHeight: _availabilityViewerSourceMinHeight),
+      constraints: const BoxConstraints(
+        minHeight: _availabilityViewerSourceMinHeight,
+      ),
       child: button,
     );
   }
@@ -501,8 +483,10 @@ class _AvailabilityViewerGridContent extends StatelessWidget {
       rangeEnd: overlay.rangeEnd,
       isRedacted: false,
     );
-    final CalendarAvailabilityOverlay comparison =
-        deriveAvailabilityOverlay(model: model, base: base);
+    final CalendarAvailabilityOverlay comparison = deriveAvailabilityOverlay(
+      model: model,
+      base: base,
+    );
     final List<CalendarFreeBusyInterval> intervals =
         buildAvailabilityDisplayIntervals(
       rangeOverlay: overlay,

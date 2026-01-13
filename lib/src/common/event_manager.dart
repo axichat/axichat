@@ -13,9 +13,7 @@ class EventManager<E> {
 
   bool _match<T extends E>(E event) => event is T;
 
-  void registerHandler<T extends E>(
-    EventHandler<T> handler,
-  ) {
+  void registerHandler<T extends E>(EventHandler<T> handler) {
     if (_registry[_match<T>] == null) {
       _registry[_match<T>] = [handler];
     } else {
@@ -23,9 +21,7 @@ class EventManager<E> {
     }
   }
 
-  void registerHandlers<T extends E>(
-    List<EventHandler<T>> handlers,
-  ) {
+  void registerHandlers<T extends E>(List<EventHandler<T>> handlers) {
     if (_registry[_match<T>] == null) {
       _registry[_match<T>] = handlers;
     } else {

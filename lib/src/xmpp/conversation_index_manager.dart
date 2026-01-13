@@ -159,9 +159,8 @@ final class ConversationIndexItemRetractedEvent extends mox.XmppEvent {
 }
 
 final class ConversationIndexManager extends mox.XmppManagerBase {
-  ConversationIndexManager({
-    String? maxItems,
-  })  : _maxItems = maxItems ?? _defaultMaxItems,
+  ConversationIndexManager({String? maxItems})
+      : _maxItems = maxItems ?? _defaultMaxItems,
         super(managerId);
 
   static const String managerId = 'axi.conversation.index';
@@ -181,8 +180,9 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   Stream<ConvItemUpdate> get updates => _updatesController.stream;
 
   final Map<String, ConvItem> _cache = {};
-  final SyncRateLimiter _rateLimiter =
-      SyncRateLimiter(conversationIndexSyncRateLimit);
+  final SyncRateLimiter _rateLimiter = SyncRateLimiter(
+    conversationIndexSyncRateLimit,
+  );
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
@@ -242,10 +242,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     return int.parse(_defaultMaxItems);
   }
 
-  bool _isSnapshotComplete({
-    required int itemsCount,
-    required int maxItems,
-  }) =>
+  bool _isSnapshotComplete({required int itemsCount, required int maxItems}) =>
       itemsCount < maxItems;
 
   @override
@@ -321,8 +318,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     try {
       final config = _nodeConfig();
 
-      final configured =
-          await pubsub.configureNode(host, conversationIndexNode, config);
+      final configured = await pubsub.configureNode(
+        host,
+        conversationIndexNode,
+        config,
+      );
       if (!configured.isType<mox.PubSubError>()) {
         _nodeReady = true;
         return;
@@ -339,8 +339,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
           _createNodeConfig(),
           nodeId: conversationIndexNode,
         );
-        final applied =
-            await pubsub.configureNode(host, conversationIndexNode, config);
+        final applied = await pubsub.configureNode(
+          host,
+          conversationIndexNode,
+          config,
+        );
         if (!applied.isType<mox.PubSubError>()) {
           _nodeReady = true;
           return;
@@ -351,8 +354,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
       try {
         await pubsub.createNode(host, nodeId: conversationIndexNode);
-        final applied =
-            await pubsub.configureNode(host, conversationIndexNode, config);
+        final applied = await pubsub.configureNode(
+          host,
+          conversationIndexNode,
+          config,
+        );
         if (!applied.isType<mox.PubSubError>()) {
           _nodeReady = true;
         }
@@ -431,9 +437,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         .toList(growable: false);
     _cache
       ..clear()
-      ..addAll({
-        for (final entry in parsed) entry.itemId: entry,
-      });
+      ..addAll({for (final entry in parsed) entry.itemId: entry});
     return PubSubFetchResult(
       items: List<ConvItem>.unmodifiable(parsed),
       isSuccess: true,
@@ -516,10 +520,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     return aTrimmed!.compareTo(bTrimmed!) >= 0 ? aTrimmed : bTrimmed;
   }
 
-  ConvItem? _mergeIncoming(
-    ConvItem incoming, {
-    ConvItem? cached,
-  }) {
+  ConvItem? _mergeIncoming(ConvItem incoming, {ConvItem? cached}) {
     final resolvedCache = cached ?? _cache[incoming.itemId];
     if (resolvedCache == null) return incoming;
 
@@ -572,8 +573,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         return;
       }
       if (pubsub != null && itemId.isNotEmpty) {
-        final itemResult =
-            await pubsub.getItem(host, conversationIndexNode, itemId);
+        final itemResult = await pubsub.getItem(
+          host,
+          conversationIndexNode,
+          itemId,
+        );
         if (!itemResult.isType<mox.PubSubError>()) {
           final payload = itemResult.get<mox.PubSubItem>().payload;
           if (payload != null) {

@@ -67,8 +67,11 @@ Future<DayEventEditorResult?> showDayEventEditor({
   required DateTime initialDate,
   DayEvent? existing,
 }) {
-  final DateTime normalized =
-      DateTime(initialDate.year, initialDate.month, initialDate.day);
+  final DateTime normalized = DateTime(
+    initialDate.year,
+    initialDate.month,
+    initialDate.day,
+  );
   return showAdaptiveBottomSheet<DayEventEditorResult>(
     context: context,
     isScrollControlled: true,
@@ -79,19 +82,13 @@ Future<DayEventEditorResult?> showDayEventEditor({
     ),
     showCloseButton: false,
     builder: (BuildContext sheetContext) {
-      return _DayEventEditorForm(
-        initialDate: normalized,
-        existing: existing,
-      );
+      return _DayEventEditorForm(initialDate: normalized, existing: existing);
     },
   );
 }
 
 class _DayEventEditorForm extends StatefulWidget {
-  const _DayEventEditorForm({
-    required this.initialDate,
-    this.existing,
-  });
+  const _DayEventEditorForm({required this.initialDate, this.existing});
 
   final DateTime initialDate;
   final DayEvent? existing;
@@ -151,8 +148,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       widget.existing?.icsMeta?.attendees ?? _emptyAttendees,
     );
     _titleController = TextEditingController(text: widget.existing?.title);
-    _descriptionController =
-        TextEditingController(text: widget.existing?.description);
+    _descriptionController = TextEditingController(
+      text: widget.existing?.description,
+    );
   }
 
   @override
@@ -201,9 +199,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
               TaskDestructiveButton(
                 label: context.l10n.commonDelete,
                 icon: Icons.delete_outline,
-                onPressed: () => Navigator.of(context).pop(
-                  const DayEventEditorResult.deleted(),
-                ),
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(const DayEventEditorResult.deleted()),
               ),
             TaskSecondaryButton(
               label: context.l10n.calendarExportFormatIcsTitle,
@@ -295,9 +293,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       color: colors.border,
                       verticalPadding: calendarGutterMd,
                     ),
-                    TaskSectionHeader(
-                      title: context.l10n.calendarDates,
-                    ),
+                    TaskSectionHeader(title: context.l10n.calendarDates),
                     const SizedBox(height: calendarInsetLg),
                     ScheduleRangeFields(
                       start: _startDate,
@@ -389,9 +385,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                         color: colors.border,
                         verticalPadding: calendarGutterMd,
                       ),
-                      CalendarAttachmentsField(
-                        attachments: _attachments,
-                      ),
+                      CalendarAttachmentsField(attachments: _attachments),
                     ],
                     if (showDiagnostics) ...[
                       TaskSectionDivider(
@@ -409,11 +403,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
               ),
             ),
             if (!keyboardOpen)
-              SafeArea(
-                top: false,
-                bottom: true,
-                child: actions,
-              ),
+              SafeArea(top: false, bottom: true, child: actions),
           ],
         ),
       ),
@@ -424,10 +414,16 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
 
   DayEventDraft _currentDraft() {
     final String title = _titleController.text.trim();
-    final DateTime normalizedStart =
-        DateTime(_startDate.year, _startDate.month, _startDate.day);
-    final DateTime normalizedEnd =
-        DateTime(_endDate.year, _endDate.month, _endDate.day);
+    final DateTime normalizedStart = DateTime(
+      _startDate.year,
+      _startDate.month,
+      _startDate.day,
+    );
+    final DateTime normalizedEnd = DateTime(
+      _endDate.year,
+      _endDate.month,
+      _endDate.day,
+    );
     final List<String>? categories = resolveCategoryOverride(
       base: widget.existing?.icsMeta,
       categories: _categories,
@@ -529,10 +525,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(
-        context,
-        l10n.calendarExportFailed('$error'),
-      );
+      FeedbackSystem.showError(context, l10n.calendarExportFailed('$error'));
     }
   }
 }

@@ -16,13 +16,7 @@ const Color _typingGlyphRasterColor = Colors.white;
 const FilterQuality _typingGlyphFilterQuality = FilterQuality.low;
 const int _typingGlyphRasterMaxCount = 6;
 
-enum TypingTextChangeKind {
-  none,
-  selection,
-  insert,
-  delete,
-  replace,
-}
+enum TypingTextChangeKind { none, selection, insert, delete, replace }
 
 extension TypingTextChangeKindX on TypingTextChangeKind {
   bool get isInsertion => this == TypingTextChangeKind.insert;
@@ -65,10 +59,7 @@ class TypingGlyphAnimation {
 
 @immutable
 class TypingGlyphFrame {
-  const TypingGlyphFrame({
-    required this.animation,
-    required this.progress,
-  });
+  const TypingGlyphFrame({required this.animation, required this.progress});
 
   final TypingGlyphAnimation animation;
   final double progress;
@@ -96,7 +87,9 @@ class TypingTextEditingController extends TextEditingController {
       List<TextRange>.unmodifiable(_hiddenRanges);
 
   void updateSource(
-      TextEditingController? source, TextEditingValue? initialValue) {
+    TextEditingController? source,
+    TextEditingValue? initialValue,
+  ) {
     if (_source == source) {
       if (_source == null && initialValue != null) {
         _syncFromSource(initialValue);
@@ -139,8 +132,10 @@ class TypingTextEditingController extends TextEditingController {
     final String fullText = text;
     final TextRange composingRange = value.composing;
     final bool hasValidComposing = withComposing && value.isComposingRangeValid;
-    final List<TextRange> hiddenRanges =
-        _validatedHiddenRanges(fullText, _hiddenRanges);
+    final List<TextRange> hiddenRanges = _validatedHiddenRanges(
+      fullText,
+      _hiddenRanges,
+    );
     if (!hasValidComposing && hiddenRanges.isEmpty) {
       return TextSpan(style: style, text: fullText);
     }
@@ -428,8 +423,10 @@ class TypingCaretPainter extends RenderEditablePainter {
       return;
     }
     final TypingGlyphAnimation glyphAnimation = frame.animation;
-    final Rect? glyphRect =
-        _glyphRectForRange(renderEditable, glyphAnimation.range);
+    final Rect? glyphRect = _glyphRectForRange(
+      renderEditable,
+      glyphAnimation.range,
+    );
     if (glyphRect == null) {
       return;
     }
@@ -443,8 +440,10 @@ class TypingCaretPainter extends RenderEditablePainter {
       );
       return;
     }
-    final _TypingGlyphRaster raster =
-        _glyphRasters.putIfAbsent(glyphAnimation, _TypingGlyphRaster.new);
+    final _TypingGlyphRaster raster = _glyphRasters.putIfAbsent(
+      glyphAnimation,
+      _TypingGlyphRaster.new,
+    );
     if (raster.image == null && !raster.isGenerating) {
       _startGlyphRasterization(renderEditable, glyphAnimation, raster);
     }
@@ -454,8 +453,10 @@ class TypingCaretPainter extends RenderEditablePainter {
     }
 
     final Color baseColor = glyphAnimation.style.color ?? _caretColor;
-    final double glyphAlpha =
-        (baseColor.a * progress).clamp(_glyphStartOpacity, _glyphEndOpacity);
+    final double glyphAlpha = (baseColor.a * progress).clamp(
+      _glyphStartOpacity,
+      _glyphEndOpacity,
+    );
     final Color glyphColor = baseColor.withValues(alpha: glyphAlpha.toDouble());
     final Paint paint = Paint()
       ..colorFilter = ColorFilter.mode(glyphColor, BlendMode.modulate)
@@ -493,11 +494,15 @@ class TypingCaretPainter extends RenderEditablePainter {
     double progress,
   ) {
     final Color baseColor = glyphAnimation.style.color ?? _caretColor;
-    final double glyphAlpha =
-        (baseColor.a * progress).clamp(_glyphStartOpacity, _glyphEndOpacity);
+    final double glyphAlpha = (baseColor.a * progress).clamp(
+      _glyphStartOpacity,
+      _glyphEndOpacity,
+    );
     final Color glyphColor = baseColor.withValues(alpha: glyphAlpha.toDouble());
-    final TextStyle glyphStyle =
-        _glyphTextStyle(glyphAnimation.style, glyphColor);
+    final TextStyle glyphStyle = _glyphTextStyle(
+      glyphAnimation.style,
+      glyphColor,
+    );
     final TextPainter painter = TextPainter(
       text: TextSpan(text: glyphAnimation.text, style: glyphStyle),
       textDirection: renderEditable.textDirection,
@@ -540,8 +545,10 @@ class TypingCaretPainter extends RenderEditablePainter {
     _TypingGlyphRaster raster,
   ) {
     raster.isGenerating = true;
-    final TextStyle rasterStyle =
-        _glyphTextStyle(glyphAnimation.style, _typingGlyphRasterColor);
+    final TextStyle rasterStyle = _glyphTextStyle(
+      glyphAnimation.style,
+      _typingGlyphRasterColor,
+    );
     final TextPainter painter = TextPainter(
       text: TextSpan(text: glyphAnimation.text, style: rasterStyle),
       textDirection: renderEditable.textDirection,
@@ -586,8 +593,10 @@ class TypingCaretPainter extends RenderEditablePainter {
     final Set<TypingGlyphAnimation> activeAnimations =
         frames.map((TypingGlyphFrame frame) => frame.animation).toSet();
     final List<TypingGlyphAnimation> toRemove = <TypingGlyphAnimation>[];
-    _glyphRasters
-        .forEach((TypingGlyphAnimation key, _TypingGlyphRaster raster) {
+    _glyphRasters.forEach((
+      TypingGlyphAnimation key,
+      _TypingGlyphRaster raster,
+    ) {
       if (!activeAnimations.contains(key)) {
         toRemove.add(key);
       }

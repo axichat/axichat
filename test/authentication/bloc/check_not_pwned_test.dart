@@ -33,25 +33,29 @@ void main() {
     httpClient = MockHttpClient();
     provisioningClient = MockEmailProvisioningClient();
 
-    when(() => xmppService.connectivityStream).thenAnswer(
-      (_) => const Stream<mox.XmppConnectionState>.empty(),
-    );
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => const Stream<mox.XmppConnectionState>.empty());
 
-    when(() => credentialStore.read(key: any(named: 'key')))
-        .thenAnswer((_) async => null);
-    when(() => credentialStore.write(
-          key: any(named: 'key'),
-          value: any(named: 'value'),
-        )).thenAnswer((_) async => true);
-    when(() => credentialStore.delete(key: any(named: 'key')))
-        .thenAnswer((_) async => true);
+    when(
+      () => credentialStore.read(key: any(named: 'key')),
+    ).thenAnswer((_) async => null);
+    when(
+      () => credentialStore.write(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
+      () => credentialStore.delete(key: any(named: 'key')),
+    ).thenAnswer((_) async => true);
     when(() => credentialStore.close()).thenAnswer((_) async {});
   });
 
   test('checkNotPwned does not emit AuthenticationState changes', () async {
-    when(() => httpClient.get(any())).thenAnswer(
-      (_) async => http.Response('', 200),
-    );
+    when(
+      () => httpClient.get(any()),
+    ).thenAnswer((_) async => http.Response('', 200));
 
     final cubit = AuthenticationCubit(
       credentialStore: credentialStore,
@@ -81,9 +85,7 @@ void main() {
       () => httpClient.get(
         Uri.parse('https://api.pwnedpasswords.com/range/$subhash'),
       ),
-    ).thenAnswer(
-      (_) async => http.Response('$suffix:42\r\n', 200),
-    );
+    ).thenAnswer((_) async => http.Response('$suffix:42\r\n', 200));
 
     final cubit = AuthenticationCubit(
       credentialStore: credentialStore,

@@ -12,10 +12,14 @@ const double chipsBarHeaderBadgeFontSize = 11.0;
 const double chipsBarHeaderBorderRadius = 12.0;
 const double chipsBarLightOverlayOpacity = 0.07;
 const double chipsBarDarkOverlayOpacity = 0.06;
-const EdgeInsets chipsBarBadgePadding =
-    EdgeInsets.symmetric(horizontal: 6, vertical: 2);
-const EdgeInsets chipsBarCountBadgePadding =
-    EdgeInsets.symmetric(horizontal: 10, vertical: 4);
+const EdgeInsets chipsBarBadgePadding = EdgeInsets.symmetric(
+  horizontal: 6,
+  vertical: 2,
+);
+const EdgeInsets chipsBarCountBadgePadding = EdgeInsets.symmetric(
+  horizontal: 10,
+  vertical: 4,
+);
 const double chipsBarCountBadgeRadius = 12.0;
 const double chipsBarCountBadgeFontSize = 12.0;
 const double chipsBarCountBadgeLetterSpacing = 0.4;
@@ -25,8 +29,9 @@ TextStyle chipsBarHeaderTextStyle(BuildContext context) {
   return (base ?? const TextStyle()).copyWith(
     fontSize: chipsBarHeaderFontSize,
     fontWeight: FontWeight.w600,
-    color:
-        Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+    color: Theme.of(
+      context,
+    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
     letterSpacing: chipsBarHeaderLetterSpacing,
   );
 }
@@ -71,10 +76,7 @@ class ChipsBarSurface extends StatelessWidget {
       curve: curve,
       width: double.infinity,
       padding: padding,
-      decoration: BoxDecoration(
-        color: resolvedBackground,
-        border: border,
-      ),
+      decoration: BoxDecoration(color: resolvedBackground, border: border),
       child: child,
     );
   }

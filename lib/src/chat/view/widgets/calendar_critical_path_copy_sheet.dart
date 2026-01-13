@@ -192,11 +192,7 @@ class _CriticalPathCopyToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadSwitch(
-      label: Text(label),
-      value: value,
-      onChanged: onChanged,
-    );
+    return ShadSwitch(label: Text(label), value: value, onChanged: onChanged);
   }
 }
 
@@ -221,10 +217,7 @@ class _CriticalPathCopyActionRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              iconData,
-              size: _criticalPathCopyHeaderIconSize,
-            ),
+            Icon(iconData, size: _criticalPathCopyHeaderIconSize),
             const SizedBox(width: _criticalPathCopySectionGap),
             Text(label),
           ],

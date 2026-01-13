@@ -42,10 +42,8 @@ mox.XmppManagerAttributes _buildAttributes({
     sendNonza: (_) {},
     getManagerById: <T extends mox.XmppManagerBase>(_) => null,
     sendEvent: events.add,
-    getConnectionSettings: () => mox.ConnectionSettings(
-      jid: fullJid,
-      password: _accountPassword,
-    ),
+    getConnectionSettings: () =>
+        mox.ConnectionSettings(jid: fullJid, password: _accountPassword),
     getFullJID: () => fullJid,
     getSocket: () => throw UnimplementedError(),
     getConnection: () => throw UnimplementedError(),
@@ -73,18 +71,11 @@ mox.XMLNode _createMucUserNode({
           _roleAttr: _roleValue,
         },
         children: [
-          if (reason != null)
-            mox.XMLNode(
-              tag: _reasonTag,
-              text: reason,
-            ),
+          if (reason != null) mox.XMLNode(tag: _reasonTag, text: reason),
         ],
       ),
       for (final code in statusCodes)
-        mox.XMLNode(
-          tag: _statusTag,
-          attributes: {_codeAttr: code},
-        ),
+        mox.XMLNode(tag: _statusTag, attributes: {_codeAttr: code}),
     ],
   );
 }
@@ -106,11 +97,7 @@ mox.Stanza _createPresence({
   required mox.XMLNode mucUser,
   String? type,
 }) {
-  return mox.Stanza.presence(
-    from: from,
-    type: type,
-    children: [mucUser],
-  );
+  return mox.Stanza.presence(from: from, type: type, children: [mucUser]);
 }
 
 void main() {
@@ -121,10 +108,7 @@ void main() {
       'JOIN-001 [HP] remembered passwords are injected into join presence',
       () async {
         final manager = MucJoinBootstrapManager()
-          ..rememberPassword(
-            roomJid: _roomJid,
-            password: _passwordRaw,
-          );
+          ..rememberPassword(roomJid: _roomJid, password: _passwordRaw);
 
         final mucJoin = _createMucJoinNode();
         final presence = mox.Stanza.presence(
@@ -149,41 +133,32 @@ void main() {
       },
     );
 
-    test(
-      'JOIN-001 [HP] non-MUC presences do not receive passwords',
-      () async {
-        final manager = MucJoinBootstrapManager()
-          ..rememberPassword(
-            roomJid: _roomJid,
-            password: _passwordRaw,
-          );
+    test('JOIN-001 [HP] non-MUC presences do not receive passwords', () async {
+      final manager = MucJoinBootstrapManager()
+        ..rememberPassword(roomJid: _roomJid, password: _passwordRaw);
 
-        final presence = mox.Stanza.presence(to: _roomJidWithNick);
-        final handler = manager.getOutgoingPreStanzaHandlers().single;
+      final presence = mox.Stanza.presence(to: _roomJidWithNick);
+      final handler = manager.getOutgoingPreStanzaHandlers().single;
 
-        await handler.callback(
+      await handler.callback(
+        presence,
+        mox.StanzaHandlerData(
+          _handlerDone,
+          _handlerCancel,
           presence,
-          mox.StanzaHandlerData(
-            _handlerDone,
-            _handlerCancel,
-            presence,
-            mox.TypedMap<mox.StanzaHandlerExtension>(),
-          ),
-        );
+          mox.TypedMap<mox.StanzaHandlerExtension>(),
+        ),
+      );
 
-        final updatedJoin = presence.firstTag(_mucTag, xmlns: _mucJoinXmlns);
-        expect(updatedJoin, isNull);
-      },
-    );
+      final updatedJoin = presence.firstTag(_mucTag, xmlns: _mucJoinXmlns);
+      expect(updatedJoin, isNull);
+    });
 
     test(
       'JOIN-001 [HP] unavailable presence does not inject passwords',
       () async {
         final manager = MucJoinBootstrapManager()
-          ..rememberPassword(
-            roomJid: _roomJid,
-            password: _passwordRaw,
-          );
+          ..rememberPassword(roomJid: _roomJid, password: _passwordRaw);
 
         final mucJoin = _createMucJoinNode();
         final presence = mox.Stanza.presence(

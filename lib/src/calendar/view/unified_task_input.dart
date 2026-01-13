@@ -99,10 +99,12 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   void initState() {
     super.initState();
 
-    _titleController =
-        TextEditingController(text: widget.editingTask?.title ?? '');
-    _descriptionController =
-        TextEditingController(text: widget.editingTask?.description ?? '');
+    _titleController = TextEditingController(
+      text: widget.editingTask?.title ?? '',
+    );
+    _descriptionController = TextEditingController(
+      text: widget.editingTask?.description ?? '',
+    );
     _checklistController = TaskChecklistController(
       initialItems: widget.editingTask?.checklist ?? const [],
     );
@@ -237,9 +239,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       canSubmit: _canSubmit,
       onSave: _saveTask,
       onSubmissionReset: () => setState(() => _isSubmitting = false),
-      onClearError: () => context.read<T>().add(
-            const CalendarEvent.errorCleared(),
-          ),
+      onClearError: () =>
+          context.read<T>().add(const CalendarEvent.errorCleared()),
     );
     return ResponsiveHelper.layoutBuilder(
       context,
@@ -308,8 +309,9 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     final description = _descriptionController.text.trim().isNotEmpty
         ? _descriptionController.text.trim()
         : null;
-    final List<TaskChecklistItem> checklist =
-        List<TaskChecklistItem>.from(_checklistController.items);
+    final List<TaskChecklistItem> checklist = List<TaskChecklistItem>.from(
+      _checklistController.items,
+    );
 
     DateTime? scheduledTime;
     if (_selectedDate != null && _selectedTime != null) {
@@ -369,9 +371,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
         icsMeta: icsMeta,
       );
 
-      context.read<T>().add(
-            CalendarEvent.taskUpdated(task: updatedTask),
-          );
+      context.read<T>().add(CalendarEvent.taskUpdated(task: updatedTask));
     } else {
       context.read<T>().add(
             CalendarEvent.taskAdded(
@@ -416,9 +416,7 @@ class _UnifiedTaskMobileLayout extends StatelessWidget {
         backgroundColor: context.colorScheme.background,
         scrolledUnderElevation: 0,
         forceMaterialTransparency: true,
-        shape: Border(
-          bottom: BorderSide(color: context.colorScheme.border),
-        ),
+        shape: Border(bottom: BorderSide(color: context.colorScheme.border)),
         leadingWidth: AxiIconButton.kDefaultSize + 24,
         leading: Navigator.canPop(context)
             ? Padding(
@@ -490,9 +488,7 @@ class _UnifiedTaskDialogHeader extends StatelessWidget {
     return Container(
       padding: calendarPaddingXl,
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: Row(
         children: [
@@ -609,9 +605,7 @@ class _UnifiedTaskForm extends StatelessWidget {
               autovalidateMode: titleAutovalidateMode,
             ),
             const SizedBox(height: calendarGutterLg),
-            _UnifiedTaskDescriptionField(
-              controller: descriptionController,
-            ),
+            _UnifiedTaskDescriptionField(controller: descriptionController),
             const SizedBox(height: calendarGutterLg),
             TaskChecklist(controller: checklistController),
             const SizedBox(height: calendarGutterLg),
@@ -675,9 +669,7 @@ class _UnifiedTaskForm extends StatelessWidget {
             ],
             if (attachments.isNotEmpty) ...[
               const SizedBox(height: calendarGutterLg),
-              CalendarAttachmentsField(
-                attachments: attachments,
-              ),
+              CalendarAttachmentsField(attachments: attachments),
             ],
             if (showDiagnostics) ...[
               const SizedBox(height: calendarGutterLg),
@@ -760,10 +752,7 @@ class _UnifiedTaskDateTimeSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          context.l10n.calendarDateTimeLabel,
-          style: textTheme.muted,
-        ),
+        Text(context.l10n.calendarDateTimeLabel, style: textTheme.muted),
         const SizedBox(height: calendarGutterSm),
         TaskDateTimeToolbar(
           primaryField: TaskDateTimeToolbarField(
@@ -802,10 +791,7 @@ class _UnifiedTaskDurationField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          context.l10n.calendarDurationLabel,
-          style: textTheme.muted,
-        ),
+        Text(context.l10n.calendarDurationLabel, style: textTheme.muted),
         const SizedBox(height: calendarGutterSm),
         AxiSelect<Duration>(
           placeholder: Text(context.l10n.calendarSelectDuration),
@@ -900,9 +886,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
         return Container(
           padding: calendarPaddingXl,
           decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: colors.border),
-            ),
+            border: Border(top: BorderSide(color: colors.border)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

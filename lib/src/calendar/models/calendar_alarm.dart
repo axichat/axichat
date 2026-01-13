@@ -118,7 +118,9 @@ enum CalendarAlarmTriggerType {
           _calendarAlarmTriggerTypeRelativeIcs,
       };
 
-  static CalendarAlarmTriggerType? fromIcsValue(String? value) =>
+  static CalendarAlarmTriggerType? fromIcsValue(
+    String? value,
+  ) =>
       switch (value) {
         _calendarAlarmTriggerTypeAbsoluteIcs =>
           CalendarAlarmTriggerType.absolute,

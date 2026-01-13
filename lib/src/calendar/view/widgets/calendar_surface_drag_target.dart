@@ -40,8 +40,10 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
     if (pendingPayload == null || pendingOffset == null) {
       return false;
     }
-    final bool handled = widget.controller
-        .dispatchDragPayloadUpdate(pendingPayload, pendingOffset);
+    final bool handled = widget.controller.dispatchDragPayloadUpdate(
+      pendingPayload,
+      pendingOffset,
+    );
     if (handled) {
       _pendingPayload = null;
       _pendingOffset = null;
@@ -55,8 +57,10 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
     if (dropPayload == null || dropOffset == null) {
       return false;
     }
-    final bool handled =
-        widget.controller.dispatchDragPayloadDrop(dropPayload, dropOffset);
+    final bool handled = widget.controller.dispatchDragPayloadDrop(
+      dropPayload,
+      dropOffset,
+    );
     if (handled) {
       _pendingDropPayload = null;
       _pendingDropOffset = null;
@@ -64,19 +68,13 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
     return handled;
   }
 
-  void _scheduleDeferredUpdate(
-    CalendarDragPayload payload,
-    Offset offset,
-  ) {
+  void _scheduleDeferredUpdate(CalendarDragPayload payload, Offset offset) {
     _pendingPayload = payload;
     _pendingOffset = offset;
     _flushPendingOperations();
   }
 
-  void _scheduleDeferredDrop(
-    CalendarDragPayload payload,
-    Offset offset,
-  ) {
+  void _scheduleDeferredDrop(CalendarDragPayload payload, Offset offset) {
     _pendingDropPayload = payload;
     _pendingDropOffset = offset;
     if (!_flushPendingOperations() && mounted) {
@@ -92,16 +90,20 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
   }
 
   bool _handleWillAccept(DragTargetDetails<CalendarDragPayload> details) {
-    if (!widget.controller
-        .dispatchDragPayloadUpdate(details.data, details.offset)) {
+    if (!widget.controller.dispatchDragPayloadUpdate(
+      details.data,
+      details.offset,
+    )) {
       _scheduleDeferredUpdate(details.data, details.offset);
     }
     return true;
   }
 
   void _handleMove(DragTargetDetails<CalendarDragPayload> details) {
-    final bool handled = widget.controller
-        .dispatchDragPayloadUpdate(details.data, details.offset);
+    final bool handled = widget.controller.dispatchDragPayloadUpdate(
+      details.data,
+      details.offset,
+    );
     if (!handled) {
       _scheduleDeferredUpdate(details.data, details.offset);
     }
@@ -109,8 +111,10 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
 
   void _handleAccept(DragTargetDetails<CalendarDragPayload> details) {
     _cancelDeferredUpdate();
-    final bool handled =
-        widget.controller.dispatchDragPayloadDrop(details.data, details.offset);
+    final bool handled = widget.controller.dispatchDragPayloadDrop(
+      details.data,
+      details.offset,
+    );
     if (!handled) {
       _scheduleDeferredDrop(details.data, details.offset);
     }

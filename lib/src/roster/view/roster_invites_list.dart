@@ -25,17 +25,13 @@ class RosterInvitesList extends StatelessWidget {
 
         if (invites == null) {
           return Center(
-            child: AxiProgressIndicator(
-              color: context.colorScheme.foreground,
-            ),
+            child: AxiProgressIndicator(color: context.colorScheme.foreground),
           );
         }
 
         return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-          builder: (context, searchState) => _RosterInvitesBody(
-            invites: invites,
-            searchState: searchState,
-          ),
+          builder: (context, searchState) =>
+              _RosterInvitesBody(invites: invites, searchState: searchState),
         );
       },
     );
@@ -43,10 +39,7 @@ class RosterInvitesList extends StatelessWidget {
 }
 
 class _RosterInvitesBody extends StatelessWidget {
-  const _RosterInvitesBody({
-    required this.invites,
-    this.searchState,
-  });
+  const _RosterInvitesBody({required this.invites, this.searchState});
 
   final List<Invite> invites;
   final HomeSearchState? searchState;
@@ -76,10 +69,7 @@ class _RosterInvitesBody extends StatelessWidget {
 
     if (visibleInvites.isEmpty) {
       return Center(
-        child: Text(
-          l10n.rosterInvitesEmpty,
-          style: context.textTheme.muted,
-        ),
+        child: Text(l10n.rosterInvitesEmpty, style: context.textTheme.muted),
       );
     }
 
@@ -100,15 +90,17 @@ class _RosterInvitesBody extends StatelessWidget {
                     AxiDeleteMenuItem(
                       onPressed: () async {
                         if (!disabled &&
-                            await confirm(context,
-                                    text: l10n.rosterRejectInviteConfirm(
-                                      invite.jid,
-                                    )) ==
+                            await confirm(
+                                  context,
+                                  text: l10n.rosterRejectInviteConfirm(
+                                    invite.jid,
+                                  ),
+                                ) ==
                                 true &&
                             context.mounted) {
-                          context
-                              .read<RosterCubit>()
-                              .rejectContact(jid: invite.jid);
+                          context.read<RosterCubit>().rejectContact(
+                                jid: invite.jid,
+                              );
                         }
                       },
                     ),

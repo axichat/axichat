@@ -59,15 +59,9 @@ class SyncControls extends StatelessWidget {
           )
         : null;
     if (compact) {
-      return _CompactSyncControls(
-        state: state,
-        transferMenu: transferMenu,
-      );
+      return _CompactSyncControls(state: state, transferMenu: transferMenu);
     }
-    return _InlineSyncControls(
-      state: state,
-      transferMenu: transferMenu,
-    );
+    return _InlineSyncControls(state: state, transferMenu: transferMenu);
   }
 }
 
@@ -143,10 +137,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(
-        context,
-        'Failed to export calendar: $error',
-      );
+      FeedbackSystem.showError(context, 'Failed to export calendar: $error');
     }
   }
 
@@ -171,10 +162,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
     final path = result.files.single.path;
     if (path == null) {
       if (!mounted) return;
-      FeedbackSystem.showError(
-        context,
-        'Unable to access the selected file.',
-      );
+      FeedbackSystem.showError(context, 'Unable to access the selected file.');
       return;
     }
     final file = File(path);
@@ -184,20 +172,14 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         final importedModel = result.model!;
         if (!importedModel.hasCalendarData) {
           if (!mounted) return;
-          FeedbackSystem.showInfo(
-            context,
-            _noCalendarDataImportMessage,
-          );
+          FeedbackSystem.showInfo(context, _noCalendarDataImportMessage);
           return;
         }
         if (!mounted) return;
-        context
-            .read<CalendarBloc>()
-            .add(CalendarEvent.modelImported(model: importedModel));
-        FeedbackSystem.showSuccess(
-          context,
-          _calendarImportSuccessMessage,
-        );
+        context.read<CalendarBloc>().add(
+              CalendarEvent.modelImported(model: importedModel),
+            );
+        FeedbackSystem.showSuccess(context, _calendarImportSuccessMessage);
         return;
       }
       final tasks = result.tasks;
@@ -210,28 +192,22 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         return;
       }
       if (!mounted) return;
-      context
-          .read<CalendarBloc>()
-          .add(CalendarEvent.tasksImported(tasks: tasks));
+      context.read<CalendarBloc>().add(
+            CalendarEvent.tasksImported(tasks: tasks),
+          );
       FeedbackSystem.showSuccess(
         context,
         'Imported ${tasks.length} task${tasks.length == 1 ? '' : 's'}.',
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(
-        context,
-        'Import failed: $error',
-      );
+      FeedbackSystem.showError(context, 'Import failed: $error');
     }
   }
 }
 
 class SyncStatusIndicator extends StatelessWidget {
-  const SyncStatusIndicator({
-    super.key,
-    required this.state,
-  });
+  const SyncStatusIndicator({super.key, required this.state});
 
   final CalendarState state;
 
@@ -240,10 +216,7 @@ class SyncStatusIndicator extends StatelessWidget {
     final (String label, Widget indicator) = _resolveVisual(context);
     return AxiTooltip(
       builder: (_) => Text(label),
-      child: Semantics(
-        label: label,
-        child: indicator,
-      ),
+      child: Semantics(label: label, child: indicator),
     );
   }
 
@@ -261,41 +234,26 @@ class SyncStatusIndicator extends StatelessWidget {
     if (state.syncError != null) {
       return (
         'Sync failed',
-        const Icon(
-          LucideIcons.cloudAlert,
-          size: 16,
-          color: Colors.red,
-        ),
+        const Icon(LucideIcons.cloudAlert, size: 16, color: Colors.red),
       );
     }
     if (state.lastSyncTime != null) {
       return (
         'Synced',
-        const Icon(
-          LucideIcons.cloudCheck,
-          size: 16,
-          color: Colors.green,
-        ),
+        const Icon(LucideIcons.cloudCheck, size: 16, color: Colors.green),
       );
     }
     final Color fallbackColor =
         Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
     return (
       'Not synced yet',
-      Icon(
-        LucideIcons.cloud,
-        size: 16,
-        color: fallbackColor,
-      ),
+      Icon(LucideIcons.cloud, size: 16, color: fallbackColor),
     );
   }
 }
 
 class _InlineSyncControls extends StatelessWidget {
-  const _InlineSyncControls({
-    required this.state,
-    this.transferMenu,
-  });
+  const _InlineSyncControls({required this.state, this.transferMenu});
 
   final CalendarState state;
   final Widget? transferMenu;
@@ -312,19 +270,15 @@ class _InlineSyncControls extends StatelessWidget {
         children: [
           Text(
             statusText,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: statusColor,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w600, color: statusColor),
           ),
           if (lastSyncTime != null && !state.isSyncing) ...[
             const SizedBox(width: 6),
             Text(
               TimeFormatter.formatSyncTime(lastSyncTime),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).hintColor),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).hintColor,
+                  ),
             ),
           ],
           const SizedBox(width: 6),
@@ -343,10 +297,7 @@ class _InlineSyncControls extends StatelessWidget {
 }
 
 class _CompactSyncControls extends StatelessWidget {
-  const _CompactSyncControls({
-    required this.state,
-    this.transferMenu,
-  });
+  const _CompactSyncControls({required this.state, this.transferMenu});
 
   final CalendarState state;
   final Widget? transferMenu;

@@ -246,10 +246,7 @@ class PubSubSupport {
 }
 
 class StoredAvatar {
-  const StoredAvatar({
-    required this.path,
-    required this.hash,
-  });
+  const StoredAvatar({required this.path, required this.hash});
 
   final String? path;
   final String? hash;
@@ -272,10 +269,7 @@ final serverLookup = <String, IOEndpoint>{
 
 const String _bookmarks2NodeXmlns = 'urn:xmpp:bookmarks:1';
 
-bool _isFirstPartyJid({
-  required mox.JID? myJid,
-  required String jid,
-}) {
+bool _isFirstPartyJid({required mox.JID? myJid, required String jid}) {
   if (myJid == null) {
     return false;
   }
@@ -409,10 +403,7 @@ abstract interface class XmppBase {
 }
 
 class XmppStreamReady {
-  const XmppStreamReady({
-    required this.resumed,
-    required this.timestamp,
-  });
+  const XmppStreamReady({required this.resumed, required this.timestamp});
 
   final bool resumed;
   final DateTime timestamp;
@@ -463,8 +454,9 @@ class XmppService extends XmppBase
     _sessionTokenSmResIdSuffix,
     _sessionTokenSmResLocSuffix,
   ];
-  static final RegExp _sessionTokenPrefixSanitizePattern =
-      RegExp(r'[^a-zA-Z0-9_-]');
+  static final RegExp _sessionTokenPrefixSanitizePattern = RegExp(
+    r'[^a-zA-Z0-9_-]',
+  );
   static const int _notificationPayloadLookupStart = 0;
   static const int _notificationPayloadLookupEnd = 0;
 
@@ -647,10 +639,7 @@ class XmppService extends XmppBase
     if (!_persistSessionTokens) {
       return;
     }
-    await _credentialStore.write(
-      key: _sessionTokenKey(suffix),
-      value: value,
-    );
+    await _credentialStore.write(key: _sessionTokenKey(suffix), value: value);
   }
 
   Future<String?> _readSessionToken(String suffix) async {
@@ -688,8 +677,9 @@ class XmppService extends XmppBase
   final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
   @override
   final selfAvatarHashKey = XmppStateStore.registerKey('self_avatar_hash');
-  final avatarEncryptionSaltKey =
-      XmppStateStore.registerKey('avatar_encryption_salt');
+  final avatarEncryptionSaltKey = XmppStateStore.registerKey(
+    'avatar_encryption_salt',
+  );
 
   final StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
@@ -758,7 +748,8 @@ class XmppService extends XmppBase
         );
         if (event.stanza.id == null) return;
         await _dbOp<XmppDatabase>(
-            (db) => db.markMessageAcked(event.stanza.id!));
+          (db) => db.markMessageAcked(event.stanza.id!),
+        );
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _recordStreamReady(event.resumed);
@@ -802,7 +793,8 @@ class XmppService extends XmppBase
         _xmppLogger.info('Bound resource: ${event.resource}...');
 
         await _dbOp<XmppStateStore>(
-            (ss) => ss.write(key: resourceStorageKey, value: event.resource));
+          (ss) => ss.write(key: resourceStorageKey, value: event.resource),
+        );
       })
       ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
         _xmppLogger.fine('Saving FAST token.');
@@ -1049,9 +1041,7 @@ class XmppService extends XmppBase
   }) async {
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
-    await _configureSessionTokenPersistence(
-      enabled: persistSessionTokens,
-    );
+    await _configureSessionTokenPersistence(enabled: persistSessionTokens);
     _reconnectBlocked = false;
     if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
@@ -1145,9 +1135,7 @@ class XmppService extends XmppBase
     final shouldNotify = _hasInitializedDatabases;
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
-    await _configureSessionTokenPersistence(
-      enabled: persistSessionTokens,
-    );
+    await _configureSessionTokenPersistence(enabled: persistSessionTokens);
     _reconnectBlocked = false;
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
@@ -1203,8 +1191,9 @@ class XmppService extends XmppBase
     _connectionPasswordPreHashed = preHashed;
     _connection = connectionOverride ?? await _connectionFactory();
     _omemoActivitySubscription?.cancel();
-    _omemoActivitySubscription =
-        _connection.omemoActivityStream.listen(_omemoActivityController.add);
+    _omemoActivitySubscription = _connection.omemoActivityStream.listen(
+      _omemoActivityController.add,
+    );
 
     if (!_stateStore.isCompleted) {
       _stateStore.complete(
@@ -1221,8 +1210,9 @@ class XmppService extends XmppBase
     await _initConnection(preHashed: preHashed);
 
     await _eventSubscription?.cancel();
-    _eventSubscription =
-        _connection.asBroadcastStream().listen(_handleXmppEvent);
+    _eventSubscription = _connection.asBroadcastStream().listen(
+          _handleXmppEvent,
+        );
 
     _connection.connectionSettings = XmppConnectionSettings(
       jid: _myJid!.toBare(),
@@ -1245,9 +1235,7 @@ class XmppService extends XmppBase
       final error = result.get<mox.XmppError>();
       _xmppLogger.info('Login failed with error: $error');
       if (_isAuthenticationError(error)) {
-        throw XmppAuthenticationException(
-          error is Exception ? error : null,
-        );
+        throw XmppAuthenticationException(error is Exception ? error : null);
       }
       throw XmppNetworkException(error is Exception ? error : null);
     }
@@ -1260,37 +1248,33 @@ class XmppService extends XmppBase
     _sessionReconnectEnabled = true;
 
     await _messageSubscription?.cancel();
-    _messageSubscription = _messageStream.stream.listen(
-      (message) async {
-        final chat = await _dbOpReturning<XmppDatabase, Chat?>(
-          (db) async => db.getChat(message.chatJid),
-        );
-        if (chat?.muted ?? false) {
-          return;
-        }
-        final previewSetting = chat?.notificationPreviewSetting ??
-            NotificationPreviewSetting.inherit;
-        final showPreview = previewSetting
-            .resolvePreview(_notificationService.notificationPreviewsEnabled);
-        final threadKey = _notificationPayloadCodec.encodeChatJid(
-              message.chatJid,
-            ) ??
-            message.chatJid.trim();
-        if (threadKey.isEmpty) {
-          return;
-        }
-        await _notificationService.sendMessageNotification(
-          title: chat?.title ?? message.senderJid,
-          body: message.body,
-          extraConditions: [
-            message.senderJid != myJid,
-          ],
-          payload: threadKey,
-          threadKey: threadKey,
-          showPreviewOverride: showPreview,
-        );
-      },
-    );
+    _messageSubscription = _messageStream.stream.listen((message) async {
+      final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+        (db) async => db.getChat(message.chatJid),
+      );
+      if (chat?.muted ?? false) {
+        return;
+      }
+      final previewSetting = chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting.resolvePreview(
+        _notificationService.notificationPreviewsEnabled,
+      );
+      final threadKey =
+          _notificationPayloadCodec.encodeChatJid(message.chatJid) ??
+              message.chatJid.trim();
+      if (threadKey.isEmpty) {
+        return;
+      }
+      await _notificationService.sendMessageNotification(
+        title: chat?.title ?? message.senderJid,
+        body: message.body,
+        extraConditions: [message.senderJid != myJid],
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
+      );
+    });
 
     unawaited(_resolveMamSupportForAccount());
     _xmppLogger.info('Login successful. Initializing databases...');
@@ -1319,9 +1303,7 @@ class XmppService extends XmppBase
     return false;
   }
 
-  Future<void> _initConnection({
-    bool preHashed = false,
-  }) async {
+  Future<void> _initConnection({bool preHashed = false}) async {
     _xmppLogger.info('Initializing connection object...');
     final storedResource = await _dbOpReturning<XmppStateStore, String?>(
       (ss) async => ss.read(key: resourceStorageKey) as String?,
@@ -1371,18 +1353,14 @@ class XmppService extends XmppBase
       }
       _connection
         ..setFastToken(fastToken)
-        ..setUserAgent(mox.UserAgent(
-          software: appDisplayName,
-          id: userAgentId,
-        ));
+        ..setUserAgent(
+          mox.UserAgent(software: appDisplayName, id: userAgentId),
+        );
     });
   }
 
   @override
-  Future<XmppDatabase> _buildDatabase(
-    String prefix,
-    String passphrase,
-  ) async {
+  Future<XmppDatabase> _buildDatabase(String prefix, String passphrase) async {
     final effectiveMode = messageStorageMode;
     if (effectiveMode.isServerOnly) {
       return XmppDrift.inMemory();
@@ -1500,9 +1478,7 @@ class XmppService extends XmppBase
       }
     }
     try {
-      final scripts = DemoChats.scripts(
-        openJid: DemoChats.defaultOpenJid,
-      );
+      final scripts = DemoChats.scripts(openJid: DemoChats.defaultOpenJid);
       await _dbOp<XmppDatabase>((db) async {
         for (final script in scripts) {
           final existingChat = await db.getChat(script.chat.jid);
@@ -1633,151 +1609,141 @@ class XmppService extends XmppBase
 
   Future<void> _seedDemoReactions(List<DemoChatScript> scripts) async {
     if (!_demoOfflineMode) return;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        for (final script in scripts) {
-          final chat = script.chat;
-          final messages = script.messages;
+    await _dbOp<XmppDatabase>((db) async {
+      for (final script in scripts) {
+        final chat = script.chat;
+        final messages = script.messages;
 
-          if (chat.defaultTransport.isEmail) {
-            for (final message in messages) {
-              await db.replaceReactions(
-                messageId: message.stanzaID,
-                senderJid: kDemoSelfJid,
-                emojis: const [],
-              );
-              await db.replaceReactions(
-                messageId: message.stanzaID,
-                senderJid: chat.jid,
-                emojis: const [],
-              );
-            }
-            continue;
-          }
-
-          if (messages.length < 2) continue;
-
-          final existingReactions = await db.getReactionsForChat(chat.jid);
-          bool hasReactionsForMessage(String messageId) {
-            for (final reaction in existingReactions) {
-              if (reaction.messageID == messageId) return true;
-            }
-            return false;
-          }
-
-          if (chat.type == ChatType.groupChat) {
-            final franklinMessage = messages
-                .where(
-                  (message) =>
-                      (_nickFromSender(message.senderJid) ?? '')
-                          .toLowerCase() ==
-                      'franklin',
-                )
-                .firstOrNull;
-            if (franklinMessage != null &&
-                !hasReactionsForMessage(franklinMessage.stanzaID)) {
-              const reactors = _demoFounderBareJids;
-              await db.replaceReactions(
-                messageId: franklinMessage.stanzaID,
-                senderJid: reactors[0],
-                emojis: const [
-                  _demoReactionClap,
-                  _demoReactionFire,
-                  _demoReactionHeart,
-                  _demoReactionLaugh,
-                  _demoReactionSparkles,
-                ],
-              );
-              await db.replaceReactions(
-                messageId: franklinMessage.stanzaID,
-                senderJid: reactors[1],
-                emojis: const [
-                  _demoReactionClap,
-                  _demoReactionFire,
-                  _demoReactionThumbsUp,
-                ],
-              );
-              await db.replaceReactions(
-                messageId: franklinMessage.stanzaID,
-                senderJid: reactors[2],
-                emojis: const [
-                  _demoReactionClap,
-                  _demoReactionHeart,
-                  _demoReactionScroll,
-                ],
-              );
-              await db.replaceReactions(
-                messageId: franklinMessage.stanzaID,
-                senderJid: reactors[3],
-                emojis: const [
-                  _demoReactionClap,
-                  _demoReactionFire,
-                  _demoReactionThumbsUp,
-                ],
-              );
-              await db.replaceReactions(
-                messageId: franklinMessage.stanzaID,
-                senderJid: reactors[4],
-                emojis: const [
-                  _demoReactionClap,
-                  _demoReactionMind,
-                  _demoReactionThumbsUp,
-                ],
-              );
-              await db.replaceReactions(
-                messageId: franklinMessage.stanzaID,
-                senderJid: reactors[5],
-                emojis: const [
-                  _demoReactionClap,
-                  _demoReactionMoney,
-                  _demoReactionFire,
-                ],
-              );
-            }
-
-            final madisonMessages = messages.where(
-              (message) =>
-                  (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
-                  'madison',
+        if (chat.defaultTransport.isEmail) {
+          for (final message in messages) {
+            await db.replaceReactions(
+              messageId: message.stanzaID,
+              senderJid: kDemoSelfJid,
+              emojis: const [],
             );
-            final madisonSecondMessage = madisonMessages.length >= 2
-                ? madisonMessages.elementAt(1)
-                : null;
-            if (madisonSecondMessage != null &&
-                !hasReactionsForMessage(madisonSecondMessage.stanzaID)) {
-              await db.replaceReactions(
-                messageId: madisonSecondMessage.stanzaID,
-                senderJid: kDemoSelfJid,
-                emojis: const [
-                  _demoReactionThumbsUp,
-                  _demoReactionMind,
-                ],
-              );
-              await db.replaceReactions(
-                messageId: madisonSecondMessage.stanzaID,
-                senderJid: 'washington@axi.im',
-                emojis: const [
-                  _demoReactionClap,
-                ],
-              );
-            }
-            continue;
+            await db.replaceReactions(
+              messageId: message.stanzaID,
+              senderJid: chat.jid,
+              emojis: const [],
+            );
+          }
+          continue;
+        }
+
+        if (messages.length < 2) continue;
+
+        final existingReactions = await db.getReactionsForChat(chat.jid);
+        bool hasReactionsForMessage(String messageId) {
+          for (final reaction in existingReactions) {
+            if (reaction.messageID == messageId) return true;
+          }
+          return false;
+        }
+
+        if (chat.type == ChatType.groupChat) {
+          final franklinMessage = messages
+              .where(
+                (message) =>
+                    (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
+                    'franklin',
+              )
+              .firstOrNull;
+          if (franklinMessage != null &&
+              !hasReactionsForMessage(franklinMessage.stanzaID)) {
+            const reactors = _demoFounderBareJids;
+            await db.replaceReactions(
+              messageId: franklinMessage.stanzaID,
+              senderJid: reactors[0],
+              emojis: const [
+                _demoReactionClap,
+                _demoReactionFire,
+                _demoReactionHeart,
+                _demoReactionLaugh,
+                _demoReactionSparkles,
+              ],
+            );
+            await db.replaceReactions(
+              messageId: franklinMessage.stanzaID,
+              senderJid: reactors[1],
+              emojis: const [
+                _demoReactionClap,
+                _demoReactionFire,
+                _demoReactionThumbsUp,
+              ],
+            );
+            await db.replaceReactions(
+              messageId: franklinMessage.stanzaID,
+              senderJid: reactors[2],
+              emojis: const [
+                _demoReactionClap,
+                _demoReactionHeart,
+                _demoReactionScroll,
+              ],
+            );
+            await db.replaceReactions(
+              messageId: franklinMessage.stanzaID,
+              senderJid: reactors[3],
+              emojis: const [
+                _demoReactionClap,
+                _demoReactionFire,
+                _demoReactionThumbsUp,
+              ],
+            );
+            await db.replaceReactions(
+              messageId: franklinMessage.stanzaID,
+              senderJid: reactors[4],
+              emojis: const [
+                _demoReactionClap,
+                _demoReactionMind,
+                _demoReactionThumbsUp,
+              ],
+            );
+            await db.replaceReactions(
+              messageId: franklinMessage.stanzaID,
+              senderJid: reactors[5],
+              emojis: const [
+                _demoReactionClap,
+                _demoReactionMoney,
+                _demoReactionFire,
+              ],
+            );
           }
 
-          final targetMessage = messages[messages.length - 2];
-          if (hasReactionsForMessage(targetMessage.stanzaID)) continue;
-
-          final senderBare = _safeBareJid(targetMessage.senderJid);
-          final reactor = senderBare == kDemoSelfJid ? chat.jid : kDemoSelfJid;
-          await db.replaceReactions(
-            messageId: targetMessage.stanzaID,
-            senderJid: reactor,
-            emojis: const [_demoReactionThumbsUp],
+          final madisonMessages = messages.where(
+            (message) =>
+                (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
+                'madison',
           );
+          final madisonSecondMessage =
+              madisonMessages.length >= 2 ? madisonMessages.elementAt(1) : null;
+          if (madisonSecondMessage != null &&
+              !hasReactionsForMessage(madisonSecondMessage.stanzaID)) {
+            await db.replaceReactions(
+              messageId: madisonSecondMessage.stanzaID,
+              senderJid: kDemoSelfJid,
+              emojis: const [_demoReactionThumbsUp, _demoReactionMind],
+            );
+            await db.replaceReactions(
+              messageId: madisonSecondMessage.stanzaID,
+              senderJid: 'washington@axi.im',
+              emojis: const [_demoReactionClap],
+            );
+          }
+          continue;
         }
-      },
-      awaitDatabase: true,
-    );
+
+        final targetMessage = messages[messages.length - 2];
+        if (hasReactionsForMessage(targetMessage.stanzaID)) continue;
+
+        final senderBare = _safeBareJid(targetMessage.senderJid);
+        final reactor = senderBare == kDemoSelfJid ? chat.jid : kDemoSelfJid;
+        await db.replaceReactions(
+          messageId: targetMessage.stanzaID,
+          senderJid: reactor,
+          emojis: const [_demoReactionThumbsUp],
+        );
+      }
+    }, awaitDatabase: true);
   }
 
   Future<void> _seedDemoAvatars(List<DemoChatScript> scripts) async {
@@ -1793,17 +1759,11 @@ class XmppService extends XmppBase
     for (final script in scripts) {
       final avatar = avatarAssets[script.chat.jid];
       if (avatar == null) continue;
-      await _seedDemoAvatarForJid(
-        jid: script.chat.jid,
-        avatar: avatar,
-      );
+      await _seedDemoAvatarForJid(jid: script.chat.jid, avatar: avatar);
     }
     final selfAvatar = avatarAssets[kDemoSelfJid];
     if (selfAvatar != null) {
-      await _seedDemoAvatarForJid(
-        jid: kDemoSelfJid,
-        avatar: selfAvatar,
-      );
+      await _seedDemoAvatarForJid(jid: kDemoSelfJid, avatar: selfAvatar);
     }
   }
 
@@ -1847,7 +1807,7 @@ class XmppService extends XmppBase
         path: filePath,
         sizeBytes: data.length,
         width: decoded?.width,
-        height: decoded?.height
+        height: decoded?.height,
       );
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine(
@@ -1859,9 +1819,7 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> _seedDemoAttachmentMessages(
-    List<DemoChatScript> scripts,
-  ) async {
+  Future<void> _seedDemoAttachmentMessages(List<DemoChatScript> scripts) async {
     if (!kEnableDemoChats) return;
     await _dbOp<XmppDatabase>((db) async {
       for (final script in scripts) {
@@ -1874,15 +1832,13 @@ class XmppService extends XmppBase
           }
           final messageWithAttachment = script.messages.firstWhere(
             (message) => message.fileMetadataID == attachment.id,
-            orElse: () => const Message(
-              stanzaID: '',
-              senderJid: '',
-              chatJid: '',
-            ),
+            orElse: () =>
+                const Message(stanzaID: '', senderJid: '', chatJid: ''),
           );
           if (messageWithAttachment.stanzaID.isEmpty) continue;
-          final existing =
-              await db.getMessageByStanzaID(messageWithAttachment.stanzaID);
+          final existing = await db.getMessageByStanzaID(
+            messageWithAttachment.stanzaID,
+          );
           if (existing != null) continue;
           await db.saveMessage(
             messageWithAttachment,
@@ -1948,13 +1904,11 @@ class XmppService extends XmppBase
       final bytes = background == null
           ? raw
           : await _applyDemoAvatarBackground(
-              bytes: raw, background: background);
+              bytes: raw,
+              background: background,
+            );
       final avatarPath = await _writeAvatarFile(bytes: bytes);
-      await _storeAvatar(
-        jid: jid,
-        path: avatarPath,
-        hash: avatar.hash,
-      );
+      await _storeAvatar(jid: jid, path: avatarPath, hash: avatar.hash);
     } catch (error, stackTrace) {
       _xmppLogger.fine(
         'Failed to seed demo avatar from ${avatar.assetPath}',
@@ -2039,11 +1993,7 @@ class XmppService extends XmppBase
       try {
         await _connection.setShouldReconnect(true);
       } catch (error, stackTrace) {
-        _xmppLogger.finer(
-          _reconnectEnableFailedLog,
-          error,
-          stackTrace,
-        );
+        _xmppLogger.finer(_reconnectEnableFailedLog, error, stackTrace);
         return;
       }
     }
@@ -2108,10 +2058,9 @@ class XmppService extends XmppBase
       await foregroundTaskBridge.acquire(
         clientId: _foregroundSocketWarmupClientId,
         config: buildForegroundServiceConfig(
-          notificationText: toBeginningOfSentenceCase(
-                ConnectionState.connecting.name,
-              ) ??
-              ConnectionState.connecting.name,
+          notificationText:
+              toBeginningOfSentenceCase(ConnectionState.connecting.name) ??
+                  ConnectionState.connecting.name,
         ),
       );
       warmupAcquired = true;
@@ -2157,11 +2106,13 @@ class XmppService extends XmppBase
       }
 
       _connection = nextConnection;
-      _omemoActivitySubscription =
-          _connection.omemoActivityStream.listen(_omemoActivityController.add);
+      _omemoActivitySubscription = _connection.omemoActivityStream.listen(
+        _omemoActivityController.add,
+      );
       await _initConnection(preHashed: _connectionPasswordPreHashed);
-      _eventSubscription =
-          _connection.asBroadcastStream().listen(_handleXmppEvent);
+      _eventSubscription = _connection.asBroadcastStream().listen(
+            _handleXmppEvent,
+          );
       _myJid = existingJid;
       _connection.connectionSettings = XmppConnectionSettings(
         jid: existingJid,
@@ -2203,11 +2154,13 @@ class XmppService extends XmppBase
       try {
         final XmppConnection fallbackConnection = XmppConnection();
         _connection = fallbackConnection;
-        _omemoActivitySubscription = _connection.omemoActivityStream
-            .listen(_omemoActivityController.add);
+        _omemoActivitySubscription = _connection.omemoActivityStream.listen(
+          _omemoActivityController.add,
+        );
         await _initConnection(preHashed: _connectionPasswordPreHashed);
-        _eventSubscription =
-            _connection.asBroadcastStream().listen(_handleXmppEvent);
+        _eventSubscription = _connection.asBroadcastStream().listen(
+              _handleXmppEvent,
+            );
         _myJid = existingJid;
         _connection.connectionSettings = XmppConnectionSettings(
           jid: existingJid,
@@ -2228,7 +2181,8 @@ class XmppService extends XmppBase
           final error = result.get<mox.XmppError>();
           if (_isAuthenticationError(error)) {
             throw XmppAuthenticationException(
-                error is Exception ? error : null);
+              error is Exception ? error : null,
+            );
           }
           throw XmppNetworkException(error is Exception ? error : null);
         }
@@ -2326,7 +2280,10 @@ class XmppService extends XmppBase
         _xmppLogger.info('Gracefully disconnected.');
       } catch (e, s) {
         _xmppLogger.severe(
-            'Graceful disconnect failed. Closing forcefully...', e, s);
+          'Graceful disconnect failed. Closing forcefully...',
+          e,
+          s,
+        );
       }
     }
     if (withForeground) {
@@ -2382,9 +2339,7 @@ class XmppService extends XmppBase
     }
 
     if (residuals.isNotEmpty) {
-      _xmppLogger.severe(
-        'Reset left residual state: ${residuals.join(', ')}',
-      );
+      _xmppLogger.severe('Reset left residual state: ${residuals.join(', ')}');
     }
 
     assert(residuals.isEmpty);
@@ -2421,7 +2376,8 @@ class XmppService extends XmppBase
 
   @override
   Future<V> _dbOpReturning<D extends Database, V>(
-      FutureOr<V> Function(D) operation) async {
+    FutureOr<V> Function(D) operation,
+  ) async {
     _xmppLogger.info('Retrieving completer for $D...');
 
     try {
@@ -2575,10 +2531,14 @@ class XmppService extends XmppBase
     final selfBare = _myJid?.toBare();
     final host = _myJid?.domain;
     final hostJid = _safeJidFromString(host);
-    final selfFeatures =
-        await _discoFeaturesFor(discoManager: discoManager, jid: selfBare);
-    final hostFeatures =
-        await _discoFeaturesFor(discoManager: discoManager, jid: hostJid);
+    final selfFeatures = await _discoFeaturesFor(
+      discoManager: discoManager,
+      jid: selfBare,
+    );
+    final hostFeatures = await _discoFeaturesFor(
+      discoManager: discoManager,
+      jid: hostJid,
+    );
 
     final pubSubSupported = selfFeatures.contains(mox.pubsubXmlns) ||
         selfFeatures.contains(mox.pubsubOwnerXmlns) ||
@@ -2637,13 +2597,15 @@ class XmppService extends XmppBase
 
   /// Register a callback to handle calendar sync messages
   void setCalendarSyncCallback(
-      Future<bool> Function(CalendarSyncInbound) callback) {
+    Future<bool> Function(CalendarSyncInbound) callback,
+  ) {
     _calendarSyncCallback = callback;
   }
 
   /// Register a callback to surface calendar sync warnings.
   void setCalendarSyncWarningCallback(
-      Future<void> Function(CalendarSyncWarning) callback) {
+    Future<void> Function(CalendarSyncWarning) callback,
+  ) {
     _calendarSyncWarningCallback = callback;
   }
 
@@ -2687,10 +2649,8 @@ class XmppService extends XmppBase
     _emailBlocklistSyncCallback = null;
   }
 
-  static String generateResource() => 'axi.${generateRandomString(
-        length: 7,
-        seed: DateTime.now().millisecondsSinceEpoch,
-      )}';
+  static String generateResource() =>
+      'axi.${generateRandomString(length: 7, seed: DateTime.now().millisecondsSinceEpoch)}';
 }
 
 class XmppClientNegotiator extends mox.ClientToServerNegotiator {
@@ -2752,25 +2712,18 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
 
   @override
   Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
-      mox.XMLNode nonza) async {
+    mox.XMLNode nonza,
+  ) async {
     if (!_attempted) {
       final stanza = mox.XMLNode.xmlns(
         tag: 'iq',
         xmlns: mox.stanzaXmlns,
-        attributes: {
-          'type': 'set',
-          'id': const Uuid().v4(),
-        },
+        attributes: {'type': 'set', 'id': const Uuid().v4()},
         children: [
           mox.XMLNode.xmlns(
             tag: 'bind',
             xmlns: mox.bindXmlns,
-            children: [
-              mox.XMLNode(
-                tag: 'resource',
-                text: resource,
-              ),
-            ],
+            children: [mox.XMLNode(tag: 'resource', text: resource)],
           ),
         ],
       );
@@ -2832,12 +2785,7 @@ final class _ChunkedConversionBuffer<S, T> {
   }
 }
 
-enum _XmppStanzaGuardResult {
-  allowed,
-  oversize,
-  depthExceeded,
-  malformed,
-}
+enum _XmppStanzaGuardResult { allowed, oversize, depthExceeded, malformed }
 
 final class _XmppStanzaSizeGuard {
   _XmppStanzaSizeGuard({
@@ -2920,8 +2868,9 @@ final class _XmppStanzaSizeGuard {
     } on Exception {
       // ignore; stream parser may already be closed
     }
-    _eventBuffer =
-        _ChunkedConversionBuffer<String, XmlEvent>(XmlEventDecoder());
+    _eventBuffer = _ChunkedConversionBuffer<String, XmlEvent>(
+      XmlEventDecoder(),
+    );
   }
 
   void _resetCounters() {
@@ -3005,11 +2954,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   }
 
   @override
-  Future<bool> connect(
-    String domain, {
-    String? host,
-    int? port,
-  }) async {
+  Future<bool> connect(String domain, {String? host, int? port}) async {
     _dropSocket(expectClosure: true);
     _secure = false;
 
@@ -3066,9 +3011,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
         if (_containsForbiddenXml(data)) {
           _log.warning(_xmlForbiddenLog);
           _eventStream.add(
-            mox.XmppSocketErrorEvent(
-              const FormatException(_xmlForbiddenError),
-            ),
+            mox.XmppSocketErrorEvent(const FormatException(_xmlForbiddenError)),
           );
           _dropSocket(expectClosure: false);
           return;
@@ -3097,9 +3040,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
               );
               break;
             case _XmppStanzaGuardResult.malformed:
-              _log.warning(
-                'Blocked inbound stanza due to parse error.',
-              );
+              _log.warning('Blocked inbound stanza due to parse error.');
               _eventStream.add(
                 mox.XmppSocketErrorEvent(
                   const FormatException(_stanzaMalformedError),
@@ -3330,8 +3271,9 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   @override
   Future<void> loadState() async {
     var newState = state;
-    final c2sValue =
-        await owner._readSessionToken(XmppService._sessionTokenSmC2sSuffix);
+    final c2sValue = await owner._readSessionToken(
+      XmppService._sessionTokenSmC2sSuffix,
+    );
     if (c2sValue != null) {
       final parsed = int.tryParse(c2sValue);
       if (parsed != null) {
@@ -3339,8 +3281,9 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
         newState = newState.copyWith(c2s: parsed);
       }
     }
-    final s2cValue =
-        await owner._readSessionToken(XmppService._sessionTokenSmS2cSuffix);
+    final s2cValue = await owner._readSessionToken(
+      XmppService._sessionTokenSmS2cSuffix,
+    );
     if (s2cValue != null) {
       final parsed = int.tryParse(s2cValue);
       if (parsed != null) {
@@ -3348,13 +3291,15 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
         newState = newState.copyWith(s2c: parsed);
       }
     }
-    final resId =
-        await owner._readSessionToken(XmppService._sessionTokenSmResIdSuffix);
+    final resId = await owner._readSessionToken(
+      XmppService._sessionTokenSmResIdSuffix,
+    );
     if (resId != null && resId.isNotEmpty) {
       newState = newState.copyWith(streamResumptionId: resId);
     }
-    final resLoc =
-        await owner._readSessionToken(XmppService._sessionTokenSmResLocSuffix);
+    final resLoc = await owner._readSessionToken(
+      XmppService._sessionTokenSmResLocSuffix,
+    );
     if (resLoc != null && resLoc.isNotEmpty) {
       newState = newState.copyWith(streamResumptionLocation: resLoc);
     }
@@ -3363,15 +3308,14 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   }
 
   Future<bool> hasPersistedState() async {
-    final resId =
-        await owner._readSessionToken(XmppService._sessionTokenSmResIdSuffix);
+    final resId = await owner._readSessionToken(
+      XmppService._sessionTokenSmResIdSuffix,
+    );
     return resId != null && resId.isNotEmpty;
   }
 
   Future<void> handleFailedResumption() async {
-    _log.info(
-      'Stream resumption was not accepted; clearing SM state.',
-    );
+    _log.info('Stream resumption was not accepted; clearing SM state.');
     await resetState();
     await clearPersistedState();
   }
@@ -3403,9 +3347,8 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
 /// - Faster reconnection using cached salted passwords
 /// - Compatibility with the app's credential management system
 class SaslScramNegotiator extends mox.SaslScramNegotiator {
-  SaslScramNegotiator({
-    this.preHashed = false,
-  }) : super(10, '', '', mox.ScramHashType.sha512);
+  SaslScramNegotiator({this.preHashed = false})
+      : super(10, '', '', mox.ScramHashType.sha512);
 
   final bool preHashed;
 

@@ -30,25 +30,17 @@ class AvatarEditorScreen extends StatelessWidget {
     final templates = buildDefaultAvatarTemplates();
     return MultiBlocProvider(
       providers: [
-        BlocProvider.value(
-          value: locate<ProfileCubit>(),
-        ),
-        BlocProvider.value(
-          value: locate<SettingsCubit>(),
-        ),
+        BlocProvider.value(value: locate<ProfileCubit>()),
+        BlocProvider.value(value: locate<SettingsCubit>()),
         BlocProvider(
           create: (context) => AvatarEditorCubit(
             xmppService: locate<XmppService>(),
             templates: templates,
             profileCubit: locate<ProfileCubit>(),
-          )..initialize(
-              ShadTheme.of(context, listen: false).colorScheme,
-            ),
+          )..initialize(ShadTheme.of(context, listen: false).colorScheme),
         ),
       ],
-      child: _AvatarEditorBody(
-        templates: templates,
-      ),
+      child: _AvatarEditorBody(templates: templates),
     );
   }
 }
@@ -72,11 +64,7 @@ class _AvatarEditorBody extends StatelessWidget {
             backgroundColor: colors.background,
             surfaceTintColor: Colors.transparent,
             scrolledUnderElevation: 0,
-            shape: Border(
-              bottom: BorderSide(
-                color: colors.border,
-              ),
-            ),
+            shape: Border(bottom: BorderSide(color: colors.border)),
             leading: Padding(
               padding: const EdgeInsets.only(left: 12.0),
               child: AxiIconButton.ghost(
@@ -102,10 +90,7 @@ class _AvatarEditorBody extends StatelessWidget {
                         isWide: isWide,
                       ),
                       _AvatarEditorToolsSection(state: state),
-                      _DefaultsSection(
-                        templates: templates,
-                        state: state,
-                      ),
+                      _DefaultsSection(templates: templates, state: state),
                     ],
                   ),
                 ),
@@ -228,18 +213,17 @@ class _AvatarSummaryCard extends StatelessWidget {
                   children: [
                     Text(
                       profile.username,
-                      style: context.textTheme.h3
-                          .copyWith(color: colors.foreground),
+                      style: context.textTheme.h3.copyWith(
+                        color: colors.foreground,
+                      ),
                     ),
-                    Text(
-                      profile.jid,
-                      style: context.textTheme.muted,
-                    ),
+                    Text(profile.jid, style: context.textTheme.muted),
                     if (state.estimatedBytes != null)
                       Text(
                         '${state.estimatedBytes! ~/ 1024} KB • ${state.draft?.mimeType ?? ''}',
-                        style: context.textTheme.small
-                            .copyWith(color: colors.mutedForeground),
+                        style: context.textTheme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
                       ),
                   ],
                 ),
@@ -269,8 +253,9 @@ class _AvatarSummaryCard extends StatelessWidget {
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 colors.foreground,
                               ),
-                              backgroundColor:
-                                  colors.foreground.withValues(alpha: 0.2),
+                              backgroundColor: colors.foreground.withValues(
+                                alpha: 0.2,
+                              ),
                             ),
                           ),
                           slotSize: _avatarEditorSecondaryIconSize,
@@ -322,10 +307,8 @@ class _AvatarSummaryCard extends StatelessWidget {
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 colors.primaryForeground,
                               ),
-                              backgroundColor:
-                                  colors.primaryForeground.withValues(
-                                alpha: 0.2,
-                              ),
+                              backgroundColor: colors.primaryForeground
+                                  .withValues(alpha: 0.2),
                             ),
                           ),
                           slotSize: _avatarEditorPrimaryIconSize,
@@ -358,8 +341,9 @@ class _AvatarSummaryCard extends StatelessWidget {
               ),
               child: Text(
                 errorText,
-                style:
-                    context.textTheme.small.copyWith(color: colors.destructive),
+                style: context.textTheme.small.copyWith(
+                  color: colors.destructive,
+                ),
               ),
             ),
           if (showSuccessMessage)
@@ -425,8 +409,9 @@ class _CropCard extends StatelessWidget {
           ),
           Text(
             l10n.avatarCropDescription,
-            style:
-                context.textTheme.small.copyWith(color: colors.mutedForeground),
+            style: context.textTheme.small.copyWith(
+              color: colors.mutedForeground,
+            ),
           ),
           if (!hasPreview)
             Container(
@@ -471,8 +456,9 @@ class _CropCard extends StatelessWidget {
                     children: [
                       Text(
                         l10n.avatarCropSizeLabel(cropRect.width.round()),
-                        style: context.textTheme.small
-                            .copyWith(color: colors.foreground),
+                        style: context.textTheme.small.copyWith(
+                          color: colors.foreground,
+                        ),
                       ),
                       Text(
                         l10n.avatarCropSavedSize,
@@ -528,13 +514,15 @@ class _BackgroundPicker extends StatelessWidget {
           ),
           Text(
             l10n.avatarBackgroundDescription,
-            style:
-                context.textTheme.small.copyWith(color: colors.mutedForeground),
+            style: context.textTheme.small.copyWith(
+              color: colors.mutedForeground,
+            ),
           ),
           Center(
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(maxWidth: _avatarEditorColorPickerWidth),
+              constraints: const BoxConstraints(
+                maxWidth: _avatarEditorColorPickerWidth,
+              ),
               child: ColorPicker(
                 color: state.backgroundColor,
                 onColorChanged: (color) => context
@@ -560,19 +548,23 @@ class _BackgroundPicker extends StatelessWidget {
                 wheelWidth: 14,
                 showColorCode: true,
                 colorCodeHasColor: true,
-                colorCodeTextStyle:
-                    context.textTheme.small.copyWith(color: colors.foreground),
-                colorCodePrefixStyle: context.textTheme.small
-                    .copyWith(color: colors.mutedForeground),
+                colorCodeTextStyle: context.textTheme.small.copyWith(
+                  color: colors.foreground,
+                ),
+                colorCodePrefixStyle: context.textTheme.small.copyWith(
+                  color: colors.mutedForeground,
+                ),
                 heading: Text(
                   l10n.avatarBackgroundWheelTitle,
-                  style: context.textTheme.small
-                      .copyWith(color: colors.foreground),
+                  style: context.textTheme.small.copyWith(
+                    color: colors.foreground,
+                  ),
                 ),
                 subheading: Text(
                   l10n.avatarBackgroundWheelDescription,
-                  style: context.textTheme.small
-                      .copyWith(color: colors.mutedForeground),
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                  ),
                 ),
                 actionButtons: const ColorPickerActionButtons(
                   dialogActionButtons: false,
@@ -592,9 +584,10 @@ class _BackgroundPicker extends StatelessWidget {
               size: ShadButtonSize.sm,
               onPressed: state.backgroundColor == Colors.transparent
                   ? null
-                  : () => context
-                      .read<AvatarEditorCubit>()
-                      .setBackgroundColor(Colors.transparent, colors),
+                  : () => context.read<AvatarEditorCubit>().setBackgroundColor(
+                        Colors.transparent,
+                        colors,
+                      ),
               child: Text(l10n.avatarBackgroundTransparent),
             ),
           ),
@@ -635,8 +628,9 @@ class _BackgroundPicker extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.avatarBackgroundPreview,
-                  style: context.textTheme.small
-                      .copyWith(color: colors.mutedForeground),
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                  ),
                 ),
               ),
             ],
@@ -650,10 +644,7 @@ class _BackgroundPicker extends StatelessWidget {
 const _avatarEditorColorPickerWidth = 340.0;
 
 class _DefaultsSection extends StatelessWidget {
-  const _DefaultsSection({
-    required this.templates,
-    required this.state,
-  });
+  const _DefaultsSection({required this.templates, required this.state});
 
   final List<AvatarTemplate> templates;
   final AvatarEditorState state;
@@ -686,9 +677,7 @@ class _DefaultsSection extends StatelessWidget {
                 <AvatarTemplateCategory, List<AvatarTemplate>>{
               for (final category in AvatarTemplateCategory.values)
                 category: templates
-                    .where(
-                      (template) => template.category == category,
-                    )
+                    .where((template) => template.category == category)
                     .toList(),
             };
             return Wrap(
@@ -910,8 +899,10 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
           LayoutBuilder(
             builder: (context, constraints) {
               final viewportFraction =
-                  (_avatarTemplateCardWidth / constraints.maxWidth)
-                      .clamp(_avatarTemplateCarouselMinViewportFraction, 1.0);
+                  (_avatarTemplateCardWidth / constraints.maxWidth).clamp(
+                _avatarTemplateCarouselMinViewportFraction,
+                1.0,
+              );
               return CarouselSlider.builder(
                 carouselController: _carouselController,
                 itemCount: templates.length,
@@ -968,15 +959,9 @@ class _TemplatePreviewCard extends StatelessWidget {
             color: colors.primary,
             fontWeight: FontWeight.w700,
           )
-        : context.textTheme.small.copyWith(
-            color: colors.mutedForeground,
-          );
-    final border = isSelected
-        ? Border.all(
-            color: colors.primary,
-            width: 2,
-          )
-        : null;
+        : context.textTheme.small.copyWith(color: colors.mutedForeground);
+    final border =
+        isSelected ? Border.all(color: colors.primary, width: 2) : null;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -1009,10 +994,7 @@ class _TemplatePreviewCard extends StatelessWidget {
                                 color: colors.mutedForeground,
                               ),
                             )
-                          : Image.asset(
-                              assetPath,
-                              fit: BoxFit.cover,
-                            ),
+                          : Image.asset(assetPath, fit: BoxFit.cover),
                     ),
                   ),
                 ),

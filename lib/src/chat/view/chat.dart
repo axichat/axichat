@@ -110,14 +110,7 @@ extension on MessageStatus {
       };
 }
 
-enum _ChatRoute {
-  main,
-  search,
-  details,
-  settings,
-  gallery,
-  calendar,
-}
+enum _ChatRoute { main, search, details, settings, gallery, calendar }
 
 extension on _ChatRoute {
   bool get isMain => this == _ChatRoute.main;
@@ -296,9 +289,7 @@ const ShapeBorder _calendarMessageCardShadowShape = ContinuousRectangleBorder(
   ),
 );
 const ShapeBorder _calendarTaskShadowShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.all(
-    Radius.circular(calendarEventRadius),
-  ),
+  borderRadius: BorderRadius.all(Radius.circular(calendarEventRadius)),
 );
 const double _inviteAttachmentCornerRadius = 20.0;
 const double _inviteAttachmentPaddingValue = 12.0;
@@ -335,18 +326,11 @@ const _selectionHeadroomTolerance = 1.0;
 const _selectionDismissMoveAllowance = 36.0;
 // ignore: unused_element
 const _selectionDismissTapAllowance = 48.0;
-final _selectionSpacerTimestamp =
-    DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-const _reactionQuickChoices = [
-  '👍',
-  '❤️',
-  '😂',
-  '😮',
-  '😢',
-  '🙏',
-  '🔥',
-  '👏',
-];
+final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
+  0,
+  isUtc: true,
+);
+const _reactionQuickChoices = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
@@ -365,10 +349,14 @@ const _subjectDividerThickness = 1.0;
 const _messageListHorizontalPadding = 12.0;
 const _typingIndicatorBottomInset = 8.0;
 const _typingIndicatorRadius = 999.0;
-const _typingIndicatorPadding =
-    EdgeInsets.symmetric(horizontal: 12, vertical: 8);
-const _messageFallbackOuterPadding =
-    EdgeInsets.symmetric(horizontal: _chatHorizontalPadding, vertical: 4);
+const _typingIndicatorPadding = EdgeInsets.symmetric(
+  horizontal: 12,
+  vertical: 8,
+);
+const _messageFallbackOuterPadding = EdgeInsets.symmetric(
+  horizontal: _chatHorizontalPadding,
+  vertical: 4,
+);
 const _messageFallbackInnerPadding = _typingIndicatorPadding;
 const _typingIndicatorMaxAvatars = 7;
 const _typingAvatarBorderWidth = 1.6;
@@ -383,10 +371,7 @@ class _MessageFilterOption {
 }
 
 class _CalendarTaskShare {
-  const _CalendarTaskShare({
-    required this.task,
-    required this.text,
-  });
+  const _CalendarTaskShare({required this.task, required this.text});
 
   final CalendarTask? task;
   final String text;
@@ -561,9 +546,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                           .toList(),
                       selectedOptionBuilder: (_, value) => Text(
                         messageFilterOptions
-                            .firstWhere(
-                              (option) => option.filter == value,
-                            )
+                            .firstWhere((option) => option.filter == value)
                             .label,
                       ),
                     ),
@@ -622,9 +605,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   if (state.error != null) {
                     statusChild = Text(
                       state.error ?? l10n.chatSearchFailed,
-                      style: TextStyle(
-                        color: context.colorScheme.destructive,
-                      ),
+                      style: TextStyle(color: context.colorScheme.destructive),
                     );
                   } else if (state.status.isLoading) {
                     statusChild = Row(
@@ -858,9 +839,7 @@ List<BoxShadow> _selectedBubbleShadows(Color color) => [
 List<BoxShadow> _scaleShadows(List<BoxShadow> shadows, double factor) => shadows
     .map(
       (shadow) => shadow.copyWith(
-        color: shadow.color.withValues(
-          alpha: shadow.color.a * factor,
-        ),
+        color: shadow.color.withValues(alpha: shadow.color.a * factor),
       ),
     )
     .toList();
@@ -931,10 +910,7 @@ OutlinedBorder _attachmentSurfaceShape({
   );
 }
 
-bool _chatMessagesShouldChain(
-  ChatMessage current,
-  ChatMessage? neighbor,
-) {
+bool _chatMessagesShouldChain(ChatMessage current, ChatMessage? neighbor) {
   if (neighbor == null) return false;
   if (neighbor.user.id != current.user.id) return false;
   final neighborDate = DateTime(
@@ -1022,8 +998,9 @@ class _RoomMembersDrawerContent extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     l10n.chatMembersLoadingEllipsis,
-                    style:
-                        textTheme.muted.copyWith(color: colors.mutedForeground),
+                    style: textTheme.muted.copyWith(
+                      color: colors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -1067,8 +1044,10 @@ class _ChatState extends State<Chat> {
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
-  static final RegExp _axiDomainPattern =
-      RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
+  static final RegExp _axiDomainPattern = RegExp(
+    r'@(?:[\\w-]+\\.)*axi\\.im$',
+    caseSensitive: false,
+  );
   static final Map<String, double> _scrollOffsetCache = {};
   String? _lastScrollStorageKey;
 
@@ -1246,10 +1225,7 @@ class _ChatState extends State<Chat> {
     return bloc;
   }
 
-  void _appendTaskShareText(
-    CalendarTask task, {
-    String? shareText,
-  }) {
+  void _appendTaskShareText(CalendarTask task, {String? shareText}) {
     final String resolvedShareText = shareText ?? task.toShareText();
     final String existing = _textController.text;
     final String separator =
@@ -1279,15 +1255,9 @@ class _ChatState extends State<Chat> {
         context.read<ChatBloc>().state.chat!.defaultTransport.isEmail;
     if (!canShareIcs) {
       _showSnackbar(_calendarFragmentShareDeniedMessage);
-      return _CalendarTaskShare(
-        task: null,
-        text: shareText,
-      );
+      return _CalendarTaskShare(task: null, text: shareText);
     }
-    return _CalendarTaskShare(
-      task: task,
-      text: shareText,
-    );
+    return _CalendarTaskShare(task: task, text: shareText);
   }
 
   void _handleTaskDrop(CalendarDragPayload payload) {
@@ -1303,10 +1273,7 @@ class _ChatState extends State<Chat> {
           _pendingCalendarSeedText = null;
         });
       }
-      _appendTaskShareText(
-        payload.snapshot,
-        shareText: share.text,
-      );
+      _appendTaskShareText(payload.snapshot, shareText: share.text);
       return;
     }
     if (!mounted) return;
@@ -1314,10 +1281,7 @@ class _ChatState extends State<Chat> {
       _pendingCalendarTaskIcs = share.task;
       _pendingCalendarSeedText = share.text;
     });
-    _appendTaskShareText(
-      payload.snapshot,
-      shareText: share.text,
-    );
+    _appendTaskShareText(payload.snapshot, shareText: share.text);
   }
 
   Future<void> _handleAvailabilityRequest(
@@ -1448,9 +1412,7 @@ class _ChatState extends State<Chat> {
         );
   }
 
-  void _addAvailabilityTaskToPersonalCalendar(
-    _AvailabilityTaskDraft draft,
-  ) {
+  void _addAvailabilityTaskToPersonalCalendar(_AvailabilityTaskDraft draft) {
     final storageManager = context.read<CalendarStorageManager>();
     if (!storageManager.isAuthStorageReady) {
       _showSnackbar(_availabilityRequestCalendarUnavailableMessage);
@@ -1569,10 +1531,7 @@ class _ChatState extends State<Chat> {
     if (cached != null) return cached;
     final bucket = PageStorage.maybeOf(context);
     if (bucket == null) return 0;
-    final restored = bucket.readState(
-      context,
-      identifier: storageKey,
-    );
+    final restored = bucket.readState(context, identifier: storageKey);
     if (restored is double) return restored;
     if (restored is num) return restored.toDouble();
     return 0;
@@ -1589,11 +1548,7 @@ class _ChatState extends State<Chat> {
     if (skipPageStorage) return;
     final bucket = PageStorage.maybeOf(context);
     if (bucket != null) {
-      bucket.writeState(
-        context,
-        offset,
-        identifier: storageKey,
-      );
+      bucket.writeState(context, offset, identifier: storageKey);
     }
   }
 
@@ -1884,8 +1839,10 @@ class _ChatState extends State<Chat> {
         context.read<SettingsCubit>().animationDuration;
     const drawerMaxWidth = 420.0;
     const drawerWidthFraction = 0.9;
-    final drawerWidth =
-        math.min(screenWidth * drawerWidthFraction, drawerMaxWidth);
+    final drawerWidth = math.min(
+      screenWidth * drawerWidthFraction,
+      drawerMaxWidth,
+    );
     showGeneralDialog(
       context: context,
       useRootNavigator: false,
@@ -1916,8 +1873,9 @@ class _ChatState extends State<Chat> {
                         action: action,
                       ),
                     ),
-                    onChangeNickname: (nick) => locate<ChatBloc>()
-                        .add(ChatNicknameChangeRequested(nick)),
+                    onChangeNickname: (nick) => locate<ChatBloc>().add(
+                      ChatNicknameChangeRequested(nick),
+                    ),
                     onLeaveRoom: () =>
                         locate<ChatBloc>().add(const ChatLeaveRoomRequested()),
                     onClose: navigator.pop,
@@ -1942,10 +1900,7 @@ class _ChatState extends State<Chat> {
             begin: const Offset(0.08, 0),
             end: Offset.zero,
           ).animate(curved),
-          child: FadeScaleTransition(
-            animation: animation,
-            child: child,
-          ),
+          child: FadeScaleTransition(animation: animation, child: child),
         );
       },
     );
@@ -2046,19 +2001,11 @@ class _ChatState extends State<Chat> {
       }
     } on Exception {
       if (!mounted) return;
-      showToast?.call(
-        FeedbackToast.error(
-          title: l10n.rosterAddTitle,
-        ),
-      );
+      showToast?.call(FeedbackToast.error(title: l10n.rosterAddTitle));
       return;
     }
     if (!mounted) return;
-    showToast?.call(
-      FeedbackToast.success(
-        title: l10n.rosterAddTitle,
-      ),
-    );
+    showToast?.call(FeedbackToast.success(title: l10n.rosterAddTitle));
   }
 
   void _handleSubjectChanged() {
@@ -2115,14 +2062,11 @@ class _ChatState extends State<Chat> {
   }
 
   _FileMetadataStreamEntry _metadataEntryFor(String id) {
-    return _fileMetadataStreamEntries.putIfAbsent(
-      id,
-      () {
-        final entry = _FileMetadataStreamEntry();
-        entry.attach(context.read<XmppService>().fileMetadataStream(id));
-        return entry;
-      },
-    );
+    return _fileMetadataStreamEntries.putIfAbsent(id, () {
+      final entry = _FileMetadataStreamEntry();
+      entry.attach(context.read<XmppService>().fileMetadataStream(id));
+      return entry;
+    });
   }
 
   Stream<FileMetadataData?> _metadataStreamFor(String id) {
@@ -2287,9 +2231,9 @@ class _ChatState extends State<Chat> {
 
     final emailService = RepositoryProvider.of<EmailService?>(context);
     if (decision.alwaysAllow && canTrustChat) {
-      context
-          .read<ChatBloc>()
-          .add(const ChatAttachmentAutoDownloadToggled(true));
+      context.read<ChatBloc>().add(
+            const ChatAttachmentAutoDownloadToggled(true),
+          );
     }
     if (isEmailChat) {
       if (emailService != null) {
@@ -2307,24 +2251,15 @@ class _ChatState extends State<Chat> {
   Future<void> _handleLinkTap(String url) async {
     if (!mounted) return;
     final l10n = context.l10n;
-    final report = assessLinkSafety(
-      raw: url,
-      kind: LinkSafetyKind.message,
-    );
+    final report = assessLinkSafety(raw: url, kind: LinkSafetyKind.message);
     if (report == null || !report.isSafe) {
       _showSnackbar(l10n.chatInvalidLink(url.trim()));
       return;
     }
     final hostLabel = formatLinkSchemeHostLabel(report);
     final baseMessage = report.needsWarning
-        ? l10n.chatOpenLinkWarningMessage(
-            report.displayUri,
-            hostLabel,
-          )
-        : l10n.chatOpenLinkMessage(
-            report.displayUri,
-            hostLabel,
-          );
+        ? l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel)
+        : l10n.chatOpenLinkMessage(report.displayUri, hostLabel);
     final warningBlock = formatLinkWarningText(report.warnings);
     final action = await showLinkActionDialog(
       context,
@@ -2336,9 +2271,7 @@ class _ChatState extends State<Chat> {
     );
     if (action == null) return;
     if (action == LinkAction.copy) {
-      await Clipboard.setData(
-        ClipboardData(text: report.displayUri),
-      );
+      await Clipboard.setData(ClipboardData(text: report.displayUri));
       return;
     }
     final launched = await launchUrl(
@@ -2355,9 +2288,7 @@ class _ChatState extends State<Chat> {
     final messenger = ScaffoldMessenger.of(context);
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _handleSendMessage() async {
@@ -2706,9 +2637,9 @@ class _ChatState extends State<Chat> {
       items.add(
         ShadContextMenuItem(
           leading: const Icon(LucideIcons.refreshCw),
-          onPressed: () => context
-              .read<ChatBloc>()
-              .add(ChatAttachmentRetryRequested(pending.id)),
+          onPressed: () => context.read<ChatBloc>().add(
+                ChatAttachmentRetryRequested(pending.id),
+              ),
           child: Text(l10n.chatAttachmentRetry),
         ),
       );
@@ -2716,9 +2647,9 @@ class _ChatState extends State<Chat> {
     items.add(
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.trash),
-        onPressed: () => context
-            .read<ChatBloc>()
-            .add(ChatPendingAttachmentRemoved(pending.id)),
+        onPressed: () => context.read<ChatBloc>().add(
+              ChatPendingAttachmentRemoved(pending.id),
+            ),
         child: Text(l10n.chatAttachmentRemove),
       ),
     );
@@ -2777,10 +2708,7 @@ class _ChatState extends State<Chat> {
       final image = frame.image;
       codec.dispose();
       try {
-        return Size(
-          image.width.toDouble(),
-          image.height.toDouble(),
-        );
+        return Size(image.width.toDouble(), image.height.toDouble());
       } finally {
         image.dispose();
       }
@@ -2886,8 +2814,9 @@ class _ChatState extends State<Chat> {
       _clearMessageSelection();
       return;
     }
-    final tappedInside =
-        hitRegions.any((rect) => rect.contains(globalPosition));
+    final tappedInside = hitRegions.any(
+      (rect) => rect.contains(globalPosition),
+    );
     if (!tappedInside) {
       _clearMessageSelection();
     }
@@ -3540,8 +3469,9 @@ class _ChatState extends State<Chat> {
                   _subjectChangeSuppressed = true;
                   _subjectController
                     ..text = subject
-                    ..selection =
-                        TextSelection.collapsed(offset: subject.length);
+                    ..selection = TextSelection.collapsed(
+                      offset: subject.length,
+                    );
                   _lastSubjectValue = subject;
                   _subjectChangeSuppressed = false;
                   if (subject.isNotEmpty && !_subjectFocusNode.hasFocus) {
@@ -3627,12 +3557,15 @@ class _ChatState extends State<Chat> {
                     resolvedProfileJid?.isNotEmpty == true
                         ? resolvedProfileJid
                         : xmppSelfJid;
-                final String? normalizedXmppSelfJid =
-                    _normalizeBareJid(selfXmppJid);
-                final String? normalizedEmailSelfJid =
-                    _normalizeBareJid(resolvedEmailSelfJid);
-                final String? normalizedChatJid =
-                    _normalizeBareJid(chatEntity?.remoteJid);
+                final String? normalizedXmppSelfJid = _normalizeBareJid(
+                  selfXmppJid,
+                );
+                final String? normalizedEmailSelfJid = _normalizeBareJid(
+                  resolvedEmailSelfJid,
+                );
+                final String? normalizedChatJid = _normalizeBareJid(
+                  chatEntity?.remoteJid,
+                );
                 final bool isSelfChat = normalizedChatJid != null &&
                     ((normalizedXmppSelfJid != null &&
                             normalizedChatJid == normalizedXmppSelfJid) ||
@@ -3870,9 +3803,7 @@ class _ChatState extends State<Chat> {
                         usePrimary: false,
                         onPressed: () {
                           if (!prepareChatExit()) return;
-                          unawaited(
-                            context.read<ChatsCubit>().closeAllChats(),
-                          );
+                          unawaited(context.read<ChatsCubit>().closeAllChats());
                         },
                       );
                 final List<AppBarActionItem> navigationActions =
@@ -3884,9 +3815,7 @@ class _ChatState extends State<Chat> {
                       usePrimary: false,
                       onPressed: () {
                         if (!prepareChatExit()) return;
-                        unawaited(
-                          context.read<ChatsCubit>().popChat(),
-                        );
+                        unawaited(context.read<ChatsCubit>().popChat());
                       },
                     ),
                   if (!readOnly && forwardStack.isNotEmpty)
@@ -3896,9 +3825,7 @@ class _ChatState extends State<Chat> {
                       usePrimary: false,
                       onPressed: () {
                         if (!prepareChatExit()) return;
-                        unawaited(
-                          context.read<ChatsCubit>().restoreChat(),
-                        );
+                        unawaited(context.read<ChatsCubit>().restoreChat());
                       },
                     ),
                 ];
@@ -4037,9 +3964,9 @@ class _ChatState extends State<Chat> {
                                     _chatAppBarTitleMinWidth,
                                     _chatAppBarTitleMaxWidth,
                                   );
-                                  final baseTitleStyle = Theme.of(context)
-                                          .appBarTheme
-                                          .titleTextStyle ??
+                                  final baseTitleStyle = Theme.of(
+                                        context,
+                                      ).appBarTheme.titleTextStyle ??
                                       context.textTheme.h4;
                                   final titleStyle = baseTitleStyle.copyWith(
                                     fontSize: context.textTheme.large.fontSize,
@@ -4080,7 +4007,9 @@ class _ChatState extends State<Chat> {
                                                     Padding(
                                                       padding:
                                                           const EdgeInsetsDirectional
-                                                              .only(start: 6),
+                                                              .only(
+                                                        start: 6,
+                                                      ),
                                                       child: AxiTooltip(
                                                         builder: (context) =>
                                                             Text(
@@ -4241,17 +4170,18 @@ class _ChatState extends State<Chat> {
                                 readOnly: readOnly,
                                 isSelfChat: isSelfChat,
                                 onAddContact: _handleAddContact,
-                                onReportSpam: () => _handleSpamToggle(
-                                  sendToSpam: true,
-                                ),
+                                onReportSpam: () =>
+                                    _handleSpamToggle(sendToSpam: true),
                               ),
                               Expanded(
                                 child: IgnorePointer(
                                   ignoring: !_chatRoute.allowsChatInteraction,
                                   child: LayoutBuilder(
                                     builder: (context, constraints) {
-                                      final rawContentWidth =
-                                          math.max(0.0, constraints.maxWidth);
+                                      final rawContentWidth = math.max(
+                                        0.0,
+                                        constraints.maxWidth,
+                                      );
                                       final availableWidth = math.max(
                                         0.0,
                                         rawContentWidth -
@@ -4316,8 +4246,9 @@ class _ChatState extends State<Chat> {
                                                 !isGroupedNonLeader(message),
                                           )
                                           .toList();
-                                      final filteredItems =
-                                          displayItems.where((message) {
+                                      final filteredItems = displayItems.where((
+                                        message,
+                                      ) {
                                         final hasHtml = message
                                                 .normalizedHtmlBody
                                                 ?.isNotEmpty ==
@@ -4367,7 +4298,8 @@ class _ChatState extends State<Chat> {
                                           !state.messagesLoaded;
                                       final selectedMessages =
                                           _collectSelectedMessages(
-                                              filteredItems);
+                                        filteredItems,
+                                      );
                                       if (_multiSelectActive &&
                                           selectedMessages.isEmpty) {
                                         WidgetsBinding.instance
@@ -4437,14 +4369,15 @@ class _ChatState extends State<Chat> {
                                                   ?.containsKey('token') ==
                                               true)
                                             invite.pseudoMessageData?['token']
-                                                as String
+                                                as String,
                                       };
                                       for (var index = 0;
                                           index < filteredItems.length;
                                           index++) {
                                         final e = filteredItems[index];
-                                        final senderBare =
-                                            _bareJid(e.senderJid);
+                                        final senderBare = _bareJid(
+                                          e.senderJid,
+                                        );
                                         final normalizedSenderBare =
                                             _normalizeBareJid(e.senderJid);
                                         final isSelfXmpp = senderBare != null &&
@@ -4548,16 +4481,18 @@ class _ChatState extends State<Chat> {
                                             "Join '$resolvedInviteRoomName'";
                                         final inviteRevoked =
                                             inviteToken != null &&
-                                                revokedInviteTokens
-                                                    .contains(inviteToken);
+                                                revokedInviteTokens.contains(
+                                                  inviteToken,
+                                                );
                                         if (shareContext?.subject
                                                 ?.trim()
                                                 .isNotEmpty ==
                                             true) {
                                           subjectLabel =
                                               shareContext!.subject!.trim();
-                                          if (shownSubjectShares
-                                              .add(shareContext.shareId)) {
+                                          if (shownSubjectShares.add(
+                                            shareContext.shareId,
+                                          )) {
                                             showSubjectHeader = true;
                                           }
                                         } else {
@@ -4785,7 +4720,8 @@ class _ChatState extends State<Chat> {
                                           ),
                                           child: _QuoteBanner(
                                             key: ValueKey<String?>(
-                                                quoting.stanzaID),
+                                              quoting.stanzaID,
+                                            ),
                                             message: quoting,
                                             isSelf: _isQuotedMessageFromSelf(
                                               quotedMessage: quoting,
@@ -4864,19 +4800,27 @@ class _ChatState extends State<Chat> {
                                                   onClear: _clearMultiSelection,
                                                   onCopy: () =>
                                                       _copySelectedMessages(
-                                                    List<Message>.of(targets),
+                                                    List<Message>.of(
+                                                      targets,
+                                                    ),
                                                   ),
                                                   onShare: () =>
                                                       _shareSelectedMessages(
-                                                    List<Message>.of(targets),
+                                                    List<Message>.of(
+                                                      targets,
+                                                    ),
                                                   ),
                                                   onForward: () =>
                                                       _forwardSelectedMessages(
-                                                    List<Message>.of(targets),
+                                                    List<Message>.of(
+                                                      targets,
+                                                    ),
                                                   ),
                                                   onAddToCalendar: () =>
                                                       _addSelectedToCalendar(
-                                                    List<Message>.of(targets),
+                                                    List<Message>.of(
+                                                      targets,
+                                                    ),
                                                   ),
                                                   showReactions: canReact,
                                                   onReactionSelected: canReact
@@ -4981,9 +4925,9 @@ class _ChatState extends State<Chat> {
                                                       _handlePendingAttachmentLongPressed,
                                                   pendingAttachmentMenuBuilder:
                                                       _pendingAttachmentMenuItems,
-                                                  buildComposerAccessories: (
-                                                          {required bool
-                                                              canSend}) =>
+                                                  buildComposerAccessories: ({
+                                                    required bool canSend,
+                                                  }) =>
                                                       _composerAccessories(
                                                     canSend: canSend,
                                                     attachmentsEnabled:
@@ -5501,8 +5445,9 @@ class _ChatState extends State<Chat> {
                                                               _multiSelectActive &&
                                                                   _multiSelectedMessageIds
                                                                       .contains(
-                                                                          messageModel
-                                                                              .stanzaID);
+                                                                    messageModel
+                                                                        .stanzaID,
+                                                                  );
                                                           final isSelected =
                                                               isSingleSelection ||
                                                                   isMultiSelection;
@@ -5621,8 +5566,8 @@ class _ChatState extends State<Chat> {
                                                                   '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
                                                           final isDesktopPlatform =
                                                               EnvScope.maybeOf(
-                                                                          context)
-                                                                      ?.isDesktopPlatform ??
+                                                                    context,
+                                                                  )?.isDesktopPlatform ??
                                                                   false;
                                                           final bubbleTextChildren =
                                                               <Widget>[];
@@ -5651,7 +5596,9 @@ class _ChatState extends State<Chat> {
                                                                   isDesktopPlatform &&
                                                                           !widget
                                                                               .readOnly
-                                                                      ? (_) =>
+                                                                      ? (
+                                                                          _,
+                                                                        ) =>
                                                                           _toggleMessageSelection(
                                                                             messageModel,
                                                                           )
@@ -5846,8 +5793,8 @@ class _ChatState extends State<Chat> {
                                                                   subjectLabel;
                                                               final textTheme =
                                                                   Theme.of(
-                                                                          context)
-                                                                      .textTheme;
+                                                                context,
+                                                              ).textTheme;
                                                               final baseSubjectStyle = textTheme
                                                                       .titleSmall ??
                                                                   textTheme
@@ -6255,9 +6202,10 @@ class _ChatState extends State<Chat> {
                                                                   fragmentCard =
                                                                   displayFragment
                                                                       .maybeMap(
-                                                                criticalPath:
-                                                                    (value) =>
-                                                                        ChatCalendarCriticalPathCard(
+                                                                criticalPath: (
+                                                                  value,
+                                                                ) =>
+                                                                    ChatCalendarCriticalPathCard(
                                                                   path: value
                                                                       .path,
                                                                   tasks: value
@@ -6316,8 +6264,10 @@ class _ChatState extends State<Chat> {
                                                                       _metadataInitialFor(
                                                                     resolvedMetadataId,
                                                                   ),
-                                                                  builder: (context,
-                                                                      snapshot) {
+                                                                  builder: (
+                                                                    context,
+                                                                    snapshot,
+                                                                  ) {
                                                                     const captionPrefix =
                                                                         '📎 ';
                                                                     const fallbackFilename =
@@ -6347,8 +6297,10 @@ class _ChatState extends State<Chat> {
                                                                     final caption =
                                                                         '$captionPrefix$resolvedFilename ($sizeLabel)';
                                                                     return DynamicInlineText(
-                                                                      key: ValueKey(
-                                                                          bubbleContentKey),
+                                                                      key:
+                                                                          ValueKey(
+                                                                        bubbleContentKey,
+                                                                      ),
                                                                       text:
                                                                           TextSpan(
                                                                         text:
@@ -6396,7 +6348,8 @@ class _ChatState extends State<Chat> {
                                                                 html_widget
                                                                     .Html(
                                                                   key: ValueKey(
-                                                                      bubbleContentKey),
+                                                                    bubbleContentKey,
+                                                                  ),
                                                                   data: HtmlContentCodec
                                                                       .sanitizeHtml(
                                                                     normalizedHtmlBody,
@@ -6410,7 +6363,9 @@ class _ChatState extends State<Chat> {
                                                                           ? null
                                                                           : () {
                                                                               context.read<ChatBloc>().add(
-                                                                                    ChatEmailImagesLoaded(messageModel.id!),
+                                                                                    ChatEmailImagesLoaded(
+                                                                                      messageModel.id!,
+                                                                                    ),
                                                                                   );
                                                                             },
                                                                     ),
@@ -6446,13 +6401,16 @@ class _ChatState extends State<Chat> {
                                                                               .underline,
                                                                     ),
                                                                   },
-                                                                  onLinkTap:
-                                                                      (url, _,
-                                                                          __) {
+                                                                  onLinkTap: (
+                                                                    url,
+                                                                    _,
+                                                                    __,
+                                                                  ) {
                                                                     if (url !=
                                                                         null) {
                                                                       _handleLinkTap(
-                                                                          url);
+                                                                        url,
+                                                                      );
                                                                     }
                                                                   },
                                                                 ),
@@ -6464,28 +6422,33 @@ class _ChatState extends State<Chat> {
                                                                   padding:
                                                                       const EdgeInsets
                                                                           .only(
-                                                                          top:
-                                                                              4),
+                                                                    top: 4,
+                                                                  ),
                                                                   child:
                                                                       Text.rich(
                                                                     TextSpan(
                                                                       children: [
                                                                         time,
                                                                         const TextSpan(
-                                                                            text:
-                                                                                ' '),
+                                                                          text:
+                                                                              ' ',
+                                                                        ),
                                                                         transportDetail,
                                                                         if (self &&
                                                                             status !=
                                                                                 null) ...[
                                                                           const TextSpan(
-                                                                              text: ' '),
+                                                                            text:
+                                                                                ' ',
+                                                                          ),
                                                                           status,
                                                                         ],
                                                                         if (verification !=
                                                                             null) ...[
                                                                           const TextSpan(
-                                                                              text: ' '),
+                                                                            text:
+                                                                                ' ',
+                                                                          ),
                                                                           verification,
                                                                         ],
                                                                       ],
@@ -6498,7 +6461,8 @@ class _ChatState extends State<Chat> {
                                                                   .add(
                                                                 DynamicInlineText(
                                                                   key: ValueKey(
-                                                                      bubbleContentKey),
+                                                                    bubbleContentKey,
+                                                                  ),
                                                                   text:
                                                                       parsedText
                                                                           .body,
@@ -6640,10 +6604,12 @@ class _ChatState extends State<Chat> {
                                                                           .stanzaID,
                                                                   metadataStream:
                                                                       _metadataStreamFor(
-                                                                          attachmentId),
+                                                                    attachmentId,
+                                                                  ),
                                                                   initialMetadata:
                                                                       _metadataInitialFor(
-                                                                          attachmentId),
+                                                                    attachmentId,
+                                                                  ),
                                                                   allowed:
                                                                       allowAttachment,
                                                                   autoDownloadSettings:
@@ -7061,13 +7027,17 @@ class _ChatState extends State<Chat> {
                                                                         participants:
                                                                             replyParticipants,
                                                                         onRecipientTap:
-                                                                            (chat) {
+                                                                            (
+                                                                          chat,
+                                                                        ) {
                                                                           final chatsCubit =
                                                                               context.read<ChatsCubit?>();
                                                                           if (chatsCubit !=
                                                                               null) {
                                                                             unawaited(
-                                                                              chatsCubit.pushChat(jid: chat.jid),
+                                                                              chatsCubit.pushChat(
+                                                                                jid: chat.jid,
+                                                                              ),
                                                                             );
                                                                           }
                                                                         },
@@ -7077,7 +7047,10 @@ class _ChatState extends State<Chat> {
                                                                             reactions:
                                                                                 reactions,
                                                                             onReactionTap: canReact
-                                                                                ? (emoji) => _toggleQuickReaction(
+                                                                                ? (
+                                                                                    emoji,
+                                                                                  ) =>
+                                                                                    _toggleQuickReaction(
                                                                                       messageModel,
                                                                                       emoji,
                                                                                     )
@@ -7190,13 +7163,15 @@ class _ChatState extends State<Chat> {
                                                                         : 0);
                                                             actionButtonKeys =
                                                                 List.generate(
-                                                                    actionCount,
-                                                                    (_) =>
-                                                                        GlobalKey());
+                                                              actionCount,
+                                                              (_) =>
+                                                                  GlobalKey(),
+                                                            );
                                                             _selectionActionButtonKeys
                                                               ..clear()
                                                               ..addAll(
-                                                                  actionButtonKeys);
+                                                                actionButtonKeys,
+                                                              );
                                                           } else if (_selectedMessageId ==
                                                               messageModel
                                                                   .stanzaID) {
@@ -7250,7 +7225,8 @@ class _ChatState extends State<Chat> {
                                                               );
                                                           void onDetails() =>
                                                               _showMessageDetails(
-                                                                  message);
+                                                                message,
+                                                              );
                                                           VoidCallback?
                                                               onSelect;
                                                           if (includeSelectAction) {
@@ -7385,9 +7361,10 @@ class _ChatState extends State<Chat> {
                                                                           _ReactionManager(
                                                                         reactions:
                                                                             reactions,
-                                                                        onToggle:
-                                                                            (emoji) =>
-                                                                                _toggleQuickReaction(
+                                                                        onToggle: (
+                                                                          emoji,
+                                                                        ) =>
+                                                                            _toggleQuickReaction(
                                                                           messageModel,
                                                                           emoji,
                                                                         ),
@@ -7492,8 +7469,9 @@ class _ChatState extends State<Chat> {
                                                                   Tween<Offset>(
                                                                 begin:
                                                                     const Offset(
-                                                                        0,
-                                                                        -0.18),
+                                                                  0,
+                                                                  -0.18,
+                                                                ),
                                                                 end:
                                                                     Offset.zero,
                                                               ).animate(
@@ -7618,7 +7596,9 @@ class _ChatState extends State<Chat> {
                                                                 isDesktopPlatform &&
                                                                         !widget
                                                                             .readOnly
-                                                                    ? (_) =>
+                                                                    ? (
+                                                                        _,
+                                                                      ) =>
                                                                         _toggleMessageSelection(
                                                                           messageModel,
                                                                         )
@@ -7962,9 +7942,8 @@ class _ChatState extends State<Chat> {
                                 state: state,
                                 onViewFilterChanged: _setViewFilter,
                                 onToggleNotifications: _toggleNotifications,
-                                onSpamToggle: (sendToSpam) => _handleSpamToggle(
-                                  sendToSpam: sendToSpam,
-                                ),
+                                onSpamToggle: (sendToSpam) =>
+                                    _handleSpamToggle(sendToSpam: sendToSpam),
                                 isChatBlocked: isChatBlocked,
                                 blocklistEntry: chatBlocklistEntry,
                                 blockAddress: blockAddress,
@@ -7989,15 +7968,10 @@ class _ChatState extends State<Chat> {
                           final Widget overlayStack = PageTransitionSwitcher(
                             reverse: isLeavingToMain,
                             duration: overlayDuration,
-                            layoutBuilder: (entries) => Stack(
-                              fit: StackFit.expand,
-                              children: entries,
-                            ),
-                            transitionBuilder: (
-                              child,
-                              primaryAnimation,
-                              secondaryAnimation,
-                            ) {
+                            layoutBuilder: (entries) =>
+                                Stack(fit: StackFit.expand, children: entries),
+                            transitionBuilder:
+                                (child, primaryAnimation, secondaryAnimation) {
                               final bool isExiting = child.key != chatRouteKey;
                               final Animation<double> enterAnimation =
                                   CurvedAnimation(
@@ -8175,10 +8149,7 @@ class _ChatState extends State<Chat> {
     required chat_models.Chat target,
     required List<Message> messages,
   }) async {
-    if (!_shouldPromptEmailForwarding(
-      target: target,
-      messages: messages,
-    )) {
+    if (!_shouldPromptEmailForwarding(target: target, messages: messages)) {
       return EmailForwardingMode.original;
     }
     if (!mounted) return null;
@@ -8305,9 +8276,7 @@ class _ChatState extends State<Chat> {
       model: model,
     );
     if (copiedText.isEmpty) return;
-    await Clipboard.setData(
-      ClipboardData(text: copiedText),
-    );
+    await Clipboard.setData(ClipboardData(text: copiedText));
     _clearAllSelections();
   }
 
@@ -8335,7 +8304,8 @@ class _ChatState extends State<Chat> {
     }
 
     final locationHelper = LocationAutocompleteHelper.fromState(
-        context.read<CalendarBloc>().state);
+      context.read<CalendarBloc>().state,
+    );
 
     await showQuickAddModal(
       context: context,
@@ -8366,9 +8336,8 @@ class _ChatState extends State<Chat> {
     final selection = await showFadeScaleDialog<String>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => _CalendarTextSelectionDialog(
-        initialText: trimmed,
-      ),
+      builder: (dialogContext) =>
+          _CalendarTextSelectionDialog(initialText: trimmed),
     );
     if (!mounted) return null;
     if (selection == null) return null;
@@ -8521,7 +8490,8 @@ class _ChatState extends State<Chat> {
       return;
     }
     final locationHelper = LocationAutocompleteHelper.fromState(
-        context.read<CalendarBloc>().state);
+      context.read<CalendarBloc>().state,
+    );
     await showQuickAddModal(
       context: context,
       prefilledText: calendarText,
@@ -8583,13 +8553,10 @@ class _ChatState extends State<Chat> {
       if (context.read<SettingsCubit>().animationDuration == Duration.zero) {
         context.read<ChatBloc>().add(const ChatMessageFocused(null));
       } else {
-        Future.delayed(
-          context.read<SettingsCubit>().animationDuration,
-          () {
-            if (!mounted || _chatRoute.isDetails) return;
-            context.read<ChatBloc>().add(const ChatMessageFocused(null));
-          },
-        );
+        Future.delayed(context.read<SettingsCubit>().animationDuration, () {
+          if (!mounted || _chatRoute.isDetails) return;
+          context.read<ChatBloc>().add(const ChatMessageFocused(null));
+        });
       }
     }
     if (!nextRoute.isSearch) {
@@ -8716,16 +8683,15 @@ class _ChatState extends State<Chat> {
       context: context,
       builder: (context) => Dialog(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxHeight: 420,
-            minWidth: 320,
-          ),
+          constraints: const BoxConstraints(maxHeight: 420, minWidth: 320),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -8768,16 +8734,11 @@ class _ChatState extends State<Chat> {
 
   void _toggleQuickReaction(Message message, String emoji) {
     context.read<ChatBloc>().add(
-          ChatMessageReactionToggled(
-            message: message,
-            emoji: emoji,
-          ),
+          ChatMessageReactionToggled(message: message, emoji: emoji),
         );
   }
 
-  Map<String, FanOutRecipientState> _latestRecipientStatuses(
-    ChatState state,
-  ) {
+  Map<String, FanOutRecipientState> _latestRecipientStatuses(ChatState state) {
     if (state.fanOutReports.isEmpty) {
       return const {};
     }
@@ -8840,11 +8801,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
         context.iconTheme.size ?? _pinnedBadgeFallbackIconSize;
     final double badgeSize = iconSize * _pinnedBadgeSizeScale;
     final double badgeInset = iconSize * _pinnedBadgeInsetScale;
-    final Icon icon = Icon(
-      iconData,
-      size: iconSize,
-      color: iconColor,
-    );
+    final Icon icon = Icon(iconData, size: iconSize, color: iconColor);
     final Color badgeColor = iconColor;
     if (count <= _pinnedBadgeHiddenCount) {
       return icon;
@@ -8857,10 +8814,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.card,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: badgeColor,
-          width: _pinnedBadgeBorderWidth,
-        ),
+        border: Border.all(color: badgeColor, width: _pinnedBadgeBorderWidth),
       ),
       child: SizedBox(
         width: badgeSize,
@@ -8887,11 +8841,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
         clipBehavior: Clip.hardEdge,
         children: [
           Center(child: icon),
-          Positioned(
-            top: badgeInset,
-            right: badgeInset,
-            child: badge,
-          ),
+          Positioned(top: badgeInset, right: badgeInset, child: badge),
         ],
       ),
     );
@@ -8933,10 +8883,8 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final FileMetadataData? Function(String) metadataInitialFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({
-    required bool isSelf,
-    required chat_models.Chat? chat,
-  }) shouldAllowAttachment;
+  final bool Function({required bool isSelf, required chat_models.Chat? chat})
+      shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -9064,9 +9012,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
         ),
         decoration: BoxDecoration(
           color: colors.card,
-          border: Border(
-            bottom: BorderSide(color: colors.border),
-          ),
+          border: Border(bottom: BorderSide(color: colors.border)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -9087,10 +9033,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               ],
             ),
             const SizedBox(height: _chatPinnedPanelHeaderSpacing),
-            Flexible(
-              fit: FlexFit.loose,
-              child: panelBody,
-            ),
+            Flexible(fit: FlexFit.loose, child: panelBody),
           ],
         ),
       ),
@@ -9133,10 +9076,8 @@ class _PinnedMessageTile extends StatelessWidget {
   final FileMetadataData? Function(String) metadataInitialFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({
-    required bool isSelf,
-    required chat_models.Chat? chat,
-  }) shouldAllowAttachment;
+  final bool Function({required bool isSelf, required chat_models.Chat? chat})
+      shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -9164,10 +9105,7 @@ class _PinnedMessageTile extends StatelessWidget {
     );
   }
 
-  bool _isSelfMessage({
-    required Message message,
-    required String? accountJid,
-  }) {
+  bool _isSelfMessage({required Message message, required String? accountJid}) {
     if (chat.type == ChatType.groupChat) {
       final myOccupantId = roomState?.myOccupantId;
       final occupantId = message.occupantID;
@@ -9273,11 +9211,8 @@ class _PinnedMessageTile extends StatelessWidget {
         taskShareText.isNotEmpty &&
         taskShareText == messageText;
     final CalendarFragment? calendarFragment = message?.calendarFragment;
-    final CalendarCriticalPathFragment? criticalPathFragment =
-        calendarFragment?.maybeMap(
-      criticalPath: (value) => value,
-      orElse: () => null,
-    );
+    final CalendarCriticalPathFragment? criticalPathFragment = calendarFragment
+        ?.maybeMap(criticalPath: (value) => value, orElse: () => null);
     final bool hasCriticalPath = criticalPathFragment != null;
     final String? criticalPathShareText = hasCriticalPath
         ? const CalendarFragmentFormatter().describe(calendarFragment!).trim()
@@ -9295,10 +9230,9 @@ class _PinnedMessageTile extends StatelessWidget {
         !hasAttachments &&
         !hasCalendarTask &&
         !hasCriticalPath;
-    final messageStyle = Theme.of(context)
-        .textTheme
-        .bodyMedium
-        ?.copyWith(color: colors.foreground);
+    final messageStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: colors.foreground);
     final messageWidget = showLoading
         ? Align(
             alignment: Alignment.centerLeft,
@@ -9308,10 +9242,7 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
           )
         : showMessageText
-            ? Text(
-                messageText ?? _emptyText,
-                style: messageStyle,
-              )
+            ? Text(messageText ?? _emptyText, style: messageStyle)
             : showMissing
                 ? Text(
                     l10n.chatPinnedMissingMessage,
@@ -9326,10 +9257,7 @@ class _PinnedMessageTile extends StatelessWidget {
             builder: (context) => Text(l10n.chatUnpinMessage),
             child: ShadIconButton.ghost(
               onPressed: () => context.read<ChatBloc>().add(
-                    ChatMessagePinRequested(
-                      message: messageForPin,
-                      pin: false,
-                    ),
+                    ChatMessagePinRequested(message: messageForPin, pin: false),
                   ),
               icon: Icon(
                 LucideIcons.pinOff,
@@ -9346,10 +9274,7 @@ class _PinnedMessageTile extends StatelessWidget {
     final accountJid = context.read<XmppService>().myJid?.toString();
     final isSelf = message == null
         ? false
-        : _isSelfMessage(
-            message: message,
-            accountJid: accountJid,
-          );
+        : _isSelfMessage(message: message, accountJid: accountJid);
     final senderLabel = _resolveSenderLabel(
       context: context,
       message: message,
@@ -9497,12 +9422,8 @@ class _ChatCalendarPanel extends StatelessWidget {
     }
     return MultiBlocProvider(
       providers: [
-        BlocProvider<ChatCalendarBloc>.value(
-          value: resolvedBloc,
-        ),
-        BlocProvider<CalendarBloc>.value(
-          value: resolvedBloc,
-        ),
+        BlocProvider<ChatCalendarBloc>.value(value: resolvedBloc),
+        BlocProvider<CalendarBloc>.value(value: resolvedBloc),
       ],
       child: ChatCalendarWidget(
         chat: resolvedChat,
@@ -9522,18 +9443,13 @@ class _ChatDetailsOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: context.colorScheme.background,
-      child: const SafeArea(
-        top: false,
-        child: ChatMessageDetails(),
-      ),
+      child: const SafeArea(top: false, child: ChatMessageDetails()),
     );
   }
 }
 
 class _ChatSearchOverlay extends StatelessWidget {
-  const _ChatSearchOverlay({
-    required this.panel,
-  });
+  const _ChatSearchOverlay({required this.panel});
 
   final Widget panel;
 
@@ -9542,11 +9458,7 @@ class _ChatSearchOverlay extends StatelessWidget {
     return Column(
       children: [
         panel,
-        const Expanded(
-          child: IgnorePointer(
-            child: SizedBox.expand(),
-          ),
-        ),
+        const Expanded(child: IgnorePointer(child: SizedBox.expand())),
       ],
     );
   }
@@ -9592,9 +9504,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
 }
 
 class _ChatGalleryOverlay extends StatelessWidget {
-  const _ChatGalleryOverlay({
-    required this.chat,
-  });
+  const _ChatGalleryOverlay({required this.chat});
 
   final chat_models.Chat? chat;
 
@@ -9756,10 +9666,7 @@ class _ChatCalendarOverlayVisibilityState
   Widget build(BuildContext context) {
     final bool visible = widget.visible;
     final Widget transitionChild = widget.useDesktopFade
-        ? FadeTransition(
-            opacity: _opacity,
-            child: widget.child,
-          )
+        ? FadeTransition(opacity: _opacity, child: widget.child)
         : SlideTransition(
             position: _slide,
             child: FadeScaleTransition(
@@ -9771,10 +9678,7 @@ class _ChatCalendarOverlayVisibilityState
       enabled: visible,
       child: IgnorePointer(
         ignoring: !visible,
-        child: ExcludeSemantics(
-          excluding: !visible,
-          child: transitionChild,
-        ),
+        child: ExcludeSemantics(excluding: !visible, child: transitionChild),
       ),
     );
   }
@@ -9803,21 +9707,19 @@ final class _FileMetadataStreamEntry {
   Object? _lastError;
   StackTrace? _lastStackTrace;
 
-  late final Stream<FileMetadataData?> stream = Stream.multi(
-    (multi) {
-      if (_lastError != null) {
-        multi.addError(_lastError!, _lastStackTrace);
-      } else if (_hasValue) {
-        multi.add(_latest);
-      }
-      final subscription = _controller.stream.listen(
-        multi.add,
-        onError: (Object error, StackTrace stackTrace) =>
-            multi.addError(error, stackTrace),
-      );
-      multi.onCancel = subscription.cancel;
-    },
-  );
+  late final Stream<FileMetadataData?> stream = Stream.multi((multi) {
+    if (_lastError != null) {
+      multi.addError(_lastError!, _lastStackTrace);
+    } else if (_hasValue) {
+      multi.add(_latest);
+    }
+    final subscription = _controller.stream.listen(
+      multi.add,
+      onError: (Object error, StackTrace stackTrace) =>
+          multi.addError(error, stackTrace),
+    );
+    multi.onCancel = subscription.cancel;
+  });
 
   FileMetadataData? get latestOrNull => _hasValue ? _latest : null;
 
@@ -9939,8 +9841,10 @@ double _measureReactionChipWidth({
   final emojiPainter = TextPainter(
     text: TextSpan(
       text: reaction.emoji,
-      style:
-          _reactionEmojiTextStyle(context, highlighted: reaction.reactedBySelf),
+      style: _reactionEmojiTextStyle(
+        context,
+        highlighted: reaction.reactedBySelf,
+      ),
     ),
     maxLines: 1,
     textDirection: textDirection,
@@ -10101,19 +10005,12 @@ class _MessageAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AxiAvatar(
-      jid: jid,
-      size: size,
-      avatarPath: avatarPath,
-    );
+    return AxiAvatar(jid: jid, size: size, avatarPath: avatarPath);
   }
 }
 
 class _ReactionStrip extends StatelessWidget {
-  const _ReactionStrip({
-    required this.reactions,
-    this.onReactionTap,
-  });
+  const _ReactionStrip({required this.reactions, this.onReactionTap});
 
   final List<ReactionPreview> reactions;
   final void Function(String emoji)? onReactionTap;
@@ -10153,10 +10050,7 @@ class _ReactionStrip extends StatelessWidget {
           }
           children.add(const _ReactionOverflowGlyph());
         }
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: children,
-        );
+        return Row(mainAxisSize: MainAxisSize.min, children: children);
       },
     );
   }
@@ -10188,10 +10082,7 @@ class _ReactionOverflowGlyph extends StatelessWidget {
 }
 
 class _ReplyStrip extends StatelessWidget {
-  const _ReplyStrip({
-    required this.participants,
-    this.onRecipientTap,
-  });
+  const _ReplyStrip({required this.participants, this.onRecipientTap});
 
   final List<chat_models.Chat> participants;
   final ValueChanged<chat_models.Chat>? onRecipientTap;
@@ -10231,10 +10122,7 @@ class _ReplyStrip extends StatelessWidget {
                       (_recipientAvatarSize - _recipientAvatarOverlap) +
                   _recipientOverflowGap;
           children.add(
-            Positioned(
-              left: offset,
-              child: const _RecipientOverflowAvatar(),
-            ),
+            Positioned(left: offset, child: const _RecipientOverflowAvatar()),
           );
         }
         final baseWidth = layout.totalWidth;
@@ -10244,10 +10132,7 @@ class _ReplyStrip extends StatelessWidget {
         return SizedBox(
           width: totalWidth,
           height: _recipientAvatarSize,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: children,
-          ),
+          child: Stack(clipBehavior: Clip.none, children: children),
         );
       },
     );
@@ -10288,10 +10173,7 @@ class _RecipientCutoutStrip extends StatelessWidget {
                       (_recipientAvatarSize - _recipientAvatarOverlap) +
                   _recipientOverflowGap;
           children.add(
-            Positioned(
-              left: offset,
-              child: const _RecipientOverflowAvatar(),
-            ),
+            Positioned(left: offset, child: const _RecipientOverflowAvatar()),
           );
         }
         final baseWidth = layout.totalWidth;
@@ -10301,10 +10183,7 @@ class _RecipientCutoutStrip extends StatelessWidget {
         return SizedBox(
           width: totalWidth,
           height: _recipientAvatarSize,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: children,
-          ),
+          child: Stack(clipBehavior: Clip.none, children: children),
         );
       },
     );
@@ -10327,10 +10206,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
       padding: const EdgeInsets.all(borderWidth),
-      decoration: BoxDecoration(
-        color: colors.card,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: colors.card, shape: BoxShape.circle),
       child: ClipOval(
         child: AxiAvatar(
           jid: chat.avatarIdentifier,
@@ -10399,10 +10275,7 @@ class _TypingIndicatorPill extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (avatarStrip != null)
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: avatarStrip,
-                ),
+                Flexible(fit: FlexFit.loose, child: avatarStrip),
               if (avatarStrip != null)
                 const SizedBox(width: _typingAvatarSpacing),
               const TypingIndicator(),
@@ -10455,10 +10328,7 @@ class _TypingAvatarStrip extends StatelessWidget {
                       (_recipientAvatarSize - _recipientAvatarOverlap) +
                   _recipientOverflowGap;
           children.add(
-            Positioned(
-              left: offset,
-              child: const _RecipientOverflowAvatar(),
-            ),
+            Positioned(left: offset, child: const _RecipientOverflowAvatar()),
           );
         }
         final baseWidth = layout.totalWidth;
@@ -10468,10 +10338,7 @@ class _TypingAvatarStrip extends StatelessWidget {
         return SizedBox(
           width: totalWidth,
           height: _recipientAvatarSize,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: children,
-          ),
+          child: Stack(clipBehavior: Clip.none, children: children),
         );
       },
     );
@@ -10479,10 +10346,7 @@ class _TypingAvatarStrip extends StatelessWidget {
 }
 
 class _TypingAvatar extends StatelessWidget {
-  const _TypingAvatar({
-    required this.jid,
-    this.avatarPath,
-  });
+  const _TypingAvatar({required this.jid, this.avatarPath});
 
   final String jid;
   final String? avatarPath;
@@ -10494,10 +10358,7 @@ class _TypingAvatar extends StatelessWidget {
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
       padding: const EdgeInsets.all(_typingAvatarBorderWidth),
-      decoration: BoxDecoration(
-        color: borderColor,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: borderColor, shape: BoxShape.circle),
       child: ClipOval(
         child: AxiAvatar(
           jid: jid,
@@ -10510,10 +10371,7 @@ class _TypingAvatar extends StatelessWidget {
 }
 
 class _InviteAttachmentText extends StatelessWidget {
-  const _InviteAttachmentText({
-    required this.text,
-    required this.style,
-  });
+  const _InviteAttachmentText({required this.text, required this.style});
 
   final String text;
   final TextStyle style;
@@ -10558,8 +10416,9 @@ class _InviteAttachmentCard extends StatelessWidget {
     final bool showDetailLabel = trimmedDetailLabel.isNotEmpty;
     final Widget attachmentIcon = DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.muted
-            .withValues(alpha: _inviteAttachmentIconBackgroundAlpha),
+        color: colors.muted.withValues(
+          alpha: _inviteAttachmentIconBackgroundAlpha,
+        ),
         shape: SquircleBorder(
           cornerRadius: _inviteAttachmentIconCornerRadius,
           side: BorderSide(color: colors.border),
@@ -10630,10 +10489,7 @@ class _InviteAttachmentCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: _inviteAttachmentActionSpacing),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: actionButton,
-                  ),
+                  Align(alignment: Alignment.centerRight, child: actionButton),
                 ],
               );
             }
@@ -10717,10 +10573,7 @@ class _MessageExtraShadow extends StatelessWidget {
       return child;
     }
     return DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: shape,
-        shadows: shadows,
-      ),
+      decoration: ShapeDecoration(shape: shape, shadows: shadows),
       child: child,
     );
   }
@@ -10808,10 +10661,7 @@ class _MessageBubbleRegion extends SingleChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderMessageBubbleRegion(
-        messageId: messageId,
-        registry: registry,
-      );
+      _RenderMessageBubbleRegion(messageId: messageId, registry: registry);
 
   @override
   void updateRenderObject(
@@ -10922,10 +10772,7 @@ class _ComposerNotice extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: foreground,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(color: foreground, fontWeight: FontWeight.w500),
             ),
           ),
           if (actionLabel != null && onAction != null)
@@ -11023,8 +10870,9 @@ class _ChatComposerSection extends StatelessWidget {
           attachment.status == PendingAttachmentStatus.queued &&
           !attachment.isPreparing,
     );
-    final hasPreparingAttachments =
-        pendingAttachments.any((attachment) => attachment.isPreparing);
+    final hasPreparingAttachments = pendingAttachments.any(
+      (attachment) => attachment.isPreparing,
+    );
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
     final sendEnabled = !hasPreparingAttachments &&
         (composerHasText || hasQueuedAttachments || hasSubjectText);
@@ -11059,9 +10907,7 @@ class _ChatComposerSection extends StatelessWidget {
           color: colors.background,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: colors.border, width: 1),
-              ),
+              border: Border(top: BorderSide(color: colors.border, width: 1)),
             ),
             child: Padding(
               padding: EdgeInsets.fromLTRB(
@@ -11087,9 +10933,7 @@ class _ChatComposerSection extends StatelessWidget {
                       semanticsLabel: context.l10n.chatComposerSemantics,
                       onSend: onSend,
                       header: header,
-                      actions: buildComposerAccessories(
-                        canSend: sendEnabled,
-                      ),
+                      actions: buildComposerAccessories(canSend: sendEnabled),
                       sendEnabled: sendEnabled,
                     ),
                   ),
@@ -11151,12 +10995,7 @@ class _ChatComposerSection extends StatelessWidget {
         horizontal: horizontalPadding + _composerNoticeHorizontalInset,
       );
       for (var i = 0; i < notices.length; i++) {
-        children.add(
-          Padding(
-            padding: noticePadding,
-            child: notices[i],
-          ),
-        );
+        children.add(Padding(padding: noticePadding, child: notices[i]));
         if (i != notices.length - 1) {
           children.add(const SizedBox(height: 8));
         }
@@ -11189,10 +11028,7 @@ class _ChatComposerSection extends StatelessWidget {
 }
 
 class _ComposerTaskDropRegion extends StatelessWidget {
-  const _ComposerTaskDropRegion({
-    required this.child,
-    this.onTaskDropped,
-  });
+  const _ComposerTaskDropRegion({required this.child, this.onTaskDropped});
 
   final Widget child;
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
@@ -11291,9 +11127,7 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
         color: colors.background,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: colors.border, width: 1),
-            ),
+            border: Border(top: BorderSide(color: colors.border, width: 1)),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -11564,10 +11398,14 @@ class _ReactionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlighted = data.reactedBySelf;
-    final emojiStyle =
-        _reactionEmojiTextStyle(context, highlighted: highlighted);
-    final countStyle =
-        _reactionCountTextStyle(context, highlighted: highlighted);
+    final emojiStyle = _reactionEmojiTextStyle(
+      context,
+      highlighted: highlighted,
+    );
+    final countStyle = _reactionCountTextStyle(
+      context,
+      highlighted: highlighted,
+    );
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: onTap,
@@ -11576,10 +11414,7 @@ class _ReactionChip extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Text(
-              data.emoji,
-              style: emojiStyle,
-            ),
+            Text(data.emoji, style: emojiStyle),
             if (data.count > 1)
               Positioned(
                 right: -_reactionSubscriptPadding,
@@ -11642,11 +11477,7 @@ class _SelectionHeadroomSpacer extends StatelessWidget {
   }
 }
 
-enum _SelectionShiftOutcome {
-  satisfied,
-  animated,
-  awaitingHeadroom,
-}
+enum _SelectionShiftOutcome { satisfied, animated, awaitingHeadroom }
 
 class _MessageActionBar extends StatelessWidget {
   const _MessageActionBar({
@@ -11717,8 +11548,10 @@ class _MessageActionBar extends StatelessWidget {
       if (onEdit != null)
         ContextActionButton(
           key: nextKey(),
-          icon:
-              const Icon(LucideIcons.pencilLine, size: _messageActionIconSize),
+          icon: const Icon(
+            LucideIcons.pencilLine,
+            size: _messageActionIconSize,
+          ),
           label: l10n.chatActionEdit,
           onPressed: onEdit!,
         ),
@@ -11753,8 +11586,10 @@ class _MessageActionBar extends StatelessWidget {
       ),
       ContextActionButton(
         key: nextKey(),
-        icon:
-            const Icon(LucideIcons.calendarPlus, size: _messageActionIconSize),
+        icon: const Icon(
+          LucideIcons.calendarPlus,
+          size: _messageActionIconSize,
+        ),
         label: l10n.chatActionAddToCalendar,
         onPressed: onAddToCalendar,
       ),
@@ -11769,8 +11604,10 @@ class _MessageActionBar extends StatelessWidget {
       actions.add(
         ContextActionButton(
           key: nextKey(),
-          icon:
-              const Icon(LucideIcons.squareCheck, size: _messageActionIconSize),
+          icon: const Icon(
+            LucideIcons.squareCheck,
+            size: _messageActionIconSize,
+          ),
           label: l10n.chatActionSelect,
           onPressed: onSelect,
         ),
@@ -11870,10 +11707,7 @@ class _MessageArrivalAnimatorState extends State<_MessageArrivalAnimator>
     }
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(
-        position: _slide,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }
@@ -11918,10 +11752,7 @@ class _MessageSelectionToolbar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          SelectionSummaryHeader(
-            count: count,
-            onClear: onClear,
-          ),
+          SelectionSummaryHeader(count: count, onClear: onClear),
           SizedBox(height: scaled(12)),
           Wrap(
             spacing: scaled(8),
@@ -11977,10 +11808,7 @@ class _MultiSelectReactionPanel extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         const SizedBox(height: 12),
-        Text(
-          context.l10n.chatActionReact,
-          style: context.textTheme.muted,
-        ),
+        Text(context.l10n.chatActionReact, style: context.textTheme.muted),
         const SizedBox(height: 8),
         Wrap(
           spacing: _reactionManagerQuickSpacing,
@@ -12002,9 +11830,7 @@ class _MultiSelectReactionPanel extends StatelessWidget {
 }
 
 class _CalendarTextSelectionDialog extends StatefulWidget {
-  const _CalendarTextSelectionDialog({
-    required this.initialText,
-  });
+  const _CalendarTextSelectionDialog({required this.initialText});
 
   final String initialText;
 
@@ -12256,9 +12082,9 @@ class _ChatSettingsButtons extends StatelessWidget {
             subtitle: '$signatureHint $signatureWarning',
             value: signatureActive,
             onChanged: globalSignatureEnabled
-                ? (enabled) => context
-                    .read<ChatBloc>()
-                    .add(ChatShareSignatureToggled(enabled))
+                ? (enabled) => context.read<ChatBloc>().add(
+                      ChatShareSignatureToggled(enabled),
+                    )
                 : null,
           ),
         ),
@@ -12289,9 +12115,7 @@ class _ChatSettingsButtons extends StatelessWidget {
                     if (address == null || address.isEmpty) {
                       return;
                     }
-                    context.read<BlocklistCubit?>()?.block(
-                          address: address,
-                        );
+                    context.read<BlocklistCubit?>()?.block(address: address);
                     return;
                   }
                   final entry = blocklistEntry;
@@ -12304,10 +12128,7 @@ class _ChatSettingsButtons extends StatelessWidget {
         ),
       ),
     ];
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: tiles,
-    );
+    return ListView(padding: EdgeInsets.zero, children: tiles);
   }
 }
 
@@ -12340,10 +12161,7 @@ class _ChatSettingsRow extends StatelessWidget {
       if (resolvedSubtitle != null)
         Padding(
           padding: const EdgeInsets.only(top: _chatSettingsLabelSpacing),
-          child: Text(
-            resolvedSubtitle,
-            style: subtitleStyle,
-          ),
+          child: Text(resolvedSubtitle, style: subtitleStyle),
         ),
     ];
     return Row(
@@ -12395,10 +12213,7 @@ class _ChatSettingsSwitchRow extends StatelessWidget {
 }
 
 class _ChatViewFilterControl extends StatelessWidget {
-  const _ChatViewFilterControl({
-    required this.filter,
-    required this.onChanged,
-  });
+  const _ChatViewFilterControl({required this.filter, required this.onChanged});
 
   final MessageTimelineFilter filter;
   final ValueChanged<MessageTimelineFilter> onChanged;
@@ -12425,9 +12240,7 @@ class _ChatViewFilterControl extends StatelessWidget {
                 ),
               )
               .toList(),
-          selectedOptionBuilder: (_, value) => Text(
-            value.menuLabel(l10n),
-          ),
+          selectedOptionBuilder: (_, value) => Text(value.menuLabel(l10n)),
         ),
       ),
     );
@@ -12460,15 +12273,11 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
               .map(
                 (option) => ShadOption<NotificationPreviewSetting>(
                   value: option,
-                  child: Text(
-                    option.label(l10n),
-                  ),
+                  child: Text(option.label(l10n)),
                 ),
               )
               .toList(),
-          selectedOptionBuilder: (_, value) => Text(
-            value.label(l10n),
-          ),
+          selectedOptionBuilder: (_, value) => Text(value.label(l10n)),
         ),
       ),
     );
@@ -12487,9 +12296,7 @@ extension NotificationPreviewSettingLabels on NotificationPreviewSetting {
 }
 
 class _ChatAttachmentTrustToggle extends StatelessWidget {
-  const _ChatAttachmentTrustToggle({
-    required this.chat,
-  });
+  const _ChatAttachmentTrustToggle({required this.chat});
 
   final chat_models.Chat chat;
 
@@ -12505,9 +12312,9 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
       title: label,
       subtitle: hint,
       value: enabled,
-      onChanged: (value) => context
-          .read<ChatBloc>()
-          .add(ChatAttachmentAutoDownloadToggled(value)),
+      onChanged: (value) => context.read<ChatBloc>().add(
+            ChatAttachmentAutoDownloadToggled(value),
+          ),
     );
   }
 }
@@ -12565,9 +12372,7 @@ class _ReactionManager extends StatelessWidget {
             else
               Text(
                 context.l10n.chatReactionsNone,
-                style: textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
+                style: textTheme.small.copyWith(color: colors.mutedForeground),
               ),
             Text(
               hasReactions
@@ -12631,22 +12436,12 @@ class _ReactionManagerChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                data.emoji,
-                style: const TextStyle(fontSize: 20),
-              ),
+              Text(data.emoji, style: const TextStyle(fontSize: 20)),
               const SizedBox(width: 6),
-              Text(
-                data.count.toString(),
-                style: countStyle,
-              ),
+              Text(data.count.toString(), style: countStyle),
               if (data.reactedBySelf) ...[
                 const SizedBox(width: 6),
-                Icon(
-                  LucideIcons.minus,
-                  size: 16,
-                  color: colors.primary,
-                ),
+                Icon(LucideIcons.minus, size: 16, color: colors.primary),
               ],
             ],
           ),
@@ -12657,10 +12452,7 @@ class _ReactionManagerChip extends StatelessWidget {
 }
 
 class _ReactionQuickButton extends StatelessWidget {
-  const _ReactionQuickButton({
-    required this.emoji,
-    required this.onPressed,
-  });
+  const _ReactionQuickButton({required this.emoji, required this.onPressed});
 
   final String emoji;
   final VoidCallback onPressed;
@@ -12675,16 +12467,11 @@ class _ReactionQuickButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: colors.secondary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: colors.border.withValues(alpha: 0.9),
-          ),
+          border: Border.all(color: colors.border.withValues(alpha: 0.9)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Text(
-            emoji,
-            style: const TextStyle(fontSize: 20),
-          ),
+          child: Text(emoji, style: const TextStyle(fontSize: 20)),
         ),
       ),
     ).withTapBounce();
@@ -12704,11 +12491,7 @@ class _ReactionAddButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            LucideIcons.plus,
-            size: 16,
-            color: colors.primary,
-          ),
+          Icon(LucideIcons.plus, size: 16, color: colors.primary),
           const SizedBox(width: 6),
           Text(context.l10n.chatReactionMore),
         ],
@@ -12718,10 +12501,7 @@ class _ReactionAddButton extends StatelessWidget {
 }
 
 class _QuotedMessagePreview extends StatelessWidget {
-  const _QuotedMessagePreview({
-    required this.message,
-    required this.isSelf,
-  });
+  const _QuotedMessagePreview({required this.message, required this.isSelf});
 
   final Message message;
   final bool isSelf;
@@ -12733,9 +12513,7 @@ class _QuotedMessagePreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: BorderRadius.circular(10),
-        border: Border(
-          left: BorderSide(color: colors.primary, width: 3),
-        ),
+        border: Border(left: BorderSide(color: colors.primary, width: 3)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -12813,9 +12591,7 @@ class _QuoteBanner extends StatelessWidget {
                 ),
                 Builder(
                   builder: (context) {
-                    final split = ChatSubjectCodec.splitXmppBody(
-                      message.body,
-                    );
+                    final split = ChatSubjectCodec.splitXmppBody(message.body);
                     final previewText =
                         split.body.isNotEmpty ? split.body : split.subject;
                     return Text(
@@ -13038,10 +12814,7 @@ class _GuestChatState extends State<GuestChat> {
         ),
       ),
       ChatComposerAccessory.trailing(
-        child: _SendMessageAccessory(
-          enabled: canSend,
-          onPressed: _handleSend,
-        ),
+        child: _SendMessageAccessory(enabled: canSend, onPressed: _handleSend),
       ),
     ];
   }
@@ -13071,9 +12844,7 @@ class _GuestChatState extends State<GuestChat> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: context.colorScheme.background,
-        border: Border(
-          left: BorderSide(color: context.colorScheme.border),
-        ),
+        border: Border(left: BorderSide(color: context.colorScheme.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13173,9 +12944,7 @@ class _GuestChatHeader extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colors.background,
-        border: Border(
-          bottom: BorderSide(color: colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: Row(
         children: [
@@ -13250,10 +13019,7 @@ class _GuestMessageBubble extends StatelessWidget {
       key: ValueKey(message.createdAt.microsecondsSinceEpoch),
       text: TextSpan(
         text: message.text,
-        style: context.textTheme.small.copyWith(
-          color: textColor,
-          height: 1.3,
-        ),
+        style: context.textTheme.small.copyWith(color: textColor, height: 1.3),
       ),
       details: [
         TextSpan(
@@ -13289,10 +13055,7 @@ class _GuestMessageBubble extends StatelessWidget {
       shadows: _selectedBubbleShadows(colors.primary),
       bubbleWidthFraction: _cutoutMaxWidthFraction,
       cornerClearance: _bubbleRadius,
-      body: Padding(
-        padding: _bubblePadding,
-        child: inlineText,
-      ),
+      body: Padding(padding: _bubblePadding, child: inlineText),
     );
     final showSenderLabel = !chainedPrev;
     Widget bubbleWithLabel = bubble;
@@ -13422,17 +13185,9 @@ class _SenderLabelBlock extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: crossAxis,
         children: [
-          Text(
-            primaryLabel,
-            style: primaryStyle,
-            textAlign: textAlign,
-          ),
+          Text(primaryLabel, style: primaryStyle, textAlign: textAlign),
           if (secondaryLabel != null)
-            Text(
-              secondaryLabel!,
-              style: secondaryStyle,
-              textAlign: textAlign,
-            ),
+            Text(secondaryLabel!, style: secondaryStyle, textAlign: textAlign),
         ],
       ),
     );

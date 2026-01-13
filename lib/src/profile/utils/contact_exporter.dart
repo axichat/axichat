@@ -72,11 +72,7 @@ class ContactExporter {
     final String exportBody =
         format.isCsv ? _buildCsv(contacts) : _buildVcard(contacts);
     final String sanitizedLabel = _sanitizeLabel(fileLabel);
-    return _writeExportFile(
-      exportBody,
-      sanitizedLabel,
-      format.fileExtension,
-    );
+    return _writeExportFile(exportBody, sanitizedLabel, format.fileExtension);
   }
 }
 

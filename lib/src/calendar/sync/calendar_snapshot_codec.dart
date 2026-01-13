@@ -179,8 +179,10 @@ class CalendarSnapshotCodec {
   }
 
   static String _generateFileName() {
-    final timestamp =
-        DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
+    final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(
+          ':',
+          '-',
+        );
     return 'calendar_snapshot_$timestamp$fileExtension';
   }
 }

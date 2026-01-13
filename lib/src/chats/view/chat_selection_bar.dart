@@ -17,10 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatSelectionActionBar extends StatefulWidget {
-  const ChatSelectionActionBar({
-    super.key,
-    required this.selectedChats,
-  });
+  const ChatSelectionActionBar({super.key, required this.selectedChats});
 
   final List<Chat> selectedChats;
 
@@ -150,8 +147,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       showToast?.call(
         FeedbackToast.success(
           title: l10n.chatSelectionExportReadyTitle,
-          message:
-              l10n.chatSelectionExportReadyMessage(widget.selectedChats.length),
+          message: l10n.chatSelectionExportReadyMessage(
+            widget.selectedChats.length,
+          ),
         ),
       );
     } catch (_) {

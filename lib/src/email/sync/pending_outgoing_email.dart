@@ -100,10 +100,7 @@ String? _normalizeHtml(String? value) {
   return _normalizeText(stripped);
 }
 
-String? _normalizeFileSignature({
-  String? fileName,
-  String? filePath,
-}) {
+String? _normalizeFileSignature({String? fileName, String? filePath}) {
   final normalizedFileName = _normalizeText(fileName);
   if (normalizedFileName != null) {
     return normalizedFileName;

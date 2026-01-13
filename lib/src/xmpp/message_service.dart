@@ -105,10 +105,12 @@ const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
 const Duration _mamQueryTimeout = Duration(seconds: 90);
 const Set<String> _emptyPinPublisherSet = <String>{};
-final _pinPendingPublishesKey =
-    XmppStateStore.registerKey(_pinPendingPublishesKeyName);
-final _pinPendingRetractionsKey =
-    XmppStateStore.registerKey(_pinPendingRetractionsKeyName);
+final _pinPendingPublishesKey = XmppStateStore.registerKey(
+  _pinPendingPublishesKeyName,
+);
+final _pinPendingRetractionsKey = XmppStateStore.registerKey(
+  _pinPendingRetractionsKeyName,
+);
 const String _pinBase64PaddingChar = '=';
 const int _pinBase64Quantum = 4;
 final RegExp _pinBase64PaddingPattern = RegExp(r'=+$');
@@ -185,10 +187,7 @@ final class _MessageStatusSyncEnvelope {
   static bool isEnvelope(String raw) => tryParseEnvelope(raw) != null;
 }
 
-enum _OutboundMessageKind {
-  message,
-  attachment,
-}
+enum _OutboundMessageKind { message, attachment }
 
 extension _OutboundMessageKindView on _OutboundMessageKind {
   String get label => switch (this) {
@@ -444,10 +443,7 @@ String? _chatJidFromPinNode(String nodeId) {
   return _decodePinChatJid(encoded);
 }
 
-enum _PinNodePolicy {
-  shared,
-  restricted,
-}
+enum _PinNodePolicy { shared, restricted }
 
 final class _PinNodeContext {
   const _PinNodeContext({
@@ -462,10 +458,7 @@ final class _PinNodeContext {
 }
 
 final class _PinNodeConfigResult {
-  const _PinNodeConfigResult({
-    required this.host,
-    required this.policy,
-  });
+  const _PinNodeConfigResult({required this.host, required this.policy});
 
   final mox.JID host;
   final _PinNodePolicy policy;
@@ -594,7 +587,7 @@ enum MamGlobalSyncOutcome {
   skippedDenied,
   skippedInFlight,
   skippedResumed,
-  failed;
+  failed,
 }
 
 extension MamGlobalSyncOutcomeBehavior on MamGlobalSyncOutcome {
@@ -608,16 +601,19 @@ extension MamGlobalSyncOutcomeBehavior on MamGlobalSyncOutcome {
       };
 }
 
-final _capabilityCacheKey =
-    XmppStateStore.registerKey('message_peer_capabilities');
+final _capabilityCacheKey = XmppStateStore.registerKey(
+  'message_peer_capabilities',
+);
 const String _mamGlobalLastIdKeyName = 'mam_global_last_id';
 const String _mamGlobalLastSyncKeyName = 'mam_global_last_sync';
 const String _mamGlobalDeniedUntilKeyName = 'mam_global_denied_until';
 final _mamGlobalLastIdKey = XmppStateStore.registerKey(_mamGlobalLastIdKeyName);
-final _mamGlobalLastSyncKey =
-    XmppStateStore.registerKey(_mamGlobalLastSyncKeyName);
-final _mamGlobalDeniedUntilKey =
-    XmppStateStore.registerKey(_mamGlobalDeniedUntilKeyName);
+final _mamGlobalLastSyncKey = XmppStateStore.registerKey(
+  _mamGlobalLastSyncKeyName,
+);
+final _mamGlobalDeniedUntilKey = XmppStateStore.registerKey(
+  _mamGlobalDeniedUntilKeyName,
+);
 const String _mamGlobalScopeFallback = 'default';
 const String _mamGlobalScopeSeparator = ':';
 final Map<String, RegisteredStateKey> _mamGlobalScopedKeyCache = {};
@@ -639,8 +635,9 @@ const String _attachmentCacheTempPrefix = '.';
 const bool _attachmentCacheFollowLinks = false;
 const String _attachmentCacheSessionPrefixLabel = 'session';
 const String _attachmentCacheSessionPrefixSeparator = '_';
-const Duration _inboundAttachmentAutoDownloadRateLimitWindow =
-    Duration(minutes: 1);
+const Duration _inboundAttachmentAutoDownloadRateLimitWindow = Duration(
+  minutes: 1,
+);
 const Duration _inboundAttachmentAutoDownloadRateLimitCleanupInterval =
     Duration(minutes: 5);
 const int _inboundAttachmentAutoDownloadMaxEventsPerChat = 30;
@@ -746,10 +743,7 @@ class XmppAttachmentUpload {
 }
 
 class XmppUploadHeader {
-  const XmppUploadHeader({
-    required this.name,
-    required this.value,
-  });
+  const XmppUploadHeader({required this.name, required this.value});
 
   final String name;
   final String value;
@@ -781,9 +775,7 @@ mixin MessageService
     int end = 50,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) {
-    List<Message> filteredMessagesForChat(
-      List<Message> messages,
-    ) {
+    List<Message> filteredMessagesForChat(List<Message> messages) {
       final filtered = messages.where((message) {
         return !_isInternalSyncEnvelope(message.body);
       }).toList(growable: false);
@@ -844,10 +836,7 @@ mixin MessageService
     required ChatType chatType,
   }) async {
     await _dbOp<XmppDatabase>((db) async {
-      await db.saveMessage(
-        message,
-        chatType: chatType,
-      );
+      await db.saveMessage(message, chatType: chatType);
       if (messageStorageMode.isServerOnly) {
         await db.trimChatMessages(
           jid: message.chatJid,
@@ -886,12 +875,7 @@ mixin MessageService
       );
     }
     if (previous == next) return;
-    unawaited(
-      _applyMessageStorageModeChange(
-        previous: previous,
-        next: next,
-      ),
-    );
+    unawaited(_applyMessageStorageModeChange(previous: previous, next: next));
   }
 
   Future<void> _applyMessageStorageModeChange({
@@ -902,10 +886,7 @@ mixin MessageService
     if (next.isServerOnly) {
       await purgeMessageHistory();
     }
-    await _reopenDatabaseForStorageMode(
-      previous: previous,
-      next: next,
-    );
+    await _reopenDatabaseForStorageMode(previous: previous, next: next);
   }
 
   Future<void> _reopenDatabaseForStorageMode({
@@ -1096,29 +1077,21 @@ mixin MessageService
   ) async {
     if (timestamp == null) return;
     final key = _lastSeenKeyFor(chatJid);
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final raw = ss.read(key: key) as String?;
-        final existing = raw == null ? null : DateTime.tryParse(raw);
-        if (existing != null && !timestamp.isAfter(existing)) {
-          return;
-        }
-        await ss.write(
-          key: key,
-          value: timestamp.toIso8601String(),
-        );
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final raw = ss.read(key: key) as String?;
+      final existing = raw == null ? null : DateTime.tryParse(raw);
+      if (existing != null && !timestamp.isAfter(existing)) {
+        return;
+      }
+      await ss.write(key: key, value: timestamp.toIso8601String());
+    }, awaitDatabase: true);
   }
 
   Future<DateTime?> loadLastSeenTimestamp(String chatJid) async {
-    return await _dbOpReturning<XmppStateStore, DateTime?>(
-      (ss) {
-        final raw = ss.read(key: _lastSeenKeyFor(chatJid)) as String?;
-        return raw == null ? null : DateTime.tryParse(raw);
-      },
-    );
+    return await _dbOpReturning<XmppStateStore, DateTime?>((ss) {
+      final raw = ss.read(key: _lastSeenKeyFor(chatJid)) as String?;
+      return raw == null ? null : DateTime.tryParse(raw);
+    });
   }
 
   String _mamScopeToken() {
@@ -1166,13 +1139,10 @@ mixin MessageService
     if (normalizedLegacy == null || normalizedLegacy.isEmpty) {
       return null;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        await ss.write(key: scopedKey, value: normalizedLegacy);
-        await ss.delete(key: legacyKey);
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      await ss.write(key: scopedKey, value: normalizedLegacy);
+      await ss.delete(key: legacyKey);
+    }, awaitDatabase: true);
     return normalizedLegacy;
   }
 
@@ -1210,13 +1180,10 @@ mixin MessageService
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
     final scopedKey = _mamScopedKey(_mamGlobalLastIdKeyName);
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        await ss.write(key: scopedKey, value: trimmed);
-        await ss.delete(key: _mamGlobalLastIdKey);
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      await ss.write(key: scopedKey, value: trimmed);
+      await ss.delete(key: _mamGlobalLastIdKey);
+    }, awaitDatabase: true);
   }
 
   Future<DateTime?> _loadMamGlobalLastSync() async {
@@ -1228,16 +1195,13 @@ mixin MessageService
 
   Future<void> _storeMamGlobalLastSync(DateTime timestamp) async {
     final scopedKey = _mamScopedKey(_mamGlobalLastSyncKeyName);
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        await ss.write(
-          key: scopedKey,
-          value: timestamp.toUtc().toIso8601String(),
-        );
-        await ss.delete(key: _mamGlobalLastSyncKey);
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      await ss.write(
+        key: scopedKey,
+        value: timestamp.toUtc().toIso8601String(),
+      );
+      await ss.delete(key: _mamGlobalLastSyncKey);
+    }, awaitDatabase: true);
   }
 
   Future<DateTime?> _loadMamGlobalDeniedUntil() async {
@@ -1261,21 +1225,15 @@ mixin MessageService
     _mamGlobalDeniedUntilLoaded = true;
     _mamGlobalDeniedUntil = until;
     final scopedKey = _mamScopedKey(_mamGlobalDeniedUntilKeyName);
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        if (until == null) {
-          await ss.delete(key: scopedKey);
-          await ss.delete(key: _mamGlobalDeniedUntilKey);
-          return;
-        }
-        await ss.write(
-          key: scopedKey,
-          value: until.toUtc().toIso8601String(),
-        );
+    await _dbOp<XmppStateStore>((ss) async {
+      if (until == null) {
+        await ss.delete(key: scopedKey);
         await ss.delete(key: _mamGlobalDeniedUntilKey);
-      },
-      awaitDatabase: true,
-    );
+        return;
+      }
+      await ss.write(key: scopedKey, value: until.toUtc().toIso8601String());
+      await ss.delete(key: _mamGlobalDeniedUntilKey);
+    }, awaitDatabase: true);
   }
 
   Future<List<Message>> searchChatMessages({
@@ -1390,11 +1348,7 @@ mixin MessageService
       final members = await fetchRoomMembers(roomJid: roomJid);
       final admins = await fetchRoomAdmins(roomJid: roomJid);
       final owners = await fetchRoomOwners(roomJid: roomJid);
-      final entries = <MucAffiliationEntry>[
-        ...members,
-        ...admins,
-        ...owners,
-      ];
+      final entries = <MucAffiliationEntry>[...members, ...admins, ...owners];
       final added = _appendPinAffiliations(affiliations, entries);
       if (added == 0) {
         return null;
@@ -1472,10 +1426,7 @@ mixin MessageService
     return _normalizePinPublishers(candidates);
   }
 
-  void _cachePinAuthorizedPublishers(
-    String chatJid,
-    _PinNodeContext context,
-  ) {
+  void _cachePinAuthorizedPublishers(String chatJid, _PinNodeContext context) {
     final normalizedChat = _normalizePinChatJid(chatJid);
     if (normalizedChat == null) {
       return;
@@ -1610,8 +1561,10 @@ mixin MessageService
       if (!support.pubSubSupported) {
         return;
       }
-      final nodeConfig =
-          await _ensurePinNodeForChat(normalizedChat, context: context);
+      final nodeConfig = await _ensurePinNodeForChat(
+        normalizedChat,
+        context: context,
+      );
       if (nodeConfig == null) {
         return;
       }
@@ -1630,10 +1583,7 @@ mixin MessageService
       if (snapshot == null) {
         return;
       }
-      await _applyPinSnapshot(
-        chatJid: normalizedChat,
-        items: snapshot,
-      );
+      await _applyPinSnapshot(chatJid: normalizedChat, items: snapshot);
       await _flushPendingPinSyncForChat(normalizedChat);
     } on XmppAbortedException {
       return;
@@ -1695,8 +1645,9 @@ mixin MessageService
 
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
-  static const Duration _conversationIndexMutedForeverDuration =
-      Duration(days: 3650);
+  static const Duration _conversationIndexMutedForeverDuration = Duration(
+    days: 3650,
+  );
   bool _mamLoginSyncInFlight = false;
   bool _mamGlobalSyncInFlight = false;
   DateTime? _mamGlobalSyncCompletedAt;
@@ -1848,9 +1799,7 @@ mixin MessageService
         unawaited(_acknowledgeMessage(event));
 
         if (shouldPersistAttachment) {
-          await _dbOp<XmppDatabase>(
-            (db) => db.saveFileMetadata(metadata),
-          );
+          await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
           message = message.copyWith(fileMetadataID: metadata.id);
         }
 
@@ -1859,8 +1808,9 @@ mixin MessageService
         if (event.get<mox.OmemoData>() case final data?) {
           final newRatchets = data.newRatchets.values.map((e) => e.length);
           final newCount = newRatchets.fold(0, (v, e) => v + e);
-          final replacedRatchets =
-              data.replacedRatchets.values.map((e) => e.length);
+          final replacedRatchets = data.replacedRatchets.values.map(
+            (e) => e.length,
+          );
           final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
           final pseudoMessageData = {
             'ratchetsAdded': newRatchets.toList(),
@@ -1962,21 +1912,19 @@ mixin MessageService
         final isDisplayed = event.type == mox.ChatMarker.displayed;
         final isReceived = isDisplayed || event.type == mox.ChatMarker.received;
         const bool isAcked = true;
-        await _dbOp<XmppDatabase>(
-          (db) async {
-            switch (event.type) {
-              case mox.ChatMarker.displayed:
-                db.markMessageDisplayed(event.id);
-                db.markMessageReceived(event.id);
-                db.markMessageAcked(event.id);
-              case mox.ChatMarker.received:
-                db.markMessageReceived(event.id);
-                db.markMessageAcked(event.id);
-              case mox.ChatMarker.acknowledged:
-                db.markMessageAcked(event.id);
-            }
-          },
-        );
+        await _dbOp<XmppDatabase>((db) async {
+          switch (event.type) {
+            case mox.ChatMarker.displayed:
+              db.markMessageDisplayed(event.id);
+              db.markMessageReceived(event.id);
+              db.markMessageAcked(event.id);
+            case mox.ChatMarker.received:
+              db.markMessageReceived(event.id);
+              db.markMessageAcked(event.id);
+            case mox.ChatMarker.acknowledged:
+              db.markMessageAcked(event.id);
+          }
+        });
 
         await _broadcastMessageStatusSync(
           id: event.id,
@@ -1986,12 +1934,10 @@ mixin MessageService
         );
       })
       ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
-        await _dbOp<XmppDatabase>(
-          (db) async {
-            db.markMessageReceived(event.id);
-            db.markMessageAcked(event.id);
-          },
-        );
+        await _dbOp<XmppDatabase>((db) async {
+          db.markMessageReceived(event.id);
+          db.markMessageAcked(event.id);
+        });
 
         await _broadcastMessageStatusSync(
           id: event.id,
@@ -2132,10 +2078,7 @@ mixin MessageService
     var start = 0;
     while (true) {
       final page = await _dbOpReturning<XmppDatabase, List<Chat>>(
-        (db) => db.getChats(
-          start: start,
-          end: start + _mamDiscoChatLimit,
-        ),
+        (db) => db.getChats(start: start, end: start + _mamDiscoChatLimit),
       );
       if (page.isEmpty) break;
       chats.addAll(page);
@@ -2275,11 +2218,7 @@ mixin MessageService
     final result = await mamManager.queryArchive(
       to: null,
       options: options,
-      rsm: mox.ResultSetManagement(
-        before: before,
-        after: after,
-        max: pageSize,
-      ),
+      rsm: mox.ResultSetManagement(before: before, after: after, max: pageSize),
       timeout: _mamQueryTimeout,
     );
     if (result == null) {
@@ -2366,9 +2305,7 @@ mixin MessageService
     );
   }
 
-  Future<void> _ensureMucJoinForSend({
-    required String roomJid,
-  }) async {
+  Future<void> _ensureMucJoinForSend({required String roomJid}) async {
     if (connectionState != ConnectionState.connected) return;
     late final String normalizedRoom;
     try {
@@ -2532,9 +2469,7 @@ mixin MessageService
     final isGroupChat = chatType == ChatType.groupChat;
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
       if (this is AvatarService) {
-        unawaited(
-          (this as AvatarService).prefetchAvatarForJid(jid),
-        );
+        unawaited((this as AvatarService).prefetchAvatarForJid(jid));
       }
     }
     if (isGroupChat && !offlineDemo) {
@@ -2639,9 +2574,7 @@ mixin MessageService
         kind: _OutboundMessageKind.message,
         chatJid: message.chatJid,
       );
-      final sent = await _connection.sendMessage(
-        stanza,
-      );
+      final sent = await _connection.sendMessage(stanza);
       if (!sent) {
         if (shouldStore) {
           await _handleMessageSendFailure(message.stanzaID);
@@ -2793,10 +2726,7 @@ mixin MessageService
             : HtmlContentCodec.toPlainText(normalizedHtmlCaption));
     final body = resolvedCaption.isNotEmpty
         ? resolvedCaption
-        : _attachmentLabel(
-            filename,
-            size,
-          );
+        : _attachmentLabel(filename, size);
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -2836,14 +2766,9 @@ mixin MessageService
     }
 
     try {
-      final sfsData = _sfsDataForAttachment(
-        metadata: metadata,
-        url: getUrl,
-      );
+      final sfsData = _sfsDataForAttachment(metadata: metadata, url: getUrl);
       final extraExtensions = <mox.StanzaHandlerExtension>[
-        const mox.MessageProcessingHintData(
-          [mox.MessageProcessingHint.store],
-        ),
+        const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
         sfsData,
         mox.OOBData(getUrl, filename),
       ];
@@ -2859,9 +2784,7 @@ mixin MessageService
         kind: _OutboundMessageKind.attachment,
         chatJid: message.chatJid,
       );
-      final sent = await _connection.sendMessage(
-        stanza,
-      );
+      final sent = await _connection.sendMessage(stanza);
       if (!sent) {
         if (shouldStore) {
           await _dbOp<XmppDatabase>(
@@ -2873,9 +2796,7 @@ mixin MessageService
         }
         throw XmppMessageException();
       }
-      await _dbOp<XmppDatabase>(
-        (db) => db.markMessageAcked(message.stanzaID),
-      );
+      await _dbOp<XmppDatabase>((db) => db.markMessageAcked(message.stanzaID));
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment message ${message.stanzaID}',
@@ -2974,10 +2895,7 @@ mixin MessageService
     );
     final headers = slot.headers
         .map(
-          (header) => XmppUploadHeader(
-            name: header.name,
-            value: header.value,
-          ),
+          (header) => XmppUploadHeader(name: header.name, value: header.value),
         )
         .toList(growable: false);
     return XmppAttachmentUpload._(
@@ -3005,10 +2923,8 @@ mixin MessageService
           putUrl: upload._putUrl,
           headers: upload._headers
               .map(
-                (header) => _UploadSlotHeader(
-                  name: header.name,
-                  value: header.value,
-                ),
+                (header) =>
+                    _UploadSlotHeader(name: header.name, value: header.value),
               )
               .toList(growable: false),
         ),
@@ -3019,11 +2935,7 @@ mixin MessageService
       );
       _log.fine(_attachmentUploadCompleteLog);
     } catch (error, stackTrace) {
-      _log.warning(
-        _attachmentUploadFailedLog,
-        error,
-        stackTrace,
-      );
+      _log.warning(_attachmentUploadFailedLog, error, stackTrace);
       if (shouldStore) {
         await _dbOp<XmppDatabase>(
           (db) => db.saveMessageError(
@@ -3049,10 +2961,9 @@ mixin MessageService
       size: metadata.sizeBytes,
       hashes: metadata.plainTextHashes ?? const {},
     );
-    return mox.StatelessFileSharingData(
-      sfsMetadata,
-      [mox.StatelessFileSharingUrlSource(url)],
-    );
+    return mox.StatelessFileSharingData(sfsMetadata, [
+      mox.StatelessFileSharingUrlSource(url),
+    ]);
   }
 
   Future<_UploadSlot> _requestHttpUploadSlot({
@@ -3088,11 +2999,7 @@ mixin MessageService
     } on XmppMessageException {
       rethrow;
     } catch (error, stackTrace) {
-      _log.warning(
-        _uploadSlotRequestFailedLog,
-        error,
-        stackTrace,
-      );
+      _log.warning(_uploadSlotRequestFailedLog, error, stackTrace);
       throw XmppMessageException();
     }
   }
@@ -3102,9 +3009,9 @@ mixin MessageService
     required CalendarSyncOutbound outbound,
     ChatType chatType = ChatType.chat,
   }) async {
-    const hint = mox.MessageProcessingHintData(
-      [mox.MessageProcessingHint.store],
-    );
+    const hint = mox.MessageProcessingHintData([
+      mox.MessageProcessingHint.store,
+    ]);
     final extensions = <mox.StanzaHandlerExtension>[hint];
     final attachment = outbound.attachment;
     if (attachment != null) {
@@ -3178,11 +3085,7 @@ mixin MessageService
         contentType: contentType,
       );
     } catch (error, stackTrace) {
-      _log.warning(
-        _calendarSnapshotUploadFailedMessage,
-        error,
-        stackTrace,
-      );
+      _log.warning(_calendarSnapshotUploadFailedMessage, error, stackTrace);
       throw XmppMessageException();
     }
     return CalendarSnapshotUploadResult(
@@ -3241,10 +3144,7 @@ mixin MessageService
       if (putUrl == null || getUrl == null) {
         throw XmppUploadMisconfiguredException();
       }
-      await _validateHttpUploadSlotUrls(
-        putUrl: putUrl,
-        getUrl: getUrl,
-      );
+      await _validateHttpUploadSlotUrls(putUrl: putUrl, getUrl: getUrl);
       return _UploadSlot(
         getUrl: getUrl,
         putUrl: putUrl,
@@ -3310,9 +3210,7 @@ mixin MessageService
       final putSafe = await isSafeHostForRemoteConnection(putHost);
       final getSafe = await isSafeHostForRemoteConnection(getHost);
       if (!putSafe || !getSafe) {
-        throw XmppUploadMisconfiguredException(
-          'Upload slot host not allowed.',
-        );
+        throw XmppUploadMisconfiguredException('Upload slot host not allowed.');
       }
     }
   }
@@ -3397,11 +3295,7 @@ mixin MessageService
       );
       throw XmppUploadUnavailableException();
     } catch (error, stackTrace) {
-      _log.warning(
-        'HTTP upload failed.',
-        error,
-        stackTrace,
-      );
+      _log.warning('HTTP upload failed.', error, stackTrace);
       rethrow;
     } finally {
       client.close();
@@ -3471,11 +3365,7 @@ mixin MessageService
         'condition=$stanzaCondition text=${text.isEmpty ? 'none' : text}',
       );
     } catch (error, stackTrace) {
-      _log.fine(
-        'Failed to log HTTP upload IQ error.',
-        error,
-        stackTrace,
-      );
+      _log.fine('Failed to log HTTP upload IQ error.', error, stackTrace);
     }
   }
 
@@ -3548,10 +3438,7 @@ mixin MessageService
     );
   }
 
-  Future<void> resendMessage(
-    String stanzaID, {
-    ChatType? chatType,
-  }) async {
+  Future<void> resendMessage(String stanzaID, {ChatType? chatType}) async {
     final message = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(stanzaID),
     );
@@ -3614,13 +3501,11 @@ mixin MessageService
       messageType: messageType,
     );
 
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        db.markMessageDisplayed(stanzaID);
-        db.markMessageReceived(stanzaID);
-        db.markMessageAcked(stanzaID);
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      db.markMessageDisplayed(stanzaID);
+      db.markMessageReceived(stanzaID);
+      db.markMessageAcked(stanzaID);
+    });
   }
 
   Future<MamPageResult> fetchLatestFromArchive({
@@ -3628,12 +3513,7 @@ mixin MessageService
     int pageSize = 50,
     bool isMuc = false,
   }) async =>
-      _fetchMamPage(
-        jid: jid,
-        before: '',
-        pageSize: pageSize,
-        isMuc: isMuc,
-      );
+      _fetchMamPage(jid: jid, before: '', pageSize: pageSize, isMuc: isMuc);
 
   DateTime? get mamGlobalSyncCompletedAt => _mamGlobalSyncCompletedAt;
 
@@ -3650,12 +3530,7 @@ mixin MessageService
     int pageSize = 50,
     bool isMuc = false,
   }) async =>
-      _fetchMamPage(
-        jid: jid,
-        before: before,
-        pageSize: pageSize,
-        isMuc: isMuc,
-      );
+      _fetchMamPage(jid: jid, before: before, pageSize: pageSize, isMuc: isMuc);
 
   Future<MamPageResult> fetchSinceFromArchive({
     required String jid,
@@ -3698,11 +3573,7 @@ mixin MessageService
     final result = await mamManager.queryArchive(
       to: isMuc ? peerJid : null,
       options: options,
-      rsm: mox.ResultSetManagement(
-        before: before,
-        after: after,
-        max: pageSize,
-      ),
+      rsm: mox.ResultSetManagement(before: before, after: after, max: pageSize),
       timeout: _mamQueryTimeout,
     );
     if (result == null) {
@@ -3741,9 +3612,7 @@ mixin MessageService
   }) async {
     final Draft? existingDraft = id == null
         ? null
-        : await _dbOpReturning<XmppDatabase, Draft?>(
-            (db) => db.getDraft(id),
-          );
+        : await _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
     final previousMetadataIds =
         existingDraft?.attachmentMetadataIds ?? const <String>[];
     final draftRecipients = await _resolveDraftRecipientRecords(
@@ -3858,9 +3727,7 @@ mixin MessageService
     );
     final metadataIds = draft?.attachmentMetadataIds ?? const <String>[];
     final syncId = draft?.draftSyncId ?? '';
-    await _dbOp<XmppDatabase>(
-      (db) => db.removeDraft(id),
-    );
+    await _dbOp<XmppDatabase>((db) => db.removeDraft(id));
     if (metadataIds.isNotEmpty) {
       await _deleteAttachmentMetadata(metadataIds);
     }
@@ -3874,17 +3741,13 @@ mixin MessageService
     if (trimmed.isEmpty) {
       return;
     }
-    await _dbOp<XmppDatabase>(
-      (db) => db.deleteFileMetadata(trimmed),
-    );
+    await _dbOp<XmppDatabase>((db) => db.deleteFileMetadata(trimmed));
   }
 
   Future<void> _handleMessageSendFailure(String stanzaID) async {
     await _dbOp<XmppDatabase>(
-      (db) => db.saveMessageError(
-        error: MessageError.unknown,
-        stanzaID: stanzaID,
-      ),
+      (db) =>
+          db.saveMessageError(error: MessageError.unknown, stanzaID: stanzaID),
     );
   }
 
@@ -3921,17 +3784,13 @@ mixin MessageService
     return metadata.id;
   }
 
-  Future<void> _deleteAttachmentMetadata(
-    Iterable<String> metadataIds,
-  ) async {
+  Future<void> _deleteAttachmentMetadata(Iterable<String> metadataIds) async {
     if (metadataIds.isEmpty) return;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        for (final metadataId in metadataIds) {
-          await db.deleteFileMetadata(metadataId);
-        }
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      for (final metadataId in metadataIds) {
+        await db.deleteFileMetadata(metadataId);
+      }
+    });
   }
 
   Future<void> _ensureCapabilityCacheLoaded() async {
@@ -3941,12 +3800,14 @@ mixin MessageService
           (ss.read(key: _capabilityCacheKey) as Map<dynamic, dynamic>?) ?? {};
       _capabilityCache
         ..clear()
-        ..addAll(stored.map(
-          (key, value) => MapEntry(
-            key as String,
-            _PeerCapabilities.fromJson(value as Map<dynamic, dynamic>),
+        ..addAll(
+          stored.map(
+            (key, value) => MapEntry(
+              key as String,
+              _PeerCapabilities.fromJson(value as Map<dynamic, dynamic>),
+            ),
           ),
-        ));
+        );
     }, awaitDatabase: true);
     _capabilityCacheLoaded = true;
   }
@@ -4111,12 +3972,10 @@ mixin MessageService
     final peer = event.from.toBare().toString();
     final isMuc = event.type == 'groupchat';
     if (isMuc) {
-      await _dbOp<XmppDatabase>(
-        (db) async {
-          db.markMessageReceived(id);
-          db.markMessageAcked(id);
-        },
-      );
+      await _dbOp<XmppDatabase>((db) async {
+        db.markMessageReceived(id);
+        db.markMessageAcked(id);
+      });
       return;
     }
     final target = isMuc ? event.from.toString() : peer;
@@ -4132,12 +3991,10 @@ mixin MessageService
         messageType: messageType,
       );
 
-      await _dbOp<XmppDatabase>(
-        (db) async {
-          db.markMessageReceived(id);
-          db.markMessageAcked(id);
-        },
-      );
+      await _dbOp<XmppDatabase>((db) async {
+        db.markMessageReceived(id);
+        db.markMessageAcked(id);
+      });
     }
 
     if (deliveryReceiptRequested && capabilities.supportsReceipts) {
@@ -4153,12 +4010,10 @@ mixin MessageService
         ),
       );
 
-      await _dbOp<XmppDatabase>(
-        (db) async {
-          db.markMessageReceived(id);
-          db.markMessageAcked(id);
-        },
-      );
+      await _dbOp<XmppDatabase>((db) async {
+        db.markMessageReceived(id);
+        db.markMessageAcked(id);
+      });
     }
   }
 
@@ -4187,19 +4042,17 @@ mixin MessageService
       return false;
     }
 
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        if (envelope.displayed) {
-          db.markMessageDisplayed(envelope.id);
-        }
-        if (envelope.received) {
-          db.markMessageReceived(envelope.id);
-        }
-        if (envelope.acked) {
-          db.markMessageAcked(envelope.id);
-        }
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      if (envelope.displayed) {
+        db.markMessageDisplayed(envelope.id);
+      }
+      if (envelope.received) {
+        db.markMessageReceived(envelope.id);
+      }
+      if (envelope.acked) {
+        db.markMessageAcked(envelope.id);
+      }
+    });
     return true;
   }
 
@@ -4342,9 +4195,7 @@ mixin MessageService
   //   });
   // }
 
-  MessageError _resolveMessageError(
-    mox.StanzaError? stanzaError,
-  ) {
+  MessageError _resolveMessageError(mox.StanzaError? stanzaError) {
     return switch (stanzaError) {
       mox.ServiceUnavailableError _ => MessageError.serviceUnavailable,
       mox.RemoteServerNotFoundError _ => MessageError.serverNotFound,
@@ -4358,9 +4209,7 @@ mixin MessageService
     return errorType == expected;
   }
 
-  bool _shouldAttemptMucRepair(
-    StanzaErrorConditionData? conditionData,
-  ) {
+  bool _shouldAttemptMucRepair(StanzaErrorConditionData? conditionData) {
     if (conditionData == null) return false;
     final String condition = conditionData.condition;
     final String? errorType = conditionData.type;
@@ -4413,10 +4262,12 @@ mixin MessageService
   }) {
     final String? summaryJid = _normalizeMucRoomJidCandidate(summary.chatJid);
     if (summaryJid != null) return summaryJid;
-    final String? fromBare =
-        _normalizeMucRoomJidCandidate(event.from.toBare().toString());
-    final String? toBare =
-        _normalizeMucRoomJidCandidate(event.to.toBare().toString());
+    final String? fromBare = _normalizeMucRoomJidCandidate(
+      event.from.toBare().toString(),
+    );
+    final String? toBare = _normalizeMucRoomJidCandidate(
+      event.to.toBare().toString(),
+    );
     final String? ownBare = _normalizeBareJidValue(_myJid?.toBare().toString());
     if (ownBare == null || ownBare.isEmpty) {
       return fromBare ?? toBare;
@@ -4427,10 +4278,12 @@ mixin MessageService
   }
 
   String? _resolveGroupChatRoomJidFromEvent(mox.MessageEvent event) {
-    final String? fromBare =
-        _normalizeMucRoomJidCandidate(event.from.toBare().toString());
-    final String? toBare =
-        _normalizeMucRoomJidCandidate(event.to.toBare().toString());
+    final String? fromBare = _normalizeMucRoomJidCandidate(
+      event.from.toBare().toString(),
+    );
+    final String? toBare = _normalizeMucRoomJidCandidate(
+      event.to.toBare().toString(),
+    );
     final String? ownBare = _normalizeBareJidValue(_myJid?.toBare().toString());
     if (ownBare == null || ownBare.isEmpty) {
       return fromBare ?? toBare;
@@ -4494,13 +4347,11 @@ mixin MessageService
         event.extensions.get<StanzaErrorConditionData>();
 
     await _dbOp<XmppDatabase>(
-      (db) => db.saveMessageError(
-        stanzaID: stanzaId,
-        error: error,
-      ),
+      (db) => db.saveMessageError(stanzaID: stanzaId, error: error),
     );
-    final _OutboundMessageSummary? summary =
-        _outboundMessageSummaries.remove(stanzaId);
+    final _OutboundMessageSummary? summary = _outboundMessageSummaries.remove(
+      stanzaId,
+    );
     final String? mappedRoomJid = _takeOutboundGroupchatRoomJid(stanzaId);
     final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
     String? roomJid = summaryIsGroupChat
@@ -4562,25 +4413,23 @@ mixin MessageService
     final mox.OccupantIdData? occupantData =
         event.extensions.get<mox.OccupantIdData>();
     final String? occupantId = occupantData?.id;
-    return await _dbOpReturning<XmppDatabase, bool>(
-      (db) async {
-        if (await db.getMessageByOriginID(correction.id) case final message?) {
-          if (!message.authorizedForMutation(
-                from: event.from,
-                occupantId: occupantId,
-              ) ||
-              !message.editable) {
-            return false;
-          }
-          await db.saveMessageEdit(
-            stanzaID: message.stanzaID,
-            body: event.extensions.get<mox.MessageBodyData>()?.body,
-          );
-          return true;
+    return await _dbOpReturning<XmppDatabase, bool>((db) async {
+      if (await db.getMessageByOriginID(correction.id) case final message?) {
+        if (!message.authorizedForMutation(
+              from: event.from,
+              occupantId: occupantId,
+            ) ||
+            !message.editable) {
+          return false;
         }
-        return false;
-      },
-    );
+        await db.saveMessageEdit(
+          stanzaID: message.stanzaID,
+          body: event.extensions.get<mox.MessageBodyData>()?.body,
+        );
+        return true;
+      }
+      return false;
+    });
   }
 
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
@@ -4594,21 +4443,19 @@ mixin MessageService
     final mox.OccupantIdData? occupantData =
         event.extensions.get<mox.OccupantIdData>();
     final String? occupantId = occupantData?.id;
-    return await _dbOpReturning<XmppDatabase, bool>(
-      (db) async {
-        if (await db.getMessageByOriginID(retraction.id) case final message?) {
-          if (!message.authorizedForMutation(
-            from: event.from,
-            occupantId: occupantId,
-          )) {
-            return false;
-          }
-          await db.markMessageRetracted(message.stanzaID);
-          return true;
+    return await _dbOpReturning<XmppDatabase, bool>((db) async {
+      if (await db.getMessageByOriginID(retraction.id) case final message?) {
+        if (!message.authorizedForMutation(
+          from: event.from,
+          occupantId: occupantId,
+        )) {
+          return false;
         }
-        return false;
-      },
-    );
+        await db.markMessageRetracted(message.stanzaID);
+        return true;
+      }
+      return false;
+    });
   }
 
   Future<bool> _handleReactions(mox.MessageEvent event) async {
@@ -4623,27 +4470,24 @@ mixin MessageService
       _log.fine('Dropping reactions with no valid emoji payload');
       return !event.displayable;
     }
-    return await _dbOpReturning<XmppDatabase, bool>(
-      (db) async {
-        final message = await db.getMessageByStanzaID(reactions.messageId);
-        if (message == null) {
-          _log.fine(
-            'Dropping reactions for unknown message ${reactions.messageId}',
-          );
-          return !event.displayable;
-        }
-        final bool isGroupChat = event.type == _messageTypeGroupchat;
-        final String senderJid = isGroupChat
-            ? event.from.toString()
-            : event.from.toBare().toString();
-        await db.replaceReactions(
-          messageId: message.stanzaID,
-          senderJid: senderJid,
-          emojis: sanitizedEmojis,
+    return await _dbOpReturning<XmppDatabase, bool>((db) async {
+      final message = await db.getMessageByStanzaID(reactions.messageId);
+      if (message == null) {
+        _log.fine(
+          'Dropping reactions for unknown message ${reactions.messageId}',
         );
         return !event.displayable;
-      },
-    );
+      }
+      final bool isGroupChat = event.type == _messageTypeGroupchat;
+      final String senderJid =
+          isGroupChat ? event.from.toString() : event.from.toBare().toString();
+      await db.replaceReactions(
+        messageId: message.stanzaID,
+        senderJid: senderJid,
+        emojis: sanitizedEmojis,
+      );
+      return !event.displayable;
+    });
   }
 
   Future<bool> _handleCalendarSync(
@@ -4763,8 +4607,10 @@ mixin MessageService
     required ChatType chatType,
   }) {
     final CalendarChatAcl acl = chatType.calendarDefaultAcl;
-    final CalendarChatRole requiredRole =
-        _calendarSyncRequiredRole(syncMessage, acl: acl);
+    final CalendarChatRole requiredRole = _calendarSyncRequiredRole(
+      syncMessage,
+      acl: acl,
+    );
     final CalendarChatRole? senderRole = _calendarSyncSenderRole(
       event,
       chatJid: chatJid,
@@ -4871,8 +4717,10 @@ mixin MessageService
     if (roomState == null) {
       return false;
     }
-    final Occupant? occupant =
-        _mucOccupantForSender(event, roomState: roomState);
+    final Occupant? occupant = _mucOccupantForSender(
+      event,
+      roomState: roomState,
+    );
     return occupant?.isPresent ?? false;
   }
 
@@ -5110,9 +4958,7 @@ mixin MessageService
     bool? allowInsecureHostsOverride,
     required bool allowRemoteDownload,
   }) async {
-    await _dbOp<XmppDatabase>(
-      (db) => db.saveFileMetadata(metadata),
-    );
+    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     final existingPath = metadata.path?.trim();
     final existingFile = existingPath == null || existingPath.isEmpty
         ? null
@@ -5232,9 +5078,7 @@ mixin MessageService
   Future<void> _requestCalendarSnapshotFallback(String jid) async {
     if (connectionState != ConnectionState.connected) return;
     final syncMessage = CalendarSyncMessage.request();
-    final messageJson = jsonEncode({
-      'calendar_sync': syncMessage.toJson(),
-    });
+    final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
     try {
       await sendCalendarSyncMessage(
         jid: jid,
@@ -5341,10 +5185,7 @@ mixin MessageService
       final state = CalendarSyncState.read();
       final lastApplied = state.lastAppliedTimestamp;
       if (lastApplied != null) {
-        await _catchUpCalendarFromArchive(
-          jid: selfJid,
-          since: lastApplied,
-        );
+        await _catchUpCalendarFromArchive(jid: selfJid, since: lastApplied);
         _log.info('Calendar rehydration catch-up complete');
         return true;
       }
@@ -5433,9 +5274,7 @@ mixin MessageService
 
     void emit() {
       if (!controller.hasListener) return;
-      controller.add(
-        _applyReactionPreviews(currentMessages, currentReactions),
-      );
+      controller.add(_applyReactionPreviews(currentMessages, currentReactions));
     }
 
     void start() {
@@ -5587,8 +5426,9 @@ mixin MessageService
         final resolvedName = _sanitizeAttachmentFilename(
           statelessData.metadata.name ?? p.basename(encryptedUrl),
         );
-        final mimeType =
-            _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
+        final mimeType = _sanitizeAttachmentMimeType(
+          statelessData.metadata.mediaType,
+        );
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: [encryptedUrl],
@@ -5626,8 +5466,9 @@ mixin MessageService
       final resolvedName = _sanitizeAttachmentFilename(
         statelessData.metadata.name ?? p.basename(urls.first),
       );
-      final mimeType =
-          _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
+      final mimeType = _sanitizeAttachmentMimeType(
+        statelessData.metadata.mediaType,
+      );
       return FileMetadataData(
         id: uuid.v4(),
         sourceUrls: urls,
@@ -5790,8 +5631,9 @@ mixin MessageService
           bytes: plainBytes,
         );
         resolvedSizeBytes = plainBytes.length;
-        decryptedTmp =
-            File(p.join(directory.path, '.${metadata.id}.decrypted'));
+        decryptedTmp = File(
+          p.join(directory.path, '.${metadata.id}.decrypted'),
+        );
         await decryptedTmp.writeAsBytes(plainBytes, flush: true);
         await _replaceFile(source: decryptedTmp, destination: finalFile);
         decryptedTmp = null;
@@ -5819,9 +5661,7 @@ mixin MessageService
         (db) => db.saveFileMetadata(updatedMetadata),
         awaitDatabase: true,
       );
-      unawaited(
-        _enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}),
-      );
+      unawaited(_enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}));
       return finalFile.path;
     } on XmppAbortedException {
       return null;
@@ -6058,8 +5898,9 @@ mixin MessageService
             await client.getUrl(current).timeout(_httpAttachmentGetTimeout)
               ..followRedirects = false
               ..maxRedirects = 0;
-        final response =
-            await request.close().timeout(_httpAttachmentGetTimeout);
+        final response = await request.close().timeout(
+              _httpAttachmentGetTimeout,
+            );
         final statusCode = response.statusCode;
 
         if (_isHttpRedirectStatusCode(statusCode)) {
@@ -6095,8 +5936,9 @@ mixin MessageService
         final sink = destination.openWrite();
         var received = 0;
         try {
-          await for (final chunk
-              in response.timeout(_httpAttachmentGetTimeout)) {
+          await for (final chunk in response.timeout(
+            _httpAttachmentGetTimeout,
+          )) {
             received += chunk.length;
             if (received > maxBytes) {
               throw XmppFileTooBigException(maxBytes);
@@ -6133,8 +5975,9 @@ mixin MessageService
       throw XmppMessageException();
     }
     if (!allowInsecureHosts) {
-      final safe = await isSafeHostForRemoteConnection(host)
-          .timeout(_httpAttachmentGetTimeout);
+      final safe = await isSafeHostForRemoteConnection(
+        host,
+      ).timeout(_httpAttachmentGetTimeout);
       if (!safe) {
         throw XmppMessageException();
       }
@@ -6174,15 +6017,14 @@ mixin MessageService
         if (cipherBytes.length <= _aesGcmTagLengthBytes) {
           throw XmppMessageException();
         }
-        final macBytes =
-            cipherBytes.sublist(cipherBytes.length - _aesGcmTagLengthBytes);
-        final body =
-            cipherBytes.sublist(0, cipherBytes.length - _aesGcmTagLengthBytes);
-        final secretBox = SecretBox(
-          body,
-          nonce: ivBytes,
-          mac: Mac(macBytes),
+        final macBytes = cipherBytes.sublist(
+          cipherBytes.length - _aesGcmTagLengthBytes,
         );
+        final body = cipherBytes.sublist(
+          0,
+          cipherBytes.length - _aesGcmTagLengthBytes,
+        );
+        final secretBox = SecretBox(body, nonce: ivBytes, mac: Mac(macBytes));
         final algorithm = scheme == mox.sfsEncryptionAes128GcmNoPaddingXmlns
             ? AesGcm.with128bits()
             : AesGcm.with256bits();
@@ -6283,9 +6125,7 @@ mixin MessageService
     return false;
   }
 
-  Future<void> _handlePinNotification(
-    mox.PubSubNotificationEvent event,
-  ) async {
+  Future<void> _handlePinNotification(mox.PubSubNotificationEvent event) async {
     final nodeId = event.item.node;
     final chatJid = _chatJidFromPinNode(nodeId);
     if (chatJid == null) return;
@@ -6309,8 +6149,9 @@ mixin MessageService
     if (parsed == null) {
       return;
     }
-    if (_pendingPinRetractionsByChat[chatJid]
-            ?.contains(parsed.messageStanzaId) ==
+    if (_pendingPinRetractionsByChat[chatJid]?.contains(
+          parsed.messageStanzaId,
+        ) ==
         true) {
       return;
     }
@@ -6329,9 +6170,7 @@ mixin MessageService
     await _applyPinSyncUpdate(parsed);
   }
 
-  Future<void> _handlePinRetraction(
-    mox.PubSubItemsRetractedEvent event,
-  ) async {
+  Future<void> _handlePinRetraction(mox.PubSubItemsRetractedEvent event) async {
     final chatJid = _chatJidFromPinNode(event.node);
     if (chatJid == null) return;
     if (event.itemIds.isEmpty) return;
@@ -6356,9 +6195,7 @@ mixin MessageService
     }
   }
 
-  Future<void> _applyPinSyncUpdate(
-    _PinnedMessageSyncPayload payload,
-  ) async {
+  Future<void> _applyPinSyncUpdate(_PinnedMessageSyncPayload payload) async {
     await _dbOp<XmppDatabase>(
       (db) => db.upsertPinnedMessage(
         PinnedMessageEntry(
@@ -6632,10 +6469,7 @@ mixin MessageService
     }
   }
 
-  Future<void> _queuePinPublish(
-    String chatJid,
-    String messageStanzaId,
-  ) async {
+  Future<void> _queuePinPublish(String chatJid, String messageStanzaId) async {
     await _ensurePendingPinSyncLoaded();
     final publishes = _pendingPinPublishesByChat.putIfAbsent(
       chatJid,
@@ -6727,21 +6561,18 @@ mixin MessageService
     _pendingPinRetractionsByChat.removeWhere((_, ids) => ids.isEmpty);
     final publishes = _encodePendingPinMap(_pendingPinPublishesByChat);
     final retractions = _encodePendingPinMap(_pendingPinRetractionsByChat);
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        if (publishes.isEmpty) {
-          await ss.delete(key: _pinPendingPublishesKey);
-        } else {
-          await ss.write(key: _pinPendingPublishesKey, value: publishes);
-        }
-        if (retractions.isEmpty) {
-          await ss.delete(key: _pinPendingRetractionsKey);
-        } else {
-          await ss.write(key: _pinPendingRetractionsKey, value: retractions);
-        }
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      if (publishes.isEmpty) {
+        await ss.delete(key: _pinPendingPublishesKey);
+      } else {
+        await ss.write(key: _pinPendingPublishesKey, value: publishes);
+      }
+      if (retractions.isEmpty) {
+        await ss.delete(key: _pinPendingRetractionsKey);
+      } else {
+        await ss.write(key: _pinPendingRetractionsKey, value: retractions);
+      }
+    }, awaitDatabase: true);
   }
 
   Future<void> _flushPendingPinSync() async {
@@ -6786,8 +6617,10 @@ mixin MessageService
     if (pubsub == null) {
       return;
     }
-    final nodeConfig =
-        await _ensurePinNodeForChat(normalizedChat, context: context);
+    final nodeConfig = await _ensurePinNodeForChat(
+      normalizedChat,
+      context: context,
+    );
     if (nodeConfig == null) {
       return;
     }
@@ -6931,9 +6764,7 @@ mixin MessageService
     if (!chatAllowed) {
       return false;
     }
-    return _inboundAttachmentAutoDownloadGlobalLimiter.allowEvent(
-      nowMs: nowMs,
-    );
+    return _inboundAttachmentAutoDownloadGlobalLimiter.allowEvent(nowMs: nowMs);
   }
 
   Future<void> _autoDownloadTrustedInboundAttachment({
@@ -6950,16 +6781,14 @@ mixin MessageService
           message.senderJid.trim().toLowerCase() == accountJid.toLowerCase();
       var isTrusted = isSelf;
       if (!isTrusted) {
-        isTrusted = await _dbOpReturning<XmppDatabase, bool>(
-          (db) async {
-            final chat = await db.getChat(message.chatJid);
-            if (chat?.spam ?? false) {
-              return false;
-            }
-            if (chat == null) return false;
-            return chat.attachmentAutoDownload.isAllowed;
-          },
-        );
+        isTrusted = await _dbOpReturning<XmppDatabase, bool>((db) async {
+          final chat = await db.getChat(message.chatJid);
+          if (chat?.spam ?? false) {
+            return false;
+          }
+          if (chat == null) return false;
+          return chat.attachmentAutoDownload.isAllowed;
+        });
       }
       if (!isTrusted) return;
       final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
@@ -6978,16 +6807,16 @@ mixin MessageService
     }
   }
 
-// Future<bool> _downloadAllowed(String chatJid) async {
-//   if (!(await Permission.storage.status).isGranted) return false;
-//   if ((await _connection.getConnectionState()) !=
-//       mox.XmppConnectionState.connected) return false;
-//   var allowed = false;
-//   await _dbOp<XmppDatabase>((db) async {
-//     allowed = (await db.rosterAccessor.selectOne(chatJid) != null);
-//   });
-//   return allowed;
-// }
+  // Future<bool> _downloadAllowed(String chatJid) async {
+  //   if (!(await Permission.storage.status).isGranted) return false;
+  //   if ((await _connection.getConnectionState()) !=
+  //       mox.XmppConnectionState.connected) return false;
+  //   var allowed = false;
+  //   await _dbOp<XmppDatabase>((db) async {
+  //     allowed = (await db.rosterAccessor.selectOne(chatJid) != null);
+  //   });
+  //   return allowed;
+  // }
 }
 
 final class _AttachmentCacheEntry {
@@ -7016,14 +6845,12 @@ class _UploadSlot {
       putUrl: slot.putUrl.toString(),
       headers: slot.headers.entries
           .map(
-            (entry) => _UploadSlotHeader(
-              name: entry.key,
-              value: entry.value,
-            ),
+            (entry) => _UploadSlotHeader(name: entry.key, value: entry.value),
           )
           .where(
-            (header) => _allowedHttpUploadPutHeaders
-                .contains(header.name.toLowerCase()),
+            (header) => _allowedHttpUploadPutHeaders.contains(
+              header.name.toLowerCase(),
+            ),
           )
           .toList(growable: false),
     );
@@ -7035,10 +6862,7 @@ class _UploadSlot {
 }
 
 class _UploadSlotHeader {
-  const _UploadSlotHeader({
-    required this.name,
-    required this.value,
-  });
+  const _UploadSlotHeader({required this.name, required this.value});
 
   final String name;
   final String value;
@@ -7058,9 +6882,6 @@ class _ReactionBucket {
     }
   }
 
-  ReactionPreview toPreview() => ReactionPreview(
-        emoji: emoji,
-        count: count,
-        reactedBySelf: reactedBySelf,
-      );
+  ReactionPreview toPreview() =>
+      ReactionPreview(emoji: emoji, count: count, reactedBySelf: reactedBySelf);
 }

@@ -116,21 +116,13 @@ class _QuickAddModalState extends State<QuickAddModal>
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ));
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
+    );
 
     if (widget.surface == QuickAddModalSurface.dialog) {
       _animationController.forward();
@@ -230,10 +222,7 @@ class _QuickAddModalState extends State<QuickAddModal>
         child: AnimatedBuilder(
           animation: _scaleAnimation,
           builder: (context, child) {
-            return Transform.scale(
-              scale: _scaleAnimation.value,
-              child: child,
-            );
+            return Transform.scale(scale: _scaleAnimation.value, child: child);
           },
           child: Form(
             key: _formKey,
@@ -378,8 +367,9 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
 
     if (!_recurrenceLocked) {
-      final RecurrenceFormValue value =
-          RecurrenceFormValue.fromRule(task.recurrence);
+      final RecurrenceFormValue value = RecurrenceFormValue.fromRule(
+        task.recurrence,
+      );
       _formController.setRecurrence(value);
     }
 
@@ -656,8 +646,9 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     _formController.setSubmitting(true);
     final BaseCalendarBloc? calendarBloc = widget.calendarBloc;
-    final List<String> queuedPathIds =
-        List<String>.from(_queuedCriticalPathIds);
+    final List<String> queuedPathIds = List<String>.from(
+      _queuedCriticalPathIds,
+    );
     final bool hasQueuedPaths = queuedPathIds.isNotEmpty;
     final Set<String>? previousIds =
         hasQueuedPaths ? calendarBloc?.state.model.tasks.keys.toSet() : null;
@@ -734,8 +725,10 @@ class _QuickAddModalState extends State<QuickAddModal>
     widget.onTaskAdded(task);
 
     if (hasQueuedPaths && calendarBloc != null && previousIds != null) {
-      final CalendarTask? createdTask =
-          await _waitForNewTask(calendarBloc, previousIds);
+      final CalendarTask? createdTask = await _waitForNewTask(
+        calendarBloc,
+        previousIds,
+      );
       if (!mounted) {
         return;
       }
@@ -749,9 +742,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           );
         }
       } else {
-        _setFormError(
-          context.l10n.calendarCriticalPathAddAfterSaveFailed,
-        );
+        _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
       }
     }
 
@@ -918,12 +909,11 @@ class _QuickAddModalContent extends StatelessWidget {
     final double keyboardInset = mediaQuery.viewInsets.bottom;
     final double safeBottom = mediaQuery.viewPadding.bottom;
     final bool keyboardOpen = isSheet && keyboardInset > safeBottom;
-    final EdgeInsets contentPadding =
-        responsive.contentPadding.resolve(Directionality.of(context));
+    final EdgeInsets contentPadding = responsive.contentPadding.resolve(
+      Directionality.of(context),
+    );
     final EdgeInsets scrollPadding = isSheet
-        ? contentPadding.copyWith(
-            bottom: contentPadding.bottom + keyboardInset,
-          )
+        ? contentPadding.copyWith(bottom: contentPadding.bottom + keyboardInset)
         : contentPadding;
     final BorderRadius borderRadius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
@@ -983,14 +973,16 @@ class _QuickAddModalContent extends StatelessWidget {
                               : Container(
                                   key: const ValueKey('quick-add-error'),
                                   margin: const EdgeInsets.only(
-                                      bottom: calendarGutterSm),
+                                    bottom: calendarGutterSm,
+                                  ),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: calendarGutterMd,
                                     vertical: calendarInsetMd,
                                   ),
                                   decoration: BoxDecoration(
                                     color: calendarDangerColor.withValues(
-                                        alpha: 0.08),
+                                      alpha: 0.08,
+                                    ),
                                     borderRadius: BorderRadius.circular(
                                       calendarBorderRadius,
                                     ),
@@ -1158,11 +1150,7 @@ class _QuickAddModalContent extends StatelessWidget {
                     padding: EdgeInsets.only(
                       bottom: actionInsetBuilder(context),
                     ),
-                    child: SafeArea(
-                      top: false,
-                      bottom: true,
-                      child: actions,
-                    ),
+                    child: SafeArea(top: false, bottom: true, child: actions),
                   ),
               ],
             ),
@@ -1171,19 +1159,14 @@ class _QuickAddModalContent extends StatelessWidget {
       },
     );
     if (isSheet) {
-      return ClipRRect(
-        borderRadius: borderRadius,
-        child: shell,
-      );
+      return ClipRRect(borderRadius: borderRadius, child: shell);
     }
     return shell;
   }
 }
 
 class _QuickAddHeader extends StatelessWidget {
-  const _QuickAddHeader({
-    required this.onClose,
-  });
+  const _QuickAddHeader({required this.onClose});
 
   final VoidCallback onClose;
 
@@ -1202,11 +1185,7 @@ class _QuickAddHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.add_task,
-            color: calendarTitleColor,
-            size: 20,
-          ),
+          Icon(Icons.add_task, color: calendarTitleColor, size: 20),
           const SizedBox(width: calendarGutterSm),
           Text(
             l10n.calendarAddTaskTitle,
@@ -1298,9 +1277,7 @@ class _QuickAddTaskNameField extends StatelessWidget {
 }
 
 class _QuickAddDescriptionField extends StatelessWidget {
-  const _QuickAddDescriptionField({
-    required this.controller,
-  });
+  const _QuickAddDescriptionField({required this.controller});
 
   final TextEditingController controller;
 
@@ -1549,8 +1526,9 @@ class _QuickAddActions extends StatelessWidget {
                 onPressed: isSubmitting ? null : onCancel,
                 foregroundColor: calendarSubtitleColor,
                 hoverForegroundColor: calendarPrimaryColor,
-                hoverBackgroundColor:
-                    calendarPrimaryColor.withValues(alpha: 0.06),
+                hoverBackgroundColor: calendarPrimaryColor.withValues(
+                  alpha: 0.06,
+                ),
               ),
             ),
             Expanded(

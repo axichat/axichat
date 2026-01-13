@@ -44,8 +44,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
-        final MediaQueryData windowMediaQuery =
-            MediaQueryData.fromView(View.of(sheetContext));
+        final MediaQueryData windowMediaQuery = MediaQueryData.fromView(
+          View.of(sheetContext),
+        );
         final Color resolvedBackground = backgroundColor ?? scheme.card;
         final bool transparentSurface = resolvedBackground.a == 0;
         const BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
@@ -179,15 +180,9 @@ class _AxiSheetChrome extends StatelessWidget {
       children: [
         Padding(
           padding: _closeButtonPadding,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: closeButton,
-          ),
+          child: Align(alignment: Alignment.centerRight, child: closeButton),
         ),
-        Flexible(
-          fit: FlexFit.loose,
-          child: child,
-        ),
+        Flexible(fit: FlexFit.loose, child: child),
       ],
     );
   }
@@ -236,10 +231,7 @@ class AxiModalSurface extends StatelessWidget {
                 ),
               ],
         ),
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }

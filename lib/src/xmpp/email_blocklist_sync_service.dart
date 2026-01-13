@@ -30,11 +30,7 @@ final _emailBlocklistSnapshotIdsKey = XmppStateStore.registerKey(
   _emailBlocklistSnapshotIdsKeyName,
 );
 
-enum _EmailBlocklistSyncDecision {
-  applyRemote,
-  publishLocal,
-  skip,
-}
+enum _EmailBlocklistSyncDecision { applyRemote, publishLocal, skip }
 
 mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   bool _emailBlocklistSnapshotInFlight = false;
@@ -133,8 +129,9 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       }
       final localSourceId = await _ensureEmailBlocklistSourceId();
       final previousSnapshotAt = _emailBlocklistLastSnapshotAt;
-      final previousSnapshotIds =
-          Set<String>.of(_emailBlocklistLastSnapshotIds);
+      final previousSnapshotIds = Set<String>.of(
+        _emailBlocklistLastSnapshotIds,
+      );
 
       for (final entry in remoteByAddress.entries) {
         final remoteAddress = entry.key;
@@ -417,19 +414,17 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (normalized.isEmpty) {
       return;
     }
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        if (blocked) {
-          await db.addEmailBlock(
-            normalized,
-            blockedAt: updatedAt,
-            sourceId: sourceId,
-          );
-        } else {
-          await db.removeEmailBlock(normalized);
-        }
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      if (blocked) {
+        await db.addEmailBlock(
+          normalized,
+          blockedAt: updatedAt,
+          sourceId: sourceId,
+        );
+      } else {
+        await db.removeEmailBlock(normalized);
+      }
+    });
     final callback = emailBlocklistSyncCallback;
     if (callback != null) {
       await callback(
@@ -467,10 +462,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     }
     final generated = uuid.v4();
     await _dbOp<XmppStateStore>(
-      (ss) async => ss.write(
-        key: _emailBlocklistSyncSourceKey,
-        value: generated,
-      ),
+      (ss) async =>
+          ss.write(key: _emailBlocklistSyncSourceKey, value: generated),
     );
     _emailBlocklistSourceId = generated;
     return generated;
@@ -480,23 +473,20 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (_pendingEmailBlocklistSyncLoaded) {
       return;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final rawPublishes =
-            (ss.read(key: _emailBlocklistPendingPublishesKey) as List?)
-                ?.cast<Object?>();
-        final rawRetractions =
-            (ss.read(key: _emailBlocklistPendingRetractionsKey) as List?)
-                ?.cast<Object?>();
-        _pendingEmailBlocklistPublishes
-          ..clear()
-          ..addAll(_normalizeEmailBlocklistSyncIds(rawPublishes));
-        _pendingEmailBlocklistRetractions
-          ..clear()
-          ..addAll(_normalizeEmailBlocklistSyncIds(rawRetractions));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawPublishes =
+          (ss.read(key: _emailBlocklistPendingPublishesKey) as List?)
+              ?.cast<Object?>();
+      final rawRetractions =
+          (ss.read(key: _emailBlocklistPendingRetractionsKey) as List?)
+              ?.cast<Object?>();
+      _pendingEmailBlocklistPublishes
+        ..clear()
+        ..addAll(_normalizeEmailBlocklistSyncIds(rawPublishes));
+      _pendingEmailBlocklistRetractions
+        ..clear()
+        ..addAll(_normalizeEmailBlocklistSyncIds(rawRetractions));
+    }, awaitDatabase: true);
     _pendingEmailBlocklistSyncLoaded = true;
   }
 
@@ -504,19 +494,17 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (_emailBlocklistSnapshotMetaLoaded) {
       return;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final rawTimestamp = ss.read(key: _emailBlocklistSnapshotAtKey);
-        final rawIds = (ss.read(key: _emailBlocklistSnapshotIdsKey) as List?)
-            ?.cast<Object?>();
-        _emailBlocklistLastSnapshotAt =
-            _parseEmailBlocklistSnapshotAt(rawTimestamp);
-        _emailBlocklistLastSnapshotIds
-          ..clear()
-          ..addAll(_normalizeEmailBlocklistSyncIds(rawIds));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawTimestamp = ss.read(key: _emailBlocklistSnapshotAtKey);
+      final rawIds = (ss.read(key: _emailBlocklistSnapshotIdsKey) as List?)
+          ?.cast<Object?>();
+      _emailBlocklistLastSnapshotAt = _parseEmailBlocklistSnapshotAt(
+        rawTimestamp,
+      );
+      _emailBlocklistLastSnapshotIds
+        ..clear()
+        ..addAll(_normalizeEmailBlocklistSyncIds(rawIds));
+    }, awaitDatabase: true);
     _emailBlocklistSnapshotMetaLoaded = true;
   }
 
@@ -672,8 +660,9 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     }
     await manager.ensureNode();
 
-    final pendingRetractions =
-        _pendingEmailBlocklistRetractions.toList(growable: false);
+    final pendingRetractions = _pendingEmailBlocklistRetractions.toList(
+      growable: false,
+    );
     for (final address in pendingRetractions) {
       final retracted = await manager.retractBlock(address);
       if (retracted) {
@@ -681,8 +670,9 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       }
     }
 
-    final pendingPublishes =
-        _pendingEmailBlocklistPublishes.toList(growable: false);
+    final pendingPublishes = _pendingEmailBlocklistPublishes.toList(
+      growable: false,
+    );
     for (final address in pendingPublishes) {
       final localEntry =
           await _dbOpReturning<XmppDatabase, EmailBlocklistEntry?>(

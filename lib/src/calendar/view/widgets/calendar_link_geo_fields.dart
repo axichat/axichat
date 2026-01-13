@@ -51,10 +51,12 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
   void initState() {
     super.initState();
     _urlController = TextEditingController(text: widget.url ?? '');
-    _latitudeController =
-        TextEditingController(text: _formatCoordinate(widget.geo?.latitude));
-    _longitudeController =
-        TextEditingController(text: _formatCoordinate(widget.geo?.longitude));
+    _latitudeController = TextEditingController(
+      text: _formatCoordinate(widget.geo?.latitude),
+    );
+    _longitudeController = TextEditingController(
+      text: _formatCoordinate(widget.geo?.longitude),
+    );
     _expanded = _shouldStartExpanded(widget);
   }
 
@@ -144,17 +146,14 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
 
   @override
   Widget build(BuildContext context) {
-    const TextInputType geoKeyboard =
-        TextInputType.numberWithOptions(decimal: true, signed: true);
+    const TextInputType geoKeyboard = TextInputType.numberWithOptions(
+      decimal: true,
+      signed: true,
+    );
     final List<Widget> chips = <Widget>[];
     final String? url = widget.url?.trim();
     if (url != null && url.isNotEmpty) {
-      chips.add(
-        _LinkGeoChip(
-          icon: Icons.link,
-          label: _formatUrlLabel(url),
-        ),
-      );
+      chips.add(_LinkGeoChip(icon: Icons.link, label: _formatUrlLabel(url)));
     }
     final CalendarGeo? geo = widget.geo;
     if (geo != null) {
@@ -233,10 +232,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
 }
 
 class _LinkGeoChip extends StatelessWidget {
-  const _LinkGeoChip({
-    required this.icon,
-    required this.label,
-  });
+  const _LinkGeoChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -260,11 +256,7 @@ class _LinkGeoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: calendarGutterLg,
-            color: calendarSubtitleColor,
-          ),
+          Icon(icon, size: calendarGutterLg, color: calendarSubtitleColor),
           const SizedBox(width: calendarInsetMd),
           Flexible(
             child: Text(

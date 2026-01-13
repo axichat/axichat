@@ -111,20 +111,26 @@ class CalendarModel with _$CalendarModel {
       'dayEvents': sortedDayEvents.map((k, v) => MapEntry(k, v.toJson())),
       'journals': sortedJournals.map((k, v) => MapEntry(k, v.toJson())),
       'lastModified': lastModified.toIso8601String(),
-      'criticalPaths':
-          sortedCriticalPaths.map((k, v) => MapEntry(k, v.toJson())),
+      'criticalPaths': sortedCriticalPaths.map(
+        (k, v) => MapEntry(k, v.toJson()),
+      ),
       'availability': sortedAvailability.map((k, v) => MapEntry(k, v.toJson())),
-      'availabilityOverlays':
-          sortedAvailabilityOverlays.map((k, v) => MapEntry(k, v.toJson())),
+      'availabilityOverlays': sortedAvailabilityOverlays.map(
+        (k, v) => MapEntry(k, v.toJson()),
+      ),
       'collection': collectionJson,
-      'deletedTaskIds':
-          sortedDeletedTaskIds.map((k, v) => MapEntry(k, v.toIso8601String())),
-      'deletedDayEventIds': sortedDeletedDayEventIds
-          .map((k, v) => MapEntry(k, v.toIso8601String())),
-      'deletedJournalIds': sortedDeletedJournalIds
-          .map((k, v) => MapEntry(k, v.toIso8601String())),
-      'deletedCriticalPathIds': sortedDeletedCriticalPathIds
-          .map((k, v) => MapEntry(k, v.toIso8601String())),
+      'deletedTaskIds': sortedDeletedTaskIds.map(
+        (k, v) => MapEntry(k, v.toIso8601String()),
+      ),
+      'deletedDayEventIds': sortedDeletedDayEventIds.map(
+        (k, v) => MapEntry(k, v.toIso8601String()),
+      ),
+      'deletedJournalIds': sortedDeletedJournalIds.map(
+        (k, v) => MapEntry(k, v.toIso8601String()),
+      ),
+      'deletedCriticalPathIds': sortedDeletedCriticalPathIds.map(
+        (k, v) => MapEntry(k, v.toIso8601String()),
+      ),
     });
     return sha256.convert(utf8.encode(content)).toString();
   }
@@ -132,10 +138,7 @@ class CalendarModel with _$CalendarModel {
   CalendarModel addTask(CalendarTask task) {
     final updatedTasks = {...tasks, task.id: task};
     final now = DateTime.now();
-    final updated = copyWith(
-      tasks: updatedTasks,
-      lastModified: now,
-    );
+    final updated = copyWith(tasks: updatedTasks, lastModified: now);
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 
@@ -169,18 +172,12 @@ class CalendarModel with _$CalendarModel {
     }
     final updatedTasks = {...tasks}..addAll(replacements);
     final now = DateTime.now();
-    final updated = copyWith(
-      tasks: updatedTasks,
-      lastModified: now,
-    );
+    final updated = copyWith(tasks: updatedTasks, lastModified: now);
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 
   CalendarModel addDayEvent(DayEvent event) {
-    final updatedDayEvents = <String, DayEvent>{
-      ...dayEvents,
-      event.id: event,
-    };
+    final updatedDayEvents = <String, DayEvent>{...dayEvents, event.id: event};
     final DateTime now = DateTime.now();
     final CalendarModel updated = copyWith(
       dayEvents: updatedDayEvents,
@@ -200,11 +197,14 @@ class CalendarModel with _$CalendarModel {
     if (!dayEvents.containsKey(eventId)) {
       return this;
     }
-    final Map<String, DayEvent> updatedEvents =
-        Map<String, DayEvent>.from(dayEvents)..remove(eventId);
+    final Map<String, DayEvent> updatedEvents = Map<String, DayEvent>.from(
+      dayEvents,
+    )..remove(eventId);
     final DateTime now = DateTime.now();
-    final updatedDeletedDayEventIds =
-        _purgeStaleTombstones(deletedDayEventIds, now);
+    final updatedDeletedDayEventIds = _purgeStaleTombstones(
+      deletedDayEventIds,
+      now,
+    );
     updatedDeletedDayEventIds[eventId] = now;
     final CalendarModel updated = copyWith(
       dayEvents: updatedEvents,
@@ -308,8 +308,10 @@ class CalendarModel with _$CalendarModel {
     final Map<String, CalendarJournal> updatedJournals =
         Map<String, CalendarJournal>.from(journals)..remove(journalId);
     final DateTime now = DateTime.now();
-    final updatedDeletedJournalIds =
-        _purgeStaleTombstones(deletedJournalIds, now);
+    final updatedDeletedJournalIds = _purgeStaleTombstones(
+      deletedJournalIds,
+      now,
+    );
     updatedDeletedJournalIds[journalId] = now;
     final CalendarModel updated = copyWith(
       journals: updatedJournals,
@@ -324,10 +326,7 @@ class CalendarModel with _$CalendarModel {
       return this;
     }
     final Map<String, CalendarJournal> updatedJournals =
-        <String, CalendarJournal>{
-      ...journals,
-      ...replacements,
-    };
+        <String, CalendarJournal>{...journals, ...replacements};
     final DateTime now = DateTime.now();
     final CalendarModel updated = copyWith(
       journals: updatedJournals,
@@ -411,8 +410,10 @@ class CalendarModel with _$CalendarModel {
     if (path == null || path.isArchived) {
       return this;
     }
-    final CalendarCriticalPath updatedPath =
-        path.addTask(normalizedTaskId, index: index);
+    final CalendarCriticalPath updatedPath = path.addTask(
+      normalizedTaskId,
+      index: index,
+    );
     final nextPaths = Map<String, CalendarCriticalPath>.from(criticalPaths)
       ..[pathId] = updatedPath;
     final updated = copyWith(
@@ -470,10 +471,7 @@ class CalendarModel with _$CalendarModel {
     );
     final nextPaths = Map<String, CalendarCriticalPath>.from(criticalPaths)
       ..[pathId] = updatedPath;
-    final updated = copyWith(
-      criticalPaths: nextPaths,
-      lastModified: now,
-    );
+    final updated = copyWith(criticalPaths: nextPaths, lastModified: now);
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 
@@ -491,10 +489,7 @@ class CalendarModel with _$CalendarModel {
           path.taskIds.where((id) => id != baseId).toList();
       if (filtered.length != path.taskIds.length) {
         changed = true;
-        next[entry.key] = path.copyWith(
-          taskIds: filtered,
-          modifiedAt: now,
-        );
+        next[entry.key] = path.copyWith(taskIds: filtered, modifiedAt: now);
       } else {
         next[entry.key] = path;
       }
@@ -517,10 +512,7 @@ class CalendarModel with _$CalendarModel {
           .toList(growable: false);
       if (filtered.length != path.taskIds.length) {
         changed = true;
-        next[entry.key] = path.copyWith(
-          taskIds: filtered,
-          modifiedAt: now,
-        );
+        next[entry.key] = path.copyWith(taskIds: filtered, modifiedAt: now);
       } else {
         next[entry.key] = path;
       }
@@ -668,8 +660,10 @@ extension CalendarModelMerge on CalendarModel {
       final CalendarTask? remoteTask = remote.tasks[id];
       final DateTime? localDeletedAt = deletedTaskIds[id];
       final DateTime? remoteDeletedAt = remote.deletedTaskIds[id];
-      final DateTime? deletedAt =
-          _latestTimestamp(localDeletedAt, remoteDeletedAt);
+      final DateTime? deletedAt = _latestTimestamp(
+        localDeletedAt,
+        remoteDeletedAt,
+      );
 
       CalendarTask? selectedTask;
       if (localTask == null) {
@@ -715,8 +709,10 @@ extension CalendarModelMerge on CalendarModel {
       final DayEvent? remoteEvent = remote.dayEvents[id];
       final DateTime? localDeletedAt = deletedDayEventIds[id];
       final DateTime? remoteDeletedAt = remote.deletedDayEventIds[id];
-      final DateTime? deletedAt =
-          _latestTimestamp(localDeletedAt, remoteDeletedAt);
+      final DateTime? deletedAt = _latestTimestamp(
+        localDeletedAt,
+        remoteDeletedAt,
+      );
 
       DayEvent? selectedEvent;
       if (localEvent == null) {
@@ -762,8 +758,10 @@ extension CalendarModelMerge on CalendarModel {
       final CalendarJournal? remoteJournal = remote.journals[id];
       final DateTime? localDeletedAt = deletedJournalIds[id];
       final DateTime? remoteDeletedAt = remote.deletedJournalIds[id];
-      final DateTime? deletedAt =
-          _latestTimestamp(localDeletedAt, remoteDeletedAt);
+      final DateTime? deletedAt = _latestTimestamp(
+        localDeletedAt,
+        remoteDeletedAt,
+      );
 
       CalendarJournal? selectedJournal;
       if (localJournal == null) {
@@ -809,8 +807,10 @@ extension CalendarModelMerge on CalendarModel {
       final CalendarCriticalPath? remotePath = remote.criticalPaths[id];
       final DateTime? localDeletedAt = deletedCriticalPathIds[id];
       final DateTime? remoteDeletedAt = remote.deletedCriticalPathIds[id];
-      final DateTime? deletedAt =
-          _latestTimestamp(localDeletedAt, remoteDeletedAt);
+      final DateTime? deletedAt = _latestTimestamp(
+        localDeletedAt,
+        remoteDeletedAt,
+      );
 
       CalendarCriticalPath? selectedPath;
       if (localPath == null) {
@@ -838,8 +838,10 @@ extension CalendarModelMerge on CalendarModel {
       mergedPaths[id] = selectedPath;
     }
 
-    final mergedAvailability =
-        _mergeAvailability(availability, remote.availability);
+    final mergedAvailability = _mergeAvailability(
+      availability,
+      remote.availability,
+    );
     final mergedAvailabilityOverlays = _mergeAvailabilityOverlays(
       availabilityOverlays,
       remote.availabilityOverlays,

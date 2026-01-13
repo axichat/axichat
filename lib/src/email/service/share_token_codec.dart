@@ -4,10 +4,7 @@
 import 'dart:math';
 
 class ShareTokenParseResult {
-  const ShareTokenParseResult({
-    required this.token,
-    required this.cleanedBody,
-  });
+  const ShareTokenParseResult({required this.token, required this.cleanedBody});
 
   final String token;
   final String cleanedBody;
@@ -61,8 +58,10 @@ class ShareTokenCodec {
   }
 
   static String subjectToken(String shareId) {
-    final normalized =
-        shareId.toUpperCase().replaceAll(RegExp(r'[^0-9A-Z]'), '');
+    final normalized = shareId.toUpperCase().replaceAll(
+          RegExp(r'[^0-9A-Z]'),
+          '',
+        );
     if (normalized.length < _minCapabilityLength) {
       throw ArgumentError(
         'shareId must contain at least $_minCapabilityLength base32 characters.',

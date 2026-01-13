@@ -451,9 +451,7 @@ extension CalendarTaskExtensions on CalendarTask {
     if (occurrenceOverrides.isEmpty) {
       return this;
     }
-    return copyWith(
-      occurrenceOverrides: _emptyTaskOccurrenceOverrides,
-    );
+    return copyWith(occurrenceOverrides: _emptyTaskOccurrenceOverrides);
   }
 }
 
@@ -483,10 +481,7 @@ extension CalendarTaskCopying on CalendarTask {
   }
 }
 
-CalendarIcsMeta? _cloneIcsMeta(
-  DateTime now,
-  CalendarIcsMeta? meta,
-) {
+CalendarIcsMeta? _cloneIcsMeta(DateTime now, CalendarIcsMeta? meta) {
   if (meta == null) {
     return null;
   }

@@ -108,7 +108,9 @@ enum CalendarParticipantRole {
           _participantRoleNonParticipantIcs,
       };
 
-  static CalendarParticipantRole? fromIcsValue(String? value) =>
+  static CalendarParticipantRole? fromIcsValue(
+    String? value,
+  ) =>
       switch (value) {
         _participantRoleChairIcs => CalendarParticipantRole.chair,
         _participantRoleRequiredIcs =>

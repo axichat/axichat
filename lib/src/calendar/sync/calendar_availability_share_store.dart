@@ -7,13 +7,13 @@ import 'package:axichat/src/storage/state_store.dart';
 const String _availabilityShareStoreKey = 'calendar_availability_share_v1';
 
 class CalendarAvailabilityShareStore {
-  CalendarAvailabilityShareStore({
-    XmppStateStore? stateStore,
-  }) : _stateStore = stateStore ?? XmppStateStore();
+  CalendarAvailabilityShareStore({XmppStateStore? stateStore})
+      : _stateStore = stateStore ?? XmppStateStore();
 
   final XmppStateStore _stateStore;
-  static final RegisteredStateKey _storeKey =
-      XmppStateStore.registerKey(_availabilityShareStoreKey);
+  static final RegisteredStateKey _storeKey = XmppStateStore.registerKey(
+    _availabilityShareStoreKey,
+  );
 
   Map<String, CalendarAvailabilityShareRecord> readAll() {
     final raw = _stateStore.read(key: _storeKey);

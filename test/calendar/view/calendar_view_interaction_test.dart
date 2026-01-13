@@ -21,8 +21,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(registerCalendarFallbackValues);
 
-  testWidgets('QuickAddModal submits scheduled task with prefilled time',
-      (tester) async {
+  testWidgets('QuickAddModal submits scheduled task with prefilled time', (
+    tester,
+  ) async {
     final slotTime = DateTime(2024, 1, 15, 10, 30);
     CalendarTask? submitted;
 
@@ -66,11 +67,13 @@ void main() {
     );
 
     expect(
-        find.descendant(of: harness.gridFinder, matching: find.text('MON 15')),
-        findsOneWidget);
+      find.descendant(of: harness.gridFinder, matching: find.text('MON 15')),
+      findsOneWidget,
+    );
     expect(
-        find.descendant(of: harness.gridFinder, matching: find.text('TUE 16')),
-        findsOneWidget);
+      find.descendant(of: harness.gridFinder, matching: find.text('TUE 16')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('selection sidebar exit button clears selection', (tester) async {
@@ -109,8 +112,9 @@ void main() {
     expect(find.text('Comfort'), findsOneWidget);
   });
 
-  testWidgets('selection sidebar summary updates with bloc state',
-      (tester) async {
+  testWidgets('selection sidebar summary updates with bloc state', (
+    tester,
+  ) async {
     final initialState = CalendarTestData.selectionMode();
 
     final harness = await CalendarWidgetHarness.pump(
@@ -129,8 +133,9 @@ void main() {
     expect(find.text('1 task selected'), findsOneWidget);
   });
 
-  testWidgets('selection batch apply button dispatches title change',
-      (tester) async {
+  testWidgets('selection batch apply button dispatches title change', (
+    tester,
+  ) async {
     final harness = await CalendarWidgetHarness.pump(
       tester: tester,
       state: CalendarTestData.selectionMode(),
@@ -182,9 +187,7 @@ void main() {
         continue;
       }
 
-      final overrides = {
-        ...baseTask.occurrenceOverrides,
-      };
+      final overrides = {...baseTask.occurrenceOverrides};
       final TaskOccurrenceOverride existing =
           overrides[occurrenceKey] ?? const TaskOccurrenceOverride();
       overrides[occurrenceKey] = existing.copyWith(title: 'Batch Title');
@@ -265,8 +268,9 @@ void main() {
     }
   });
 
-  testWidgets('task context menu opens across vertical positions',
-      (tester) async {
+  testWidgets('task context menu opens across vertical positions', (
+    tester,
+  ) async {
     final taskFinder = await _pumpContextMenuSurface(tester);
     final menuFinder = find.text('Copy Task');
     final Rect taskRect = tester.getRect(taskFinder);
@@ -305,14 +309,8 @@ void main() {
       );
     }
 
-    await expectMenuAt(
-      Offset(taskRect.center.dx, taskRect.top + 6),
-      'top',
-    );
-    await expectMenuAt(
-      taskRect.center,
-      'center',
-    );
+    await expectMenuAt(Offset(taskRect.center.dx, taskRect.top + 6), 'top');
+    await expectMenuAt(taskRect.center, 'center');
     await expectMenuAt(
       Offset(taskRect.center.dx, taskRect.bottom - 6),
       'bottom',
@@ -359,50 +357,44 @@ void main() {
     },
   );
 
-  testWidgets(
-    'context menu remains open while hovering into menu items',
-    (tester) async {
-      final finders = await _pumpNestedContextMenuSurfaces(tester);
-      final Finder topTaskFinder = finders['top']!;
-      final Finder menuFinder = find.text('Copy Task');
+  testWidgets('context menu remains open while hovering into menu items', (
+    tester,
+  ) async {
+    final finders = await _pumpNestedContextMenuSurfaces(tester);
+    final Finder topTaskFinder = finders['top']!;
+    final Finder menuFinder = find.text('Copy Task');
 
-      final TestGesture gesture = await tester.startGesture(
-        tester.getCenter(topTaskFinder),
-        kind: PointerDeviceKind.mouse,
-        buttons: kSecondaryButton,
-      );
-      await tester.pump();
-      await gesture.up();
-      await tester.pump();
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
-      await _pumpUntilMenuVisible(tester, menuFinder);
+    final TestGesture gesture = await tester.startGesture(
+      tester.getCenter(topTaskFinder),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryButton,
+    );
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await _pumpUntilMenuVisible(tester, menuFinder);
 
-      final Rect menuRect = tester.getRect(menuFinder.first);
-      final TestPointer hoverPointer = TestPointer(
-        21,
-        PointerDeviceKind.mouse,
-      );
-      await tester.sendEventToBinding(
-        hoverPointer.hover(menuRect.topLeft - const Offset(48, 48)),
-      );
-      await tester.pump();
-      await tester.sendEventToBinding(
-        hoverPointer.hover(menuRect.center),
-      );
-      await tester.pump();
+    final Rect menuRect = tester.getRect(menuFinder.first);
+    final TestPointer hoverPointer = TestPointer(21, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(
+      hoverPointer.hover(menuRect.topLeft - const Offset(48, 48)),
+    );
+    await tester.pump();
+    await tester.sendEventToBinding(hoverPointer.hover(menuRect.center));
+    await tester.pump();
 
-      expect(
-        menuFinder,
-        findsOneWidget,
-        reason: 'Menu should remain visible while hovering over entries.',
-      );
+    expect(
+      menuFinder,
+      findsOneWidget,
+      reason: 'Menu should remain visible while hovering over entries.',
+    );
 
-      await tester.sendEventToBinding(hoverPointer.removePointer());
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle(const Duration(milliseconds: 150));
-      expect(menuFinder, findsNothing);
-    },
-  );
+    await tester.sendEventToBinding(hoverPointer.removePointer());
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle(const Duration(milliseconds: 150));
+    expect(menuFinder, findsNothing);
+  });
 
   testWidgets('log calendar grid geometry', (tester) async {
     final harness = await CalendarWidgetHarness.pump(
@@ -413,10 +405,14 @@ void main() {
     final double bodyTop = harness.gridBodyTop();
     debugPrint('Calendar grid body top: $bodyTop');
 
-    final Offset morningSlot =
-        harness.slotPosition(0, const Duration(hours: 9));
-    final Offset eveningSlot =
-        harness.slotPosition(0, const Duration(hours: 15));
+    final Offset morningSlot = harness.slotPosition(
+      0,
+      const Duration(hours: 9),
+    );
+    final Offset eveningSlot = harness.slotPosition(
+      0,
+      const Duration(hours: 15),
+    );
     debugPrint('Slot 9am center: $morningSlot');
     debugPrint('Slot 8pm center: $eveningSlot');
   }, skip: true);
@@ -429,10 +425,12 @@ void main() {
 
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
-    final Finder weeklyFinder =
-        find.byKey(const ValueKey('calendar-task-task-weekly-sync'));
-    final Finder designFinder =
-        find.byKey(const ValueKey('calendar-task-task-design-review'));
+    final Finder weeklyFinder = find.byKey(
+      const ValueKey('calendar-task-task-weekly-sync'),
+    );
+    final Finder designFinder = find.byKey(
+      const ValueKey('calendar-task-task-design-review'),
+    );
 
     debugPrint('Weekly Sync widgets: ${weeklyFinder.evaluate().length}');
     debugPrint('Design Review widgets: ${designFinder.evaluate().length}');
@@ -477,8 +475,9 @@ void main() {
     }
   }, skip: true);
 
-  testWidgets('selection batch editors preload shared field values',
-      (tester) async {
+  testWidgets('selection batch editors preload shared field values', (
+    tester,
+  ) async {
     final base = CalendarTestData.baseState();
     final sourceTask = base.model.tasks['task-design-review']!;
     final updatedTask = sourceTask.copyWith(
@@ -486,10 +485,7 @@ void main() {
       location: 'Room 12',
     );
     final updatedModel = base.model.copyWith(
-      tasks: {
-        ...base.model.tasks,
-        updatedTask.id: updatedTask,
-      },
+      tasks: {...base.model.tasks, updatedTask.id: updatedTask},
     );
     final selectionState = base.copyWith(
       model: updatedModel,
@@ -525,24 +521,19 @@ void main() {
       tester.widget<TextField>(descriptionField).controller?.text,
       'Review the sprint backlog',
     );
-    expect(
-      tester.widget<TextField>(locationField).controller?.text,
-      'Room 12',
-    );
+    expect(tester.widget<TextField>(locationField).controller?.text, 'Room 12');
   });
 
-  testWidgets('selection list retains recurring occurrences when updated',
-      (tester) async {
+  testWidgets('selection list retains recurring occurrences when updated', (
+    tester,
+  ) async {
     final base = CalendarTestData.baseState();
     final recurring = base.model.tasks['task-recurring-standup']!;
     final rangeStart = base.weekStart;
     final rangeEnd = rangeStart.add(const Duration(days: 7));
     final occurrences =
         recurring.occurrencesWithin(rangeStart, rangeEnd).take(3).toList();
-    final Set<String> firstTwoIds = {
-      occurrences[0].id,
-      occurrences[1].id,
-    };
+    final Set<String> firstTwoIds = {occurrences[0].id, occurrences[1].id};
 
     final initialState = base.copyWith(
       isSelectionMode: true,
@@ -738,8 +729,12 @@ Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
                                 controller: topController,
                                 groupId: groupId,
                                 builderFactory: builderFactory,
-                                geometryRect:
-                                    const Rect.fromLTWH(40, 24, 240, 140),
+                                geometryRect: const Rect.fromLTWH(
+                                  40,
+                                  24,
+                                  240,
+                                  140,
+                                ),
                               ),
                             ),
                           ),
@@ -756,8 +751,12 @@ Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
                                 controller: bottomController,
                                 groupId: groupId,
                                 builderFactory: builderFactory,
-                                geometryRect:
-                                    const Rect.fromLTWH(40, 420, 240, 140),
+                                geometryRect: const Rect.fromLTWH(
+                                  40,
+                                  420,
+                                  240,
+                                  140,
+                                ),
                               ),
                             ),
                           ),

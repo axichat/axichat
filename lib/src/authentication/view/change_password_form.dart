@@ -74,10 +74,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                ChangePasswordForm.title(l10n),
-                style: context.textTheme.h3,
-              ),
+              Text(ChangePasswordForm.title(l10n), style: context.textTheme.h3),
               state is AuthenticationPasswordChangeSuccess
                   ? Padding(
                       padding: const EdgeInsets.all(10.0),
@@ -142,10 +139,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     onPressed: () => _onPressed(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: [
-                        spinnerSlot,
-                        Text(l10n.commonContinue),
-                      ],
+                      children: [spinnerSlot, Text(l10n.commonContinue)],
                     ),
                   ).withTapBounce(enabled: !loading);
                 },

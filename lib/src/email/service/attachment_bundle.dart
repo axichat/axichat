@@ -52,8 +52,9 @@ final class EmailAttachmentBundler {
       );
     }
     final tempDir = await getTemporaryDirectory();
-    final bundleDir =
-        Directory(p.join(tempDir.path, emailAttachmentBundleDirName));
+    final bundleDir = Directory(
+      p.join(tempDir.path, emailAttachmentBundleDirName),
+    );
     if (!await bundleDir.exists()) {
       await bundleDir.create(recursive: true);
     }
@@ -70,10 +71,7 @@ final class EmailAttachmentBundler {
         followLinks: false,
       );
       if (entityType == FileSystemEntityType.link) {
-        throw FileSystemException(
-          _bundleSymlinkErrorMessage,
-          attachment.path,
-        );
+        throw FileSystemException(_bundleSymlinkErrorMessage, attachment.path);
       }
       if (entityType != FileSystemEntityType.file) {
         throw FileSystemException(
@@ -98,12 +96,10 @@ final class EmailAttachmentBundler {
         fallbackPath: attachment.path,
         index: index,
       );
-      files.add(
-        <String, String>{
-          _bundleFilePathKey: attachment.path,
-          _bundleFileNameKey: sanitizedName,
-        },
-      );
+      files.add(<String, String>{
+        _bundleFilePathKey: attachment.path,
+        _bundleFileNameKey: sanitizedName,
+      });
       index += _bundleFileIndexStep;
     }
     final payload = <String, Object?>{

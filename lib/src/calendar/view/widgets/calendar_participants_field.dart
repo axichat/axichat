@@ -132,10 +132,12 @@ class _OrganizerFieldState extends State<_OrganizerField> {
   @override
   void initState() {
     super.initState();
-    _addressController =
-        TextEditingController(text: widget.organizer?.address ?? '');
-    _nameController =
-        TextEditingController(text: widget.organizer?.commonName ?? '');
+    _addressController = TextEditingController(
+      text: widget.organizer?.address ?? '',
+    );
+    _nameController = TextEditingController(
+      text: widget.organizer?.commonName ?? '',
+    );
   }
 
   @override
@@ -273,8 +275,9 @@ class _AttendeesFieldState extends State<_AttendeesField> {
     final String name = _nameController.text.trim();
     final String? commonName = name.isEmpty ? null : name;
 
-    final List<CalendarAttendee> next =
-        List<CalendarAttendee>.from(widget.attendees);
+    final List<CalendarAttendee> next = List<CalendarAttendee>.from(
+      widget.attendees,
+    );
     final bool exists = next.any(
       (attendee) => attendee.address.toLowerCase() == address.toLowerCase(),
     );
@@ -289,12 +292,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
       return;
     }
 
-    next.add(
-      CalendarAttendee(
-        address: address,
-        commonName: commonName,
-      ),
-    );
+    next.add(CalendarAttendee(address: address, commonName: commonName));
     widget.onChanged(next);
     _addressController
       ..clear()
@@ -306,8 +304,9 @@ class _AttendeesFieldState extends State<_AttendeesField> {
   }
 
   void _removeAttendee(CalendarAttendee attendee) {
-    final List<CalendarAttendee> next =
-        List<CalendarAttendee>.from(widget.attendees)..remove(attendee);
+    final List<CalendarAttendee> next = List<CalendarAttendee>.from(
+      widget.attendees,
+    )..remove(attendee);
     widget.onChanged(next);
   }
 
@@ -316,8 +315,9 @@ class _AttendeesFieldState extends State<_AttendeesField> {
     if (index == -1) {
       return;
     }
-    final List<CalendarAttendee> updated =
-        List<CalendarAttendee>.from(widget.attendees);
+    final List<CalendarAttendee> updated = List<CalendarAttendee>.from(
+      widget.attendees,
+    );
     updated[index] = next;
     widget.onChanged(updated);
   }
@@ -494,9 +494,8 @@ class _AttendeeCard extends StatelessWidget {
                   value: attendee.role,
                   options: roleOptions,
                   selectedLabel: (role) => role?.label ?? _attendeeDefaultLabel,
-                  onChanged: (value) => onChanged(
-                    attendee.copyWith(role: value),
-                  ),
+                  onChanged: (value) =>
+                      onChanged(attendee.copyWith(role: value)),
                 ),
               ),
               const SizedBox(width: calendarGutterSm),
@@ -507,9 +506,8 @@ class _AttendeeCard extends StatelessWidget {
                   options: statusOptions,
                   selectedLabel: (status) =>
                       status?.label ?? _attendeeDefaultLabel,
-                  onChanged: (value) => onChanged(
-                    attendee.copyWith(status: value),
-                  ),
+                  onChanged: (value) =>
+                      onChanged(attendee.copyWith(status: value)),
                 ),
               ),
             ],
@@ -518,9 +516,7 @@ class _AttendeeCard extends StatelessWidget {
           ShadSwitch(
             label: const Text(_attendeeRsvpLabel),
             value: attendee.rsvp,
-            onChanged: (value) => onChanged(
-              attendee.copyWith(rsvp: value),
-            ),
+            onChanged: (value) => onChanged(attendee.copyWith(rsvp: value)),
           ),
           const SizedBox(height: calendarInsetSm),
           _ParticipantActionsRow(
@@ -648,9 +644,7 @@ class _ParticipantActionsRow extends StatelessWidget {
 }
 
 class _AttendeeRemoveButton extends StatelessWidget {
-  const _AttendeeRemoveButton({
-    required this.onPressed,
-  });
+  const _AttendeeRemoveButton({required this.onPressed});
 
   final VoidCallback onPressed;
 

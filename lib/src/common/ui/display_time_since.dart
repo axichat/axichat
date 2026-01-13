@@ -7,11 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 class DisplayTimeSince extends StatefulWidget {
-  const DisplayTimeSince({
-    super.key,
-    required this.timestamp,
-    this.style,
-  });
+  const DisplayTimeSince({super.key, required this.timestamp, this.style});
 
   final DateTime timestamp;
   final TextStyle? style;

@@ -231,8 +231,11 @@ class NlScheduleAdapter {
       recurrence: mapRecurrence(item.recurrence),
     );
 
-    final resultNotes =
-        mergeAssumptions(item.flags, item.assumptions, item.confidence);
+    final resultNotes = mergeAssumptions(
+      item.flags,
+      item.assumptions,
+      item.confidence,
+    );
 
     return NlAdapterResult(
       task: task,
@@ -360,19 +363,13 @@ class NlScheduleAdapter {
 
   /// Returns the mapped [CalendarTask]. The app shares a single model for
   /// tasks and events, so this is equivalent to [mapToAppTypes].
-  CalendarTask? toTask(
-    ScheduleItem item, {
-    required ParseContext ctx,
-  }) {
+  CalendarTask? toTask(ScheduleItem item, {required ParseContext ctx}) {
     return mapToAppTypes(item, ctx: ctx).task;
   }
 
   /// Returns a [CalendarTask] only when the parser produced a scheduled bucket,
   /// allowing callers to gate event-specific UI.
-  CalendarTask? toEvent(
-    ScheduleItem item, {
-    required ParseContext ctx,
-  }) {
+  CalendarTask? toEvent(ScheduleItem item, {required ParseContext ctx}) {
     final result = mapToAppTypes(item, ctx: ctx);
     return result.bucket == TaskBucket.scheduled ? result.task : null;
   }

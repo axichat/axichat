@@ -229,10 +229,7 @@ class _CategoryChip extends StatelessWidget {
       labelStyle: labelStyle.copyWith(color: calendarTitleColor),
       label: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _categoryChipMaxWidth),
-        child: Text(
-          label,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(label, overflow: TextOverflow.ellipsis),
       ),
       deleteIcon: onRemove == null
           ? null

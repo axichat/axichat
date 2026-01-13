@@ -4,11 +4,7 @@
 import 'package:flutter/material.dart';
 
 class ListItemPadding extends StatelessWidget {
-  const ListItemPadding({
-    super.key,
-    required this.child,
-    this.padding,
-  });
+  const ListItemPadding({super.key, required this.child, this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;

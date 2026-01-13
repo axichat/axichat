@@ -27,9 +27,7 @@ class RosterList extends StatelessWidget {
 
         if (items == null) {
           return Center(
-            child: AxiProgressIndicator(
-              color: context.colorScheme.foreground,
-            ),
+            child: AxiProgressIndicator(color: context.colorScheme.foreground),
           );
         }
 
@@ -94,10 +92,7 @@ class _RosterListBody extends StatelessWidget {
 
     if (visibleItems.isEmpty) {
       return Center(
-        child: Text(
-          l10n.rosterEmpty,
-          style: context.textTheme.muted,
-        ),
+        child: Text(l10n.rosterEmpty, style: context.textTheme.muted),
       );
     }
 
@@ -133,13 +128,15 @@ class _RosterListBody extends StatelessWidget {
                       _ => false,
                     };
                     if (!isLoading &&
-                        await confirm(context,
-                                text: l10n.rosterRemoveConfirm(item.jid)) ==
+                        await confirm(
+                              context,
+                              text: l10n.rosterRemoveConfirm(item.jid),
+                            ) ==
                             true &&
                         context.mounted) {
-                      context
-                          .read<RosterCubit?>()
-                          ?.removeContact(jid: item.jid);
+                      context.read<RosterCubit?>()?.removeContact(
+                            jid: item.jid,
+                          );
                     }
                   },
                 ),

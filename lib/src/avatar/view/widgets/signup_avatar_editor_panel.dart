@@ -287,10 +287,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                   mainAxisSize: MainAxisSize.min,
                   spacing: avatarActionSpacing,
                   children: [
-                    const Icon(
-                      LucideIcons.check,
-                      size: avatarActionIconSize,
-                    ),
+                    const Icon(LucideIcons.check, size: avatarActionIconSize),
                     Text(l10n.avatarUseThis),
                   ],
                 ),
@@ -309,8 +306,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                         valueColor: AlwaysStoppedAnimation<Color>(
                           colors.primaryForeground,
                         ),
-                        backgroundColor:
-                            colors.primaryForeground.withValues(alpha: 0.2),
+                        backgroundColor: colors.primaryForeground.withValues(
+                          alpha: 0.2,
+                        ),
                       ),
                     ),
                     slotSize: avatarActionIconSize,
@@ -344,8 +342,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                         valueColor: AlwaysStoppedAnimation<Color>(
                           colors.secondaryForeground,
                         ),
-                        backgroundColor:
-                            colors.secondaryForeground.withValues(alpha: 0.2),
+                        backgroundColor: colors.secondaryForeground.withValues(
+                          alpha: 0.2,
+                        ),
                       ),
                     ),
                     slotSize: avatarActionIconSize,
@@ -353,10 +352,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                     duration: baseAnimationDuration,
                   ),
                   if (!_shufflingBackground) ...[
-                    const Icon(
-                      LucideIcons.palette,
-                      size: avatarActionIconSize,
-                    ),
+                    const Icon(LucideIcons.palette, size: avatarActionIconSize),
                     const SizedBox(width: avatarActionSpacing),
                   ],
                   Text(l10n.signupAvatarBackgroundColor),
@@ -369,10 +365,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                 mainAxisSize: MainAxisSize.min,
                 spacing: avatarActionSpacing,
                 children: [
-                  const Icon(
-                    LucideIcons.upload,
-                    size: avatarActionIconSize,
-                  ),
+                  const Icon(LucideIcons.upload, size: avatarActionIconSize),
                   Text(l10n.signupAvatarUploadImage),
                 ],
               ),
@@ -386,16 +379,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 12.0,
-            children: [
-              preview,
-              cropper,
-            ],
+            children: [preview, cropper],
           )
         : preview;
 
-    return ShadCard(
-      padding: const EdgeInsets.all(12.0),
-      child: previewAndCrop,
-    );
+    return ShadCard(padding: const EdgeInsets.all(12.0), child: previewAndCrop);
   }
 }

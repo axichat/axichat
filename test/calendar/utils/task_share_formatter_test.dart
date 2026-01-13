@@ -19,10 +19,7 @@ void main() {
         task.copyWith(
           reminders: const ReminderPreferences(
             enabled: true,
-            startOffsets: <Duration>[
-              Duration(hours: 2),
-              Duration(minutes: 30),
-            ],
+            startOffsets: <Duration>[Duration(hours: 2), Duration(minutes: 30)],
             deadlineOffsets: <Duration>[Duration(hours: 4)],
           ),
         ),

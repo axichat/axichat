@@ -69,7 +69,9 @@ void main() {
 
       final avatarEvent = sentEvents.single as mox.UserAvatarUpdatedEvent;
       expect(
-          avatarEvent.jid.toBare().toString(), equals('contact@example.com'));
+        avatarEvent.jid.toBare().toString(),
+        equals('contact@example.com'),
+      );
       expect(avatarEvent.metadata, hasLength(1));
 
       final metadata = avatarEvent.metadata.single;
@@ -104,8 +106,9 @@ void main() {
                 ))
               .build();
 
-      when(() => pubsub.getItem(from, mox.userAvatarMetadataXmlns, avatarId))
-          .thenAnswer(
+      when(
+        () => pubsub.getItem(from, mox.userAvatarMetadataXmlns, avatarId),
+      ).thenAnswer(
         (_) async => moxlib.Result(
           mox.PubSubItem(
             id: avatarId,
@@ -148,8 +151,9 @@ void main() {
 
       await manager.onXmppEvent(event);
 
-      verify(() => pubsub.getItem(from, mox.userAvatarMetadataXmlns, avatarId))
-          .called(1);
+      verify(
+        () => pubsub.getItem(from, mox.userAvatarMetadataXmlns, avatarId),
+      ).called(1);
       expect(sentEvents, hasLength(1));
       expect(sentEvents.single, isA<mox.UserAvatarUpdatedEvent>());
       final avatarEvent = sentEvents.single as mox.UserAvatarUpdatedEvent;
@@ -165,10 +169,9 @@ void main() {
       final pubsub = _MockPubSubManager();
       final jid = mox.JID.fromString('contact@example.com');
 
-      when(() => pubsub.unsubscribe(jid, mox.userAvatarMetadataXmlns))
-          .thenAnswer(
-        (_) async => const moxlib.Result(true),
-      );
+      when(
+        () => pubsub.unsubscribe(jid, mox.userAvatarMetadataXmlns),
+      ).thenAnswer((_) async => const moxlib.Result(true));
 
       final attributes = mox.XmppManagerAttributes(
         sendStanza: (_) async => null,
@@ -195,8 +198,9 @@ void main() {
 
       expect(result.isType<mox.AvatarError>(), isFalse);
       expect(result.get<bool>(), isTrue);
-      verify(() => pubsub.unsubscribe(jid, mox.userAvatarMetadataXmlns))
-          .called(1);
+      verify(
+        () => pubsub.unsubscribe(jid, mox.userAvatarMetadataXmlns),
+      ).called(1);
     },
   );
 }

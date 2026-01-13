@@ -123,8 +123,10 @@ class CalendarLayoutMetrics {
   double heightForDuration(Duration duration) {
     final double totalMinutes =
         duration.inMicroseconds / Duration.microsecondsPerMinute;
-    final double normalizedMinutes =
-        math.max(totalMinutes, minutesPerSlot.toDouble());
+    final double normalizedMinutes = math.max(
+      totalMinutes,
+      minutesPerSlot.toDouble(),
+    );
     return (normalizedMinutes / minutesPerSlot) * slotHeight;
   }
 
@@ -271,8 +273,10 @@ class CalendarLayoutCalculator {
   }
 
   double computeNarrowedWidth(double slotWidth, double baselineWidth) {
-    final double effectiveSlotWidth =
-        math.max(slotWidth - (theme.eventColumnGap * 2), 0.0);
+    final double effectiveSlotWidth = math.max(
+      slotWidth - (theme.eventColumnGap * 2),
+      0.0,
+    );
     final double thresholdWidth =
         effectiveSlotWidth * theme.narrowedWidthThresholdFactor;
 
@@ -357,23 +361,18 @@ class CalendarLayoutCalculator {
     }
 
     final double minutesFromStart = minuteDelta.toDouble();
-    final double topOffset = metrics.verticalOffsetForMinutes(
-      minutesFromStart,
-    );
+    final double topOffset = metrics.verticalOffsetForMinutes(minutesFromStart);
     final Duration duration = task.duration ?? const Duration(hours: 1);
-    final double height = clampEventHeight(
-      metrics.heightForDuration(duration),
-    );
+    final double height = clampEventHeight(metrics.heightForDuration(duration));
 
     final int spanDays = isDayView
         ? 1
-        : ((clampedWeekEnd.difference(clampedWeekStart).inDays + 1)
-            .clamp(1, 7));
+        : ((clampedWeekEnd.difference(clampedWeekStart).inDays + 1).clamp(
+            1,
+            7,
+          ));
 
-    final double left = eventLeftOffset(
-      dayWidth: dayWidth,
-      overlap: overlap,
-    );
+    final double left = eventLeftOffset(dayWidth: dayWidth, overlap: overlap);
 
     final double width = eventWidth(
       dayWidth: dayWidth,
@@ -397,10 +396,7 @@ class CalendarLayoutCalculator {
 /// Simple immutable description of how overlapping events should be rendered
 /// in the same column.
 class OverlapInfo {
-  const OverlapInfo({
-    required this.columnIndex,
-    required this.totalColumns,
-  });
+  const OverlapInfo({required this.columnIndex, required this.totalColumns});
 
   final int columnIndex;
   final int totalColumns;
@@ -438,13 +434,7 @@ class _OverlapCandidate {
 }
 
 DateTime _stripSubMinute(DateTime value) {
-  return DateTime(
-    value.year,
-    value.month,
-    value.day,
-    value.hour,
-    value.minute,
-  );
+  return DateTime(value.year, value.month, value.day, value.hour, value.minute);
 }
 
 DateTime _resolveOverlapEnd(CalendarTask task, DateTime start) {

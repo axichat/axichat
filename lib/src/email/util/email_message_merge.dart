@@ -22,12 +22,18 @@ Message mergeOriginMessages({
 }) {
   final resolvedBody = preferNonEmptyText(primary.body, duplicate.body);
   final resolvedHtml = preferNonEmptyText(primary.htmlBody, duplicate.htmlBody);
-  final resolvedMetadata =
-      preferNonEmptyText(primary.fileMetadataID, duplicate.fileMetadataID);
-  final resolvedQuoting =
-      preferNonEmptyText(primary.quoting, duplicate.quoting);
-  final resolvedStickerPack =
-      preferNonEmptyText(primary.stickerPackID, duplicate.stickerPackID);
+  final resolvedMetadata = preferNonEmptyText(
+    primary.fileMetadataID,
+    duplicate.fileMetadataID,
+  );
+  final resolvedQuoting = preferNonEmptyText(
+    primary.quoting,
+    duplicate.quoting,
+  );
+  final resolvedStickerPack = preferNonEmptyText(
+    primary.stickerPackID,
+    duplicate.stickerPackID,
+  );
   final fallbackTimestamp = DateTime.timestamp();
   final resolvedTimestamp =
       primary.timestamp ?? duplicate.timestamp ?? fallbackTimestamp;

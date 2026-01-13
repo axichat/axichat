@@ -214,10 +214,7 @@ class CalendarFragmentFormatter {
     return '$_fragmentLabelAvailability$_fragmentInfoSeparator$range';
   }
 
-  String _formatDateRange({
-    required DateTime start,
-    DateTime? end,
-  }) {
+  String _formatDateRange({required DateTime start, DateTime? end}) {
     final startLabel = TimeFormatter.formatFriendlyDate(start);
     final endLabel = end == null ? null : TimeFormatter.formatFriendlyDate(end);
     if (endLabel == null || endLabel == startLabel) {

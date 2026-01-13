@@ -43,9 +43,7 @@ class CalendarTaskViewSheet extends StatelessWidget {
       header: header,
       children: [
         const _TaskViewSectionLabel(text: _taskViewPreviewLabel),
-        CalendarFragmentCard(
-          fragment: CalendarFragment.task(task: task),
-        ),
+        CalendarFragmentCard(fragment: CalendarFragment.task(task: task)),
         const SizedBox(height: _taskViewSheetSpacing),
         const _TaskViewSectionLabel(text: _taskViewActionsLabel),
         _TaskViewActionTile(

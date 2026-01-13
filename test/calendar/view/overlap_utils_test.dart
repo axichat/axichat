@@ -42,14 +42,30 @@ void main() {
   });
 
   test('sequential tasks stay full width when new overlaps occur', () {
-    final t1 =
-        taskFactory(title: 'T1', hour: 10, minute: 0, durationMinutes: 15);
-    final t2 =
-        taskFactory(title: 'T2', hour: 10, minute: 15, durationMinutes: 15);
-    final t3 =
-        taskFactory(title: 'T3', hour: 10, minute: 30, durationMinutes: 15);
-    final split =
-        taskFactory(title: 'Split', hour: 10, minute: 0, durationMinutes: 15);
+    final t1 = taskFactory(
+      title: 'T1',
+      hour: 10,
+      minute: 0,
+      durationMinutes: 15,
+    );
+    final t2 = taskFactory(
+      title: 'T2',
+      hour: 10,
+      minute: 15,
+      durationMinutes: 15,
+    );
+    final t3 = taskFactory(
+      title: 'T3',
+      hour: 10,
+      minute: 30,
+      durationMinutes: 15,
+    );
+    final split = taskFactory(
+      title: 'Split',
+      hour: 10,
+      minute: 0,
+      durationMinutes: 15,
+    );
 
     final overlaps = calculateOverlapColumns([t1, t2, t3, split]);
 

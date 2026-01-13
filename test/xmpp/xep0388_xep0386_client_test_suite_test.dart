@@ -32,25 +32,22 @@ const String _uuidV4Pattern =
 const String _resourceSafeTagPattern = r'^[a-z0-9]+$';
 const String _emptyString = '';
 
-final RegisteredStateKey _userAgentKey =
-    XmppStateStore.registerKey(_userAgentKeyName);
+final RegisteredStateKey _userAgentKey = XmppStateStore.registerKey(
+  _userAgentKeyName,
+);
 final RegExp _uuidV4Regex = RegExp(_uuidV4Pattern);
 final RegExp _resourceSafeTagRegex = RegExp(_resourceSafeTagPattern);
 
 class _StateStoreWrite {
-  const _StateStoreWrite({
-    required this.key,
-    required this.value,
-  });
+  const _StateStoreWrite({required this.key, required this.value});
 
   final RegisteredStateKey key;
   final Object? value;
 }
 
 class _StateStoreHarness {
-  _StateStoreHarness({
-    Map<RegisteredStateKey, Object?>? initialValues,
-  })  : values = initialValues ?? <RegisteredStateKey, Object?>{},
+  _StateStoreHarness({Map<RegisteredStateKey, Object?>? initialValues})
+      : values = initialValues ?? <RegisteredStateKey, Object?>{},
         writes = <_StateStoreWrite>[];
 
   final Map<RegisteredStateKey, Object?> values;
@@ -80,12 +77,7 @@ class _StateStoreHarness {
           invocation.namedArguments[#key] as RegisteredStateKey;
       final Object? value = invocation.namedArguments[#value] as Object?;
       values[key] = value;
-      writes.add(
-        _StateStoreWrite(
-          key: key,
-          value: value,
-        ),
-      );
+      writes.add(_StateStoreWrite(key: key, value: value));
       return _operationSuccess;
     });
     when(() => store.delete(key: any(named: 'key'))).thenAnswer((invocation) {
@@ -149,8 +141,9 @@ void main() {
   group('SASL2 negotiator registration', () {
     test('SASL2-FEAT-001 registers SASL2 negotiator', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
@@ -169,8 +162,9 @@ void main() {
   group('SASL2 user agent', () {
     test('SASL2-INIT-004 includes user-agent software', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
@@ -183,8 +177,9 @@ void main() {
 
     test('SASL2-INIT-005 user-agent id is UUIDv4', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
@@ -200,8 +195,9 @@ void main() {
     test('SASL2-INIT-006 reuses persisted user-agent id', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness()
         ..seedUserAgent(_storedUserAgentId);
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
@@ -219,27 +215,31 @@ void main() {
 
     test('SEC-UA-002 persists user-agent id across sessions', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness firstHarness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness firstHarness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       String? firstId;
       try {
         await firstHarness.connect(jid: _testJidFull);
 
-        final mox.UserAgent firstUserAgent =
-            _captureUserAgent(firstHarness.connection);
+        final mox.UserAgent firstUserAgent = _captureUserAgent(
+          firstHarness.connection,
+        );
         firstId = firstUserAgent.id;
         expect(firstId, isNotNull);
       } finally {
         await firstHarness.close();
       }
 
-      final _XmppHarness secondHarness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness secondHarness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await secondHarness.connect(jid: _testJidFull);
 
-        final mox.UserAgent secondUserAgent =
-            _captureUserAgent(secondHarness.connection);
+        final mox.UserAgent secondUserAgent = _captureUserAgent(
+          secondHarness.connection,
+        );
         expect(secondUserAgent.id, equals(firstId));
 
         final List<_StateStoreWrite> userAgentWrites = stateStoreHarness.writes
@@ -255,13 +255,15 @@ void main() {
   group('SASL2 connection settings', () {
     test('SASL2-INIT-014 uses bare JID for stream settings', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
-        final XmppConnectionSettings settings =
-            _captureConnectionSettings(harness.connection);
+        final XmppConnectionSettings settings = _captureConnectionSettings(
+          harness.connection,
+        );
         expect(settings.jid.toString(), equals(_testJidBare));
       } finally {
         await harness.close();
@@ -272,8 +274,9 @@ void main() {
   group('Bind2 configuration', () {
     test('BIND2-REQ-001 registers Bind2 negotiator', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
@@ -290,8 +293,9 @@ void main() {
 
     test('BIND2-REQ-002/003 uses a safe generic bind tag', () async {
       final _StateStoreHarness stateStoreHarness = _StateStoreHarness();
-      final _XmppHarness harness =
-          _createHarness(stateStoreHarness: stateStoreHarness);
+      final _XmppHarness harness = _createHarness(
+        stateStoreHarness: stateStoreHarness,
+      );
       try {
         await harness.connect(jid: _testJidFull);
 
@@ -312,9 +316,7 @@ void main() {
   });
 }
 
-_XmppHarness _createHarness({
-  required _StateStoreHarness stateStoreHarness,
-}) {
+_XmppHarness _createHarness({required _StateStoreHarness stateStoreHarness}) {
   mockConnection = MockXmppConnection();
   mockStateStore = MockXmppStateStore();
   mockNotificationService = MockNotificationService();
@@ -357,7 +359,8 @@ mox.UserAgent _captureUserAgent(MockXmppConnection connection) {
 }
 
 XmppConnectionSettings _captureConnectionSettings(
-    MockXmppConnection connection) {
+  MockXmppConnection connection,
+) {
   final List<dynamic> captured = verify(
     () => connection.connectionSettings = captureAny(),
   ).captured;

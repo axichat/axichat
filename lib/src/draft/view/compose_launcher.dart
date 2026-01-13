@@ -57,10 +57,7 @@ void openComposeDraft(
     resolvedNavigator.push<void>(
       AxiFadePageRoute<void>(
         duration: animationDuration,
-        builder: (_) => ComposeScreen(
-          seed: seed,
-          locate: locate,
-        ),
+        builder: (_) => ComposeScreen(seed: seed, locate: locate),
       ),
     ),
   );

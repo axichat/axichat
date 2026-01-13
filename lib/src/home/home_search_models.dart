@@ -6,10 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 
 class HomeSearchFilter {
-  const HomeSearchFilter({
-    required this.id,
-    required this.label,
-  });
+  const HomeSearchFilter({required this.id, required this.label});
 
   final String id;
   final String label;

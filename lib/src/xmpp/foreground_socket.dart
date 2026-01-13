@@ -57,10 +57,7 @@ abstract class ForegroundTaskBridge {
 
   Future<void> send(List<Object> parts);
 
-  void registerListener(
-    String clientId,
-    ForegroundTaskMessageHandler handler,
-  );
+  void registerListener(String clientId, ForegroundTaskMessageHandler handler);
 
   void unregisterListener(String clientId);
 }
@@ -86,10 +83,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
       _usageCounts.values.fold(0, (previous, element) => previous + element);
 
   @override
-  void registerListener(
-    String clientId,
-    ForegroundTaskMessageHandler handler,
-  ) {
+  void registerListener(String clientId, ForegroundTaskMessageHandler handler) {
     _listeners[clientId] = handler;
     if (_callbackRegistered) {
       return;
@@ -202,10 +196,9 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   }
 
   ForegroundServiceConfig _defaultConfig() => buildForegroundServiceConfig(
-        notificationText: toBeginningOfSentenceCase(
-              ConnectionState.connecting.name,
-            ) ??
-            ConnectionState.connecting.name,
+        notificationText:
+            toBeginningOfSentenceCase(ConnectionState.connecting.name) ??
+                ConnectionState.connecting.name,
       );
 
   @override
@@ -263,8 +256,9 @@ ForegroundServiceConfig buildForegroundServiceConfig({
     ForegroundServiceConfig(
       notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
       notificationText: notificationText,
-      notificationIcon:
-          const NotificationIcon(metaDataName: 'im.axi.axichat.APP_ICON'),
+      notificationIcon: const NotificationIcon(
+        metaDataName: 'im.axi.axichat.APP_ICON',
+      ),
     );
 
 bool launchedFromNotification = false;
@@ -300,10 +294,9 @@ void notificationTapBackground(NotificationResponse notificationResponse) {
         ? null
         : notificationResponse.payload,
   );
-  FlutterForegroundTask.sendDataToMain([
-    notificationTapPrefix,
-    notificationResponse.payload ?? '',
-  ].join(join));
+  FlutterForegroundTask.sendDataToMain(
+    [notificationTapPrefix, notificationResponse.payload ?? ''].join(join),
+  );
 }
 
 String? takeLaunchedNotificationChatJid() {
@@ -378,11 +371,7 @@ class ForegroundSocket extends TaskHandler {
       final port = split.length > 3 && split[3].isNotEmpty
           ? int.tryParse(split[3])
           : null;
-      final result = await _socket!.connect(
-        split[1],
-        host: host,
-        port: port,
-      );
+      final result = await _socket!.connect(split[1], host: host, port: port);
       return _sendToMain([connectPrefix, result]);
     } else if (data.startsWith('$securePrefix$join')) {
       final domain = data.substring('$securePrefix$join'.length);
@@ -484,9 +473,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     } else if (data == socketErrorPrefix) {
       _eventStream.add(mox.XmppSocketErrorEvent(''));
     } else if (data.startsWith('$socketClosurePrefix$join')) {
-      _eventStream.add(
-        mox.XmppSocketClosureEvent(_boolFromPayload(data)),
-      );
+      _eventStream.add(mox.XmppSocketClosureEvent(_boolFromPayload(data)));
     } else if (data.startsWith('$connectPrefix$join')) {
       _completeConnect(_boolFromPayload(data));
     } else if (data.startsWith('$securePrefix$join')) {
@@ -551,20 +538,13 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   Future<bool> connect(String domain, {String? host, int? port}) async {
     await reset();
 
-    final target = _resolveTarget(
-      domain,
-      host: host,
-      port: port,
-    );
+    final target = _resolveTarget(domain, host: host, port: port);
     if (target == null) {
       return false;
     }
 
     if (!_listenerRegistered) {
-      _bridge.registerListener(
-        foregroundClientXmpp,
-        _onReceiveTaskData,
-      );
+      _bridge.registerListener(foregroundClientXmpp, _onReceiveTaskData);
       _listenerRegistered = true;
     }
 
@@ -585,20 +565,11 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       rethrow;
     }
 
-    _sendToTask([
-      connectPrefix,
-      domain,
-      target.host,
-      target.port,
-    ]);
+    _sendToTask([connectPrefix, domain, target.host, target.port]);
     return _connect.future;
   }
 
-  _SocketTarget? _resolveTarget(
-    String domain, {
-    String? host,
-    int? port,
-  }) {
+  _SocketTarget? _resolveTarget(String domain, {String? host, int? port}) {
     final overrideHost = host;
     final hasOverride = overrideHost != null && overrideHost.isNotEmpty;
     if (hasOverride) {
@@ -686,12 +657,11 @@ void _configureLogging() {
       ..onRecord.listen((record) {
         final sanitizedMessage = SafeLogging.sanitizeMessage(record.message);
         final sanitizedError = SafeLogging.sanitizeError(record.error);
-        final sanitizedStackTrace =
-            SafeLogging.sanitizeStackTrace(record.stackTrace);
+        final sanitizedStackTrace = SafeLogging.sanitizeStackTrace(
+          record.stackTrace,
+        );
         final buffer = StringBuffer()
-          ..write(
-            '${record.level.name}: ${record.time}: $sanitizedMessage',
-          );
+          ..write('${record.level.name}: ${record.time}: $sanitizedMessage');
         if (record.stackTrace != null) {
           buffer
             ..write(' Exception: $sanitizedError')

@@ -78,10 +78,7 @@ List<HomeSearchFilter> _blocklistSearchFilters(AppLocalizations l10n) => [
 
 List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
       HomeSearchFilter(id: 'all', label: l10n.draftsFilterAll),
-      HomeSearchFilter(
-        id: 'attachments',
-        label: l10n.draftsFilterAttachments,
-      ),
+      HomeSearchFilter(id: 'attachments', label: l10n.draftsFilterAttachments),
     ];
 
 const double _secondaryPaneGutter = 0.0;
@@ -137,9 +134,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
     if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
-    context
-        .read<AccessibilityActionBloc?>()
-        ?.add(const AccessibilityMenuOpened());
+    context.read<AccessibilityActionBloc?>()?.add(
+          const AccessibilityMenuOpened(),
+        );
     return KeyEventResult.handled;
   }
 
@@ -160,9 +157,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!mounted || !_isFindActionEvent(event)) return false;
-    context
-        .read<AccessibilityActionBloc?>()
-        ?.add(const AccessibilityMenuOpened());
+    context.read<AccessibilityActionBloc?>()?.add(
+          const AccessibilityMenuOpened(),
+        );
     return true;
   }
 
@@ -282,18 +279,12 @@ class _HomeScreenState extends State<HomeScreen> {
           id: HomeTab.blocked,
           label: l10n.homeTabBlocked,
           body: const BlocklistList(key: PageStorageKey('Blocked')),
-          fab: const _TabActionGroup(
-            extraActions: [BlocklistAddButton()],
-          ),
+          fab: const _TabActionGroup(extraActions: [BlocklistAddButton()]),
           searchFilters: blocklistFilters,
         ),
     ];
     if (tabs.isEmpty) {
-      return Scaffold(
-        body: Center(
-          child: Text(l10n.homeNoModules),
-        ),
-      );
+      return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
     final initialTabFilters = <HomeTab, String?>{
       for (final entry in tabs)
@@ -302,10 +293,8 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     final Widget mainContent = Builder(
       builder: (context) {
-        Widget constrainSecondary(Widget child) => Align(
-              alignment: Alignment.topLeft,
-              child: child,
-            );
+        Widget constrainSecondary(Widget child) =>
+            Align(alignment: Alignment.topLeft, child: child);
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
@@ -351,8 +340,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                     0,
                             collapsed: _railCollapsed,
                             onDestinationSelected: (index) {
-                              final controller =
-                                  DefaultTabController.maybeOf(context);
+                              final controller = DefaultTabController.maybeOf(
+                                context,
+                              );
                               if (controller == null) return;
                               controller.animateTo(index);
                             },
@@ -374,9 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         : MultiBlocProvider(
                             providers: [
                               BlocProvider(
-                                key: Key(
-                                  openJid,
-                                ),
+                                key: Key(openJid),
                                 create: (context) => ChatBloc(
                                   jid: openJid,
                                   messageService: context.read<XmppService>(),
@@ -418,9 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Widget chatLayout({required bool showChatCalendar}) {
                       final EdgeInsets secondaryPanePadding = showChatCalendar
                           ? EdgeInsets.zero
-                          : const EdgeInsets.only(
-                              left: _secondaryPaneGutter,
-                            );
+                          : const EdgeInsets.only(left: _secondaryPaneGutter);
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -458,9 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (navRail != null) navRail,
-                            const Expanded(
-                              child: CalendarWidget(),
-                            ),
+                            const Expanded(child: CalendarWidget()),
                           ],
                         );
 
@@ -497,9 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     final Widget calendarAwareContent = hasCalendarBloc
-        ? CalendarTaskFeedbackObserver<CalendarBloc>(
-            child: mainContent,
-          )
+        ? CalendarTaskFeedbackObserver<CalendarBloc>(child: mainContent)
         : mainContent;
     final shouldResizeForKeyboard = navPlacement != NavPlacement.bottom;
 
@@ -518,9 +500,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             if (isRoster)
               BlocProvider(
-                create: (context) => RosterCubit(
-                  rosterService: context.read<XmppService>(),
-                ),
+                create: (context) =>
+                    RosterCubit(rosterService: context.read<XmppService>()),
               ),
             BlocProvider(
               create: (context) => ProfileCubit(
@@ -535,9 +516,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             if (isBlocking)
               BlocProvider(
-                create: (context) => BlocklistCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+                create: (context) =>
+                    BlocklistCubit(xmppService: context.read<XmppService>()),
               ),
             // Always provide CalendarBloc for logged-in users
             if (calendarStorage != null)
@@ -576,22 +556,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
 
                       xmppService
-                        ..setCalendarSyncCallback(
-                          (inbound) async {
-                            if (bloc.isClosed) return false;
-                            return await manager.onCalendarMessage(inbound);
-                          },
-                        )
-                        ..setCalendarSyncWarningCallback(
-                          (warning) async {
-                            if (bloc.isClosed) return;
-                            bloc.add(
-                              CalendarEvent.syncWarningRaised(
-                                warning: warning,
-                              ),
-                            );
-                          },
-                        );
+                        ..setCalendarSyncCallback((inbound) async {
+                          if (bloc.isClosed) return false;
+                          return await manager.onCalendarMessage(inbound);
+                        })
+                        ..setCalendarSyncWarningCallback((warning) async {
+                          if (bloc.isClosed) return;
+                          bloc.add(
+                            CalendarEvent.syncWarningRaised(warning: warning),
+                          );
+                        });
                       return manager;
                     },
                     availabilityCoordinator: availabilityShareCoordinator,
@@ -605,9 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (seedDemoCalendar) {
                     bloc.add(
                       CalendarEvent.remoteModelApplied(
-                        model: DemoCalendar.franklin(
-                          anchor: DateTime.now(),
-                        ),
+                        model: DemoCalendar.franklin(anchor: DateTime.now()),
                       ),
                     );
                   }
@@ -615,19 +587,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             BlocProvider(
-              create: (context) => ConnectivityCubit(
-                xmppBase: context.read<XmppService>(),
-              ),
+              create: (context) =>
+                  ConnectivityCubit(xmppBase: context.read<XmppService>()),
             ),
             BlocProvider(
-              create: (context) => EmailSyncCubit(
-                emailService: context.read<EmailService>(),
-              ),
+              create: (context) =>
+                  EmailSyncCubit(emailService: context.read<EmailService>()),
             ),
           ],
-          child: EmailForwardingWelcomeGate(
-            child: calendarAwareContent,
-          ),
+          child: EmailForwardingWelcomeGate(child: calendarAwareContent),
         ),
       ),
     );
@@ -727,10 +695,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 },
                 child: Stack(
-                  children: [
-                    wrappedScaffold,
-                    const AccessibilityActionMenu(),
-                  ],
+                  children: [wrappedScaffold, const AccessibilityActionMenu()],
                 ),
               ),
             ),
@@ -766,10 +731,7 @@ class _HomeCalendarViewTransition extends StatelessWidget {
         index: openCalendar ? _homeCalendarPageIndex : _homeChatPageIndex,
         duration: duration,
         curve: curve,
-        children: [
-          chatChild,
-          calendarChild,
-        ],
+        children: [chatChild, calendarChild],
       );
     }
     return _HomeMobileCalendarViewTransition(
@@ -1014,12 +976,10 @@ class _NexusState extends State<Nexus> {
         AppBarActionItem(
           label: context.l10n.accessibilityActionsLabel,
           iconData: LucideIcons.lifeBuoy,
-          inline: _FindActionIconButton(
-            showShortcutHint: showShortcutHints,
-          ),
-          onPressed: () => context
-              .read<AccessibilityActionBloc?>()
-              ?.add(const AccessibilityMenuOpened()),
+          inline: _FindActionIconButton(showShortcutHint: showShortcutHints),
+          onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+                const AccessibilityMenuOpened(),
+              ),
         ),
       if (showDesktopRefresh)
         AppBarActionItem(
@@ -1062,13 +1022,9 @@ class _NexusState extends State<Nexus> {
             listener: (context, state) {
               if (showToast == null) return;
               if (state is RosterFailure) {
-                showToast(
-                  FeedbackToast.error(message: state.message),
-                );
+                showToast(FeedbackToast.error(message: state.message));
               } else if (state is RosterSuccess) {
-                showToast(
-                  FeedbackToast.success(message: state.message),
-                );
+                showToast(FeedbackToast.success(message: state.message));
               }
             },
           ),
@@ -1077,22 +1033,16 @@ class _NexusState extends State<Nexus> {
             listener: (context, state) {
               if (showToast == null) return;
               if (state is BlocklistFailure) {
-                showToast(
-                  FeedbackToast.error(message: state.message),
-                );
+                showToast(FeedbackToast.error(message: state.message));
               } else if (state is BlocklistSuccess) {
-                showToast(
-                  FeedbackToast.success(message: state.message),
-                );
+                showToast(FeedbackToast.success(message: state.message));
               }
             },
           ),
       ],
       child: Container(
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: context.colorScheme.border),
-          ),
+          border: Border(bottom: BorderSide(color: context.colorScheme.border)),
         ),
         child: TabBarView(
           physics: tabViewPhysics,
@@ -1111,15 +1061,11 @@ class _NexusState extends State<Nexus> {
 
     late final Widget bottomArea;
     if (selectionActive) {
-      bottomArea = ChatSelectionActionBar(
-        selectedChats: selectedChats,
-      );
+      bottomArea = ChatSelectionActionBar(selectedChats: selectedChats);
     } else if (widget.navPlacement == NavPlacement.bottom) {
       final Widget tabBar = Container(
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: context.colorScheme.border),
-          ),
+          border: Border(bottom: BorderSide(color: context.colorScheme.border)),
         ),
         child: AxiTabBar(
           backgroundColor: context.colorScheme.background,
@@ -1132,10 +1078,7 @@ class _NexusState extends State<Nexus> {
       );
       bottomArea = Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          tabBar,
-          const ProfileTile(),
-        ],
+        children: [tabBar, const ProfileTile()],
       );
     } else {
       bottomArea = const ProfileTile();
@@ -1204,11 +1147,7 @@ class _TabActionGroup extends StatelessWidget {
     if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: actions,
-    );
+    return Wrap(spacing: 8, runSpacing: 8, children: actions);
   }
 }
 
@@ -1229,9 +1168,9 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
       return AxiIconButton.ghost(
         iconData: LucideIcons.lifeBuoy,
         tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-        onPressed: () => context
-            .read<AccessibilityActionBloc?>()
-            ?.add(const AccessibilityMenuOpened()),
+        onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+              const AccessibilityMenuOpened(),
+            ),
         usePrimary: true,
       );
     }
@@ -1248,17 +1187,14 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
         ),
         child: InkWell(
           borderRadius: radius,
-          onTap: () => context
-              .read<AccessibilityActionBloc?>()
-              ?.add(const AccessibilityMenuOpened()),
+          onTap: () => context.read<AccessibilityActionBloc?>()?.add(
+                const AccessibilityMenuOpened(),
+              ),
           child: Padding(
             padding: _railFooterItemPadding,
             child: Row(
               children: [
-                const Icon(
-                  LucideIcons.lifeBuoy,
-                  size: _railFooterIconSize,
-                ),
+                const Icon(LucideIcons.lifeBuoy, size: _railFooterIconSize),
                 const SizedBox(width: _railFooterItemSpacing),
                 ShortcutHint(shortcut: shortcut, dense: true),
               ],
@@ -1285,10 +1221,7 @@ class _HomeNavigationRailFooter extends StatelessWidget {
       items.add(const SizedBox(height: _railFooterSpacing));
     }
     items.add(_SettingsRailItem(collapsed: collapsed));
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: items,
-    );
+    return Column(mainAxisSize: MainAxisSize.min, children: items);
   }
 }
 
@@ -1298,10 +1231,7 @@ class _SettingsRailItem extends StatelessWidget {
   final bool collapsed;
 
   void _openSettings(BuildContext context) {
-    context.push(
-      const ProfileRoute().location,
-      extra: context.read,
-    );
+    context.push(const ProfileRoute().location, extra: context.read);
   }
 
   @override
@@ -1334,10 +1264,7 @@ class _SettingsRailItem extends StatelessWidget {
             padding: _railFooterItemPadding,
             child: Row(
               children: [
-                const Icon(
-                  LucideIcons.settings,
-                  size: _railFooterIconSize,
-                ),
+                const Icon(LucideIcons.settings, size: _railFooterIconSize),
                 const SizedBox(width: _railFooterItemSpacing),
                 Expanded(
                   child: Text(
@@ -1375,28 +1302,20 @@ class _FindActionIconButton extends StatelessWidget {
     final Widget content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          LucideIcons.lifeBuoy,
-          size: 18,
-          color: colors.primary,
-        ),
+        Icon(LucideIcons.lifeBuoy, size: 18, color: colors.primary),
         if (showShortcutHint) ...[
           const SizedBox(width: 10),
-          ShortcutHint(
-            shortcut: shortcut,
-            dense: true,
-          ),
+          ShortcutHint(shortcut: shortcut, dense: true),
         ],
       ],
     );
     return AxiTooltip(
-      builder: (_) => Text(
-        l10n.accessibilityActionsShortcutTooltip(shortcutText),
-      ),
+      builder: (_) =>
+          Text(l10n.accessibilityActionsShortcutTooltip(shortcutText)),
       child: ShadButton.ghost(
-        onPressed: () => context
-            .read<AccessibilityActionBloc?>()
-            ?.add(const AccessibilityMenuOpened()),
+        onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+              const AccessibilityMenuOpened(),
+            ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: content,
       ),
@@ -1405,10 +1324,7 @@ class _FindActionIconButton extends StatelessWidget {
 }
 
 class _SearchToggleButton extends StatelessWidget {
-  const _SearchToggleButton({
-    required this.active,
-    this.onPressed,
-  });
+  const _SearchToggleButton({required this.active, this.onPressed});
 
   final bool active;
   final VoidCallback? onPressed;
@@ -1516,22 +1432,24 @@ class _ScaleOnlyFabAnimator extends FloatingActionButtonAnimator {
     const curveIn = Interval(0.5, 1.0, curve: Curves.easeOut);
     return TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: curveOut)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.0,
+        ).chain(CurveTween(curve: curveOut)),
         weight: 50,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: curveIn)),
+        tween: Tween<double>(
+          begin: 0.0,
+          end: 1.0,
+        ).chain(CurveTween(curve: curveIn)),
         weight: 50,
       ),
     ]).animate(parent);
   }
 
   @override
-  Animation<double> getRotationAnimation({
-    required Animation<double> parent,
-  }) =>
+  Animation<double> getRotationAnimation({required Animation<double> parent}) =>
       const AlwaysStoppedAnimation<double>(0.0);
 
   @override
@@ -1614,8 +1532,9 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
     if (widget.tabs.isEmpty) {
       return const SizedBox.shrink();
     }
-    final badgeCounts =
-        _computeBadgeCounts(context.watch<RosterCubit?>()?.inviteCount ?? 0);
+    final badgeCounts = _computeBadgeCounts(
+      context.watch<RosterCubit?>()?.inviteCount ?? 0,
+    );
     final calendarDestinationIndex = _calendarDestinationIndex();
     final destinations = <AxiRailDestination>[];
     for (final tab in widget.tabs) {
@@ -1656,9 +1575,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         toggleExpandedTooltip: l10n.homeRailHideMenu,
         toggleCollapsedTooltip: l10n.homeRailShowMenu,
         backgroundColor: context.colorScheme.background,
-        footer: _HomeNavigationRailFooter(
-          collapsed: widget.collapsed,
-        ),
+        footer: _HomeNavigationRailFooter(collapsed: widget.collapsed),
         onDestinationSelected: (index) {
           final calendarIndex = _calendarDestinationIndex();
           if (calendarIndex != null && index == calendarIndex) {
@@ -1681,8 +1598,9 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
 
   int? _calendarDestinationIndex() {
     if (!widget.calendarAvailable) return null;
-    final chatIndex =
-        widget.tabs.indexWhere((entry) => entry.id == HomeTab.chats);
+    final chatIndex = widget.tabs.indexWhere(
+      (entry) => entry.id == HomeTab.chats,
+    );
     if (chatIndex == -1) {
       return widget.tabs.length;
     }
@@ -1695,7 +1613,9 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   }
 
   int? _tabIndexForDestination(
-      int destinationIndex, int? calendarDestinationIndex) {
+    int destinationIndex,
+    int? calendarDestinationIndex,
+  ) {
     if (calendarDestinationIndex == null) return destinationIndex;
     if (destinationIndex == calendarDestinationIndex) {
       return null;
@@ -1863,9 +1783,9 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                       tooltip: l10n.commonClear,
                       onPressed: _controller.text.isEmpty
                           ? null
-                          : () => context
-                              .read<HomeSearchCubit?>()
-                              ?.clearQuery(tab: tab),
+                          : () => context.read<HomeSearchCubit?>()?.clearQuery(
+                                tab: tab,
+                              ),
                     ),
                     const SizedBox(width: 8),
                     ShadButton.ghost(
@@ -1885,9 +1805,10 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         initialValue: sortValue,
                         onChanged: (value) {
                           if (value == null) return;
-                          context
-                              .read<HomeSearchCubit?>()
-                              ?.updateSort(value, tab: tab);
+                          context.read<HomeSearchCubit?>()?.updateSort(
+                                value,
+                                tab: tab,
+                              );
                         },
                         options: SearchSortOrder.values
                             .map(
@@ -1906,9 +1827,10 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         child: AxiSelect<String>(
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
-                            context
-                                .read<HomeSearchCubit?>()
-                                ?.updateFilter(value, tab: tab);
+                            context.read<HomeSearchCubit?>()?.updateFilter(
+                                  value,
+                                  tab: tab,
+                                );
                           },
                           options: filters
                               .map(
@@ -1918,9 +1840,8 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                                 ),
                               )
                               .toList(),
-                          selectedOptionBuilder: (_, value) => Text(
-                            _filterLabel(filters, value),
-                          ),
+                          selectedOptionBuilder: (_, value) =>
+                              Text(_filterLabel(filters, value)),
                         ),
                       ),
                     ],

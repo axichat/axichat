@@ -1,9 +1,7 @@
 import 'dart:io';
 
 const _sourceResDir = 'android/app/src/main/res';
-const _flavorResDirs = [
-  'android/app/src/development/res',
-];
+const _flavorResDirs = ['android/app/src/development/res'];
 
 void main() {
   final sourceDir = Directory(_sourceResDir);
@@ -29,8 +27,8 @@ void main() {
     }
     for (final flavorDir in _flavorResDirs) {
       final targetDir = Directory(
-          '$flavorDir/${resDir.path.split(Platform.pathSeparator).last}')
-        ..createSync(recursive: true);
+        '$flavorDir/${resDir.path.split(Platform.pathSeparator).last}',
+      )..createSync(recursive: true);
       for (final sourceFile in launcherFiles) {
         final destPath =
             '${targetDir.path}/${sourceFile.uri.pathSegments.last}';

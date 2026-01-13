@@ -89,10 +89,7 @@ final class MucBookmark {
     }
   }
 
-  static MucBookmark? fromBookmarks2Xml(
-    mox.XMLNode node, {
-    String? itemId,
-  }) {
+  static MucBookmark? fromBookmarks2Xml(mox.XMLNode node, {String? itemId}) {
     if (node.tag != _conferenceTag) return null;
     if (node.attributes['xmlns']?.toString() != _bookmarksNode) return null;
 
@@ -107,10 +104,12 @@ final class MucBookmark {
       return null;
     }
 
-    final rawName =
-        _normalize(node.attributes[_conferenceNameAttr]?.toString());
-    final rawAutojoin =
-        _normalize(node.attributes[_conferenceAutojoinAttr]?.toString());
+    final rawName = _normalize(
+      node.attributes[_conferenceNameAttr]?.toString(),
+    );
+    final rawAutojoin = _normalize(
+      node.attributes[_conferenceAutojoinAttr]?.toString(),
+    );
     final nick = _normalize(node.firstTag(_nickTag)?.innerText());
     final password = _normalize(node.firstTag(_passwordTag)?.innerText());
     final extensionsNode = node.firstTag(_extensionsTag);
@@ -183,9 +182,8 @@ final class MucBookmarkRetractedEvent extends mox.XmppEvent {
 }
 
 final class BookmarksManager extends mox.XmppManagerBase {
-  BookmarksManager({
-    String? maxItems,
-  })  : _maxItems = maxItems ?? _defaultMaxItems,
+  BookmarksManager({String? maxItems})
+      : _maxItems = maxItems ?? _defaultMaxItems,
         super(managerId);
 
   static const String managerId = 'axi.bookmarks';
@@ -286,10 +284,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
   int _resolveFetchLimit() =>
       _parseMaxItems(_maxItems) ?? _bookmarksFetchLimitFallback;
 
-  bool _isSnapshotComplete({
-    required int itemsCount,
-    required int maxItems,
-  }) =>
+  bool _isSnapshotComplete({required int itemsCount, required int maxItems}) =>
       itemsCount < maxItems;
 
   mox.JID? _selfPepHost() {
@@ -317,8 +312,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = DateTime.timestamp();
     try {
       final config = _nodeConfig();
-      final configured =
-          await pubsub.configureNode(host, _bookmarksNode, config);
+      final configured = await pubsub.configureNode(
+        host,
+        _bookmarksNode,
+        config,
+      );
       if (!configured.isType<mox.PubSubError>()) {
         _nodeReady = true;
         return;
@@ -350,8 +348,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
       try {
         await pubsub.createNode(host, nodeId: _bookmarksNode);
-        final applied =
-            await pubsub.configureNode(host, _bookmarksNode, config);
+        final applied = await pubsub.configureNode(
+          host,
+          _bookmarksNode,
+          config,
+        );
         if (!applied.isType<mox.PubSubError>()) {
           _nodeReady = true;
         }

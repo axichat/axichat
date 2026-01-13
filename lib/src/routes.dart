@@ -58,10 +58,7 @@ class TransitionGoRouteData extends GoRouteData {
           curve: _routeFadeCurve,
           reverseCurve: _routeFadeCurve,
         );
-        return FadeTransition(
-          opacity: curved,
-          child: child,
-        );
+        return FadeTransition(opacity: curved, child: child);
       },
     );
   }
@@ -73,18 +70,14 @@ class TransitionGoRouteData extends GoRouteData {
     TypedGoRoute<ProfileRoute>(
       path: ProfileRoute.path,
       routes: [
-        TypedGoRoute<AvatarEditorRoute>(
-          path: AvatarEditorRoute.path,
-        ),
+        TypedGoRoute<AvatarEditorRoute>(path: AvatarEditorRoute.path),
         TypedGoRoute<ArchivesRoute>(
           path: ArchivesRoute.path,
           routes: [
             TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
           ],
         ),
-        TypedGoRoute<AttachmentGalleryRoute>(
-          path: AttachmentGalleryRoute.path,
-        ),
+        TypedGoRoute<AttachmentGalleryRoute>(path: AttachmentGalleryRoute.path),
       ],
     ),
   ],
@@ -137,9 +130,8 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
   bool get authenticationRequired => true;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) => ArchivesScreen(
-        locate: state.extra! as T Function<T>(),
-      );
+  Widget build(BuildContext context, GoRouterState state) =>
+      ArchivesScreen(locate: state.extra! as T Function<T>());
 }
 
 class AttachmentGalleryRoute extends TransitionGoRouteData
@@ -168,10 +160,8 @@ class ArchivedChatRoute extends TransitionGoRouteData
   bool get authenticationRequired => true;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) => ArchivedChatScreen(
-        locate: state.extra! as T Function<T>(),
-        jid: jid,
-      );
+  Widget build(BuildContext context, GoRouterState state) =>
+      ArchivedChatScreen(locate: state.extra! as T Function<T>(), jid: jid);
 }
 
 @TypedGoRoute<GuestCalendarRoute>(path: '/guest-calendar')

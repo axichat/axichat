@@ -9,8 +9,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 extension ValidJid on String {
   bool get isValidJid => RegExp(
-          r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
-      .hasMatch(this);
+        r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
+      ).hasMatch(this);
 }
 
 class JidInput extends StatelessWidget {
@@ -40,9 +40,11 @@ class JidInput extends StatelessWidget {
       optionsBuilder: (value) {
         if (value.text.isEmpty) return const [];
         return jidOptions
-            .where((e) =>
-                e.toLowerCase().contains(value.text.toLowerCase()) &&
-                e.toLowerCase() != value.text.toLowerCase())
+            .where(
+              (e) =>
+                  e.toLowerCase().contains(value.text.toLowerCase()) &&
+                  e.toLowerCase() != value.text.toLowerCase(),
+            )
             .toList();
       },
       optionsViewBuilder: (context, onSelected, options) => Align(
@@ -112,9 +114,7 @@ class JidInput extends StatelessWidget {
                 padding: inputSubtextInsets,
                 child: Text(
                   error ?? context.l10n.jidInputInvalid,
-                  style: TextStyle(
-                    color: context.colorScheme.destructive,
-                  ),
+                  style: TextStyle(color: context.colorScheme.destructive),
                 ),
               ),
             ],

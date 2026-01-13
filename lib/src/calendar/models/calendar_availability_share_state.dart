@@ -52,9 +52,8 @@ class CalendarAvailabilityShareSource {
       : type = CalendarAvailabilityShareSourceType.personal,
         chatJid = null;
 
-  const CalendarAvailabilityShareSource.chat({
-    required this.chatJid,
-  }) : type = CalendarAvailabilityShareSourceType.chat;
+  const CalendarAvailabilityShareSource.chat({required this.chatJid})
+      : type = CalendarAvailabilityShareSourceType.chat;
 
   final CalendarAvailabilityShareSourceType type;
   final String? chatJid;
@@ -67,9 +66,7 @@ class CalendarAvailabilityShareSource {
         if (chatJid != null) _availabilityShareSourceChatJidKey: chatJid,
       };
 
-  static CalendarAvailabilityShareSource? fromJson(
-    Map<String, dynamic> json,
-  ) {
+  static CalendarAvailabilityShareSource? fromJson(Map<String, dynamic> json) {
     final typeValue = json[_availabilityShareSourceTypeKey] as String?;
     final type = CalendarAvailabilityShareSourceType.fromStorageValue(
       typeValue,
@@ -146,9 +143,7 @@ class CalendarAvailabilityShareRecord {
           _availabilityShareRecordUpdatedAtKey: updatedAt!.toIso8601String(),
       };
 
-  static CalendarAvailabilityShareRecord? fromJson(
-    Map<String, dynamic> json,
-  ) {
+  static CalendarAvailabilityShareRecord? fromJson(Map<String, dynamic> json) {
     final id = json[_availabilityShareRecordIdKey] as String?;
     final sourceRaw = json[_availabilityShareRecordSourceKey];
     final chatJid = json[_availabilityShareRecordChatJidKey] as String?;

@@ -50,8 +50,9 @@ class CalendarInvitationStatusField extends StatelessWidget {
   Widget build(BuildContext context) {
     final CalendarMethod? effectiveMethod =
         method != null && method!.isPublish ? null : method;
-    final List<CalendarRequestStatusEntry> entries =
-        _parseRequestStatus(rawProperties);
+    final List<CalendarRequestStatusEntry> entries = _parseRequestStatus(
+      rawProperties,
+    );
     if (!hasInvitationStatusData(
       method: effectiveMethod,
       sequence: sequence,
@@ -146,10 +147,7 @@ List<CalendarRequestStatusEntry> _parseRequestStatus(
 }
 
 class _InvitationDetailRow extends StatelessWidget {
-  const _InvitationDetailRow({
-    required this.label,
-    required this.value,
-  });
+  const _InvitationDetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -179,9 +177,7 @@ class _InvitationDetailRow extends StatelessWidget {
 }
 
 class _RequestStatusTile extends StatelessWidget {
-  const _RequestStatusTile({
-    required this.entry,
-  });
+  const _RequestStatusTile({required this.entry});
 
   final CalendarRequestStatusEntry entry;
 

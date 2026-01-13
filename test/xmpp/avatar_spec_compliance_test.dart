@@ -60,91 +60,82 @@ void main() {
     resetMocktailState();
   });
 
-  test(
-    'XEP-0084 empty metadata clears cached avatar',
-    () async {
-      const contactJid = 'contact@example.com';
-      const avatarHash = 'avatar-hash';
+  test('XEP-0084 empty metadata clears cached avatar', () async {
+    const contactJid = 'contact@example.com';
+    const avatarHash = 'avatar-hash';
 
-      await database.saveRosterItems([
-        const RosterItem(
-          jid: contactJid,
-          title: 'contact',
-          presence: Presence.chat,
-          subscription: Subscription.both,
-          avatarHash: avatarHash,
-        ),
-      ]);
+    await database.saveRosterItems([
+      const RosterItem(
+        jid: contactJid,
+        title: 'contact',
+        presence: Presence.chat,
+        subscription: Subscription.both,
+        avatarHash: avatarHash,
+      ),
+    ]);
 
-      await eventManager.executeHandlers(
-        mox.UserAvatarUpdatedEvent(
-          mox.JID.fromString(contactJid),
-          const <mox.UserAvatarMetadata>[],
-        ),
-      );
+    await eventManager.executeHandlers(
+      mox.UserAvatarUpdatedEvent(
+        mox.JID.fromString(contactJid),
+        const <mox.UserAvatarMetadata>[],
+      ),
+    );
 
-      final updated = await database.getRosterItem(contactJid);
-      expect(updated?.avatarHash, isNull);
-      expect(updated?.avatarPath, isNull);
-    },
-  );
+    final updated = await database.getRosterItem(contactJid);
+    expect(updated?.avatarHash, isNull);
+    expect(updated?.avatarPath, isNull);
+  });
 
-  test(
-    'XEP-0060 retract of current avatar clears cached avatar',
-    () async {
-      const contactJid = 'contact@example.com';
-      const avatarHash = 'avatar-hash';
+  test('XEP-0060 retract of current avatar clears cached avatar', () async {
+    const contactJid = 'contact@example.com';
+    const avatarHash = 'avatar-hash';
 
-      await database.saveRosterItems([
-        const RosterItem(
-          jid: contactJid,
-          title: 'contact',
-          presence: Presence.chat,
-          subscription: Subscription.both,
-          avatarHash: avatarHash,
-        ),
-      ]);
+    await database.saveRosterItems([
+      const RosterItem(
+        jid: contactJid,
+        title: 'contact',
+        presence: Presence.chat,
+        subscription: Subscription.both,
+        avatarHash: avatarHash,
+      ),
+    ]);
 
-      await eventManager.executeHandlers(
-        mox.PubSubItemsRetractedEvent(
-          from: contactJid,
-          node: mox.userAvatarMetadataXmlns,
-          itemIds: const [avatarHash],
-        ),
-      );
+    await eventManager.executeHandlers(
+      mox.PubSubItemsRetractedEvent(
+        from: contactJid,
+        node: mox.userAvatarMetadataXmlns,
+        itemIds: const [avatarHash],
+      ),
+    );
 
-      final updated = await database.getRosterItem(contactJid);
-      expect(updated?.avatarHash, isNull);
-      expect(updated?.avatarPath, isNull);
-    },
-  );
+    final updated = await database.getRosterItem(contactJid);
+    expect(updated?.avatarHash, isNull);
+    expect(updated?.avatarPath, isNull);
+  });
 
-  test(
-    'XEP-0060 node purge clears cached avatar',
-    () async {
-      const contactJid = 'contact@example.com';
-      const avatarHash = 'avatar-hash';
+  test('XEP-0060 node purge clears cached avatar', () async {
+    const contactJid = 'contact@example.com';
+    const avatarHash = 'avatar-hash';
 
-      await database.saveRosterItems([
-        const RosterItem(
-          jid: contactJid,
-          title: 'contact',
-          presence: Presence.chat,
-          subscription: Subscription.both,
-          avatarHash: avatarHash,
-        ),
-      ]);
+    await database.saveRosterItems([
+      const RosterItem(
+        jid: contactJid,
+        title: 'contact',
+        presence: Presence.chat,
+        subscription: Subscription.both,
+        avatarHash: avatarHash,
+      ),
+    ]);
 
-      await eventManager.executeHandlers(
-        mox.PubSubNodePurgedEvent(
-          from: contactJid,
-          node: mox.userAvatarMetadataXmlns,
-        ),
-      );
+    await eventManager.executeHandlers(
+      mox.PubSubNodePurgedEvent(
+        from: contactJid,
+        node: mox.userAvatarMetadataXmlns,
+      ),
+    );
 
-      final updated = await database.getRosterItem(contactJid);
-      expect(updated?.avatarHash, isNull);
-      expect(updated?.avatarPath, isNull);
-    },
-  );
+    final updated = await database.getRosterItem(contactJid);
+    expect(updated?.avatarHash, isNull);
+    expect(updated?.avatarPath, isNull);
+  });
 }

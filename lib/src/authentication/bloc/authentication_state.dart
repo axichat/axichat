@@ -35,10 +35,7 @@ abstract final class AuthenticationInProgress extends AuthenticationState {
 }
 
 final class AuthenticationLogInInProgress extends AuthenticationInProgress {
-  const AuthenticationLogInInProgress({
-    this.fromSignup = false,
-    super.config,
-  });
+  const AuthenticationLogInInProgress({this.fromSignup = false, super.config});
 
   final bool fromSignup;
 
@@ -92,19 +89,13 @@ final class AuthenticationCompleteFromSignup extends AuthenticationComplete {
 }
 
 final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {
-  const AuthenticationPasswordChangeSuccess(
-    this.successText, {
-    super.config,
-  });
+  const AuthenticationPasswordChangeSuccess(this.successText, {super.config});
 
   final String successText;
 
   @override
   AuthenticationPasswordChangeSuccess copyWithConfig(EndpointConfig config) =>
-      AuthenticationPasswordChangeSuccess(
-        successText,
-        config: config,
-      );
+      AuthenticationPasswordChangeSuccess(successText, config: config);
 
   @override
   List<Object?> get props => [config, successText];
@@ -125,19 +116,13 @@ final class AuthenticationPasswordChangeInProgress
 }
 
 final class AuthenticationPasswordChangeFailure extends AuthenticationComplete {
-  const AuthenticationPasswordChangeFailure(
-    this.errorText, {
-    super.config,
-  });
+  const AuthenticationPasswordChangeFailure(this.errorText, {super.config});
 
   final String errorText;
 
   @override
   AuthenticationPasswordChangeFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationPasswordChangeFailure(
-        errorText,
-        config: config,
-      );
+      AuthenticationPasswordChangeFailure(errorText, config: config);
 
   @override
   List<Object?> get props => [config, errorText];
@@ -155,38 +140,26 @@ final class AuthenticationUnregisterInProgress extends AuthenticationComplete {
 }
 
 final class AuthenticationUnregisterFailure extends AuthenticationComplete {
-  const AuthenticationUnregisterFailure(
-    this.errorText, {
-    super.config,
-  });
+  const AuthenticationUnregisterFailure(this.errorText, {super.config});
 
   final String errorText;
 
   @override
   AuthenticationUnregisterFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationUnregisterFailure(
-        errorText,
-        config: config,
-      );
+      AuthenticationUnregisterFailure(errorText, config: config);
 
   @override
   List<Object?> get props => [config, errorText];
 }
 
 final class AuthenticationFailure extends AuthenticationState {
-  const AuthenticationFailure(
-    this.errorText, {
-    super.config,
-  });
+  const AuthenticationFailure(this.errorText, {super.config});
 
   final String errorText;
 
   @override
   AuthenticationFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationFailure(
-        errorText,
-        config: config,
-      );
+      AuthenticationFailure(errorText, config: config);
 
   @override
   List<Object?> get props => [config, errorText];

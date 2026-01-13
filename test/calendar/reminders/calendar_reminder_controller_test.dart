@@ -65,8 +65,9 @@ void main() {
       scheduledTimes = <DateTime>[];
 
       when(() => notificationService.init()).thenAnswer((_) async {});
-      when(() => notificationService.refreshTimeZone())
-          .thenAnswer((_) async {});
+      when(
+        () => notificationService.refreshTimeZone(),
+      ).thenAnswer((_) async {});
       when(
         () => notificationService.scheduleNotification(
           id: any(named: 'id'),
@@ -83,8 +84,9 @@ void main() {
         payloadById[id] = payload;
         scheduledTimes.add(time);
       });
-      when(() => notificationService.cancelNotification(any()))
-          .thenAnswer((_) async {});
+      when(
+        () => notificationService.cancelNotification(any()),
+      ).thenAnswer((_) async {});
     });
 
     test('schedules start and deadline reminders for tasks', () async {
@@ -140,8 +142,9 @@ void main() {
       await controller.syncWithTasks(<CalendarTask>[meeting, demo]);
 
       final List<String?> cancelledPayloads = <String?>[];
-      when(() => notificationService.cancelNotification(any()))
-          .thenAnswer((invocation) async {
+      when(() => notificationService.cancelNotification(any())).thenAnswer((
+        invocation,
+      ) async {
         final int id = invocation.positionalArguments.first as int;
         cancelledPayloads.add(payloadById[id]);
       });
@@ -195,9 +198,7 @@ void main() {
 
       await controller.syncWithTasks(<CalendarTask>[kickoff]);
       await controller.syncWithTasks(<CalendarTask>[
-        kickoff.copyWith(
-          scheduledTime: DateTime(2024, 6, 3, 9),
-        )
+        kickoff.copyWith(scheduledTime: DateTime(2024, 6, 3, 9)),
       ]);
 
       verify(() => notificationService.refreshTimeZone()).called(2);

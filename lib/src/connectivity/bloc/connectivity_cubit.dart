@@ -9,9 +9,8 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 part 'connectivity_state.dart';
 
 class ConnectivityCubit extends Cubit<ConnectivityState> {
-  ConnectivityCubit({
-    required XmppBase xmppBase,
-  })  : _xmppBase = xmppBase,
+  ConnectivityCubit({required XmppBase xmppBase})
+      : _xmppBase = xmppBase,
         super(stateMap(xmppBase.connectionState)) {
     _connectivitySubscription = _xmppBase.connectivityStream.listen(
       (e) => emit(stateMap(e)),

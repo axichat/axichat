@@ -90,18 +90,13 @@ class MediaDecodeGuard {
 }
 
 class _DecodeFailure {
-  const _DecodeFailure({
-    required this.count,
-    required this.lastFailure,
-  });
+  const _DecodeFailure({required this.count, required this.lastFailure});
 
   final int count;
   final DateTime lastFailure;
 
-  _DecodeFailure increment(DateTime timestamp) => _DecodeFailure(
-        count: count + 1,
-        lastFailure: timestamp,
-      );
+  _DecodeFailure increment(DateTime timestamp) =>
+      _DecodeFailure(count: count + 1, lastFailure: timestamp);
 }
 
 Future<bool> isSafeImageFile(File file, ImageDecodeLimits limits) async {
@@ -123,10 +118,7 @@ Future<bool> isSafeImageFile(File file, ImageDecodeLimits limits) async {
   }
 }
 
-Future<bool> isSafeImageBytes(
-  Uint8List bytes,
-  ImageDecodeLimits limits,
-) async {
+Future<bool> isSafeImageBytes(Uint8List bytes, ImageDecodeLimits limits) async {
   if (!_isLengthSafe(bytes.length, limits)) {
     return false;
   }

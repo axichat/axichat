@@ -24,8 +24,9 @@ Future<void> _pumpBloc() async {
 
 void _mockEmailSync(MockEmailService service) {
   when(() => service.syncState).thenReturn(const EmailSyncState.ready());
-  when(() => service.syncStateStream)
-      .thenAnswer((_) => const Stream<EmailSyncState>.empty());
+  when(
+    () => service.syncStateStream,
+  ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
   when(
     () => service.sendMessage(
       chat: any(named: 'chat'),
@@ -81,18 +82,17 @@ void main() {
     messageStreamController = StreamController<List<Message>>.broadcast();
     chatStreamController = StreamController<Chat?>.broadcast();
 
-    when(() => notificationService.dismissNotifications())
-        .thenAnswer((_) async {});
-    when(() => mucService.roomStateStream(any()))
-        .thenAnswer((_) => const Stream<RoomState>.empty());
     when(
-      () => mucService.warmRoomFromHistory(
-        roomJid: any(named: 'roomJid'),
-      ),
+      () => notificationService.dismissNotifications(),
+    ).thenAnswer((_) async {});
+    when(
+      () => mucService.roomStateStream(any()),
+    ).thenAnswer((_) => const Stream<RoomState>.empty());
+    when(
+      () => mucService.warmRoomFromHistory(roomJid: any(named: 'roomJid')),
     ).thenAnswer(
-      (invocation) async => RoomState(
-        roomJid: invocation.namedArguments[#roomJid] as String,
-      ),
+      (invocation) async =>
+          RoomState(roomJid: invocation.namedArguments[#roomJid] as String),
     );
     when(
       () => mucService.trackOccupantsFromMessages(any(), any()),
@@ -133,8 +133,9 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(() => settingsCubit.state).thenReturn(const SettingsState());
-    when(() => settingsCubit.stream)
-        .thenAnswer((_) => const Stream<SettingsState>.empty());
+    when(
+      () => settingsCubit.stream,
+    ).thenAnswer((_) => const Stream<SettingsState>.empty());
     when(() => settingsCubit.close()).thenAnswer((_) async {});
 
     when(
@@ -154,13 +155,15 @@ void main() {
       ),
     ).thenAnswer((_) async => 0);
 
-    when(() => chatsService.chatStream(any()))
-        .thenAnswer((_) => chatStreamController.stream);
+    when(
+      () => chatsService.chatStream(any()),
+    ).thenAnswer((_) => chatStreamController.stream);
 
     when(() => chatsService.myJid).thenReturn('self@axi.im');
 
-    when(() => messageService.sendReadMarker(any(), any()))
-        .thenAnswer((_) async {});
+    when(
+      () => messageService.sendReadMarker(any(), any()),
+    ).thenAnswer((_) async {});
 
     when(
       () => chatsService.sendTyping(
@@ -169,8 +172,9 @@ void main() {
       ),
     ).thenAnswer((_) async {});
 
-    when(() => chatsService.loadChatViewFilter(any()))
-        .thenAnswer((_) async => MessageTimelineFilter.directOnly);
+    when(
+      () => chatsService.loadChatViewFilter(any()),
+    ).thenAnswer((_) async => MessageTimelineFilter.directOnly);
     when(
       () => chatsService.saveChatViewFilter(
         jid: any(named: 'jid'),
@@ -276,15 +280,12 @@ void main() {
       ),
     ).captured.single as List<FanOutTarget>;
 
-    expect(
-      capturedTargets.map((target) => target.key).toSet(),
-      {emailChat.jid, extraChat.jid},
-    );
+    expect(capturedTargets.map((target) => target.key).toSet(), {
+      emailChat.jid,
+      extraChat.jid,
+    });
     expect(bloc.state.fanOutReports[report.shareId], report);
-    expect(
-      bloc.state.fanOutDrafts[report.shareId]?.body,
-      'Team status update',
-    );
+    expect(bloc.state.fanOutDrafts[report.shareId]?.body, 'Team status update');
 
     await bloc.close();
   });
@@ -392,13 +393,15 @@ void main() {
     await _pumpBloc();
 
     expect(bloc.state.composerError, 'Select at least one recipient.');
-    verifyNever(() => emailService.fanOutSend(
-          targets: any(named: 'targets'),
-          body: any(named: 'body'),
-          attachment: any(named: 'attachment'),
-          shareId: any(named: 'shareId'),
-          useSubjectToken: any(named: 'useSubjectToken'),
-        ));
+    verifyNever(
+      () => emailService.fanOutSend(
+        targets: any(named: 'targets'),
+        body: any(named: 'body'),
+        attachment: any(named: 'attachment'),
+        shareId: any(named: 'shareId'),
+        useSubjectToken: any(named: 'useSubjectToken'),
+      ),
+    );
 
     await bloc.close();
   });
@@ -537,10 +540,7 @@ void main() {
     await _pumpBloc();
 
     expect(capturedTargets.length, 2);
-    expect(
-      capturedTargets[1].map((target) => target.key),
-      [extraChat.jid],
-    );
+    expect(capturedTargets[1].map((target) => target.key), [extraChat.jid]);
     expect(capturedShareIds.every((id) => id == failureReport.shareId), isTrue);
 
     await bloc.close();
@@ -565,9 +565,7 @@ void main() {
         chat: any(named: 'chat'),
         attachment: any(named: 'attachment'),
       ),
-    ).thenAnswer(
-      (_) => sendCompleter.future.then((_) => 1),
-    );
+    ).thenAnswer((_) => sendCompleter.future.then((_) => 1));
 
     final bloc = ChatBloc(
       jid: emailChat.jid,
@@ -677,8 +675,9 @@ void main() {
   test('email sync status updates composer error', () async {
     final emailService = MockEmailService();
     final syncController = StreamController<EmailSyncState>.broadcast();
-    when(() => emailService.syncStateStream)
-        .thenAnswer((_) => syncController.stream);
+    when(
+      () => emailService.syncStateStream,
+    ).thenAnswer((_) => syncController.stream);
     when(() => emailService.syncState).thenReturn(const EmailSyncState.ready());
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
@@ -713,10 +712,12 @@ void main() {
 
   test('saves drafts when email sync is offline', () async {
     final emailService = MockEmailService();
-    when(() => emailService.syncState)
-        .thenReturn(const EmailSyncState.offline('offline'));
-    when(() => emailService.syncStateStream)
-        .thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    when(
+      () => emailService.syncState,
+    ).thenReturn(const EmailSyncState.offline('offline'));
+    when(
+      () => emailService.syncStateStream,
+    ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
     final emailChat = initialChat.copyWith(
       deltaChatId: 4,
       emailAddress: 'ally@example.com',
@@ -750,8 +751,12 @@ void main() {
     final capturedAttachments =
         verification.captured.last as List<EmailAttachment>;
     expect(capturedAttachments, isEmpty);
-    verifyNever(() => emailService.sendMessage(
-        chat: any(named: 'chat'), body: any(named: 'body')));
+    verifyNever(
+      () => emailService.sendMessage(
+        chat: any(named: 'chat'),
+        body: any(named: 'body'),
+      ),
+    );
     expect(bloc.state.toastId, greaterThan(0));
     expect(bloc.state.toast?.message, contains('Drafts'));
 
@@ -879,14 +884,18 @@ void main() {
     final connectivityController =
         StreamController<xmpp.ConnectionState>.broadcast();
 
-    when(() => xmppService.connectionState)
-        .thenReturn(xmpp.ConnectionState.notConnected);
-    when(() => xmppService.connectivityStream)
-        .thenAnswer((_) => connectivityController.stream);
-    when(() => xmppService.httpUploadSupportStream)
-        .thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
-    when(() => xmppService.httpUploadSupport)
-        .thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(xmpp.ConnectionState.notConnected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => connectivityController.stream);
+    when(
+      () => xmppService.httpUploadSupportStream,
+    ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+    when(
+      () => xmppService.httpUploadSupport,
+    ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
     when(
       () => xmppService.messageStreamForChat(
         any(),
@@ -895,8 +904,9 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) => messageStreamController.stream);
-    when(() => xmppService.sendReadMarker(any(), any()))
-        .thenAnswer((_) async {});
+    when(
+      () => xmppService.sendReadMarker(any(), any()),
+    ).thenAnswer((_) async {});
     when(
       () => xmppService.countLocalMessages(
         jid: any(named: 'jid'),
@@ -911,8 +921,9 @@ void main() {
         isMuc: any(named: 'isMuc'),
       ),
     ).thenAnswer((_) async => const xmpp.MamPageResult(complete: true));
-    when(() => xmppService.loadLastSeenTimestamp(any()))
-        .thenAnswer((_) async => DateTime(2024));
+    when(
+      () => xmppService.loadLastSeenTimestamp(any()),
+    ).thenAnswer((_) async => DateTime(2024));
 
     final mamPages = Queue<xmpp.MamPageResult>.from([
       const xmpp.MamPageResult(complete: false, firstId: 'p0', lastId: 'p1'),

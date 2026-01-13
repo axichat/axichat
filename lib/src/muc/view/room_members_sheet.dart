@@ -83,9 +83,7 @@ class RoomMembersSheet extends StatelessWidget {
                     child: Text(
                       currentNickname == null
                           ? l10n.mucChangeNickname
-                          : l10n.mucChangeNicknameWithCurrent(
-                              currentNickname!,
-                            ),
+                          : l10n.mucChangeNicknameWithCurrent(currentNickname!),
                     ),
                   ),
                 if (onLeaveRoom != null)
@@ -105,8 +103,9 @@ class RoomMembersSheet extends StatelessWidget {
                 ? Center(
                     child: Text(
                       l10n.mucNoMembers,
-                      style:
-                          theme.muted.copyWith(color: colors.mutedForeground),
+                      style: theme.muted.copyWith(
+                        color: colors.mutedForeground,
+                      ),
                     ),
                   )
                 : ListView.separated(
@@ -296,25 +295,23 @@ class _MemberSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Text(title, style: theme.muted),
         ),
-        ...occupants.map(
-          (occupant) {
-            final actions = buildActions(occupant);
-            final subtitle = _roleSubtitle(occupant);
-            final isSelf = occupant.occupantId == myOccupantId;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: _MemberTile(
-                key: ValueKey(occupant.occupantId),
-                occupant: occupant,
-                subtitle: subtitle,
-                actions: actions,
-                onAction: onAction,
-                isSelf: isSelf,
-                l10n: l10n,
-              ),
-            );
-          },
-        ),
+        ...occupants.map((occupant) {
+          final actions = buildActions(occupant);
+          final subtitle = _roleSubtitle(occupant);
+          final isSelf = occupant.occupantId == myOccupantId;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: _MemberTile(
+              key: ValueKey(occupant.occupantId),
+              occupant: occupant,
+              subtitle: subtitle,
+              actions: actions,
+              onAction: onAction,
+              isSelf: isSelf,
+              l10n: l10n,
+            ),
+          );
+        }),
       ],
     );
   }
@@ -501,10 +498,7 @@ class _MemberTileState extends State<_MemberTile> {
           builder: (context, rosterState) {
             final cachedItems =
                 rosterState is RosterAvailable ? rosterState.items : null;
-            return avatarBuilder(
-              chats: chats,
-              rosterItems: cachedItems,
-            );
+            return avatarBuilder(chats: chats, rosterItems: cachedItems);
           },
         );
       },
@@ -548,12 +542,7 @@ class _MemberTileState extends State<_MemberTile> {
             ),
           );
 
-    return Column(
-      children: [
-        tile,
-        actionsPanel,
-      ],
-    );
+    return Column(children: [tile, actionsPanel]);
   }
 }
 
@@ -588,19 +577,20 @@ class _MemberActionPanel extends StatelessWidget {
             ? ShadButton.destructive
             : ShadButton.outline;
         return builder(
-            size: ShadButtonSize.sm,
-            onPressed: () {
-              onClose();
-              onAction(occupantId, action);
-            },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(descriptor.icon, size: iconSize),
-                SizedBox(width: scaled(6)),
-                Text(descriptor.label),
-              ],
-            ));
+          size: ShadButtonSize.sm,
+          onPressed: () {
+            onClose();
+            onAction(occupantId, action);
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(descriptor.icon, size: iconSize),
+              SizedBox(width: scaled(6)),
+              Text(descriptor.label),
+            ],
+          ),
+        );
       }).toList(),
     );
   }
@@ -759,10 +749,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              l10n.mucInviteUsers,
-                              style: titleStyle,
-                            ),
+                            child: Text(l10n.mucInviteUsers, style: titleStyle),
                           ),
                           AxiIconButton(
                             iconData: LucideIcons.x,
@@ -922,11 +909,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            SafeArea(
-              top: false,
-              bottom: true,
-              child: actions,
-            ),
+            SafeArea(top: false, bottom: true, child: actions),
           ],
         ),
       ),
@@ -952,10 +935,7 @@ class _HeaderRow extends StatelessWidget {
     final headerStyle = context.modalHeaderTextStyle;
     return Row(
       children: [
-        Text(
-          l10n.mucMembersTitle,
-          style: headerStyle,
-        ),
+        Text(l10n.mucMembersTitle, style: headerStyle),
         const Spacer(),
         if (canInvite)
           ShadButton.outline(

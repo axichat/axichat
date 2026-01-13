@@ -12,10 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 
-enum _CalendarDragSwitchSource {
-  edge,
-  tabBar,
-}
+enum _CalendarDragSwitchSource { edge, tabBar }
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
@@ -43,10 +40,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   bool _showScheduleTabCue = false;
   bool _showTasksTabCue = false;
   bool _cancelBucketHovering = false;
-  final GlobalKey _cancelBucketKey =
-      GlobalKey(debugLabel: 'calendarDragCancelBucket');
-  final FocusNode _cancelBucketFocusNode =
-      FocusNode(debugLabel: 'calendarCancelBucketFocus');
+  final GlobalKey _cancelBucketKey = GlobalKey(
+    debugLabel: 'calendarDragCancelBucket',
+  );
+  final FocusNode _cancelBucketFocusNode = FocusNode(
+    debugLabel: 'calendarCancelBucketFocus',
+  );
   CalendarDragPayload? _activeCancelPayload;
 
   TabController get mobileTabController;
@@ -315,15 +314,17 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       key: _cancelBucketKey,
                       hitTestBehavior: HitTestBehavior.translucent,
                       onWillAcceptWithDetails: (details) {
-                        final bool inside =
-                            _isPointerInsideCancelBucket(details);
+                        final bool inside = _isPointerInsideCancelBucket(
+                          details,
+                        );
                         _setActiveCancelPayload(details.data);
                         _setCancelBucketHovering(inside);
                         return inside;
                       },
                       onMove: (details) {
-                        final bool inside =
-                            _isPointerInsideCancelBucket(details);
+                        final bool inside = _isPointerInsideCancelBucket(
+                          details,
+                        );
                         _setCancelBucketHovering(inside);
                       },
                       onLeave: (_) {
@@ -339,8 +340,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         if (candidate.isNotEmpty) {
                           _setActiveCancelPayload(candidate.first);
                         }
-                        final ColorScheme scheme =
-                            Theme.of(context).colorScheme;
+                        final ColorScheme scheme = Theme.of(
+                          context,
+                        ).colorScheme;
                         final bool hovering =
                             _cancelBucketHovering || candidate.isNotEmpty;
                         final Color fillColor = scheme.error.withValues(
@@ -492,7 +494,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   }
 
   bool _handleTasksTabDragEvent(
-      DragTargetDetails<CalendarDragPayload> details) {
+    DragTargetDetails<CalendarDragPayload> details,
+  ) {
     final bool canSwitch = _canSwitchTo(1);
     if (!canSwitch) {
       _handleTasksTabDragLeave();
@@ -606,10 +609,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
-  void _scheduleSwitch(
-    int index, {
-    required _CalendarDragSwitchSource source,
-  }) {
+  void _scheduleSwitch(int index, {required _CalendarDragSwitchSource source}) {
     if (_pendingSwitchIndex == index &&
         _pendingSwitchSource == source &&
         _switchTimer?.isActive == true) {
@@ -814,10 +814,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         endDate: snapshot.endDate,
       );
     }
-    return snapshot.copyWith(
-      scheduledTime: null,
-      endDate: snapshot.endDate,
-    );
+    return snapshot.copyWith(scheduledTime: null, endDate: snapshot.endDate);
   }
 
   void onDragCancelRequested(CalendarDragPayload payload);
@@ -846,29 +843,20 @@ class _DragTabLabel extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: cueColor,
-            width: 2,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: cueColor, width: 2)),
       ),
       child: DefaultTextStyle.merge(
         style: TextStyle(
           fontWeight: showCue ? FontWeight.w600 : FontWeight.w500,
         ),
-        child: Align(
-          alignment: Alignment.center,
-          child: label,
-        ),
+        child: Align(alignment: Alignment.center, child: label),
       ),
     );
   }
 }
 
 typedef _EdgeDragEventHandler = void Function(
-  DragTargetDetails<CalendarDragPayload> details,
-);
+    DragTargetDetails<CalendarDragPayload> details);
 
 class _DragEdgeTarget extends StatelessWidget {
   const _DragEdgeTarget({

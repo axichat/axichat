@@ -44,8 +44,10 @@ void main(List<String> args) {
     0.5,
   ];
   final rows = fractions
-      .map((fraction) =>
-          (image.height * fraction).round().clamp(0, image.height - 1))
+      .map(
+        (fraction) =>
+            (image.height * fraction).round().clamp(0, image.height - 1),
+      )
       .toList();
 
   for (final row in rows) {

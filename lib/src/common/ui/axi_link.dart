@@ -12,11 +12,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AxiLink extends StatelessWidget {
-  const AxiLink({
-    super.key,
-    required this.text,
-    required this.link,
-  });
+  const AxiLink({super.key, required this.text, required this.link});
 
   final String text;
   final String link;
@@ -38,24 +34,15 @@ class AxiLink extends StatelessWidget {
 
   Future<void> _handleTap(BuildContext context) async {
     final l10n = context.l10n;
-    final report = assessLinkSafety(
-      raw: link,
-      kind: LinkSafetyKind.message,
-    );
+    final report = assessLinkSafety(raw: link, kind: LinkSafetyKind.message);
     if (report == null || !report.isSafe) {
       _showSnackbar(context, l10n.chatInvalidLink(link.trim()));
       return;
     }
     final hostLabel = formatLinkSchemeHostLabel(report);
     final baseMessage = report.needsWarning
-        ? l10n.chatOpenLinkWarningMessage(
-            report.displayUri,
-            hostLabel,
-          )
-        : l10n.chatOpenLinkMessage(
-            report.displayUri,
-            hostLabel,
-          );
+        ? l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel)
+        : l10n.chatOpenLinkMessage(report.displayUri, hostLabel);
     final warningBlock = formatLinkWarningText(report.warnings);
     final action = await showLinkActionDialog(
       context,
@@ -68,9 +55,7 @@ class AxiLink extends StatelessWidget {
     if (!context.mounted) return;
     if (action == null) return;
     if (action == LinkAction.copy) {
-      await Clipboard.setData(
-        ClipboardData(text: report.displayUri),
-      );
+      await Clipboard.setData(ClipboardData(text: report.displayUri));
       return;
     }
     final launched = await launchUrl(
@@ -86,18 +71,12 @@ class AxiLink extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
 class AxiLinkDetector extends StatelessWidget {
-  const AxiLinkDetector({
-    super.key,
-    required this.onTap,
-    required this.child,
-  });
+  const AxiLinkDetector({super.key, required this.onTap, required this.child});
 
   final void Function()? onTap;
   final Widget child;

@@ -43,11 +43,7 @@ import 'package:url_launcher/link.dart';
 
 import 'authentication/view/logout_button.dart';
 
-enum _ProfileRoute {
-  main,
-  changePassword,
-  delete,
-}
+enum _ProfileRoute { main, changePassword, delete }
 
 const double _profileActionSpacing = 8.0;
 const double _profileHeaderSpacing = 12.0;
@@ -102,26 +98,15 @@ class ProfileScreen extends StatelessWidget {
       value: locate<Capability>(),
       child: MultiBlocProvider(
         providers: [
-          BlocProvider.value(
-            value: locate<ProfileCubit>(),
-          ),
-          BlocProvider.value(
-            value: locate<ConnectivityCubit>(),
-          ),
-          BlocProvider.value(
-            value: locate<EmailSyncCubit>(),
-          ),
+          BlocProvider.value(value: locate<ProfileCubit>()),
+          BlocProvider.value(value: locate<ConnectivityCubit>()),
+          BlocProvider.value(value: locate<EmailSyncCubit>()),
           BlocProvider(
-            create: (context) => EmailContactImportCubit(
-              emailService: locate<EmailService>(),
-            ),
+            create: (context) =>
+                EmailContactImportCubit(emailService: locate<EmailService>()),
           ),
-          BlocProvider.value(
-            value: locate<SettingsCubit>(),
-          ),
-          BlocProvider.value(
-            value: locate<AuthenticationCubit>(),
-          ),
+          BlocProvider.value(value: locate<SettingsCubit>()),
+          BlocProvider.value(value: locate<AuthenticationCubit>()),
           BlocProvider(
             create: (context) => ProfileExportCubit(
               xmppService: locate<XmppService>(),
@@ -188,8 +173,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final l10n = context.l10n;
         final demoOffline =
             context.read<XmppService?>()?.demoOfflineMode ?? false;
-        final ConnectionState connectionState =
-            _xmppStateFor(state, demoOffline: demoOffline);
+        final ConnectionState connectionState = _xmppStateFor(
+          state,
+          demoOffline: demoOffline,
+        );
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
@@ -311,9 +298,7 @@ class _ProfileMainView extends StatelessWidget {
       );
     }
     return Padding(
-      padding: const EdgeInsets.only(
-        left: _profileWideHorizontalPadding,
-      ),
+      padding: const EdgeInsets.only(left: _profileWideHorizontalPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -587,8 +572,9 @@ class _ProfileCardSection extends StatelessWidget {
                     Align(
                       alignment: Alignment.center,
                       child: ConstrainedBox(
-                        constraints:
-                            BoxConstraints(maxWidth: statusFieldMaxWidth),
+                        constraints: BoxConstraints(
+                          maxWidth: statusFieldMaxWidth,
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(
                             _profileStatusFieldPadding,
@@ -619,20 +605,14 @@ class _ProfileCardSection extends StatelessWidget {
                         },
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.center,
-                      child: actionButtons,
-                    ),
+                    Align(alignment: Alignment.center, child: actionButtons),
                   ],
                 ),
               );
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: _profileCardSectionSpacing,
-                children: [
-                  profileCard,
-                  const _ProfileLegalLinks(),
-                ],
+                children: [profileCard, const _ProfileLegalLinks()],
               );
             },
           );
@@ -674,8 +654,9 @@ class _ProfileCardSection extends StatelessWidget {
     if (!context.mounted || format == null) {
       return;
     }
-    final result =
-        await context.read<ProfileExportCubit>().exportXmppContacts(format);
+    final result = await context.read<ProfileExportCubit>().exportXmppContacts(
+          format,
+        );
     if (!context.mounted) {
       return;
     }
@@ -689,8 +670,9 @@ class _ProfileCardSection extends StatelessWidget {
     if (!context.mounted || format == null) {
       return;
     }
-    final result =
-        await context.read<ProfileExportCubit>().exportEmailContacts(format);
+    final result = await context.read<ProfileExportCubit>().exportEmailContacts(
+          format,
+        );
     if (!context.mounted) {
       return;
     }
@@ -719,17 +701,13 @@ class _ProfileCardSection extends StatelessWidget {
     final label = result.kind.label(l10n);
     if (result.outcome.isEmpty) {
       showToast?.call(
-        FeedbackToast.info(
-          message: l10n.profileExportEmptyMessage(label),
-        ),
+        FeedbackToast.info(message: l10n.profileExportEmptyMessage(label)),
       );
       return;
     }
     if (result.outcome.isFailure || result.file == null) {
       showToast?.call(
-        FeedbackToast.error(
-          message: l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
       return;
     }
@@ -740,25 +718,19 @@ class _ProfileCardSection extends StatelessWidget {
         return;
       }
       showToast?.call(
-        FeedbackToast.error(
-          message: l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
       return;
     }
     String? savePath;
     try {
-      savePath = await FilePicker.platform.saveFile(
-        fileName: exportFileName,
-      );
+      savePath = await FilePicker.platform.saveFile(fileName: exportFileName);
     } on Exception {
       if (!context.mounted) {
         return;
       }
       showToast?.call(
-        FeedbackToast.error(
-          message: l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
       return;
     }
@@ -787,9 +759,7 @@ class _ProfileCardSection extends StatelessWidget {
         return;
       }
       showToast?.call(
-        FeedbackToast.error(
-          message: l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
       return;
     }
@@ -797,9 +767,7 @@ class _ProfileCardSection extends StatelessWidget {
       return;
     }
     showToast?.call(
-      FeedbackToast.success(
-        message: l10n.profileExportReadyMessage(label),
-      ),
+      FeedbackToast.success(message: l10n.profileExportReadyMessage(label)),
     );
   }
 }
@@ -853,38 +821,26 @@ class _ProfileLegalLinks extends StatelessWidget {
       padding: const EdgeInsets.symmetric(
         horizontal: _profileLegalSeparatorSpacing,
       ),
-      child: Text(
-        _profileLegalSeparatorText,
-        style: textStyle,
-      ),
+      child: Text(_profileLegalSeparatorText, style: textStyle),
     );
     final Widget trailingSeparator = Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: _profileLegalSeparatorSpacing,
       ),
-      child: Text(
-        _profileLegalSeparatorText,
-        style: textStyle,
-      ),
+      child: Text(_profileLegalSeparatorText, style: textStyle),
     );
     final Widget madeBy = Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
       runSpacing: _profileHeaderWrapSpacing,
       children: [
-        Text(
-          _profileMadeByPrefix,
-          style: textStyle,
-        ),
+        Text(_profileMadeByPrefix, style: textStyle),
         _ProfileMutedLink(
           link: axichatHomeUrl,
           text: _profileBrandLabel,
           textStyle: textStyle,
         ),
-        Text(
-          _profileMadeBySuffix,
-          style: textStyle,
-        ),
+        Text(_profileMadeBySuffix, style: textStyle),
       ],
     );
     return Align(
@@ -931,10 +887,7 @@ class _ProfileMutedLink extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         hoverStrategies: mobileHoverStrategies,
         onTap: followLink,
-        child: Text(
-          text,
-          style: textStyle,
-        ),
+        child: Text(text, style: textStyle),
       ),
     );
   }
@@ -1025,14 +978,13 @@ class _SettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final aboutLabel =
-        MaterialLocalizations.of(context).aboutListTileTitle(appDisplayName);
+    final aboutLabel = MaterialLocalizations.of(
+      context,
+    ).aboutListTileTitle(appDisplayName);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SettingsControls(
-          showDivider: showTopDivider,
-        ),
+        SettingsControls(showDivider: showTopDivider),
         ListItemPadding(
           child: AxiListTile(
             leading: const Icon(LucideIcons.info),

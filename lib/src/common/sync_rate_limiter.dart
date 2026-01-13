@@ -86,10 +86,7 @@ final class SyncRateLimiter {
 }
 
 final class WindowRateLimit {
-  const WindowRateLimit({
-    required this.maxEvents,
-    required this.window,
-  });
+  const WindowRateLimit({required this.maxEvents, required this.window});
 
   final int maxEvents;
   final Duration window;
@@ -128,10 +125,7 @@ final class WindowRateLimiter {
 }
 
 final class KeyedWindowRateLimiter {
-  KeyedWindowRateLimiter({
-    required this.limit,
-    required this.cleanupInterval,
-  });
+  KeyedWindowRateLimiter({required this.limit, required this.cleanupInterval});
 
   final WindowRateLimit limit;
   final Duration cleanupInterval;
@@ -140,10 +134,7 @@ final class KeyedWindowRateLimiter {
 
   bool allowEvent(String key, {int? nowMs}) {
     final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
-    final limiter = _limiters.putIfAbsent(
-      key,
-      () => WindowRateLimiter(limit),
-    );
+    final limiter = _limiters.putIfAbsent(key, () => WindowRateLimiter(limit));
     final allowed = limiter.allowEvent(nowMs: now);
     _cleanup(now);
     return allowed;
@@ -161,8 +152,6 @@ final class KeyedWindowRateLimiter {
       return;
     }
     _lastCleanupMs = nowMs;
-    _limiters.removeWhere(
-      (_, limiter) => limiter.prune(nowMs: nowMs) == 0,
-    );
+    _limiters.removeWhere((_, limiter) => limiter.prune(nowMs: nowMs) == 0);
   }
 }

@@ -38,13 +38,15 @@ class HomeRefreshSyncService {
     if (_listenersStarted) return;
     _listenersStarted = true;
     _lastXmppState = _xmppService.connectionState;
-    _xmppConnectivitySubscription =
-        _xmppService.connectivityStream.listen(_handleXmppConnectivity);
+    _xmppConnectivitySubscription = _xmppService.connectivityStream.listen(
+      _handleXmppConnectivity,
+    );
     final emailService = _emailService;
     if (emailService != null) {
       _lastEmailStatus = emailService.syncState.status;
-      _emailSyncSubscription =
-          emailService.syncStateStream.listen(_handleEmailSyncState);
+      _emailSyncSubscription = emailService.syncStateStream.listen(
+        _handleEmailSyncState,
+      );
     }
   }
 
@@ -157,14 +159,13 @@ class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return MamGlobalSyncOutcome.failed;
     }
-    final streamReady =
-        await _xmppService.waitForStreamReady(_streamReadyTimeout);
+    final streamReady = await _xmppService.waitForStreamReady(
+      _streamReadyTimeout,
+    );
     if (streamReady?.isResumed ?? false) {
       return MamGlobalSyncOutcome.skippedResumed;
     }
-    return _xmppService.syncGlobalMamCatchUp(
-      pageSize: _mamHistoryPageSize,
-    );
+    return _xmppService.syncGlobalMamCatchUp(pageSize: _mamHistoryPageSize);
   }
 
   Future<void> _refreshEmailUnread() async {

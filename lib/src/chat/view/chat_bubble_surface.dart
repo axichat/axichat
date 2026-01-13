@@ -8,19 +8,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 /// Slots managed by [ChatBubbleSurface].
-enum _ChatBubbleSlot {
-  body,
-  reaction,
-  recipients,
-  avatar,
-  selection,
-}
+enum _ChatBubbleSlot { body, reaction, recipients, avatar, selection }
 
 class _ChatBubbleSlotWidget extends ParentDataWidget<_ChatBubbleParentData> {
-  const _ChatBubbleSlotWidget({
-    required this.slot,
-    required super.child,
-  });
+  const _ChatBubbleSlotWidget({required this.slot, required super.child});
 
   final _ChatBubbleSlot slot;
 
@@ -102,10 +93,7 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
     this.avatarAnchor = ChatBubbleCutoutAnchor.left,
   }) : super(
           children: [
-            _ChatBubbleSlotWidget(
-              slot: _ChatBubbleSlot.body,
-              child: body,
-            ),
+            _ChatBubbleSlotWidget(slot: _ChatBubbleSlot.body, child: body),
             if (reactionOverlay != null)
               _ChatBubbleSlotWidget(
                 slot: _ChatBubbleSlot.reaction,
@@ -457,10 +445,7 @@ class RenderChatBubbleSurface extends RenderBox
         parentUsesSize: true,
       );
       final cutoutRadius = math.max(style.depth, style.cornerRadius);
-      final rect = Rect.fromCircle(
-        center: Offset.zero,
-        radius: cutoutRadius,
-      );
+      final rect = Rect.fromCircle(center: Offset.zero, radius: cutoutRadius);
       final childParentData = child.parentData as _ChatBubbleParentData;
       childParentData.offset = Offset(
         -child.size.width / 2 + style.offset.dx,
@@ -569,33 +554,29 @@ class RenderChatBubbleSurface extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    final localPath = _bubblePath(
-      size,
-      borderRadius,
-      [
-        if (_reactionCutoutRect != null)
-          _CutoutDescriptor(
-            rect: _reactionCutoutRect!,
-            cornerRadius: reactionStyle?.cornerRadius ?? 16,
-          ),
-        if (_recipientCutoutRect != null)
-          _CutoutDescriptor(
-            rect: _recipientCutoutRect!,
-            cornerRadius: recipientStyle?.cornerRadius ?? 16,
-          ),
-        if (_avatarCutoutRect != null)
-          _CutoutDescriptor(
-            rect: _avatarCutoutRect!,
-            cornerRadius: avatarStyle?.cornerRadius ?? 16,
-            shape: _CutoutShape.oval,
-          ),
-        if (_selectionCutoutRect != null)
-          _CutoutDescriptor(
-            rect: _selectionCutoutRect!,
-            cornerRadius: selectionStyle?.cornerRadius ?? 16,
-          ),
-      ],
-    );
+    final localPath = _bubblePath(size, borderRadius, [
+      if (_reactionCutoutRect != null)
+        _CutoutDescriptor(
+          rect: _reactionCutoutRect!,
+          cornerRadius: reactionStyle?.cornerRadius ?? 16,
+        ),
+      if (_recipientCutoutRect != null)
+        _CutoutDescriptor(
+          rect: _recipientCutoutRect!,
+          cornerRadius: recipientStyle?.cornerRadius ?? 16,
+        ),
+      if (_avatarCutoutRect != null)
+        _CutoutDescriptor(
+          rect: _avatarCutoutRect!,
+          cornerRadius: avatarStyle?.cornerRadius ?? 16,
+          shape: _CutoutShape.oval,
+        ),
+      if (_selectionCutoutRect != null)
+        _CutoutDescriptor(
+          rect: _selectionCutoutRect!,
+          cornerRadius: selectionStyle?.cornerRadius ?? 16,
+        ),
+    ]);
     final path = localPath.shift(offset);
 
     final canvas = context.canvas;
@@ -683,10 +664,7 @@ class RenderChatBubbleSurface extends RenderBox
           parentData.slot == _ChatBubbleSlot.body && size.contains(position);
       final shouldTestAttachment = parentData.slot != _ChatBubbleSlot.body;
       if (shouldTestBody || shouldTestAttachment) {
-        if (child.hitTest(
-          result,
-          position: position - parentData.offset,
-        )) {
+        if (child.hitTest(result, position: position - parentData.offset)) {
           return true;
         }
       }
@@ -728,11 +706,7 @@ Path _bubblePath(
         ).getOuterPath(cutout.rect),
       _CutoutShape.oval => Path()..addOval(cutout.rect),
     };
-    path = Path.combine(
-      PathOperation.difference,
-      path,
-      cutoutPath,
-    );
+    path = Path.combine(PathOperation.difference, path, cutoutPath);
   }
   return path;
 }
@@ -826,12 +800,16 @@ double _verticalCutoutTop({
   }
   final safeInset = cornerClearance;
   final minTop = safeInset;
-  final maxTop =
-      math.max(minTop, bubbleHeight - safeInset - requestedThickness);
+  final maxTop = math.max(
+    minTop,
+    bubbleHeight - safeInset - requestedThickness,
+  );
   final centerTop = (bubbleHeight - requestedThickness) / 2;
   if (maxTop <= minTop) {
     return centerTop.clamp(
-        0.0, math.max(0.0, bubbleHeight - requestedThickness));
+      0.0,
+      math.max(0.0, bubbleHeight - requestedThickness),
+    );
   }
   final resolvedAlignment = ((alignment ?? 0).clamp(-1.0, 1.0) + 1) / 2;
   final available = maxTop - minTop;

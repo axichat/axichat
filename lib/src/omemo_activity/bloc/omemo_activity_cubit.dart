@@ -538,6 +538,7 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
           failureMessageBuilder: (_, __) => 'Failed to rotate pre-keys',
         );
     }
+    return null;
   }
 
   static OmemoOperationType _defaultTypeForOperation(
@@ -764,11 +765,7 @@ enum OmemoOperationType {
   rotatingPreKeys,
 }
 
-enum OmemoOperationStatus {
-  inProgress,
-  success,
-  failure,
-}
+enum OmemoOperationStatus { inProgress, success, failure }
 
 typedef _MessageBuilder = String? Function(String? target, int? deviceId);
 

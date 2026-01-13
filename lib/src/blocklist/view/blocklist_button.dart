@@ -31,12 +31,8 @@ class BlocklistAddButton extends StatelessWidget {
         String jid = '';
         return MultiBlocProvider(
           providers: [
-            BlocProvider.value(
-              value: locate<BlocklistCubit>(),
-            ),
-            BlocProvider.value(
-              value: locate<RosterCubit>(),
-            ),
+            BlocProvider.value(value: locate<BlocklistCubit>()),
+            BlocProvider.value(value: locate<RosterCubit>()),
           ],
           child: StatefulBuilder(
             builder: (context, setState) {
@@ -103,10 +99,7 @@ class BlocklistUnblockAllButton extends StatelessWidget {
           },
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              spinnerSlot,
-              Text(context.l10n.blocklistUnblockAll),
-            ],
+            children: [spinnerSlot, Text(context.l10n.blocklistUnblockAll)],
           ),
         ).withTapBounce(enabled: !disabled);
       },

@@ -51,12 +51,7 @@ class TaskSectionHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            child: Text(
-              displayTitle,
-              style: style,
-            ),
-          ),
+          Expanded(child: Text(displayTitle, style: style)),
           if (trailing != null) ...[
             const SizedBox(width: calendarGutterSm),
             trailing!,
@@ -95,10 +90,7 @@ class TaskSectionExpander extends StatelessWidget {
     final Widget trailing = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (badge != null) ...[
-          badge!,
-          const SizedBox(width: calendarInsetSm),
-        ],
+        if (badge != null) ...[badge!, const SizedBox(width: calendarInsetSm)],
         Icon(
           isExpanded ? Icons.expand_less : Icons.expand_more,
           size: calendarGutterLg,
@@ -129,10 +121,7 @@ class TaskSectionExpander extends StatelessWidget {
       children: [
         if (isExpanded) ...[
           const SizedBox(height: calendarGutterSm),
-          IgnorePointer(
-            ignoring: !enabled,
-            child: child,
-          ),
+          IgnorePointer(ignoring: !enabled, child: child),
         ] else if (collapsedHint != null) ...[
           const SizedBox(height: calendarGutterSm),
           collapsedHint!,
@@ -158,11 +147,7 @@ class TaskSectionExpander extends StatelessWidget {
 /// Divider that matches the legacy calendar form styling (subtle grey line with
 /// pill radius). Used between logical sections in sidebars and modals.
 class TaskSectionDivider extends StatelessWidget {
-  const TaskSectionDivider({
-    super.key,
-    this.verticalPadding = 12,
-    this.color,
-  });
+  const TaskSectionDivider({super.key, this.verticalPadding = 12, this.color});
 
   final double verticalPadding;
   final Color? color;
@@ -388,23 +373,14 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
           },
           onSubmitted: widget.onFieldSubmitted,
           style: widget.textStyle ??
-              TextStyle(
-                color: calendarTitleColor,
-                fontSize: 14,
-              ),
+              TextStyle(color: calendarTitleColor, fontSize: 14),
           decoration: InputDecoration(
             labelText: widget.labelText,
             labelStyle: widget.labelStyle ??
-                TextStyle(
-                  color: calendarSubtitleColor,
-                  fontSize: 14,
-                ),
+                TextStyle(color: calendarSubtitleColor, fontSize: 14),
             hintText: widget.hintText,
             hintStyle: widget.hintStyle ??
-                TextStyle(
-                  color: calendarTimeLabelColor,
-                  fontSize: 14,
-                ),
+                TextStyle(color: calendarTimeLabelColor, fontSize: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
               borderSide: BorderSide(color: calendarBorderColor),
@@ -521,10 +497,7 @@ class TaskToolbarButton extends StatelessWidget {
             Icon(icon, size: 16),
             const SizedBox(width: calendarInsetMd),
           ],
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12),
-          ),
+          Text(label, style: const TextStyle(fontSize: 12)),
         ],
       ),
     ).withTapBounce(enabled: allowPress);
@@ -554,10 +527,7 @@ class TaskGhostIconButton extends StatelessWidget {
     ).withTapBounce();
     return tooltip == null
         ? button
-        : AxiTooltip(
-            builder: (_) => Text(tooltip!),
-            child: button,
-          );
+        : AxiTooltip(builder: (_) => Text(tooltip!), child: button);
   }
 }
 
@@ -634,10 +604,7 @@ class TaskScheduleSection extends StatelessWidget {
     }
     final Widget? effectiveTrailing = trailingChildren.isEmpty
         ? null
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: trailingChildren,
-          );
+        : Row(mainAxisSize: MainAxisSize.min, children: trailingChildren);
 
     return Padding(
       padding: padding,
@@ -740,7 +707,9 @@ class TaskRecurrenceSection extends StatelessWidget {
             forceAdvanced: forceAdvanced,
             chipPadding: chipPadding ??
                 const EdgeInsets.symmetric(
-                    horizontal: calendarGutterMd, vertical: calendarGutterSm),
+                  horizontal: calendarGutterMd,
+                  vertical: calendarGutterSm,
+                ),
             weekdayChipPadding: weekdayChipPadding ??
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             intervalSelectWidth: intervalSelectWidth ?? 120,
@@ -869,11 +838,7 @@ class TaskDateTimeToolbar extends StatelessWidget {
         ),
     ];
 
-    return TaskFormActionsRow(
-      padding: padding,
-      gap: gap,
-      children: children,
-    );
+    return TaskFormActionsRow(padding: padding, gap: gap, children: children);
   }
 }
 
@@ -901,12 +866,16 @@ class _TaskDateTimeToolbarFields extends StatelessWidget {
   List<Widget> _buttonsForField(TaskDateTimeToolbarField field) {
     final widgets = <Widget>[
       _TaskDateTimeToolbarButton(
-          field: field, type: _TaskDateTimeButtonType.date),
+        field: field,
+        type: _TaskDateTimeButtonType.date,
+      ),
     ];
     if (field.showTimeButton) {
       widgets.add(
         _TaskDateTimeToolbarButton(
-            field: field, type: _TaskDateTimeButtonType.time),
+          field: field,
+          type: _TaskDateTimeButtonType.time,
+        ),
       );
     }
     return widgets;
@@ -930,10 +899,7 @@ class _TaskDateTimeToolbarFields extends StatelessWidget {
 enum _TaskDateTimeButtonType { date, time }
 
 class _TaskDateTimeToolbarButton extends StatelessWidget {
-  const _TaskDateTimeToolbarButton({
-    required this.field,
-    required this.type,
-  });
+  const _TaskDateTimeToolbarButton({required this.field, required this.type});
 
   final TaskDateTimeToolbarField field;
   final _TaskDateTimeButtonType type;
@@ -1313,10 +1279,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     },
                     title: Text(
                       suggestion.label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: calendarTitleColor,
-                      ),
+                      style: TextStyle(fontSize: 13, color: calendarTitleColor),
                     ),
                     subtitle: Text(
                       suggestion.isHistory ? 'From your tasks' : 'Suggested',
@@ -1327,10 +1290,8 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     ),
                   );
                 },
-                separatorBuilder: (_, __) => Divider(
-                  height: 1,
-                  color: calendarBorderColor,
-                ),
+                separatorBuilder: (_, __) =>
+                    Divider(height: 1, color: calendarBorderColor),
                 itemCount: list.length,
               ),
             ),
@@ -1434,19 +1395,13 @@ class TaskFormActionsRow extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: decoration,
-      child: _TaskFormActionsLayout(
-        gap: gap,
-        children: children,
-      ),
+      child: _TaskFormActionsLayout(gap: gap, children: children),
     );
   }
 }
 
 class _TaskFormActionsLayout extends StatelessWidget {
-  const _TaskFormActionsLayout({
-    required this.children,
-    required this.gap,
-  });
+  const _TaskFormActionsLayout({required this.children, required this.gap});
 
   final List<Widget> children;
   final double? gap;

@@ -54,10 +54,7 @@ class AxiSheetHeader extends StatelessWidget {
         padding: padding,
         child: Row(
           children: [
-            if (leading != null) ...[
-              leading!,
-              const SizedBox(width: 10),
-            ],
+            if (leading != null) ...[leading!, const SizedBox(width: 10)],
             Expanded(child: titleBlock),
             AxiIconButton(
               iconData: LucideIcons.x,
@@ -114,10 +111,7 @@ class AxiSheetScaffold extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           header,
-          Flexible(
-            fit: FlexFit.loose,
-            child: fixedBody,
-          ),
+          Flexible(fit: FlexFit.loose, child: fixedBody),
           if (footer != null) footer!,
         ],
       );
@@ -127,8 +121,9 @@ class AxiSheetScaffold extends StatelessWidget {
     final double keyboardInset = mediaQuery.viewInsets.bottom;
     final double safeBottom = mediaQuery.viewPadding.bottom;
     final double bottomInset = math.max(keyboardInset, safeBottom);
-    final EdgeInsets padding = (bodyPadding ?? EdgeInsets.zero)
-        .copyWith(bottom: (bodyPadding?.bottom ?? 0) + bottomInset);
+    final EdgeInsets padding = (bodyPadding ?? EdgeInsets.zero).copyWith(
+      bottom: (bodyPadding?.bottom ?? 0) + bottomInset,
+    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -144,10 +139,7 @@ class AxiSheetScaffold extends StatelessWidget {
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             children: [
               ...?scrollChildren,
-              if (footer != null) ...[
-                const SizedBox(height: 12),
-                footer!,
-              ],
+              if (footer != null) ...[const SizedBox(height: 12), footer!],
             ],
           ),
         ),

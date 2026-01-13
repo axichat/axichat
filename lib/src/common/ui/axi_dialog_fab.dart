@@ -25,10 +25,8 @@ class AxiDialogFab extends StatelessWidget {
       tooltip: tooltip,
       iconData: iconData,
       text: label,
-      onPressed: () => showFadeScaleDialog(
-        context: context,
-        builder: dialogBuilder,
-      ),
+      onPressed: () =>
+          showFadeScaleDialog(context: context, builder: dialogBuilder),
     );
   }
 }

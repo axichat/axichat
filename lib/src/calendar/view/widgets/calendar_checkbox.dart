@@ -56,9 +56,7 @@ class CalendarCheckbox extends StatelessWidget {
             color: isEnabled ? borderColor : borderColor.withValues(alpha: 0.6),
             width: borderWidth,
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
     );

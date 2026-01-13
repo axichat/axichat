@@ -133,9 +133,7 @@ class CalendarSurfaceController {
 /// Describes the visible day columns rendered inside [CalendarRenderSurface].
 @immutable
 class CalendarDayColumn {
-  const CalendarDayColumn({
-    required this.date,
-  });
+  const CalendarDayColumn({required this.date});
 
   final DateTime date;
 
@@ -364,10 +362,7 @@ class CalendarSurfaceParentData extends ContainerBoxParentData<RenderBox> {
 }
 
 class _DayColumnGeometry {
-  const _DayColumnGeometry({
-    required this.date,
-    required this.bounds,
-  });
+  const _DayColumnGeometry({required this.date, required this.bounds});
 
   final DateTime date;
   final Rect bounds;
@@ -379,30 +374,21 @@ class _DayColumnGeometry {
 }
 
 class _TaskHit {
-  const _TaskHit({
-    required this.task,
-    required this.geometry,
-  });
+  const _TaskHit({required this.task, required this.geometry});
 
   final CalendarTask task;
   final CalendarTaskGeometry geometry;
 }
 
 class _DragLayoutOverride {
-  const _DragLayoutOverride({
-    required this.rect,
-    required this.columnDate,
-  });
+  const _DragLayoutOverride({required this.rect, required this.columnDate});
 
   final Rect rect;
   final DateTime columnDate;
 }
 
 class _PreviewMetrics {
-  const _PreviewMetrics({
-    required this.start,
-    required this.duration,
-  });
+  const _PreviewMetrics({required this.start, required this.duration});
 
   final DateTime start;
   final Duration duration;
@@ -651,8 +637,9 @@ class RenderCalendarSurface extends RenderBox
   static const double _availabilityOverlayInset = 1.0;
   static const double _availabilityOverlayMinHeight = 1.0;
   static const double _availabilityOverlayMinWidth = 0.0;
-  static const Duration _availabilityOverlayEndEpsilon =
-      Duration(microseconds: 1);
+  static const Duration _availabilityOverlayEndEpsilon = Duration(
+    microseconds: 1,
+  );
   int? _activePointerId;
   Offset? _pointerDownLocal;
   DateTime? _pointerDownSlot;
@@ -700,10 +687,7 @@ class RenderCalendarSurface extends RenderBox
         !controller.dragHasMoved) {
       return null;
     }
-    return _resolveActiveDragLayoutOverride(
-      metrics,
-      requireMovement: true,
-    );
+    return _resolveActiveDragLayoutOverride(metrics, requireMovement: true);
   }
 
   _DragLayoutOverride? _resolveActiveDragLayoutOverride(
@@ -776,10 +760,7 @@ class RenderCalendarSurface extends RenderBox
       columnGeometry.date.month,
       columnGeometry.date.day,
     );
-    return _DragLayoutOverride(
-      rect: rect,
-      columnDate: normalizedColumnDate,
-    );
+    return _DragLayoutOverride(rect: rect, columnDate: normalizedColumnDate);
   }
 
   _PreviewMetrics? _computePreviewMetricsForPointer({
@@ -896,8 +877,10 @@ class RenderCalendarSurface extends RenderBox
 
     double finalStartMinutes = topMinutes;
     if (finalStartMinutes > maxStartMinutes && stepMinutes > 0) {
-      final int boundedIndex =
-          math.min(maxStepIndex, (maxStartMinutes / stepMinutes).floor());
+      final int boundedIndex = math.min(
+        maxStepIndex,
+        (maxStartMinutes / stepMinutes).floor(),
+      );
       finalStartMinutes = boundedIndex * stepMinutes.toDouble();
       stepIndex = boundedIndex;
     }
@@ -906,17 +889,16 @@ class RenderCalendarSurface extends RenderBox
     final double finalTopLocal =
         columnTop + metrics.verticalOffsetForMinutes(finalStartMinutes);
     final double clampedTopLocal = finalTopLocal.clamp(
-        columnTop, math.max(columnTop, columnBottom - previewHeight));
+      columnTop,
+      math.max(columnTop, columnBottom - previewHeight),
+    );
 
     double updatedPointerOffset = pointerLocalDy - clampedTopLocal;
     if (!updatedPointerOffset.isFinite) {
       updatedPointerOffset = pointerOffset;
     }
     updatedPointerOffset = updatedPointerOffset.clamp(0.0, pointerClampHeight);
-    controller.setDragPointerOffsetFromTop(
-      updatedPointerOffset,
-      notify: false,
-    );
+    controller.setDragPointerOffsetFromTop(updatedPointerOffset, notify: false);
 
     final DateTime dayStart = DateTime(
       columnGeometry.date.year,
@@ -933,8 +915,9 @@ class RenderCalendarSurface extends RenderBox
           : (clampedTopLocal - columnTop) * minutesPerPixel;
       effectiveMinutes = fallbackMinutes.round();
     }
-    final DateTime candidateStart =
-        dayStart.add(Duration(minutes: effectiveMinutes));
+    final DateTime candidateStart = dayStart.add(
+      Duration(minutes: effectiveMinutes),
+    );
     final DateTime effectiveStart = _clampPreviewStart(
       candidateStart,
       columnDate,
@@ -942,10 +925,7 @@ class RenderCalendarSurface extends RenderBox
       snapToStep: false,
     );
 
-    return _PreviewMetrics(
-      start: effectiveStart,
-      duration: baseDuration,
-    );
+    return _PreviewMetrics(start: effectiveStart, duration: baseDuration);
   }
 
   Offset _pointerGlobalForDragTarget({
@@ -1115,10 +1095,7 @@ class RenderCalendarSurface extends RenderBox
     );
   }
 
-  void _handlePointerDragUpdate(
-    Offset localPosition,
-    Offset globalPosition,
-  ) {
+  void _handlePointerDragUpdate(Offset localPosition, Offset globalPosition) {
     _pointerDragSessionActive = true;
     _pointerDownLocal = null;
     _pointerDownSlot = null;
@@ -1188,13 +1165,11 @@ class RenderCalendarSurface extends RenderBox
 
     if (hoverHit != null) {
       final DateTime targetDate = hoverHit.geometry.columnDate ??
-          DateTime(
-            previewStart.year,
-            previewStart.month,
-            previewStart.day,
-          );
-      final DateTime? hoverStart =
-          _computePreviewStartForHover(targetDate, globalPosition);
+          DateTime(previewStart.year, previewStart.month, previewStart.day);
+      final DateTime? hoverStart = _computePreviewStartForHover(
+        targetDate,
+        globalPosition,
+      );
       if (hoverStart != null) {
         previewStart = hoverStart;
       }
@@ -1204,8 +1179,10 @@ class RenderCalendarSurface extends RenderBox
       controller.markDragMoved();
     }
 
-    final bool overlapsScheduled =
-        _previewOverlapsScheduled(previewStart, previewDuration);
+    final bool overlapsScheduled = _previewOverlapsScheduled(
+      previewStart,
+      previewDuration,
+    );
 
     final double? columnWidth = columnWidthForOffset(clampedLocal);
 
@@ -1413,8 +1390,10 @@ class RenderCalendarSurface extends RenderBox
         final DateTime scheduled = task.scheduledTime!;
         final _DayColumnGeometry? columnGeometry = _geometryForDate(scheduled);
         if (columnGeometry != null) {
-          final _DragLayoutOverride? dragOverride =
-              _dragOverrideForTask(task, resolvedMetrics);
+          final _DragLayoutOverride? dragOverride = _dragOverrideForTask(
+            task,
+            resolvedMetrics,
+          );
           if (dragOverride != null) {
             final Rect rect = dragOverride.rect;
             final double columnWidth = rect.width;
@@ -1431,10 +1410,7 @@ class RenderCalendarSurface extends RenderBox
               splitWidthFactor: splitWidthFactor,
               columnDate: dragOverride.columnDate,
             );
-            child.layout(
-              BoxConstraints.tight(rect.size),
-              parentUsesSize: true,
-            );
+            child.layout(BoxConstraints.tight(rect.size), parentUsesSize: true);
             parentData.offset = rect.topLeft;
             parentData.geometry = geometry;
             nextGeometries[task.id] = geometry;
@@ -1478,10 +1454,7 @@ class RenderCalendarSurface extends RenderBox
               columnDate: columnGeometry.date,
             );
 
-            child.layout(
-              BoxConstraints.tight(rect.size),
-              parentUsesSize: true,
-            );
+            child.layout(BoxConstraints.tight(rect.size), parentUsesSize: true);
             parentData.offset = rect.topLeft;
             parentData.geometry = geometry;
             nextGeometries[task.id] = geometry;
@@ -1529,12 +1502,7 @@ class RenderCalendarSurface extends RenderBox
       resolved.add(
         _DayColumnGeometry(
           date: column.normalizedDate,
-          bounds: Rect.fromLTWH(
-            left,
-            0,
-            columnWidth,
-            size.height,
-          ),
+          bounds: Rect.fromLTWH(left, 0, columnWidth, size.height),
         ),
       );
     }
@@ -1582,8 +1550,10 @@ class RenderCalendarSurface extends RenderBox
           task.scheduledTime!.month,
           task.scheduledTime!.day,
         );
-        final tasksForDate =
-            grouped.putIfAbsent(normalized, () => <String, CalendarTask>{});
+        final tasksForDate = grouped.putIfAbsent(
+          normalized,
+          () => <String, CalendarTask>{},
+        );
         tasksForDate.putIfAbsent(task.id, () => task);
       }
       child = childAfter(child);
@@ -1591,9 +1561,7 @@ class RenderCalendarSurface extends RenderBox
 
     final Map<String, OverlapInfo> overlaps = <String, OverlapInfo>{};
     grouped.forEach((_, tasksById) {
-      overlaps.addAll(
-        calculateOverlapColumns(tasksById.values.toList()),
-      );
+      overlaps.addAll(calculateOverlapColumns(tasksById.values.toList()));
     });
     return overlaps;
   }
@@ -1695,8 +1663,9 @@ class RenderCalendarSurface extends RenderBox
       return;
     }
     final Paint paint = Paint()
-      ..color =
-          calendarPrimaryColor.withValues(alpha: _availabilityWindowAlpha);
+      ..color = calendarPrimaryColor.withValues(
+        alpha: _availabilityWindowAlpha,
+      );
     for (final _DayColumnGeometry column in _dayGeometries) {
       for (final CalendarAvailabilityWindow window in _availabilityWindows) {
         _paintAvailabilityInterval(
@@ -1723,8 +1692,9 @@ class RenderCalendarSurface extends RenderBox
     for (final CalendarAvailabilityOverlay overlay in _availabilityOverlays) {
       for (final CalendarFreeBusyInterval interval in overlay.intervals) {
         final Paint paint = Paint()
-          ..color = interval.type.baseColor
-              .withValues(alpha: _availabilityOverlayAlpha);
+          ..color = interval.type.baseColor.withValues(
+            alpha: _availabilityOverlayAlpha,
+          );
         for (final _DayColumnGeometry column in _dayGeometries) {
           _paintAvailabilityInterval(
             canvas,
@@ -1773,8 +1743,10 @@ class RenderCalendarSurface extends RenderBox
     final double endMinutes = resolvedEnd.difference(dayStart).inMicroseconds /
         Duration.microsecondsPerMinute;
     final double top = metrics.verticalOffsetForMinutes(startMinutes);
-    final double height = math.max(_availabilityOverlayMinHeight,
-        metrics.verticalOffsetForMinutes(endMinutes) - top);
+    final double height = math.max(
+      _availabilityOverlayMinHeight,
+      metrics.verticalOffsetForMinutes(endMinutes) - top,
+    );
     const double inset = _availabilityOverlayInset;
     final double width = math.max(
       _availabilityOverlayMinWidth,
@@ -1817,10 +1789,14 @@ class RenderCalendarSurface extends RenderBox
     final double startX = offset.dx + _timeColumnWidth;
     final double endX = offset.dx + size.width;
 
-    final double hourStrokeWidth =
-        math.max(1.0 / _devicePixelRatio, calendarBorderStroke);
-    final double slotStrokeWidth =
-        math.max(1.0 / _devicePixelRatio, calendarSubSlotBorderStroke);
+    final double hourStrokeWidth = math.max(
+      1.0 / _devicePixelRatio,
+      calendarBorderStroke,
+    );
+    final double slotStrokeWidth = math.max(
+      1.0 / _devicePixelRatio,
+      calendarSubSlotBorderStroke,
+    );
 
     final Paint hourLinePaint = Paint()
       ..color = calendarBorderDarkColor
@@ -1836,7 +1812,10 @@ class RenderCalendarSurface extends RenderBox
       final bool isHourBoundary = slot % metrics.slotsPerHour == 0;
       final Paint paint = isHourBoundary ? hourLinePaint : subSlotPaint;
       canvas.drawLine(
-          Offset(startX, snappedDy), Offset(endX, snappedDy), paint);
+        Offset(startX, snappedDy),
+        Offset(endX, snappedDy),
+        paint,
+      );
     }
   }
 
@@ -1953,8 +1932,9 @@ class RenderCalendarSurface extends RenderBox
     if (preview == null || preview.duration <= Duration.zero) {
       return;
     }
-    final _DragLayoutOverride? override =
-        _resolveActiveDragLayoutOverride(metrics);
+    final _DragLayoutOverride? override = _resolveActiveDragLayoutOverride(
+      metrics,
+    );
     if (override == null) {
       return;
     }
@@ -1987,8 +1967,10 @@ class RenderCalendarSurface extends RenderBox
       );
     canvas.drawRRect(outlineRect, outlinePaint);
 
-    final double anchorHeight =
-        math.min(metrics.slotHeight, previewRect.height);
+    final double anchorHeight = math.min(
+      metrics.slotHeight,
+      previewRect.height,
+    );
     final Rect anchorBounds = Rect.fromLTWH(
       previewRect.left + 1,
       previewRect.top + 1,
@@ -2273,14 +2255,16 @@ class RenderCalendarSurface extends RenderBox
       return null;
     }
 
-    final Offset localPosition =
-        _clampLocalOffset(globalToLocal(globalPosition));
+    final Offset localPosition = _clampLocalOffset(
+      globalToLocal(globalPosition),
+    );
     if (_isInTimeColumn(localPosition)) {
       return null;
     }
 
-    final _DayColumnGeometry? columnGeometry =
-        _geometryForOffset(localPosition);
+    final _DayColumnGeometry? columnGeometry = _geometryForOffset(
+      localPosition,
+    );
     if (columnGeometry == null) {
       return null;
     }
@@ -2370,8 +2354,10 @@ class RenderCalendarSurface extends RenderBox
     if (controller == null || task == null) {
       return null;
     }
-    final DateTime? computed =
-        _computePreviewStartFromGlobalOffset(globalPosition, targetDate);
+    final DateTime? computed = _computePreviewStartFromGlobalOffset(
+      globalPosition,
+      targetDate,
+    );
     if (computed != null) {
       final Duration duration = _resolvePreviewDuration(controller, task);
       final DateTime snapped = _snapToStep(computed);
@@ -2512,13 +2498,11 @@ class RenderCalendarSurface extends RenderBox
     CalendarDragPayload payload,
     Offset dragTargetOffset,
   ) {
-    final Offset pointerGlobal =
-        _pointerGlobalForPayloadOnly(payload, dragTargetOffset);
-    _ensureExternalDragInitialized(
+    final Offset pointerGlobal = _pointerGlobalForPayloadOnly(
       payload,
       dragTargetOffset,
-      pointerGlobal,
     );
+    _ensureExternalDragInitialized(payload, dragTargetOffset, pointerGlobal);
     _handleExternalDragUpdate(payload, dragTargetOffset);
   }
 
@@ -2526,13 +2510,11 @@ class RenderCalendarSurface extends RenderBox
     CalendarDragPayload payload,
     Offset dragTargetOffset,
   ) {
-    final Offset pointerGlobal =
-        _pointerGlobalForPayloadOnly(payload, dragTargetOffset);
-    _ensureExternalDragInitialized(
+    final Offset pointerGlobal = _pointerGlobalForPayloadOnly(
       payload,
       dragTargetOffset,
-      pointerGlobal,
     );
+    _ensureExternalDragInitialized(payload, dragTargetOffset, pointerGlobal);
     _handleExternalDragDrop(payload, dragTargetOffset);
     _externalDragTaskId = null;
   }

@@ -43,8 +43,9 @@ void main() {
 
     when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
     when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
-    when(() => database.getMessageByStanzaID(any()))
-        .thenAnswer((_) async => null);
+    when(
+      () => database.getMessageByStanzaID(any()),
+    ).thenAnswer((_) async => null);
     when(() => database.getChat(any())).thenAnswer((_) async => null);
     when(() => database.createChat(any())).thenAnswer((_) async {});
     when(() => database.saveMessage(any())).thenAnswer((_) async {});

@@ -62,19 +62,13 @@ main() {
       'When jids are added to or removed from the database, emits the new blocklist in order.',
       () async {
         expectLater(
-          xmppService
-              .blocklistStream()
-              .map((items) => items.map((item) => item.jid).toList()),
+          xmppService.blocklistStream().map(
+                (items) => items.map((item) => item.jid).toList(),
+              ),
           emitsInOrder([
             [],
-            ...List.generate(
-              length,
-              (index) => jids.sublist(0, index),
-            ),
-            ...List.generate(
-              length,
-              (index) => jids.sublist(index, length),
-            )
+            ...List.generate(length, (index) => jids.sublist(0, index)),
+            ...List.generate(length, (index) => jids.sublist(index, length)),
           ]),
         );
 
@@ -93,32 +87,27 @@ main() {
     );
   });
 
-  test(
-    'requestBlocklist adds new blocklist to the database.',
-    () async {
-      await connectSuccessfully(xmppService);
+  test('requestBlocklist adds new blocklist to the database.', () async {
+    await connectSuccessfully(xmppService);
 
-      when(() => mockConnection.requestBlocklist()).thenAnswer(
-        (_) async => jids,
-      );
+    when(() => mockConnection.requestBlocklist()).thenAnswer((_) async => jids);
 
-      final beforeRequest = await database.getBlocklist(
-        start: 0,
-        end: double.maxFinite.toInt(),
-      );
-      expect(beforeRequest, isEmpty);
+    final beforeRequest = await database.getBlocklist(
+      start: 0,
+      end: double.maxFinite.toInt(),
+    );
+    expect(beforeRequest, isEmpty);
 
-      await pumpEventQueue();
+    await pumpEventQueue();
 
-      await xmppService.requestBlocklist();
+    await xmppService.requestBlocklist();
 
-      final afterRequest = await database.getBlocklist(
-        start: 0,
-        end: double.maxFinite.toInt(),
-      );
-      expect(afterRequest.map((entry) => entry.jid), jids);
+    final afterRequest = await database.getBlocklist(
+      start: 0,
+      end: double.maxFinite.toInt(),
+    );
+    expect(afterRequest.map((entry) => entry.jid), jids);
 
-      verify(() => mockConnection.requestBlocklist()).called(1);
-    },
-  );
+    verify(() => mockConnection.requestBlocklist()).called(1);
+  });
 }

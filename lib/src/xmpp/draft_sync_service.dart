@@ -14,9 +14,7 @@ const String _draftAttachmentUploadStanzaId = 'draft-attachment-upload';
 const int _draftsSnapshotStart = 0;
 const int _draftsSnapshotEnd = 0;
 
-final _draftSyncSourceKey = XmppStateStore.registerKey(
-  _draftSyncSourceKeyName,
-);
+final _draftSyncSourceKey = XmppStateStore.registerKey(_draftSyncSourceKeyName);
 final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
   _draftSyncPendingPublishesKeyName,
 );
@@ -30,11 +28,7 @@ final _draftSyncSnapshotIdsKey = XmppStateStore.registerKey(
   _draftSyncSnapshotIdsKeyName,
 );
 
-enum _DraftSyncDecision {
-  applyRemote,
-  publishLocal,
-  skip,
-}
+enum _DraftSyncDecision { applyRemote, publishLocal, skip }
 
 mixin DraftSyncService on XmppBase, BaseStreamService {
   bool _draftSnapshotInFlight = false;
@@ -126,10 +120,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       }
       final remoteIds = remoteById.keys.toSet();
       final localDrafts = await _dbOpReturning<XmppDatabase, List<Draft>>(
-        (db) => db.getDrafts(
-          start: _draftsSnapshotStart,
-          end: _draftsSnapshotEnd,
-        ),
+        (db) =>
+            db.getDrafts(start: _draftsSnapshotStart, end: _draftsSnapshotEnd),
       );
       final localById = <String, Draft>{};
       for (final draft in localDrafts) {
@@ -448,10 +440,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         continue;
       }
       recipients.add(
-        DraftRecipientData(
-          jid: normalized,
-          role: _draftRecipientRoleDefault,
-        ),
+        DraftRecipientData(jid: normalized, role: _draftRecipientRoleDefault),
       );
     }
     return Future.value(List<DraftRecipientData>.unmodifiable(recipients));
@@ -463,25 +452,19 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (recipients.isEmpty) return const <DraftRecipientData>[];
     final mapped = recipients
         .map(
-          (recipient) => DraftRecipientData(
-            jid: recipient.jid,
-            role: recipient.role,
-          ),
+          (recipient) =>
+              DraftRecipientData(jid: recipient.jid, role: recipient.role),
         )
         .toList(growable: false);
     return List<DraftRecipientData>.unmodifiable(mapped);
   }
 
-  List<DraftRecipient> _mapSyncRecipients(
-    List<DraftRecipientData> recipients,
-  ) {
+  List<DraftRecipient> _mapSyncRecipients(List<DraftRecipientData> recipients) {
     if (recipients.isEmpty) return const <DraftRecipient>[];
     final mapped = recipients
         .map(
-          (recipient) => DraftRecipient(
-            jid: recipient.jid,
-            role: recipient.role,
-          ),
+          (recipient) =>
+              DraftRecipient(jid: recipient.jid, role: recipient.role),
         )
         .toList(growable: false);
     return List<DraftRecipient>.unmodifiable(mapped);
@@ -499,7 +482,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
   }
 
   Future<List<DraftAttachmentRef>?> _resolveDraftAttachments(
-      Draft draft) async {
+    Draft draft,
+  ) async {
     final metadataIds =
         draft.attachmentMetadataIds.length > draftSyncMaxAttachments
             ? draft.attachmentMetadataIds
@@ -542,18 +526,16 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     List<DraftAttachmentRef> attachments,
   ) async {
     if (attachments.isEmpty) return;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        for (final attachment in attachments) {
-          final existing = await db.getFileMetadata(attachment.id);
-          final merged = _mergeDraftAttachmentMetadata(
-            attachment: attachment,
-            existing: existing,
-          );
-          await db.saveFileMetadata(merged);
-        }
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      for (final attachment in attachments) {
+        final existing = await db.getFileMetadata(attachment.id);
+        final merged = _mergeDraftAttachmentMetadata(
+          attachment: attachment,
+          existing: existing,
+        );
+        await db.saveFileMetadata(merged);
+      }
+    });
   }
 
   FileMetadataData _mergeDraftAttachmentMetadata({
@@ -626,9 +608,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         stanzaId: _draftAttachmentUploadStanzaId,
         shouldStore: false,
       );
-      await _dbOp<XmppDatabase>(
-        (db) => db.saveFileMetadata(upload.metadata),
-      );
+      await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(upload.metadata));
       return upload.metadata;
     } on XmppException catch (_) {
       return metadata;
@@ -654,10 +634,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     return null;
   }
 
-  List<String>? _mergeAttachmentUrls(
-    List<String>? existing,
-    String? incoming,
-  ) {
+  List<String>? _mergeAttachmentUrls(List<String>? existing, String? incoming) {
     final urls = <String>{};
     if (existing != null) {
       for (final value in existing) {
@@ -677,10 +654,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     return urls.toList(growable: false);
   }
 
-  String? _normalizeAttachmentText(
-    String? value, {
-    required int maxBytes,
-  }) {
+  String? _normalizeAttachmentText(String? value, {required int maxBytes}) {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return null;
@@ -709,23 +683,20 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (_pendingDraftSyncLoaded) {
       return;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final rawPublishes =
-            (ss.read(key: _draftSyncPendingPublishesKey) as List?)
-                ?.cast<Object?>();
-        final rawRetractions =
-            (ss.read(key: _draftSyncPendingRetractionsKey) as List?)
-                ?.cast<Object?>();
-        _pendingDraftPublishes
-          ..clear()
-          ..addAll(_normalizeDraftSyncIds(rawPublishes));
-        _pendingDraftRetractions
-          ..clear()
-          ..addAll(_normalizeDraftSyncIds(rawRetractions));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawPublishes =
+          (ss.read(key: _draftSyncPendingPublishesKey) as List?)
+              ?.cast<Object?>();
+      final rawRetractions =
+          (ss.read(key: _draftSyncPendingRetractionsKey) as List?)
+              ?.cast<Object?>();
+      _pendingDraftPublishes
+        ..clear()
+        ..addAll(_normalizeDraftSyncIds(rawPublishes));
+      _pendingDraftRetractions
+        ..clear()
+        ..addAll(_normalizeDraftSyncIds(rawRetractions));
+    }, awaitDatabase: true);
     _pendingDraftSyncLoaded = true;
   }
 
@@ -733,18 +704,15 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (_draftSnapshotMetaLoaded) {
       return;
     }
-    await _dbOp<XmppStateStore>(
-      (ss) async {
-        final rawTimestamp = ss.read(key: _draftSyncSnapshotAtKey);
-        final rawIds =
-            (ss.read(key: _draftSyncSnapshotIdsKey) as List?)?.cast<Object?>();
-        _draftLastSnapshotAt = _parseDraftSnapshotAt(rawTimestamp);
-        _draftLastSnapshotIds
-          ..clear()
-          ..addAll(_normalizeDraftSyncIds(rawIds));
-      },
-      awaitDatabase: true,
-    );
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawTimestamp = ss.read(key: _draftSyncSnapshotAtKey);
+      final rawIds =
+          (ss.read(key: _draftSyncSnapshotIdsKey) as List?)?.cast<Object?>();
+      _draftLastSnapshotAt = _parseDraftSnapshotAt(rawTimestamp);
+      _draftLastSnapshotIds
+        ..clear()
+        ..addAll(_normalizeDraftSyncIds(rawIds));
+    }, awaitDatabase: true);
     _draftSnapshotMetaLoaded = true;
   }
 
@@ -823,10 +791,12 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     await _dbOp<XmppStateStore>(
       (ss) async => ss.writeAll(
         data: {
-          _draftSyncPendingPublishesKey:
-              _pendingDraftPublishes.toList(growable: false),
-          _draftSyncPendingRetractionsKey:
-              _pendingDraftRetractions.toList(growable: false),
+          _draftSyncPendingPublishesKey: _pendingDraftPublishes.toList(
+            growable: false,
+          ),
+          _draftSyncPendingRetractionsKey: _pendingDraftRetractions.toList(
+            growable: false,
+          ),
         },
       ),
       awaitDatabase: true,
@@ -960,10 +930,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     }
     final generated = uuid.v4();
     await _dbOp<XmppStateStore>(
-      (ss) async => ss.write(
-        key: _draftSyncSourceKey,
-        value: generated,
-      ),
+      (ss) async => ss.write(key: _draftSyncSourceKey, value: generated),
     );
     _draftSourceId = generated;
     return generated;
@@ -973,12 +940,10 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return;
-    await _dbOp<XmppDatabase>(
-      (db) async {
-        for (final metadataId in metadataIds) {
-          await db.deleteFileMetadata(metadataId);
-        }
-      },
-    );
+    await _dbOp<XmppDatabase>((db) async {
+      for (final metadataId in metadataIds) {
+        await db.deleteFileMetadata(metadataId);
+      }
+    });
   }
 }

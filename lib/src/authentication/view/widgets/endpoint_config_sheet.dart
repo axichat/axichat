@@ -117,14 +117,22 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final xmppHost = _xmppHostController.text.trim();
     final imapHost = _imapHostController.text.trim();
     final smtpHost = _smtpHostController.text.trim();
-    final xmppPort =
-        _parsePort(_xmppPortController.text, EndpointConfig.defaultXmppPort);
-    final imapPort =
-        _parsePort(_imapPortController.text, EndpointConfig.defaultImapPort);
-    final smtpPort =
-        _parsePort(_smtpPortController.text, EndpointConfig.defaultSmtpPort);
-    final apiPort =
-        _parsePort(_apiPortController.text, EndpointConfig.defaultApiPort);
+    final xmppPort = _parsePort(
+      _xmppPortController.text,
+      EndpointConfig.defaultXmppPort,
+    );
+    final imapPort = _parsePort(
+      _imapPortController.text,
+      EndpointConfig.defaultImapPort,
+    );
+    final smtpPort = _parsePort(
+      _smtpPortController.text,
+      EndpointConfig.defaultSmtpPort,
+    );
+    final apiPort = _parsePort(
+      _apiPortController.text,
+      EndpointConfig.defaultApiPort,
+    );
 
     return current.copyWith(
       domain: domain,
@@ -163,8 +171,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final l10n = context.l10n;
-    final placeholderStyle =
-        textTheme.muted.copyWith(color: colors.mutedForeground);
+    final placeholderStyle = textTheme.muted.copyWith(
+      color: colors.mutedForeground,
+    );
     final inputStyle = TextStyle(color: colors.foreground);
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
       horizontal: widget.compact ? 12 : 24,
@@ -182,8 +191,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           autocorrect: false,
           keyboardType: TextInputType.url,
           controller: _domainController,
-          placeholder:
-              Text(l10n.authCustomServerDomainOrIp, style: placeholderStyle),
+          placeholder: Text(
+            l10n.authCustomServerDomainOrIp,
+            style: placeholderStyle,
+          ),
           placeholderStyle: placeholderStyle,
           style: inputStyle,
         ),
@@ -253,9 +264,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 autocorrect: false,
                 keyboardType: TextInputType.text,
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                    RegExp(r'[A-Za-z0-9._:-]'),
-                  ),
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._:-]')),
                 ],
                 placeholder: Text(
                   l10n.authCustomServerXmppHostPlaceholder,
@@ -272,9 +281,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
                   l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
@@ -308,9 +315,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
                   l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
@@ -344,9 +349,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
                   l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
@@ -364,9 +367,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           child: AxiTextFormField(
             autocorrect: false,
             keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-            ],
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             placeholder: Text(
               l10n.authCustomServerApiPortPlaceholder,
               style: placeholderStyle,
@@ -460,14 +461,8 @@ class _ToggleTile extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: textStyle,
-            ),
-            ShadSwitch(
-              value: value,
-              onChanged: enabled ? onChanged : null,
-            ),
+            Text(label, style: textStyle),
+            ShadSwitch(value: value, onChanged: enabled ? onChanged : null),
           ],
         ),
       ),

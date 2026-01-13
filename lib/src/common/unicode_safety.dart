@@ -50,10 +50,7 @@ const Set<int> _unicodeControlCodePoints = <int>{
 };
 
 class UnicodeSanitizedText {
-  const UnicodeSanitizedText({
-    required this.value,
-    required this.hadControls,
-  });
+  const UnicodeSanitizedText({required this.value, required this.hadControls});
 
   final String value;
   final bool hadControls;

@@ -111,19 +111,18 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   }
 
   void _handleMedia(SharedMedia media) {
-    final String? sanitizedText =
-        _sanitizeSharedText(media.content ?? _sharedTextEmpty);
-    final List<ShareAttachmentPayload> attachments =
-        _sanitizeSharedAttachments(media.attachments);
+    final String? sanitizedText = _sanitizeSharedText(
+      media.content ?? _sharedTextEmpty,
+    );
+    final List<ShareAttachmentPayload> attachments = _sanitizeSharedAttachments(
+      media.attachments,
+    );
     if (sanitizedText == null && attachments.isEmpty) {
       return;
     }
     emit(
       ShareIntentState.ready(
-        SharePayload(
-          text: sanitizedText,
-          attachments: attachments,
-        ),
+        SharePayload(text: sanitizedText, attachments: attachments),
       ),
     );
   }
@@ -159,12 +158,7 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
       if (path.length > _maxSharedAttachmentPathLength) continue;
       if (path.contains(_sharedAttachmentNullToken)) continue;
       if (!seenPaths.add(path)) continue;
-      sanitized.add(
-        ShareAttachmentPayload(
-          path: path,
-          type: attachment.type,
-        ),
-      );
+      sanitized.add(ShareAttachmentPayload(path: path, type: attachment.type));
       if (sanitized.length >= _maxSharedAttachmentCount) {
         break;
       }

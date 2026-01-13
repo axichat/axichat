@@ -36,8 +36,9 @@ class MamStreamManagementGuard extends mox.XmppManagerBase {
       return state;
     }
 
-    final sm = getAttributes()
-        .getManagerById<XmppStreamManagementManager>(mox.smManager);
+    final sm = getAttributes().getManagerById<XmppStreamManagementManager>(
+      mox.smManager,
+    );
     if (sm == null || !sm.isStreamManagementEnabled()) {
       return state;
     }

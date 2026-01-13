@@ -69,15 +69,12 @@ class CalendarSidebarController extends ChangeNotifier {
 
   void adjustWidth(double delta) {
     if (delta == 0) return;
-    final double nextWidth =
-        (_state.width + delta).clamp(_state.minWidth, _state.maxWidth);
+    final double nextWidth = (_state.width + delta).clamp(
+      _state.minWidth,
+      _state.maxWidth,
+    );
     if (nextWidth != _state.width) {
-      _updateState(
-        _state.copyWith(
-          width: nextWidth,
-          hasUserResized: true,
-        ),
-      );
+      _updateState(_state.copyWith(width: nextWidth, hasUserResized: true));
     }
   }
 
@@ -92,10 +89,7 @@ class CalendarSidebarController extends ChangeNotifier {
         _state.expandedSection == section ? null : section;
     if (next != _state.expandedSection) {
       _updateState(
-        _state.copyWith(
-          expandedSection: next,
-          expandedSectionSpecified: true,
-        ),
+        _state.copyWith(expandedSection: next, expandedSectionSpecified: true),
       );
     }
   }
@@ -105,10 +99,7 @@ class CalendarSidebarController extends ChangeNotifier {
       return;
     }
     _updateState(
-      _state.copyWith(
-        expandedSection: section,
-        expandedSectionSpecified: true,
-      ),
+      _state.copyWith(expandedSection: section, expandedSectionSpecified: true),
     );
   }
 

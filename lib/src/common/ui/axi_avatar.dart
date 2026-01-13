@@ -325,9 +325,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
                         selectedColor: context.colorScheme.accentForeground,
                         selectedTileColor: context.colorScheme.accent,
                         onTap: () {
-                          context
-                              .read<ProfileCubit>()
-                              .updatePresence(presence: value);
+                          context.read<ProfileCubit>().updatePresence(
+                                presence: value,
+                              );
                           popoverController.toggle();
                         },
                       ),
@@ -356,9 +356,6 @@ class _AxiAvatarState extends State<AxiAvatar> {
       return presenceLabel;
     }();
     if (tooltipText == null) return sizedChild;
-    return AxiTooltip(
-      builder: (_) => Text(tooltipText),
-      child: sizedChild,
-    );
+    return AxiTooltip(builder: (_) => Text(tooltipText), child: sizedChild);
   }
 }

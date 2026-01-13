@@ -64,8 +64,9 @@ const bool _calendarActionShowTransferMenu = false;
 const bool _calendarActionMenuGhost = true;
 const bool _calendarActionUsePrimary = true;
 const String _calendarSurfacePageId = 'calendar-surface';
-const ValueKey<String> _calendarSurfacePageKey =
-    ValueKey<String>(_calendarSurfacePageId);
+const ValueKey<String> _calendarSurfacePageKey = ValueKey<String>(
+  _calendarSurfacePageId,
+);
 const bool _calendarSurfacePopEnabledDefault = true;
 
 bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
@@ -137,11 +138,7 @@ class _CalendarWidgetState
     _mobileInitialScrollSynced = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      calendarBloc.add(
-        CalendarEvent.dateSelected(
-          date: DateTime.now(),
-        ),
-      );
+      calendarBloc.add(CalendarEvent.dateSelected(date: DateTime.now()));
     });
   }
 
@@ -186,15 +183,10 @@ class _CalendarWidgetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          children: [
-            navigation,
-            if (errorBanner != null) errorBanner,
-          ],
+          children: [navigation, if (errorBanner != null) errorBanner],
         ),
       );
-      headerChildren.add(
-        navContent,
-      );
+      headerChildren.add(navContent);
     } else if (errorBanner != null) {
       headerChildren.add(errorBanner);
     }
@@ -357,14 +349,14 @@ class _CalendarAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final Color background = CalendarNavSurface.backgroundColor(context);
-    final EdgeInsets toolbarPadding =
-        calendarMarginLarge.copyWith(top: 0, bottom: 0);
+    final EdgeInsets toolbarPadding = calendarMarginLarge.copyWith(
+      top: 0,
+      bottom: 0,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
-        border: Border(
-          bottom: BorderSide(color: colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SizedBox(
         height: kToolbarHeight,
@@ -392,10 +384,7 @@ class _CalendarAppBar extends StatelessWidget {
 }
 
 class _CalendarActionRow extends StatelessWidget {
-  const _CalendarActionRow({
-    required this.state,
-    this.onShareAvailability,
-  });
+  const _CalendarActionRow({required this.state, this.onShareAvailability});
 
   final CalendarState state;
   final VoidCallback? onShareAvailability;
@@ -454,12 +443,7 @@ class CalendarSurfaceNavigator extends StatelessWidget {
       child: Navigator(
         key: navigatorKey,
         onDidRemovePage: (page) {},
-        pages: [
-          MaterialPage<void>(
-            key: _calendarSurfacePageKey,
-            child: child,
-          ),
-        ],
+        pages: [MaterialPage<void>(key: _calendarSurfacePageKey, child: child)],
       ),
     );
   }

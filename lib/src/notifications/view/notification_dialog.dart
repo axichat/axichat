@@ -9,7 +9,9 @@ import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<bool?> showNotificationDialog(
-        BuildContext context, NotificationService notificationService) =>
+  BuildContext context,
+  NotificationService notificationService,
+) =>
     showFadeScaleDialog<bool>(
       context: context,
       builder: (context) => ShadDialog(

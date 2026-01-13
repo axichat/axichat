@@ -147,8 +147,9 @@ class _AvatarCropperState extends State<AvatarCropper> {
                     baseColor: colors.card,
                     maskColor: colors.background.withValues(alpha: 0.55),
                     radius: widget.borderRadius.topLeft.x,
-                    initialRectBuilder:
-                        InitialRectBuilder.withArea(initialArea),
+                    initialRectBuilder: InitialRectBuilder.withArea(
+                      initialArea,
+                    ),
                     willUpdateScale: (_) => false,
                     scrollZoomSensitivity: 0,
                     overlayBuilder: (context, rect) {
@@ -205,18 +206,17 @@ class _AvatarCropperState extends State<AvatarCropper> {
                         _lastArea = safeTarget;
                       }
                     },
-                    cornerDotBuilder: (size, alignment) => DotControl(
-                      color: colors.primary,
-                      padding: 7,
-                    ),
+                    cornerDotBuilder: (size, alignment) =>
+                        DotControl(color: colors.primary, padding: 7),
                     progressIndicator: Center(
                       child: SizedBox.square(
                         dimension: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: colors.primary,
-                          backgroundColor:
-                              colors.primary.withValues(alpha: 0.2),
+                          backgroundColor: colors.primary.withValues(
+                            alpha: 0.2,
+                          ),
                         ),
                       ),
                     ),
@@ -288,10 +288,7 @@ class _AvatarCropperState extends State<AvatarCropper> {
 
   Rect _snapToCenter(Rect rect) {
     if (!_isValidRect(rect)) return rect;
-    final imageCenter = Offset(
-      widget.imageWidth / 2,
-      widget.imageHeight / 2,
-    );
+    final imageCenter = Offset(widget.imageWidth / 2, widget.imageHeight / 2);
     if ((rect.center - imageCenter).distance <= _snapDistance) {
       return Rect.fromCenter(
         center: imageCenter,

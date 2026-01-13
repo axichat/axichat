@@ -129,8 +129,9 @@ class RoomState {
     Set<String>? selfPresenceStatusCodes,
     this.selfPresenceReason,
   })  : occupants = Map.unmodifiable(occupants ?? <String, Occupant>{}),
-        selfPresenceStatusCodes =
-            Set.unmodifiable(selfPresenceStatusCodes ?? const <String>{});
+        selfPresenceStatusCodes = Set.unmodifiable(
+          selfPresenceStatusCodes ?? const <String>{},
+        );
 
   final String roomJid;
   final Map<String, Occupant> occupants;
@@ -190,9 +191,7 @@ class RoomState {
       selfPresenceStatusCodes.contains(mucStatusRoomShutdown);
 
   List<Occupant> _sortedByNick(List<Occupant> items) => items
-    ..sort(
-      (a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()),
-    );
+    ..sort((a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()));
 
   RoomState copyWith({
     Map<String, Occupant>? occupants,

@@ -48,8 +48,9 @@ void main() {
 
     prepareMockConnection();
 
-    when(() => mockConnection.asBroadcastStream())
-        .thenAnswer((_) => eventStreamController.stream);
+    when(
+      () => mockConnection.asBroadcastStream(),
+    ).thenAnswer((_) => eventStreamController.stream);
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,

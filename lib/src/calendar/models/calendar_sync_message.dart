@@ -45,10 +45,7 @@ class CalendarSyncAttachment {
 }
 
 class CalendarSyncOutbound {
-  const CalendarSyncOutbound({
-    required this.envelope,
-    this.attachment,
-  });
+  const CalendarSyncOutbound({required this.envelope, this.attachment});
 
   final String envelope;
   final CalendarSyncAttachment? attachment;
@@ -156,9 +153,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       XmlElement(XmlName('timestamp'))..innerText = timestamp.toIso8601String(),
     ]);
 
-    element.children.add(
-      XmlElement(XmlName('entity'))..innerText = entity,
-    );
+    element.children.add(XmlElement(XmlName('entity'))..innerText = entity);
 
     if (checksum != null) {
       element.children.add(
@@ -167,9 +162,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     }
 
     if (taskId != null) {
-      element.children.add(
-        XmlElement(XmlName('task_id'))..innerText = taskId!,
-      );
+      element.children.add(XmlElement(XmlName('task_id'))..innerText = taskId!);
     }
 
     if (operation != null) {
@@ -213,7 +206,8 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
   }
 
   static CalendarSyncMessage fromXmppExtension(
-      Map<String, XmlElement> extensions) {
+    Map<String, XmlElement> extensions,
+  ) {
     final calendarExt = extensions['calendar_sync'];
     if (calendarExt == null) {
       throw ArgumentError('Missing calendar_sync extension');
@@ -240,18 +234,20 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
 
     final timestamp = DateTime.parse(timestampStr);
     final checksum = _trimmedBoundedText(
-        getText('checksum'), _calendarSyncChecksumMaxLength);
-    final taskId =
-        _trimmedBoundedText(getText('task_id'), _calendarSyncTaskIdMaxLength);
+      getText('checksum'),
+      _calendarSyncChecksumMaxLength,
+    );
+    final taskId = _trimmedBoundedText(
+      getText('task_id'),
+      _calendarSyncTaskIdMaxLength,
+    );
     final operation = _trimmedBoundedText(
       getText('operation'),
       _calendarSyncOperationMaxLength,
     );
-    final entity = _trimmedBoundedText(
-          getText('entity'),
-          _calendarSyncEntityMaxLength,
-        ) ??
-        'task';
+    final entity =
+        _trimmedBoundedText(getText('entity'), _calendarSyncEntityMaxLength) ??
+            'task';
 
     Map<String, dynamic>? data;
     final dataStr = getText('data');

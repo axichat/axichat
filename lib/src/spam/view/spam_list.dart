@@ -35,9 +35,7 @@ class SpamList extends StatelessWidget {
       builder: (context, items) {
         if (items == null) {
           return Center(
-            child: AxiProgressIndicator(
-              color: context.colorScheme.foreground,
-            ),
+            child: AxiProgressIndicator(color: context.colorScheme.foreground),
           );
         }
 
@@ -89,18 +87,17 @@ class _SpamListBody extends StatelessWidget {
 
     visibleItems.sort(
       (a, b) => sortOrder.isNewestFirst
-          ? (b.spamUpdatedAt ?? b.lastChangeTimestamp)
-              .compareTo(a.spamUpdatedAt ?? a.lastChangeTimestamp)
-          : (a.spamUpdatedAt ?? a.lastChangeTimestamp)
-              .compareTo(b.spamUpdatedAt ?? b.lastChangeTimestamp),
+          ? (b.spamUpdatedAt ?? b.lastChangeTimestamp).compareTo(
+              a.spamUpdatedAt ?? a.lastChangeTimestamp,
+            )
+          : (a.spamUpdatedAt ?? a.lastChangeTimestamp).compareTo(
+              b.spamUpdatedAt ?? b.lastChangeTimestamp,
+            ),
     );
 
     if (visibleItems.isEmpty) {
       return Center(
-        child: Text(
-          l10n.spamEmpty,
-          style: context.textTheme.muted,
-        ),
+        child: Text(l10n.spamEmpty, style: context.textTheme.muted),
       );
     }
 

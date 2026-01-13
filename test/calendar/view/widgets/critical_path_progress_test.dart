@@ -57,10 +57,15 @@ void main() {
       const double expectedProgress = completedTasks / totalTasks;
 
       expect(progress.total, totalTasks);
-      expect(progress.completed, completedTasks,
-          reason: 'later completed tasks are gated');
-      expect(progress.progressValue,
-          closeTo(expectedProgress, _progressTolerance));
+      expect(
+        progress.completed,
+        completedTasks,
+        reason: 'later completed tasks are gated',
+      );
+      expect(
+        progress.progressValue,
+        closeTo(expectedProgress, _progressTolerance),
+      );
     });
 
     test('includes later tasks after earlier blockers are done', () {
@@ -85,8 +90,10 @@ void main() {
 
       expect(progress.total, totalTasks);
       expect(progress.completed, completedTasks);
-      expect(progress.progressValue,
-          closeTo(expectedProgress, _progressTolerance));
+      expect(
+        progress.progressValue,
+        closeTo(expectedProgress, _progressTolerance),
+      );
     });
 
     test('treats missing tasks as incomplete blockers', () {
@@ -111,8 +118,10 @@ void main() {
 
       expect(progress.total, totalTasks);
       expect(progress.completed, completedTasks);
-      expect(progress.progressValue,
-          closeTo(expectedProgress, _progressTolerance));
+      expect(
+        progress.progressValue,
+        closeTo(expectedProgress, _progressTolerance),
+      );
     });
 
     test('counts checklist progress after predecessor completes', () {
@@ -130,21 +139,9 @@ void main() {
           'b',
           completed: false,
           checklist: [
-            const TaskChecklistItem(
-              id: 'b1',
-              label: 'b1',
-              isCompleted: true,
-            ),
-            const TaskChecklistItem(
-              id: 'b2',
-              label: 'b2',
-              isCompleted: false,
-            ),
-            const TaskChecklistItem(
-              id: 'b3',
-              label: 'b3',
-              isCompleted: true,
-            ),
+            const TaskChecklistItem(id: 'b1', label: 'b1', isCompleted: true),
+            const TaskChecklistItem(id: 'b2', label: 'b2', isCompleted: false),
+            const TaskChecklistItem(id: 'b3', label: 'b3', isCompleted: true),
           ],
         ),
       };
@@ -161,8 +158,10 @@ void main() {
 
       expect(progress.total, totalTasks);
       expect(progress.completed, completedTasks);
-      expect(progress.progressValue,
-          closeTo(expectedProgress, _progressTolerance));
+      expect(
+        progress.progressValue,
+        closeTo(expectedProgress, _progressTolerance),
+      );
     });
 
     test('gates checklist progress behind incomplete predecessors', () {
@@ -175,25 +174,13 @@ void main() {
         isArchived: false,
       );
       final tasks = <String, CalendarTask>{
-        'a': _task(
-          'a',
-          completed: false,
-          checklist: const [],
-        ),
+        'a': _task('a', completed: false, checklist: const []),
         'b': _task(
           'b',
           completed: false,
           checklist: [
-            const TaskChecklistItem(
-              id: 'b1',
-              label: 'b1',
-              isCompleted: true,
-            ),
-            const TaskChecklistItem(
-              id: 'b2',
-              label: 'b2',
-              isCompleted: true,
-            ),
+            const TaskChecklistItem(id: 'b1', label: 'b1', isCompleted: true),
+            const TaskChecklistItem(id: 'b2', label: 'b2', isCompleted: true),
           ],
         ),
       };
@@ -206,8 +193,10 @@ void main() {
 
       expect(progress.total, totalTasks);
       expect(progress.completed, completedTasks);
-      expect(progress.progressValue,
-          closeTo(expectedProgress, _progressTolerance));
+      expect(
+        progress.progressValue,
+        closeTo(expectedProgress, _progressTolerance),
+      );
     });
 
     test('ignores checklist progress once parent task completes', () {
@@ -224,16 +213,8 @@ void main() {
           'a',
           completed: true,
           checklist: [
-            const TaskChecklistItem(
-              id: 'a1',
-              label: 'a1',
-              isCompleted: false,
-            ),
-            const TaskChecklistItem(
-              id: 'a2',
-              label: 'a2',
-              isCompleted: false,
-            ),
+            const TaskChecklistItem(id: 'a1', label: 'a1', isCompleted: false),
+            const TaskChecklistItem(id: 'a2', label: 'a2', isCompleted: false),
           ],
         ),
       };
@@ -246,8 +227,10 @@ void main() {
 
       expect(progress.total, totalTasks);
       expect(progress.completed, completedTasks);
-      expect(progress.progressValue,
-          closeTo(expectedProgress, _progressTolerance));
+      expect(
+        progress.progressValue,
+        closeTo(expectedProgress, _progressTolerance),
+      );
     });
   });
 }

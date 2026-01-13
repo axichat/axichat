@@ -118,10 +118,7 @@ class _GuestCalendarWidgetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          children: [
-            navigation,
-            if (errorBanner != null) errorBanner,
-          ],
+          children: [navigation, if (errorBanner != null) errorBanner],
         ),
       );
       children.add(navContent);
@@ -215,10 +212,9 @@ class _GuestCalendarWidgetState
   Widget buildLoadingOverlay(BuildContext context) {
     const double guestLoadingScrimAlpha = 0.3;
     return CalendarLoadingOverlay(
-      color: Theme.of(context)
-          .colorScheme
-          .scrim
-          .withValues(alpha: guestLoadingScrimAlpha),
+      color: Theme.of(
+        context,
+      ).colorScheme.scrim.withValues(alpha: guestLoadingScrimAlpha),
     );
   }
 
@@ -251,8 +247,9 @@ class _GuestCalendarWidgetState
   }
 
   Future<void> _handleBannerBackNavigation() async {
-    final navigator =
-        GoRouter.of(context).routerDelegate.navigatorKey.currentState;
+    final navigator = GoRouter.of(
+      context,
+    ).routerDelegate.navigatorKey.currentState;
     if (navigator != null && await navigator.maybePop()) {
       return;
     }
@@ -310,11 +307,7 @@ class _GuestBanner extends StatelessWidget {
             },
           ),
           const SizedBox(width: calendarGutterMd),
-          Icon(
-            Icons.info_outline_rounded,
-            size: 18,
-            color: accent,
-          ),
+          Icon(Icons.info_outline_rounded, size: 18, color: accent),
           const SizedBox(width: calendarGutterMd),
           Expanded(
             child: Text(
@@ -382,7 +375,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
       final model = widget.state.model;
       if (!model.hasCalendarData) {
         FeedbackSystem.showInfo(
-            context, 'No calendar data available to export.');
+          context,
+          'No calendar data available to export.',
+        );
         return;
       }
       final format = await showCalendarExportFormatSheet(
@@ -415,10 +410,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(
-        context,
-        'Failed to export calendar: $error',
-      );
+      FeedbackSystem.showError(context, 'Failed to export calendar: $error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -460,20 +452,14 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         final importedModel = importResult.model!;
         if (!importedModel.hasCalendarData) {
           if (!mounted) return;
-          FeedbackSystem.showInfo(
-            context,
-            _guestCalendarNoDataImportMessage,
-          );
+          FeedbackSystem.showInfo(context, _guestCalendarNoDataImportMessage);
           return;
         }
         if (!mounted) return;
-        context
-            .read<GuestCalendarBloc>()
-            .add(CalendarEvent.modelImported(model: importedModel));
-        FeedbackSystem.showSuccess(
-          context,
-          _guestCalendarImportSuccessMessage,
-        );
+        context.read<GuestCalendarBloc>().add(
+              CalendarEvent.modelImported(model: importedModel),
+            );
+        FeedbackSystem.showSuccess(context, _guestCalendarImportSuccessMessage);
         return;
       }
       final tasks = importResult.tasks;
@@ -486,19 +472,16 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!mounted) return;
-      context
-          .read<GuestCalendarBloc>()
-          .add(CalendarEvent.tasksImported(tasks: tasks));
+      context.read<GuestCalendarBloc>().add(
+            CalendarEvent.tasksImported(tasks: tasks),
+          );
       FeedbackSystem.showSuccess(
         context,
         'Imported ${tasks.length} task${tasks.length == 1 ? '' : 's'}.',
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(
-        context,
-        'Import failed: $error',
-      );
+      FeedbackSystem.showError(context, 'Import failed: $error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

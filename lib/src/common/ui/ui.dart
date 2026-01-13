@@ -428,13 +428,21 @@ const calendarPaddingLg = EdgeInsets.all(12.0);
 const calendarPaddingXl = EdgeInsets.all(16.0);
 
 // Purpose-specific paddings for shared surfaces.
-const calendarMenuItemPadding =
-    EdgeInsets.symmetric(horizontal: 14, vertical: 12);
+const calendarMenuItemPadding = EdgeInsets.symmetric(
+  horizontal: 14,
+  vertical: 12,
+);
 const calendarFieldPadding = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
-const calendarActionButtonPadding =
-    EdgeInsets.symmetric(horizontal: 14, vertical: 14);
-const calendarAccordionPadding =
-    EdgeInsets.fromLTRB(14, 6, 14, calendarFormGap);
+const calendarActionButtonPadding = EdgeInsets.symmetric(
+  horizontal: 14,
+  vertical: 14,
+);
+const calendarAccordionPadding = EdgeInsets.fromLTRB(
+  14,
+  6,
+  14,
+  calendarFormGap,
+);
 
 const calendarMarginSmall = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const calendarMarginMedium = EdgeInsets.symmetric(horizontal: 12, vertical: 6);
@@ -572,11 +580,7 @@ const calendarPrimaryGradient = LinearGradient(
 );
 
 const calendarCardShadow = [
-  BoxShadow(
-    color: Color(0x1f000000),
-    blurRadius: 8,
-    offset: Offset(0, 2),
-  ),
+  BoxShadow(color: Color(0x1f000000), blurRadius: 8, offset: Offset(0, 2)),
 ];
 
 // Task-specific constants - updated to match target design
@@ -584,8 +588,9 @@ Color get taskCompletedColor => calendarPrimaryColor;
 const calendarCardRadius = 6.0;
 
 // Task priority colors matching target HTML design exactly
-const taskCriticalColor =
-    Color(0xFFDC3545); // Red - critical (important + urgent)
+const taskCriticalColor = Color(
+  0xFFDC3545,
+); // Red - critical (important + urgent)
 const taskImportantColor = Color(0xFF28A745); // Green - important only
 const taskUrgentColor = Color(0xFFFD7E14); // Orange - urgent only
 const taskNormalColor = Color(0xFF0969DA); // Blue - normal

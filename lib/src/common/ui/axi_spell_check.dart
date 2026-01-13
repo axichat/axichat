@@ -136,14 +136,17 @@ List<SuggestionSpan> _correctSpellCheckResults(
       // corrected results.
       final SuggestionSpan adjustedSpan = SuggestionSpan(
         TextRange(
-            start: currentSpan.range.start + offset,
-            end: currentSpan.range.end + offset),
+          start: currentSpan.range.start + offset,
+          end: currentSpan.range.end + offset,
+        ),
         currentSpan.suggestions,
       );
 
       // Start search for the next misspelled word at the end of currentSpan.
-      searchStart =
-          math.min(currentSpan.range.end + 1 + offset, newText.length);
+      searchStart = math.min(
+        currentSpan.range.end + 1 + offset,
+        newText.length,
+      );
       correctedSpellCheckResults.add(adjustedSpan);
     } else if (currentSpanFoundElsewhere) {
       // Word was pushed forward but not modified.
@@ -328,8 +331,9 @@ List<TextSpan> _buildSubtreesWithComposingRegion(
           );
           textSpanTreeChildren.add(
             TextSpan(
-                style: style,
-                text: text.substring(composingRegion.end, endIndex)),
+              style: style,
+              text: text.substring(composingRegion.end, endIndex),
+            ),
           );
         } else {
           textSpanTreeChildren.add(
@@ -376,8 +380,9 @@ List<TextSpan> _buildSubtreesWithComposingRegion(
       if (composingRegion.end != text.length) {
         textSpanTreeChildren.add(
           TextSpan(
-              style: style,
-              text: text.substring(composingRegion.end, text.length)),
+            style: style,
+            text: text.substring(composingRegion.end, text.length),
+          ),
         );
       }
     } else {
@@ -398,8 +403,9 @@ void _addComposingRegionTextSpans(
   TextStyle? style,
   TextStyle composingTextStyle,
 ) {
-  treeChildren.add(TextSpan(
-      style: style, text: text.substring(start, composingRegion.start)));
+  treeChildren.add(
+    TextSpan(style: style, text: text.substring(start, composingRegion.start)),
+  );
   treeChildren.add(
     TextSpan(
       style: composingTextStyle,

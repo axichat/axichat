@@ -50,10 +50,8 @@ class CalendarState with _$CalendarState {
     String? focusedCriticalPathId,
   }) = _CalendarState;
 
-  factory CalendarState.initial() => CalendarState(
-        model: CalendarModel.empty(),
-        selectedDate: DateTime.now(),
-      );
+  factory CalendarState.initial() =>
+      CalendarState(model: CalendarModel.empty(), selectedDate: DateTime.now());
 }
 
 extension CalendarStateExtensions on CalendarState {
@@ -101,14 +99,18 @@ extension CalendarStateExtensions on CalendarState {
     final date = selectedDate;
     final weekday = date.weekday; // Monday = 1, Sunday = 7
     final daysFromMonday = weekday - DateTime.monday;
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: daysFromMonday));
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: daysFromMonday));
   }
 
   DateTime get weekEnd {
     final start = weekStart;
-    return start
-        .add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    return start.add(
+      const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
+    );
   }
 
   List<CalendarTask> get tasksForSelectedWeek =>
@@ -162,7 +164,11 @@ extension CalendarStateExtensions on CalendarState {
         final baseStart = baseInstance.scheduledTime!;
         final baseEnd = baseInstance.effectiveEndDate ?? baseStart;
         if (_overlapsRange(
-            baseStart, baseEnd, normalizedStart, normalizedEnd)) {
+          baseStart,
+          baseEnd,
+          normalizedStart,
+          normalizedEnd,
+        )) {
           results.add(baseInstance);
           emittedIds.add(baseInstance.id);
         }
@@ -198,8 +204,9 @@ extension CalendarStateExtensions on CalendarState {
           if (override.isCancelled == true) {
             continue;
           }
-          final DateTime? originalStart =
-              task.originalStartForOccurrenceKey(entry.key);
+          final DateTime? originalStart = task.originalStartForOccurrenceKey(
+            entry.key,
+          );
           if (originalStart == null) {
             continue;
           }
@@ -248,10 +255,16 @@ extension CalendarStateExtensions on CalendarState {
   }
 
   List<DayEvent> dayEventsInRange(DateTime rangeStart, DateTime rangeEnd) {
-    final DateTime normalizedStart =
-        DateTime(rangeStart.year, rangeStart.month, rangeStart.day);
-    final DateTime normalizedEnd =
-        DateTime(rangeEnd.year, rangeEnd.month, rangeEnd.day);
+    final DateTime normalizedStart = DateTime(
+      rangeStart.year,
+      rangeStart.month,
+      rangeStart.day,
+    );
+    final DateTime normalizedEnd = DateTime(
+      rangeEnd.year,
+      rangeEnd.month,
+      rangeEnd.day,
+    );
 
     final List<DayEvent> events = model.dayEvents.values
         .where(
@@ -260,9 +273,7 @@ extension CalendarStateExtensions on CalendarState {
               !event.normalizedStart.isAfter(normalizedEnd),
         )
         .toList();
-    events.sort(
-      (a, b) => a.normalizedStart.compareTo(b.normalizedStart),
-    );
+    events.sort((a, b) => a.normalizedStart.compareTo(b.normalizedStart));
     return events;
   }
 
@@ -291,11 +302,7 @@ extension CalendarStateExtensions on CalendarState {
   List<CalendarCriticalPath> criticalPathsForTask(CalendarTask task) {
     final String baseId = baseTaskIdFrom(task.id);
     return criticalPaths
-        .where(
-          (path) => path.taskIds.any(
-            (id) => baseTaskIdFrom(id) == baseId,
-          ),
-        )
+        .where((path) => path.taskIds.any((id) => baseTaskIdFrom(id) == baseId))
         .toList();
   }
 

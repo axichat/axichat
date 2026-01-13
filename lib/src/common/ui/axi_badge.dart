@@ -26,10 +26,7 @@ class AxiBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.primary,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colors.background,
-          width: 1.5,
-        ),
+        border: Border.all(color: colors.background, width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

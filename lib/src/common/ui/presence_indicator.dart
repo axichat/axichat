@@ -6,11 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class PresenceIndicator extends StatelessWidget {
-  const PresenceIndicator({
-    super.key,
-    required this.presence,
-    this.status,
-  });
+  const PresenceIndicator({super.key, required this.presence, this.status});
 
   final Presence presence;
   final String? status;
@@ -41,17 +37,9 @@ class PresenceCircle extends StatelessWidget {
         color: presence.toColor,
       ),
       child: presence.isDnd
-          ? const Icon(
-              LucideIcons.minus,
-              color: Colors.white,
-              size: 10.0,
-            )
+          ? const Icon(LucideIcons.minus, color: Colors.white, size: 10.0)
           : presence.isUnknown
-              ? const Icon(
-                  Icons.question_mark,
-                  color: Colors.black,
-                  size: 10.0,
-                )
+              ? const Icon(Icons.question_mark, color: Colors.black, size: 10.0)
               : null,
     );
   }

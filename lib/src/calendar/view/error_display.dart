@@ -47,11 +47,7 @@ class ErrorDisplay extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.error_outline,
-                color: scheme.destructive,
-                size: 20,
-              ),
+              Icon(Icons.error_outline, color: scheme.destructive, size: 20),
               const SizedBox(width: calendarGutterSm),
               Text(
                 l10n.calendarErrorTitle,
@@ -75,10 +71,7 @@ class ErrorDisplay extends StatelessWidget {
           const SizedBox(height: calendarGutterSm),
           Text(
             _getFriendlyErrorMessage(l10n, error),
-            style: TextStyle(
-              color: scheme.foreground,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: scheme.foreground, fontSize: 14),
           ),
           if (onRetry != null) ...[
             const SizedBox(height: calendarGutterMd),
@@ -92,10 +85,7 @@ class ErrorDisplay extends StatelessWidget {
     );
   }
 
-  static String _getFriendlyErrorMessage(
-    AppLocalizations l10n,
-    String error,
-  ) {
+  static String _getFriendlyErrorMessage(AppLocalizations l10n, String error) {
     // Convert technical errors to user-friendly messages
     if (error.contains('Task not found')) {
       return l10n.calendarErrorTaskNotFound;
@@ -134,8 +124,11 @@ class ErrorDisplay extends StatelessWidget {
 }
 
 class ErrorSnackBar {
-  static void show(BuildContext context, String error,
-      {VoidCallback? onRetry}) {
+  static void show(
+    BuildContext context,
+    String error, {
+    VoidCallback? onRetry,
+  }) {
     final scheme = ShadTheme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
