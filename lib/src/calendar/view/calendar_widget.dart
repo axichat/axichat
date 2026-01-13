@@ -58,6 +58,7 @@ class CalendarNavSurface extends StatelessWidget {
 
 const double _calendarShareActionSpacing = 8.0;
 const String _calendarAvailabilityShareTooltip = 'Share availability';
+const bool _calendarAvailabilityShareVisible = false;
 const String _calendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
 const bool _calendarActionShowTransferMenu = false;
@@ -400,7 +401,7 @@ class _CalendarActionRow extends StatelessWidget {
           state: state,
           showTransferMenu: _calendarActionShowTransferMenu,
         ),
-        if (onShareAvailability != null)
+        if (onShareAvailability != null && _calendarAvailabilityShareVisible)
           AxiIconButton.ghost(
             iconData: LucideIcons.send,
             tooltip: _calendarAvailabilityShareTooltip,
