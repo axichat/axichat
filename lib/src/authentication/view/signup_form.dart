@@ -7,15 +7,15 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
+import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/network_safety.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -51,10 +51,10 @@ enum _InsecurePasswordReason { weak, breached }
 
 const _strengthMediumColor = Color(0xFFF97316);
 const _strengthStrongColor = Color(0xFF22C55E);
-const int _captchaXmlMaxBytes = 64 * 1024;
+const int _captchaXmlMaxBytes = 1 << 20;
 const int _captchaXmlMaxNodes = 4000;
 const int _captchaXmlMaxDepth = 32;
-const Duration _captchaXmlMaxParseDuration = Duration(milliseconds: 120);
+const Duration _captchaXmlMaxParseDuration = Duration(seconds: 5);
 const String _captchaAllowedScheme = 'https';
 const bool _allowInsecurePasswordOverrideEnabled = !kReleaseMode;
 const int _httpOkStatus = 200;
@@ -887,44 +887,22 @@ class _SignupFormState extends State<SignupForm>
                                     child: FutureBuilder<String>(
                                       future: _captchaSrc,
                                       builder: (context, snapshot) {
-                                        final hasValidUrl = snapshot.hasData &&
-                                            (snapshot.data?.isNotEmpty ??
-                                                false);
-                                        final encounteredError = snapshot
-                                                .hasError ||
-                                            (snapshot.hasData && !hasValidUrl);
-                                        final persistentError =
-                                            encounteredError &&
-                                                _captchaHasLoadedOnce;
-                                        final describingLoading =
-                                            (!snapshot.hasData &&
-                                                    !encounteredError) ||
-                                                (encounteredError &&
-                                                    !_captchaHasLoadedOnce);
                                         Widget captchaSurface;
-                                        if (encounteredError) {
-                                          if (_captchaHasLoadedOnce) {
-                                            captchaSurface =
-                                                const _CaptchaErrorMessage();
-                                          } else {
-                                            _scheduleInitialCaptchaRetry();
-                                            captchaSurface =
-                                                const _CaptchaSkeleton();
-                                          }
-                                        } else if (!snapshot.hasData) {
-                                          captchaSurface =
-                                              const _CaptchaSkeleton();
-                                        } else {
-                                          final captchaUrl =
-                                              snapshot.requireData;
+                                        if (snapshot.hasData) {
                                           captchaSurface = _CaptchaImage(
-                                            url: captchaUrl,
+                                            url: snapshot.requireData,
                                             showErrorMessageOnError:
                                                 _captchaHasLoadedOnce,
                                             onLoaded: _markCaptchaLoaded,
                                             onInitialError:
                                                 _scheduleInitialCaptchaRetry,
                                           );
+                                        } else if (snapshot.hasError) {
+                                          captchaSurface =
+                                              const _CaptchaErrorMessage();
+                                        } else {
+                                          captchaSurface =
+                                              const _CaptchaSkeleton();
                                         }
                                         return Align(
                                           alignment: Alignment.centerLeft,
@@ -934,30 +912,14 @@ class _SignupFormState extends State<SignupForm>
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Semantics(
-                                                label: persistentError
-                                                    ? l10n
-                                                        .signupCaptchaUnavailable
-                                                    : l10n
-                                                        .signupCaptchaChallenge,
-                                                hint: persistentError
-                                                    ? l10n.signupCaptchaFailed
-                                                    : describingLoading
-                                                        ? l10n
-                                                            .signupCaptchaLoading
-                                                        : l10n
-                                                            .signupCaptchaInstructions,
-                                                image: !persistentError &&
-                                                    hasValidUrl,
-                                                child: persistentError
-                                                    ? _CaptchaFrame(
-                                                        child: captchaSurface,
-                                                      )
-                                                    : ExcludeSemantics(
-                                                        child: _CaptchaFrame(
-                                                          child: captchaSurface,
-                                                        ),
-                                                      ),
-                                              ),
+                                                  label: l10n
+                                                      .signupCaptchaChallenge,
+                                                  hint: l10n
+                                                      .signupCaptchaInstructions,
+                                                  image: true,
+                                                  child: _CaptchaFrame(
+                                                    child: captchaSurface,
+                                                  )),
                                               const SizedBox(width: 12),
                                               Semantics(
                                                 button: true,

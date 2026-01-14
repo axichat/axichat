@@ -17,7 +17,7 @@ class LogoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
+    final authenticationCubit = context.read<AuthenticationCubit>();
     final l10n = context.l10n;
     return AxiIconButton(
       iconData: LucideIcons.logOut,
@@ -26,7 +26,7 @@ class LogoutButton extends StatelessWidget {
         builder: (context) {
           var severity = LogoutSeverity.normal;
           return BlocProvider.value(
-            value: locate<AuthenticationCubit>(),
+            value: authenticationCubit,
             child: StatefulBuilder(
               builder: (context, setState) {
                 void updateSeverity(LogoutSeverity value) {
@@ -42,28 +42,42 @@ class LogoutButton extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8.0),
                       ),
-                      selectedColor: context.colorScheme.accentForeground,
-                      selectedTileColor: context.colorScheme.accent,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           CheckboxListTile(
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(l10n.authLogoutNormal),
-                            subtitle: Text(l10n.authLogoutNormalDescription),
+                            title: Text(
+                              l10n.authLogoutNormal,
+                              style: TextStyle(
+                                  color: context.colorScheme.cardForeground),
+                            ),
+                            subtitle: Text(
+                              l10n.authLogoutNormalDescription,
+                              style: TextStyle(
+                                  color: context.colorScheme.cardForeground),
+                            ),
                             value: severity.isNormal,
                             selected: severity.isNormal,
+                            tileColor: context.colorScheme.card,
                             onChanged: (_) =>
                                 updateSeverity(LogoutSeverity.normal),
                           ),
                           const SizedBox(height: 12),
                           CheckboxListTile(
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(l10n.authLogoutBurn),
-                            subtitle: Text(l10n.authLogoutBurnDescription),
+                            title: Text(
+                              l10n.authLogoutBurn,
+                              style: TextStyle(
+                                  color: context.colorScheme.cardForeground),
+                            ),
+                            subtitle: Text(
+                              l10n.authLogoutBurnDescription,
+                              style: TextStyle(
+                                  color: context.colorScheme.cardForeground),
+                            ),
                             isThreeLine: true,
                             value: severity.isBurn,
                             selected: severity.isBurn,
+                            tileColor: context.colorScheme.card,
                             onChanged: (_) =>
                                 updateSeverity(LogoutSeverity.burn),
                           ),
@@ -71,9 +85,9 @@ class LogoutButton extends StatelessWidget {
                       ),
                     ),
                   ),
-                  callback: () => context.read<AuthenticationCubit>().logout(
-                        severity: severity,
-                      ),
+                  callback: () => authenticationCubit.logout(
+                    severity: severity,
+                  ),
                 );
               },
             ),
