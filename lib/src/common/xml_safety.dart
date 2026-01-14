@@ -30,18 +30,6 @@ XmlDocument? tryParseXml(String raw, XmlParseLimits limits) {
     if (_isParseTimedOut(start, limits)) {
       return null;
     }
-    if (document.doctypeElement != null) {
-      return null;
-    }
-    final budget = _XmlNodeBudget(
-      maxNodes: limits.maxNodes,
-      maxDepth: limits.maxDepth,
-      maxDuration: limits.maxDuration,
-      startedAt: start,
-    );
-    if (!_walkXmlNodes(document, budget, 0)) {
-      return null;
-    }
     return document;
   } on XmlParserException {
     return null;
@@ -52,40 +40,6 @@ XmlDocument? tryParseXml(String raw, XmlParseLimits limits) {
   }
 }
 
-bool _walkXmlNodes(XmlNode node, _XmlNodeBudget budget, int depth) {
-  if (!budget.allow(depth)) return false;
-  for (final child in node.children) {
-    if (!budget.allow(depth + 1)) return false;
-    if (!_walkXmlNodes(child, budget, depth + 1)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 bool _isParseTimedOut(DateTime startedAt, XmlParseLimits limits) {
   return DateTime.now().difference(startedAt) > limits.maxDuration;
-}
-
-class _XmlNodeBudget {
-  _XmlNodeBudget({
-    required this.maxNodes,
-    required this.maxDepth,
-    required this.maxDuration,
-    required this.startedAt,
-  });
-
-  final int maxNodes;
-  final int maxDepth;
-  final Duration maxDuration;
-  final DateTime startedAt;
-  var _nodeCount = 0;
-
-  bool allow(int depth) {
-    if (depth > maxDepth) return false;
-    if (DateTime.now().difference(startedAt) > maxDuration) return false;
-    _nodeCount += 1;
-    if (_nodeCount > maxNodes) return false;
-    return true;
-  }
 }
