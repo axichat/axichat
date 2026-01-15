@@ -1630,7 +1630,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _markSmtpProvisioned();
       try {
         await emailService.start();
-        unawaited(emailService.handleNetworkAvailable());
+        fireAndForget(
+          emailService.handleNetworkAvailable,
+          operationName: 'AuthenticationCubit.emailNetworkAvailableAfterStart',
+        );
       } on Exception catch (error, stackTrace) {
         _log.finer('Failed to start email sync', error, stackTrace);
       }

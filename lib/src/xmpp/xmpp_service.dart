@@ -1296,14 +1296,23 @@ class XmppService extends XmppBase
       );
     });
 
-    unawaited(_resolveMamSupportForAccount());
+    fireAndForget(
+      _resolveMamSupportForAccount,
+      operationName: 'XmppService.resolveMamSupportForAccount',
+    );
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
-    unawaited(refreshSelfAvatarIfNeeded());
+    fireAndForget(
+      refreshSelfAvatarIfNeeded,
+      operationName: 'XmppService.refreshSelfAvatarIfNeeded',
+    );
     if (messageStorageMode.isServerOnly) {
       await purgeMessageHistory();
     }
-    unawaited(_verifyMamSupportOnLogin());
+    fireAndForget(
+      _verifyMamSupportOnLogin,
+      operationName: 'XmppService.verifyMamSupportOnLogin',
+    );
 
     return _connection.saltedPassword;
   }
@@ -2227,7 +2236,10 @@ class XmppService extends XmppBase
             'Failed to enable reconnection after foreground migration failure: ${error.runtimeType}.',
           );
         }
-        unawaited(requestReconnect(ReconnectTrigger.foregroundMigration));
+        fireAndForget(
+          () => requestReconnect(ReconnectTrigger.foregroundMigration),
+          operationName: 'XmppService.requestReconnectForegroundMigration',
+        );
       }
     } finally {
       if (warmupAcquired) {
@@ -3022,7 +3034,10 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
     final StreamSubscription<dynamic>? priorSubscription = _socketSubscription;
     if (priorSubscription != null) {
-      unawaited(priorSubscription.cancel());
+      fireAndForget(
+        priorSubscription.cancel,
+        operationName: 'XmppSocketWrapper.cancelPriorSubscription',
+      );
     }
 
     _socketSubscription = socket.listen(
@@ -3214,7 +3229,10 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     final subscription = _socketSubscription;
     _socketSubscription = null;
     if (subscription != null) {
-      unawaited(subscription.cancel());
+      fireAndForget(
+        subscription.cancel,
+        operationName: 'XmppSocketWrapper.cancelSocketSubscription',
+      );
     }
     try {
       socket.destroy();
