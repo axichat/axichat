@@ -18,7 +18,6 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 
 /// Threshold of updates before sending a snapshot.
@@ -725,15 +724,16 @@ class CalendarSyncManager {
     );
   }
 
-  void _onBatchTimerTick(Timer timer) {
+  Future<void> _onBatchTimerTick(Timer timer) async {
     if (_pendingEnvelopes.isEmpty) {
       _stopBatchTimer();
       return;
     }
-    fireAndForget(
-      () => _flushPendingEnvelopes().catchError(_logBatchFlushError),
-      operationName: 'CalendarSyncManager.flushPendingEnvelopes',
-    );
+    try {
+      await _flushPendingEnvelopes();
+    } catch (error, stackTrace) {
+      _logBatchFlushError(error, stackTrace);
+    }
   }
 
   void _stopBatchTimer() {
