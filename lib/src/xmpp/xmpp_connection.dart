@@ -417,7 +417,10 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _cancelBackoff();
     _backoffTimer = Timer(
       strategy.delay(_reconnectionAttempts),
-      () => unawaited(_fireBackoffReconnect()),
+      () => fireAndForget(
+        _fireBackoffReconnect,
+        operationName: 'XmppConnection.fireBackoffReconnect',
+      ),
     );
   }
 

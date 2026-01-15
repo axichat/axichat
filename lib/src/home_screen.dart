@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-// ignore_for_file: unnecessary_type_check
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
@@ -34,18 +32,19 @@ import 'package:axichat/src/chats/view/chats_add_button.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
-import 'package:axichat/src/draft/view/compose_launcher.dart';
+import 'package:axichat/src/demo/demo_calendar.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
-import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
@@ -310,9 +309,15 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             if (chatsState.openStack.isNotEmpty) {
               if (chatsState.openStack.skip(1).isNotEmpty) {
-                unawaited(chatsCubit?.popChat());
+                fireAndForget(
+                  () => chatsCubit?.popChat(),
+                  operationName: 'HomeScreen.popChat',
+                );
               } else {
-                unawaited(chatsCubit?.closeAllChats());
+                fireAndForget(
+                  () => chatsCubit?.closeAllChats(),
+                  operationName: 'HomeScreen.closeAllChats',
+                );
               }
             }
           },
@@ -835,8 +840,13 @@ class _NexusState extends State<Nexus> {
           label: _homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
           inline: const _DesktopHomeRefreshButton(),
-          onPressed: () =>
-              unawaited(context.read<ChatsCubit>().refreshHomeSync()),
+          onPressed: () {
+            final chatsCubit = context.read<ChatsCubit>();
+            fireAndForget(
+              chatsCubit.refreshHomeSync,
+              operationName: 'HomeScreen.refreshHomeSync',
+            );
+          },
         ),
       AppBarActionItem(
         label: searchActive
@@ -1244,7 +1254,13 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
             tooltip: _homeSyncTooltip,
             onPressed: spinning
                 ? null
-                : () => unawaited(context.read<ChatsCubit>().refreshHomeSync()),
+                : () {
+                    final chatsCubit = context.read<ChatsCubit>();
+                    fireAndForget(
+                      chatsCubit.refreshHomeSync,
+                      operationName: 'HomeScreen.refreshHomeSync',
+                    );
+                  },
             icon: RotationTransition(
               turns: _spinController,
               child: Icon(

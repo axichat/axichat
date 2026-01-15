@@ -81,8 +81,8 @@ mixin BlockingService on XmppBase, BaseStreamService {
     if (newlyBlocked.isEmpty) {
       return;
     }
-    unawaited(
-      _dbOp<XmppDatabase>((db) async {
+    fireAndForget(
+      () => _dbOp<XmppDatabase>((db) async {
         for (final jid in newlyBlocked) {
           await db.updatePresence(
             jid: jid,
@@ -91,6 +91,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
           );
         }
       }),
+      operationName: 'BlockingService.updatePresenceForNewBlocks',
     );
   }
 

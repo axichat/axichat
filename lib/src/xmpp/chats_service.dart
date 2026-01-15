@@ -50,7 +50,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
-        unawaited(syncConversationIndexOnLogin());
+        fireAndForget(
+          syncConversationIndexOnLogin,
+          operationName: 'ChatsService.syncConversationIndexOnLogin',
+        );
       })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
         await applyConversationIndexItems([event.item]);
@@ -441,7 +444,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       if (roomJid == null) return;
       final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
       if (!hasPresence) {
-        unawaited(ensureJoined(roomJid: roomJid, allowRejoin: true));
+        fireAndForget(
+          () => ensureJoined(roomJid: roomJid, allowRejoin: true),
+          operationName: 'ChatsService.ensureJoinedForChatState',
+        );
         return;
       }
     }
@@ -468,7 +474,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
-    unawaited(_publishConversationIndexForOpenChat(jid));
+    fireAndForget(
+      () => _publishConversationIndexForOpenChat(jid),
+      operationName: 'ChatsService.publishConversationIndexForOpenChat',
+    );
   }
 
   Future<void> closeChat() async {
