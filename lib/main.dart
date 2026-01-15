@@ -127,6 +127,7 @@ void _configureLogging() {
   _loggerConfigured = true;
 
   SafeLogging.setVerboseXmppTraffic(enabled: kDebugMode);
+  SafeLogging.setRawXmppTraffic(enabled: kDebugMode);
 
   if (kDebugMode) {
     Logger.root
