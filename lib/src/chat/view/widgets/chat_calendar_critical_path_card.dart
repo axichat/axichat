@@ -62,7 +62,10 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
       canAddToPersonal: canAddToPersonal,
       canAddToChat: canAddToChat,
     );
-    if (!context.mounted || decision == null) {
+    if (decision == null) {
+      return;
+    }
+    if (!context.mounted) {
       return;
     }
 
@@ -70,20 +73,21 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final CalendarCriticalPath? importPath = importModel.criticalPaths[path.id];
     final Set<String> taskIds = <String>{}
       ..addAll(importPath?.taskIds ?? const <String>[]);
+    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc(context);
+    final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc(context);
     bool didCopy = false;
-    if (decision.addToPersonal &&
-        _maybeReadPersonalCalendarBloc(context) != null) {
+    if (decision.addToPersonal && personalBloc != null) {
       final bool copied = await _copyCriticalPathToCalendar(
-        bloc: context.read<CalendarBloc>(),
+        bloc: personalBloc,
         model: importModel,
         pathId: path.id,
         taskIds: taskIds,
       );
       didCopy = didCopy || copied;
     }
-    if (decision.addToChat && _maybeReadChatCalendarBloc(context) != null) {
+    if (decision.addToChat && chatBloc != null) {
       final bool copied = await _copyCriticalPathToCalendar(
-        bloc: context.read<ChatCalendarBloc>(),
+        bloc: chatBloc,
         model: importModel,
         pathId: path.id,
         taskIds: taskIds,

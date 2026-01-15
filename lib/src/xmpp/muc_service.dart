@@ -1035,7 +1035,18 @@ mixin MucService on XmppBase, BaseStreamService {
       _explicitlyLeftRooms.remove(key);
       _leftRooms.remove(key);
     }
-    if (_mucJoinInFlight.contains(key)) return;
+    if (_mucJoinInFlight.contains(key)) {
+      final joinCompleter = _mucJoinCompleters[key];
+      if (joinCompleter != null && !joinCompleter.isCompleted) {
+        try {
+          await joinCompleter.future.timeout(_mucJoinTimeout);
+        } on TimeoutException {
+          // Join timeouts are handled by the join attempt that owns the completer.
+        }
+      }
+      await _awaitInstantRoomConfigurationIfNeeded(key);
+      return;
+    }
     final preferredNick = nickname?.trim();
     final rememberedNick = preferredNick?.isNotEmpty == true
         ? preferredNick!
