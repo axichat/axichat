@@ -763,10 +763,9 @@ class _UnknownSenderBanner extends StatelessWidget {
                     size: _unknownSenderIconSize,
                   ),
                   label: l10n.rosterAddTitle,
-                  onPressed: () => fireAndForget(
-                    onAddContact!,
-                    operationName: 'ChatView.addContact',
-                  ),
+                  onPressed: () async {
+                    await onAddContact!();
+                  },
                 ),
               if (onReportSpam != null)
                 ContextActionButton(
@@ -775,10 +774,9 @@ class _UnknownSenderBanner extends StatelessWidget {
                     size: _unknownSenderIconSize,
                   ),
                   label: l10n.chatReportSpam,
-                  onPressed: () => fireAndForget(
-                    onReportSpam!,
-                    operationName: 'ChatView.reportSpam',
-                  ),
+                  onPressed: () async {
+                    await onReportSpam!();
+                  },
                   destructive: true,
                 ),
             ];
@@ -3814,10 +3812,7 @@ class _ChatState extends State<Chat> {
                         onPressed: () {
                           if (!prepareChatExit()) return;
                           final chatsCubit = context.read<ChatsCubit>();
-                          fireAndForget(
-                            chatsCubit.closeAllChats,
-                            operationName: 'ChatView.closeAllChats',
-                          );
+                          chatsCubit.closeAllChats();
                         },
                       );
                 final List<AppBarActionItem> navigationActions =
@@ -3830,10 +3825,7 @@ class _ChatState extends State<Chat> {
                       onPressed: () {
                         if (!prepareChatExit()) return;
                         final chatsCubit = context.read<ChatsCubit>();
-                        fireAndForget(
-                          chatsCubit.popChat,
-                          operationName: 'ChatView.popChat',
-                        );
+                        chatsCubit.popChat();
                       },
                     ),
                   if (!readOnly && forwardStack.isNotEmpty)
@@ -3844,10 +3836,7 @@ class _ChatState extends State<Chat> {
                       onPressed: () {
                         if (!prepareChatExit()) return;
                         final chatsCubit = context.read<ChatsCubit>();
-                        fireAndForget(
-                          chatsCubit.restoreChat,
-                          operationName: 'ChatView.restoreChat',
-                        );
+                        chatsCubit.restoreChat();
                       },
                     ),
                 ];
@@ -7036,11 +7025,8 @@ class _ChatState extends State<Chat> {
                                                                               context.read<ChatsCubit?>();
                                                                           if (chatsCubit !=
                                                                               null) {
-                                                                            fireAndForget(
-                                                                              () => chatsCubit.pushChat(
-                                                                                jid: chat.jid,
-                                                                              ),
-                                                                              operationName: 'ChatView.pushChatFromRecipient',
+                                                                            chatsCubit.pushChat(
+                                                                              jid: chat.jid,
                                                                             );
                                                                           }
                                                                         },
@@ -7253,15 +7239,11 @@ class _ChatState extends State<Chat> {
                                                           }
                                                           VoidCallback? onEdit;
                                                           if (canEdit) {
-                                                            onEdit = () =>
-                                                                fireAndForget(
-                                                                  () =>
-                                                                      _handleEditMessage(
-                                                                    messageModel,
-                                                                  ),
-                                                                  operationName:
-                                                                      'ChatView.handleEditMessage',
-                                                                );
+                                                            onEdit = () async {
+                                                              await _handleEditMessage(
+                                                                messageModel,
+                                                              );
+                                                            };
                                                           }
                                                           VoidCallback?
                                                               onPinToggle;

@@ -2,8 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -21,10 +19,9 @@ class AxiLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AxiLinkDetector(
-      onTap: () => fireAndForget(
-        () => _handleTap(context),
-        operationName: 'AxiLink.handleTap',
-      ),
+      onTap: () async {
+        await _handleTap(context);
+      },
       child: Text(
         text,
         style: const TextStyle(

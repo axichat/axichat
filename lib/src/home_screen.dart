@@ -309,15 +309,9 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             if (chatsState.openStack.isNotEmpty) {
               if (chatsState.openStack.skip(1).isNotEmpty) {
-                fireAndForget(
-                  () => chatsCubit?.popChat(),
-                  operationName: 'HomeScreen.popChat',
-                );
+                chatsCubit?.popChat();
               } else {
-                fireAndForget(
-                  () => chatsCubit?.closeAllChats(),
-                  operationName: 'HomeScreen.closeAllChats',
-                );
+                chatsCubit?.closeAllChats();
               }
             }
           },
@@ -840,12 +834,9 @@ class _NexusState extends State<Nexus> {
           label: _homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
           inline: const _DesktopHomeRefreshButton(),
-          onPressed: () {
+          onPressed: () async {
             final chatsCubit = context.read<ChatsCubit>();
-            fireAndForget(
-              chatsCubit.refreshHomeSync,
-              operationName: 'HomeScreen.refreshHomeSync',
-            );
+            await chatsCubit.refreshHomeSync();
           },
         ),
       AppBarActionItem(
@@ -1254,12 +1245,9 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
             tooltip: _homeSyncTooltip,
             onPressed: spinning
                 ? null
-                : () {
+                : () async {
                     final chatsCubit = context.read<ChatsCubit>();
-                    fireAndForget(
-                      chatsCubit.refreshHomeSync,
-                      operationName: 'HomeScreen.refreshHomeSync',
-                    );
+                    await chatsCubit.refreshHomeSync();
                   },
             icon: RotationTransition(
               turns: _spinController,

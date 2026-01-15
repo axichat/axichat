@@ -246,10 +246,9 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       TaskContextAction(
         icon: Icons.copy,
         label: l10n.chatCalendarTaskCopyActionLabel,
-        onSelected: () => fireAndForget(
-          () => _handleCopyTask(task: task, style: copyStyle),
-          operationName: 'ChatCalendarTaskCard.copyTask',
-        ),
+        onSelected: () async {
+          await _handleCopyTask(task: task, style: copyStyle);
+        },
       ),
     ];
   }
