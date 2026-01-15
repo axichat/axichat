@@ -488,8 +488,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!mounted) return;
-      final GuestCalendarBloc calendarBloc =
-          context.read<GuestCalendarBloc>();
+      final GuestCalendarBloc calendarBloc = context.read<GuestCalendarBloc>();
       final Set<String> taskIds = <String>{}
         ..addAll(tasks.map((task) => task.id));
       calendarBloc.add(CalendarEvent.tasksImported(tasks: tasks));

@@ -67,8 +67,7 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     }
 
     final CalendarModel importModel = _buildImportModel();
-    final CalendarCriticalPath? importPath =
-        importModel.criticalPaths[path.id];
+    final CalendarCriticalPath? importPath = importModel.criticalPaths[path.id];
     final Set<String> taskIds = <String>{}
       ..addAll(importPath?.taskIds ?? const <String>[]);
     bool didCopy = false;
