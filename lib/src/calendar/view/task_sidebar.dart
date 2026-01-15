@@ -2057,7 +2057,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     ];
   }
 
-  void _copyTaskDetails(CalendarTask task) {
+  Future<void> _copyTaskDetails(CalendarTask task) async {
     final buffer = StringBuffer();
     if (task.title.trim().isNotEmpty) {
       buffer.writeln(task.title.trim());
@@ -2081,7 +2081,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final payload = buffer.toString().trim().isEmpty
         ? task.title.trim()
         : buffer.toString().trim();
-    Clipboard.setData(ClipboardData(text: payload));
+    await Clipboard.setData(ClipboardData(text: payload));
     if (mounted) {
       FeedbackSystem.showSuccess(context, context.l10n.calendarTaskCopied);
     }
