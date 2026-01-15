@@ -16,10 +16,11 @@ import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
-import 'package:axichat/src/calendar/view/task_input.dart' as task_input;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'unified_task_input.dart';
+import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_text_field.dart';
 
@@ -79,7 +80,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
     };
   } else {
     defaultHandler = (CalendarTask task) =>
-        task_input.showTaskInput(context, editingTask: task);
+        showUnifiedTaskInput<B>(context, editingTask: task);
   }
 
   await showAdaptiveBottomSheet<void>(
@@ -179,35 +180,11 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  style: context.textTheme.h3.copyWith(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              AxiIconButton(
-                                iconData: LucideIcons.x,
-                                tooltip: MaterialLocalizations.of(
-                                  context,
-                                ).closeButtonTooltip,
-                                iconSize: 16,
-                                buttonSize: 34,
-                                tapTargetSize: 40,
-                                backgroundColor: Colors.transparent,
-                                borderColor: Colors.transparent,
-                                color: context.colorScheme.mutedForeground,
-                                onPressed: () =>
-                                    Navigator.of(context).maybePop(),
-                              ),
-                            ],
+                          CalendarSheetHeader(
+                            title: title,
+                            subtitle: subtitle,
+                            onClose: () => Navigator.of(context).maybePop(),
                           ),
-                          const SizedBox(height: calendarInsetSm),
-                          Text(subtitle, style: context.textTheme.muted),
                           const SizedBox(height: calendarGutterSm),
                           TaskTextField(
                             controller: _queryController,

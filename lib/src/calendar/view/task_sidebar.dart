@@ -73,6 +73,7 @@ import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/task_text_field.dart';
 import 'widgets/critical_path_panel.dart';
+import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
@@ -2266,8 +2267,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<bool> _confirmCriticalPathDeletion(CalendarCriticalPath path) async {
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
     final result = await showAdaptiveBottomSheet<bool>(
       context: context,
       dialogMaxWidth: 420,
@@ -2281,36 +2280,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      context.l10n.calendarCriticalPathDeleteTitle,
-                      style: textTheme.h3.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  AxiIconButton(
-                    iconData: LucideIcons.x,
-                    tooltip: MaterialLocalizations.of(
-                      sheetContext,
-                    ).closeButtonTooltip,
-                    iconSize: 16,
-                    buttonSize: 34,
-                    tapTargetSize: 40,
-                    backgroundColor: Colors.transparent,
-                    borderColor: Colors.transparent,
-                    color: colors.mutedForeground,
-                    onPressed: () => Navigator.of(sheetContext).maybePop(false),
-                  ),
-                ],
-              ),
-              const SizedBox(height: calendarGutterSm),
-              Text(
-                context.l10n.calendarRemovePathConfirm(path.name),
-                style: textTheme.muted,
+              CalendarSheetHeader(
+                title: context.l10n.calendarCriticalPathDeleteTitle,
+                subtitle: context.l10n.calendarRemovePathConfirm(path.name),
+                onClose: () => Navigator.of(sheetContext).maybePop(false),
               ),
               const SizedBox(height: calendarGutterMd),
               Row(

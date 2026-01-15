@@ -82,9 +82,6 @@ const String _availabilityShareEditHint =
 const String _availabilityShareRecentPresetPrefix = 'Shared';
 const String _availabilityShareBackLabel = 'Back';
 const String _availabilityShareSaveLabel = 'Save';
-const String _availabilityChatTypeDirectLabel = 'Direct chat';
-const String _availabilityChatTypeGroupLabel = 'Group chat';
-const String _availabilityChatTypeNoteLabel = 'Notes';
 
 const Uuid _availabilityPresetIdGenerator = Uuid();
 
@@ -1305,12 +1302,4 @@ Color _availabilityShareBackgroundColor(BuildContext context) {
   return ShadTheme.of(context).brightness == Brightness.dark
       ? scheme.card
       : calendarSidebarBackgroundColor;
-}
-
-extension _ChatTypeLabelX on ChatType {
-  String get label => switch (this) {
-        ChatType.chat => _availabilityChatTypeDirectLabel,
-        ChatType.groupChat => _availabilityChatTypeGroupLabel,
-        ChatType.note => _availabilityChatTypeNoteLabel,
-      };
 }

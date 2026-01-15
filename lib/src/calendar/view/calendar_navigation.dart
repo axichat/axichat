@@ -13,6 +13,7 @@ import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'widgets/calendar_sheet_header.dart';
 import 'widgets/task_form_section.dart';
 
 DateTime shiftedCalendarDate(CalendarState state, int steps) {
@@ -1111,16 +1112,10 @@ class _CalendarDropdown extends StatelessWidget {
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
               const SizedBox(width: calendarGutterSm),
-              AxiIconButton(
-                iconData: LucideIcons.x,
+              CalendarSheetCloseButton(
                 tooltip: context.l10n.commonClose,
-                onPressed: onClose,
-                iconSize: 16,
-                buttonSize: 34,
-                tapTargetSize: 40,
-                backgroundColor: Colors.transparent,
-                borderColor: Colors.transparent,
                 color: calendarSubtitleColor,
+                onPressed: onClose,
               ),
             ],
           ),
