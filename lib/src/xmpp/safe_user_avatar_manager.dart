@@ -41,14 +41,19 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     } on Exception {
       return;
     }
-    if (_shouldSkipAvatarJid(from)) return;
+    if (_shouldSkipAvatarJid(from)) {
+      logger.fine('Avatar notification skipped; jid marked skippable.');
+      return;
+    }
 
     if (event.item.payload case final payload?) {
+      logger.fine('Avatar notification received with inline payload.');
       await _emitFromPayload(from: from, payload: payload);
       return;
     }
 
     final itemId = event.item.id.trim();
+    logger.fine('Avatar notification received without payload; refreshing.');
     await _refreshMetadata(
       from: from,
       itemId: itemId.isNotEmpty ? itemId : null,
@@ -57,7 +62,11 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
   Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {
     if (event.node != mox.userAvatarMetadataXmlns) return;
-    if (_shouldSkipAvatarJid(event.from)) return;
+    if (_shouldSkipAvatarJid(event.from)) {
+      logger.fine('Avatar refresh event skipped; jid marked skippable.');
+      return;
+    }
+    logger.fine('Avatar refresh event received; refreshing metadata.');
     await _refreshMetadata(from: event.from);
   }
 
@@ -66,7 +75,10 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     final pubsub = getAttributes().getManagerById<mox.PubSubManager>(
       mox.pubsubManager,
     );
-    if (pubsub == null) return;
+    if (pubsub == null) {
+      logger.fine('PubSubManager unavailable; cannot refresh avatar metadata.');
+      return;
+    }
 
     final bareFrom = from.toBare();
     final normalizedItemId = itemId?.trim();
@@ -79,10 +91,12 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
       if (!itemResult.isType<mox.PubSubError>()) {
         final fetchedPayload = itemResult.get<mox.PubSubItem>().payload;
         if (fetchedPayload != null) {
+          logger.fine('Avatar metadata fetched via item lookup.');
           await _emitFromPayload(from: from, payload: fetchedPayload);
           return;
         }
       }
+      logger.fine('Avatar item lookup failed; falling back to getItems.');
     }
 
     var itemsResult = await pubsub.getItems(
@@ -95,6 +109,10 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
       final shouldRetry = error is mox.EjabberdMaxItemsError ||
           error is mox.MalformedResponseError ||
           error is mox.UnknownPubSubError;
+      logger.fine(
+        'Avatar getItems failed with ${error.runtimeType}; '
+        'retry=$shouldRetry.',
+      );
       if (!shouldRetry) return;
       itemsResult = await pubsub.getItems(
         bareFrom,
@@ -105,6 +123,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
     final items = itemsResult.get<List<mox.PubSubItem>>();
     if (items.isEmpty) {
+      logger.fine('Avatar getItems returned empty list; emitting clear event.');
       getAttributes().sendEvent(
         mox.UserAvatarUpdatedEvent(from, const <mox.UserAvatarMetadata>[]),
       );
@@ -131,6 +150,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
     final metadata =
         payload.findTags(_infoTag).map(mox.UserAvatarMetadata.fromXML).toList();
+    logger.fine('Avatar metadata parsed. count=${metadata.length}.');
     getAttributes().sendEvent(mox.UserAvatarUpdatedEvent(from, metadata));
   }
 

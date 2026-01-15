@@ -2100,6 +2100,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is! AuthenticationComplete) return;
     final currentJid = _authenticatedJid;
 
+    await _homeRefreshSyncService.close();
+    if (_endpointConfig.enableSmtp) {
+      if (severity == LogoutSeverity.burn) {
+        await _emailService?.burn(jid: currentJid);
+      } else {
+        await _emailService?.shutdown(
+          jid: currentJid,
+          clearCredentials: severity == LogoutSeverity.normal,
+        );
+      }
+    }
+
     switch (severity) {
       case LogoutSeverity.auto:
         break;
@@ -2115,18 +2127,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }
-    await _homeRefreshSyncService.close();
     await _xmppService.disconnect();
-    if (_endpointConfig.enableSmtp) {
-      if (severity == LogoutSeverity.burn) {
-        await _emailService?.burn(jid: currentJid);
-      } else {
-        await _emailService?.shutdown(
-          jid: currentJid,
-          clearCredentials: severity == LogoutSeverity.normal,
-        );
-      }
-    }
 
     _clearSessionEmailCredentials();
     _authenticatedJid = null;

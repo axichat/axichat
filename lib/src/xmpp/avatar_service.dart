@@ -77,6 +77,12 @@ mixin AvatarService on XmppBase, MucService {
   static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
   static const bool _allowAvatarPublisherFallback = true;
   static const bool _avatarSkipDefault = true;
+  static const String _avatarClearReasonMetadataEmpty = 'metadata_empty';
+  static const String _avatarClearReasonVcardEmpty = 'vcard_empty';
+  static const String _avatarClearReasonPubSubRetract = 'pubsub_retract';
+  static const String _avatarClearReasonPubSubNodeDeleted =
+      'pubsub_node_deleted';
+  static const String _avatarClearReasonPubSubNodePurged = 'pubsub_node_purged';
   static const String _mimePng = 'image/png';
   static const String _mimeJpeg = 'image/jpeg';
   static const List<int> _pngMagicBytes = <int>[
@@ -162,8 +168,20 @@ mixin AvatarService on XmppBase, MucService {
     manager
       ..registerHandler<mox.UserAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
+        final myBareJid = _myJid?.toBare().toString();
+        final isSelf = myBareJid != null && myBareJid == bareJid;
+        _avatarLog.fine(
+          'User avatar update received. isSelf=$isSelf '
+          'metadataCount=${event.metadata.length}.',
+        );
         if (event.metadata.isEmpty) {
-          await _clearAvatarForJid(bareJid);
+          _avatarLog.fine(
+            'User avatar metadata empty; clearing avatar. isSelf=$isSelf.',
+          );
+          await _clearAvatarForJid(
+            bareJid,
+            reason: _avatarClearReasonMetadataEmpty,
+          );
           return;
         }
 
@@ -179,8 +197,20 @@ mixin AvatarService on XmppBase, MucService {
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
+        final myBareJid = _myJid?.toBare().toString();
+        final isSelf = myBareJid != null && myBareJid == bareJid;
+        _avatarLog.fine(
+          'VCard avatar update received. isSelf=$isSelf '
+          'hasHash=${event.hash.isNotEmpty}.',
+        );
         if (event.hash.isEmpty) {
-          await _clearAvatarForJid(bareJid);
+          _avatarLog.fine(
+            'VCard avatar hash empty; clearing avatar. isSelf=$isSelf.',
+          );
+          await _clearAvatarForJid(
+            bareJid,
+            reason: _avatarClearReasonVcardEmpty,
+          );
           return;
         }
         await _refreshAvatarFromVCard(bareJid, event.hash);
@@ -199,7 +229,13 @@ mixin AvatarService on XmppBase, MucService {
         if (existingHash == null || existingHash.trim().isEmpty) return;
         if (!event.itemIds.contains(existingHash)) return;
 
-        await _clearAvatarForJid(bareJid);
+        _avatarLog.fine(
+          'Avatar pubsub retraction matched stored hash; clearing avatar.',
+        );
+        await _clearAvatarForJid(
+          bareJid,
+          reason: _avatarClearReasonPubSubRetract,
+        );
       })
       ..registerHandler<mox.PubSubNodeDeletedEvent>((event) async {
         final node = event.node;
@@ -211,7 +247,11 @@ mixin AvatarService on XmppBase, MucService {
         final bareJid = _avatarSafeBareJid(event.from);
         if (bareJid == null) return;
 
-        await _clearAvatarForJid(bareJid);
+        _avatarLog.fine('Avatar pubsub node deleted; clearing avatar.');
+        await _clearAvatarForJid(
+          bareJid,
+          reason: _avatarClearReasonPubSubNodeDeleted,
+        );
       })
       ..registerHandler<mox.PubSubNodePurgedEvent>((event) async {
         final node = event.node;
@@ -223,9 +263,16 @@ mixin AvatarService on XmppBase, MucService {
         final bareJid = _avatarSafeBareJid(event.from);
         if (bareJid == null) return;
 
-        await _clearAvatarForJid(bareJid);
+        _avatarLog.fine('Avatar pubsub node purged; clearing avatar.');
+        await _clearAvatarForJid(
+          bareJid,
+          reason: _avatarClearReasonPubSubNodePurged,
+        );
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        _avatarLog.fine(
+          'Stream negotiations done. resumed=${event.resumed}.',
+        );
         _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
           unawaited(_notifyCachedSelfAvatarIfAvailable());
@@ -464,34 +511,73 @@ mixin AvatarService on XmppBase, MucService {
   }) async {
     final normalizedJid = bareJid.trim();
     if (normalizedJid.isEmpty) return;
-    if (await _shouldSkipAvatarForBareJid(normalizedJid)) return;
+    if (await _shouldSkipAvatarForBareJid(normalizedJid)) {
+      _avatarLog.fine('VCard request skipped; jid marked skippable.');
+      return;
+    }
     final added = _avatarRefreshInProgress.add(normalizedJid);
-    if (!force && !added) return;
+    if (!force && !added) {
+      _avatarLog.fine('VCard request already in progress; skipping.');
+      return;
+    }
     try {
+      final myBareJid = _myJid?.toBare().toString();
+      final isSelf = myBareJid != null && myBareJid == normalizedJid;
+      _avatarLog.fine(
+        'Refreshing vCard avatar. isSelf=$isSelf force=$force.',
+      );
       final manager = _connection.getManager<mox.VCardManager>();
-      if (manager == null) return;
+      if (manager == null) {
+        _avatarLog.fine('VCardManager unavailable; skipping refresh.');
+        return;
+      }
 
       final vcardResult = await manager.requestVCard(
         mox.JID.fromString(normalizedJid),
       );
-      if (vcardResult.isType<mox.VCardError>()) return;
+      if (vcardResult.isType<mox.VCardError>()) {
+        _avatarLog.fine('VCard request failed; aborting refresh.');
+        return;
+      }
       final vcard = vcardResult.get<mox.VCard>();
       final rawEncoded = vcard.photo?.binval?.trim();
-      if (rawEncoded == null || rawEncoded.isEmpty) return;
-      if (rawEncoded.length > _maxAvatarBase64Length * 2) return;
+      if (rawEncoded == null || rawEncoded.isEmpty) {
+        _avatarLog.fine('VCard photo missing; aborting refresh.');
+        return;
+      }
+      if (rawEncoded.length > _maxAvatarBase64Length * 2) {
+        _avatarLog.fine('VCard photo payload too large; aborting refresh.');
+        return;
+      }
       final encoded = rawEncoded.replaceAll(RegExp(r'\s+'), '');
-      if (encoded.isEmpty) return;
-      if (encoded.length > _maxAvatarBase64Length) return;
+      if (encoded.isEmpty) {
+        _avatarLog.fine('VCard photo payload empty after normalization.');
+        return;
+      }
+      if (encoded.length > _maxAvatarBase64Length) {
+        _avatarLog.fine('VCard photo payload exceeds max length.');
+        return;
+      }
 
       Uint8List bytes;
       try {
         bytes = base64Decode(encoded);
       } on FormatException {
+        _avatarLog.fine('VCard photo base64 decode failed.');
         return;
       }
-      if (bytes.isEmpty) return;
-      if (bytes.length > _maxAvatarBytes) return;
-      if (!_isSupportedAvatarBytes(bytes)) return;
+      if (bytes.isEmpty) {
+        _avatarLog.fine('VCard avatar bytes empty after decode.');
+        return;
+      }
+      if (bytes.length > _maxAvatarBytes) {
+        _avatarLog.fine('VCard avatar bytes exceed max size.');
+        return;
+      }
+      if (!_isSupportedAvatarBytes(bytes)) {
+        _avatarLog.fine('VCard avatar bytes not supported.');
+        return;
+      }
 
       final hash = sha1.convert(bytes).toString();
       if (!force) {
@@ -506,6 +592,7 @@ mixin AvatarService on XmppBase, MucService {
 
       final path = await _writeAvatarFile(bytes: bytes);
       await _storeAvatar(jid: normalizedJid, path: path, hash: hash);
+      _avatarLog.fine('VCard avatar stored successfully.');
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
     } finally {
@@ -534,6 +621,7 @@ mixin AvatarService on XmppBase, MucService {
     } on XmppAbortedException {
       return;
     }
+    _avatarLog.fine('Refreshing roster avatars from cache.');
     if (rosterJids.isEmpty) return;
     scheduleAvatarRefresh(rosterJids);
   }
@@ -545,18 +633,34 @@ mixin AvatarService on XmppBase, MucService {
   }) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
-    if (await _shouldSkipAvatarForBareJid(bareJid)) return;
+    if (await _shouldSkipAvatarForBareJid(bareJid)) {
+      _avatarLog.fine('Avatar refresh skipped; jid marked skippable.');
+      return;
+    }
     final added = _avatarRefreshInProgress.add(bareJid);
-    if (!force && !added) return;
+    if (!force && !added) {
+      _avatarLog.fine('Avatar refresh already in progress; skipping.');
+      return;
+    }
     try {
       final manager = _connection.getManager<mox.UserAvatarManager>();
-      if (manager == null) return;
-
       final myBareJid = _myJid?.toBare().toString();
       final isSelf = myBareJid != null && myBareJid == bareJid;
+      _avatarLog.fine(
+        'Refreshing avatar. isSelf=$isSelf force=$force '
+        'metadataProvided=${metadata != null}.',
+      );
+      if (manager == null) {
+        _avatarLog.fine('UserAvatarManager unavailable; skipping refresh.');
+        return;
+      }
       final existingHash = await _storedAvatarHash(bareJid);
       if (metadata != null && metadata.isEmpty) {
-        await _clearAvatarForJid(bareJid);
+        _avatarLog.fine('Metadata empty during refresh; clearing avatar.');
+        await _clearAvatarForJid(
+          bareJid,
+          reason: _avatarClearReasonMetadataEmpty,
+        );
         return;
       }
 
@@ -568,6 +672,9 @@ mixin AvatarService on XmppBase, MucService {
           case final _AvatarMetadataLoaded loaded:
             selectedMetadata = loaded.metadata;
           case _AvatarMetadataMissing():
+            _avatarLog.fine(
+              'Avatar metadata missing; requesting vCard fallback.',
+            );
             if (isSelf) {
               await _maybeRepairSelfAvatar(bareJid);
               return;
@@ -575,13 +682,19 @@ mixin AvatarService on XmppBase, MucService {
             await _refreshAvatarFromVCardRequest(bareJid, force: true);
             return;
           case _AvatarMetadataLoadFailed():
+            _avatarLog.fine(
+              'Avatar metadata load failed; requesting vCard fallback.',
+            );
             if (!isSelf) {
               await _refreshAvatarFromVCardRequest(bareJid, force: true);
             }
             return;
         }
       }
-      if (selectedMetadata == null) return;
+      if (selectedMetadata == null) {
+        _avatarLog.fine('No usable avatar metadata selected; skipping.');
+        return;
+      }
       if (!force &&
           existingHash != null &&
           existingHash == selectedMetadata.id) {
@@ -595,21 +708,32 @@ mixin AvatarService on XmppBase, MucService {
         mox.JID.fromString(bareJid),
         selectedMetadata.id,
       );
-      if (avatarDataResult.isType<mox.AvatarError>()) return;
+      if (avatarDataResult.isType<mox.AvatarError>()) {
+        _avatarLog.fine('Avatar data fetch failed; aborting refresh.');
+        return;
+      }
       final avatarData = avatarDataResult.get<mox.UserAvatarData>();
       Uint8List bytes;
       try {
         final normalized = avatarData.base64.replaceAll(RegExp(r'\s+'), '');
         bytes = base64Decode(normalized);
       } on FormatException {
+        _avatarLog.fine('Avatar data base64 decode failed.');
         return;
       }
-      if (bytes.isEmpty) return;
-      if (bytes.length > _maxAvatarBytes) return;
+      if (bytes.isEmpty) {
+        _avatarLog.fine('Avatar data payload empty after decode.');
+        return;
+      }
+      if (bytes.length > _maxAvatarBytes) {
+        _avatarLog.fine('Avatar data payload exceeds max bytes.');
+        return;
+      }
 
       final path = await _writeAvatarFile(bytes: bytes);
 
       await _storeAvatar(jid: bareJid, path: path, hash: avatarData.hash);
+      _avatarLog.fine('Avatar refresh stored successfully.');
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh avatar.', error, stackTrace);
     } finally {
@@ -620,13 +744,23 @@ mixin AvatarService on XmppBase, MucService {
   Future<void> _refreshAvatarFromVCard(String jid, String hash) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
-    if (await _shouldSkipAvatarForBareJid(bareJid)) return;
+    if (await _shouldSkipAvatarForBareJid(bareJid)) {
+      _avatarLog.fine('VCard refresh skipped; jid marked skippable.');
+      return;
+    }
     if (hash.isEmpty) {
-      await _clearAvatarForJid(bareJid);
+      _avatarLog.fine('VCard hash empty; clearing avatar.');
+      await _clearAvatarForJid(
+        bareJid,
+        reason: _avatarClearReasonVcardEmpty,
+      );
       return;
     }
     final added = _avatarRefreshInProgress.add(bareJid);
-    if (!added) return;
+    if (!added) {
+      _avatarLog.fine('VCard refresh already in progress; skipping.');
+      return;
+    }
     try {
       final existingHash = await _storedAvatarHash(bareJid);
       if (existingHash == hash) {
@@ -637,27 +771,52 @@ mixin AvatarService on XmppBase, MucService {
       }
 
       final manager = _connection.getManager<mox.VCardManager>();
-      if (manager == null) return;
+      if (manager == null) {
+        _avatarLog.fine('VCardManager unavailable; skipping refresh.');
+        return;
+      }
 
       final vcardResult = await manager.requestVCard(
         mox.JID.fromString(bareJid),
       );
-      if (vcardResult.isType<mox.VCardError>()) return;
+      if (vcardResult.isType<mox.VCardError>()) {
+        _avatarLog.fine('VCard request failed; aborting refresh.');
+        return;
+      }
       final vcard = vcardResult.get<mox.VCard>();
       final rawEncoded = vcard.photo?.binval?.trim();
-      if (rawEncoded == null || rawEncoded.isEmpty) return;
-      if (rawEncoded.length > _maxAvatarBase64Length * 2) return;
+      if (rawEncoded == null || rawEncoded.isEmpty) {
+        _avatarLog.fine('VCard photo missing; aborting refresh.');
+        return;
+      }
+      if (rawEncoded.length > _maxAvatarBase64Length * 2) {
+        _avatarLog.fine('VCard photo payload too large; aborting refresh.');
+        return;
+      }
       final encoded = rawEncoded.replaceAll(RegExp(r'\s+'), '');
-      if (encoded.isEmpty) return;
-      if (encoded.length > _maxAvatarBase64Length) return;
+      if (encoded.isEmpty) {
+        _avatarLog.fine('VCard photo payload empty after normalization.');
+        return;
+      }
+      if (encoded.length > _maxAvatarBase64Length) {
+        _avatarLog.fine('VCard photo payload exceeds max length.');
+        return;
+      }
 
       final bytes = base64Decode(encoded);
-      if (bytes.isEmpty) return;
-      if (bytes.length > _maxAvatarBytes) return;
+      if (bytes.isEmpty) {
+        _avatarLog.fine('VCard avatar bytes empty after decode.');
+        return;
+      }
+      if (bytes.length > _maxAvatarBytes) {
+        _avatarLog.fine('VCard avatar bytes exceed max size.');
+        return;
+      }
 
       final path = await _writeAvatarFile(bytes: bytes);
 
       await _storeAvatar(jid: bareJid, path: path, hash: hash);
+      _avatarLog.fine('VCard avatar stored successfully.');
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
     } finally {
@@ -667,7 +826,10 @@ mixin AvatarService on XmppBase, MucService {
 
   Future<_AvatarMetadataLoadResult> _loadMetadata(String jid) async {
     final pubsub = _connection.getManager<mox.PubSubManager>();
-    if (pubsub == null) return const _AvatarMetadataLoadFailed();
+    if (pubsub == null) {
+      _avatarLog.fine('PubSubManager unavailable; cannot load metadata.');
+      return const _AvatarMetadataLoadFailed();
+    }
     const maxMetadataItems = 1;
     const metadataInfoTag = 'info';
 
@@ -686,6 +848,9 @@ mixin AvatarService on XmppBase, MucService {
       final shouldRetry = error is mox.EjabberdMaxItemsError ||
           error is mox.MalformedResponseError ||
           error is mox.UnknownPubSubError;
+      _avatarLog.fine(
+        'Metadata fetch failed with ${error.runtimeType}; retry=$shouldRetry.',
+      );
       if (shouldRetry) {
         result = await getItems(null);
       }
@@ -694,31 +859,48 @@ mixin AvatarService on XmppBase, MucService {
     if (result.isType<mox.PubSubError>()) {
       final error = result.get<mox.PubSubError>();
       if (error is mox.ItemNotFoundError || error is mox.NoItemReturnedError) {
+        _avatarLog.fine('Metadata fetch returned no items.');
         return const _AvatarMetadataMissing();
       }
+      _avatarLog.fine('Metadata fetch failed after retry.');
       return const _AvatarMetadataLoadFailed();
     }
 
     final items = result.get<List<mox.PubSubItem>>();
-    if (items.isEmpty) return const _AvatarMetadataMissing();
+    if (items.isEmpty) {
+      _avatarLog.fine('Metadata fetch returned empty payload list.');
+      return const _AvatarMetadataMissing();
+    }
 
     final filteredItems = _filterAvatarItemsByPublisher(
       items: items,
       ownerBare: jid,
     );
-    if (filteredItems.isEmpty) return const _AvatarMetadataMissing();
+    if (filteredItems.isEmpty) {
+      _avatarLog.fine('Metadata filtered out by publisher checks.');
+      return const _AvatarMetadataMissing();
+    }
 
     final payload = filteredItems.first.payload;
-    if (payload == null) return const _AvatarMetadataLoadFailed();
+    if (payload == null) {
+      _avatarLog.fine('Metadata payload missing.');
+      return const _AvatarMetadataLoadFailed();
+    }
 
     final metadata = payload
         .findTags(metadataInfoTag)
         .map(mox.UserAvatarMetadata.fromXML)
         .toList();
-    if (metadata.isEmpty) return const _AvatarMetadataMissing();
+    if (metadata.isEmpty) {
+      _avatarLog.fine('Metadata payload contains no usable entries.');
+      return const _AvatarMetadataMissing();
+    }
 
     final selected = _selectMetadata(metadata);
-    if (selected == null) return const _AvatarMetadataLoadFailed();
+    if (selected == null) {
+      _avatarLog.fine('Metadata selection failed; no valid entries.');
+      return const _AvatarMetadataLoadFailed();
+    }
 
     return _AvatarMetadataLoaded(selected);
   }
@@ -783,10 +965,19 @@ mixin AvatarService on XmppBase, MucService {
     }
   }
 
-  Future<void> _clearAvatarForJid(String jid) async {
+  Future<void> _clearAvatarForJid(
+    String jid, {
+    String? reason,
+  }) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
     final existingPath = await _storedAvatarPath(bareJid);
+    final myBareJid = _myJid?.toBare().toString();
+    final isSelf = myBareJid != null && myBareJid == bareJid;
+    _avatarLog.fine(
+      'Clearing avatar. isSelf=$isSelf reason=$reason '
+      'hasCachedFile=${existingPath?.trim().isNotEmpty == true}.',
+    );
 
     await _dbOp<XmppDatabase>((db) async {
       final rosterItem = await db.getRosterItem(bareJid);
@@ -807,7 +998,6 @@ mixin AvatarService on XmppBase, MucService {
       }
     }, awaitDatabase: true);
 
-    final myBareJid = _myJid?.toBare().toString();
     if (myBareJid != null && myBareJid == bareJid && isStateStoreReady) {
       await _dbOp<XmppStateStore>((ss) async {
         await ss.write(key: selfAvatarPathKey, value: null);
@@ -885,12 +1075,15 @@ mixin AvatarService on XmppBase, MucService {
     if (targetJid == null) {
       throw XmppAvatarException();
     }
+    _avatarLog.fine('Publishing avatar. public=$public.');
     try {
-      return await _publishAvatarOnce(
+      final result = await _publishAvatarOnce(
         payload: payload,
         targetJid: targetJid,
         public: public,
       );
+      _avatarLog.fine('Avatar publish completed.');
+      return result;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
       if (cause is mox.AvatarError || cause is mox.PubSubError) {
@@ -963,8 +1156,10 @@ mixin AvatarService on XmppBase, MucService {
         public ? presenceBasedDeliveryDisabled : presenceBasedDeliveryEnabled;
     final pubsub = _connection.getManager<SafePubSubManager>();
     if (pubsub == null) {
+      _avatarLog.warning('PubSub unavailable; cannot publish avatar.');
       throw XmppAvatarException('PubSub is unavailable');
     }
+    _avatarLog.fine('Preparing avatar publish payloads. public=$public.');
     final host = mox.JID.fromString(targetJid);
     final accessModel = public ? openAccessModel : presenceAccessModel;
     final dataPublishOptions = mox.PubSubPublishOptions(
@@ -1042,16 +1237,23 @@ mixin AvatarService on XmppBase, MucService {
         node: node,
         accessModel: config.accessModel,
       );
-      if (_configuredAvatarNodes.contains(cacheKey)) return;
+      if (_configuredAvatarNodes.contains(cacheKey)) {
+        _avatarLog.fine('Avatar node config cached; skipping configure.');
+        return;
+      }
 
       final configured = await pubsub
           .configureNode(host, node, config)
           .timeout(_avatarPublishTimeout);
       if (!configured.isType<mox.PubSubError>()) {
+        _avatarLog.fine('Avatar node configured successfully.');
         _configuredAvatarNodes.add(cacheKey);
         return;
       }
       final configuredError = configured.get<mox.PubSubError>();
+      _avatarLog.fine(
+        'Avatar node configure failed with ${configuredError.runtimeType}.',
+      );
       final shouldCreateNode = configuredError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
@@ -1065,6 +1267,7 @@ mixin AvatarService on XmppBase, MucService {
             .configureNode(host, node, config)
             .timeout(_avatarPublishTimeout);
         if (!confirmed.isType<mox.PubSubError>()) {
+          _avatarLog.fine('Avatar node created and configured successfully.');
           _configuredAvatarNodes.add(cacheKey);
           return;
         }
@@ -1080,6 +1283,7 @@ mixin AvatarService on XmppBase, MucService {
             .configureNode(host, node, config)
             .timeout(_avatarPublishTimeout);
         if (!confirmed.isType<mox.PubSubError>()) {
+          _avatarLog.fine('Avatar node configured after create.');
           _configuredAvatarNodes.add(cacheKey);
         }
       } on Exception {
@@ -1088,6 +1292,7 @@ mixin AvatarService on XmppBase, MucService {
     }
 
     Future<void> publishData() async {
+      _avatarLog.fine('Publishing avatar data payload.');
       await ensureNodeConfigured(
         node: mox.userAvatarDataXmlns,
         config: dataNodeConfig,
@@ -1104,11 +1309,17 @@ mixin AvatarService on XmppBase, MucService {
           )
           .timeout(_avatarPublishTimeout);
       if (result.isType<mox.PubSubError>()) {
+        _avatarLog.fine(
+          'Avatar data publish failed with '
+          '${result.get<mox.PubSubError>().runtimeType}.',
+        );
         throw XmppAvatarException(result.get<mox.PubSubError>());
       }
+      _avatarLog.fine('Avatar data publish succeeded.');
     }
 
     Future<void> publishMetadata() async {
+      _avatarLog.fine('Publishing avatar metadata payload.');
       await ensureNodeConfigured(
         node: mox.userAvatarMetadataXmlns,
         config: metadataNodeConfig,
@@ -1125,8 +1336,13 @@ mixin AvatarService on XmppBase, MucService {
           )
           .timeout(_avatarPublishTimeout);
       if (result.isType<mox.PubSubError>()) {
+        _avatarLog.fine(
+          'Avatar metadata publish failed with '
+          '${result.get<mox.PubSubError>().runtimeType}.',
+        );
         throw XmppAvatarException(result.get<mox.PubSubError>());
       }
+      _avatarLog.fine('Avatar metadata publish succeeded.');
     }
 
     bool isRetriableVerificationError(mox.PubSubError error) =>
@@ -1142,6 +1358,9 @@ mixin AvatarService on XmppBase, MucService {
       for (var attempt = 0;
           attempt < _avatarPublishVerificationAttempts;
           attempt++) {
+        _avatarLog.fine(
+          'Verifying avatar publish. node=$node attempt=${attempt + 1}.',
+        );
         final result = await pubsub
             .getItem(host, node, payload.hash)
             .timeout(_avatarPublishVerificationTimeout);
@@ -1149,6 +1368,10 @@ mixin AvatarService on XmppBase, MucService {
           final error = result.get<mox.PubSubError>();
           final shouldRetry = isRetriableVerificationError(error) &&
               attempt + 1 < _avatarPublishVerificationAttempts;
+          _avatarLog.fine(
+            'Avatar verify failed with ${error.runtimeType}; '
+            'retry=$shouldRetry.',
+          );
           if (!shouldRetry) {
             return false;
           }
@@ -1164,9 +1387,11 @@ mixin AvatarService on XmppBase, MucService {
             (storedPayload.innerText().trim().isNotEmpty ||
                 storedPayload.findTags(avatarMetadataInfoTag).isNotEmpty);
         if (isValid) {
+          _avatarLog.fine('Avatar verify succeeded.');
           return true;
         }
         if (attempt + 1 >= _avatarPublishVerificationAttempts) {
+          _avatarLog.fine('Avatar verify failed: payload invalid.');
           return false;
         }
         await Future<void>.delayed(_avatarPublishVerificationDelay);
@@ -1237,6 +1462,7 @@ mixin AvatarService on XmppBase, MucService {
     await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
     final vCardManager = _connection.getManager<mox.VCardManager>();
     vCardManager?.setLastHash(targetJid, payload.hash);
+    _avatarLog.fine('Avatar publish stored locally.');
 
     return AvatarUploadResult(path: path, hash: payload.hash);
   }
