@@ -2316,7 +2316,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ),
         );
       }
-    } on XmppMessageException catch (_) {
+    } on XmppMessageException catch (error, stackTrace) {
+      _log.safeWarning(_sendMessageFailedLogMessage, error, stackTrace);
       await _saveXmppDraft(
         chat: chat,
         recipients: xmppRecipients,

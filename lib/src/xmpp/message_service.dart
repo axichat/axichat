@@ -2624,6 +2624,19 @@ mixin MessageService
         extraExtensions: resolvedExtensions,
         chatType: chatType,
       );
+      if (kDebugMode) {
+        final to = stanza.to;
+        final toHasResource = to.resource.trim().isNotEmpty;
+        final toIsBare = to.toBare() == to;
+        final stanzaType = stanza.type ?? 'chat';
+        _log.fine(
+          'Outbound message stanza: '
+          'chatType=${chatType.name} '
+          'type=$stanzaType '
+          'toBare=$toIsBare '
+          'toHasResource=$toHasResource',
+        );
+      }
       _trackOutboundMessageSummary(
         stanza: stanza,
         chatType: chatType,
@@ -2834,6 +2847,19 @@ mixin MessageService
         extraExtensions: extraExtensions,
         chatType: chatType,
       );
+      if (kDebugMode) {
+        final to = stanza.to;
+        final toHasResource = to.resource.trim().isNotEmpty;
+        final toIsBare = to.toBare() == to;
+        final stanzaType = stanza.type ?? 'chat';
+        _log.fine(
+          'Outbound attachment stanza: '
+          'chatType=${chatType.name} '
+          'type=$stanzaType '
+          'toBare=$toIsBare '
+          'toHasResource=$toHasResource',
+        );
+      }
       _trackOutboundMessageSummary(
         stanza: stanza,
         chatType: chatType,

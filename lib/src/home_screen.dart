@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:animations/animations.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';

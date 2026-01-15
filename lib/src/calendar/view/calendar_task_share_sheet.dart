@@ -133,14 +133,14 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       header: header,
       bodyPadding: EdgeInsets.zero,
       children: [
-        Padding(
+        const Padding(
           padding: _taskShareContentPadding,
-          child: const _TaskShareSectionLabel(text: _taskShareTargetLabel),
+          child: _TaskShareSectionLabel(text: _taskShareTargetLabel),
         ),
         if (widget.availableChats.isEmpty)
-          Padding(
+          const Padding(
             padding: _taskShareContentPadding,
-            child: const _TaskShareEmptyMessage(
+            child: _TaskShareEmptyMessage(
               message: _taskShareMissingChatsMessage,
             ),
           )
@@ -157,9 +157,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             onRecipientToggled: _handleRecipientToggled,
           ),
         const SizedBox(height: _taskShareSectionSpacing),
-        Padding(
+        const Padding(
           padding: _taskShareContentPadding,
-          child: const _TaskShareSectionLabel(text: _taskShareEditAccessLabel),
+          child: _TaskShareSectionLabel(text: _taskShareEditAccessLabel),
         ),
         Padding(
           padding: _taskShareContentPadding,
