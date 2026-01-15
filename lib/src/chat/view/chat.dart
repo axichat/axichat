@@ -6188,7 +6188,8 @@ class _ChatState extends State<Chat> {
                                                                         task:
                                                                             calendarTaskIcs,
                                                                         readOnly:
-                                                                            calendarTaskIcsReadOnly,
+                                                                            calendarTaskIcsReadOnly &&
+                                                                                !self,
                                                                         requireImportConfirmation:
                                                                             !self,
                                                                         footerDetails:

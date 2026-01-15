@@ -233,7 +233,8 @@ void _scheduleOptimizedCleanup(String path) {
   }
   fireAndForget(
     () async {
-      await Future<void>.delayed(EmailAttachmentOptimizer._optimizedCleanupDelay);
+      await Future<void>.delayed(
+          EmailAttachmentOptimizer._optimizedCleanupDelay);
       try {
         if (await file.exists()) {
           await file.delete();

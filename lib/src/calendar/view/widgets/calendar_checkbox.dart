@@ -32,6 +32,11 @@ class CalendarCheckbox extends StatelessWidget {
     final double clampedVisualSize = visualSize.clamp(16, 22);
     final double visualScale = (clampedVisualSize / baseSize) - 1;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1.5);
+    final fillColor = MaterialStateProperty.resolveWith<Color?>(
+      (states) => states.contains(MaterialState.selected)
+          ? activeColor
+          : Colors.transparent,
+    );
 
     return MouseRegion(
       cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
@@ -49,11 +54,12 @@ class CalendarCheckbox extends StatelessWidget {
             vertical: visualScale,
           ),
           activeColor: activeColor,
+          fillColor: fillColor,
           checkColor: Colors.white,
           mouseCursor:
               isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
           side: BorderSide(
-            color: isEnabled ? borderColor : borderColor.withValues(alpha: 0.6),
+            color: borderColor,
             width: borderWidth,
           ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),

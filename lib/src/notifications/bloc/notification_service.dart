@@ -400,7 +400,8 @@ class NotificationService {
     _inAppTimers[id] = Timer(delay, () {
       _inAppTimers.remove(id);
       fireAndForget(
-        () => _fireImmediate(id: id, title: title, body: body, payload: payload),
+        () =>
+            _fireImmediate(id: id, title: title, body: body, payload: payload),
         operationName: 'NotificationService.fireImmediate',
       );
     });

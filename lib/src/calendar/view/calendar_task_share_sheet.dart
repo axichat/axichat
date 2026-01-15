@@ -4,7 +4,10 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
@@ -37,12 +40,14 @@ const String _taskShareTitle = 'Share task';
 const String _taskShareSubtitle = 'Send a task to a chat as .ics.';
 const String _taskShareTargetLabel = 'Share with';
 const String _taskShareEditAccessLabel = 'Edit access';
-const String _taskShareAllowEditsLabel = 'Allow edits';
-const String _taskShareAllowEditsHint =
-    'Let chat members update this task in the shared calendar.';
-const String _taskShareAllowEditsDisabledHint =
+const String _taskShareReadOnlyLabel = 'Read only';
+const String _taskShareReadOnlyHint =
+    'Recipients can view this task, but only you can edit it.';
+const String _taskShareEditableHint =
+    'Recipients can edit this task, and updates sync back to your calendar.';
+const String _taskShareReadOnlyDisabledHint =
     'Editing is only available for chat calendars.';
-const String _taskShareButtonLabel = 'Share';
+const String _taskShareButtonLabel = 'Send';
 const String _taskShareMissingChatsMessage = 'No chats available.';
 const String _taskShareMissingRecipientMessage = 'Select a chat to share with.';
 const String _taskShareMissingServiceMessage =
@@ -52,7 +57,7 @@ const String _taskShareDeniedMessage =
 const String _taskShareSendFailureMessage = 'Failed to share task.';
 const String _taskShareSendSuccessMessage = 'Task shared.';
 const String _taskShareIcsMimeType = 'text/calendar';
-const bool _taskShareAllowEditsDefault = false;
+const bool _taskShareReadOnlyDefault = true;
 
 Future<void> showCalendarTaskShareSheet({
   required BuildContext context,
@@ -102,7 +107,7 @@ class CalendarTaskShareSheet extends StatefulWidget {
 class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
-  bool _allowEdits = _taskShareAllowEditsDefault;
+  bool _isReadOnly = _taskShareReadOnlyDefault;
 
   @override
   void initState() {
@@ -119,11 +124,12 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   @override
   Widget build(BuildContext context) {
     final Chat? selectedChat = _selectedChat;
-    final bool allowEditsEnabled =
-        selectedChat != null && selectedChat.defaultTransport.isEmail != true;
-    final String allowEditsHint = allowEditsEnabled
-        ? _taskShareAllowEditsHint
-        : _taskShareAllowEditsDisabledHint;
+    final bool readOnlyEnabled =
+        selectedChat != null && selectedChat.supportsChatCalendar;
+    final bool isReadOnly = readOnlyEnabled ? _isReadOnly : true;
+    final String readOnlyHint = readOnlyEnabled
+        ? (isReadOnly ? _taskShareReadOnlyHint : _taskShareEditableHint)
+        : _taskShareReadOnlyDisabledHint;
     final header = AxiSheetHeader(
       title: const Text(_taskShareTitle),
       subtitle: const Text(_taskShareSubtitle),
@@ -164,10 +170,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         Padding(
           padding: _taskShareContentPadding,
           child: _TaskShareEditAccessToggle(
-            value: _allowEdits,
-            isEnabled: allowEditsEnabled,
-            hint: allowEditsHint,
-            onChanged: _handleAllowEditsChanged,
+            value: isReadOnly,
+            isEnabled: readOnlyEnabled,
+            hint: readOnlyHint,
+            onChanged: _handleReadOnlyChanged,
           ),
         ),
         const SizedBox(height: _taskShareSectionSpacing),
@@ -202,8 +208,8 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     if (!mounted) return;
     setState(() {
       _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
-      if (chat.defaultTransport.isEmail) {
-        _allowEdits = _taskShareAllowEditsDefault;
+      if (!chat.supportsChatCalendar) {
+        _isReadOnly = true;
       }
     });
     _handleSharePressed();
@@ -231,10 +237,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     });
   }
 
-  void _handleAllowEditsChanged(bool value) {
+  void _handleReadOnlyChanged(bool value) {
     if (!mounted) return;
     setState(() {
-      _allowEdits = value;
+      _isReadOnly = value;
     });
   }
 
@@ -249,8 +255,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     }
     setState(() => _isSending = true);
     final String shareText = widget.task.toShareText();
-    final bool allowEdits = _allowEdits && !selected.defaultTransport.isEmail;
-    final bool readOnly = !allowEdits;
+    final bool readOnly = _isReadOnly || !selected.supportsChatCalendar;
     final XmppService? xmppService = _maybeReadXmppService(context);
     final EmailService? emailService = RepositoryProvider.of<EmailService?>(
       context,
@@ -300,6 +305,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           calendarTaskIcsReadOnly: readOnly,
           chatType: selected.type,
         );
+        if (!readOnly) {
+          await _linkSharedTask(selected);
+        }
       }
       if (!mounted) {
         return;
@@ -314,6 +322,29 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         setState(() => _isSending = false);
       }
     }
+  }
+
+  Future<void> _linkSharedTask(Chat chat) async {
+    if (!chat.supportsChatCalendar) {
+      return;
+    }
+    final CalendarBloc? calendarBloc = _maybeReadCalendarBloc(context);
+    if (calendarBloc == null) {
+      return;
+    }
+    final String taskId = widget.task.id.trim();
+    if (taskId.isEmpty) {
+      return;
+    }
+    final String chatStorageId = chatCalendarStorageId(chat.jid);
+    final Set<String> storageIds = <String>{calendarBloc.id, chatStorageId};
+    if (storageIds.length < 2) {
+      return;
+    }
+    await CalendarLinkedTaskRegistry.instance.addLinks(
+      taskId: taskId,
+      storageIds: storageIds,
+    );
   }
 }
 
@@ -354,7 +385,7 @@ class _TaskShareEditAccessToggle extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ShadSwitch(
-          label: const Text(_taskShareAllowEditsLabel),
+          label: const Text(_taskShareReadOnlyLabel),
           value: value,
           onChanged: isEnabled ? onChanged : null,
         ),
@@ -401,7 +432,7 @@ class _TaskShareActionRow extends StatelessWidget {
               duration: baseAnimationDuration,
             ),
             if (!isBusy) ...[
-              const Icon(LucideIcons.share2, size: _taskShareHeaderIconSize),
+              const Icon(LucideIcons.send, size: _taskShareHeaderIconSize),
               const SizedBox(width: _taskShareSectionGap),
             ],
             Text(label),
@@ -451,6 +482,14 @@ Future<EmailAttachment?> _buildCalendarTaskAttachment(CalendarTask task) async {
 XmppService? _maybeReadXmppService(BuildContext context) {
   try {
     return RepositoryProvider.of<XmppService>(context, listen: false);
+  } on FlutterError {
+    return null;
+  }
+}
+
+CalendarBloc? _maybeReadCalendarBloc(BuildContext context) {
+  try {
+    return context.read<CalendarBloc>();
   } on FlutterError {
     return null;
   }

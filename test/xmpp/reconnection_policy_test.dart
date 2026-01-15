@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,11 +13,11 @@ void main() {
       });
 
       var triggered = false;
-      unawaited(
-        policy.canTriggerFailure().then((value) {
+      fireAndForget(
+        () => policy.canTriggerFailure().then((value) async {
           triggered = value;
           if (value) {
-            unawaited(policy.onFailure());
+            await policy.onFailure();
           }
         }),
       );
@@ -39,13 +38,13 @@ void main() {
         reconnectCalls++;
       });
 
-      unawaited(policy.setShouldReconnect(true));
+      fireAndForget(() => policy.setShouldReconnect(true));
       var triggered = false;
-      unawaited(
-        policy.canTriggerFailure().then((value) {
+      fireAndForget(
+        () => policy.canTriggerFailure().then((value) async {
           triggered = value;
           if (value) {
-            unawaited(policy.onFailure());
+            await policy.onFailure();
           }
         }),
       );
@@ -69,17 +68,17 @@ void main() {
         reconnectCalls++;
       });
 
-      unawaited(policy.setShouldReconnect(true));
-      unawaited(
-        policy.canTriggerFailure().then((value) {
+      fireAndForget(() => policy.setShouldReconnect(true));
+      fireAndForget(
+        () => policy.canTriggerFailure().then((value) async {
           if (value) {
-            unawaited(policy.onFailure());
+            await policy.onFailure();
           }
         }),
       );
 
       async.flushMicrotasks();
-      unawaited(policy.setShouldReconnect(false));
+      fireAndForget(() => policy.setShouldReconnect(false));
 
       async.elapse(const Duration(minutes: 10));
       async.flushMicrotasks();
@@ -96,17 +95,17 @@ void main() {
         reconnectCalls++;
       });
 
-      unawaited(policy.setShouldReconnect(true));
-      unawaited(
-        policy.canTriggerFailure().then((value) {
+      fireAndForget(() => policy.setShouldReconnect(true));
+      fireAndForget(
+        () => policy.canTriggerFailure().then((value) async {
           if (value) {
-            unawaited(policy.onFailure());
+            await policy.onFailure();
           }
         }),
       );
       async.flushMicrotasks();
 
-      unawaited(policy.requestReconnect(ReconnectTrigger.userAction));
+      fireAndForget(() => policy.requestReconnect(ReconnectTrigger.userAction));
       async.flushMicrotasks();
 
       expect(reconnectCalls, 1);

@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/ui/jid_input.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -982,7 +983,7 @@ class AccessibilityActionBloc
   }
 
   void _clearMessageStream() {
-    unawaited(_messageSubscription?.cancel());
+    fireAndForget(() => _messageSubscription?.cancel());
     _messageSubscription = null;
   }
 

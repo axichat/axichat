@@ -30,8 +30,7 @@ class PriorityCheckboxTile extends StatelessWidget {
         isActive ? color.withValues(alpha: 0.08) : calendarContainerColor;
     final borderColor = isActive ? color : calendarBorderColor;
     final Color textColor = isActive ? color : calendarTitleColor;
-    final Color disabledColor = calendarSubtitleColor;
-    final bool showShadow = isActive && isEnabled;
+    final bool showShadow = isActive;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1);
     final bool? checkboxValue = isIndeterminate ? null : value;
 
@@ -60,7 +59,7 @@ class PriorityCheckboxTile extends StatelessWidget {
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isEnabled ? borderColor : calendarBorderColor,
+                  color: borderColor,
                   width: borderWidth,
                 ),
                 boxShadow: showShadow
@@ -98,7 +97,7 @@ class PriorityCheckboxTile extends StatelessWidget {
                         fontSize: 13,
                         fontWeight:
                             isActive ? FontWeight.w600 : FontWeight.w500,
-                        color: isEnabled ? textColor : disabledColor,
+                        color: textColor,
                       ),
                     ),
                   ),
