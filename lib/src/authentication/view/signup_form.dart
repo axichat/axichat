@@ -13,6 +13,7 @@ import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/xml_safety.dart';
@@ -981,10 +982,12 @@ class _SignupFormState extends State<SignupForm>
                                         setState(() {
                                           rememberMe = value;
                                         });
-                                        unawaited(
-                                          context
+                                        fireAndForget(
+                                          () => context
                                               .read<AuthenticationCubit>()
                                               .persistRememberMeChoice(value),
+                                          operationName:
+                                              'SignupForm.persistRememberMeChoice',
                                         );
                                       },
                                     ),
@@ -1418,7 +1421,10 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
             ShadButton.secondary(
               onPressed: busy || !allowBackgroundShuffle
                   ? null
-                  : () => unawaited(_handleShuffleBackground()),
+                  : () => fireAndForget(
+                        _handleShuffleBackground,
+                        operationName: 'SignupForm.shuffleBackground',
+                      ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1451,7 +1457,12 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
               ),
             ).withTapBounce(),
             ShadButton.outline(
-              onPressed: busy ? null : () => unawaited(widget.onUpload()),
+              onPressed: busy
+                  ? null
+                  : () => fireAndForget(
+                        widget.onUpload,
+                        operationName: 'SignupForm.uploadAvatar',
+                      ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

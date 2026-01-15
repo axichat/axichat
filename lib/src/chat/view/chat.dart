@@ -5658,27 +5658,6 @@ class _ChatState extends State<Chat> {
                                                             );
                                                           }
 
-                                                          if (quotedModel !=
-                                                              null) {
-                                                            bubbleTextChildren
-                                                                .add(
-                                                              _QuotedMessagePreview(
-                                                                message:
-                                                                    quotedModel,
-                                                                isSelf:
-                                                                    _isQuotedMessageFromSelf(
-                                                                  quotedMessage:
-                                                                      quotedModel,
-                                                                  isGroupChat:
-                                                                      isGroupChat,
-                                                                  myOccupantId:
-                                                                      myOccupantId,
-                                                                  currentUserId:
-                                                                      currentUserId,
-                                                                ),
-                                                              ),
-                                                            );
-                                                          }
                                                           if (isError) {
                                                             bubbleTextChildren
                                                                 .addAll([
@@ -7273,13 +7252,15 @@ class _ChatState extends State<Chat> {
                                                           }
                                                           VoidCallback? onEdit;
                                                           if (canEdit) {
-                                                            onEdit =
-                                                                () => fireAndForget(
-                                                                      () => _handleEditMessage(
-                                                                        messageModel,
-                                                                      ),
-                                                                      operationName: 'ChatView.handleEditMessage',
-                                                                    );
+                                                            onEdit = () =>
+                                                                fireAndForget(
+                                                                  () =>
+                                                                      _handleEditMessage(
+                                                                    messageModel,
+                                                                  ),
+                                                                  operationName:
+                                                                      'ChatView.handleEditMessage',
+                                                                );
                                                           }
                                                           VoidCallback?
                                                               onPinToggle;
@@ -7537,6 +7518,35 @@ class _ChatState extends State<Chat> {
                                                                   .end
                                                               : CrossAxisAlignment
                                                                   .start;
+                                                          final replyPreview =
+                                                              quotedModel ==
+                                                                      null
+                                                                  ? null
+                                                                  : Align(
+                                                                      alignment:
+                                                                          messageRowAlignment,
+                                                                      child:
+                                                                          ConstrainedBox(
+                                                                        constraints:
+                                                                            bubbleConstraints,
+                                                                        child:
+                                                                            _QuotedMessagePreview(
+                                                                          message:
+                                                                              quotedModel,
+                                                                          isSelf:
+                                                                              _isQuotedMessageFromSelf(
+                                                                            quotedMessage:
+                                                                                quotedModel,
+                                                                            isGroupChat:
+                                                                                isGroupChat,
+                                                                            myOccupantId:
+                                                                                myOccupantId,
+                                                                            currentUserId:
+                                                                                currentUserId,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    );
                                                           final attachmentsAligned =
                                                               attachments;
                                                           final extraShadows =
@@ -7702,6 +7712,15 @@ class _ChatState extends State<Chat> {
                                                             crossAxisAlignment:
                                                                 messageColumnAlignment,
                                                             children: [
+                                                              if (replyPreview !=
+                                                                  null)
+                                                                replyPreview,
+                                                              if (replyPreview !=
+                                                                  null)
+                                                                const SizedBox(
+                                                                  height:
+                                                                      calendarInsetLg,
+                                                                ),
                                                               bubbleWithSlack,
                                                               if (bubbleExtraChildren
                                                                   .isNotEmpty)
@@ -12518,40 +12537,33 @@ class _QuotedMessagePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: colors.primary, width: 3)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
+    final mutedStyle = context.textTheme.small.copyWith(
+      color: colors.mutedForeground,
+    );
+    final senderLabel = isSelf ? context.l10n.chatSenderYou : message.senderJid;
+    return Builder(
+      builder: (context) {
+        final split = ChatSubjectCodec.splitXmppBody(message.body);
+        final previewText = split.body.isNotEmpty ? split.body : split.subject;
+        final resolvedPreview = previewText ?? context.l10n.chatQuotedNoContent;
+        final quotedPreview = '"$resolvedPreview"';
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 2,
+          spacing: calendarInsetSm,
           children: [
             Text(
-              isSelf ? context.l10n.chatSenderYou : message.senderJid,
-              style: context.textTheme.small.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              '${context.l10n.chatReplyingTo} $senderLabel',
+              style: mutedStyle,
             ),
-            Builder(
-              builder: (context) {
-                final split = ChatSubjectCodec.splitXmppBody(message.body);
-                final previewText =
-                    split.body.isNotEmpty ? split.body : split.subject;
-                return Text(
-                  previewText ?? context.l10n.chatQuotedNoContent,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.small,
-                );
-              },
+            Text(
+              quotedPreview,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: mutedStyle,
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

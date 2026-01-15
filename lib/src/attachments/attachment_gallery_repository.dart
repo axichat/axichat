@@ -86,9 +86,9 @@ final class AttachmentGalleryRepository {
         );
         emit();
       }, onError: multi.addError);
-      multi.onCancel = () {
-        unawaited(attachmentSubscription.cancel());
-        unawaited(fallbackSubscription.cancel());
+      multi.onCancel = () async {
+        await attachmentSubscription.cancel();
+        await fallbackSubscription.cancel();
       };
     });
   }

@@ -8,6 +8,7 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -238,7 +239,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         ? colors.accent
         : state.backgroundColor;
     _emitIfOpen(state.copyWith(backgroundColor: initialBackground));
-    unawaited(_loadInitialAvatar());
+    fireAndForget(
+      _loadInitialAvatar,
+      operationName: 'AvatarEditorCubit.loadInitialAvatar',
+    );
   }
 
   void setCarouselEnabled(bool enabled, ShadColorScheme colors) {
@@ -448,7 +452,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void _resumeAvatarCarouselIfNeeded() {
     if (_avatarCarouselTimer != null || _isCarouselBlocked()) return;
-    unawaited(_startAvatarCarousel());
+    fireAndForget(
+      _startAvatarCarousel,
+      operationName: 'AvatarEditorCubit.startAvatarCarousel',
+    );
   }
 
   bool _isCarouselBlocked() {
@@ -473,7 +480,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       _showNextCarouselAvatar();
     }
 
-    unawaited(_prefillCarousel(targetSize: _avatarCarouselInitialBuffer));
+    fireAndForget(
+      () => _prefillCarousel(targetSize: _avatarCarouselInitialBuffer),
+      operationName: 'AvatarEditorCubit.prefillCarouselInitial',
+    );
 
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
@@ -482,7 +492,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) {
       if (_isCarouselBlocked()) return;
       _showNextCarouselAvatar();
-      unawaited(_prefillCarousel(targetSize: _avatarCarouselSustainBuffer));
+      fireAndForget(
+        () => _prefillCarousel(targetSize: _avatarCarouselSustainBuffer),
+        operationName: 'AvatarEditorCubit.prefillCarouselSustain',
+      );
     });
   }
 

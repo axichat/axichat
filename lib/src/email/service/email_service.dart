@@ -621,7 +621,8 @@ class EmailService {
       }
     }
 
-    final deltaAccountId = await _ensureEmailAccountSession(createIfMissing: true);
+    final deltaAccountId =
+        await _ensureEmailAccountSession(createIfMissing: true);
     var alreadyProvisioned =
         (await _credentialStore.read(key: provisionedKey)) ==
             _credentialTrueValue;
@@ -810,7 +811,8 @@ class EmailService {
     return account;
   }
 
-  Future<int> _ensureEmailAccountSession({required bool createIfMissing}) async {
+  Future<int> _ensureEmailAccountSession(
+      {required bool createIfMissing}) async {
     final existingAccountIds = await _transport.accountIds();
     if (existingAccountIds.isNotEmpty) {
       final preferredAccountId = _transport.activeAccountId;
@@ -832,7 +834,7 @@ class EmailService {
       return deltaAccountId;
     }
 
-    final deltaAccountId = deltaAccountIdLegacy;
+    const deltaAccountId = deltaAccountIdLegacy;
     await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
     return deltaAccountId;
@@ -851,7 +853,8 @@ class EmailService {
     if (address == null || address.isEmpty) {
       throw StateError('No email address found.');
     }
-    final deltaAccountId = await _ensureEmailAccountSession(createIfMissing: false);
+    final deltaAccountId =
+        await _ensureEmailAccountSession(createIfMissing: false);
     await _credentialStore.write(
       key: _passwordKeyForScope(scope),
       value: password,
@@ -3378,7 +3381,8 @@ class EmailService {
     if (resolved.isEmpty) {
       throw StateError(_emailAccountMissingAddressError);
     }
-    final deltaAccountId = await _ensureEmailAccountSession(createIfMissing: false);
+    final deltaAccountId =
+        await _ensureEmailAccountSession(createIfMissing: false);
     await _hydrateAccountAddress(
       address: resolved,
       deltaAccountId: deltaAccountId,

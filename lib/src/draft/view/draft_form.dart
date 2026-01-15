@@ -17,6 +17,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -110,7 +111,10 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_dependenciesInitialized && _shouldCleanupSeedAttachments) {
-      unawaited(_cleanupSeedAttachmentMetadata());
+      fireAndForget(
+        _cleanupSeedAttachmentMetadata,
+        operationName: 'DraftForm.cleanupSeedAttachmentMetadata',
+      );
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -161,7 +165,10 @@ class _DraftFormState extends State<DraftForm> {
     _messageService = context.read<MessageService>();
     _recipients = _initialRecipients();
     if (widget.attachmentMetadataIds.isNotEmpty) {
-      unawaited(_hydrateAttachments());
+      fireAndForget(
+        _hydrateAttachments,
+        operationName: 'DraftForm.hydrateAttachments',
+      );
     }
     _dependenciesInitialized = true;
   }
@@ -1059,7 +1066,10 @@ class _DraftFormState extends State<DraftForm> {
       context,
     )?.show(FeedbackToast.success(title: l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
-      unawaited(_cleanupSeedAttachmentMetadata());
+      fireAndForget(
+        _cleanupSeedAttachmentMetadata,
+        operationName: 'DraftForm.cleanupSeedAttachmentMetadata',
+      );
     }
     final onClosed = widget.onClosed;
     if (onClosed != null) {

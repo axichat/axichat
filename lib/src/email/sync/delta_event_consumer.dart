@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
@@ -1045,7 +1046,10 @@ class DeltaEventConsumer {
         msg.hasFile &&
         resolvedChat.attachmentAutoDownload.isAllowed &&
         !isSpamQuarantined) {
-      unawaited(_context.downloadFullMessage(msg.id));
+      fireAndForget(
+        () => _context.downloadFullMessage(msg.id),
+        operationName: 'DeltaEventConsumer.downloadFullMessage',
+      );
     }
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
@@ -1243,7 +1247,10 @@ class DeltaEventConsumer {
     required int msgId,
     required int accountId,
   }) {
-    unawaited(_hydrateOriginId(msgId: msgId, accountId: accountId));
+    fireAndForget(
+      () => _hydrateOriginId(msgId: msgId, accountId: accountId),
+      operationName: 'DeltaEventConsumer.hydrateOriginId',
+    );
   }
 
   void _scheduleOriginIdHydrationIfNeeded({

@@ -955,26 +955,25 @@ mixin MucService on XmppBase, BaseStreamService {
       fireAndForget(
         () => manager
             .joinRoom(
-              mox.JID.fromString(normalizedRoom).toBare(),
-              nickname,
-              maxHistoryStanzas: resolvedHistoryStanzas,
-            )
+          mox.JID.fromString(normalizedRoom).toBare(),
+          nickname,
+          maxHistoryStanzas: resolvedHistoryStanzas,
+        )
             .then((result) {
-              if (result.isType<mox.MUCError>()) {
-                _completeJoinAttempt(
-                  normalizedRoom,
-                  error: XmppMessageException(),
-                );
-                return;
-              }
-            })
-            .catchError((Object error, StackTrace stackTrace) {
-              _completeJoinAttempt(
-                normalizedRoom,
-                error: error,
-                stackTrace: stackTrace,
-              );
-            }),
+          if (result.isType<mox.MUCError>()) {
+            _completeJoinAttempt(
+              normalizedRoom,
+              error: XmppMessageException(),
+            );
+            return;
+          }
+        }).catchError((Object error, StackTrace stackTrace) {
+          _completeJoinAttempt(
+            normalizedRoom,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }),
         operationName: 'MucService.joinRoom',
       );
       fireAndForget(

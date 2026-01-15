@@ -96,6 +96,8 @@ const _sendEmailMessageFailedLogMessage = 'Failed to send email message.';
 const _sendMessageFailedLogMessage = 'Failed to send message.';
 const _messageReactionFailedLogMessage = 'Failed to react to message.';
 const _messageForwardFailedLogMessage = 'Failed to forward message.';
+const _messageForwardSuccessToastMessage = 'Message forwarded.';
+const _messageForwardFailedToastMessage = 'Unable to forward message.';
 const _messageResendFailedLogMessage = 'Failed to resend message.';
 const _emailResendFailedLogMessage = 'Failed to resend email message.';
 const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
@@ -2648,6 +2650,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final safeForward = isEmailTarget && forwardingMode.isSafe;
     final resolvedHtmlBody = safeForward ? null : htmlBody;
     final emailService = _emailService;
+    void emitForwardSuccess() {
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(message: _messageForwardSuccessToastMessage),
+        ),
+      );
+    }
+
+    void emitForwardFailure() {
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: _messageForwardFailedToastMessage,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
+    }
+
     try {
       if (isEmailTarget &&
           emailService != null &&
@@ -2658,6 +2681,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           toChat: target,
         );
         if (forwarded) {
+          emitForwardSuccess();
           return;
         }
       }
@@ -2666,7 +2690,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final caption = plainText.isNotEmpty ? plainText : null;
         final htmlCaption = safeForward ? null : htmlBody;
         if (isEmailTarget) {
-          if (emailService == null) return;
+          if (emailService == null) {
+            emitForwardFailure();
+            return;
+          }
           final bool shouldBundle =
               attachments.length >= _emailAttachmentBundleMinimumCount;
           final bundled = await _bundleEmailAttachmentList(
@@ -2687,6 +2714,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           if (shouldBundle && bundled.isNotEmpty) {
             EmailAttachmentBundler.scheduleCleanup(bundled.first);
           }
+          emitForwardSuccess();
           return;
         }
         final attachmentGroupId = attachments.length > 1 ? uuid.v4() : null;
@@ -2706,11 +2734,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             attachmentOrder: index,
           );
         }
+        emitForwardSuccess();
         return;
       }
-      if (plainText.isEmpty && resolvedHtmlBody == null) return;
+      if (plainText.isEmpty && resolvedHtmlBody == null) {
+        emitForwardFailure();
+        return;
+      }
       if (isEmailTarget) {
-        if (emailService == null) return;
+        if (emailService == null) {
+          emitForwardFailure();
+          return;
+        }
         await emailService.sendMessage(
           chat: target,
           body: plainText,
@@ -2725,8 +2760,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chatType: target.type,
         );
       }
+      emitForwardSuccess();
     } on Exception catch (error, stackTrace) {
       _log.warning(_messageForwardFailedLogMessage, error, stackTrace);
+      emitForwardFailure();
     }
   }
 
