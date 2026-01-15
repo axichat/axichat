@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -39,6 +40,22 @@ const String _queryKeyCategoryShort = 'cat';
 const String _queryKeyTag = 'tag';
 const String _queryKeyTags = 'tags';
 
+String? _resolveCriticalPathName({
+  required BaseCalendarBloc bloc,
+  required String pathId,
+  required String fallbackName,
+}) {
+  final String? name = bloc.state.model.criticalPaths[pathId]?.name;
+  final String trimmedFallback = fallbackName.trim();
+  if (name != null && name.trim().isNotEmpty) {
+    return name;
+  }
+  if (trimmedFallback.isNotEmpty) {
+    return trimmedFallback;
+  }
+  return null;
+}
+
 Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
   required BuildContext context,
   required B bloc,
@@ -63,18 +80,47 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
 
   FutureOr<void> Function(CalendarTask task) defaultHandler;
   if (resolvedTargetPath != null) {
-    defaultHandler = (CalendarTask task) {
-      resolveBloc().add(
+    defaultHandler = (CalendarTask task) async {
+      final B resolvedBloc = resolveBloc();
+      resolvedBloc.add(
         CalendarEvent.criticalPathTaskAdded(
           pathId: resolvedTargetPath.id,
           taskId: task.id,
         ),
       );
+      final Set<String> taskIds = <String>{}..add(task.baseId);
+      final bool added = await waitForCriticalPathTasks(
+        bloc: resolvedBloc,
+        pathId: resolvedTargetPath.id,
+        taskIds: taskIds,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (!added) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
+        );
+        return;
+      }
+      final String? resolvedName = _resolveCriticalPathName(
+        bloc: resolvedBloc,
+        pathId: resolvedTargetPath.id,
+        fallbackName: resolvedTargetPath.name,
+      );
+      if (resolvedName == null) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
+        );
+        return;
+      }
       FeedbackSystem.showSuccess(
         context,
         context.l10n.calendarCriticalPathAddSuccess(
           _taskSearchSingleCount,
-          resolvedTargetPath.name,
+          resolvedName,
         ),
       );
     };

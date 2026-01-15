@@ -53,6 +53,7 @@ mixin AvatarService on XmppBase, MucService {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
+  final Set<String> _pubSubAvatarJids = {};
   final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
@@ -175,6 +176,7 @@ mixin AvatarService on XmppBase, MucService {
           'metadataCount=${event.metadata.length}.',
         );
         if (event.metadata.isEmpty) {
+          _unmarkPubSubAvatarPreferred(bareJid);
           _avatarLog.fine(
             'User avatar metadata empty; clearing avatar. isSelf=$isSelf.',
           );
@@ -185,6 +187,7 @@ mixin AvatarService on XmppBase, MucService {
           return;
         }
 
+        _markPubSubAvatarPreferred(bareJid);
         await _refreshAvatarForJid(bareJid, metadata: event.metadata);
       })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
@@ -207,6 +210,13 @@ mixin AvatarService on XmppBase, MucService {
           'hasHash=${event.hash.isNotEmpty}.',
         );
         if (event.hash.isEmpty) {
+          if (_isPubSubAvatarPreferred(bareJid)) {
+            _avatarLog.fine(
+              'VCard avatar hash empty; keeping PubSub avatar. '
+              'isSelf=$isSelf.',
+            );
+            return;
+          }
           _avatarLog.fine(
             'VCard avatar hash empty; clearing avatar. isSelf=$isSelf.',
           );
@@ -235,6 +245,7 @@ mixin AvatarService on XmppBase, MucService {
         _avatarLog.fine(
           'Avatar pubsub retraction matched stored hash; clearing avatar.',
         );
+        _unmarkPubSubAvatarPreferred(bareJid);
         await _clearAvatarForJid(
           bareJid,
           reason: _avatarClearReasonPubSubRetract,
@@ -251,6 +262,7 @@ mixin AvatarService on XmppBase, MucService {
         if (bareJid == null) return;
 
         _avatarLog.fine('Avatar pubsub node deleted; clearing avatar.');
+        _unmarkPubSubAvatarPreferred(bareJid);
         await _clearAvatarForJid(
           bareJid,
           reason: _avatarClearReasonPubSubNodeDeleted,
@@ -267,6 +279,7 @@ mixin AvatarService on XmppBase, MucService {
         if (bareJid == null) return;
 
         _avatarLog.fine('Avatar pubsub node purged; clearing avatar.');
+        _unmarkPubSubAvatarPreferred(bareJid);
         await _clearAvatarForJid(
           bareJid,
           reason: _avatarClearReasonPubSubNodePurged,
@@ -687,6 +700,9 @@ mixin AvatarService on XmppBase, MucService {
           case final _AvatarMetadataLoaded loaded:
             selectedMetadata = loaded.metadata;
           case _AvatarMetadataMissing():
+            if (!isSelf) {
+              _unmarkPubSubAvatarPreferred(bareJid);
+            }
             _avatarLog.fine(
               'Avatar metadata missing; requesting vCard fallback.',
             );
@@ -710,6 +726,7 @@ mixin AvatarService on XmppBase, MucService {
         _avatarLog.fine('No usable avatar metadata selected; skipping.');
         return;
       }
+      _markPubSubAvatarPreferred(bareJid);
       if (!force &&
           existingHash != null &&
           existingHash == selectedMetadata.id) {
@@ -764,6 +781,10 @@ mixin AvatarService on XmppBase, MucService {
       return;
     }
     if (hash.isEmpty) {
+      if (_isPubSubAvatarPreferred(bareJid)) {
+        _avatarLog.fine('VCard hash empty; keeping PubSub avatar.');
+        return;
+      }
       _avatarLog.fine('VCard hash empty; clearing avatar.');
       await _clearAvatarForJid(
         bareJid,
@@ -1097,6 +1118,7 @@ mixin AvatarService on XmppBase, MucService {
         targetJid: targetJid,
         public: public,
       );
+      _markPubSubAvatarPreferred(targetJid);
       _avatarLog.fine('Avatar publish completed.');
       return result;
     } on XmppAvatarException catch (error, stackTrace) {
@@ -1664,6 +1686,24 @@ mixin AvatarService on XmppBase, MucService {
     if (!p.isAbsolute(normalizedFile)) return false;
     final normalizedRoot = p.normalize(cacheDirectory.path);
     return p.isWithin(normalizedRoot, normalizedFile);
+  }
+
+  void _markPubSubAvatarPreferred(String bareJid) {
+    final normalized = bareJid.trim();
+    if (normalized.isEmpty) return;
+    _pubSubAvatarJids.add(normalized);
+  }
+
+  void _unmarkPubSubAvatarPreferred(String bareJid) {
+    final normalized = bareJid.trim();
+    if (normalized.isEmpty) return;
+    _pubSubAvatarJids.remove(normalized);
+  }
+
+  bool _isPubSubAvatarPreferred(String bareJid) {
+    final normalized = bareJid.trim();
+    if (normalized.isEmpty) return false;
+    return _pubSubAvatarJids.contains(normalized);
   }
 
   String? _avatarSafeBareJid(String? jid) {

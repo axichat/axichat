@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
@@ -9,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_critical_path_copy_sheet.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
@@ -65,19 +67,37 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     }
 
     final CalendarModel importModel = _buildImportModel();
+    final CalendarCriticalPath? importPath =
+        importModel.criticalPaths[path.id];
+    final Set<String> taskIds = <String>{}
+      ..addAll(importPath?.taskIds ?? const <String>[]);
+    bool didCopy = false;
     if (decision.addToPersonal &&
         _maybeReadPersonalCalendarBloc(context) != null) {
-      context.read<CalendarBloc>().add(
-            CalendarEvent.modelImported(model: importModel),
-          );
+      final bool copied = await _copyCriticalPathToCalendar(
+        bloc: context.read<CalendarBloc>(),
+        model: importModel,
+        pathId: path.id,
+        taskIds: taskIds,
+      );
+      didCopy = didCopy || copied;
     }
     if (decision.addToChat && _maybeReadChatCalendarBloc(context) != null) {
-      context.read<ChatCalendarBloc>().add(
-            CalendarEvent.modelImported(model: importModel),
-          );
+      final bool copied = await _copyCriticalPathToCalendar(
+        bloc: context.read<ChatCalendarBloc>(),
+        model: importModel,
+        pathId: path.id,
+        taskIds: taskIds,
+      );
+      didCopy = didCopy || copied;
     }
 
-    FeedbackSystem.showSuccess(context, _criticalPathCopySuccessMessage);
+    if (!context.mounted) {
+      return;
+    }
+    if (didCopy) {
+      FeedbackSystem.showSuccess(context, _criticalPathCopySuccessMessage);
+    }
   }
 
   CalendarModel _buildImportModel() {
@@ -94,6 +114,20 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final CalendarModel withTasks =
         taskMap.isEmpty ? base : base.replaceTasks(taskMap);
     return withTasks.addCriticalPath(resolvedPath);
+  }
+
+  Future<bool> _copyCriticalPathToCalendar({
+    required BaseCalendarBloc bloc,
+    required CalendarModel model,
+    required String pathId,
+    required Set<String> taskIds,
+  }) async {
+    bloc.add(CalendarEvent.modelImported(model: model));
+    return waitForCriticalPathTasks(
+      bloc: bloc,
+      pathId: pathId,
+      taskIds: taskIds,
+    );
   }
 
   CalendarBloc? _maybeReadPersonalCalendarBloc(BuildContext context) {

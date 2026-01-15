@@ -327,13 +327,11 @@ class ActionFeedback extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
-    this.feedbackMessage,
     this.hapticFeedback = true,
   });
 
   final Widget child;
   final VoidCallback? onTap;
-  final String? feedbackMessage;
   final bool hapticFeedback;
 
   @override
@@ -376,10 +374,6 @@ class _ActionFeedbackState extends State<ActionFeedback>
     });
 
     widget.onTap?.call();
-
-    if (widget.feedbackMessage != null) {
-      FeedbackSystem.showSuccess(context, widget.feedbackMessage!);
-    }
   }
 
   @override

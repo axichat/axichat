@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -28,6 +29,7 @@ const bool _defaultTransferMenuUsePrimary = false;
 const String _noCalendarDataImportMessage =
     'No calendar data detected in the selected file.';
 const String _calendarImportSuccessMessage = 'Imported calendar data.';
+const String _calendarImportFailureMessage = 'Import failed to apply changes.';
 const String _calendarImportWarningTitle = 'Import calendar';
 const String _calendarImportWarningMessage =
     'Importing will merge data and override matching items in your current '
@@ -183,9 +185,21 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
           return;
         }
         if (!mounted) return;
-        context.read<CalendarBloc>().add(
-              CalendarEvent.modelImported(model: importedModel),
-            );
+        final CalendarBloc calendarBloc = context.read<CalendarBloc>();
+        final CalendarModel mergedModel =
+            calendarBloc.state.model.mergeWith(importedModel);
+        calendarBloc.add(CalendarEvent.modelImported(model: importedModel));
+        final bool imported = await waitForCalendarChecksum(
+          bloc: calendarBloc,
+          checksum: mergedModel.checksum,
+        );
+        if (!mounted) {
+          return;
+        }
+        if (!imported) {
+          FeedbackSystem.showError(context, _calendarImportFailureMessage);
+          return;
+        }
         FeedbackSystem.showSuccess(context, _calendarImportSuccessMessage);
         return;
       }
@@ -199,12 +213,25 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         return;
       }
       if (!mounted) return;
-      context.read<CalendarBloc>().add(
-            CalendarEvent.tasksImported(tasks: tasks),
-          );
+      final CalendarBloc calendarBloc = context.read<CalendarBloc>();
+      final Set<String> taskIds = <String>{}
+        ..addAll(tasks.map((task) => task.id));
+      calendarBloc.add(CalendarEvent.tasksImported(tasks: tasks));
+      final bool imported = await waitForTasksInCalendar(
+        bloc: calendarBloc,
+        taskIds: taskIds,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!imported) {
+        FeedbackSystem.showError(context, _calendarImportFailureMessage);
+        return;
+      }
+      final String taskLabel = tasks.length == 1 ? '' : 's';
       FeedbackSystem.showSuccess(
         context,
-        'Imported ${tasks.length} task${tasks.length == 1 ? '' : 's'}.',
+        'Imported ${tasks.length} task$taskLabel.',
       );
     } catch (error) {
       if (!mounted) return;

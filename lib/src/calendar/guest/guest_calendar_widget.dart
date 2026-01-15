@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
@@ -344,6 +345,8 @@ class _GuestTransferMenu extends StatefulWidget {
 }
 
 const String _guestCalendarImportSuccessMessage = 'Imported calendar data.';
+const String _guestCalendarImportFailureMessage =
+    'Import failed to apply changes.';
 const String _guestCalendarNoDataImportMessage =
     'No calendar data detected in the selected file.';
 const String _guestCalendarImportWarningTitle = 'Import calendar';
@@ -456,9 +459,22 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
           return;
         }
         if (!mounted) return;
-        context.read<GuestCalendarBloc>().add(
-              CalendarEvent.modelImported(model: importedModel),
-            );
+        final GuestCalendarBloc calendarBloc =
+            context.read<GuestCalendarBloc>();
+        final CalendarModel mergedModel =
+            calendarBloc.state.model.mergeWith(importedModel);
+        calendarBloc.add(CalendarEvent.modelImported(model: importedModel));
+        final bool imported = await waitForCalendarChecksum(
+          bloc: calendarBloc,
+          checksum: mergedModel.checksum,
+        );
+        if (!mounted) {
+          return;
+        }
+        if (!imported) {
+          FeedbackSystem.showError(context, _guestCalendarImportFailureMessage);
+          return;
+        }
         FeedbackSystem.showSuccess(context, _guestCalendarImportSuccessMessage);
         return;
       }
@@ -472,12 +488,26 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!mounted) return;
-      context.read<GuestCalendarBloc>().add(
-            CalendarEvent.tasksImported(tasks: tasks),
-          );
+      final GuestCalendarBloc calendarBloc =
+          context.read<GuestCalendarBloc>();
+      final Set<String> taskIds = <String>{}
+        ..addAll(tasks.map((task) => task.id));
+      calendarBloc.add(CalendarEvent.tasksImported(tasks: tasks));
+      final bool imported = await waitForTasksInCalendar(
+        bloc: calendarBloc,
+        taskIds: taskIds,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!imported) {
+        FeedbackSystem.showError(context, _guestCalendarImportFailureMessage);
+        return;
+      }
+      final String taskLabel = tasks.length == 1 ? '' : 's';
       FeedbackSystem.showSuccess(
         context,
-        'Imported ${tasks.length} task${tasks.length == 1 ? '' : 's'}.',
+        'Imported ${tasks.length} task$taskLabel.',
       );
     } catch (error) {
       if (!mounted) return;
