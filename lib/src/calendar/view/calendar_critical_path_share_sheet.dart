@@ -7,8 +7,11 @@ import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
+import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -18,15 +21,11 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _criticalPathShareSectionSpacing = 16.0;
 const double _criticalPathShareTileGap = 12.0;
-const double _criticalPathShareAvatarSize = 36.0;
 const double _criticalPathShareHeaderIconSize = 18.0;
 const double _criticalPathShareProgressStrokeWidth = 2.0;
 const double _criticalPathShareLabelLetterSpacing = 0.4;
-
-const EdgeInsets _criticalPathShareChatTilePadding = EdgeInsets.symmetric(
-  horizontal: 16,
-  vertical: 8,
-);
+const EdgeInsets _criticalPathShareContentPadding =
+    EdgeInsets.symmetric(horizontal: 16);
 
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
@@ -48,6 +47,7 @@ Future<void> showCalendarCriticalPathShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarCriticalPathShareSheet(
       path: path,
       tasks: tasks,
@@ -87,14 +87,19 @@ class _CalendarCriticalPathShareSheetState
     extends State<CalendarCriticalPathShareSheet> {
   static const CalendarFragmentFormatter _fragmentFormatter =
       CalendarFragmentFormatter();
-  Chat? _selectedChat;
+  List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedChat = widget.initialChat ??
+    final Chat? initialChat = widget.initialChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
+    if (initialChat != null) {
+      _recipients = <ComposerRecipient>[
+        ComposerRecipient(target: FanOutTarget.chat(initialChat)),
+      ];
+    }
   }
 
   @override
@@ -106,34 +111,90 @@ class _CalendarCriticalPathShareSheetState
     );
     return AxiSheetScaffold.scroll(
       header: header,
+      bodyPadding: EdgeInsets.zero,
       children: [
-        _CriticalPathShareSectionLabel(
-          text: context.l10n.calendarCriticalPathShareTargetLabel,
+        Padding(
+          padding: _criticalPathShareContentPadding,
+          child: _CriticalPathShareSectionLabel(
+            text: context.l10n.calendarCriticalPathShareTargetLabel,
+          ),
         ),
         if (widget.availableChats.isEmpty)
-          _CriticalPathShareEmptyMessage(
-            message: context.l10n.calendarCriticalPathShareMissingChats,
+          Padding(
+            padding: _criticalPathShareContentPadding,
+            child: _CriticalPathShareEmptyMessage(
+              message: context.l10n.calendarCriticalPathShareMissingChats,
+            ),
           )
         else
-          _CriticalPathShareChatPicker(
-            chats: widget.availableChats,
-            selected: _selectedChat,
-            onSelected: _handleChatSelected,
+          RecipientChipsBar(
+            recipients: _recipients,
+            availableChats: widget.availableChats,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: false,
+            showSuggestionsWhenEmpty: true,
+            onRecipientAdded: _handleRecipientAdded,
+            onRecipientRemoved: _handleRecipientRemoved,
+            onRecipientToggled: _handleRecipientToggled,
           ),
         const SizedBox(height: _criticalPathShareSectionSpacing),
-        _CriticalPathShareActionRow(
-          isBusy: _isSending,
-          onPressed: _handleSharePressed,
-          label: context.l10n.calendarCriticalPathShareButtonLabel,
+        Padding(
+          padding: _criticalPathShareContentPadding,
+          child: _CriticalPathShareActionRow(
+            isBusy: _isSending,
+            onPressed: _handleSharePressed,
+            label: context.l10n.calendarCriticalPathShareButtonLabel,
+          ),
         ),
       ],
     );
   }
 
-  void _handleChatSelected(Chat chat) {
+  Chat? get _selectedChat {
+    for (final recipient in _recipients) {
+      final chat = recipient.target.chat;
+      if (recipient.included && chat != null) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  void _handleRecipientAdded(FanOutTarget target) {
+    final Chat? chat = target.chat;
+    if (chat == null) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.calendarCriticalPathShareMissingRecipient,
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() {
-      _selectedChat = chat;
+      _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
+    });
+  }
+
+  void _handleRecipientRemoved(String key) {
+    if (!mounted) return;
+    setState(() {
+      _recipients = _recipients
+          .where((recipient) => recipient.key != key)
+          .toList(growable: false);
+    });
+  }
+
+  void _handleRecipientToggled(String key) {
+    if (!mounted) return;
+    setState(() {
+      _recipients = _recipients
+          .map(
+            (recipient) => recipient.key == key
+                ? recipient.copyWith(included: !recipient.included)
+                : recipient,
+          )
+          .toList(growable: false);
     });
   }
 
@@ -225,42 +286,6 @@ class _CriticalPathShareSectionLabel extends StatelessWidget {
   }
 }
 
-class _CriticalPathShareChatPicker extends StatelessWidget {
-  const _CriticalPathShareChatPicker({
-    required this.chats,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<Chat> chats;
-  final Chat? selected;
-  final ValueChanged<Chat> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final chat in chats) ...[
-          AxiListTile(
-            leading: AxiAvatar(
-              jid: chat.jid,
-              size: _criticalPathShareAvatarSize,
-              avatarPath: chat.avatarPath,
-              shape: AxiAvatarShape.circle,
-            ),
-            title: chat.displayName,
-            subtitle: chat.type.label(context),
-            selected: selected?.jid == chat.jid,
-            onTap: () => onSelected(chat),
-            contentPadding: _criticalPathShareChatTilePadding,
-          ),
-          const SizedBox(height: _criticalPathShareTileGap),
-        ],
-      ],
-    );
-  }
-}
-
 class _CriticalPathShareActionRow extends StatelessWidget {
   const _CriticalPathShareActionRow({
     required this.isBusy,
@@ -336,13 +361,4 @@ XmppService? _maybeReadXmppService(BuildContext context) {
   } on FlutterError {
     return null;
   }
-}
-
-extension _ChatTypeLabelX on ChatType {
-  String label(BuildContext context) => switch (this) {
-        ChatType.chat => context.l10n.calendarCriticalPathShareChatTypeDirect,
-        ChatType.groupChat =>
-          context.l10n.calendarCriticalPathShareChatTypeGroup,
-        ChatType.note => context.l10n.calendarCriticalPathShareChatTypeNote,
-      };
 }

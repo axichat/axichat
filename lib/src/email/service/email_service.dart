@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -281,7 +282,12 @@ class EmailService {
       onMarkSpam: _transport.blockContact,
       onUnmarkSpam: _transport.unblockContact,
     );
-    _eventListener = (event) => unawaited(_processDeltaEvent(event));
+    _eventListener = (event) {
+      fireAndForget(
+        () => _processDeltaEvent(event),
+        operationName: 'EmailService.processDeltaEvent',
+      );
+    };
     _transport.addEventListener(_eventListener);
     _listenerAttached = true;
   }
@@ -783,7 +789,10 @@ class EmailService {
       deltaAccountId: deltaAccountId,
     );
     await start();
-    unawaited(_refreshImapCapabilities(force: true));
+    fireAndForget(
+      () => _refreshImapCapabilities(force: true),
+      operationName: 'EmailService.refreshImapCapabilities',
+    );
     await _applyPendingPushToken();
 
     final account = EmailAccount(
@@ -792,8 +801,12 @@ class EmailService {
     );
     _activeAccount = account;
     _ephemeralProvisionedScopes.add(scope);
-    unawaited(
-      _bootstrapFromCoreIfNeeded(scope: scope, databasePrefix: databasePrefix),
+    fireAndForget(
+      () => _bootstrapFromCoreIfNeeded(
+        scope: scope,
+        databasePrefix: databasePrefix,
+      ),
+      operationName: 'EmailService.bootstrapFromCoreIfNeeded',
     );
     return account;
   }
@@ -831,7 +844,10 @@ class EmailService {
       value: _credentialTrueValue,
     );
     _resetImapCapabilities();
-    unawaited(_refreshImapCapabilities(force: true));
+    fireAndForget(
+      () => _refreshImapCapabilities(force: true),
+      operationName: 'EmailService.refreshImapCapabilities',
+    );
     await _hydrateAccountAddress(
       address: address,
       deltaAccountId: deltaAccountId,
@@ -1466,15 +1482,22 @@ class EmailService {
     }
     await ensureEventChannelActive();
     await _transport.notifyNetworkAvailable();
-    unawaited(_bootstrapActiveAccountIfNeeded());
-    unawaited(
-      _runReconnectCatchUp().whenComplete(
+    fireAndForget(
+      _bootstrapActiveAccountIfNeeded,
+      operationName: 'EmailService.bootstrapActiveAccountIfNeeded',
+    );
+    fireAndForget(
+      () => _runReconnectCatchUp().whenComplete(
         () => _refreshConnectivityState(
           source: _EmailSyncSource.networkAvailable,
         ),
       ),
+      operationName: 'EmailService.reconnectCatchUp',
     );
-    unawaited(_scheduleReconnectRestartIfOffline());
+    fireAndForget(
+      _scheduleReconnectRestartIfOffline,
+      operationName: 'EmailService.reconnectRestartIfOffline',
+    );
   }
 
   Future<void> handleNetworkLost() async {
@@ -1787,7 +1810,10 @@ class EmailService {
     }
 
     _foregroundKeepaliveEnabled = true;
-    unawaited(_foregroundKeepaliveTick());
+    fireAndForget(
+      _foregroundKeepaliveTick,
+      operationName: 'EmailService.foregroundKeepaliveTick',
+    );
   }
 
   Stream<List<Message>> messageStreamForChat(
@@ -1948,20 +1974,36 @@ class EmailService {
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
-        unawaited(_bootstrapActiveAccountIfNeeded());
-        unawaited(refreshChatlistFromCore());
+        fireAndForget(
+          _bootstrapActiveAccountIfNeeded,
+          operationName: 'EmailService.bootstrapActiveAccountIfNeeded',
+        );
+        fireAndForget(
+          refreshChatlistFromCore,
+          operationName: 'EmailService.refreshChatlistFromCore',
+        );
         break;
       case DeltaEventType.connectivityChanged:
-        unawaited(
-          _refreshConnectivityState(
+        fireAndForget(
+          () => _refreshConnectivityState(
             source: _EmailSyncSource.connectivityChangedEvent,
           ),
+          operationName: 'EmailService.refreshConnectivityState',
         );
-        unawaited(_bootstrapActiveAccountIfNeeded());
-        unawaited(_runReconnectCatchUp());
+        fireAndForget(
+          _bootstrapActiveAccountIfNeeded,
+          operationName: 'EmailService.bootstrapActiveAccountIfNeeded',
+        );
+        fireAndForget(
+          _runReconnectCatchUp,
+          operationName: 'EmailService.reconnectCatchUp',
+        );
         break;
       case DeltaEventType.channelOverflow:
-        unawaited(_handleChannelOverflow());
+        fireAndForget(
+          _handleChannelOverflow,
+          operationName: 'EmailService.handleChannelOverflow',
+        );
         break;
       default:
         break;
@@ -1978,7 +2020,10 @@ class EmailService {
     );
     _notificationFlushTimer ??= Timer(_notificationFlushDelay, () {
       _notificationFlushTimer = null;
-      unawaited(_flushQueuedNotifications());
+      fireAndForget(
+        _flushQueuedNotifications,
+        operationName: 'EmailService.flushQueuedNotifications',
+      );
     });
   }
 
@@ -1992,7 +2037,10 @@ class EmailService {
     }
     _contactsSyncTimer = Timer(_contactsSyncDebounce, () {
       _contactsSyncTimer = null;
-      unawaited(syncContactsFromCore());
+      fireAndForget(
+        syncContactsFromCore,
+        operationName: 'EmailService.syncContactsFromCore',
+      );
     });
   }
 
@@ -2314,7 +2362,10 @@ class EmailService {
       if (pending == null) {
         return;
       }
-      unawaited(_confirmConnectivityDowngrade(pending));
+      fireAndForget(
+        () => _confirmConnectivityDowngrade(pending),
+        operationName: 'EmailService.confirmConnectivityDowngrade',
+      );
     });
   }
 
@@ -2414,8 +2465,11 @@ class EmailService {
     if (_syncState.status == EmailSyncStatus.ready) {
       return;
     }
-    unawaited(
-      _refreshConnectivityState(source: _EmailSyncSource.backgroundFetchDone),
+    fireAndForget(
+      () => _refreshConnectivityState(
+        source: _EmailSyncSource.backgroundFetchDone,
+      ),
+      operationName: 'EmailService.refreshConnectivityState',
     );
   }
 
@@ -2522,12 +2576,13 @@ class EmailService {
       bootstrapKey: bootstrapKey,
     );
     _bootstrapFuture = future;
-    unawaited(
-      future.whenComplete(() {
+    fireAndForget(
+      () => future.whenComplete(() {
         if (identical(_bootstrapFuture, future)) {
           _bootstrapFuture = null;
         }
       }),
+      operationName: 'EmailService.bootstrapFromCoreCleanup',
     );
   }
 
@@ -2628,7 +2683,10 @@ class EmailService {
       return;
     }
     _foregroundKeepaliveTickScheduled = true;
-    unawaited(_runForegroundKeepaliveTick());
+    fireAndForget(
+      _runForegroundKeepaliveTick,
+      operationName: 'EmailService.runForegroundKeepaliveTick',
+    );
   }
 
   Future<void> _runForegroundKeepaliveTick() async {
@@ -2672,7 +2730,12 @@ class EmailService {
     }
     final interval = _imapSyncInterval();
     _imapSyncTimer?.cancel();
-    _imapSyncTimer = Timer(interval, () => unawaited(_runImapSyncTick()));
+    _imapSyncTimer = Timer(interval, () {
+      fireAndForget(
+        _runImapSyncTick,
+        operationName: 'EmailService.runImapSyncTick',
+      );
+    });
   }
 
   Future<void> _runImapSyncTick() async {
@@ -2830,8 +2893,11 @@ class EmailService {
       _log.warning('Email transport restart failed', error, stackTrace);
     } finally {
       _reconnectRestartInFlight = false;
-      unawaited(
-        _refreshConnectivityState(source: _EmailSyncSource.reconnectRestart),
+      fireAndForget(
+        () => _refreshConnectivityState(
+          source: _EmailSyncSource.reconnectRestart,
+        ),
+        operationName: 'EmailService.refreshConnectivityState',
       );
     }
   }

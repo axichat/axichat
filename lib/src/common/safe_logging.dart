@@ -56,6 +56,16 @@ class SafeLogging {
     caseSensitive: false,
     dotAll: true,
   );
+  static final RegExp _xmlSubjectPattern = RegExp(
+    r'(<subject\b[^>]*>).*?(</subject>)',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  static final RegExp _xmlStatusPattern = RegExp(
+    r'(<status\b[^>]*>).*?(</status>)',
+    caseSensitive: false,
+    dotAll: true,
+  );
   static final RegExp _jsonPasswordPattern = RegExp(
     r'("(?:(?:old_|new_)?password|password2|passphrase)"\s*:\s*")[^"]*"',
     caseSensitive: false,
@@ -80,12 +90,17 @@ class SafeLogging {
   static final RegExp _pathTrailingPunctuationPattern = RegExp(
     r'''[)\]\},;.'"]+$''',
   );
-  static final RegExp _accountIdentifierTokenPattern = RegExp(r'\S*@\S*');
+  static final RegExp _accountIdentifierTokenPattern = RegExp(
+    r'''[^\s"'=<>]+@[^\s"'=<>]+''',
+  );
   static final RegExp _hexSecretPattern = RegExp(
     '\\b[a-fA-F0-9]{$_minSecretLength,}\\b',
   );
   static final RegExp _tokenSecretPattern = RegExp(
     '\\b[A-Za-z0-9_-]{$_minSecretLength,}\\b',
+  );
+  static final RegExp _base64SecretPattern = RegExp(
+    '[A-Za-z0-9+/=]{$_minSecretLength,}',
   );
   static const Set<String> _xmppErrorIgnoredTags = <String>{
     _xmppErrorTagName,
@@ -139,16 +154,25 @@ class SafeLogging {
   }
 
   static String _sanitizeXmppTraffic(String input) {
-    if (input.length > _xmppTrafficVerboseMaxLength) {
-      return _summarizeXmppTraffic(input);
+    final sanitized = _sanitizeContent(input);
+    if (sanitized.length > _xmppTrafficVerboseMaxLength) {
+      return _summarizeXmppTraffic(sanitized);
     }
-    return _sanitizeContent(input);
+    return sanitized;
   }
 
   static String _sanitizeContent(String input) {
     var output = input;
     output = output.replaceAllMapped(
       _xmlBodyPattern,
+      (m) => '${m.group(1)}$redactedSecret${m.group(2)}',
+    );
+    output = output.replaceAllMapped(
+      _xmlSubjectPattern,
+      (m) => '${m.group(1)}$redactedSecret${m.group(2)}',
+    );
+    output = output.replaceAllMapped(
+      _xmlStatusPattern,
       (m) => '${m.group(1)}$redactedSecret${m.group(2)}',
     );
     output = output.replaceAllMapped(
@@ -182,6 +206,7 @@ class SafeLogging {
       _accountIdentifierTokenPattern,
       (_) => redactedAccount,
     );
+    output = output.replaceAllMapped(_base64SecretPattern, _redactBase64Match);
     output = output.replaceAllMapped(_hexSecretPattern, _redactSecretMatch);
     output = output.replaceAllMapped(_tokenSecretPattern, _redactSecretMatch);
     return output;
@@ -233,6 +258,12 @@ class SafeLogging {
     if (value.length <= _minSecretPreviewLength) return redactedSecret;
     final prefix = value.substring(0, _secretPreviewPrefixLength);
     return '$redactedSecret($prefix…len=${value.length})';
+  }
+
+  static String _redactBase64Match(Match match) {
+    final value = match.group(0);
+    if (value == null || value.isEmpty) return redactedSecret;
+    return '$redactedSecret(len=${value.length})';
   }
 
   static String? _summarizeXmppError(String input) {

@@ -8672,62 +8672,41 @@ class _ChatState extends State<Chat> {
 
   Future<chat_models.Chat?> _selectForwardTarget() async {
     if (!mounted) return null;
-    final l10n = context.l10n;
     final options =
         (context.read<ChatsCubit?>()?.state.items ?? const <chat_models.Chat>[])
             .where((chat) => chat.jid != context.read<ChatBloc>().jid)
             .cast<chat_models.Chat>()
             .toList(growable: false);
     if (options.isEmpty) return null;
-    return showFadeScaleDialog<chat_models.Chat>(
+    return showAdaptiveBottomSheet<chat_models.Chat>(
       context: context,
-      builder: (context) => Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 420, minWidth: 320),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    l10n.chatForwardDialogTitle,
-                    style: context.textTheme.large.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: options.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final chat = options[index];
-                    return ListTile(
-                      title: Text(chat.displayName),
-                      subtitle: chat.lastMessage == null
-                          ? null
-                          : Text(
-                              chat.lastMessage!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: context.textTheme.muted,
-                            ),
-                      onTap: () => Navigator.of(context).pop(chat),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+      isScrollControlled: true,
+      surfacePadding: EdgeInsets.zero,
+      builder: (sheetContext) => AxiSheetScaffold.scroll(
+        header: AxiSheetHeader(
+          title: Text(sheetContext.l10n.chatForwardDialogTitle),
+          onClose: () => Navigator.of(sheetContext).maybePop(),
         ),
+        bodyPadding: EdgeInsets.zero,
+        children: [
+          RecipientChipsBar(
+            recipients: const <ComposerRecipient>[],
+            availableChats: options,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: false,
+            showSuggestionsWhenEmpty: true,
+            onRecipientAdded: (target) {
+              final chat = target.chat;
+              if (chat == null) {
+                return;
+              }
+              Navigator.of(sheetContext).pop(chat);
+            },
+            onRecipientRemoved: (_) {},
+            onRecipientToggled: (_) {},
+          ),
+        ],
       ),
     );
   }

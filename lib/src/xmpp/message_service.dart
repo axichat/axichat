@@ -2317,6 +2317,7 @@ mixin MessageService
     if (manager == null) {
       throw XmppMessageException();
     }
+    await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'pre-check');
     if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
       await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
       return;
@@ -2331,12 +2332,67 @@ mixin MessageService
       // Join failures are surfaced by the follow-up presence check.
     }
 
+    await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'post-join');
     if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
       await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
       return;
     }
 
     throw XmppMessageException();
+  }
+
+  Future<void> _logMucSendDiagnostics({
+    required String roomJid,
+    required String phase,
+  }) async {
+    if (!kDebugMode) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      _log.fine('MUC send diagnostics ($phase): not connected.');
+      return;
+    }
+    late final String normalizedRoom;
+    try {
+      normalizedRoom = _roomKey(roomJid);
+    } on Exception {
+      _log.fine('MUC send diagnostics ($phase): invalid room JID.');
+      return;
+    }
+    final roomState = roomStateFor(normalizedRoom);
+    final managerState = await _mucManagerRoomState(normalizedRoom);
+    final managerJoined = managerState?.joined == true;
+    final managerNick = managerState?.nick?.trim();
+    final managerNickPresent = managerNick?.isNotEmpty == true;
+    final needsJoin = _roomNeedsJoin(normalizedRoom);
+    final hasSelfPresence = roomState?.hasSelfPresence == true;
+    final hasSelfStatus =
+        roomState?.selfPresenceStatusCodes.contains(mucStatusSelfPresence) ==
+            true;
+    final myOccupantId = roomState?.myOccupantId;
+    final myOccupantIdPresent = myOccupantId?.trim().isNotEmpty == true;
+    final expectedOccupantIdMatches = managerNickPresent &&
+        myOccupantIdPresent &&
+        myOccupantId == '$normalizedRoom/$managerNick';
+    final occupantPresent = expectedOccupantIdMatches &&
+        roomState?.occupants[myOccupantId]?.isPresent == true;
+    final occupantCount = roomState?.occupants.length ?? 0;
+    final statusCount = roomState?.selfPresenceStatusCodes.length ?? 0;
+    _log.fine(
+      'MUC send diagnostics ($phase): '
+      'needsJoin=$needsJoin '
+      'managerState=${managerState != null} '
+      'managerJoined=$managerJoined '
+      'managerNick=$managerNickPresent '
+      'roomState=${roomState != null} '
+      'selfPresence=$hasSelfPresence '
+      'selfStatus=$hasSelfStatus '
+      'occupantId=$myOccupantIdPresent '
+      'occupantIdMatch=$expectedOccupantIdMatches '
+      'occupantPresent=$occupantPresent '
+      'occupants=$occupantCount '
+      'statusCodes=$statusCount',
+    );
   }
 
   String _resolveOutboundMessageType(String? messageType) {

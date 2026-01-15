@@ -52,6 +52,8 @@ class RecipientChipsBar extends StatefulWidget {
     this.suggestionDomains = const <String>{},
     this.horizontalPadding = 16,
     this.visibilityLabel,
+    this.allowAddressTargets = true,
+    this.showSuggestionsWhenEmpty = false,
   });
 
   final List<ComposerRecipient> recipients;
@@ -65,6 +67,8 @@ class RecipientChipsBar extends StatefulWidget {
   final Set<String> suggestionDomains;
   final double horizontalPadding;
   final String? visibilityLabel;
+  final bool allowAddressTargets;
+  final bool showSuggestionsWhenEmpty;
 
   @override
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
@@ -212,8 +216,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           ),
         )
         .toList();
-    final knownDomains = _knownDomains();
-    final knownAddresses = _knownAddresses();
+    final Set<String> knownDomains =
+        widget.allowAddressTargets ? _knownDomains() : const <String>{};
+    final Set<String> knownAddresses =
+        widget.allowAddressTargets ? _knownAddresses() : const <String>{};
     final headerPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
       vertical: calendarInsetMd,
@@ -359,6 +365,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                           tapRegionGroup: _autocompleteTapRegionGroup,
                           backgroundColor: barBackground,
                           avatarPathsByJid: avatarPathsByJid,
+                          showSuggestionsWhenEmpty:
+                              widget.showSuggestionsWhenEmpty,
                           optionsBuilder: (raw) => _autocompleteOptions(
                             raw,
                             availableAutocompleteChats,
@@ -406,6 +414,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   bool _handleManualEntry(String value) {
+    if (!widget.allowAddressTargets) {
+      return false;
+    }
     if (!_looksLikeEmail(value)) {
       return false;
     }
@@ -715,9 +726,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     Set<String> knownAddresses,
   ) {
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return const Iterable<FanOutTarget>.empty();
-    }
     final query = trimmed.toLowerCase();
     final results = <FanOutTarget>[];
     final seen = <String>{};
@@ -1103,6 +1111,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
     required this.tapRegionGroup,
     required this.backgroundColor,
     required this.avatarPathsByJid,
+    required this.showSuggestionsWhenEmpty,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
     required this.onManualEntry,
@@ -1116,6 +1125,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final Object tapRegionGroup;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
+  final bool showSuggestionsWhenEmpty;
   final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
   final bool Function(String value) onManualEntry;
@@ -1134,6 +1144,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
           tapRegionGroup: tapRegionGroup,
           backgroundColor: backgroundColor,
           avatarPathsByJid: avatarPathsByJid,
+          showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
           optionsBuilder: optionsBuilder,
           highlightedIndexListenable: highlightedIndexListenable,
           onManualEntry: onManualEntry,
@@ -1153,6 +1164,7 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
     required this.tapRegionGroup,
     required this.backgroundColor,
     required this.avatarPathsByJid,
+    required this.showSuggestionsWhenEmpty,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
     required this.onManualEntry,
@@ -1166,6 +1178,7 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
   final Object tapRegionGroup;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
+  final bool showSuggestionsWhenEmpty;
   final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
   final bool Function(String value) onManualEntry;
@@ -1194,7 +1207,7 @@ final class _RecipientAutocompleteOverlayState
 
   void _recomputeOptions() {
     final query = widget.controller.text.trim();
-    final next = query.isEmpty
+    final next = query.isEmpty && !widget.showSuggestionsWhenEmpty
         ? const <FanOutTarget>[]
         : widget.optionsBuilder(query).toList(growable: false);
     if (listEquals(_options, next)) return;
@@ -1205,7 +1218,8 @@ final class _RecipientAutocompleteOverlayState
 
   void _syncPortalVisibility() {
     final shouldShow = widget.focusNode.hasFocus &&
-        widget.controller.text.trim().isNotEmpty &&
+        (widget.controller.text.trim().isNotEmpty ||
+            widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
     if (shouldShow) {
       if (!_portalController.isShowing) {

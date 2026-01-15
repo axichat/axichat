@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -163,8 +164,10 @@ class EmailDeltaTransport implements ChatTransport {
     required DeltaContextHandle context,
     required int accountId,
   }) {
-    unawaited(
-      _hydrateAccountAddressFromCore(context: context, accountId: accountId),
+    fireAndForget(
+      () => _hydrateAccountAddressFromCore(
+          context: context, accountId: accountId),
+      operationName: 'EmailDeltaTransport.hydrateAccountAddressFromCore',
     );
   }
 
@@ -1611,8 +1614,10 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required int accountId,
   }) {
-    unawaited(
-      _hydrateOriginId(context: context, msgId: msgId, accountId: accountId),
+    fireAndForget(
+      () => _hydrateOriginId(
+          context: context, msgId: msgId, accountId: accountId),
+      operationName: 'EmailDeltaTransport.hydrateOriginId',
     );
   }
 
@@ -1621,12 +1626,13 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required FileMetadataData metadata,
   }) {
-    unawaited(
-      _hydrateAttachmentMetadata(
+    fireAndForget(
+      () => _hydrateAttachmentMetadata(
         context: context,
         msgId: msgId,
         metadata: metadata,
       ),
+      operationName: 'EmailDeltaTransport.hydrateAttachmentMetadata',
     );
   }
 

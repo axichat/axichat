@@ -453,7 +453,18 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final bool allowsAnyEdits = editMode.allowsAnyEdits;
     final bool allowsChecklistEdits = editMode.allowsChecklistEdits;
     final bool allowsFullEdits = editMode.allowsFullEdits;
-    final Widget popoverHeader = _EditTaskHeader(onClose: widget.onClose);
+    final Widget popoverHeader = ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _titleController,
+      builder: (context, value, _) {
+        final bool canSave = editMode.isChecklistOnly
+            ? true
+            : TaskTitleValidation.validate(value.text) == null;
+        return _EditTaskHeader(
+          onClose: widget.onClose,
+          onSave: allowsAnyEdits && canSave ? _handleSave : null,
+        );
+      },
+    );
     final BorderRadius radius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(8);
@@ -572,19 +583,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       enabled: allowsFullEdits,
                     ),
                     const SizedBox(height: calendarFormGap),
-                    _EditTaskDescriptionField(
-                      controller: _descriptionController,
-                      onChanged: _handleDescriptionChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    const SizedBox(height: calendarFormGap),
-                    _EditTaskLocationField(
-                      controller: _locationController,
-                      locationHelper: widget.locationHelper,
-                      onChanged: _handleLocationChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    const SizedBox(height: calendarFormGap),
                     _EditTaskPriorityRow(
                       isImportant: _isImportant,
                       isUrgent: _isUrgent,
@@ -597,6 +595,19 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                         _markTouched(_TaskEditField.priority);
                         _isUrgent = value;
                       }),
+                    ),
+                    const SizedBox(height: calendarFormGap),
+                    _EditTaskDescriptionField(
+                      controller: _descriptionController,
+                      onChanged: _handleDescriptionChanged,
+                      enabled: allowsFullEdits,
+                    ),
+                    const SizedBox(height: calendarFormGap),
+                    _EditTaskLocationField(
+                      controller: _locationController,
+                      locationHelper: widget.locationHelper,
+                      onChanged: _handleLocationChanged,
+                      enabled: allowsFullEdits,
                     ),
                     const SizedBox(height: calendarFormGap),
                     TaskChecklist(
@@ -1294,9 +1305,10 @@ class _TaskPopoverTransformBody extends StatelessWidget {
 }
 
 class _EditTaskHeader extends StatelessWidget {
-  const _EditTaskHeader({required this.onClose});
+  const _EditTaskHeader({required this.onClose, required this.onSave});
 
   final VoidCallback onClose;
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -1313,6 +1325,19 @@ class _EditTaskHeader extends StatelessWidget {
             style: calendarTitleTextStyle.copyWith(fontSize: 18),
           ),
           const Spacer(),
+          AxiIconButton(
+            iconData: Icons.check,
+            tooltip: context.l10n.commonSave,
+            onPressed: onSave,
+            color: calendarPrimaryColor,
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            iconSize: 18,
+            buttonSize: 34,
+            tapTargetSize: 40,
+            cornerRadius: 12,
+          ),
+          const SizedBox(width: calendarGutterSm),
           AxiIconButton(
             iconData: Icons.close,
             tooltip: context.l10n.calendarCloseTooltip,
@@ -1442,7 +1467,7 @@ class _EditTaskTitleField extends StatelessWidget {
         TaskTitleField(
           controller: controller,
           focusNode: focusNode,
-          autofocus: enabled,
+          autofocus: false,
           hintText: context.l10n.calendarTaskTitleHint,
           onChanged: onChanged,
           validator: validator,

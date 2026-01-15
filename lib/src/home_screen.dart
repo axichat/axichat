@@ -456,9 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     final Duration animationDuration =
                         context.watch<SettingsCubit>().animationDuration;
                     final Duration calendarTransitionDuration =
-                        animationDuration == Duration.zero
-                            ? Duration.zero
-                            : calendarViewTransitionDuration;
+                        animationDuration;
                     return SafeArea(
                       top: state is ConnectivityConnected || demoOffline,
                       child: _HomeCalendarViewTransition(
@@ -724,159 +722,11 @@ class _HomeCalendarViewTransition extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final env = EnvScope.maybeOf(context);
-    final bool isDesktop = env?.isDesktopPlatform ?? false;
-    if (isDesktop) {
-      return AxiFadeIndexedStack(
-        index: openCalendar ? _homeCalendarPageIndex : _homeChatPageIndex,
-        duration: duration,
-        curve: curve,
-        children: [chatChild, calendarChild],
-      );
-    }
-    return _HomeMobileCalendarViewTransition(
-      openCalendar: openCalendar,
+    return AxiFadeIndexedStack(
+      index: openCalendar ? _homeCalendarPageIndex : _homeChatPageIndex,
       duration: duration,
       curve: curve,
-      chatChild: chatChild,
-      calendarChild: calendarChild,
-    );
-  }
-}
-
-class _HomeMobileCalendarViewTransition extends StatefulWidget {
-  const _HomeMobileCalendarViewTransition({
-    required this.openCalendar,
-    required this.duration,
-    required this.curve,
-    required this.chatChild,
-    required this.calendarChild,
-  });
-
-  final bool openCalendar;
-  final Duration duration;
-  final Curve curve;
-  final Widget chatChild;
-  final Widget calendarChild;
-
-  @override
-  State<_HomeMobileCalendarViewTransition> createState() =>
-      _HomeMobileCalendarViewTransitionState();
-}
-
-class _HomeMobileCalendarViewTransitionState
-    extends State<_HomeMobileCalendarViewTransition>
-    with SingleTickerProviderStateMixin {
-  static const double _transitionVisibleValue = 1.0;
-  static const double _transitionHiddenValue = 0.0;
-
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: widget.duration,
-    value:
-        widget.openCalendar ? _transitionVisibleValue : _transitionHiddenValue,
-  );
-
-  late CurvedAnimation _curve = CurvedAnimation(
-    parent: _controller,
-    curve: widget.curve,
-    reverseCurve: widget.curve,
-  );
-
-  late Animation<double> _chatOpacity = Tween<double>(
-    begin: _transitionVisibleValue,
-    end: _transitionHiddenValue,
-  ).animate(_curve);
-
-  late Animation<Offset> _calendarSlide = Tween<Offset>(
-    begin: calendarViewMobileEnterOffset,
-    end: Offset.zero,
-  ).animate(_curve);
-
-  @override
-  void didUpdateWidget(covariant _HomeMobileCalendarViewTransition oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.duration != widget.duration) {
-      _controller.duration = widget.duration;
-      _syncOpenState();
-    }
-    if (oldWidget.curve != widget.curve) {
-      _curve = CurvedAnimation(
-        parent: _controller,
-        curve: widget.curve,
-        reverseCurve: widget.curve,
-      );
-      _chatOpacity = Tween<double>(
-        begin: _transitionVisibleValue,
-        end: _transitionHiddenValue,
-      ).animate(_curve);
-      _calendarSlide = Tween<Offset>(
-        begin: calendarViewMobileEnterOffset,
-        end: Offset.zero,
-      ).animate(_curve);
-    }
-    if (oldWidget.openCalendar != widget.openCalendar) {
-      _syncOpenState();
-    }
-  }
-
-  void _syncOpenState() {
-    final double target =
-        widget.openCalendar ? _transitionVisibleValue : _transitionHiddenValue;
-    if (widget.duration == Duration.zero) {
-      _controller
-        ..stop()
-        ..value = target;
-      return;
-    }
-    _controller.animateTo(
-      target,
-      duration: widget.duration,
-      curve: Curves.linear,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        TickerMode(
-          enabled: !widget.openCalendar,
-          child: IgnorePointer(
-            ignoring: widget.openCalendar,
-            child: FadeTransition(
-              opacity: _chatOpacity,
-              child: ExcludeSemantics(
-                excluding: widget.openCalendar,
-                child: widget.chatChild,
-              ),
-            ),
-          ),
-        ),
-        TickerMode(
-          enabled: widget.openCalendar,
-          child: IgnorePointer(
-            ignoring: !widget.openCalendar,
-            child: SlideTransition(
-              position: _calendarSlide,
-              child: FadeScaleTransition(
-                animation: _controller,
-                child: ExcludeSemantics(
-                  excluding: !widget.openCalendar,
-                  child: widget.calendarChild,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+      children: [chatChild, calendarChild],
     );
   }
 }

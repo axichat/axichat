@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:math' as math;
-
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
@@ -17,8 +15,11 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_free_busy_editor.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
+import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -27,22 +28,18 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
 
 const int _availabilityDefaultRangeDays = 7;
-const int _availabilityRecipientPageSize = 20;
 const int _availabilityPresetMaxCount = 5;
 const double _availabilitySheetSectionSpacing = 16.0;
 const double _availabilitySheetSectionGap = 8.0;
-const double _availabilitySheetTileGap = 12.0;
 const double _availabilitySheetHeaderIconSize = 18.0;
-const double _availabilityChatAvatarSize = 36.0;
 const double _availabilitySheetProgressStrokeWidth = 2.0;
 const double _availabilitySheetLabelLetterSpacing = 0.4;
+const EdgeInsets _availabilityRecipientsContentPadding =
+    EdgeInsets.symmetric(horizontal: 16);
 const double _availabilityEditorPanelGap = 16.0;
 const double _availabilityEditorPanelMaxWidth = 420.0;
 const bool _calendarUseRootNavigator = false;
-const double _availabilityChatTilePaddingHorizontal = 16.0;
-const double _availabilityChatTilePaddingVertical = 8.0;
 const double _availabilityPresetChipSpacing = 8.0;
-const double _availabilityRecipientSearchHeight = 48.0;
 const double _availabilityRecipientChipSpacing = 8.0;
 const double _availabilityShareEditorFallbackHeight = 360.0;
 const double _availabilityShareHeaderSpacing = 12.0;
@@ -62,9 +59,6 @@ const String _availabilitySharePresetNameMissingMessage =
 const String _availabilityShareShareLabel = 'Share';
 const String _availabilityShareSendLabel = 'Send';
 const String _availabilityShareRecipientsLabel = 'Recipients';
-const String _availabilityShareRecipientsHint = 'Search contacts';
-const String _availabilityShareRecipientsEmptyLabel =
-    'No contacts match your search.';
 const String _availabilityShareRecipientsRequiredMessage =
     'Select at least one recipient.';
 const String _availabilityShareMissingChatsMessage =
@@ -83,7 +77,6 @@ const String _availabilitySharePartialFailureMessage =
 const String _availabilityShareOwnerFallback = 'owner';
 const String _availabilitySharePresetLabel = 'Recent sheets';
 const String _availabilitySharePresetEmptyLabel = 'No recent sheets yet.';
-const String _availabilityShareLoadMoreLabel = 'Load more';
 const String _availabilityShareEditHint =
     'Tap to split, drag to resize, or toggle free/busy.';
 const String _availabilityShareRecentPresetPrefix = 'Shared';
@@ -92,11 +85,6 @@ const String _availabilityShareSaveLabel = 'Save';
 const String _availabilityChatTypeDirectLabel = 'Direct chat';
 const String _availabilityChatTypeGroupLabel = 'Group chat';
 const String _availabilityChatTypeNoteLabel = 'Notes';
-
-const EdgeInsets _availabilityChatTilePadding = EdgeInsets.symmetric(
-  horizontal: _availabilityChatTilePaddingHorizontal,
-  vertical: _availabilityChatTilePaddingVertical,
-);
 
 const Uuid _availabilityPresetIdGenerator = Uuid();
 
@@ -199,7 +187,6 @@ class _CalendarAvailabilityShareScreenState
   late DateTime? _rangeEnd;
   late CalendarModel _localModel;
   late CalendarAvailabilityPresetStore _presetStore;
-  late TextEditingController _searchController;
   List<CalendarFreeBusyInterval> _draftIntervals =
       const <CalendarFreeBusyInterval>[];
   List<CalendarAvailabilityPreset> _presets = <CalendarAvailabilityPreset>[];
@@ -208,8 +195,7 @@ class _CalendarAvailabilityShareScreenState
   bool _hasCustomDraft = false;
   _AvailabilityShareStep _step = _AvailabilityShareStep.editor;
   bool _stepReversing = false;
-  int _recipientPageSize = _availabilityRecipientPageSize;
-  final Set<String> _selectedRecipientJids = <String>{};
+  List<ComposerRecipient> _recipients = <ComposerRecipient>[];
 
   @override
   void initState() {
@@ -221,12 +207,16 @@ class _CalendarAvailabilityShareScreenState
     _localModel = widget.model;
     _presetStore = CalendarAvailabilityPresetStore();
     _presets = _loadPresets();
-    _searchController = TextEditingController()..addListener(_handleSearch);
     final Chat? lockedChat = widget.lockToChat ? widget.initialChat : null;
     _selectedChat = lockedChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
     if (lockedChat != null) {
-      _selectedRecipientJids.add(lockedChat.jid);
+      _recipients = <ComposerRecipient>[
+        ComposerRecipient(
+          target: FanOutTarget.chat(lockedChat),
+          pinned: true,
+        ),
+      ];
     }
     _resetDraftIntervals();
   }
@@ -242,7 +232,6 @@ class _CalendarAvailabilityShareScreenState
 
   @override
   void dispose() {
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -265,16 +254,18 @@ class _CalendarAvailabilityShareScreenState
           )
         : _AvailabilityRecipientsStep(
             rangeLabel: _rangeSummaryLabel(),
-            queryController: _searchController,
-            recipients: _visibleRecipients(),
-            selectedJids: _selectedRecipientJids,
+            recipients: _recipients,
+            availableChats: widget.availableChats,
             isBusy: _isSending,
-            canLoadMore: _canLoadMoreRecipients(),
-            onLoadMore: _handleLoadMoreRecipients,
-            onToggleRecipient: _handleRecipientToggled,
+            onRecipientAdded: _handleRecipientAdded,
+            onRecipientRemoved: _handleRecipientRemoved,
+            onRecipientToggled: _handleRecipientToggled,
             onBack: _handleBackToEditor,
             onSend: _handleSendPressed,
           );
+    final Widget paddedStepChild = _step.isEditor
+        ? Padding(padding: calendarMarginLarge, child: stepChild)
+        : stepChild;
     return Scaffold(
       backgroundColor: _availabilityShareBackgroundColor(context),
       body: SafeArea(
@@ -287,23 +278,20 @@ class _CalendarAvailabilityShareScreenState
               onClose: () => Navigator.of(context).maybePop(),
             ),
             Expanded(
-              child: Padding(
-                padding: calendarMarginLarge,
-                child: PageTransitionSwitcher(
-                  duration: baseAnimationDuration,
-                  reverse: _stepReversing,
-                  transitionBuilder:
-                      (child, primaryAnimation, secondaryAnimation) =>
-                          SharedAxisTransition(
-                    animation: primaryAnimation,
-                    secondaryAnimation: secondaryAnimation,
-                    transitionType: SharedAxisTransitionType.horizontal,
-                    child: child,
-                  ),
-                  child: KeyedSubtree(
-                    key: ValueKey<_AvailabilityShareStep>(_step),
-                    child: stepChild,
-                  ),
+              child: PageTransitionSwitcher(
+                duration: baseAnimationDuration,
+                reverse: _stepReversing,
+                transitionBuilder:
+                    (child, primaryAnimation, secondaryAnimation) =>
+                        SharedAxisTransition(
+                  animation: primaryAnimation,
+                  secondaryAnimation: secondaryAnimation,
+                  transitionType: SharedAxisTransitionType.horizontal,
+                  child: child,
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey<_AvailabilityShareStep>(_step),
+                  child: paddedStepChild,
                 ),
               ),
             ),
@@ -361,12 +349,6 @@ class _CalendarAvailabilityShareScreenState
       tzid: _resolveTimeZone(_localModel),
       onIntervalsChanged: _handleDraftIntervalsChanged,
     );
-  }
-
-  void _handleSearch() {
-    setState(() {
-      _recipientPageSize = _availabilityRecipientPageSize;
-    });
   }
 
   void _handleRangeStartChanged(DateTime? value) {
@@ -479,52 +461,70 @@ class _CalendarAvailabilityShareScreenState
     }
   }
 
-  void _handleRecipientToggled(Chat chat) {
+  void _handleRecipientAdded(FanOutTarget target) {
+    final Chat? chat = target.chat;
+    if (chat == null) {
+      return;
+    }
     setState(() {
-      if (_selectedRecipientJids.contains(chat.jid)) {
-        _selectedRecipientJids.remove(chat.jid);
+      final existingIndex =
+          _recipients.indexWhere((recipient) => recipient.key == target.key);
+      if (existingIndex >= 0) {
+        _recipients[existingIndex] = _recipients[existingIndex].copyWith(
+          target: target,
+          included: true,
+        );
       } else {
-        _selectedRecipientJids.add(chat.jid);
+        _recipients = <ComposerRecipient>[
+          ..._recipients,
+          ComposerRecipient(target: target),
+        ];
       }
+      _selectedChat ??= chat;
     });
   }
 
-  void _handleLoadMoreRecipients() {
+  void _handleRecipientRemoved(String key) {
     setState(() {
-      _recipientPageSize += _availabilityRecipientPageSize;
+      _recipients =
+          _recipients.where((recipient) => recipient.key != key).toList();
     });
   }
 
-  List<Chat> _visibleRecipients() {
-    final String query = _searchController.text.trim().toLowerCase();
-    final List<Chat> base = widget.availableChats
-        .where((chat) => chat.type != ChatType.note)
-        .toList(growable: false);
-    final List<Chat> filtered = query.isEmpty
-        ? base
-        : base
-            .where(
-              (chat) =>
-                  chat.displayName.toLowerCase().contains(query) ||
-                  chat.jid.toLowerCase().contains(query),
-            )
-            .toList(growable: false);
-    final int capped = math.min(filtered.length, _recipientPageSize);
-    return filtered.take(capped).toList(growable: false);
+  void _handleRecipientToggled(String key) {
+    setState(() {
+      final index = _recipients.indexWhere((recipient) => recipient.key == key);
+      if (index == -1) return;
+      final recipient = _recipients[index];
+      _recipients[index] = recipient.copyWith(included: !recipient.included);
+    });
   }
 
-  bool _canLoadMoreRecipients() {
-    final String query = _searchController.text.trim().toLowerCase();
-    final int total = widget.availableChats
-        .where((chat) => chat.type != ChatType.note)
-        .where(
-          (chat) => query.isEmpty
-              ? true
-              : chat.displayName.toLowerCase().contains(query) ||
-                  chat.jid.toLowerCase().contains(query),
-        )
-        .length;
-    return _recipientPageSize < total;
+  Chat? _resolveSelectedChatForOwner() {
+    if (widget.lockToChat) {
+      return _selectedChat;
+    }
+    for (final recipient in _recipients) {
+      final chat = recipient.target.chat;
+      if (recipient.included && chat != null) {
+        return chat;
+      }
+    }
+    return _selectedChat;
+  }
+
+  List<Chat> _includedRecipientChats() {
+    final List<Chat> chats = <Chat>[];
+    for (final recipient in _recipients) {
+      if (!recipient.included) {
+        continue;
+      }
+      final chat = recipient.target.chat;
+      if (chat != null) {
+        chats.add(chat);
+      }
+    }
+    return chats;
   }
 
   Future<void> _handleSendPressed() async {
@@ -537,16 +537,14 @@ class _CalendarAvailabilityShareScreenState
       FeedbackSystem.showError(context, _availabilityShareInvalidRangeMessage);
       return;
     }
-    final String? ownerJid = _resolveOwnerJid(_selectedChat);
+    final String? ownerJid = _resolveOwnerJid(_resolveSelectedChatForOwner());
     if (ownerJid == null || ownerJid.isEmpty) {
       FeedbackSystem.showError(context, _availabilityShareMissingJidMessage);
       return;
     }
     final List<Chat> recipients = widget.lockToChat
         ? (_selectedChat == null ? const <Chat>[] : <Chat>[_selectedChat!])
-        : widget.availableChats
-            .where((chat) => _selectedRecipientJids.contains(chat.jid))
-            .toList(growable: false);
+        : _includedRecipientChats();
     if (recipients.isEmpty) {
       FeedbackSystem.showError(
         context,
@@ -1015,96 +1013,69 @@ class _AvailabilityShareHeader extends StatelessWidget {
 class _AvailabilityRecipientsStep extends StatelessWidget {
   const _AvailabilityRecipientsStep({
     required this.rangeLabel,
-    required this.queryController,
     required this.recipients,
-    required this.selectedJids,
+    required this.availableChats,
     required this.isBusy,
-    required this.canLoadMore,
-    required this.onLoadMore,
-    required this.onToggleRecipient,
+    required this.onRecipientAdded,
+    required this.onRecipientRemoved,
+    required this.onRecipientToggled,
     required this.onBack,
     required this.onSend,
   });
 
   final String rangeLabel;
-  final TextEditingController queryController;
-  final List<Chat> recipients;
-  final Set<String> selectedJids;
+  final List<ComposerRecipient> recipients;
+  final List<Chat> availableChats;
   final bool isBusy;
-  final bool canLoadMore;
-  final VoidCallback onLoadMore;
-  final ValueChanged<Chat> onToggleRecipient;
+  final ValueChanged<FanOutTarget> onRecipientAdded;
+  final ValueChanged<String> onRecipientRemoved;
+  final ValueChanged<String> onRecipientToggled;
   final VoidCallback onBack;
   final VoidCallback onSend;
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> recipientTiles = recipients
-        .map(
-          (chat) => _AvailabilityRecipientTile(
-            chat: chat,
-            isSelected: selectedJids.contains(chat.jid),
-            onToggle: () => onToggleRecipient(chat),
-          ),
-        )
-        .toList(growable: false);
-    final List<Widget> listItems = <Widget>[];
-    for (final tile in recipientTiles) {
-      listItems.add(tile);
-      listItems.add(const SizedBox(height: _availabilitySheetTileGap));
-    }
-    if (canLoadMore) {
-      listItems.add(
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ShadButton.ghost(
-            size: ShadButtonSize.sm,
-            onPressed: onLoadMore,
-            child: const Text(_availabilityShareLoadMoreLabel),
-          ),
-        ),
-      );
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _AvailabilitySheetSectionLabel(
-          text: _availabilityShareRecipientsLabel,
-        ),
-        Text(
-          rangeLabel,
-          style: context.textTheme.small.copyWith(
-            color: context.colorScheme.mutedForeground,
+        Padding(
+          padding: _availabilityRecipientsContentPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _AvailabilitySheetSectionLabel(
+                text: _availabilityShareRecipientsLabel,
+              ),
+              Text(
+                rangeLabel,
+                style: context.textTheme.small.copyWith(
+                  color: context.colorScheme.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: _availabilitySheetSectionGap),
+            ],
           ),
         ),
-        const SizedBox(height: _availabilitySheetSectionGap),
-        SizedBox(
-          height: _availabilityRecipientSearchHeight,
-          child: AxiTextField(
-            controller: queryController,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(LucideIcons.search),
-              hintText: _availabilityShareRecipientsHint,
-            ),
-          ),
-        ),
-        const SizedBox(height: _availabilitySheetSectionGap),
-        Expanded(
-          child: recipientTiles.isEmpty
-              ? const Align(
-                  alignment: Alignment.topLeft,
-                  child: _AvailabilitySheetEmptyMessage(
-                    message: _availabilityShareRecipientsEmptyLabel,
-                  ),
-                )
-              : ListView(padding: EdgeInsets.zero, children: listItems),
+        RecipientChipsBar(
+          recipients: recipients,
+          availableChats: availableChats,
+          latestStatuses: const {},
+          collapsedByDefault: false,
+          allowAddressTargets: false,
+          showSuggestionsWhenEmpty: true,
+          onRecipientAdded: onRecipientAdded,
+          onRecipientRemoved: onRecipientRemoved,
+          onRecipientToggled: onRecipientToggled,
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
-        _AvailabilityActionRow(
-          isBusy: isBusy,
-          label: _availabilityShareSendLabel,
-          onBack: onBack,
-          onPressed: onSend,
+        Padding(
+          padding: _availabilityRecipientsContentPadding,
+          child: _AvailabilityActionRow(
+            isBusy: isBusy,
+            label: _availabilityShareSendLabel,
+            onBack: onBack,
+            onPressed: onSend,
+          ),
         ),
       ],
     );
@@ -1220,41 +1191,6 @@ class _AvailabilityPresetChip extends StatelessWidget {
     final DateTime start = preset.overlay.rangeStart.value;
     final DateTime end = preset.overlay.rangeEnd.value;
     return '${start.month}/${start.day} - ${end.month}/${end.day}';
-  }
-}
-
-class _AvailabilityRecipientTile extends StatelessWidget {
-  const _AvailabilityRecipientTile({
-    required this.chat,
-    required this.isSelected,
-    required this.onToggle,
-  });
-
-  final Chat chat;
-  final bool isSelected;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        AxiListTile(
-          leading: AxiAvatar(
-            jid: chat.jid,
-            size: _availabilityChatAvatarSize,
-            avatarPath: chat.avatarPath,
-            shape: AxiAvatarShape.circle,
-          ),
-          title: chat.displayName,
-          subtitle: chat.type.label,
-          selected: isSelected,
-          onTap: onToggle,
-          contentPadding: _availabilityChatTilePadding,
-          actions: [Checkbox(value: isSelected, onChanged: (_) => onToggle())],
-        ),
-        const SizedBox(height: _availabilitySheetTileGap),
-      ],
-    );
   }
 }
 
