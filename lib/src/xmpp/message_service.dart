@@ -875,7 +875,10 @@ mixin MessageService
       );
     }
     if (previous == next) return;
-    unawaited(_applyMessageStorageModeChange(previous: previous, next: next));
+    fireAndForget(
+      () => _applyMessageStorageModeChange(previous: previous, next: next),
+      operationName: 'MessageService.applyMessageStorageModeChange',
+    );
   }
 
   Future<void> _applyMessageStorageModeChange({
@@ -934,11 +937,12 @@ mixin MessageService
     }
     final nextEffective = messageStorageMode;
     if (previousEffective != nextEffective) {
-      unawaited(
-        _applyMessageStorageModeChange(
+      fireAndForget(
+        () => _applyMessageStorageModeChange(
           previous: previousEffective,
           next: nextEffective,
         ),
+        operationName: 'MessageService.applyMessageStorageModeChange',
       );
     }
   }
@@ -1780,7 +1784,10 @@ mixin MessageService
         if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event, metadata: metadata)) return;
         if (_isInternalSyncEnvelope(message.body)) {
-          unawaited(_acknowledgeMessage(event));
+          fireAndForget(
+            () => _acknowledgeMessage(event),
+            operationName: 'MessageService.acknowledgeInternalEnvelope',
+          );
           return;
         }
 
@@ -1796,7 +1803,10 @@ mixin MessageService
           return;
         }
 
-        unawaited(_acknowledgeMessage(event));
+        fireAndForget(
+          () => _acknowledgeMessage(event),
+          operationName: 'MessageService.acknowledgeInboundMessage',
+        );
 
         if (shouldPersistAttachment) {
           await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
@@ -1858,11 +1868,12 @@ mixin MessageService
         }
         if (shouldPersistAttachment &&
             _allowInboundAttachmentAutoDownload(message.chatJid)) {
-          unawaited(
-            _autoDownloadTrustedInboundAttachment(
+          fireAndForget(
+            () => _autoDownloadTrustedInboundAttachment(
               message: message,
               metadataId: metadata.id,
             ),
+            operationName: 'MessageService.autoDownloadInboundAttachment',
           );
         }
 
@@ -1872,17 +1883,19 @@ mixin MessageService
             !_isMucChatJid(message.chatJid);
         final isPeerChat = isDirectChat && message.chatJid != myJid;
         if (isPeerChat && this is AvatarService) {
-          unawaited(
-            (this as AvatarService).prefetchAvatarForJid(message.chatJid),
+          fireAndForget(
+            () => (this as AvatarService).prefetchAvatarForJid(message.chatJid),
+            operationName: 'MessageService.prefetchPeerAvatar',
           );
         }
         if (isDirectChat) {
-          unawaited(
-            _upsertConversationIndexForPeer(
+          fireAndForget(
+            () => _upsertConversationIndexForPeer(
               peerJid: message.chatJid,
               lastTimestamp: message.timestamp ?? DateTime.timestamp(),
               lastId: message.originID ?? message.stanzaID,
             ),
+            operationName: 'MessageService.upsertConversationIndexInbound',
           );
         }
 
@@ -1898,7 +1911,10 @@ mixin MessageService
           _mucJoinMamDeferredRooms.add(roomJid);
           return;
         }
-        unawaited(_syncMucArchiveAfterJoin(roomJid));
+        fireAndForget(
+          () => _syncMucArchiveAfterJoin(roomJid),
+          operationName: 'MessageService.syncMucArchiveAfterJoin',
+        );
       })
       ..registerHandler<OutboundGroupchatStanzaEvent>((event) async {
         _trackOutboundGroupchatStanza(
@@ -1954,8 +1970,14 @@ mixin MessageService
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
-        unawaited(_flushPendingPinSync());
-        unawaited(_syncEmailPinnedMessagesOnReconnect());
+        fireAndForget(
+          _flushPendingPinSync,
+          operationName: 'MessageService.flushPendingPinSync',
+        );
+        fireAndForget(
+          _syncEmailPinnedMessagesOnReconnect,
+          operationName: 'MessageService.syncEmailPinnedMessagesOnReconnect',
+        );
       });
   }
 
@@ -2027,7 +2049,10 @@ mixin MessageService
         final deferred = List<String>.from(_mucJoinMamDeferredRooms);
         _mucJoinMamDeferredRooms.clear();
         for (final roomJid in deferred) {
-          unawaited(_syncMucArchiveAfterJoin(roomJid));
+          fireAndForget(
+            () => _syncMucArchiveAfterJoin(roomJid),
+            operationName: 'MessageService.syncMucArchiveAfterJoin',
+          );
         }
       }
     }
@@ -2525,7 +2550,10 @@ mixin MessageService
     final isGroupChat = chatType == ChatType.groupChat;
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
       if (this is AvatarService) {
-        unawaited((this as AvatarService).prefetchAvatarForJid(jid));
+        fireAndForget(
+          () => (this as AvatarService).prefetchAvatarForJid(jid),
+          operationName: 'MessageService.prefetchOutboundPeerAvatar',
+        );
       }
     }
     if (isGroupChat && !offlineDemo) {
@@ -2656,12 +2684,13 @@ mixin MessageService
         );
       }
       if (chatType == ChatType.chat && !_isMucChatJid(jid)) {
-        unawaited(
-          _upsertConversationIndexForPeer(
+        fireAndForget(
+          () => _upsertConversationIndexForPeer(
             peerJid: jid,
             lastTimestamp: message.timestamp ?? DateTime.timestamp(),
             lastId: message.originID ?? message.stanzaID,
           ),
+          operationName: 'MessageService.upsertConversationIndexOutbound',
         );
       }
     } catch (error, stackTrace) {
@@ -3735,7 +3764,10 @@ mixin MessageService
       (db) => db.getDraft(savedId),
     );
     if (savedDraft != null) {
-      unawaited(publishDraftSync(savedDraft));
+      fireAndForget(
+        () => publishDraftSync(savedDraft),
+        operationName: 'MessageService.publishDraftSync',
+      );
     }
     final draftCount = await _dbOpReturning<XmppDatabase, int>(
       (db) => db.countDrafts(),
@@ -3814,7 +3846,10 @@ mixin MessageService
       await _deleteAttachmentMetadata(metadataIds);
     }
     if (syncId.trim().isNotEmpty) {
-      unawaited(retractDraftSync(syncId));
+      fireAndForget(
+        () => retractDraftSync(syncId),
+        operationName: 'MessageService.retractDraftSync',
+      );
     }
   }
 
@@ -4455,7 +4490,10 @@ mixin MessageService
           preserveOccupants: _preserveOccupantsOnMucError,
         );
       }
-      unawaited(_repairMucJoin(roomJid));
+      fireAndForget(
+        () => _repairMucJoin(roomJid),
+        operationName: 'MessageService.repairMucJoin',
+      );
     }
     if (summary == null) {
       _log.info(_outboundMessageRejectedMissingSummaryLog);
@@ -5120,7 +5158,10 @@ mixin MessageService
           isFromMam: event.isFromMAM,
         );
         final applied = await callback(inbound);
-        unawaited(_acknowledgeMessage(event));
+        fireAndForget(
+          () => _acknowledgeMessage(event),
+          operationName: 'MessageService.acknowledgeCalendarSync',
+        );
         return applied;
       } catch (e) {
         _log.warning('Calendar sync callback failed: $e');
@@ -5194,7 +5235,10 @@ mixin MessageService
           inbound: inbound,
         );
         await (owner as XmppService)._chatCalendarSyncCallback!(envelope);
-        unawaited(_acknowledgeMessage(event));
+        fireAndForget(
+          () => _acknowledgeMessage(event),
+          operationName: 'MessageService.acknowledgeChatCalendarSync',
+        );
       } catch (e) {
         _log.warning('Chat calendar sync callback failed: $e');
       }
@@ -5743,7 +5787,10 @@ mixin MessageService
         (db) => db.saveFileMetadata(updatedMetadata),
         awaitDatabase: true,
       );
-      unawaited(_enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}));
+      fireAndForget(
+        () => _enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}),
+        operationName: 'MessageService.enforceAttachmentCacheLimit',
+      );
       return finalFile.path;
     } on XmppAbortedException {
       return null;
@@ -6202,7 +6249,10 @@ mixin MessageService
       return true;
     }
     if (_pinSyncRateLimiter.shouldRefreshNow()) {
-      unawaited(syncPinnedMessagesForChat(chatJid));
+      fireAndForget(
+        () => syncPinnedMessagesForChat(chatJid),
+        operationName: 'MessageService.syncPinnedMessagesRateLimitRefresh',
+      );
     }
     return false;
   }
@@ -6220,7 +6270,10 @@ mixin MessageService
     }
     final payload = event.item.payload;
     if (payload == null) {
-      unawaited(syncPinnedMessagesForChat(chatJid));
+      fireAndForget(
+        () => syncPinnedMessagesForChat(chatJid),
+        operationName: 'MessageService.syncPinnedMessagesMissingPayload',
+      );
       return;
     }
     final parsed = _PinnedMessageSyncPayload.fromXml(
@@ -6245,7 +6298,10 @@ mixin MessageService
     );
     if (!canApply) {
       if (publisher == null || publisher.trim().isEmpty) {
-        unawaited(syncPinnedMessagesForChat(chatJid));
+        fireAndForget(
+          () => syncPinnedMessagesForChat(chatJid),
+          operationName: 'MessageService.syncPinnedMessagesUnauthorized',
+        );
       }
       return;
     }
