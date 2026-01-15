@@ -38,9 +38,23 @@ class SafePubSubManager extends mox.PubSubManager {
       'http://jabber.org/protocol/pubsub#owner';
   static const String _pubsubTag = 'pubsub';
   static const String _configureTag = 'configure';
+  static const String _nodeUnknownLabel = '<unknown>';
+  static const String _nodeRedactedLabel = '<redacted>';
+  static const String _nodeJidMarker = '@';
 
   final Map<_SubscriptionCacheKey, mox.SubscriptionInfo> _subscriptionCache =
       {};
+
+  String _safeNodeLabel(String? node) {
+    final trimmed = node?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _nodeUnknownLabel;
+    }
+    if (trimmed.contains(_nodeJidMarker)) {
+      return _nodeRedactedLabel;
+    }
+    return trimmed;
+  }
 
   @override
   List<mox.StanzaHandler> getIncomingStanzaHandlers() {
@@ -64,7 +78,8 @@ class SafePubSubManager extends mox.PubSubManager {
     bool autoCreate = false,
     mox.NodeConfig? createNodeConfig,
   }) async {
-    return super.publish(
+    logger.fine('PubSub publish start. node=${_safeNodeLabel(node)}.');
+    final result = await super.publish(
       jid,
       node,
       payload,
@@ -73,6 +88,15 @@ class SafePubSubManager extends mox.PubSubManager {
       autoCreate: autoCreate,
       createNodeConfig: createNodeConfig,
     );
+    if (result.isType<mox.PubSubError>()) {
+      logger.fine(
+        'PubSub publish failed. node=${_safeNodeLabel(node)} '
+        'error=${result.get<mox.PubSubError>().runtimeType}.',
+      );
+    } else {
+      logger.fine('PubSub publish succeeded. node=${_safeNodeLabel(node)}.');
+    }
+    return result;
   }
 
   @override

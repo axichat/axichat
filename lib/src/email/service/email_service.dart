@@ -2790,13 +2790,19 @@ class EmailService {
   }
 
   Future<void> _runReconnectCatchUp() async {
-    if (_reconnectCatchUpInFlight) {
+    if (_reconnectCatchUpInFlight || !_running) {
       return;
     }
     _reconnectCatchUpInFlight = true;
     try {
       await _refreshImapCapabilities();
+      if (!_running) {
+        return;
+      }
       await performBackgroundFetch(timeout: _imapSyncFetchTimeout);
+      if (!_running) {
+        return;
+      }
       await refreshChatlistFromCore();
     } finally {
       _reconnectCatchUpInFlight = false;

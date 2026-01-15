@@ -17,7 +17,6 @@ class LogoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authenticationCubit = context.read<AuthenticationCubit>();
     final l10n = context.l10n;
     return AxiIconButton(
       iconData: LucideIcons.logOut,
@@ -26,7 +25,7 @@ class LogoutButton extends StatelessWidget {
         builder: (context) {
           var severity = LogoutSeverity.normal;
           return BlocProvider.value(
-            value: authenticationCubit,
+            value: context.read<AuthenticationCubit>(),
             child: StatefulBuilder(
               builder: (context, setState) {
                 void updateSeverity(LogoutSeverity value) {
@@ -85,9 +84,9 @@ class LogoutButton extends StatelessWidget {
                       ),
                     ),
                   ),
-                  callback: () => authenticationCubit.logout(
-                    severity: severity,
-                  ),
+                  callback: () => context.read<AuthenticationCubit>().logout(
+                        severity: severity,
+                      ),
                 );
               },
             ),
