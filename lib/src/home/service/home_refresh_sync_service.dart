@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
@@ -108,26 +107,20 @@ class HomeRefreshSyncService {
     }
   }
 
-  void _handleXmppConnectivity(ConnectionState state) {
+  Future<void> _handleXmppConnectivity(ConnectionState state) async {
     final wasConnected = _lastXmppState == ConnectionState.connected;
     _lastXmppState = state;
     if (!wasConnected && state == ConnectionState.connected) {
-      fireAndForget(
-        _runReconnectSync,
-        operationName: 'HomeRefreshSyncService.runReconnectSync',
-      );
+      await _runReconnectSync();
       return;
     }
   }
 
-  void _handleEmailSyncState(EmailSyncState state) {
+  Future<void> _handleEmailSyncState(EmailSyncState state) async {
     final wasReady = _lastEmailStatus == EmailSyncStatus.ready;
     _lastEmailStatus = state.status;
     if (!wasReady && state.status == EmailSyncStatus.ready) {
-      fireAndForget(
-        _runReconnectSync,
-        operationName: 'HomeRefreshSyncService.runReconnectSync',
-      );
+      await _runReconnectSync();
     }
   }
 

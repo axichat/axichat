@@ -75,6 +75,7 @@ mixin AvatarService on XmppBase, MucService {
   static const Duration _avatarPublishVerificationTimeout = Duration(
     seconds: 5,
   );
+  static const Duration _selfAvatarRepairCooldown = Duration(minutes: 2);
   static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
   static const bool _allowAvatarPublisherFallback = true;
   static const bool _avatarSkipDefault = true;
@@ -101,7 +102,7 @@ mixin AvatarService on XmppBase, MucService {
   final LinkedHashMap<String, Uint8List> _safeAvatarBytesCache =
       LinkedHashMap();
   Timer? _selfAvatarRefreshTimer;
-  bool _selfAvatarRepairAttempted = false;
+  DateTime? _selfAvatarRepairLastAttempt;
 
   Uint8List? cachedAvatarBytes(String path) {
     final normalizedPath = path.trim();
@@ -334,7 +335,7 @@ mixin AvatarService on XmppBase, MucService {
     _avatarBytesCache.clear();
     _safeAvatarBytesCache.clear();
     _avatarDirectory = null;
-    _selfAvatarRepairAttempted = false;
+    _selfAvatarRepairLastAttempt = null;
     _selfAvatarRefreshTimer?.cancel();
     _selfAvatarRefreshTimer = null;
     await super._reset();
@@ -519,6 +520,7 @@ mixin AvatarService on XmppBase, MucService {
       if (path == null || path.isEmpty) return;
       if (!await _hasCachedAvatarFile(path)) return;
 
+      _markPubSubAvatarPreferred(myBareJid);
       owner._notifySelfAvatarUpdated(
         StoredAvatar(path: path, hash: stored.hash),
       );
@@ -703,13 +705,16 @@ mixin AvatarService on XmppBase, MucService {
             if (!isSelf) {
               _unmarkPubSubAvatarPreferred(bareJid);
             }
-            _avatarLog.fine(
-              'Avatar metadata missing; requesting vCard fallback.',
-            );
             if (isSelf) {
+              _avatarLog.fine(
+                'Avatar metadata missing for self; attempting publish repair.',
+              );
               await _maybeRepairSelfAvatar(bareJid);
               return;
             }
+            _avatarLog.fine(
+              'Avatar metadata missing; requesting vCard fallback.',
+            );
             await _refreshAvatarFromVCardRequest(bareJid, force: true);
             return;
           case _AvatarMetadataLoadFailed():
@@ -1093,6 +1098,10 @@ mixin AvatarService on XmppBase, MucService {
 
   Future<void> _persistOwnAvatar(String path, String hash) async {
     if (!isStateStoreReady) return;
+    final myBareJid = _myJid?.toBare().toString();
+    if (myBareJid != null && myBareJid.isNotEmpty) {
+      _markPubSubAvatarPreferred(myBareJid);
+    }
     try {
       await _dbOp<XmppStateStore>((ss) async {
         await ss.write(key: selfAvatarPathKey, value: path);
@@ -1511,8 +1520,13 @@ mixin AvatarService on XmppBase, MucService {
       '$node$_avatarConfigKeySeparator${accessModel.value}';
 
   Future<void> _maybeRepairSelfAvatar(String bareJid) async {
-    if (_selfAvatarRepairAttempted) return;
-    _selfAvatarRepairAttempted = true;
+    final lastAttempt = _selfAvatarRepairLastAttempt;
+    if (lastAttempt != null &&
+        DateTime.now().difference(lastAttempt) < _selfAvatarRepairCooldown) {
+      _avatarLog.fine('Skipping self avatar repair; cooldown active.');
+      return;
+    }
+    _selfAvatarRepairLastAttempt = DateTime.now();
 
     final existingPath = await _storedAvatarPath(bareJid);
     if (existingPath == null || existingPath.trim().isEmpty) return;
@@ -1540,6 +1554,7 @@ mixin AvatarService on XmppBase, MucService {
         targetJid: bareJid,
         public: true,
       );
+      _markPubSubAvatarPreferred(bareJid);
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to repair missing server avatar.', error);
       _avatarLog.fine('Repair failure details', error, stackTrace);

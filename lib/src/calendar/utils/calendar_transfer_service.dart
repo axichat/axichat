@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
@@ -100,14 +99,11 @@ class CalendarTransferService {
     return file;
   }
 
-  static void scheduleCleanup(File file) {
+  static Future<void> scheduleCleanup(File file) async {
     if (file.path.trim().isEmpty) {
       return;
     }
-    fireAndForget(
-      () => _cleanupExportFile(file),
-      operationName: 'CalendarTransferService.cleanupExportFile',
-    );
+    await _cleanupExportFile(file);
   }
 
   Future<File> exportTaskIcs({
