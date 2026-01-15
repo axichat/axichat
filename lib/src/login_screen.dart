@@ -17,7 +17,6 @@ import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/chat/view/chat.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -202,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
-  void _handleAuthState(AuthenticationState state) {
+  Future<void> _handleAuthState(AuthenticationState state) async {
     if (kDebugMode) {
       _authUiLog.fine(
         'state=${state.runtimeType} activeFlow=$_activeFlow '
@@ -248,12 +247,9 @@ class _LoginScreenState extends State<LoginScreen>
       }
       _startAuthTimeout(_AuthFlow.signup);
       if (loginFromSignup) {
-        fireAndForget(
-          () => _operationProgressController.reach(
-            _authProgressSegmentTarget,
-            duration: _authProgressSegmentDuration,
-          ),
-          operationName: 'LoginScreen.progressReachSignup',
+        await _operationProgressController.reach(
+          _authProgressSegmentTarget,
+          duration: _authProgressSegmentDuration,
         );
       }
       return;
@@ -271,29 +267,20 @@ class _LoginScreenState extends State<LoginScreen>
         _operationProgressController.start();
       }
       _startAuthTimeout(_AuthFlow.login);
-      fireAndForget(
-        () => _operationProgressController.reach(
-          _authProgressSegmentTarget,
-          duration: _authProgressSegmentDuration,
-        ),
-        operationName: 'LoginScreen.progressReachLogin',
+      await _operationProgressController.reach(
+        _authProgressSegmentTarget,
+        duration: _authProgressSegmentDuration,
       );
       return;
     }
 
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
-      fireAndForget(
-        _failOperation,
-        operationName: 'LoginScreen.failOperation',
-      );
+      await _failOperation();
       return;
     }
     if (state is AuthenticationComplete) {
-      fireAndForget(
-        _completeLoginAnimation,
-        operationName: 'LoginScreen.completeLoginAnimation',
-      );
+      await _completeLoginAnimation();
     }
   }
 

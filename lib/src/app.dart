@@ -491,7 +491,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             final routedContent = MultiBlocListener(
               listeners: [
                 BlocListener<AuthenticationCubit, AuthenticationState>(
-                  listener: (context, state) {
+                  listener: (context, state) async {
                     final previousAuthState = _lastAuthState;
                     _lastAuthState = state;
                     final currentLocation =
@@ -540,17 +540,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         );
                       }
                     }
-                    fireAndForget(
-                      () => _handleShareIntent(context),
-                      operationName: 'Axichat.handleShareIntentAfterAuth',
-                    );
+                    await _handleShareIntent(context);
                   },
                 ),
                 BlocListener<ShareIntentCubit, ShareIntentState>(
-                  listener: (context, _) => fireAndForget(
-                    () => _handleShareIntent(context),
-                    operationName: 'Axichat.handleShareIntent',
-                  ),
+                  listener: (context, _) async {
+                    await _handleShareIntent(context);
+                  },
                 ),
               ],
               child: Stack(
@@ -649,12 +645,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     } finally {
       _shareIntentHandling = false;
       if (context.mounted && shareCubit.state.hasPayload) {
-        fireAndForget(
+        Timer(
+          _shareIntentNavigationDelay,
           () async {
-            await Future<void>.delayed(_shareIntentNavigationDelay);
             await _handleShareIntent(context);
           },
-          operationName: 'Axichat.handleShareIntentRetry',
         );
       }
     }

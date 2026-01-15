@@ -7,7 +7,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -65,13 +64,10 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 label: shouldFavorite
                     ? l10n.commonFavorite
                     : l10n.commonUnfavorite,
-                onPressed: () {
+                onPressed: () async {
                   final chatsCubit = context.read<ChatsCubit>();
-                  fireAndForget(
-                    () => chatsCubit.bulkToggleFavorited(
-                      favorited: shouldFavorite,
-                    ),
-                    operationName: 'ChatSelectionActionBar.bulkToggleFavorited',
+                  await chatsCubit.bulkToggleFavorited(
+                    favorited: shouldFavorite,
                   );
                 },
               ),
@@ -82,13 +78,10 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 ),
                 label:
                     shouldArchive ? l10n.commonArchive : l10n.commonUnarchive,
-                onPressed: () {
+                onPressed: () async {
                   final chatsCubit = context.read<ChatsCubit>();
-                  fireAndForget(
-                    () => chatsCubit.bulkToggleArchived(
-                      archived: shouldArchive,
-                    ),
-                    operationName: 'ChatSelectionActionBar.bulkToggleArchived',
+                  await chatsCubit.bulkToggleArchived(
+                    archived: shouldArchive,
                   );
                 },
               ),
@@ -98,13 +91,10 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                   size: 16,
                 ),
                 label: shouldHide ? l10n.commonHide : l10n.commonShow,
-                onPressed: () {
+                onPressed: () async {
                   final chatsCubit = context.read<ChatsCubit>();
-                  fireAndForget(
-                    () => chatsCubit.bulkToggleHidden(
-                      hidden: shouldHide,
-                    ),
-                    operationName: 'ChatSelectionActionBar.bulkToggleHidden',
+                  await chatsCubit.bulkToggleHidden(
+                    hidden: shouldHide,
                   );
                 },
               ),

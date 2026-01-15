@@ -9,7 +9,6 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';

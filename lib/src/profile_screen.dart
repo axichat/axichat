@@ -9,7 +9,6 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -408,10 +407,9 @@ class _ProfileCardSection extends StatelessWidget {
                   icon: LucideIcons.messagesSquare,
                   enabled: exportEnabled,
                   onPressed: exportEnabled
-                      ? () => fireAndForget(
-                            () => _handleXmppMessageExport(context),
-                            operationName: 'ProfileScreen.exportXmppMessages',
-                          )
+                      ? () async {
+                          await _handleXmppMessageExport(context);
+                        }
                       : null,
                 ),
                 AxiMenuAction(
@@ -421,10 +419,9 @@ class _ProfileCardSection extends StatelessWidget {
                   icon: LucideIcons.users,
                   enabled: exportEnabled,
                   onPressed: exportEnabled
-                      ? () => fireAndForget(
-                            () => _handleXmppContactsExport(context),
-                            operationName: 'ProfileScreen.exportXmppContacts',
-                          )
+                      ? () async {
+                          await _handleXmppContactsExport(context);
+                        }
                       : null,
                 ),
                 AxiMenuAction(
@@ -434,10 +431,9 @@ class _ProfileCardSection extends StatelessWidget {
                   icon: LucideIcons.mail,
                   enabled: exportEnabled,
                   onPressed: exportEnabled
-                      ? () => fireAndForget(
-                            () => _handleEmailMessageExport(context),
-                            operationName: 'ProfileScreen.exportEmailMessages',
-                          )
+                      ? () async {
+                          await _handleEmailMessageExport(context);
+                        }
                       : null,
                 ),
                 AxiMenuAction(
@@ -447,10 +443,9 @@ class _ProfileCardSection extends StatelessWidget {
                   icon: LucideIcons.userRound,
                   enabled: exportEnabled,
                   onPressed: exportEnabled
-                      ? () => fireAndForget(
-                            () => _handleEmailContactsExport(context),
-                            operationName: 'ProfileScreen.exportEmailContacts',
-                          )
+                      ? () async {
+                          await _handleEmailContactsExport(context);
+                        }
                       : null,
                 ),
                 AxiMenuAction(

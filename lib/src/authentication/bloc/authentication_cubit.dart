@@ -2355,7 +2355,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           );
           return;
         }
-        _emit(const AuthenticationPasswordChangeFailure('Account not found.'));
+        _emit(
+          const AuthenticationPasswordChangeFailure(
+            'Current password is incorrect.',
+          ),
+        );
         return;
       }
       const fallback = 'Unable to change password. Please try again later.';
@@ -2475,13 +2479,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         username: normalizedUsername,
         host: resolvedHost,
       );
-      final emailDeleted = await _deleteProvisionedEmailAccount(
+      final emailDeletionError = await _deleteProvisionedEmailAccount(
         email: email ?? '$normalizedUsername@$resolvedHost',
         password: password,
         logContext: 'during unregister',
       );
-      if (!emailDeleted) {
-        _emit(const AuthenticationUnregisterFailure(fallback));
+      if (emailDeletionError != null) {
+        _emit(AuthenticationUnregisterFailure(emailDeletionError));
         return;
       }
       final response = await _requestAccountDeletion(
@@ -2504,8 +2508,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _emit(const AuthenticationUnregisterFailure(fallback));
           return;
         }
-        await logout(severity: LogoutSeverity.burn);
-        await _removeCompletedAccountRecord(normalizedUsername, resolvedHost);
+        _emit(
+          const AuthenticationUnregisterFailure(
+            'Incorrect password. Please try again.',
+          ),
+        );
         return;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
@@ -2630,21 +2637,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _upsertPendingAccountDeletion(deletion);
   }
 
-  Future<bool> _deleteProvisionedEmailAccount({
+  Future<String?> _deleteProvisionedEmailAccount({
     required String email,
     required String password,
     required String logContext,
   }) async {
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty) {
-      return true;
+      return null;
     }
     try {
       await _emailProvisioningClient.deleteAccount(
         email: normalizedEmail,
         password: password,
       );
-      return true;
+      return null;
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
       _log.warning(
         'Email account deletion failed $logContext',
@@ -2652,16 +2659,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         stackTrace,
       );
       if (error.code == provisioning.EmailProvisioningApiErrorCode.notFound) {
-        return true;
+        return null;
       }
-      return !error.isRecoverable;
+      if (error.code ==
+          provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
+        return 'Incorrect password. Please try again.';
+      }
+      if (error.isRecoverable) {
+        return error.message;
+      }
+      return null;
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Email account deletion failed $logContext',
         error,
         stackTrace,
       );
-      return false;
+      return 'Unable to delete account. Please try again later.';
     }
   }
 
@@ -2670,11 +2684,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   ) async {
     final fallbackEmail =
         deletion.email ?? '${deletion.username}@${deletion.host}'.trim();
-    return _deleteProvisionedEmailAccount(
+    final deletionError = await _deleteProvisionedEmailAccount(
       email: fallbackEmail,
       password: deletion.password,
       logContext: 'during rollback',
     );
+    return deletionError == null;
   }
 
   Future<void> _flushPendingAccountDeletions() {

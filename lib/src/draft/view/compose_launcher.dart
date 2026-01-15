@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
@@ -52,13 +51,10 @@ void openComposeDraft(
   T locate<T>() => context.read<T>();
   final Duration animationDuration =
       context.read<SettingsCubit>().animationDuration;
-  fireAndForget(
-    () => resolvedNavigator.push<void>(
-      AxiFadePageRoute<void>(
-        duration: animationDuration,
-        builder: (_) => ComposeScreen(seed: seed, locate: locate),
-      ),
+  resolvedNavigator.push<void>(
+    AxiFadePageRoute<void>(
+      duration: animationDuration,
+      builder: (_) => ComposeScreen(seed: seed, locate: locate),
     ),
-    operationName: 'ComposeLauncher.openComposeDraft',
   );
 }
