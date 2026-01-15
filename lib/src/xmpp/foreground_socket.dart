@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -106,10 +107,10 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
       return;
     }
     for (final handler in List.of(_listeners.values)) {
-      final result = handler(data);
-      if (result is Future<void>) {
-        unawaited(result);
-      }
+      fireAndForget(
+        () => handler(data),
+        operationName: 'ForegroundSocketTaskBridge.handleTaskData',
+      );
     }
   }
 
@@ -507,7 +508,10 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Sending to task: type=$type parts=${strings.length} '
       'payloadLen=$payloadLength',
     );
-    unawaited(_bridge.send(strings));
+    fireAndForget(
+      () => _bridge.send(strings),
+      operationName: 'ForegroundSocketTaskBridge.sendToTask',
+    );
   }
 
   @override
