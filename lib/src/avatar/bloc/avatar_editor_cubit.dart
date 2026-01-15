@@ -8,7 +8,6 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -234,25 +233,22 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     return super.close();
   }
 
-  void initialize(ShadColorScheme colors) {
+  Future<void> initialize(ShadColorScheme colors) async {
     final initialBackground = state.backgroundColor == Colors.transparent
         ? colors.accent
         : state.backgroundColor;
     _emitIfOpen(state.copyWith(backgroundColor: initialBackground));
-    fireAndForget(
-      _loadInitialAvatar,
-      operationName: 'AvatarEditorCubit.loadInitialAvatar',
-    );
+    await _loadInitialAvatar();
   }
 
-  void setCarouselEnabled(bool enabled, ShadColorScheme colors) {
+  Future<void> setCarouselEnabled(bool enabled, ShadColorScheme colors) async {
     _carouselColors = colors;
     _carouselEnabled = enabled;
     if (!enabled) {
       _stopAvatarCarousel();
       return;
     }
-    _resumeAvatarCarouselIfNeeded();
+    await _resumeAvatarCarouselIfNeeded();
   }
 
   void materializeCurrentCarouselAvatar() {
@@ -450,12 +446,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _avatarCarouselTimer = null;
   }
 
-  void _resumeAvatarCarouselIfNeeded() {
+  Future<void> _resumeAvatarCarouselIfNeeded() async {
     if (_avatarCarouselTimer != null || _isCarouselBlocked()) return;
-    fireAndForget(
-      _startAvatarCarousel,
-      operationName: 'AvatarEditorCubit.startAvatarCarousel',
-    );
+    await _startAvatarCarousel();
   }
 
   bool _isCarouselBlocked() {
@@ -480,22 +473,16 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       _showNextCarouselAvatar();
     }
 
-    fireAndForget(
-      () => _prefillCarousel(targetSize: _avatarCarouselInitialBuffer),
-      operationName: 'AvatarEditorCubit.prefillCarouselInitial',
-    );
+    await _prefillCarousel(targetSize: _avatarCarouselInitialBuffer);
 
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
     }
 
-    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) {
+    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) async {
       if (_isCarouselBlocked()) return;
       _showNextCarouselAvatar();
-      fireAndForget(
-        () => _prefillCarousel(targetSize: _avatarCarouselSustainBuffer),
-        operationName: 'AvatarEditorCubit.prefillCarouselSustain',
-      );
+      await _prefillCarousel(targetSize: _avatarCarouselSustainBuffer);
     });
   }
 

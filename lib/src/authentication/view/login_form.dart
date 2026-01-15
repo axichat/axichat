@@ -176,16 +176,13 @@ class _LoginFormState extends State<LoginForm> {
                       enabled: !loading,
                       initialValue: rememberMe,
                       inputLabel: Text(l10n.authRememberMeLabel),
-                      onChanged: (value) {
+                      onChanged: (value) async {
                         setState(() {
                           rememberMe = value;
                         });
-                        fireAndForget(
-                          () => context
-                              .read<AuthenticationCubit>()
-                              .persistRememberMeChoice(value),
-                          operationName: 'LoginForm.persistRememberMeChoice',
-                        );
+                        await context
+                            .read<AuthenticationCubit>()
+                            .persistRememberMeChoice(value);
                       },
                     ),
                   ),

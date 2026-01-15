@@ -330,11 +330,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
             ShadButton.secondary(
               onPressed: busy || !allowBackgroundShuffle
                   ? null
-                  : () => fireAndForget(
-                        _handleShuffleBackground,
-                        operationName:
-                            'SignupAvatarEditorPanel.shuffleBackground',
-                      ),
+                  : () async {
+                      await _handleShuffleBackground();
+                    },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -367,10 +365,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
             ShadButton.outline(
               onPressed: busy
                   ? null
-                  : () => fireAndForget(
-                        widget.onUpload,
-                        operationName: 'SignupAvatarEditorPanel.uploadAvatar',
-                      ),
+                  : () async {
+                      await widget.onUpload();
+                    },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 spacing: avatarActionSpacing,
