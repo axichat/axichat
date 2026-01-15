@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
@@ -478,7 +479,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'DraftsPubSubManager.bootstrap',
+      );
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
@@ -685,7 +689,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        unawaited(_bootstrap());
+        fireAndForget(
+          _bootstrap,
+          operationName: 'DraftsPubSubManager.bootstrap',
+        );
       }
     }
   }
@@ -824,7 +831,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      unawaited(_refreshFromServer());
+      fireAndForget(
+        _refreshFromServer,
+        operationName: 'DraftsPubSubManager.refreshFromServer',
+      );
     }
     return false;
   }
@@ -920,7 +930,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'DraftsPubSubManager.bootstrap',
+      );
     }
   }
 
@@ -934,7 +947,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'DraftsPubSubManager.bootstrap',
+      );
     }
   }
 

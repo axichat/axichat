@@ -586,8 +586,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     if (_stickyAuthActive) {
-      unawaited(_reconnectXmppForStickySession());
-      unawaited(_triggerEmailReconnect());
+      fireAndForget(
+        _reconnectXmppForStickySession,
+        operationName: 'AuthenticationCubit.reconnectXmppForStickySession',
+      );
+      fireAndForget(
+        _triggerEmailReconnect,
+        operationName: 'AuthenticationCubit.triggerEmailReconnect',
+      );
       return;
     }
 
@@ -769,7 +775,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!withForeground || !foregroundServiceActive.value) {
       return;
     }
-    unawaited(_xmppService.ensureForegroundSocketIfActive());
+    fireAndForget(
+      _xmppService.ensureForegroundSocketIfActive,
+      operationName: 'AuthenticationCubit.ensureForegroundSocketIfActive',
+    );
   }
 
   Future<bool> hasStoredLoginCredentials() async {
@@ -962,7 +971,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       Duration(milliseconds: delayMillis),
       () {
         _signupAvatarPublishRetryTimer = null;
-        unawaited(_publishPendingAvatar());
+        fireAndForget(
+          _publishPendingAvatar,
+          operationName: 'AuthenticationCubit.publishPendingAvatar',
+        );
       },
     );
   }
@@ -1300,8 +1312,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             databasePassphrase: ensuredDatabasePassphrase,
           );
           authenticationCommitted = true;
-          unawaited(
-            _provisionEmailWithRetry(
+          fireAndForget(
+            () => _provisionEmailWithRetry(
               displayName: displayName,
               databasePrefix: ensuredDatabasePrefix,
               databasePassphrase: ensuredDatabasePassphrase,
@@ -1314,6 +1326,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               allowRetries: !hasStoredDatabaseSecrets,
               mode: emailProvisioningMode,
             ),
+            operationName: 'AuthenticationCubit.provisionEmailDeferred',
           );
           return;
         }
@@ -1432,14 +1445,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool clearCredentials,
   }) async {
     if (provisioningFuture != null) {
-      unawaited(
-        provisioningFuture.catchError((Object error, StackTrace stackTrace) {
+      fireAndForget(
+        () => provisioningFuture.catchError((Object error, StackTrace stackTrace) {
           _log.fine(
             'Cancelled email provisioning after login failed',
             error,
             stackTrace,
           );
         }),
+        operationName: 'AuthenticationCubit.cancelPendingEmailProvisioning',
       );
     }
     final emailService = _emailService;
@@ -2499,7 +2513,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         foregroundServiceActive.value &&
         _authenticatedJid != null &&
         state is AuthenticationComplete;
-    unawaited(_setEmailForegroundKeepalive(emailService, shouldRun));
+    fireAndForget(
+      () => _setEmailForegroundKeepalive(emailService, shouldRun),
+      operationName: 'AuthenticationCubit.updateEmailForegroundKeepalive',
+    );
   }
 
   Future<void> _setEmailForegroundKeepalive(

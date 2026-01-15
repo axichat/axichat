@@ -193,7 +193,10 @@ mixin AvatarService on XmppBase, MucService {
         if (peerJid.isEmpty) return;
         if (peerJid == myJid) return;
         if (!await _shouldRefreshConversationAvatar(peerJid)) return;
-        unawaited(_refreshConversationAvatars([peerJid]));
+        fireAndForget(
+          () => _refreshConversationAvatars([peerJid]),
+          operationName: 'AvatarService.refreshConversationAvatars',
+        );
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
@@ -275,8 +278,14 @@ mixin AvatarService on XmppBase, MucService {
         );
         _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
-          unawaited(_notifyCachedSelfAvatarIfAvailable());
-          unawaited(refreshSelfAvatarIfNeeded());
+          fireAndForget(
+            _notifyCachedSelfAvatarIfAvailable,
+            operationName: 'AvatarService.notifyCachedSelfAvatarIfAvailable',
+          );
+          fireAndForget(
+            refreshSelfAvatarIfNeeded,
+            operationName: 'AvatarService.refreshSelfAvatarIfNeeded',
+          );
         }
         if (event.resumed) return;
         await _refreshRosterAvatarsFromCache();
@@ -323,14 +332,20 @@ mixin AvatarService on XmppBase, MucService {
     _selfAvatarRefreshTimer = Timer.periodic(_selfAvatarRefreshInterval, (_) {
       if (connectionState != ConnectionState.connected) return;
       if (avatarEncryptionKey == null) return;
-      unawaited(refreshSelfAvatarIfNeeded());
+      fireAndForget(
+        refreshSelfAvatarIfNeeded,
+        operationName: 'AvatarService.refreshSelfAvatarIfNeeded',
+      );
     });
   }
 
   void scheduleAvatarRefresh(Iterable<String> jids, {bool force = false}) {
     for (final jid in jids) {
       if (_isMucAvatarJid(jid)) continue;
-      unawaited(_refreshAvatarForJid(jid, force: force));
+      fireAndForget(
+        () => _refreshAvatarForJid(jid, force: force),
+        operationName: 'AvatarService.refreshAvatarForJid',
+      );
     }
   }
 

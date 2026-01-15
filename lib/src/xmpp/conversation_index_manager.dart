@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
@@ -249,7 +250,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'ConversationIndexManager.bootstrap',
+      );
       return super.onXmppEvent(event);
     }
 
@@ -295,7 +299,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      unawaited(_refreshFromServer());
+      fireAndForget(
+        _refreshFromServer,
+        operationName: 'ConversationIndexManager.refreshFromServer',
+      );
     }
     return false;
   }
@@ -370,7 +377,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        unawaited(_bootstrap());
+        fireAndForget(
+          _bootstrap,
+          operationName: 'ConversationIndexManager.bootstrap',
+        );
       }
     }
   }
@@ -667,7 +677,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'ConversationIndexManager.bootstrap',
+      );
     }
   }
 
@@ -681,7 +694,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'ConversationIndexManager.bootstrap',
+      );
     }
   }
 

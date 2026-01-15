@@ -242,19 +242,21 @@ mixin MucService on XmppBase, BaseStreamService {
   void _persistMucServiceHost(String? host) {
     final normalized = host?.trim();
     if (normalized == null || normalized.isEmpty) {
-      unawaited(
-        _dbOp<XmppStateStore>(
+      fireAndForget(
+        () => _dbOp<XmppStateStore>(
           (ss) => ss.delete(key: _mucServiceHostStorageKey),
           awaitDatabase: true,
         ),
+        operationName: 'MucService.clearMucServiceHost',
       );
       return;
     }
-    unawaited(
-      _dbOp<XmppStateStore>(
+    fireAndForget(
+      () => _dbOp<XmppStateStore>(
         (ss) => ss.write(key: _mucServiceHostStorageKey, value: normalized),
         awaitDatabase: true,
       ),
+      operationName: 'MucService.persistMucServiceHost',
     );
   }
 
@@ -463,7 +465,10 @@ mixin MucService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
-        unawaited(_bootstrapMucOnLogin());
+        fireAndForget(
+          _bootstrapMucOnLogin,
+          operationName: 'MucService.bootstrapMucOnLogin',
+        );
       });
   }
 
@@ -656,7 +661,10 @@ mixin MucService on XmppBase, BaseStreamService {
     _roomsNeedingJoin.clear();
     for (final entry in _roomStates.entries) {
       final room = entry.value;
-      unawaited(_setMucManagerJoinedState(roomJid: entry.key, joined: false));
+      fireAndForget(
+        () => _setMucManagerJoinedState(roomJid: entry.key, joined: false),
+        operationName: 'MucService.setMucManagerJoinedState',
+      );
       if (room.selfPresenceStatusCodes.isEmpty &&
           room.selfPresenceReason == null) {
         continue;
@@ -760,7 +768,10 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     _roomStates[key] = room;
     _roomStreams[key]?.add(room);
-    unawaited(_setMucManagerJoinedState(roomJid: key, joined: false));
+    fireAndForget(
+      () => _setMucManagerJoinedState(roomJid: key, joined: false),
+      operationName: 'MucService.setMucManagerJoinedState',
+    );
   }
 
   void _updateRoomSubject(String roomJid, String? subject) {
@@ -941,32 +952,40 @@ mixin MucService on XmppBase, BaseStreamService {
     try {
       final resolvedHistoryStanzas =
           maxHistoryStanzas ?? _defaultMucJoinHistoryStanzas;
-      unawaited(
-        manager
+      fireAndForget(
+        () => manager
             .joinRoom(
-          mox.JID.fromString(normalizedRoom).toBare(),
-          nickname,
-          maxHistoryStanzas: resolvedHistoryStanzas,
-        )
+              mox.JID.fromString(normalizedRoom).toBare(),
+              nickname,
+              maxHistoryStanzas: resolvedHistoryStanzas,
+            )
             .then((result) {
-          if (result.isType<mox.MUCError>()) {
-            _completeJoinAttempt(
-              normalizedRoom,
-              error: XmppMessageException(),
-            );
-            return;
-          }
-        }).catchError((Object error, StackTrace stackTrace) {
-          _completeJoinAttempt(
-            normalizedRoom,
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }),
+              if (result.isType<mox.MUCError>()) {
+                _completeJoinAttempt(
+                  normalizedRoom,
+                  error: XmppMessageException(),
+                );
+                return;
+              }
+            })
+            .catchError((Object error, StackTrace stackTrace) {
+              _completeJoinAttempt(
+                normalizedRoom,
+                error: error,
+                stackTrace: stackTrace,
+              );
+            }),
+        operationName: 'MucService.joinRoom',
       );
-      unawaited(_pollForSelfPresenceFromMucManager(normalizedRoom));
+      fireAndForget(
+        () => _pollForSelfPresenceFromMucManager(normalizedRoom),
+        operationName: 'MucService.pollForSelfPresenceFromMucManager',
+      );
       await joinCompleter.future.timeout(_mucJoinTimeout);
-      unawaited(_refreshRoomAvatar(normalizedRoom));
+      fireAndForget(
+        () => _refreshRoomAvatar(normalizedRoom),
+        operationName: 'MucService.refreshRoomAvatar',
+      );
     } on TimeoutException {
       _mucJoinCompleters.remove(normalizedRoom);
       final roomState = _roomStates[normalizedRoom];
@@ -1854,7 +1873,10 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
     if (bookmarks.isEmpty) return;
     await _upsertChatsFromBookmarks(bookmarks);
-    unawaited(refreshRoomAvatars(bookmarks));
+    fireAndForget(
+      () => refreshRoomAvatars(bookmarks),
+      operationName: 'MucService.refreshRoomAvatars',
+    );
 
     for (final bookmark in bookmarks) {
       final roomJid = bookmark.roomBare.toString();
@@ -2316,16 +2338,23 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     _completeJoinAttempt(roomJid);
     if (event.statusCodes.contains(mucStatusConfigurationChanged)) {
-      unawaited(_refreshRoomAvatar(roomJid));
+      fireAndForget(
+        () => _refreshRoomAvatar(roomJid),
+        operationName: 'MucService.refreshRoomAvatar',
+      );
     }
 
-    unawaited(
-      _dbOp<XmppDatabase>((db) async {
-        final chat = await db.getChat(roomJid);
-        if (chat != null && chat.myNickname != nextNick) {
-          await db.updateChat(chat.copyWith(myNickname: nextNick));
-        }
-      }, awaitDatabase: true),
+    fireAndForget(
+      () => _dbOp<XmppDatabase>(
+        (db) async {
+          final chat = await db.getChat(roomJid);
+          if (chat != null && chat.myNickname != nextNick) {
+            await db.updateChat(chat.copyWith(myNickname: nextNick));
+          }
+        },
+        awaitDatabase: true,
+      ),
+      operationName: 'MucService.persistSelfNickname',
     );
   }
 

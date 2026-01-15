@@ -17,6 +17,7 @@ import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -507,14 +508,20 @@ class _ChatListTileState extends State<ChatListTile> {
     late final VoidCallback tileOnTap;
     if (chatsState() == null) {
       tileOnTap = () {
-        unawaited(_handleTap(item));
+        fireAndForget(
+          () => _handleTap(item),
+          operationName: 'ChatsList.handleTap',
+        );
       };
     } else if (selectionActive) {
       tileOnTap =
           () => context.read<ChatsCubit>().toggleChatSelection(item.jid);
     } else {
       tileOnTap = () {
-        unawaited(_handleTap(item));
+        fireAndForget(
+          () => _handleTap(item),
+          operationName: 'ChatsList.handleTap',
+        );
       };
     }
     final tilePadding = EdgeInsetsDirectional.only(
@@ -741,7 +748,7 @@ class _ChatListTileState extends State<ChatListTile> {
         return;
       }
     }
-    unawaited(context.read<ChatsCubit>().openChat(jid: chat.jid));
+    await context.read<ChatsCubit>().openChat(jid: chat.jid);
   }
 
   Future<void> _confirmDelete(Chat chat) async {
@@ -885,7 +892,12 @@ class _ChatListTileState extends State<ChatListTile> {
     return [
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.messagesSquare),
-        onPressed: disabled ? null : () => unawaited(_handleTap(chat)),
+        onPressed: disabled
+            ? null
+            : () => fireAndForget(
+                  () => _handleTap(chat),
+                  operationName: 'ChatsList.handleTap',
+                ),
         child: Text(l10n.commonOpen),
       ),
       ShadContextMenuItem(
@@ -898,7 +910,12 @@ class _ChatListTileState extends State<ChatListTile> {
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.share2),
         onPressed:
-            disabled ? null : () => unawaited(_exportChatFromContextMenu(chat)),
+            disabled
+                ? null
+                : () => fireAndForget(
+                      () => _exportChatFromContextMenu(chat),
+                      operationName: 'ChatsList.exportChatFromContextMenu',
+                    ),
         child: Text(l10n.commonExport),
       ),
       ShadContextMenuItem(
