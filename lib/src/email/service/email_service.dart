@@ -620,8 +620,16 @@ class EmailService {
       }
     }
 
-    await _transport.ensureAccountSession(null);
-    final int deltaAccountId = _transport.activeAccountId;
+    final existingAccountIds = await _transport.accountIds();
+    final int deltaAccountId;
+    if (existingAccountIds.isNotEmpty) {
+      deltaAccountId = existingAccountIds.first;
+    } else if (_transport.accountsActive) {
+      deltaAccountId = await _transport.createAccount();
+    } else {
+      deltaAccountId = deltaAccountIdLegacy;
+    }
+    await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
     var alreadyProvisioned =
         (await _credentialStore.read(key: provisionedKey)) ==
