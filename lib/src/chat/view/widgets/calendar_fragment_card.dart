@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 const double _fragmentCardRadius = 18.0;
@@ -88,18 +89,27 @@ class CalendarFragmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final accentColor = colors.primary;
+    final bool isTaskFragment =
+        fragment.maybeMap(task: (_) => true, orElse: () => false);
+    final double cardRadius =
+        isTaskFragment ? calendarEventRadius : _fragmentCardRadius;
+    final double accentRadius =
+        isTaskFragment ? cardRadius : _fragmentAccentRadius;
     final card = DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.card,
         shape: ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(_fragmentCardRadius),
+          borderRadius: BorderRadius.circular(cardRadius),
           side: BorderSide(color: colors.border),
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CalendarFragmentAccent(color: accentColor),
+          _CalendarFragmentAccent(
+            color: accentColor,
+            radius: accentRadius,
+          ),
           Expanded(
             child: Padding(
               padding: _fragmentCardPadding,
@@ -127,7 +137,7 @@ class CalendarFragmentCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(_fragmentCardRadius),
+        borderRadius: BorderRadius.circular(cardRadius),
         child: card,
       ),
     );
@@ -135,9 +145,10 @@ class CalendarFragmentCard extends StatelessWidget {
 }
 
 class _CalendarFragmentAccent extends StatelessWidget {
-  const _CalendarFragmentAccent({required this.color});
+  const _CalendarFragmentAccent({required this.color, required this.radius});
 
   final Color color;
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +157,7 @@ class _CalendarFragmentAccent extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(_fragmentAccentRadius),
+          borderRadius: BorderRadius.circular(radius),
         ),
       ),
     );

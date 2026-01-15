@@ -83,8 +83,7 @@ class PriorityCheckboxTile extends StatelessWidget {
                         isIndeterminate: isIndeterminate,
                         onChanged: onChanged,
                         activeColor: color,
-                        borderColor:
-                            isEnabled ? borderColor : calendarBorderColor,
+                        borderColor: borderColor,
                         visualSize: 18,
                       ),
                     ),

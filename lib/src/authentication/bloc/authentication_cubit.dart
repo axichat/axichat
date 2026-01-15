@@ -374,10 +374,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _buildBaseUrl().replace(path: '/register/new/');
 
   Uri _buildChangePasswordUrl() =>
-      _buildBaseUrl().replace(path: '/register/password/');
+      _buildBaseUrl().replace(path: '/register/change_password/');
 
   Uri _buildDeleteAccountUrl() =>
-      _buildBaseUrl().replace(path: '/register/unregister/');
+      _buildBaseUrl().replace(path: '/register/delete/');
 
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
@@ -2233,7 +2233,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           'host': resolvedHost,
           'password': password,
           'password2': password2,
-          'oldpassword': oldPassword,
+          'passwordold': oldPassword,
         },
       );
       if (response.statusCode == 200) {
@@ -2345,7 +2345,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           'host': host,
           'password': oldPassword,
           'password2': oldPassword,
-          'oldpassword': newPassword,
+          'passwordold': newPassword,
         },
       );
       return response.statusCode == 200;
@@ -2364,7 +2364,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       return await _httpClient.post(
         _buildDeleteAccountUrl(),
-        body: {'username': username, 'host': host, 'password': password},
+        body: {
+          'username': username,
+          'host': host,
+          'password': password,
+        },
       );
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to delete account $logContext', error, stackTrace);
