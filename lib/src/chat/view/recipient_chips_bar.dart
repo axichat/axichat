@@ -28,6 +28,8 @@ const double _suggestionMaxHeight = 320;
 const double _chipAvatarSize = 20.0;
 const double _chipStatusBadgeSize = 12.0;
 const double _chipStatusBadgeBorderWidth = 1.5;
+const double _recipientAutocompleteMinWidth = 180.0;
+const double _recipientAutocompleteMaxWidth = 320.0;
 const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
   4,
   0,
@@ -1137,7 +1139,10 @@ class _RecipientAutocompleteField extends StatelessWidget {
   Widget build(BuildContext context) {
     return AutofillGroup(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
+        constraints: const BoxConstraints(
+          minWidth: _recipientAutocompleteMinWidth,
+          maxWidth: _recipientAutocompleteMaxWidth,
+        ),
         child: _RecipientAutocompleteOverlay(
           controller: controller,
           focusNode: focusNode,

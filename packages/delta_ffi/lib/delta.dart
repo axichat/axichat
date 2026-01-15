@@ -204,7 +204,6 @@ List<String> _bundledLibraryFiles({bool includeMissing = false}) {
 
 Set<Directory> _bundleSearchDirectories() {
   final Set<Directory> results = <Directory>{};
-
   void addDirectory(Directory directory) {
     results.add(directory);
   }

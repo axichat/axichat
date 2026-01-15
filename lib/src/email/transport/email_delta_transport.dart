@@ -730,6 +730,15 @@ class EmailDeltaTransport implements ChatTransport {
   int? _resolveAccountId(int? accountId) {
     final requestedAccountId = accountId;
     if (requestedAccountId != null) {
+      if (requestedAccountId == deltaAccountIdLegacy && _accounts != null) {
+        final primary = _primaryAccountId;
+        if (primary != null) {
+          return primary;
+        }
+        if (_accountSessions.isNotEmpty) {
+          return _accountSessions.keys.first;
+        }
+      }
       return requestedAccountId;
     }
     final context = _context;

@@ -249,6 +249,13 @@ class EmailService {
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
 
+  static const String _deltaQueueOperationNameProcessDeltaEvent =
+      'EmailService.processDeltaEvent';
+  static const String _deltaQueueOperationNameFlushQueuedNotifications =
+      'EmailService.flushQueuedNotifications';
+  static const String _deltaQueueOperationNameSyncContactsFromCore =
+      'EmailService.syncContactsFromCore';
+
   EmailService({
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
@@ -284,9 +291,9 @@ class EmailService {
       onUnmarkSpam: _transport.unblockContact,
     );
     _eventListener = (event) {
-      fireAndForget(
+      _enqueueDeltaOperation(
         () => _processDeltaEvent(event),
-        operationName: 'EmailService.processDeltaEvent',
+        operationName: _deltaQueueOperationNameProcessDeltaEvent,
       );
     };
     _transport.addEventListener(_eventListener);
@@ -308,6 +315,9 @@ class EmailService {
   final Map<String, RegisteredCredentialKey> _connectionOverrideKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
+
+  Future<void> _deltaOperationQueue = Future<void>.value();
+  int _deltaOperationQueueEpoch = 0;
 
   String? _databasePrefix;
   String? _databasePassphrase;
@@ -928,6 +938,7 @@ class EmailService {
     await _stopForegroundKeepalive();
     _resetImapCapabilities();
     _clearNotificationQueue();
+    _resetDeltaOperationQueue();
     if (!clearCredentials) {
       return;
     }
@@ -953,6 +964,7 @@ class EmailService {
     _detachTransportListener();
     await _stopForegroundKeepalive();
     _clearNotificationQueue();
+    _resetDeltaOperationQueue();
     await _transport.dispose();
     await _transport.deleteStorageArtifacts();
     _running = false;
@@ -2002,40 +2014,47 @@ class EmailService {
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
-        fireAndForget(
-          _bootstrapActiveAccountIfNeeded,
-          operationName: 'EmailService.bootstrapActiveAccountIfNeeded',
-        );
-        fireAndForget(
-          refreshChatlistFromCore,
-          operationName: 'EmailService.refreshChatlistFromCore',
-        );
+        await _bootstrapActiveAccountIfNeeded();
+        await refreshChatlistFromCore();
         break;
       case DeltaEventType.connectivityChanged:
-        fireAndForget(
-          () => _refreshConnectivityState(
-            source: _EmailSyncSource.connectivityChangedEvent,
-          ),
-          operationName: 'EmailService.refreshConnectivityState',
+        await _refreshConnectivityState(
+          source: _EmailSyncSource.connectivityChangedEvent,
         );
-        fireAndForget(
-          _bootstrapActiveAccountIfNeeded,
-          operationName: 'EmailService.bootstrapActiveAccountIfNeeded',
-        );
-        fireAndForget(
-          _runReconnectCatchUp,
-          operationName: 'EmailService.reconnectCatchUp',
-        );
+        await _bootstrapActiveAccountIfNeeded();
+        await _runReconnectCatchUp();
         break;
       case DeltaEventType.channelOverflow:
-        fireAndForget(
-          _handleChannelOverflow,
-          operationName: 'EmailService.handleChannelOverflow',
-        );
+        await _handleChannelOverflow();
         break;
       default:
         break;
     }
+  }
+
+  void _enqueueDeltaOperation(
+    Future<void> Function() operation, {
+    String? operationName,
+  }) {
+    final int epoch = _deltaOperationQueueEpoch;
+    _deltaOperationQueue = _deltaOperationQueue.then((_) async {
+      if (epoch != _deltaOperationQueueEpoch) {
+        return;
+      }
+      await operation();
+    }).catchError((Object error, StackTrace stackTrace) {
+      final operationLabel = operationName ?? 'delta operation';
+      _log.warning(
+        'Unhandled $operationLabel failure (${error.runtimeType}).',
+        error.runtimeType,
+        stackTrace,
+      );
+    });
+  }
+
+  void _resetDeltaOperationQueue() {
+    _deltaOperationQueueEpoch += 1;
+    _deltaOperationQueue = Future<void>.value();
   }
 
   void _queueNotification({
@@ -2048,9 +2067,9 @@ class EmailService {
     );
     _notificationFlushTimer ??= Timer(_notificationFlushDelay, () {
       _notificationFlushTimer = null;
-      fireAndForget(
+      _enqueueDeltaOperation(
         _flushQueuedNotifications,
-        operationName: 'EmailService.flushQueuedNotifications',
+        operationName: _deltaQueueOperationNameFlushQueuedNotifications,
       );
     });
   }
@@ -2065,9 +2084,9 @@ class EmailService {
     }
     _contactsSyncTimer = Timer(_contactsSyncDebounce, () {
       _contactsSyncTimer = null;
-      fireAndForget(
+      _enqueueDeltaOperation(
         syncContactsFromCore,
-        operationName: 'EmailService.syncContactsFromCore',
+        operationName: _deltaQueueOperationNameSyncContactsFromCore,
       );
     });
   }
