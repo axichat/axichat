@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -227,7 +228,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _abstractOnlyUntil = DateTime.now().add(_abstractWarmupDuration);
     emit(state.copyWith(backgroundColor: colors.accent, clearError: true));
     if (_carouselEnabled) {
-      unawaited(_startAvatarCarousel());
+      fireAndForget(
+        _startAvatarCarousel,
+        operationName: 'SignupAvatarCubit.startAvatarCarousel',
+      );
     }
   }
 
@@ -457,7 +461,13 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   void _scheduleRebuild() {
     _rebuildTimer?.cancel();
-    _rebuildTimer = Timer(_rebuildDelay, () => unawaited(_rebuildAvatar()));
+    _rebuildTimer = Timer(
+      _rebuildDelay,
+      () => fireAndForget(
+        _rebuildAvatar,
+        operationName: 'SignupAvatarCubit.rebuildAvatar',
+      ),
+    );
   }
 
   Future<void> _applyAvatarFromBytes(Uint8List bytes) async {
@@ -708,11 +718,12 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       }
     }
 
-    unawaited(
-      _prefillCarousel(
+    fireAndForget(
+      () => _prefillCarousel(
         targetSize: _avatarCarouselInitialBuffer,
         preferAbstract: !_nonAbstractAvatarsReady,
       ),
+      operationName: 'SignupAvatarCubit.prefillCarouselInitial',
     );
 
     if (!_carouselEnabled ||
@@ -729,11 +740,12 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         return;
       }
       _showNextCarouselAvatar(colors, allowFallback: false);
-      unawaited(
-        _prefillCarousel(
+      fireAndForget(
+        () => _prefillCarousel(
           targetSize: _avatarCarouselSustainBuffer,
           preferAbstract: !_nonAbstractAvatarsReady,
         ),
+        operationName: 'SignupAvatarCubit.prefillCarouselSustain',
       );
     });
   }
@@ -751,7 +763,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         _avatarCarouselTimer != null) {
       return;
     }
-    unawaited(_startAvatarCarousel());
+    fireAndForget(
+      _startAvatarCarousel,
+      operationName: 'SignupAvatarCubit.startAvatarCarousel',
+    );
   }
 
   bool _showNextCarouselAvatar(
@@ -852,7 +867,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         !_warmingNonAbstractAvatars &&
         _nonAbstractTemplates.isNotEmpty) {
       _warmingNonAbstractAvatars = true;
-      unawaited(_warmFirstNonAbstractAvatar(colors));
+      fireAndForget(
+        () => _warmFirstNonAbstractAvatar(colors),
+        operationName: 'SignupAvatarCubit.warmFirstNonAbstractAvatar',
+      );
     }
 
     var added = 0;

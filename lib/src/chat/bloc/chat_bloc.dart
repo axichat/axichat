@@ -19,6 +19,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/event_transform.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -261,7 +262,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .chatStream(chatLookupJid)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
-      unawaited(_initializeViewFilter());
+      fireAndForget(
+        _initializeViewFilter,
+        operationName: 'ChatBloc.initializeViewFilter',
+      );
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
       (syncState) => add(_EmailSyncStateChanged(syncState)),
@@ -283,10 +287,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final streamReady = xmppService.lastStreamReady;
             final shouldCatchUp = streamReady?.isResumed != true;
             if (shouldCatchUp && !_shouldSkipInitialMamSync(chat)) {
-              unawaited(_catchUpFromMam());
+              fireAndForget(
+                _catchUpFromMam,
+                operationName: 'ChatBloc.catchUpFromMam',
+              );
             }
-            unawaited(_prefetchPeerAvatar(chat));
-            unawaited(_syncPinnedMessagesForChat(chat));
+            fireAndForget(
+              () => _prefetchPeerAvatar(chat),
+              operationName: 'ChatBloc.prefetchPeerAvatar',
+            );
+            fireAndForget(
+              () => _syncPinnedMessagesForChat(chat),
+              operationName: 'ChatBloc.syncPinnedMessagesForChat',
+            );
           }
         }
       });
@@ -300,8 +313,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _settingsState = state;
     });
     _lifecycleListener = AppLifecycleListener(
-      onResume: () => unawaited(_handleLifecycleResumed()),
-      onShow: () => unawaited(_handleLifecycleResumed()),
+      onResume: () => fireAndForget(
+        _handleLifecycleResumed,
+        operationName: 'ChatBloc.handleLifecycleResumed',
+      ),
+      onShow: () => fireAndForget(
+        _handleLifecycleResumed,
+        operationName: 'ChatBloc.handleLifecycleResumed',
+      ),
     );
   }
 
@@ -808,7 +827,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) {
     final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
     if (targetJid == null) return;
-    unawaited(_messageSubscription?.cancel());
+    fireAndForget(
+      () => _messageSubscription?.cancel(),
+      operationName: 'ChatBloc.cancelMessageSubscription',
+    );
     _currentMessageLimit = limit;
     final chat = state.chat;
     final emailService = _emailService;
@@ -846,7 +868,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   void _subscribeToPinnedMessages(Chat chat) {
     final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
-    unawaited(_pinnedSubscription?.cancel());
+    fireAndForget(
+      () => _pinnedSubscription?.cancel(),
+      operationName: 'ChatBloc.cancelPinnedSubscription',
+    );
     if (trimmedChatJid == null) {
       _pinnedSubscription = null;
       return;
@@ -862,16 +887,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .pinnedMessagesStream(trimmedChatJid)
           .listen((items) => add(_PinnedMessagesUpdated(items)));
     }
-    unawaited(_syncPinnedMessagesForChat(chat));
+    fireAndForget(
+      () => _syncPinnedMessagesForChat(chat),
+      operationName: 'ChatBloc.syncPinnedMessagesForChat',
+    );
   }
 
   void _subscribeToTypingParticipants(Chat chat) {
     if (!_xmppAllowedForChat(chat)) {
-      unawaited(_typingParticipantsSubscription?.cancel());
+      fireAndForget(
+        () => _typingParticipantsSubscription?.cancel(),
+        operationName: 'ChatBloc.cancelTypingSubscription',
+      );
       _typingParticipantsSubscription = null;
       return;
     }
-    unawaited(_typingParticipantsSubscription?.cancel());
+    fireAndForget(
+      () => _typingParticipantsSubscription?.cancel(),
+      operationName: 'ChatBloc.cancelTypingSubscription',
+    );
     _typingParticipantsSubscription =
         _chatsService.typingParticipantsStream(chat.jid).listen(
               (participants) => add(_TypingParticipantsUpdated(participants)),
@@ -965,7 +999,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         limit: _currentMessageLimit,
         filter: state.viewFilter,
       );
-      unawaited(_prefetchPeerAvatar(event.chat));
+      fireAndForget(
+        () => _prefetchPeerAvatar(event.chat),
+        operationName: 'ChatBloc.prefetchPeerAvatar',
+      );
     }
     if (typingContextChanged) {
       _subscribeToTypingParticipants(event.chat);
@@ -976,9 +1013,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _resetMamCursors(resetContext);
     if (_xmppAllowedForChat(event.chat) &&
         !_shouldSkipInitialMamSync(event.chat)) {
-      unawaited(_hydrateLatestFromMam(event.chat));
+      fireAndForget(
+        () => _hydrateLatestFromMam(event.chat),
+        operationName: 'ChatBloc.hydrateLatestFromMam',
+      );
     }
-    unawaited(_roomSubscription?.cancel());
+    await _roomSubscription?.cancel();
+    _roomSubscription = null;
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription = _mucService
           .roomStateStream(event.chat.jid)
@@ -989,7 +1030,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (!resetContext && state.items.isNotEmpty) {
         _mucService.trackOccupantsFromMessages(event.chat.jid, state.items);
       }
-      unawaited(_ensureMucMembership(event.chat));
+      fireAndForget(
+        () => _ensureMucMembership(event.chat),
+        operationName: 'ChatBloc.ensureMucMembership',
+      );
     } else {
       emit(state.copyWith(roomState: null));
     }
@@ -1004,30 +1048,41 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
     _seedLocalRoomOccupant(chat, event.roomState);
-    unawaited(
-      _refreshRoomAffiliationsIfNeeded(chat: chat, roomState: event.roomState),
+    fireAndForget(
+      () => _refreshRoomAffiliationsIfNeeded(
+        chat: chat,
+        roomState: event.roomState,
+      ),
+      operationName: 'ChatBloc.refreshRoomAffiliationsIfNeeded',
     );
   }
 
   void _primeRoomState(Chat chat) {
     if (chat.type == ChatType.groupChat) {
-      unawaited(_mucService.seedDummyRoomData(chat.jid));
+      fireAndForget(
+        () => _mucService.seedDummyRoomData(chat.jid),
+        operationName: 'ChatBloc.seedDummyRoomData',
+      );
     }
     final cachedRoom = _mucService.roomStateFor(chat.jid);
     if (cachedRoom != null) {
       add(_RoomStateUpdated(cachedRoom));
     }
-    unawaited(() async {
-      try {
-        final warmed = await _mucService.warmRoomFromHistory(roomJid: chat.jid);
-        if (isClosed) return;
-        if (_bareJid(state.chat?.jid) != _bareJid(chat.jid)) return;
-        if (state.roomState != null) return;
-        add(_RoomStateUpdated(warmed));
-      } on Exception catch (error, stackTrace) {
-        _log.safeFine(_roomStateWarmFailedLogMessage, error, stackTrace);
-      }
-    }());
+    fireAndForget(
+      () async {
+        try {
+          final warmed =
+              await _mucService.warmRoomFromHistory(roomJid: chat.jid);
+          if (isClosed) return;
+          if (_bareJid(state.chat?.jid) != _bareJid(chat.jid)) return;
+          if (state.roomState != null) return;
+          add(_RoomStateUpdated(warmed));
+        } on Exception catch (error, stackTrace) {
+          _log.safeFine(_roomStateWarmFailedLogMessage, error, stackTrace);
+        }
+      },
+      operationName: 'ChatBloc.warmRoomFromHistory',
+    );
   }
 
   Future<void> _primeDemoPendingAttachment(
@@ -1794,7 +1849,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (event.state == ConnectionState.connected &&
         chat?.type == ChatType.groupChat) {
-      unawaited(_ensureMucMembership(chat!));
+      fireAndForget(
+        () => _ensureMucMembership(chat!),
+        operationName: 'ChatBloc.ensureMucMembership',
+      );
     }
   }
 

@@ -12,6 +12,7 @@ import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -762,7 +763,10 @@ class _UnknownSenderBanner extends StatelessWidget {
                     size: _unknownSenderIconSize,
                   ),
                   label: l10n.rosterAddTitle,
-                  onPressed: () => unawaited(onAddContact!.call()),
+                  onPressed: () => fireAndForget(
+                    onAddContact!,
+                    operationName: 'ChatView.addContact',
+                  ),
                 ),
               if (onReportSpam != null)
                 ContextActionButton(
@@ -771,7 +775,10 @@ class _UnknownSenderBanner extends StatelessWidget {
                     size: _unknownSenderIconSize,
                   ),
                   label: l10n.chatReportSpam,
-                  onPressed: () => unawaited(onReportSpam!.call()),
+                  onPressed: () => fireAndForget(
+                    onReportSpam!,
+                    operationName: 'ChatView.reportSpam',
+                  ),
                   destructive: true,
                 ),
             ];
@@ -2847,7 +2854,10 @@ class _ChatState extends State<Chat> {
 
   void _clearMessageSelection() {
     if (_selectedMessageId == null) return;
-    unawaited(_reboundSelectionScroll());
+    fireAndForget(
+      _reboundSelectionScroll,
+      operationName: 'ChatView.reboundSelectionScroll',
+    );
     setState(() {
       _selectedMessageId = null;
       _activeSelectionExtrasKey = null;
@@ -3803,7 +3813,11 @@ class _ChatState extends State<Chat> {
                         usePrimary: false,
                         onPressed: () {
                           if (!prepareChatExit()) return;
-                          unawaited(context.read<ChatsCubit>().closeAllChats());
+                          final chatsCubit = context.read<ChatsCubit>();
+                          fireAndForget(
+                            chatsCubit.closeAllChats,
+                            operationName: 'ChatView.closeAllChats',
+                          );
                         },
                       );
                 final List<AppBarActionItem> navigationActions =
@@ -3815,7 +3829,11 @@ class _ChatState extends State<Chat> {
                       usePrimary: false,
                       onPressed: () {
                         if (!prepareChatExit()) return;
-                        unawaited(context.read<ChatsCubit>().popChat());
+                        final chatsCubit = context.read<ChatsCubit>();
+                        fireAndForget(
+                          chatsCubit.popChat,
+                          operationName: 'ChatView.popChat',
+                        );
                       },
                     ),
                   if (!readOnly && forwardStack.isNotEmpty)
@@ -3825,7 +3843,11 @@ class _ChatState extends State<Chat> {
                       usePrimary: false,
                       onPressed: () {
                         if (!prepareChatExit()) return;
-                        unawaited(context.read<ChatsCubit>().restoreChat());
+                        final chatsCubit = context.read<ChatsCubit>();
+                        fireAndForget(
+                          chatsCubit.restoreChat,
+                          operationName: 'ChatView.restoreChat',
+                        );
                       },
                     ),
                 ];
@@ -7034,10 +7056,11 @@ class _ChatState extends State<Chat> {
                                                                               context.read<ChatsCubit?>();
                                                                           if (chatsCubit !=
                                                                               null) {
-                                                                            unawaited(
-                                                                              chatsCubit.pushChat(
+                                                                            fireAndForget(
+                                                                              () => chatsCubit.pushChat(
                                                                                 jid: chat.jid,
                                                                               ),
+                                                                              operationName: 'ChatView.pushChatFromRecipient',
                                                                             );
                                                                           }
                                                                         },
@@ -7251,10 +7274,11 @@ class _ChatState extends State<Chat> {
                                                           VoidCallback? onEdit;
                                                           if (canEdit) {
                                                             onEdit =
-                                                                () => unawaited(
-                                                                      _handleEditMessage(
+                                                                () => fireAndForget(
+                                                                      () => _handleEditMessage(
                                                                         messageModel,
                                                                       ),
+                                                                      operationName: 'ChatView.handleEditMessage',
                                                                     );
                                                           }
                                                           VoidCallback?
@@ -9721,9 +9745,15 @@ final class _FileMetadataStreamEntry {
   void dispose() {
     final subscription = _subscription;
     if (subscription != null) {
-      unawaited(subscription.cancel());
+      fireAndForget(
+        subscription.cancel,
+        operationName: 'ChatView.cancelLatestFileMetadataSubscription',
+      );
     }
-    unawaited(_controller.close());
+    fireAndForget(
+      _controller.close,
+      operationName: 'ChatView.closeLatestFileMetadataController',
+    );
   }
 }
 

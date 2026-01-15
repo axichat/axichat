@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/jid_extensions.dart';
@@ -173,7 +174,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'EmailBlocklistPubSubManager.bootstrap',
+      );
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
@@ -380,7 +384,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        unawaited(_bootstrap());
+        fireAndForget(
+          _bootstrap,
+          operationName: 'EmailBlocklistPubSubManager.bootstrap',
+        );
       }
     }
   }
@@ -524,7 +531,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      unawaited(_refreshFromServer());
+      fireAndForget(
+        _refreshFromServer,
+        operationName: 'EmailBlocklistPubSubManager.refreshFromServer',
+      );
     }
     return false;
   }
@@ -627,7 +637,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'EmailBlocklistPubSubManager.bootstrap',
+      );
     }
   }
 
@@ -641,7 +654,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      unawaited(_bootstrap());
+      fireAndForget(
+        _bootstrap,
+        operationName: 'EmailBlocklistPubSubManager.bootstrap',
+      );
     }
   }
 
