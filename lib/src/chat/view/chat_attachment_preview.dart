@@ -2660,9 +2660,9 @@ void _scheduleShareCleanup(File sharedFile) {
     return;
   }
   final Directory shareDir = sharedFile.parent;
-  fireAndForget(
+  Timer(
+    _attachmentShareCleanupDelay,
     () async {
-      await Future<void>.delayed(_attachmentShareCleanupDelay);
       try {
         if (await shareDir.exists()) {
           await shareDir.delete(recursive: true);
@@ -2671,7 +2671,6 @@ void _scheduleShareCleanup(File sharedFile) {
         return;
       }
     },
-    operationName: 'ChatAttachmentPreview.cleanupShareDir',
   );
 }
 
