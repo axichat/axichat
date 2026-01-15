@@ -151,7 +151,19 @@ Future<void> _moveToInbox(BuildContext context, Chat chat) async {
   final l10n = context.l10n;
   final xmppService = context.read<XmppService?>();
   final toaster = ShadToaster.maybeOf(context);
-  await xmppService?.setSpamStatus(jid: chat.jid, spam: false);
+  if (xmppService == null) {
+    toaster?.show(FeedbackToast.error(message: l10n.chatSpamUpdateFailed));
+    return;
+  }
+  try {
+    await xmppService.setSpamStatus(jid: chat.jid, spam: false);
+  } on Exception {
+    toaster?.show(FeedbackToast.error(message: l10n.chatSpamUpdateFailed));
+    return;
+  }
+  if (!context.mounted) {
+    return;
+  }
   toaster?.show(
     FeedbackToast.success(
       title: l10n.spamMoveToastTitle,

@@ -286,7 +286,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     bool didCopy = false;
     if (decision.addToPersonal && _maybeReadPersonalCalendarBloc() != null) {
       final CalendarTask personalTask = task.copyForCalendar(style);
-      final bool copied = await _copyTaskToCalendar(
+      final bool copied = _copyTaskToCalendar(
         task: personalTask,
         style: style,
         bloc: context.read<CalendarBloc>(),
@@ -295,7 +295,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     }
     if (decision.addToChat && _maybeReadChatCalendarBloc() != null) {
       final CalendarTask chatTask = task.copyForCalendar(style);
-      final bool copied = await _copyTaskToCalendar(
+      final bool copied = _copyTaskToCalendar(
         task: chatTask,
         style: style,
         bloc: context.read<ChatCalendarBloc>(),
