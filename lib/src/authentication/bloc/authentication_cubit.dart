@@ -74,6 +74,17 @@ const String _databaseSecretsCheckFailedLog =
     'Failed to check database secrets for pending signup cleanup.';
 const String _databasePrefixKeySuffix = '_database_prefix';
 const String _databasePassphraseKeySuffix = '_database_passphrase';
+const String _registerPathNew = '/register/new/';
+const String _registerPathChangePassword = '/register/change_password/';
+const String _registerPathChangePasswordLegacy = '/register/password/';
+const String _registerPathDeleteAccount = '/register/delete/';
+const String _registerPathDeleteAccountLegacy = '/register/unregister/';
+const String _registerBodyKeyUsername = 'username';
+const String _registerBodyKeyHost = 'host';
+const String _registerBodyKeyPassword = 'password';
+const String _registerBodyKeyPassword2 = 'password2';
+const String _registerBodyKeyPasswordOld = 'passwordold';
+const String _registerBodyKeyPasswordOldLegacy = 'oldpassword';
 const int _pendingSignupRollbackRememberedDays = 7;
 const int _pendingSignupRollbackEphemeralHours = 24;
 const Duration _pendingSignupRollbackMaxAgeRemembered = Duration(
@@ -371,13 +382,65 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
 
   Uri _buildRegistrationUrl() =>
-      _buildBaseUrl().replace(path: '/register/new/');
+      _buildBaseUrl().replace(path: _registerPathNew);
 
   Uri _buildChangePasswordUrl() =>
-      _buildBaseUrl().replace(path: '/register/change_password/');
+      _buildBaseUrl().replace(path: _registerPathChangePassword);
+
+  Uri _buildChangePasswordLegacyUrl() =>
+      _buildBaseUrl().replace(path: _registerPathChangePasswordLegacy);
 
   Uri _buildDeleteAccountUrl() =>
-      _buildBaseUrl().replace(path: '/register/delete/');
+      _buildBaseUrl().replace(path: _registerPathDeleteAccount);
+
+  Uri _buildDeleteAccountLegacyUrl() =>
+      _buildBaseUrl().replace(path: _registerPathDeleteAccountLegacy);
+
+  bool _looksLikeMissingRegisterEndpoint(http.Response response) {
+    if (response.statusCode != 404) {
+      return false;
+    }
+    final body = response.body.trim();
+    if (body.isEmpty) {
+      return true;
+    }
+    final lower = body.toLowerCase();
+    if (lower == 'not found' || lower == '404' || lower == '404 not found') {
+      return true;
+    }
+    if (lower.contains('not found') && !lower.contains('account')) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<http.Response> _postRegisterForm({
+    required Uri primary,
+    Uri? fallback,
+    required Map<String, String> body,
+  }) async {
+    final response = await _httpClient.post(primary, body: body);
+    if (fallback == null) {
+      return response;
+    }
+    if (response.statusCode != 404) {
+      return response;
+    }
+
+    final fallbackResponse = await _httpClient.post(fallback, body: body);
+    if (fallbackResponse.statusCode != 404) {
+      return fallbackResponse;
+    }
+
+    final primaryLooksMissing = _looksLikeMissingRegisterEndpoint(response);
+    final fallbackLooksMissing = _looksLikeMissingRegisterEndpoint(
+      fallbackResponse,
+    );
+    if (primaryLooksMissing && !fallbackLooksMissing) {
+      return fallbackResponse;
+    }
+    return response;
+  }
 
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
@@ -2226,14 +2289,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           )
         : null;
     try {
-      final response = await _httpClient.post(
-        uri,
+      final response = await _postRegisterForm(
+        primary: uri,
+        fallback: _buildChangePasswordLegacyUrl(),
         body: {
-          'username': normalizedUsername,
-          'host': resolvedHost,
-          'password': password,
-          'password2': password2,
-          'passwordold': oldPassword,
+          _registerBodyKeyUsername: normalizedUsername,
+          _registerBodyKeyHost: resolvedHost,
+          _registerBodyKeyPassword: password,
+          _registerBodyKeyPassword2: password2,
+          _registerBodyKeyPasswordOld: oldPassword,
+          _registerBodyKeyPasswordOldLegacy: oldPassword,
         },
       );
       if (response.statusCode == 200) {
@@ -2282,6 +2347,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
+        if (_looksLikeMissingRegisterEndpoint(response)) {
+          _emit(
+            const AuthenticationPasswordChangeFailure(
+              'Password change is not available on this server.',
+            ),
+          );
+          return;
+        }
         _emit(const AuthenticationPasswordChangeFailure('Account not found.'));
         return;
       }
@@ -2338,14 +2411,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String newPassword,
   }) async {
     try {
-      final response = await _httpClient.post(
-        _buildChangePasswordUrl(),
+      final response = await _postRegisterForm(
+        primary: _buildChangePasswordUrl(),
+        fallback: _buildChangePasswordLegacyUrl(),
         body: {
-          'username': username,
-          'host': host,
-          'password': oldPassword,
-          'password2': oldPassword,
-          'passwordold': newPassword,
+          _registerBodyKeyUsername: username,
+          _registerBodyKeyHost: host,
+          _registerBodyKeyPassword: oldPassword,
+          _registerBodyKeyPassword2: oldPassword,
+          _registerBodyKeyPasswordOld: newPassword,
+          _registerBodyKeyPasswordOldLegacy: newPassword,
         },
       );
       return response.statusCode == 200;
@@ -2362,12 +2437,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String logContext,
   }) async {
     try {
-      return await _httpClient.post(
-        _buildDeleteAccountUrl(),
+      return await _postRegisterForm(
+        primary: _buildDeleteAccountUrl(),
+        fallback: _buildDeleteAccountLegacyUrl(),
         body: {
-          'username': username,
-          'host': host,
-          'password': password,
+          _registerBodyKeyUsername: username,
+          _registerBodyKeyHost: host,
+          _registerBodyKeyPassword: password,
         },
       );
     } on Exception catch (error, stackTrace) {
@@ -2418,7 +2494,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _emit(const AuthenticationUnregisterFailure(fallback));
         return;
       }
-      if (response.statusCode == 200 || response.statusCode == 404) {
+      if (response.statusCode == 200) {
+        await logout(severity: LogoutSeverity.burn);
+        await _removeCompletedAccountRecord(normalizedUsername, resolvedHost);
+        return;
+      }
+      if (response.statusCode == 404) {
+        if (_looksLikeMissingRegisterEndpoint(response)) {
+          _emit(const AuthenticationUnregisterFailure(fallback));
+          return;
+        }
         await logout(severity: LogoutSeverity.burn);
         await _removeCompletedAccountRecord(normalizedUsername, resolvedHost);
         return;
@@ -2697,7 +2782,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (response == null) {
       return false;
     }
-    if (response.statusCode == 200 || response.statusCode == 404) {
+    if (response.statusCode == 200) {
+      return true;
+    }
+    if (response.statusCode == 404) {
+      if (_looksLikeMissingRegisterEndpoint(response)) {
+        return false;
+      }
       return true;
     }
     _log.warning(
