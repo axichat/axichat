@@ -108,9 +108,14 @@ class SafeLogging {
   };
 
   static bool _verboseXmppTraffic = false;
+  static bool _rawXmppTraffic = false;
 
   static void setVerboseXmppTraffic({required bool enabled}) {
     _verboseXmppTraffic = enabled;
+  }
+
+  static void setRawXmppTraffic({required bool enabled}) {
+    _rawXmppTraffic = enabled;
   }
 
   static void debugLog(
@@ -141,6 +146,9 @@ class SafeLogging {
   static String _sanitize(String input) {
     if (input.startsWith(_xmppTrafficOutPrefix) ||
         input.startsWith(_xmppTrafficInPrefix)) {
+      if (_rawXmppTraffic) {
+        return input;
+      }
       return _verboseXmppTraffic
           ? _sanitizeXmppTraffic(input)
           : _summarizeXmppTraffic(input);
