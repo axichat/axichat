@@ -1446,7 +1446,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     if (provisioningFuture != null) {
       fireAndForget(
-        () => provisioningFuture.catchError((Object error, StackTrace stackTrace) {
+        () => provisioningFuture
+            .catchError((Object error, StackTrace stackTrace) {
           _log.fine(
             'Cancelled email provisioning after login failed',
             error,

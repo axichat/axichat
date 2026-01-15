@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -44,7 +45,10 @@ class ProfileCubit extends Cubit<ProfileState> {
       }
       final path = avatar.path?.trim();
       if (path != null && path.isNotEmpty) {
-        unawaited(_xmppService.loadAvatarBytes(path));
+        fireAndForget(
+          () => _xmppService.loadAvatarBytes(path),
+          operationName: 'ProfileCubit.loadAvatarBytes',
+        );
       }
       emit(
         state.copyWith(
@@ -53,7 +57,10 @@ class ProfileCubit extends Cubit<ProfileState> {
         ),
       );
     });
-    unawaited(_loadAvatar());
+    fireAndForget(
+      _loadAvatar,
+      operationName: 'ProfileCubit.loadAvatar',
+    );
     if (_omemoService != null) {
       loadFingerprints();
     }
@@ -103,7 +110,10 @@ class ProfileCubit extends Cubit<ProfileState> {
     if (stored == null || stored.isEmpty) return;
     final path = stored.path?.trim();
     if (path != null && path.isNotEmpty) {
-      unawaited(_xmppService.loadAvatarBytes(path));
+      fireAndForget(
+        () => _xmppService.loadAvatarBytes(path),
+        operationName: 'ProfileCubit.loadAvatarBytes',
+      );
     }
     emit(
       state.copyWith(

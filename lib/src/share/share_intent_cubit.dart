@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -95,7 +96,10 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   void consume() {
     if (state.hasPayload) {
       emit(const ShareIntentState.idle());
-      unawaited(_resetInitialSharedMedia());
+      fireAndForget(
+        _resetInitialSharedMedia,
+        operationName: 'ShareIntentCubit.resetInitialSharedMedia',
+      );
     }
   }
 

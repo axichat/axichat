@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -398,8 +399,9 @@ class NotificationService {
     }
     _inAppTimers[id] = Timer(delay, () {
       _inAppTimers.remove(id);
-      unawaited(
-        _fireImmediate(id: id, title: title, body: body, payload: payload),
+      fireAndForget(
+        () => _fireImmediate(id: id, title: title, body: body, payload: payload),
+        operationName: 'NotificationService.fireImmediate',
       );
     });
   }

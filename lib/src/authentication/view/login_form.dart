@@ -7,6 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -179,10 +180,11 @@ class _LoginFormState extends State<LoginForm> {
                         setState(() {
                           rememberMe = value;
                         });
-                        unawaited(
-                          context
+                        fireAndForget(
+                          () => context
                               .read<AuthenticationCubit>()
                               .persistRememberMeChoice(value),
+                          operationName: 'LoginForm.persistRememberMeChoice',
                         );
                       },
                     ),

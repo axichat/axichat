@@ -909,13 +909,12 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.share2),
-        onPressed:
-            disabled
-                ? null
-                : () => fireAndForget(
-                      () => _exportChatFromContextMenu(chat),
-                      operationName: 'ChatsList.exportChatFromContextMenu',
-                    ),
+        onPressed: disabled
+            ? null
+            : () => fireAndForget(
+                  () => _exportChatFromContextMenu(chat),
+                  operationName: 'ChatsList.exportChatFromContextMenu',
+                ),
         child: Text(l10n.commonExport),
       ),
       ShadContextMenuItem(

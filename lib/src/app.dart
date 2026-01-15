@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
@@ -98,7 +99,10 @@ class _AxichatState extends State<Axichat> {
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
-    unawaited(_reminderController.clearAll());
+    fireAndForget(
+      _reminderController.clearAll,
+      operationName: 'Axichat.clearReminders',
+    );
     super.dispose();
   }
 
@@ -536,12 +540,17 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         );
                       }
                     }
-                    unawaited(_handleShareIntent(context));
+                    fireAndForget(
+                      () => _handleShareIntent(context),
+                      operationName: 'Axichat.handleShareIntentAfterAuth',
+                    );
                   },
                 ),
                 BlocListener<ShareIntentCubit, ShareIntentState>(
-                  listener: (context, _) =>
-                      unawaited(_handleShareIntent(context)),
+                  listener: (context, _) => fireAndForget(
+                    () => _handleShareIntent(context),
+                    operationName: 'Axichat.handleShareIntent',
+                  ),
                 ),
               ],
               child: Stack(
@@ -640,7 +649,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     } finally {
       _shareIntentHandling = false;
       if (context.mounted && shareCubit.state.hasPayload) {
-        unawaited(_handleShareIntent(context));
+        fireAndForget(
+          () async {
+            await Future<void>.delayed(_shareIntentNavigationDelay);
+            await _handleShareIntent(context);
+          },
+          operationName: 'Axichat.handleShareIntentRetry',
+        );
       }
     }
   }

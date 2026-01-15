@@ -4482,16 +4482,17 @@ mixin MessageService
           roomJid: roomJid,
           conditionData: errorCondition,
         )) {
-      _markRoomNeedsJoin(roomJid);
+      final String resolvedRoomJid = roomJid;
+      _markRoomNeedsJoin(resolvedRoomJid);
       if (_shouldClearMucPresenceForError(errorCondition)) {
         _markRoomLeft(
-          roomJid,
+          resolvedRoomJid,
           statusCodes: _emptyStatusCodes,
           preserveOccupants: _preserveOccupantsOnMucError,
         );
       }
       fireAndForget(
-        () => _repairMucJoin(roomJid),
+        () => _repairMucJoin(resolvedRoomJid),
         operationName: 'MessageService.repairMucJoin',
       );
     }

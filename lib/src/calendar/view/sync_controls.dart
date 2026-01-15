@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -102,11 +103,17 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
   }
 
   void _handleExportAll() {
-    unawaited(_exportAll());
+    fireAndForget(
+      _exportAll,
+      operationName: 'SyncControls.exportAll',
+    );
   }
 
   void _handleImportCalendar() {
-    unawaited(_importCalendar());
+    fireAndForget(
+      _importCalendar,
+      operationName: 'SyncControls.importCalendar',
+    );
   }
 
   Future<void> _exportAll() async {

@@ -533,17 +533,17 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       final Widget? keyboardActionRow = actionRow(includeTopBorder: true);
       final Widget? footerActionRow = actionRow(includeTopBorder: false);
 
-	      final Widget form = Form(
-	        key: _formKey,
-	        autovalidateMode: AutovalidateMode.disabled,
-	        child: Column(
-	          mainAxisSize: MainAxisSize.min,
-	          children: [
-	            popoverHeader,
-	            const Divider(height: 1),
-	            Flexible(
-	              fit: FlexFit.loose,
-	              child: SingleChildScrollView(
+      final Widget form = Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.disabled,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            popoverHeader,
+            const Divider(height: 1),
+            Flexible(
+              fit: FlexFit.loose,
+              child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
                   calendarGutterLg,
                   calendarGutterMd,

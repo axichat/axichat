@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -117,7 +118,10 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
       return;
     }
     emit(state.copyWith(active: true));
-    unawaited(_maybeLoadSubjects());
+    fireAndForget(
+      _maybeLoadSubjects,
+      operationName: 'ChatSearchCubit.maybeLoadSubjects',
+    );
     if (state.query.trim().isNotEmpty) {
       _scheduleSearch(immediate: true);
     }
@@ -204,11 +208,17 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
       return;
     }
     if (immediate) {
-      unawaited(_performSearch());
+      fireAndForget(
+        _performSearch,
+        operationName: 'ChatSearchCubit.performSearch',
+      );
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 350), () {
-      unawaited(_performSearch());
+      fireAndForget(
+        _performSearch,
+        operationName: 'ChatSearchCubit.performSearch',
+      );
     });
   }
 
