@@ -978,17 +978,13 @@ class _SignupFormState extends State<SignupForm>
                                       inputLabel: Text(
                                         l10n.authRememberMeLabel,
                                       ),
-                                      onChanged: (value) {
+                                      onChanged: (value) async {
                                         setState(() {
                                           rememberMe = value;
                                         });
-                                        fireAndForget(
-                                          () => context
-                                              .read<AuthenticationCubit>()
-                                              .persistRememberMeChoice(value),
-                                          operationName:
-                                              'SignupForm.persistRememberMeChoice',
-                                        );
+                                        await context
+                                            .read<AuthenticationCubit>()
+                                            .persistRememberMeChoice(value);
                                       },
                                     ),
                                   ),
@@ -1421,10 +1417,9 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
             ShadButton.secondary(
               onPressed: busy || !allowBackgroundShuffle
                   ? null
-                  : () => fireAndForget(
-                        _handleShuffleBackground,
-                        operationName: 'SignupForm.shuffleBackground',
-                      ),
+                  : () async {
+                      await _handleShuffleBackground();
+                    },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1459,10 +1454,9 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
             ShadButton.outline(
               onPressed: busy
                   ? null
-                  : () => fireAndForget(
-                        widget.onUpload,
-                        operationName: 'SignupForm.uploadAvatar',
-                      ),
+                  : () async {
+                      await widget.onUpload();
+                    },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

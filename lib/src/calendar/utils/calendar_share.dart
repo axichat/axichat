@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -64,9 +63,9 @@ Future<bool> _openDirectory(Directory directory) async {
 }
 
 void _scheduleExportCleanup(File file) {
-  fireAndForget(
+  Timer(
+    _calendarExportCleanupDelay,
     () async {
-      await Future<void>.delayed(_calendarExportCleanupDelay);
       try {
         if (await file.exists()) {
           await file.delete();
@@ -75,6 +74,5 @@ void _scheduleExportCleanup(File file) {
         return;
       }
     },
-    operationName: 'CalendarShare.cleanupExportFile',
   );
 }

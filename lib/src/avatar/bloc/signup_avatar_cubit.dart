@@ -8,7 +8,6 @@ import 'dart:typed_data';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -221,17 +220,14 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return super.close();
   }
 
-  void initialize(ShadColorScheme colors) {
+  Future<void> initialize(ShadColorScheme colors) async {
     _colors = colors;
     if (_initialized) return;
     _initialized = true;
     _abstractOnlyUntil = DateTime.now().add(_abstractWarmupDuration);
     emit(state.copyWith(backgroundColor: colors.accent, clearError: true));
     if (_carouselEnabled) {
-      fireAndForget(
-        _startAvatarCarousel,
-        operationName: 'SignupAvatarCubit.startAvatarCarousel',
-      );
+      await _startAvatarCarousel();
     }
   }
 
@@ -240,15 +236,15 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return until != null && DateTime.now().isBefore(until);
   }
 
-  void setVisible(bool visible, ShadColorScheme colors) {
+  Future<void> setVisible(bool visible, ShadColorScheme colors) async {
     _colors = colors;
     _carouselEnabled = visible;
     if (!visible) {
       _stopAvatarCarousel();
       return;
     }
-    initialize(colors);
-    _resumeAvatarCarouselIfNeeded();
+    await initialize(colors);
+    await _resumeAvatarCarouselIfNeeded();
   }
 
   void materializeCurrentCarouselAvatar() {
@@ -463,10 +459,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _rebuildTimer?.cancel();
     _rebuildTimer = Timer(
       _rebuildDelay,
-      () => fireAndForget(
-        _rebuildAvatar,
-        operationName: 'SignupAvatarCubit.rebuildAvatar',
-      ),
+      () async {
+        await _rebuildAvatar();
+      },
     );
   }
 
@@ -718,12 +713,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       }
     }
 
-    fireAndForget(
-      () => _prefillCarousel(
-        targetSize: _avatarCarouselInitialBuffer,
-        preferAbstract: !_nonAbstractAvatarsReady,
-      ),
-      operationName: 'SignupAvatarCubit.prefillCarouselInitial',
+    await _prefillCarousel(
+      targetSize: _avatarCarouselInitialBuffer,
+      preferAbstract: !_nonAbstractAvatarsReady,
     );
 
     if (!_carouselEnabled ||
@@ -733,19 +725,16 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       return;
     }
 
-    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) {
+    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) async {
       if (!_carouselEnabled ||
           state.hasUserSelectedAvatar ||
           state.processing) {
         return;
       }
       _showNextCarouselAvatar(colors, allowFallback: false);
-      fireAndForget(
-        () => _prefillCarousel(
-          targetSize: _avatarCarouselSustainBuffer,
-          preferAbstract: !_nonAbstractAvatarsReady,
-        ),
-        operationName: 'SignupAvatarCubit.prefillCarouselSustain',
+      await _prefillCarousel(
+        targetSize: _avatarCarouselSustainBuffer,
+        preferAbstract: !_nonAbstractAvatarsReady,
       );
     });
   }
@@ -755,7 +744,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _avatarCarouselTimer = null;
   }
 
-  void _resumeAvatarCarouselIfNeeded() {
+  Future<void> _resumeAvatarCarouselIfNeeded() async {
     if (!_carouselEnabled ||
         state.hasUserSelectedAvatar ||
         state.processing ||
@@ -763,10 +752,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         _avatarCarouselTimer != null) {
       return;
     }
-    fireAndForget(
-      _startAvatarCarousel,
-      operationName: 'SignupAvatarCubit.startAvatarCarousel',
-    );
+    await _startAvatarCarousel();
   }
 
   bool _showNextCarouselAvatar(
@@ -867,10 +853,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         !_warmingNonAbstractAvatars &&
         _nonAbstractTemplates.isNotEmpty) {
       _warmingNonAbstractAvatars = true;
-      fireAndForget(
-        () => _warmFirstNonAbstractAvatar(colors),
-        operationName: 'SignupAvatarCubit.warmFirstNonAbstractAvatar',
-      );
+      await _warmFirstNonAbstractAvatar(colors);
     }
 
     var added = 0;
