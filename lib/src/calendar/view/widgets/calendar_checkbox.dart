@@ -32,8 +32,8 @@ class CalendarCheckbox extends StatelessWidget {
     final double clampedVisualSize = visualSize.clamp(16, 22);
     final double visualScale = (clampedVisualSize / baseSize) - 1;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1.5);
-    final fillColor = MaterialStateProperty.resolveWith<Color?>(
-      (states) => states.contains(MaterialState.selected)
+    final fillColor = WidgetStateProperty.resolveWith<Color?>(
+      (states) => states.contains(WidgetState.selected)
           ? activeColor
           : Colors.transparent,
     );

@@ -16,6 +16,8 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'calendar_sheet_header.dart';
+
 const int _criticalPathTaskUnit = 1;
 const int _criticalPathZeroCount = 0;
 const double _criticalPathZeroProgress = 0.0;
@@ -939,30 +941,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        context.l10n.calendarCriticalPathAddToTitle,
-                        style: textTheme.h3.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      AxiIconButton(
-                        iconData: LucideIcons.x,
-                        tooltip: MaterialLocalizations.of(
-                          sheetContext,
-                        ).closeButtonTooltip,
-                        iconSize: 16,
-                        buttonSize: 34,
-                        tapTargetSize: 40,
-                        backgroundColor: Colors.transparent,
-                        borderColor: Colors.transparent,
-                        color: colors.mutedForeground,
-                        onPressed: () => Navigator.of(sheetContext).maybePop(),
-                      ),
-                    ],
+                  CalendarSheetHeader(
+                    title: sheetContext.l10n.calendarCriticalPathAddToTitle,
+                    onClose: () => Navigator.of(sheetContext).maybePop(),
                   ),
                   const SizedBox(height: calendarGutterMd),
                   if (paths.isEmpty) ...[
@@ -1172,7 +1153,6 @@ Future<String?> promptCriticalPathName({
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
-          final colors = context.colorScheme;
           final textTheme = context.textTheme;
           final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           FocusScope.of(dialogContext).requestFocus(focusNode);
@@ -1186,31 +1166,9 @@ Future<String?> promptCriticalPathName({
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: textTheme.h3.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      AxiIconButton(
-                        iconData: LucideIcons.x,
-                        tooltip: MaterialLocalizations.of(
-                          dialogContext,
-                        ).closeButtonTooltip,
-                        iconSize: 16,
-                        buttonSize: 34,
-                        tapTargetSize: 40,
-                        backgroundColor: Colors.transparent,
-                        borderColor: Colors.transparent,
-                        color: colors.mutedForeground,
-                        onPressed: () => Navigator.of(dialogContext).maybePop(),
-                      ),
-                    ],
+                  CalendarSheetHeader(
+                    title: title,
+                    onClose: () => Navigator.of(dialogContext).maybePop(),
                   ),
                   const SizedBox(height: calendarGutterSm),
                   Flexible(

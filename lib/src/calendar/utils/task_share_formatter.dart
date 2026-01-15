@@ -256,7 +256,6 @@ class TaskShareFormatter {
       case TaskPriority.critical:
         return 'critical';
     }
-    return null;
   }
 
   static String _formatDateTime(DateTime dt, DateTime reference) =>
