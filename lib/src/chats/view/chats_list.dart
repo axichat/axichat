@@ -17,7 +17,6 @@ import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -507,21 +506,15 @@ class _ChatListTileState extends State<ChatListTile> {
         : colors.card;
     late final VoidCallback tileOnTap;
     if (chatsState() == null) {
-      tileOnTap = () {
-        fireAndForget(
-          () => _handleTap(item),
-          operationName: 'ChatsList.handleTap',
-        );
+      tileOnTap = () async {
+        await _handleTap(item);
       };
     } else if (selectionActive) {
       tileOnTap =
           () => context.read<ChatsCubit>().toggleChatSelection(item.jid);
     } else {
-      tileOnTap = () {
-        fireAndForget(
-          () => _handleTap(item),
-          operationName: 'ChatsList.handleTap',
-        );
+      tileOnTap = () async {
+        await _handleTap(item);
       };
     }
     final tilePadding = EdgeInsetsDirectional.only(
@@ -894,10 +887,9 @@ class _ChatListTileState extends State<ChatListTile> {
         leading: const Icon(LucideIcons.messagesSquare),
         onPressed: disabled
             ? null
-            : () => fireAndForget(
-                  () => _handleTap(chat),
-                  operationName: 'ChatsList.handleTap',
-                ),
+            : () async {
+                await _handleTap(chat);
+              },
         child: Text(l10n.commonOpen),
       ),
       ShadContextMenuItem(
@@ -911,10 +903,9 @@ class _ChatListTileState extends State<ChatListTile> {
         leading: const Icon(LucideIcons.share2),
         onPressed: disabled
             ? null
-            : () => fireAndForget(
-                  () => _exportChatFromContextMenu(chat),
-                  operationName: 'ChatsList.exportChatFromContextMenu',
-                ),
+            : () async {
+                await _exportChatFromContextMenu(chat);
+              },
         child: Text(l10n.commonExport),
       ),
       ShadContextMenuItem(

@@ -22,7 +22,6 @@ import 'package:axichat/src/calendar/view/models/task_context_action.dart';
 import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_task_copy_sheet.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
