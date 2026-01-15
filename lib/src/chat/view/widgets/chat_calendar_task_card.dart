@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
@@ -11,6 +12,7 @@ import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/base_task_tile.dart';
@@ -284,21 +286,19 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     bool didCopy = false;
     if (decision.addToPersonal && _maybeReadPersonalCalendarBloc() != null) {
       final CalendarTask personalTask = task.copyForCalendar(style);
-      final bool copied = _copyTaskToCalendar(
+      final bool copied = await _copyTaskToCalendar(
         task: personalTask,
         style: style,
-        state: context.read<CalendarBloc>().state,
-        dispatch: context.read<CalendarBloc>().add,
+        bloc: context.read<CalendarBloc>(),
       );
       didCopy = didCopy || copied;
     }
     if (decision.addToChat && _maybeReadChatCalendarBloc() != null) {
       final CalendarTask chatTask = task.copyForCalendar(style);
-      final bool copied = _copyTaskToCalendar(
+      final bool copied = await _copyTaskToCalendar(
         task: chatTask,
         style: style,
-        state: context.read<ChatCalendarBloc>().state,
-        dispatch: context.read<ChatCalendarBloc>().add,
+        bloc: context.read<ChatCalendarBloc>(),
       );
       didCopy = didCopy || copied;
     }
@@ -330,13 +330,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     }
   }
 
-  bool _copyTaskToCalendar({
+  Future<bool> _copyTaskToCalendar({
     required CalendarTask task,
     required CalendarTaskCopyStyle style,
-    required CalendarState state,
-    required void Function(CalendarEvent event) dispatch,
-  }) {
-    final bool alreadyAdded = state.model.tasks.containsKey(task.id);
+    required BaseCalendarBloc bloc,
+  }) async {
+    final bool alreadyAdded = bloc.state.model.tasks.containsKey(task.id);
     if (style.isLinked && alreadyAdded) {
       final l10n = context.l10n;
       FeedbackSystem.showInfo(
@@ -346,8 +345,9 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return false;
     }
     final List<CalendarTask> tasks = <CalendarTask>[task];
-    dispatch(CalendarEvent.tasksImported(tasks: tasks));
-    return true;
+    bloc.add(CalendarEvent.tasksImported(tasks: tasks));
+    final Set<String> taskIds = <String>{}..add(task.id);
+    return waitForTasksInCalendar(bloc: bloc, taskIds: taskIds);
   }
 
   CalendarBloc? _maybeReadPersonalCalendarBloc() {

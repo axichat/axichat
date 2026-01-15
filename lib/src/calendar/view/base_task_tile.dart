@@ -679,12 +679,9 @@ class _TaskCompletionToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String feedbackMessage =
-        isCompleted ? 'Task marked incomplete' : 'Task completed!';
     final bool isEnabled = onToggle != null;
     return ActionFeedback(
       onTap: isUpdating || !isEnabled ? null : () => onToggle!(!isCompleted),
-      feedbackMessage: feedbackMessage,
       child: isUpdating
           ? const SizedBox(
               width: 20,
