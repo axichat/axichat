@@ -130,6 +130,7 @@ class SafePubSubManager extends mox.PubSubManager {
     mox.JID jid,
     String node,
   ) async {
+    logger.fine('PubSub subscribe start. node=${_safeNodeLabel(node)}.');
     final attrs = getAttributes();
     final subscriberJid = attrs.getFullJID().toBare().toString();
     final result = await attrs.sendStanza(
@@ -153,19 +154,23 @@ class SafePubSubManager extends mox.PubSubManager {
     );
 
     if (result == null) {
+      logger.fine('PubSub subscribe failed: null response.');
       return moxlib.Result(mox.UnknownPubSubError());
     }
 
     if (result.attributes['type'] != _iqResult) {
+      logger.fine('PubSub subscribe failed: error response.');
       return moxlib.Result(mox.getPubSubError(result));
     }
 
     final pubsub = result.firstTag('pubsub', xmlns: mox.pubsubXmlns);
     if (pubsub == null) {
+      logger.fine('PubSub subscribe failed: missing pubsub element.');
       return moxlib.Result(mox.UnknownPubSubError());
     }
     final subscription = pubsub.firstTag('subscription');
     if (subscription == null) {
+      logger.fine('PubSub subscribe failed: missing subscription element.');
       return moxlib.Result(mox.UnknownPubSubError());
     }
     final state = mox.SubscriptionState.fromString(
@@ -184,6 +189,7 @@ class SafePubSubManager extends mox.PubSubManager {
       configurationRequired: configurationRequired,
     );
     _recordSubscription(subscriptionInfo);
+    logger.fine('PubSub subscribe succeeded. node=${_safeNodeLabel(node)}.');
     return moxlib.Result(subscriptionInfo);
   }
 
@@ -193,15 +199,27 @@ class SafePubSubManager extends mox.PubSubManager {
     String node, {
     String? subId,
   }) async {
+    logger.fine('PubSub unsubscribe start. node=${_safeNodeLabel(node)}.');
     final attrs = getAttributes();
     final subscriberJid = attrs.getFullJID().toBare().toString();
     final result = await super.unsubscribe(jid, node, subId: subId);
     if (result.isType<mox.PubSubError>() &&
         result.get<mox.PubSubError>() is mox.MalformedResponseError) {
+      logger.fine(
+        'PubSub unsubscribe accepted malformed response. '
+        'node=${_safeNodeLabel(node)}.',
+      );
       return const moxlib.Result(true);
     }
     if (!result.isType<mox.PubSubError>()) {
       _removeSubscription(jid: subscriberJid, node: node, subId: subId);
+      logger
+          .fine('PubSub unsubscribe succeeded. node=${_safeNodeLabel(node)}.');
+    } else {
+      logger.fine(
+        'PubSub unsubscribe failed. node=${_safeNodeLabel(node)} '
+        'error=${result.get<mox.PubSubError>().runtimeType}.',
+      );
     }
     return result;
   }
@@ -211,6 +229,7 @@ class SafePubSubManager extends mox.PubSubManager {
     String node,
     AxiPubSubNodeConfig config,
   ) async {
+    logger.fine('PubSub configure start. node=${_safeNodeLabel(node)}.');
     return configureNodeWithForm(jid, node, config.toForm());
   }
 
@@ -241,13 +260,16 @@ class SafePubSubManager extends mox.PubSubManager {
     );
 
     if (result == null) {
+      logger.fine('PubSub configure failed: null response.');
       return moxlib.Result(mox.UnknownPubSubError());
     }
 
     if (result.attributes['type'] != _iqResult) {
+      logger.fine('PubSub configure failed: error response.');
       return moxlib.Result(mox.getPubSubError(result));
     }
 
+    logger.fine('PubSub configure succeeded. node=${_safeNodeLabel(node)}.');
     return const moxlib.Result(true);
   }
 
@@ -260,6 +282,10 @@ class SafePubSubManager extends mox.PubSubManager {
     if (affiliations.isEmpty) {
       return const moxlib.Result(true);
     }
+    logger.fine(
+      'PubSub setAffiliations start. node=${_safeNodeLabel(node)} '
+      'count=${affiliations.length}.',
+    );
     final affiliationNodes = <mox.XMLNode>[];
     for (final entry in affiliations.entries) {
       final targetJid = entry.key.trim();
@@ -301,14 +327,104 @@ class SafePubSubManager extends mox.PubSubManager {
     );
 
     if (result == null) {
+      logger.fine('PubSub setAffiliations failed: null response.');
       return moxlib.Result(mox.UnknownPubSubError());
     }
 
     if (result.attributes['type'] != _iqResult) {
+      logger.fine('PubSub setAffiliations failed: error response.');
       return moxlib.Result(mox.getPubSubError(result));
     }
 
+    logger.fine(
+      'PubSub setAffiliations succeeded. node=${_safeNodeLabel(node)}.',
+    );
     return const moxlib.Result(true);
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>> getItems(
+    mox.JID jid,
+    String node, {
+    int? maxItems,
+  }) async {
+    logger.fine('PubSub getItems start. node=${_safeNodeLabel(node)}.');
+    final result = await super.getItems(jid, node, maxItems: maxItems);
+    if (result.isType<mox.PubSubError>()) {
+      logger.fine(
+        'PubSub getItems failed. node=${_safeNodeLabel(node)} '
+        'error=${result.get<mox.PubSubError>().runtimeType}.',
+      );
+      return result;
+    }
+    final items = result.get<List<mox.PubSubItem>>();
+    logger.fine(
+      'PubSub getItems succeeded. node=${_safeNodeLabel(node)} '
+      'count=${items.length}.',
+    );
+    return result;
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
+    mox.JID jid,
+    String node,
+    String id,
+  ) async {
+    logger.fine('PubSub getItem start. node=${_safeNodeLabel(node)}.');
+    final result = await super.getItem(jid, node, id);
+    if (result.isType<mox.PubSubError>()) {
+      logger.fine(
+        'PubSub getItem failed. node=${_safeNodeLabel(node)} '
+        'error=${result.get<mox.PubSubError>().runtimeType}.',
+      );
+    } else {
+      logger.fine('PubSub getItem succeeded. node=${_safeNodeLabel(node)}.');
+    }
+    return result;
+  }
+
+  @override
+  Future<String?> createNode(mox.JID jid, {String? nodeId}) async {
+    logger.fine(
+      'PubSub createNode start. node=${_safeNodeLabel(nodeId)}.',
+    );
+    final result = await super.createNode(jid, nodeId: nodeId);
+    if (result == null) {
+      logger.fine('PubSub createNode failed. node=${_safeNodeLabel(nodeId)}.');
+    } else {
+      logger.fine(
+        'PubSub createNode succeeded. node=${_safeNodeLabel(nodeId)}.',
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<String?> createNodeWithConfig(
+    mox.JID jid,
+    mox.NodeConfig config, {
+    String? nodeId,
+  }) async {
+    logger.fine(
+      'PubSub createNodeWithConfig start. node=${_safeNodeLabel(nodeId)}.',
+    );
+    final result = await super.createNodeWithConfig(
+      jid,
+      config,
+      nodeId: nodeId,
+    );
+    if (result == null) {
+      logger.fine(
+        'PubSub createNodeWithConfig failed. node=${_safeNodeLabel(nodeId)}.',
+      );
+    } else {
+      logger.fine(
+        'PubSub createNodeWithConfig succeeded. '
+        'node=${_safeNodeLabel(nodeId)}.',
+      );
+    }
+    return result;
   }
 
   Future<mox.StanzaHandlerData> _onPubSubEvent(
@@ -345,6 +461,9 @@ class SafePubSubManager extends mox.PubSubManager {
       if (!hasItem && !hasRetract) {
         final node = items.attributes[_nodeAttr]?.toString().trim();
         if (node != null && node.isNotEmpty) {
+          logger.fine(
+            'PubSub items refresh event. node=${_safeNodeLabel(node)}.',
+          );
           getAttributes().sendEvent(
             PubSubItemsRefreshedEvent(from: from, node: node),
           );
@@ -386,6 +505,10 @@ class SafePubSubManager extends mox.PubSubManager {
         subId: subId,
       ),
     );
+    logger.fine(
+      'PubSub subscription event. node=${_safeNodeLabel(node)} '
+      'state=${state.value}.',
+    );
   }
 
   void _handleConfigurationEvent(mox.XMLNode configuration, mox.JID from) {
@@ -400,6 +523,9 @@ class SafePubSubManager extends mox.PubSubManager {
         node: node,
         dataForm: form,
       ),
+    );
+    logger.fine(
+      'PubSub configuration event. node=${_safeNodeLabel(node)}.',
     );
   }
 

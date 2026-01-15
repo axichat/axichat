@@ -9,6 +9,7 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
@@ -139,7 +140,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _authRecoveryFuture = _recoverAuthTransaction();
     _endpointConfigRecoveryFuture = _restoreEndpointConfig();
-    unawaited(_endpointConfigRecoveryFuture);
+    fireAndForget(
+      () => _endpointConfigRecoveryFuture,
+      operationName: 'AuthenticationCubit.endpointConfigRecovery',
+    );
     _lifecycleListener = AppLifecycleListener(
       onResume: _loginIfStoredCredentials,
       onShow: _loginIfStoredCredentials,
@@ -179,7 +183,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               lifeCycleState == AppLifecycleState.inactive,
         );
         if (lifeCycleState == AppLifecycleState.resumed) {
-          unawaited(_triggerEmailReconnect());
+          fireAndForget(
+            _triggerEmailReconnect,
+            operationName: 'AuthenticationCubit.triggerEmailReconnect',
+          );
         }
       },
     );
@@ -187,15 +194,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       connectionState,
     ) {
       if (connectionState == ConnectionState.connected) {
-        unawaited(_attemptEmailProvisioningRecovery());
-        unawaited(_emailService?.handleNetworkAvailable());
-        unawaited(_publishPendingAvatar());
+        fireAndForget(
+          _attemptEmailProvisioningRecovery,
+          operationName: 'AuthenticationCubit.emailProvisioningRecovery',
+        );
+        fireAndForget(
+          () async => _emailService?.handleNetworkAvailable(),
+          operationName: 'AuthenticationCubit.emailReconnect',
+        );
+        fireAndForget(
+          _publishPendingAvatar,
+          operationName: 'AuthenticationCubit.avatarPublish',
+        );
         if (_authenticatedJid != null) {
-          unawaited(_homeRefreshSyncService.syncOnLogin());
+          fireAndForget(
+            _homeRefreshSyncService.syncOnLogin,
+            operationName: 'AuthenticationCubit.homeRefreshSync',
+          );
         }
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
-        unawaited(_emailService?.handleNetworkLost());
+        fireAndForget(
+          () async => _emailService?.handleNetworkLost(),
+          operationName: 'AuthenticationCubit.emailDisconnect',
+        );
       }
     });
     _foregroundListener = _handleForegroundServiceActiveChanged;
@@ -205,13 +227,25 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _handleEmailAuthFailure,
       );
     }
-    unawaited(_flushPendingAccountDeletions());
-    unawaited(_purgeLegacySignupDraft());
+    fireAndForget(
+      _flushPendingAccountDeletions,
+      operationName: 'AuthenticationCubit.flushPendingAccountDeletions',
+    );
+    fireAndForget(
+      _purgeLegacySignupDraft,
+      operationName: 'AuthenticationCubit.purgeLegacySignupDraft',
+    );
     if (kEnableDemoChats) {
-      unawaited(_loginToDemoMode());
+      fireAndForget(
+        _loginToDemoMode,
+        operationName: 'AuthenticationCubit.loginToDemoMode',
+      );
     }
     if (autoLoginOnStart && state is AuthenticationNone) {
-      unawaited(login());
+      fireAndForget(
+        login,
+        operationName: 'AuthenticationCubit.autoLogin',
+      );
     }
   }
 

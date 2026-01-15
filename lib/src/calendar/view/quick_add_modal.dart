@@ -922,6 +922,22 @@ class _QuickAddModalContent extends StatelessWidget {
         ? Theme.of(context).colorScheme.surface
         : calendarContainerColor;
     final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
+    final Widget header = ValueListenableBuilder<TextEditingValue>(
+      valueListenable: taskNameController,
+      builder: (context, value, _) {
+        final bool canSubmit = titleValidator(value.text) == null;
+        return AnimatedBuilder(
+          animation: formController,
+          builder: (context, _) {
+            final bool disabled = formController.isSubmitting || !canSubmit;
+            return _QuickAddHeader(
+              onClose: onClose,
+              onSubmit: disabled ? null : onTaskSubmit,
+            );
+          },
+        );
+      },
+    );
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: taskNameController,
       builder: (context, value, _) {
@@ -957,7 +973,7 @@ class _QuickAddModalContent extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _QuickAddHeader(onClose: onClose),
+                header,
                 Flexible(
                   child: SingleChildScrollView(
                     padding: scrollPadding,
@@ -1023,6 +1039,12 @@ class _QuickAddModalContent extends StatelessWidget {
                           onSubmit: onTaskSubmit,
                         ),
                         const SizedBox(height: calendarGutterMd),
+                        _QuickAddPriorityToggles(
+                          formController: formController,
+                          onImportantChanged: onImportantChanged,
+                          onUrgentChanged: onUrgentChanged,
+                        ),
+                        const SizedBox(height: calendarGutterMd),
                         _QuickAddDescriptionField(
                           controller: descriptionController,
                         ),
@@ -1031,12 +1053,6 @@ class _QuickAddModalContent extends StatelessWidget {
                           controller: locationController,
                           helper: locationHelper,
                           onChanged: onLocationChanged,
-                        ),
-                        const SizedBox(height: calendarGutterMd),
-                        _QuickAddPriorityToggles(
-                          formController: formController,
-                          onImportantChanged: onImportantChanged,
-                          onUrgentChanged: onUrgentChanged,
                         ),
                         const SizedBox(height: calendarGutterMd),
                         TaskChecklist(controller: checklistController),
@@ -1166,13 +1182,15 @@ class _QuickAddModalContent extends StatelessWidget {
 }
 
 class _QuickAddHeader extends StatelessWidget {
-  const _QuickAddHeader({required this.onClose});
+  const _QuickAddHeader({required this.onClose, required this.onSubmit});
 
   final VoidCallback onClose;
+  final VoidCallback? onSubmit;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final colors = context.colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterLg,
@@ -1192,20 +1210,30 @@ class _QuickAddHeader extends StatelessWidget {
             style: calendarTitleTextStyle.copyWith(fontSize: 18),
           ),
           const Spacer(),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onClose,
-              borderRadius: BorderRadius.circular(4),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(
-                  Icons.close,
-                  color: calendarSubtitleColor,
-                  size: 18,
-                ),
-              ),
-            ),
+          AxiIconButton(
+            iconData: Icons.check,
+            tooltip: l10n.calendarAddTaskAction,
+            onPressed: onSubmit,
+            color: calendarPrimaryColor,
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            iconSize: 18,
+            buttonSize: 34,
+            tapTargetSize: 40,
+            cornerRadius: 12,
+          ),
+          const SizedBox(width: calendarGutterSm),
+          AxiIconButton(
+            iconData: Icons.close,
+            tooltip: context.l10n.calendarCloseTooltip,
+            onPressed: onClose,
+            color: calendarSubtitleColor,
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            iconSize: 18,
+            buttonSize: 34,
+            tapTargetSize: 40,
+            cornerRadius: 12,
           ),
         ],
       ),

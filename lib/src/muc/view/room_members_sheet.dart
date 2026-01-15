@@ -767,7 +767,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                       onRecipientRemoved: _removeRecipient,
                       onRecipientToggled: _toggleRecipient,
                       collapsedByDefault: false,
-                      horizontalPadding: _inviteSheetHorizontalPadding,
                     ),
                     const SizedBox(height: _inviteSheetSectionSpacing),
                   ],

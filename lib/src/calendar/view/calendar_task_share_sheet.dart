@@ -9,10 +9,13 @@ import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
+import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -23,17 +26,12 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _taskShareSectionSpacing = 16.0;
 const double _taskShareSectionGap = 8.0;
-const double _taskShareTileGap = 12.0;
-const double _taskShareAvatarSize = 36.0;
 const double _taskShareHeaderIconSize = 18.0;
 const double _taskShareProgressStrokeWidth = 2.0;
 const double _taskShareLabelFontSize = 12.0;
 const double _taskShareLabelLetterSpacing = 1.1;
-
-const EdgeInsets _taskShareChatTilePadding = EdgeInsets.symmetric(
-  horizontal: 16,
-  vertical: 8,
-);
+const EdgeInsets _taskShareContentPadding =
+    EdgeInsets.symmetric(horizontal: 16);
 
 const String _taskShareTitle = 'Share task';
 const String _taskShareSubtitle = 'Send a task to a chat as .ics.';
@@ -54,9 +52,6 @@ const String _taskShareDeniedMessage =
 const String _taskShareSendFailureMessage = 'Failed to share task.';
 const String _taskShareSendSuccessMessage = 'Task shared.';
 const String _taskShareIcsMimeType = 'text/calendar';
-const String _taskShareChatTypeDirectLabel = 'Direct chat';
-const String _taskShareChatTypeGroupLabel = 'Group chat';
-const String _taskShareChatTypeNoteLabel = 'Notes';
 const bool _taskShareAllowEditsDefault = false;
 
 Future<void> showCalendarTaskShareSheet({
@@ -75,6 +70,7 @@ Future<void> showCalendarTaskShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,
       availableChats: available,
@@ -104,21 +100,27 @@ class CalendarTaskShareSheet extends StatefulWidget {
 }
 
 class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
-  Chat? _selectedChat;
+  List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
   bool _allowEdits = _taskShareAllowEditsDefault;
 
   @override
   void initState() {
     super.initState();
-    _selectedChat = widget.initialChat ??
+    final Chat? initialChat = widget.initialChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
+    if (initialChat != null) {
+      _recipients = <ComposerRecipient>[
+        ComposerRecipient(target: FanOutTarget.chat(initialChat)),
+      ];
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final Chat? selectedChat = _selectedChat;
     final bool allowEditsEnabled =
-        _selectedChat?.defaultTransport.isEmail != true;
+        selectedChat != null && selectedChat.defaultTransport.isEmail != true;
     final String allowEditsHint = allowEditsEnabled
         ? _taskShareAllowEditsHint
         : _taskShareAllowEditsDisabledHint;
@@ -129,43 +131,104 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
     return AxiSheetScaffold.scroll(
       header: header,
+      bodyPadding: EdgeInsets.zero,
       children: [
-        const _TaskShareSectionLabel(text: _taskShareTargetLabel),
+        Padding(
+          padding: _taskShareContentPadding,
+          child: const _TaskShareSectionLabel(text: _taskShareTargetLabel),
+        ),
         if (widget.availableChats.isEmpty)
-          const _TaskShareEmptyMessage(message: _taskShareMissingChatsMessage)
+          Padding(
+            padding: _taskShareContentPadding,
+            child: const _TaskShareEmptyMessage(
+              message: _taskShareMissingChatsMessage,
+            ),
+          )
         else
-          _TaskShareChatPicker(
-            chats: widget.availableChats,
-            selected: _selectedChat,
-            onSelected: _handleChatSelected,
+          RecipientChipsBar(
+            recipients: _recipients,
+            availableChats: widget.availableChats,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: false,
+            showSuggestionsWhenEmpty: true,
+            onRecipientAdded: _handleRecipientAdded,
+            onRecipientRemoved: _handleRecipientRemoved,
+            onRecipientToggled: _handleRecipientToggled,
           ),
         const SizedBox(height: _taskShareSectionSpacing),
-        const _TaskShareSectionLabel(text: _taskShareEditAccessLabel),
-        _TaskShareEditAccessToggle(
-          value: _allowEdits,
-          isEnabled: allowEditsEnabled,
-          hint: allowEditsHint,
-          onChanged: _handleAllowEditsChanged,
+        Padding(
+          padding: _taskShareContentPadding,
+          child: const _TaskShareSectionLabel(text: _taskShareEditAccessLabel),
+        ),
+        Padding(
+          padding: _taskShareContentPadding,
+          child: _TaskShareEditAccessToggle(
+            value: _allowEdits,
+            isEnabled: allowEditsEnabled,
+            hint: allowEditsHint,
+            onChanged: _handleAllowEditsChanged,
+          ),
         ),
         const SizedBox(height: _taskShareSectionSpacing),
-        _TaskShareActionRow(
-          isBusy: _isSending,
-          onPressed: _handleSharePressed,
-          label: _taskShareButtonLabel,
+        Padding(
+          padding: _taskShareContentPadding,
+          child: _TaskShareActionRow(
+            isBusy: _isSending,
+            onPressed: _handleSharePressed,
+            label: _taskShareButtonLabel,
+          ),
         ),
       ],
     );
   }
 
-  void _handleChatSelected(Chat chat) {
+  Chat? get _selectedChat {
+    for (final recipient in _recipients) {
+      final chat = recipient.target.chat;
+      if (recipient.included && chat != null) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  void _handleRecipientAdded(FanOutTarget target) {
+    final Chat? chat = target.chat;
+    if (chat == null) {
+      FeedbackSystem.showInfo(context, _taskShareMissingRecipientMessage);
+      return;
+    }
     if (!mounted) return;
     setState(() {
-      _selectedChat = chat;
+      _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
       if (chat.defaultTransport.isEmail) {
         _allowEdits = _taskShareAllowEditsDefault;
       }
     });
     _handleSharePressed();
+  }
+
+  void _handleRecipientRemoved(String key) {
+    if (!mounted) return;
+    setState(() {
+      _recipients = _recipients
+          .where((recipient) => recipient.key != key)
+          .toList(growable: false);
+    });
+  }
+
+  void _handleRecipientToggled(String key) {
+    if (!mounted) return;
+    setState(() {
+      _recipients = _recipients
+          .map(
+            (recipient) => recipient.key == key
+                ? recipient.copyWith(included: !recipient.included)
+                : recipient,
+          )
+          .toList(growable: false);
+    });
   }
 
   void _handleAllowEditsChanged(bool value) {
@@ -176,7 +239,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   }
 
   Future<void> _handleSharePressed() async {
-    final selected = _selectedChat;
+    final Chat? selected = _selectedChat;
     if (selected == null) {
       FeedbackSystem.showInfo(context, _taskShareMissingRecipientMessage);
       return;
@@ -302,42 +365,6 @@ class _TaskShareEditAccessToggle extends StatelessWidget {
   }
 }
 
-class _TaskShareChatPicker extends StatelessWidget {
-  const _TaskShareChatPicker({
-    required this.chats,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<Chat> chats;
-  final Chat? selected;
-  final ValueChanged<Chat> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final chat in chats) ...[
-          AxiListTile(
-            leading: AxiAvatar(
-              jid: chat.jid,
-              size: _taskShareAvatarSize,
-              avatarPath: chat.avatarPath,
-              shape: AxiAvatarShape.circle,
-            ),
-            title: chat.displayName,
-            subtitle: chat.type.label,
-            selected: selected?.jid == chat.jid,
-            onTap: () => onSelected(chat),
-            contentPadding: _taskShareChatTilePadding,
-          ),
-          const SizedBox(height: _taskShareTileGap),
-        ],
-      ],
-    );
-  }
-}
-
 class _TaskShareActionRow extends StatelessWidget {
   const _TaskShareActionRow({
     required this.isBusy,
@@ -427,12 +454,4 @@ XmppService? _maybeReadXmppService(BuildContext context) {
   } on FlutterError {
     return null;
   }
-}
-
-extension _ChatTypeLabelX on ChatType {
-  String get label => switch (this) {
-        ChatType.chat => _taskShareChatTypeDirectLabel,
-        ChatType.groupChat => _taskShareChatTypeGroupLabel,
-        ChatType.note => _taskShareChatTypeNoteLabel,
-      };
 }

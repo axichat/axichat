@@ -28,6 +28,7 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
@@ -766,27 +767,39 @@ class XmppService extends XmppBase
         if (!event.resumed && _streamResumptionAttempted) {
           final sm = _connection.getManager<XmppStreamManagementManager>();
           await sm?.handleFailedResumption();
-          unawaited(_syncAfterReconnect());
+          fireAndForget(
+            _syncAfterReconnect,
+            operationName: 'XmppService.syncAfterReconnect',
+          );
         }
         _streamResumptionAttempted = false;
         if (!event.resumed) {
-          unawaited(() async {
-            try {
-              await _connection
-                  .getManager<XmppPresenceManager>()
-                  ?.sendInitialPresence();
-            } catch (error, stackTrace) {
-              _xmppLogger.warning(
-                'Failed to send initial presence.',
-                error,
-                stackTrace,
-              );
-            }
-          }());
+          fireAndForget(
+            () async {
+              try {
+                await _connection
+                    .getManager<XmppPresenceManager>()
+                    ?.sendInitialPresence();
+              } catch (error, stackTrace) {
+                _xmppLogger.warning(
+                  'Failed to send initial presence.',
+                  error,
+                  stackTrace,
+                );
+              }
+            },
+            operationName: 'XmppService.sendInitialPresence',
+          );
         }
         if (event.resumed) return;
-        unawaited(_refreshHttpUploadSupport());
-        unawaited(_refreshPubSubSupport());
+        fireAndForget(
+          _refreshHttpUploadSupport,
+          operationName: 'XmppService.refreshHttpUploadSupport',
+        );
+        fireAndForget(
+          _refreshPubSubSupport,
+          operationName: 'XmppService.refreshPubSubSupport',
+        );
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -974,7 +987,10 @@ class XmppService extends XmppBase
     }
 
     if (withForeground) {
-      unawaited(_connection.updateConnectivityNotification(state));
+      fireAndForget(
+        () => _connection.updateConnectivityNotification(state),
+        operationName: 'XmppService.updateConnectivityNotification',
+      );
     }
   }
 
@@ -1077,13 +1093,14 @@ class XmppService extends XmppBase
           );
 
           if (!_foregroundServiceNotificationSent) {
-            unawaited(
-              _notificationService.sendNotification(
+            fireAndForget(
+              () => _notificationService.sendNotification(
                 title: 'Background connection disabled',
                 body:
                     'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.',
                 allowForeground: true,
               ),
+              operationName: 'XmppService.notifyForegroundDisabled',
             );
             _foregroundServiceNotificationSent = true;
           }
@@ -1120,7 +1137,10 @@ class XmppService extends XmppBase
       _foregroundSocketMigrationDelay,
       () {
         _foregroundSocketMigrationTimer = null;
-        unawaited(ensureForegroundSocketIfActive());
+        fireAndForget(
+          ensureForegroundSocketIfActive,
+          operationName: 'XmppService.ensureForegroundSocketIfActive',
+        );
       },
     );
   }
@@ -2883,7 +2903,7 @@ final class _XmppStanzaSizeGuard {
 /// Stream management negotiator that tolerates missing managers and avoids null
 /// dereferences during feature matching.
 class XmppSocketWrapper implements mox.BaseSocketWrapper {
-  XmppSocketWrapper({bool logTraffic = false})
+  XmppSocketWrapper({bool logTraffic = kDebugMode})
       : _logIncomingOutgoing = logTraffic;
 
   static final _log = Logger('XmppSocketWrapper');
