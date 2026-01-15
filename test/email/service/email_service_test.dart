@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -58,7 +59,7 @@ class FakeForegroundBridge implements ForegroundTaskBridge {
     for (final handler in List.of(_listeners.values)) {
       final result = handler(data);
       if (result is Future) {
-        unawaited(result);
+        fireAndForget(() => result);
       }
     }
   }

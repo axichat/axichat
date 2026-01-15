@@ -364,6 +364,9 @@ class _ActionFeedbackState extends State<ActionFeedback>
   }
 
   void _handleTap() {
+    if (widget.onTap == null) {
+      return;
+    }
     if (widget.hapticFeedback) {
       // HapticFeedback.lightImpact();
     }
@@ -382,7 +385,7 @@ class _ActionFeedbackState extends State<ActionFeedback>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _handleTap,
+      onTap: widget.onTap == null ? null : _handleTap,
       child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) {

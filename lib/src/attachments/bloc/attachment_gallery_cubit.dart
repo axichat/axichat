@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/attachments/attachment_gallery_repository.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -41,7 +42,7 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
   AttachmentGalleryCubit({required XmppService xmppService, this.chatJid})
       : _xmppService = xmppService,
         super(const AttachmentGalleryState()) {
-    unawaited(_subscribe());
+    fireAndForget(_subscribe);
   }
 
   final XmppService _xmppService;
