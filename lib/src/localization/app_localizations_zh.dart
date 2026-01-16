@@ -3510,6 +3510,256 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatChooseTextToAdd => '选择要添加的文本';
+
+  @override
+  String get notificationChannelMessages => 'Messages';
+
+  @override
+  String get notificationNewMessageTitle => 'New message';
+
+  @override
+  String get notificationOpenAction => 'Open notification';
+
+  @override
+  String get notificationBackgroundConnectionDisabledTitle =>
+      'Background connection disabled';
+
+  @override
+  String get notificationBackgroundConnectionDisabledBody =>
+      'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.';
+
+  @override
+  String get calendarReminderDeadlineNow => 'Deadline now';
+
+  @override
+  String calendarReminderDueIn(Object duration) {
+    return 'Due in $duration';
+  }
+
+  @override
+  String get calendarReminderStartingNow => 'Starting now';
+
+  @override
+  String calendarReminderStartsIn(Object duration) {
+    return 'Starts in $duration';
+  }
+
+  @override
+  String get calendarReminderHappeningToday => 'Happening today';
+
+  @override
+  String calendarReminderIn(Object duration) {
+    return 'In $duration';
+  }
+
+  @override
+  String calendarReminderDurationDays(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# days',
+      one: '# day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarReminderDurationHours(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# hours',
+      one: '# hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarReminderDurationMinutes(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# minutes',
+      one: '# minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarExportCalendar => 'Export calendar';
+
+  @override
+  String get calendarImportCalendar => 'Import calendar';
+
+  @override
+  String get calendarSyncStatusSyncing => 'Syncing...';
+
+  @override
+  String get calendarSyncStatusFailed => 'Sync failed';
+
+  @override
+  String get calendarSyncStatusSynced => 'Synced';
+
+  @override
+  String get calendarSyncStatusIdle => 'Idle';
+
+  @override
+  String calendarSplitTaskAtTime(Object time) {
+    return 'Split task at $time';
+  }
+
+  @override
+  String get calendarSplitSelectTime => 'Select split time';
+
+  @override
+  String get calendarTaskMarkIncomplete => 'Mark incomplete';
+
+  @override
+  String get calendarTaskMarkComplete => 'Mark complete';
+
+  @override
+  String get calendarTaskRemoveImportant => 'Remove important flag';
+
+  @override
+  String get calendarTaskMarkImportant => 'Mark as important';
+
+  @override
+  String get calendarTaskRemoveUrgent => 'Remove urgent flag';
+
+  @override
+  String get calendarTaskMarkUrgent => 'Mark as urgent';
+
+  @override
+  String get calendarDeselectTask => 'Deselect task';
+
+  @override
+  String get calendarAddTaskToSelection => 'Add task to selection';
+
+  @override
+  String get calendarSelectTask => 'Select task';
+
+  @override
+  String get calendarDeselectAllRepeats => 'Deselect all repeats';
+
+  @override
+  String get calendarAddAllRepeats => 'Add all repeats';
+
+  @override
+  String get calendarSelectAllRepeats => 'Select all repeats';
+
+  @override
+  String get calendarAddToSelection => 'Add to selection';
+
+  @override
+  String get calendarSelectAllTasks => 'Select all tasks';
+
+  @override
+  String get calendarExitSelectionMode => 'Exit selection mode';
+
+  @override
+  String get calendarSplitTask => 'Split task';
+
+  @override
+  String get calendarCopyTemplate => 'Copy template';
+
+  @override
+  String calendarTaskAddedMessage(Object title) {
+    return 'Task \"$title\" added';
+  }
+
+  @override
+  String calendarTasksAddedMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# tasks added',
+      one: '# task added',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarTaskRemovedMessage(Object title) {
+    return 'Task \"$title\" removed';
+  }
+
+  @override
+  String calendarTasksRemovedMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# tasks removed',
+      one: '# task removed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarTaskRemovedTitle => 'Task removed';
+
+  @override
+  String get calendarDeadlinePlaceholder => 'Set deadline (optional)';
+
+  @override
+  String get calendarTaskDescriptionHint => 'Description (optional)';
+
+  @override
+  String get calendarTaskLocationHint => 'Location (optional)';
+
+  @override
+  String get calendarPickDateLabel => 'Pick date';
+
+  @override
+  String get calendarPickTimeLabel => 'Pick time';
+
+  @override
+  String get calendarReminderLabel => 'Reminder';
+
+  @override
+  String get calendarEditDayEventTitle => 'Edit day event';
+
+  @override
+  String get calendarNewDayEventTitle => 'New day event';
+
+  @override
+  String get commonAdd => 'Add';
+
+  @override
+  String get commonTitle => 'Title';
+
+  @override
+  String get calendarShareUnavailable => 'Calendar sharing is unavailable.';
+
+  @override
+  String get calendarShareAvailability => 'Share availability';
+
+  @override
+  String get calendarShortcutUndo => 'Ctrl/Cmd+Z';
+
+  @override
+  String get calendarShortcutRedo => 'Ctrl/Cmd+Shift+Z';
+
+  @override
+  String commonShortcutTooltip(Object tooltip, Object shortcut) {
+    return '$tooltip ($shortcut)';
+  }
+
+  @override
+  String get calendarDragCanceled => 'Drag canceled';
+
+  @override
+  String get calendarZoomLabelCompact => 'Compact';
+
+  @override
+  String get calendarZoomLabelComfort => 'Comfort';
+
+  @override
+  String get calendarZoomLabelExpanded => 'Expanded';
+
+  @override
+  String calendarZoomLabelMinutes(Object minutes) {
+    return '${minutes}m';
+  }
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).

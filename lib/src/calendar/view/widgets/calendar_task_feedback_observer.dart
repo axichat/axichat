@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 class CalendarTaskFeedbackObserver<B extends BaseCalendarBloc>
     extends StatefulWidget {

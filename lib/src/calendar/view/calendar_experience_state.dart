@@ -335,10 +335,10 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   void onDragCancelRequested(CalendarDragPayload payload) {
     final CalendarTask restored = restoreTaskFromPayload(payload);
     calendarBloc.add(CalendarEvent.taskUpdated(task: restored));
-            FeedbackSystem.showInfo(
-              context,
-              context.l10n.calendarDragCanceled,
-            );
+    FeedbackSystem.showInfo(
+      context,
+      context.l10n.calendarDragCanceled,
+    );
   }
 
   @override
