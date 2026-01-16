@@ -394,7 +394,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           autocorrect: false,
           keyboardType: TextInputType.url,
           placeholder: Text(
-            'Email provisioning URL (optional)',
+            l10n.authCustomServerEmailProvisioningUrlPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
@@ -407,7 +407,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           keyboardType: TextInputType.visiblePassword,
           obscureText: _emailProvisioningTokenObscure,
           placeholder: Text(
-            'Email public token (optional)',
+            l10n.authCustomServerEmailPublicTokenPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,

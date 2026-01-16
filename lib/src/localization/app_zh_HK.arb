@@ -760,6 +760,8 @@
   "authCustomServerSmtpHostPlaceholder": "SMTP 主機（可選）",
   "authCustomServerImapHostPlaceholder": "IMAP 主機（可選）",
   "authCustomServerApiPortPlaceholder": "API 連接埠",
+  "authCustomServerEmailProvisioningUrlPlaceholder": "電郵開通服務 URL（可選）",
+  "authCustomServerEmailPublicTokenPlaceholder": "電郵公開代幣（可選）",
   "authCustomServerReset": "重設為 axi.im",
   "authCustomServerOpenSettings": "開啟自訂伺服器設定",
   "authCustomServerAdvancedHint": "進階伺服器選項會保持隱藏，直到你點擊使用者名稱的後綴。",

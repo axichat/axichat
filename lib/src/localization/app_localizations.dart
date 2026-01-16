@@ -3440,6 +3440,18 @@ abstract class AppLocalizations {
   /// **'API port'**
   String get authCustomServerApiPortPlaceholder;
 
+  /// No description provided for @authCustomServerEmailProvisioningUrlPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Email provisioning URL (optional)'**
+  String get authCustomServerEmailProvisioningUrlPlaceholder;
+
+  /// No description provided for @authCustomServerEmailPublicTokenPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Email public token (optional)'**
+  String get authCustomServerEmailPublicTokenPlaceholder;
+
   /// No description provided for @authCustomServerReset.
   ///
   /// In en, this message translates to:
