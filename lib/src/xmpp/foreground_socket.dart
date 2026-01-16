@@ -19,8 +19,7 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 const join = '::';
 const connectPrefix = 'Connect';
 const securePrefix = 'Secure';
-const String _foregroundSocketSendOperationName =
-    'ForegroundSocket.sendToTask';
+const String _foregroundSocketSendOperationName = 'ForegroundSocket.sendToTask';
 const writePrefix = 'Write';
 const closePrefix = 'Close';
 const destroyPrefix = 'Destroy';

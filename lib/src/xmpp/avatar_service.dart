@@ -1310,10 +1310,29 @@ mixin AvatarService on XmppBase, MucService {
         _configuredAvatarNodes.add(cacheKey);
         return;
       }
-      final configuredError = configured.get<mox.PubSubError>();
+      var configuredError = configured.get<mox.PubSubError>();
       _avatarLog.fine(
         'Avatar node configure failed with ${configuredError.runtimeType}.',
       );
+      if (config.hasSendLastPublishedItem) {
+        _avatarLog.fine('Retrying avatar node configure without send_last.');
+        final strippedConfig = config.withoutSendLastPublishedItem();
+        final strippedResult = await pubsub
+            .configureNode(host, node, strippedConfig)
+            .timeout(_avatarPublishTimeout);
+        if (!strippedResult.isType<mox.PubSubError>()) {
+          _avatarLog.fine(
+            'Avatar node configured without send_last.',
+          );
+          _configuredAvatarNodes.add(cacheKey);
+          return;
+        }
+        configuredError = strippedResult.get<mox.PubSubError>();
+        _avatarLog.fine(
+          'Avatar node configure failed without send_last with '
+          '${configuredError.runtimeType}.',
+        );
+      }
       final shouldCreateNode = configuredError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
@@ -1321,7 +1340,11 @@ mixin AvatarService on XmppBase, MucService {
 
       try {
         await pubsub
-            .createNodeWithConfig(host, config.toNodeConfig(), nodeId: node)
+            .createNodeWithConfig(
+              host,
+              config.withoutSendLastPublishedItem().toNodeConfig(),
+              nodeId: node,
+            )
             .timeout(_avatarPublishTimeout);
         final confirmed = await pubsub
             .configureNode(host, node, config)
@@ -1330,6 +1353,18 @@ mixin AvatarService on XmppBase, MucService {
           _avatarLog.fine('Avatar node created and configured successfully.');
           _configuredAvatarNodes.add(cacheKey);
           return;
+        }
+        if (config.hasSendLastPublishedItem) {
+          final strippedConfirmed = await pubsub
+              .configureNode(host, node, config.withoutSendLastPublishedItem())
+              .timeout(_avatarPublishTimeout);
+          if (!strippedConfirmed.isType<mox.PubSubError>()) {
+            _avatarLog.fine(
+              'Avatar node configured after create without send_last.',
+            );
+            _configuredAvatarNodes.add(cacheKey);
+            return;
+          }
         }
       } on Exception {
         // ignore and retry below
@@ -1345,6 +1380,19 @@ mixin AvatarService on XmppBase, MucService {
         if (!confirmed.isType<mox.PubSubError>()) {
           _avatarLog.fine('Avatar node configured after create.');
           _configuredAvatarNodes.add(cacheKey);
+          return;
+        }
+        if (config.hasSendLastPublishedItem) {
+          final strippedConfirmed = await pubsub
+              .configureNode(host, node, config.withoutSendLastPublishedItem())
+              .timeout(_avatarPublishTimeout);
+          if (!strippedConfirmed.isType<mox.PubSubError>()) {
+            _avatarLog.fine(
+              'Avatar node configured after create without send_last.',
+            );
+            _configuredAvatarNodes.add(cacheKey);
+            return;
+          }
         }
       } on Exception {
         return;
@@ -1365,7 +1413,8 @@ mixin AvatarService on XmppBase, MucService {
             id: payload.hash,
             options: dataPublishOptions,
             autoCreate: true,
-            createNodeConfig: dataNodeConfig.toNodeConfig(),
+            createNodeConfig:
+                dataNodeConfig.withoutSendLastPublishedItem().toNodeConfig(),
           )
           .timeout(_avatarPublishTimeout);
       if (result.isType<mox.PubSubError>()) {
@@ -1392,7 +1441,9 @@ mixin AvatarService on XmppBase, MucService {
             id: payload.hash,
             options: metadataPublishOptions,
             autoCreate: true,
-            createNodeConfig: metadataNodeConfig.toNodeConfig(),
+            createNodeConfig: metadataNodeConfig
+                .withoutSendLastPublishedItem()
+                .toNodeConfig(),
           )
           .timeout(_avatarPublishTimeout);
       if (result.isType<mox.PubSubError>()) {

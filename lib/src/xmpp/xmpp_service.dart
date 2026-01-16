@@ -953,8 +953,6 @@ class XmppService extends XmppBase
       'XmppService.syncAfterReconnect';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
-  static const _cancelSocketSubscriptionOperationName =
-      'XmppService.cancelSocketSubscription';
   static const _nonRecoverableReconnectDisableLog =
       'Failed to disable reconnection after non-recoverable error.';
   static const _reconnectEnableFailedLog =
@@ -2970,6 +2968,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       'Incoming stanza rejected due to parse error.';
   static const String _socketCancelFailedLog =
       'Failed to cancel socket subscription.';
+  static const String _cancelSocketSubscriptionOperationName =
+      'XmppService.cancelSocketSubscription';
 
   final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();

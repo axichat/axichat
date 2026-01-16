@@ -268,7 +268,41 @@ final class BookmarksManager extends mox.XmppManagerBase {
         sendLastPublishedItem: _sendLastPublishedItemNever,
       );
 
-  mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
+  mox.NodeConfig _createNodeConfig() =>
+      _nodeConfig().withoutSendLastPublishedItem().toNodeConfig();
+
+  Future<mox.PubSubError?> _configureNodeWithFallback(
+    SafePubSubManager pubsub,
+    mox.JID host,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async {
+    final configured = await pubsub.configureNode(host, node, config);
+    if (!configured.isType<mox.PubSubError>()) {
+      return null;
+    }
+    final error = configured.get<mox.PubSubError>();
+    logger.fine(
+      'PubSub node config failed. node=$node '
+      'error=${error.runtimeType}.',
+    );
+    if (!config.hasSendLastPublishedItem) {
+      return error;
+    }
+    logger.fine('PubSub node config retry without send_last. node=$node.');
+    final stripped = config.withoutSendLastPublishedItem();
+    final strippedResult = await pubsub.configureNode(host, node, stripped);
+    if (!strippedResult.isType<mox.PubSubError>()) {
+      logger.fine('PubSub node configured without send_last. node=$node.');
+      return null;
+    }
+    final strippedError = strippedResult.get<mox.PubSubError>();
+    logger.fine(
+      'PubSub node config failed without send_last. node=$node '
+      'error=${strippedError.runtimeType}.',
+    );
+    return strippedError;
+  }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
         accessModel: mox.AccessModel.whitelist.value,
@@ -318,20 +352,21 @@ final class BookmarksManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = DateTime.timestamp();
     try {
       final config = _nodeConfig();
-      final configured = await pubsub.configureNode(
+      final configuredError = await _configureNodeWithFallback(
+        pubsub,
         host,
         _bookmarksNode,
         config,
       );
-      if (!configured.isType<mox.PubSubError>()) {
+      if (configuredError == null) {
         _nodeReady = true;
         return;
       }
-      final configuredError = configured.get<mox.PubSubError>();
       final shouldCreateNode = configuredError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
       }
+      logger.fine('PubSub node missing; creating node=$_bookmarksNode.');
 
       try {
         await pubsub.createNodeWithConfig(
@@ -339,12 +374,13 @@ final class BookmarksManager extends mox.XmppManagerBase {
           _createNodeConfig(),
           nodeId: _bookmarksNode,
         );
-        final applied = await pubsub.configureNode(
+        final appliedError = await _configureNodeWithFallback(
+          pubsub,
           host,
           _bookmarksNode,
           config,
         );
-        if (!applied.isType<mox.PubSubError>()) {
+        if (appliedError == null) {
           _nodeReady = true;
           return;
         }
@@ -354,12 +390,13 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
       try {
         await pubsub.createNode(host, nodeId: _bookmarksNode);
-        final applied = await pubsub.configureNode(
+        final appliedError = await _configureNodeWithFallback(
+          pubsub,
           host,
           _bookmarksNode,
           config,
         );
-        if (!applied.isType<mox.PubSubError>()) {
+        if (appliedError == null) {
           _nodeReady = true;
         }
       } on Exception {
@@ -370,7 +407,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        await _bootstrap();
+        fireAndForget(
+          _bootstrap,
+          operationName: _bookmarksBootstrapOperationName,
+        );
       }
     }
   }
