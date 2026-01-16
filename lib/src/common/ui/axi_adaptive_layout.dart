@@ -6,8 +6,12 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 const Curve _paneResizeCurve = Curves.easeInOutCubic;
+const Curve _compactSlideCurve = Curves.easeIn;
+const Curve _compactDividerFadeCurve = Curves.easeOut;
+const Offset _compactSlideBeginOffset = Offset(1.0, 0);
 
 class AxiAdaptiveLayout extends StatelessWidget {
   const AxiAdaptiveLayout({
@@ -73,17 +77,41 @@ class AxiAdaptiveLayout extends StatelessWidget {
                 duration: context.watch<SettingsCubit>().animationDuration,
                 transitionBuilder:
                     (child, primaryAnimation, secondaryAnimation) {
-                  return SlideTransition(
+                  final bool showCompactDivider = showPrimary && showSecondary;
+                  final Widget transition = SlideTransition(
                     position: Tween<Offset>(
-                      begin: const Offset(1.0, 0),
+                      begin: _compactSlideBeginOffset,
                       end: Offset.zero,
                     ).animate(
                       CurvedAnimation(
                         parent: primaryAnimation,
-                        curve: Curves.easeIn,
+                        curve: _compactSlideCurve,
                       ),
                     ),
                     child: child,
+                  );
+                  if (!showCompactDivider) return transition;
+                  return AnimatedBuilder(
+                    animation: primaryAnimation,
+                    builder: (context, _) {
+                      final colors = ShadTheme.of(context).colorScheme;
+                      final dividerOpacity = (1 -
+                              _compactDividerFadeCurve
+                                  .transform(primaryAnimation.value))
+                          .clamp(0.0, 1.0);
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            left: BorderSide(
+                              color: colors.border.withValues(
+                                alpha: dividerOpacity,
+                              ),
+                            ),
+                          ),
+                        ),
+                        child: transition,
+                      );
+                    },
                   );
                 },
                 child: compactChild,
@@ -92,6 +120,13 @@ class AxiAdaptiveLayout extends StatelessWidget {
           );
         }
 
+        final bool showSecondaryDivider = showPrimary && showSecondary;
+        final colors = ShadTheme.of(context).colorScheme;
+        final BoxDecoration secondaryDividerDecoration = BoxDecoration(
+          border: Border(
+            left: BorderSide(color: colors.border),
+          ),
+        );
         final primaryAlign = primaryAlignment ??
             (centerPrimary ? Alignment.center : Alignment.topLeft);
         final secondaryAlign = secondaryAlignment ??
@@ -116,10 +151,15 @@ class AxiAdaptiveLayout extends StatelessWidget {
                 if (showSecondary)
                   Expanded(
                     flex: secondaryFlex,
-                    child: AxiAdaptivePane(
-                      alignment: secondaryAlign,
-                      padding: secondaryPadding,
-                      child: secondaryChild,
+                    child: DecoratedBox(
+                      decoration: showSecondaryDivider
+                          ? secondaryDividerDecoration
+                          : const BoxDecoration(),
+                      child: AxiAdaptivePane(
+                        alignment: secondaryAlign,
+                        padding: secondaryPadding,
+                        child: secondaryChild,
+                      ),
                     ),
                   ),
               ],
@@ -158,11 +198,16 @@ class AxiAdaptiveLayout extends StatelessWidget {
                 duration: animationDuration,
                 curve: _paneResizeCurve,
                 width: secondaryWidth,
-                child: ClipRect(
-                  child: AxiAdaptivePane(
-                    alignment: secondaryAlign,
-                    padding: secondaryPadding,
-                    child: secondaryChild,
+                child: DecoratedBox(
+                  decoration: showSecondaryDivider
+                      ? secondaryDividerDecoration
+                      : const BoxDecoration(),
+                  child: ClipRect(
+                    child: AxiAdaptivePane(
+                      alignment: secondaryAlign,
+                      padding: secondaryPadding,
+                      child: secondaryChild,
+                    ),
                   ),
                 ),
               ),

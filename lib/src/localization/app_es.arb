@@ -2532,5 +2532,163 @@
         "type": "String"
       }
     }
-  }
+  },
+  "chatFilterTitle": "Mensajes mostrados",
+  "chatFilterDirectOnlyLabel": "Solo directos",
+  "chatFilterAllLabel": "Todos",
+  "calendarFragmentTaskLabel": "Tarea",
+  "calendarFragmentDayEventLabel": "Evento de dia",
+  "calendarFragmentFreeBusyLabel": "Libre/ocupado",
+  "calendarFragmentAvailabilityLabel": "Disponibilidad",
+  "calendarFragmentScheduledLabel": "Programado",
+  "calendarFragmentDueLabel": "Vence",
+  "calendarFragmentUntitledLabel": "Sin titulo",
+  "calendarFragmentChecklistBullet": "- ",
+  "commonAndMoreLabel": "{count, plural, one {y 1 mas} other {y {count} mas}}",
+  "@commonAndMoreLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonBulletSymbol": "• ",
+  "commonLabelSeparator": ": ",
+  "commonUnknownLabel": "Desconocido",
+  "commonBadgeOverflowLabel": "99+",
+  "commonEllipsis": "…",
+  "chatMessageDetailsSenderLabel": "Direccion del remitente",
+  "chatMessageDetailsMetadataLabel": "Metadatos del mensaje",
+  "chatMessageDetailsHeadersLabel": "Encabezados sin formato",
+  "chatMessageDetailsHeadersActionLabel": "Ver encabezados",
+  "chatMessageDetailsHeadersNote":
+      "Los encabezados se cargan del mensaje RFC822 original.",
+  "chatMessageDetailsHeadersLoadingLabel": "Cargando encabezados...",
+  "chatMessageDetailsHeadersUnavailableLabel": "Encabezados no disponibles.",
+  "chatMessageDetailsStanzaIdLabel": "ID de stanza",
+  "chatMessageDetailsOriginIdLabel": "ID de origen",
+  "chatMessageDetailsOccupantIdLabel": "ID de ocupante",
+  "chatMessageDetailsDeltaIdLabel": "ID de mensaje Delta",
+  "chatMessageDetailsLocalIdLabel": "ID de mensaje local",
+  "chatCalendarFragmentShareDeniedMessage":
+      "Las tarjetas de calendario estan deshabilitadas para tu rol en esta sala.",
+  "chatAvailabilityRequestAccountMissingMessage":
+      "Las solicitudes de disponibilidad no estan disponibles ahora.",
+  "chatAvailabilityRequestEmailUnsupportedMessage":
+      "La disponibilidad no esta disponible para chats de correo.",
+  "chatAvailabilityRequestInvalidRangeMessage":
+      "La hora solicitada de disponibilidad no es valida.",
+  "chatAvailabilityRequestCalendarUnavailableMessage":
+      "El calendario no esta disponible.",
+  "chatAvailabilityRequestChatCalendarUnavailableMessage":
+      "El calendario del chat no esta disponible.",
+  "chatAvailabilityRequestTaskTitleFallback": "Tiempo solicitado",
+  "chatSenderAddressPrefix": "JID: ",
+  "chatRecipientVisibilityCcLabel": "CC",
+  "chatRecipientVisibilityBccLabel": "BCC",
+  "chatInviteRoomFallbackLabel": "chat grupal",
+  "chatInviteBodyLabel": "Has sido invitado a un chat grupal",
+  "chatInviteRevokedLabel": "Invitacion revocada",
+  "chatInviteActionLabel": "Unirse a '{roomName}'",
+  "@chatInviteActionLabel": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteActionFallbackLabel": "Unirse",
+  "chatInviteConfirmTitle": "Aceptar invitacion?",
+  "chatInviteConfirmMessage": "Unirse a '{roomName}'?",
+  "@chatInviteConfirmMessage": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteConfirmLabel": "Aceptar",
+  "chatChooseTextToAddHint":
+      "Selecciona una parte del mensaje para enviarla al calendario o editala primero.",
+  "chatAttachmentAutoDownloadLabel":
+      "Descargar automaticamente los adjuntos en este chat",
+  "chatAttachmentAutoDownloadHintOn":
+      "Los adjuntos de este chat se descargaran automaticamente.",
+  "chatAttachmentAutoDownloadHintOff":
+      "Los adjuntos se bloquean hasta que los apruebes.",
+  "chatAttachmentCaption": "📎 {filename} ({size})",
+  "@chatAttachmentCaption": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "chatAttachmentFallbackLabel": "Adjunto",
+  "commonFileSizeUnitBytes": "B",
+  "commonFileSizeUnitKilobytes": "KB",
+  "commonFileSizeUnitMegabytes": "MB",
+  "commonFileSizeUnitGigabytes": "GB",
+  "commonFileSizeUnitTerabytes": "TB",
+  "chatAttachmentTooLargeMessageDefault":
+      "El adjunto supera el limite del servidor.",
+  "chatAttachmentTooLargeMessage":
+      "El adjunto supera el limite del servidor ({limit}).",
+  "@chatAttachmentTooLargeMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMessageErrorWithBody": "{label}: \"{body}\"",
+  "@chatMessageErrorWithBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "messageErrorServiceUnavailableTooltip":
+      "El servicio informo de un problema temporal.",
+  "messageErrorServiceUnavailable": "Servicio no disponible",
+  "messageErrorServerNotFound": "Servidor no encontrado",
+  "messageErrorServerTimeout": "Tiempo de espera del servidor",
+  "messageErrorUnknown": "Error desconocido",
+  "messageErrorNotEncryptedForDevice": "No cifrado para este dispositivo",
+  "messageErrorMalformedKey": "Clave de cifrado mal formada",
+  "messageErrorUnknownSignedPrekey": "Prekey firmada desconocida",
+  "messageErrorNoDeviceSession": "Sin sesion de dispositivo",
+  "messageErrorSkippingTooManyKeys": "Se omitieron demasiadas claves",
+  "messageErrorInvalidHmac": "HMAC invalido",
+  "messageErrorMalformedCiphertext": "Cifrado mal formado",
+  "messageErrorNoKeyMaterial": "Falta material de clave",
+  "messageErrorNoDecryptionKey": "Falta clave de descifrado",
+  "messageErrorInvalidKex": "Intercambio de claves invalido",
+  "messageErrorUnknownOmemo": "Error OMEMO desconocido",
+  "messageErrorInvalidAffixElements": "Elementos de afijo invalidos",
+  "messageErrorEmptyDeviceList": "Lista de dispositivos vacia",
+  "messageErrorOmemoUnsupported": "OMEMO no compatible",
+  "messageErrorEncryptionFailure": "Fallo de cifrado",
+  "messageErrorInvalidEnvelope": "Sobre invalido",
+  "messageErrorFileDownloadFailure": "Fallo en la descarga del archivo",
+  "messageErrorFileUploadFailure": "Fallo en la carga del archivo",
+  "messageErrorFileDecryptionFailure": "Fallo al descifrar el archivo",
+  "messageErrorFileEncryptionFailure": "Fallo al cifrar el archivo",
+  "messageErrorPlaintextFileInOmemo":
+      "Archivo en texto plano en mensaje OMEMO",
+  "messageErrorEmailSendFailure": "Fallo al enviar el correo",
+  "messageErrorEmailAttachmentTooLarge": "Adjunto de correo demasiado grande",
+  "messageErrorEmailRecipientRejected": "Destinatario de correo rechazado",
+  "messageErrorEmailAuthenticationFailed":
+      "Autenticacion de correo fallida",
+  "messageErrorEmailBounced": "Correo rebotado",
+  "messageErrorEmailThrottled": "Correo limitado",
+  "chatEmailResendFailedDetails": "No se pudo reenviar el correo."
 }

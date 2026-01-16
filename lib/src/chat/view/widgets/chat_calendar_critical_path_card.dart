@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
+
 class ChatCalendarCriticalPathCard extends StatelessWidget {
   const ChatCalendarCriticalPathCard({
     super.key,

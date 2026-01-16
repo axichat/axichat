@@ -2509,5 +2509,170 @@
         "type": "String"
       }
     }
-  }
+  },
+  "chatFilterTitle": "显示的消息",
+  "chatFilterDirectOnlyLabel": "仅直接",
+  "chatFilterAllLabel": "全部",
+  "calendarFragmentTaskLabel": "任务",
+  "calendarFragmentDayEventLabel": "全天事件",
+  "calendarFragmentFreeBusyLabel": "空闲/忙碌",
+  "calendarFragmentAvailabilityLabel": "可用性",
+  "calendarFragmentScheduledLabel": "已安排",
+  "calendarFragmentDueLabel": "截止",
+  "calendarFragmentUntitledLabel": "未命名",
+  "calendarFragmentChecklistBullet": "- ",
+  "commonAndMoreLabel": "{count, plural, one {还有1项} other {还有{count}项}}",
+  "@commonAndMoreLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonBulletSymbol": "• ",
+  "commonLabelSeparator": "：",
+  "commonUnknownLabel": "未知",
+  "commonBadgeOverflowLabel": "99+",
+  "commonEllipsis": "…",
+  "chatMessageDetailsSenderLabel": "发送者地址",
+  "chatMessageDetailsMetadataLabel": "消息元数据",
+  "chatMessageDetailsHeadersLabel": "原始头信息",
+  "chatMessageDetailsHeadersActionLabel": "查看头信息",
+  "chatMessageDetailsHeadersNote": "头信息来自原始 RFC822 消息。",
+  "chatMessageDetailsHeadersLoadingLabel": "正在加载头信息...",
+  "chatMessageDetailsHeadersUnavailableLabel": "头信息不可用。",
+  "chatMessageDetailsStanzaIdLabel": "Stanza ID",
+  "chatMessageDetailsOriginIdLabel": "Origin ID",
+  "chatMessageDetailsOccupantIdLabel": "Occupant ID",
+  "chatMessageDetailsDeltaIdLabel": "Delta 消息 ID",
+  "chatMessageDetailsLocalIdLabel": "本地消息 ID",
+  "chatCalendarFragmentShareDeniedMessage": "你的角色无法使用此房间的日历卡片。",
+  "chatAvailabilityRequestAccountMissingMessage": "当前无法使用可用性请求。",
+  "chatAvailabilityRequestEmailUnsupportedMessage": "邮件聊天不支持可用性。",
+  "chatAvailabilityRequestInvalidRangeMessage": "可用性请求时间无效。",
+  "chatAvailabilityRequestCalendarUnavailableMessage": "日历不可用。",
+  "chatAvailabilityRequestChatCalendarUnavailableMessage": "聊天日历不可用。",
+  "chatAvailabilityRequestTaskTitleFallback": "请求的时间",
+  "chatSenderAddressPrefix": "JID: ",
+  "chatRecipientVisibilityCcLabel": "抄送",
+  "chatRecipientVisibilityBccLabel": "密送",
+  "chatInviteRoomFallbackLabel": "群聊",
+  "chatInviteBodyLabel": "你已被邀请加入群聊",
+  "chatInviteRevokedLabel": "邀请已撤销",
+  "chatInviteActionLabel": "加入“{roomName}”",
+  "@chatInviteActionLabel": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteActionFallbackLabel": "加入",
+  "chatInviteConfirmTitle": "接受邀请？",
+  "chatInviteConfirmMessage": "加入“{roomName}”？",
+  "@chatInviteConfirmMessage": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteConfirmLabel": "接受",
+  "chatChooseTextToAddHint": "选择要发送到日历的消息内容，或先编辑它。",
+  "chatAttachmentAutoDownloadLabel": "自动下载此聊天中的附件",
+  "chatAttachmentAutoDownloadHintOn": "此聊天中的附件将自动下载。",
+  "chatAttachmentAutoDownloadHintOff": "附件会被阻止，直到你批准为止。",
+  "chatAttachmentCaption": "📎 {filename}（{size}）",
+  "@chatAttachmentCaption": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "chatAttachmentFallbackLabel": "附件",
+  "commonFileSizeUnitBytes": "B",
+  "commonFileSizeUnitKilobytes": "KB",
+  "commonFileSizeUnitMegabytes": "MB",
+  "commonFileSizeUnitGigabytes": "GB",
+  "commonFileSizeUnitTerabytes": "TB",
+  "chatAttachmentTooLargeMessageDefault": "附件超过服务器限制。",
+  "chatAttachmentTooLargeMessage": "附件超过服务器限制（{limit}）。",
+  "@chatAttachmentTooLargeMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMessageErrorWithBody": "{label}：\"{body}\"",
+  "@chatMessageErrorWithBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "messageErrorServiceUnavailableTooltip": "服务出现暂时性问题。",
+  "messageErrorServiceUnavailable": "服务不可用",
+  "messageErrorServerNotFound": "未找到服务器",
+  "messageErrorServerTimeout": "服务器超时",
+  "messageErrorUnknown": "未知错误",
+  "messageErrorNotEncryptedForDevice": "未为此设备加密",
+  "messageErrorMalformedKey": "加密密钥格式错误",
+  "messageErrorUnknownSignedPrekey": "未知的已签名预密钥",
+  "messageErrorNoDeviceSession": "没有设备会话",
+  "messageErrorSkippingTooManyKeys": "跳过的密钥过多",
+  "messageErrorInvalidHmac": "无效的 HMAC",
+  "messageErrorMalformedCiphertext": "密文格式错误",
+  "messageErrorNoKeyMaterial": "缺少密钥材料",
+  "messageErrorNoDecryptionKey": "缺少解密密钥",
+  "messageErrorInvalidKex": "无效的密钥交换",
+  "messageErrorUnknownOmemo": "未知的 OMEMO 错误",
+  "messageErrorInvalidAffixElements": "无效的附加元素",
+  "messageErrorEmptyDeviceList": "设备列表为空",
+  "messageErrorOmemoUnsupported": "不支持 OMEMO",
+  "messageErrorEncryptionFailure": "加密失败",
+  "messageErrorInvalidEnvelope": "无效的信封",
+  "messageErrorFileDownloadFailure": "文件下载失败",
+  "messageErrorFileUploadFailure": "文件上传失败",
+  "messageErrorFileDecryptionFailure": "文件解密失败",
+  "messageErrorFileEncryptionFailure": "文件加密失败",
+  "messageErrorPlaintextFileInOmemo": "OMEMO 消息包含明文文件",
+  "messageErrorEmailSendFailure": "邮件发送失败",
+  "messageErrorEmailAttachmentTooLarge": "邮件附件过大",
+  "messageErrorEmailRecipientRejected": "邮件收件人被拒绝",
+  "messageErrorEmailAuthenticationFailed": "邮件认证失败",
+  "messageErrorEmailBounced": "邮件被退回",
+  "messageErrorEmailThrottled": "邮件发送受限",
+  "chatEmailResendFailedDetails": "无法重新发送邮件。",
+  "chatTaskViewTitle": "任务详情",
+  "chatTaskViewSubtitle": "只读任务。",
+  "chatTaskViewPreviewLabel": "预览",
+  "chatTaskViewActionsLabel": "任务操作",
+  "chatTaskViewCopyLabel": "复制到日历",
+  "chatTaskCopyTitle": "复制任务",
+  "chatTaskCopySubtitle": "选择要接收的日历。",
+  "chatTaskCopyPreviewLabel": "预览",
+  "chatTaskCopyCalendarsLabel": "日历",
+  "chatTaskCopyPersonalLabel": "添加到个人日历",
+  "chatTaskCopyChatLabel": "添加到聊天日历",
+  "chatTaskCopyConfirmLabel": "复制",
+  "chatTaskCopyMissingSelectionMessage": "至少选择一个日历。",
+  "chatCriticalPathCopyTitle": "复制关键路径",
+  "chatCriticalPathCopySubtitle": "选择要接收的日历。",
+  "chatCriticalPathCopyPreviewLabel": "预览",
+  "chatCriticalPathCopyCalendarsLabel": "日历",
+  "chatCriticalPathCopyPersonalLabel": "添加到个人日历",
+  "chatCriticalPathCopyChatLabel": "添加到聊天日历",
+  "chatCriticalPathCopyConfirmLabel": "复制",
+  "chatCriticalPathCopyMissingSelectionMessage": "至少选择一个日历。",
+  "chatCriticalPathCopyUnavailableMessage": "日历不可用。",
+  "chatCriticalPathCopySuccessMessage": "关键路径已复制。"
 }

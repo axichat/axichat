@@ -2532,5 +2532,163 @@
         "type": "String"
       }
     }
-  }
+  },
+  "chatFilterTitle": "Angezeigte Nachrichten",
+  "chatFilterDirectOnlyLabel": "Nur direkt",
+  "chatFilterAllLabel": "Alle",
+  "calendarFragmentTaskLabel": "Aufgabe",
+  "calendarFragmentDayEventLabel": "Ganztagstermin",
+  "calendarFragmentFreeBusyLabel": "Frei/belegt",
+  "calendarFragmentAvailabilityLabel": "Verfügbarkeit",
+  "calendarFragmentScheduledLabel": "Geplant",
+  "calendarFragmentDueLabel": "Fällig",
+  "calendarFragmentUntitledLabel": "Unbenannt",
+  "calendarFragmentChecklistBullet": "- ",
+  "commonAndMoreLabel": "{count, plural, one {und 1 weitere} other {und {count} weitere}}",
+  "@commonAndMoreLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonBulletSymbol": "• ",
+  "commonLabelSeparator": ": ",
+  "commonUnknownLabel": "Unbekannt",
+  "commonBadgeOverflowLabel": "99+",
+  "commonEllipsis": "…",
+  "chatMessageDetailsSenderLabel": "Absenderadresse",
+  "chatMessageDetailsMetadataLabel": "Nachrichtenmetadaten",
+  "chatMessageDetailsHeadersLabel": "Roh-Header",
+  "chatMessageDetailsHeadersActionLabel": "Header anzeigen",
+  "chatMessageDetailsHeadersNote":
+      "Header werden aus der ursprunglichen RFC822-Nachricht geladen.",
+  "chatMessageDetailsHeadersLoadingLabel": "Header werden geladen...",
+  "chatMessageDetailsHeadersUnavailableLabel": "Header nicht verfugbar.",
+  "chatMessageDetailsStanzaIdLabel": "Stanza-ID",
+  "chatMessageDetailsOriginIdLabel": "Origin-ID",
+  "chatMessageDetailsOccupantIdLabel": "Occupant-ID",
+  "chatMessageDetailsDeltaIdLabel": "Delta-Nachrichten-ID",
+  "chatMessageDetailsLocalIdLabel": "Lokale Nachrichten-ID",
+  "chatCalendarFragmentShareDeniedMessage":
+      "Kalenderkarten sind fur deine Rolle in diesem Raum deaktiviert.",
+  "chatAvailabilityRequestAccountMissingMessage":
+      "Verfugbarkeitsanfragen sind derzeit nicht verfugbar.",
+  "chatAvailabilityRequestEmailUnsupportedMessage":
+      "Verfugbarkeit ist fur E-Mail-Chats nicht verfugbar.",
+  "chatAvailabilityRequestInvalidRangeMessage":
+      "Der Zeitraum der Verfugbarkeitsanfrage ist ungultig.",
+  "chatAvailabilityRequestCalendarUnavailableMessage":
+      "Kalender ist nicht verfugbar.",
+  "chatAvailabilityRequestChatCalendarUnavailableMessage":
+      "Chat-Kalender ist nicht verfugbar.",
+  "chatAvailabilityRequestTaskTitleFallback": "Angeforderte Zeit",
+  "chatSenderAddressPrefix": "JID: ",
+  "chatRecipientVisibilityCcLabel": "CC",
+  "chatRecipientVisibilityBccLabel": "BCC",
+  "chatInviteRoomFallbackLabel": "Gruppenchat",
+  "chatInviteBodyLabel": "Du wurdest zu einem Gruppenchat eingeladen",
+  "chatInviteRevokedLabel": "Einladung widerrufen",
+  "chatInviteActionLabel": "Beitreten '{roomName}'",
+  "@chatInviteActionLabel": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteActionFallbackLabel": "Beitreten",
+  "chatInviteConfirmTitle": "Einladung annehmen?",
+  "chatInviteConfirmMessage": "Beitreten '{roomName}'?",
+  "@chatInviteConfirmMessage": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteConfirmLabel": "Annehmen",
+  "chatChooseTextToAddHint":
+      "Wahle einen Teil der Nachricht aus, um ihn an den Kalender zu senden, oder bearbeite ihn zuerst.",
+  "chatAttachmentAutoDownloadLabel":
+      "Anhange in diesem Chat automatisch herunterladen",
+  "chatAttachmentAutoDownloadHintOn":
+      "Anhange in diesem Chat werden automatisch heruntergeladen.",
+  "chatAttachmentAutoDownloadHintOff":
+      "Anhange werden blockiert, bis du sie bestatigst.",
+  "chatAttachmentCaption": "📎 {filename} ({size})",
+  "@chatAttachmentCaption": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "chatAttachmentFallbackLabel": "Anhang",
+  "commonFileSizeUnitBytes": "B",
+  "commonFileSizeUnitKilobytes": "KB",
+  "commonFileSizeUnitMegabytes": "MB",
+  "commonFileSizeUnitGigabytes": "GB",
+  "commonFileSizeUnitTerabytes": "TB",
+  "chatAttachmentTooLargeMessageDefault":
+      "Anhang uberschreitet das Serverlimit.",
+  "chatAttachmentTooLargeMessage":
+      "Anhang uberschreitet das Serverlimit ({limit}).",
+  "@chatAttachmentTooLargeMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMessageErrorWithBody": "{label}: \"{body}\"",
+  "@chatMessageErrorWithBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "messageErrorServiceUnavailableTooltip":
+      "Der Dienst meldete ein vorubergehendes Problem.",
+  "messageErrorServiceUnavailable": "Dienst nicht verfugbar",
+  "messageErrorServerNotFound": "Server nicht gefunden",
+  "messageErrorServerTimeout": "Serverzeituberschreitung",
+  "messageErrorUnknown": "Unbekannter Fehler",
+  "messageErrorNotEncryptedForDevice": "Nicht fur dieses Gerat verschlusselt",
+  "messageErrorMalformedKey": "Fehlerhafter Verschlusselungsschlussel",
+  "messageErrorUnknownSignedPrekey": "Unbekannter signierter Prekey",
+  "messageErrorNoDeviceSession": "Keine Geratesitzung",
+  "messageErrorSkippingTooManyKeys": "Zu viele Schlussel ubersprungen",
+  "messageErrorInvalidHmac": "Ungultiges HMAC",
+  "messageErrorMalformedCiphertext": "Fehlerhafter Geheimtext",
+  "messageErrorNoKeyMaterial": "Fehlendes Schlusselmaterial",
+  "messageErrorNoDecryptionKey": "Fehlender Entschlusselungsschlussel",
+  "messageErrorInvalidKex": "Ungultiger Schlusselaustausch",
+  "messageErrorUnknownOmemo": "Unbekannter OMEMO-Fehler",
+  "messageErrorInvalidAffixElements": "Ungultige Affix-Elemente",
+  "messageErrorEmptyDeviceList": "Leere Gerateliste",
+  "messageErrorOmemoUnsupported": "OMEMO nicht unterstutzt",
+  "messageErrorEncryptionFailure": "Verschlusselung fehlgeschlagen",
+  "messageErrorInvalidEnvelope": "Ungultiger Umschlag",
+  "messageErrorFileDownloadFailure": "Dateidownload fehlgeschlagen",
+  "messageErrorFileUploadFailure": "Dateiupload fehlgeschlagen",
+  "messageErrorFileDecryptionFailure": "Dateientschlusselung fehlgeschlagen",
+  "messageErrorFileEncryptionFailure": "Dateiverschlusselung fehlgeschlagen",
+  "messageErrorPlaintextFileInOmemo": "Klartextdatei in OMEMO-Nachricht",
+  "messageErrorEmailSendFailure": "E-Mail-Versand fehlgeschlagen",
+  "messageErrorEmailAttachmentTooLarge": "E-Mail-Anhang zu gross",
+  "messageErrorEmailRecipientRejected": "E-Mail-Empfanger abgelehnt",
+  "messageErrorEmailAuthenticationFailed":
+      "E-Mail-Authentifizierung fehlgeschlagen",
+  "messageErrorEmailBounced": "E-Mail unzustellbar",
+  "messageErrorEmailThrottled": "E-Mail gedrosselt",
+  "chatEmailResendFailedDetails":
+      "E-Mail konnte nicht erneut gesendet werden."
 }

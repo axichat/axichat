@@ -114,7 +114,6 @@ const int _attachmentVideoMinBytes = 1;
 const double _attachmentVideoMinDimension = 1.0;
 const String _attachmentShareDirName = 'attachment_shares';
 const String _attachmentShareDirPrefix = 'share_';
-const String _attachmentShareFallbackName = 'attachment';
 const int _attachmentShareNameMaxLength = 120;
 const int _attachmentSaveNameMaxLength = _attachmentShareNameMaxLength;
 const Duration _attachmentShareCleanupAge = Duration(days: 1);
@@ -153,11 +152,6 @@ const String _attachmentWindowsZoneIdentifierContent =
     '$_attachmentWindowsZoneIdEntry'
     '$_attachmentWindowsZoneEntrySeparator';
 const String _mediaDecodeGuardKeyPrefix = 'attachment:';
-const String _attachmentTooLargeMessageDefault =
-    'Attachment exceeds the server limit.';
-const String _attachmentTooLargeMessagePrefix =
-    'Attachment exceeds the server limit (';
-const String _attachmentTooLargeMessageSuffix = ').';
 const int _acknowledgedHighRiskAttachmentMaxEntries = 256;
 final LinkedHashSet<String> _acknowledgedHighRiskAttachmentIds =
     LinkedHashSet<String>();
@@ -2464,6 +2458,7 @@ Future<void> _shareAttachmentFromFile(
     sharedFile = await _prepareShareAttachmentFile(
       file: file,
       filename: filename,
+      fallbackName: l10n.chatAttachmentFallbackLabel,
     );
     if (!context.mounted) return;
     if (sharedFile == null) {
@@ -2529,7 +2524,7 @@ Future<void> _saveAttachmentToDevice(
   }
   final fallbackName = _resolveAttachmentFallbackName(
     fallbackPath: file.path,
-    fallbackName: _attachmentShareFallbackName,
+    fallbackName: l10n.chatAttachmentFallbackLabel,
   );
   final resolvedName = sanitizeAttachmentFileName(
     rawName: filename,
@@ -2559,6 +2554,7 @@ Future<void> _saveAttachmentToDevice(
 Future<File?> _prepareShareAttachmentFile({
   required File file,
   required String filename,
+  required String fallbackName,
 }) async {
   if (!await file.exists()) {
     return null;
@@ -2571,6 +2567,7 @@ Future<File?> _prepareShareAttachmentFile({
   final shareFileName = _sanitizeShareFileName(
     explicitName: filename,
     fallbackPath: file.path,
+    fallbackName: fallbackName,
   );
   final sharePath = p.join(shareDir.path, shareFileName);
   final sharedFile = await file.copy(sharePath);
@@ -2630,14 +2627,15 @@ Future<void> _cleanupAttachmentShareRoot(Directory shareRoot) async {
 String _sanitizeShareFileName({
   required String? explicitName,
   required String fallbackPath,
+  required String fallbackName,
 }) {
-  final fallbackName = _resolveAttachmentFallbackName(
+  final resolvedFallbackName = _resolveAttachmentFallbackName(
     fallbackPath: fallbackPath,
-    fallbackName: _attachmentShareFallbackName,
+    fallbackName: fallbackName,
   );
   return sanitizeAttachmentFileName(
     rawName: explicitName,
-    fallbackName: fallbackName,
+    fallbackName: resolvedFallbackName,
     maxLength: _attachmentShareNameMaxLength,
   );
 }
@@ -2752,7 +2750,13 @@ String _formatAttachmentSize({
 
 String _formatSize(int? bytes, AppLocalizations l10n) {
   if (bytes == null || bytes <= 0) return l10n.chatAttachmentUnknownSize;
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  final units = [
+    l10n.commonFileSizeUnitBytes,
+    l10n.commonFileSizeUnitKilobytes,
+    l10n.commonFileSizeUnitMegabytes,
+    l10n.commonFileSizeUnitGigabytes,
+    l10n.commonFileSizeUnitTerabytes,
+  ];
   var value = bytes.toDouble();
   var unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
@@ -2766,7 +2770,7 @@ String _attachmentTooLargeMessage(AppLocalizations l10n, int? maxBytes) {
   final resolvedLimit =
       maxBytes == null || maxBytes <= 0 ? null : _formatSize(maxBytes, l10n);
   if (resolvedLimit == null) {
-    return _attachmentTooLargeMessageDefault;
+    return l10n.chatAttachmentTooLargeMessageDefault;
   }
-  return '$_attachmentTooLargeMessagePrefix$resolvedLimit$_attachmentTooLargeMessageSuffix';
+  return l10n.chatAttachmentTooLargeMessage(resolvedLimit);
 }

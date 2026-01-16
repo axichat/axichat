@@ -126,7 +126,7 @@ class NotificationService {
         guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
       );
 
-      const InitializationSettings initializationSettings =
+      final InitializationSettings initializationSettings =
           InitializationSettings(
         android: initializationSettingsAndroid,
         iOS: initializationSettingsDarwin,

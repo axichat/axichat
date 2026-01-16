@@ -130,16 +130,18 @@ class _DraftFormState extends State<DraftForm> {
       widget.attachmentMetadataIds.isNotEmpty;
 
   void _bodyListener() {
-    if (_sendErrorMessage != null && mounted) {
-      setState(() => _sendErrorMessage = null);
+    if (!mounted) {
+      return;
     }
+    setState(() => _sendErrorMessage = null);
     _scheduleAutosave();
   }
 
   void _subjectListener() {
-    if (_sendErrorMessage != null && mounted) {
-      setState(() => _sendErrorMessage = null);
+    if (!mounted) {
+      return;
     }
+    setState(() => _sendErrorMessage = null);
     _scheduleAutosave();
   }
 

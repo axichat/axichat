@@ -190,6 +190,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   static const String _registerBodyKeyPassword2 = 'password2';
   static const String _registerBodyKeyPasswordOld = 'passwordold';
   static const String _registerBodyKeyPasswordOldLegacy = 'oldpassword';
+  static const Duration _stickyReconnectWaitTimeout = Duration(seconds: 10);
 
   Uri get registrationUrl => _buildRegistrationUrl();
 
@@ -608,6 +609,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
+  Future<bool> _loginWithStoredCredentials() async {
+    final remember = await loadRememberMeChoice();
+    if (!remember) return false;
+
+    final storedLogin = await _readStoredLoginCredentials();
+    if (!storedLogin.hasUsableCredentials) {
+      _log.fine('Skipping auto login: no stored credentials.');
+      return false;
+    }
+
+    await login(rememberMe: remember);
+    return true;
+  }
+
   Future<void> _loginIfStoredCredentials() async {
     if (_loginInFlight) {
       return;
@@ -619,16 +634,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
-    final remember = await loadRememberMeChoice();
-    if (!remember) return;
-
-    final storedLogin = await _readStoredLoginCredentials();
-    if (!storedLogin.hasUsableCredentials) {
-      _log.fine('Skipping auto login: no stored credentials.');
-      return;
-    }
-
-    await login();
+    await _loginWithStoredCredentials();
   }
 
   Future<void> _reconnectXmppForStickySession() async {
@@ -646,6 +652,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
+    final bool hasReconnectContext =
+        _xmppService.hasConnectionSettings && _xmppService.databasesInitialized;
+    if (!hasReconnectContext) {
+      await _loginWithStoredCredentials();
+      return;
+    }
+
     try {
       await _xmppService.requestReconnect(ReconnectTrigger.resume);
     } on Exception {
@@ -656,17 +669,50 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
-    final remember = await loadRememberMeChoice();
-    if (!remember) {
+    final bool didReconnect = await _awaitStickyReconnectResult();
+    if (didReconnect) {
       return;
     }
 
-    final storedLogin = await _readStoredLoginCredentials();
-    if (!storedLogin.hasUsableCredentials) {
-      return;
+    await _loginWithStoredCredentials();
+  }
+
+  Future<bool> _awaitStickyReconnectResult() async {
+    if (_xmppService.connected) {
+      return true;
     }
 
-    await login(rememberMe: remember);
+    final ConnectionState initialState = _xmppService.connectionState;
+    if (initialState == ConnectionState.error ||
+        initialState == ConnectionState.notConnected) {
+      return false;
+    }
+
+    final Completer<bool> resultCompleter = Completer<bool>();
+    late final StreamSubscription<ConnectionState> subscription;
+    subscription = _xmppService.connectivityStream.listen((state) {
+      if (state == ConnectionState.connected) {
+        if (!resultCompleter.isCompleted) {
+          resultCompleter.complete(true);
+        }
+        return;
+      }
+      if (state == ConnectionState.error ||
+          state == ConnectionState.notConnected) {
+        if (!resultCompleter.isCompleted) {
+          resultCompleter.complete(false);
+        }
+      }
+    });
+
+    try {
+      return await resultCompleter.future.timeout(
+        _stickyReconnectWaitTimeout,
+        onTimeout: () => false,
+      );
+    } finally {
+      await subscription.cancel();
+    }
   }
 
   Future<void> _triggerEmailReconnect() async {

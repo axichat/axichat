@@ -2609,5 +2609,161 @@
         "type": "String"
       }
     }
-  }
+  },
+  "chatFilterTitle": "Messages shown",
+  "chatFilterDirectOnlyLabel": "Direct only",
+  "chatFilterAllLabel": "All",
+  "calendarFragmentTaskLabel": "Task",
+  "calendarFragmentDayEventLabel": "Day event",
+  "calendarFragmentFreeBusyLabel": "Free/busy",
+  "calendarFragmentAvailabilityLabel": "Availability",
+  "calendarFragmentScheduledLabel": "Scheduled",
+  "calendarFragmentDueLabel": "Due",
+  "calendarFragmentUntitledLabel": "Untitled",
+  "calendarFragmentChecklistBullet": "- ",
+  "commonAndMoreLabel": "{count, plural, one {and 1 more} other {and {count} more}}",
+  "@commonAndMoreLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonBulletSymbol": "• ",
+  "commonLabelSeparator": ": ",
+  "commonUnknownLabel": "Unknown",
+  "commonBadgeOverflowLabel": "99+",
+  "commonEllipsis": "…",
+  "chatMessageDetailsSenderLabel": "Sender address",
+  "chatMessageDetailsMetadataLabel": "Message metadata",
+  "chatMessageDetailsHeadersLabel": "Raw headers",
+  "chatMessageDetailsHeadersActionLabel": "View headers",
+  "chatMessageDetailsHeadersNote":
+      "Headers are loaded from the original RFC822 message.",
+  "chatMessageDetailsHeadersLoadingLabel": "Loading headers...",
+  "chatMessageDetailsHeadersUnavailableLabel": "Headers unavailable.",
+  "chatMessageDetailsStanzaIdLabel": "Stanza ID",
+  "chatMessageDetailsOriginIdLabel": "Origin ID",
+  "chatMessageDetailsOccupantIdLabel": "Occupant ID",
+  "chatMessageDetailsDeltaIdLabel": "Delta message ID",
+  "chatMessageDetailsLocalIdLabel": "Local message ID",
+  "chatCalendarFragmentShareDeniedMessage":
+      "Calendar cards are disabled for your role in this room.",
+  "chatAvailabilityRequestAccountMissingMessage":
+      "Availability requests are unavailable right now.",
+  "chatAvailabilityRequestEmailUnsupportedMessage":
+      "Availability is unavailable for email chats.",
+  "chatAvailabilityRequestInvalidRangeMessage":
+      "Availability request time is invalid.",
+  "chatAvailabilityRequestCalendarUnavailableMessage":
+      "Calendar is unavailable.",
+  "chatAvailabilityRequestChatCalendarUnavailableMessage":
+      "Chat calendar is unavailable.",
+  "chatAvailabilityRequestTaskTitleFallback": "Requested time",
+  "chatSenderAddressPrefix": "JID: ",
+  "chatRecipientVisibilityCcLabel": "CC",
+  "chatRecipientVisibilityBccLabel": "BCC",
+  "chatInviteRoomFallbackLabel": "group chat",
+  "chatInviteBodyLabel": "You have been invited to a group chat",
+  "chatInviteRevokedLabel": "Invite revoked",
+  "chatInviteActionLabel": "Join '{roomName}'",
+  "@chatInviteActionLabel": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteActionFallbackLabel": "Join",
+  "chatInviteConfirmTitle": "Accept invite?",
+  "chatInviteConfirmMessage": "Join '{roomName}'?",
+  "@chatInviteConfirmMessage": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteConfirmLabel": "Accept",
+  "chatChooseTextToAddHint":
+      "Select a portion of the message to send to the calendar or edit it first.",
+  "chatAttachmentAutoDownloadLabel":
+      "Automatically download attachments in this chat",
+  "chatAttachmentAutoDownloadHintOn":
+      "Attachments in this chat will download automatically.",
+  "chatAttachmentAutoDownloadHintOff":
+      "Attachments are blocked until you approve them.",
+  "chatAttachmentCaption": "📎 {filename} ({size})",
+  "@chatAttachmentCaption": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "chatAttachmentFallbackLabel": "Attachment",
+  "commonFileSizeUnitBytes": "B",
+  "commonFileSizeUnitKilobytes": "KB",
+  "commonFileSizeUnitMegabytes": "MB",
+  "commonFileSizeUnitGigabytes": "GB",
+  "commonFileSizeUnitTerabytes": "TB",
+  "chatAttachmentTooLargeMessageDefault":
+      "Attachment exceeds the server limit.",
+  "chatAttachmentTooLargeMessage":
+      "Attachment exceeds the server limit ({limit}).",
+  "@chatAttachmentTooLargeMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMessageErrorWithBody": "{label}: \"{body}\"",
+  "@chatMessageErrorWithBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "messageErrorServiceUnavailableTooltip":
+      "The service reported a temporary issue.",
+  "messageErrorServiceUnavailable": "Service unavailable",
+  "messageErrorServerNotFound": "Server not found",
+  "messageErrorServerTimeout": "Server timed out",
+  "messageErrorUnknown": "Unknown error",
+  "messageErrorNotEncryptedForDevice": "Not encrypted for this device",
+  "messageErrorMalformedKey": "Malformed encryption key",
+  "messageErrorUnknownSignedPrekey": "Unknown signed prekey",
+  "messageErrorNoDeviceSession": "No device session",
+  "messageErrorSkippingTooManyKeys": "Too many keys skipped",
+  "messageErrorInvalidHmac": "Invalid HMAC",
+  "messageErrorMalformedCiphertext": "Malformed ciphertext",
+  "messageErrorNoKeyMaterial": "Missing key material",
+  "messageErrorNoDecryptionKey": "Missing decryption key",
+  "messageErrorInvalidKex": "Invalid key exchange",
+  "messageErrorUnknownOmemo": "Unknown OMEMO error",
+  "messageErrorInvalidAffixElements": "Invalid affix elements",
+  "messageErrorEmptyDeviceList": "Empty device list",
+  "messageErrorOmemoUnsupported": "OMEMO not supported",
+  "messageErrorEncryptionFailure": "Encryption failed",
+  "messageErrorInvalidEnvelope": "Invalid envelope",
+  "messageErrorFileDownloadFailure": "File download failed",
+  "messageErrorFileUploadFailure": "File upload failed",
+  "messageErrorFileDecryptionFailure": "File decryption failed",
+  "messageErrorFileEncryptionFailure": "File encryption failed",
+  "messageErrorPlaintextFileInOmemo": "Plaintext file in OMEMO message",
+  "messageErrorEmailSendFailure": "Email send failed",
+  "messageErrorEmailAttachmentTooLarge": "Email attachment too large",
+  "messageErrorEmailRecipientRejected": "Email recipient rejected",
+  "messageErrorEmailAuthenticationFailed": "Email authentication failed",
+  "messageErrorEmailBounced": "Email bounced",
+  "messageErrorEmailThrottled": "Email throttled",
+  "chatEmailResendFailedDetails": "Unable to resend the email."
 }

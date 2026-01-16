@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
@@ -238,10 +239,17 @@ class _GuestCalendarWidgetState
     }
     final warning = state.syncWarning;
     if (warning != null && mounted) {
+      final l10n = context.l10n;
+      final (String title, String message) = switch (warning.type) {
+        CalendarSyncWarningType.snapshotUnavailable => (
+            l10n.calendarSyncWarningSnapshotTitle,
+            l10n.calendarSyncWarningSnapshotMessage,
+          ),
+      };
       FeedbackSystem.showWarning(
         context,
-        warning.message,
-        title: warning.title,
+        message,
+        title: title,
       );
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
@@ -364,19 +372,20 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
 
   Future<void> _handleExportAll() async {
     if (_busy) return;
+    final l10n = context.l10n;
     setState(() => _busy = true);
     try {
       final model = widget.state.model;
       if (!model.hasCalendarData) {
         FeedbackSystem.showInfo(
           context,
-          context.l10n.calendarGuestExportNoData,
+          l10n.calendarGuestExportNoData,
         );
         return;
       }
       final format = await showCalendarExportFormatSheet(
         context,
-        title: context.l10n.calendarGuestExportTitle,
+        title: l10n.calendarGuestExportTitle,
       );
       if (!mounted || format == null) return;
       final File file = format == CalendarExportFormat.json
@@ -390,8 +399,8 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
             );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
-        subject: context.l10n.calendarGuestExportShareSubject,
-        text: context.l10n.calendarGuestExportShareText(format.label),
+        subject: l10n.calendarGuestExportShareSubject,
+        text: l10n.calendarGuestExportShareText(format.label),
       );
       if (!mounted) return;
       FeedbackSystem.showSuccess(
@@ -399,14 +408,14 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         calendarShareSuccessMessage(
           outcome: shareOutcome,
           filePath: file.path,
-          sharedText: context.l10n.calendarExportReady,
+          sharedText: l10n.calendarExportReady,
         ),
       );
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(
         context,
-        context.l10n.calendarGuestExportFailed(error.toString()),
+        l10n.calendarGuestExportFailed(error.toString()),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

@@ -2509,5 +2509,189 @@
         "type": "String"
       }
     }
-  }
+  },
+  "chatFilterTitle": "Messages affiches",
+  "chatFilterDirectOnlyLabel": "Direct seulement",
+  "chatFilterAllLabel": "Tous",
+  "calendarFragmentTaskLabel": "Tache",
+  "calendarFragmentDayEventLabel": "Evenement de jour",
+  "calendarFragmentFreeBusyLabel": "Libre/occupe",
+  "calendarFragmentAvailabilityLabel": "Disponibilite",
+  "calendarFragmentScheduledLabel": "Planifie",
+  "calendarFragmentDueLabel": "A rendre",
+  "calendarFragmentUntitledLabel": "Sans titre",
+  "calendarFragmentChecklistBullet": "- ",
+  "commonAndMoreLabel": "{count, plural, one {et 1 de plus} other {et {count} de plus}}",
+  "@commonAndMoreLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonBulletSymbol": "• ",
+  "commonLabelSeparator": ": ",
+  "commonUnknownLabel": "Inconnu",
+  "commonBadgeOverflowLabel": "99+",
+  "commonEllipsis": "…",
+  "chatMessageDetailsSenderLabel": "Adresse de l expediteur",
+  "chatMessageDetailsMetadataLabel": "Metadonnees du message",
+  "chatMessageDetailsHeadersLabel": "En-tetes bruts",
+  "chatMessageDetailsHeadersActionLabel": "Voir les en-tetes",
+  "chatMessageDetailsHeadersNote":
+      "Les en-tetes sont charges depuis le message RFC822 original.",
+  "chatMessageDetailsHeadersLoadingLabel": "Chargement des en-tetes...",
+  "chatMessageDetailsHeadersUnavailableLabel": "En-tetes indisponibles.",
+  "chatMessageDetailsStanzaIdLabel": "ID de stanza",
+  "chatMessageDetailsOriginIdLabel": "ID d origine",
+  "chatMessageDetailsOccupantIdLabel": "ID d occupant",
+  "chatMessageDetailsDeltaIdLabel": "ID de message Delta",
+  "chatMessageDetailsLocalIdLabel": "ID de message local",
+  "chatCalendarFragmentShareDeniedMessage":
+      "Les cartes de calendrier sont desactivees pour votre role dans ce salon.",
+  "chatAvailabilityRequestAccountMissingMessage":
+      "Les demandes de disponibilite ne sont pas disponibles pour le moment.",
+  "chatAvailabilityRequestEmailUnsupportedMessage":
+      "La disponibilite n est pas disponible pour les chats email.",
+  "chatAvailabilityRequestInvalidRangeMessage":
+      "L heure demandee pour la disponibilite est invalide.",
+  "chatAvailabilityRequestCalendarUnavailableMessage":
+      "Calendrier indisponible.",
+  "chatAvailabilityRequestChatCalendarUnavailableMessage":
+      "Le calendrier du chat est indisponible.",
+  "chatAvailabilityRequestTaskTitleFallback": "Heure demandee",
+  "chatSenderAddressPrefix": "JID: ",
+  "chatRecipientVisibilityCcLabel": "CC",
+  "chatRecipientVisibilityBccLabel": "BCC",
+  "chatInviteRoomFallbackLabel": "chat de groupe",
+  "chatInviteBodyLabel": "Vous avez ete invite a un chat de groupe",
+  "chatInviteRevokedLabel": "Invitation revoquee",
+  "chatInviteActionLabel": "Rejoindre '{roomName}'",
+  "@chatInviteActionLabel": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteActionFallbackLabel": "Rejoindre",
+  "chatInviteConfirmTitle": "Accepter l invitation ?",
+  "chatInviteConfirmMessage": "Rejoindre '{roomName}' ?",
+  "@chatInviteConfirmMessage": {
+    "placeholders": {
+      "roomName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInviteConfirmLabel": "Accepter",
+  "chatChooseTextToAddHint":
+      "Selectionnez une partie du message a envoyer au calendrier ou modifiez-la d abord.",
+  "chatAttachmentAutoDownloadLabel":
+      "Telecharger automatiquement les pieces jointes dans ce chat",
+  "chatAttachmentAutoDownloadHintOn":
+      "Les pieces jointes de ce chat se telechargeront automatiquement.",
+  "chatAttachmentAutoDownloadHintOff":
+      "Les pieces jointes sont bloquees jusqu a votre approbation.",
+  "chatAttachmentCaption": "📎 {filename} ({size})",
+  "@chatAttachmentCaption": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "chatAttachmentFallbackLabel": "Piece jointe",
+  "commonFileSizeUnitBytes": "B",
+  "commonFileSizeUnitKilobytes": "KB",
+  "commonFileSizeUnitMegabytes": "MB",
+  "commonFileSizeUnitGigabytes": "GB",
+  "commonFileSizeUnitTerabytes": "TB",
+  "chatAttachmentTooLargeMessageDefault":
+      "La piece jointe depasse la limite du serveur.",
+  "chatAttachmentTooLargeMessage":
+      "La piece jointe depasse la limite du serveur ({limit}).",
+  "@chatAttachmentTooLargeMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMessageErrorWithBody": "{label} : \"{body}\"",
+  "@chatMessageErrorWithBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "messageErrorServiceUnavailableTooltip":
+      "Le service a signale un probleme temporaire.",
+  "messageErrorServiceUnavailable": "Service indisponible",
+  "messageErrorServerNotFound": "Serveur introuvable",
+  "messageErrorServerTimeout": "Delai d attente du serveur",
+  "messageErrorUnknown": "Erreur inconnue",
+  "messageErrorNotEncryptedForDevice": "Non chiffre pour cet appareil",
+  "messageErrorMalformedKey": "Cle de chiffrement mal formee",
+  "messageErrorUnknownSignedPrekey": "Prekey signee inconnue",
+  "messageErrorNoDeviceSession": "Aucune session d appareil",
+  "messageErrorSkippingTooManyKeys": "Trop de cles ignorees",
+  "messageErrorInvalidHmac": "HMAC invalide",
+  "messageErrorMalformedCiphertext": "Chiffre mal forme",
+  "messageErrorNoKeyMaterial": "Materiel de cle manquant",
+  "messageErrorNoDecryptionKey": "Cle de dechiffrement manquante",
+  "messageErrorInvalidKex": "Echange de cles invalide",
+  "messageErrorUnknownOmemo": "Erreur OMEMO inconnue",
+  "messageErrorInvalidAffixElements": "Elements d affixe invalides",
+  "messageErrorEmptyDeviceList": "Liste d appareils vide",
+  "messageErrorOmemoUnsupported": "OMEMO non pris en charge",
+  "messageErrorEncryptionFailure": "Echec du chiffrement",
+  "messageErrorInvalidEnvelope": "Enveloppe invalide",
+  "messageErrorFileDownloadFailure":
+      "Echec du telechargement du fichier",
+  "messageErrorFileUploadFailure": "Echec du televersement du fichier",
+  "messageErrorFileDecryptionFailure":
+      "Echec du dechiffrement du fichier",
+  "messageErrorFileEncryptionFailure":
+      "Echec du chiffrement du fichier",
+  "messageErrorPlaintextFileInOmemo":
+      "Fichier en clair dans un message OMEMO",
+  "messageErrorEmailSendFailure": "Echec de l envoi de l email",
+  "messageErrorEmailAttachmentTooLarge": "Piece jointe email trop volumineuse",
+  "messageErrorEmailRecipientRejected": "Destinataire email refuse",
+  "messageErrorEmailAuthenticationFailed":
+      "Echec de l authentification email",
+  "messageErrorEmailBounced": "Email rebondi",
+  "messageErrorEmailThrottled": "Email limite",
+  "chatEmailResendFailedDetails": "Impossible de renvoyer l email.",
+  "chatTaskViewTitle": "Details de la tache",
+  "chatTaskViewSubtitle": "Tache en lecture seule.",
+  "chatTaskViewPreviewLabel": "Apercu",
+  "chatTaskViewActionsLabel": "Actions de la tache",
+  "chatTaskViewCopyLabel": "Copier dans le calendrier",
+  "chatTaskCopyTitle": "Copier la tache",
+  "chatTaskCopySubtitle": "Choisissez les calendriers qui doivent la recevoir.",
+  "chatTaskCopyPreviewLabel": "Apercu",
+  "chatTaskCopyCalendarsLabel": "Calendriers",
+  "chatTaskCopyPersonalLabel": "Ajouter au calendrier personnel",
+  "chatTaskCopyChatLabel": "Ajouter au calendrier du chat",
+  "chatTaskCopyConfirmLabel": "Copier",
+  "chatTaskCopyMissingSelectionMessage": "Selectionnez au moins un calendrier.",
+  "chatCriticalPathCopyTitle": "Copier le chemin critique",
+  "chatCriticalPathCopySubtitle": "Choisissez les calendriers qui doivent la recevoir.",
+  "chatCriticalPathCopyPreviewLabel": "Apercu",
+  "chatCriticalPathCopyCalendarsLabel": "Calendriers",
+  "chatCriticalPathCopyPersonalLabel": "Ajouter au calendrier personnel",
+  "chatCriticalPathCopyChatLabel": "Ajouter au calendrier du chat",
+  "chatCriticalPathCopyConfirmLabel": "Copier",
+  "chatCriticalPathCopyMissingSelectionMessage": "Selectionnez au moins un calendrier.",
+  "chatCriticalPathCopyUnavailableMessage": "Le calendrier est indisponible.",
+  "chatCriticalPathCopySuccessMessage": "Chemin critique copie."
 }
