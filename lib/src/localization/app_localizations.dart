@@ -6488,6 +6488,390 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose text to add'**
   String get chatChooseTextToAdd;
+
+  /// No description provided for @notificationChannelMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get notificationChannelMessages;
+
+  /// No description provided for @notificationNewMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New message'**
+  String get notificationNewMessageTitle;
+
+  /// No description provided for @notificationOpenAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open notification'**
+  String get notificationOpenAction;
+
+  /// No description provided for @notificationBackgroundConnectionDisabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Background connection disabled'**
+  String get notificationBackgroundConnectionDisabledTitle;
+
+  /// No description provided for @notificationBackgroundConnectionDisabledBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.'**
+  String get notificationBackgroundConnectionDisabledBody;
+
+  /// No description provided for @calendarReminderDeadlineNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Deadline now'**
+  String get calendarReminderDeadlineNow;
+
+  /// No description provided for @calendarReminderDueIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Due in {duration}'**
+  String calendarReminderDueIn(Object duration);
+
+  /// No description provided for @calendarReminderStartingNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting now'**
+  String get calendarReminderStartingNow;
+
+  /// No description provided for @calendarReminderStartsIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts in {duration}'**
+  String calendarReminderStartsIn(Object duration);
+
+  /// No description provided for @calendarReminderHappeningToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Happening today'**
+  String get calendarReminderHappeningToday;
+
+  /// No description provided for @calendarReminderIn.
+  ///
+  /// In en, this message translates to:
+  /// **'In {duration}'**
+  String calendarReminderIn(Object duration);
+
+  /// No description provided for @calendarReminderDurationDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {# day} other {# days}}'**
+  String calendarReminderDurationDays(num count);
+
+  /// No description provided for @calendarReminderDurationHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {# hour} other {# hours}}'**
+  String calendarReminderDurationHours(num count);
+
+  /// No description provided for @calendarReminderDurationMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {# minute} other {# minutes}}'**
+  String calendarReminderDurationMinutes(num count);
+
+  /// No description provided for @calendarExportCalendar.
+  ///
+  /// In en, this message translates to:
+  /// **'Export calendar'**
+  String get calendarExportCalendar;
+
+  /// No description provided for @calendarImportCalendar.
+  ///
+  /// In en, this message translates to:
+  /// **'Import calendar'**
+  String get calendarImportCalendar;
+
+  /// No description provided for @calendarSyncStatusSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing...'**
+  String get calendarSyncStatusSyncing;
+
+  /// No description provided for @calendarSyncStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync failed'**
+  String get calendarSyncStatusFailed;
+
+  /// No description provided for @calendarSyncStatusSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced'**
+  String get calendarSyncStatusSynced;
+
+  /// No description provided for @calendarSyncStatusIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get calendarSyncStatusIdle;
+
+  /// No description provided for @calendarSplitTaskAtTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Split task at {time}'**
+  String calendarSplitTaskAtTime(Object time);
+
+  /// No description provided for @calendarSplitSelectTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Select split time'**
+  String get calendarSplitSelectTime;
+
+  /// No description provided for @calendarTaskMarkIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark incomplete'**
+  String get calendarTaskMarkIncomplete;
+
+  /// No description provided for @calendarTaskMarkComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark complete'**
+  String get calendarTaskMarkComplete;
+
+  /// No description provided for @calendarTaskRemoveImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove important flag'**
+  String get calendarTaskRemoveImportant;
+
+  /// No description provided for @calendarTaskMarkImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as important'**
+  String get calendarTaskMarkImportant;
+
+  /// No description provided for @calendarTaskRemoveUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove urgent flag'**
+  String get calendarTaskRemoveUrgent;
+
+  /// No description provided for @calendarTaskMarkUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as urgent'**
+  String get calendarTaskMarkUrgent;
+
+  /// No description provided for @calendarDeselectTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect task'**
+  String get calendarDeselectTask;
+
+  /// No description provided for @calendarAddTaskToSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Add task to selection'**
+  String get calendarAddTaskToSelection;
+
+  /// No description provided for @calendarSelectTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Select task'**
+  String get calendarSelectTask;
+
+  /// No description provided for @calendarDeselectAllRepeats.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect all repeats'**
+  String get calendarDeselectAllRepeats;
+
+  /// No description provided for @calendarAddAllRepeats.
+  ///
+  /// In en, this message translates to:
+  /// **'Add all repeats'**
+  String get calendarAddAllRepeats;
+
+  /// No description provided for @calendarSelectAllRepeats.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all repeats'**
+  String get calendarSelectAllRepeats;
+
+  /// No description provided for @calendarAddToSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to selection'**
+  String get calendarAddToSelection;
+
+  /// No description provided for @calendarSelectAllTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all tasks'**
+  String get calendarSelectAllTasks;
+
+  /// No description provided for @calendarExitSelectionMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit selection mode'**
+  String get calendarExitSelectionMode;
+
+  /// No description provided for @calendarSplitTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Split task'**
+  String get calendarSplitTask;
+
+  /// No description provided for @calendarCopyTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy template'**
+  String get calendarCopyTemplate;
+
+  /// No description provided for @calendarTaskAddedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task \"{title}\" added'**
+  String calendarTaskAddedMessage(Object title);
+
+  /// No description provided for @calendarTasksAddedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {# task added} other {# tasks added}}'**
+  String calendarTasksAddedMessage(num count);
+
+  /// No description provided for @calendarTaskRemovedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task \"{title}\" removed'**
+  String calendarTaskRemovedMessage(Object title);
+
+  /// No description provided for @calendarTasksRemovedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {# task removed} other {# tasks removed}}'**
+  String calendarTasksRemovedMessage(num count);
+
+  /// No description provided for @calendarTaskRemovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Task removed'**
+  String get calendarTaskRemovedTitle;
+
+  /// No description provided for @calendarDeadlinePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Set deadline (optional)'**
+  String get calendarDeadlinePlaceholder;
+
+  /// No description provided for @calendarTaskDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get calendarTaskDescriptionHint;
+
+  /// No description provided for @calendarTaskLocationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Location (optional)'**
+  String get calendarTaskLocationHint;
+
+  /// No description provided for @calendarPickDateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick date'**
+  String get calendarPickDateLabel;
+
+  /// No description provided for @calendarPickTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick time'**
+  String get calendarPickTimeLabel;
+
+  /// No description provided for @calendarReminderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder'**
+  String get calendarReminderLabel;
+
+  /// No description provided for @calendarEditDayEventTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit day event'**
+  String get calendarEditDayEventTitle;
+
+  /// No description provided for @calendarNewDayEventTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New day event'**
+  String get calendarNewDayEventTitle;
+
+  /// No description provided for @commonAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get commonAdd;
+
+  /// No description provided for @commonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get commonTitle;
+
+  /// No description provided for @calendarShareUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sharing is unavailable.'**
+  String get calendarShareUnavailable;
+
+  /// No description provided for @calendarShareAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Share availability'**
+  String get calendarShareAvailability;
+
+  /// No description provided for @calendarShortcutUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Ctrl/Cmd+Z'**
+  String get calendarShortcutUndo;
+
+  /// No description provided for @calendarShortcutRedo.
+  ///
+  /// In en, this message translates to:
+  /// **'Ctrl/Cmd+Shift+Z'**
+  String get calendarShortcutRedo;
+
+  /// No description provided for @commonShortcutTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'{tooltip} ({shortcut})'**
+  String commonShortcutTooltip(Object tooltip, Object shortcut);
+
+  /// No description provided for @calendarDragCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag canceled'**
+  String get calendarDragCanceled;
+
+  /// No description provided for @calendarZoomLabelCompact.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get calendarZoomLabelCompact;
+
+  /// No description provided for @calendarZoomLabelComfort.
+  ///
+  /// In en, this message translates to:
+  /// **'Comfort'**
+  String get calendarZoomLabelComfort;
+
+  /// No description provided for @calendarZoomLabelExpanded.
+  ///
+  /// In en, this message translates to:
+  /// **'Expanded'**
+  String get calendarZoomLabelExpanded;
+
+  /// No description provided for @calendarZoomLabelMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m'**
+  String calendarZoomLabelMinutes(Object minutes);
 }
 
 class _AppLocalizationsDelegate

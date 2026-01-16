@@ -10,6 +10,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
@@ -287,6 +289,7 @@ class _InlineSyncControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final statusText = _statusTextFor(state, l10n);
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);

@@ -77,8 +77,7 @@ class NotificationService {
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
 
   AppLocalizations get _l10n =>
-      _localizations ??
-      AppLocalizations.lookupAppLocalizations(const Locale('en'));
+      _localizations ?? lookupAppLocalizations(const Locale('en'));
 
   void updateLocalizations(AppLocalizations localizations) {
     _localizations = localizations;

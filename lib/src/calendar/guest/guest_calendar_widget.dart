@@ -312,7 +312,7 @@ class _GuestBanner extends StatelessWidget {
           const SizedBox(width: calendarGutterMd),
           Expanded(
             child: Text(
-              'Guest Mode - Tasks saved locally on this device only',
+              context.l10n.calendarGuestModeNotice,
               style: calendarBodyTextStyle.copyWith(
                 color: calendarSubtitleColor,
                 fontSize: 14,
@@ -325,7 +325,7 @@ class _GuestBanner extends StatelessWidget {
           transferMenu,
           const SizedBox(width: calendarGutterMd),
           TaskPrimaryButton(
-            label: 'Sign Up to Sync',
+            label: context.l10n.calendarGuestSignUpToSync,
             onPressed: onSignUp,
             icon: Icons.login,
           ),
@@ -344,16 +344,7 @@ class _GuestTransferMenu extends StatefulWidget {
   State<_GuestTransferMenu> createState() => _GuestTransferMenuState();
 }
 
-const String _guestCalendarImportSuccessMessage = 'Imported calendar data.';
-const String _guestCalendarImportFailureMessage =
-    'Import failed to apply changes.';
-const String _guestCalendarNoDataImportMessage =
-    'No calendar data detected in the selected file.';
-const String _guestCalendarImportWarningTitle = 'Import calendar';
-const String _guestCalendarImportWarningMessage =
-    'Importing will merge data and override matching items in your current '
-    'calendar. Continue?';
-const String _guestCalendarImportConfirmLabel = 'Import';
+const String _guestCalendarExportFilePrefix = 'axichat_guest_calendar';
 
 class _GuestTransferMenuState extends State<_GuestTransferMenu> {
   final CalendarTransferService _transferService =
@@ -379,28 +370,28 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
       if (!model.hasCalendarData) {
         FeedbackSystem.showInfo(
           context,
-          'No calendar data available to export.',
+          context.l10n.calendarGuestExportNoData,
         );
         return;
       }
       final format = await showCalendarExportFormatSheet(
         context,
-        title: 'Export guest calendar',
+        title: context.l10n.calendarGuestExportTitle,
       );
       if (!mounted || format == null) return;
       final File file = format == CalendarExportFormat.json
           ? await _transferService.exportModel(
               model: model,
-              fileNamePrefix: 'axichat_guest_calendar',
+              fileNamePrefix: _guestCalendarExportFilePrefix,
             )
           : await _transferService.exportIcs(
               model: model,
-              fileNamePrefix: 'axichat_guest_calendar',
+              fileNamePrefix: _guestCalendarExportFilePrefix,
             );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
-        subject: 'Axichat guest calendar export',
-        text: 'Axichat guest calendar export (${format.label})',
+        subject: context.l10n.calendarGuestExportShareSubject,
+        text: context.l10n.calendarGuestExportShareText(format.label),
       );
       if (!mounted) return;
       FeedbackSystem.showSuccess(
@@ -408,12 +399,15 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         calendarShareSuccessMessage(
           outcome: shareOutcome,
           filePath: file.path,
-          sharedText: 'Export ready to share.',
+          sharedText: context.l10n.calendarExportReady,
         ),
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(context, 'Failed to export calendar: $error');
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarGuestExportFailed(error.toString()),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -425,9 +419,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     try {
       final shouldImport = await confirm(
         context,
-        title: _guestCalendarImportWarningTitle,
-        message: _guestCalendarImportWarningMessage,
-        confirmLabel: _guestCalendarImportConfirmLabel,
+        title: context.l10n.calendarGuestImportTitle,
+        message: context.l10n.calendarGuestImportWarningMessage,
+        confirmLabel: context.l10n.calendarGuestImportConfirmLabel,
       );
       if (shouldImport != true) {
         return;
@@ -445,7 +439,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         if (!mounted) return;
         FeedbackSystem.showError(
           context,
-          'Unable to access the selected file.',
+          context.l10n.calendarGuestImportFileAccessError,
         );
         return;
       }
@@ -455,7 +449,10 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         final importedModel = importResult.model!;
         if (!importedModel.hasCalendarData) {
           if (!mounted) return;
-          FeedbackSystem.showInfo(context, _guestCalendarNoDataImportMessage);
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarGuestImportNoData,
+          );
           return;
         }
         if (!mounted) return;
@@ -472,10 +469,16 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
           return;
         }
         if (!imported) {
-          FeedbackSystem.showError(context, _guestCalendarImportFailureMessage);
+          FeedbackSystem.showError(
+            context,
+            context.l10n.calendarGuestImportFailed,
+          );
           return;
         }
-        FeedbackSystem.showSuccess(context, _guestCalendarImportSuccessMessage);
+        FeedbackSystem.showSuccess(
+          context,
+          context.l10n.calendarGuestImportSuccess,
+        );
         return;
       }
       final tasks = importResult.tasks;
@@ -483,7 +486,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         if (!mounted) return;
         FeedbackSystem.showInfo(
           context,
-          'No tasks detected in the selected file.',
+          context.l10n.calendarGuestImportNoTasks,
         );
         return;
       }
@@ -500,17 +503,22 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!imported) {
-        FeedbackSystem.showError(context, _guestCalendarImportFailureMessage);
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarGuestImportFailed,
+        );
         return;
       }
-      final String taskLabel = tasks.length == 1 ? '' : 's';
       FeedbackSystem.showSuccess(
         context,
-        'Imported ${tasks.length} task$taskLabel.',
+        context.l10n.calendarGuestImportTasksSuccess(tasks.length),
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(context, 'Import failed: $error');
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarGuestImportError(error.toString()),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
