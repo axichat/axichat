@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -20,7 +21,9 @@ class AccessibilityFindActionButton extends StatelessWidget {
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
-    final tooltip = 'Accessibility actions ($shortcutText)';
+    final tooltip = context.l10n.accessibilityActionsShortcutTooltip(
+      shortcutText,
+    );
     if (compact) {
       return AxiTooltip(
         builder: (_) => Text(tooltip),

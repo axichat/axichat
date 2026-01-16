@@ -289,7 +289,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   String? _validateTaskTitle(String? raw) {
     return _initialTitleValidationMessage ??
-        TaskTitleValidation.validate(raw ?? '');
+        TaskTitleValidation.validate(raw ?? '', context.l10n);
   }
 
   void _clearInitialValidationMessage() {

@@ -4,6 +4,7 @@
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -93,7 +94,7 @@ class TransportAwareAvatar extends StatelessWidget {
         badge = AxiTransportChip(
           transport: MessageTransport.xmpp,
           compact: true,
-          label: shouldLabelAll ? 'All' : null,
+          label: shouldLabelAll ? context.l10n.commonAll : null,
         );
       }
     }

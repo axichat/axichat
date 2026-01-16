@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -10,7 +11,7 @@ class AxiMore extends StatefulWidget {
   const AxiMore({
     super.key,
     required this.actions,
-    this.tooltip = 'More options',
+    this.tooltip = '',
     this.enabled = true,
     this.ghost = false,
     this.usePrimary = false,
@@ -43,6 +44,9 @@ class _AxiMoreState extends State<AxiMore> {
 
   Future<void> _showSheetActions(List<AxiMenuAction> actions) async {
     if (!mounted) return;
+    final tooltip = widget.tooltip.isEmpty
+        ? context.l10n.commonMoreOptions
+        : widget.tooltip;
     const double sheetItemSpacing = 4;
     await showAdaptiveBottomSheet<void>(
       context: context,
@@ -54,7 +58,7 @@ class _AxiMoreState extends State<AxiMore> {
         final textTheme = ShadTheme.of(sheetContext).textTheme;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
-            title: Text(widget.tooltip),
+            title: Text(tooltip),
             onClose: () => Navigator.of(sheetContext).maybePop(),
           ),
           children: [
@@ -95,6 +99,9 @@ class _AxiMoreState extends State<AxiMore> {
 
   @override
   Widget build(BuildContext context) {
+    final tooltip = widget.tooltip.isEmpty
+        ? context.l10n.commonMoreOptions
+        : widget.tooltip;
     final commandSurface = resolveCommandSurface(context);
     final actions = widget.actions
         .map(
@@ -120,13 +127,13 @@ class _AxiMoreState extends State<AxiMore> {
       return widget.ghost
           ? AxiIconButton.ghost(
               iconData: LucideIcons.ellipsisVertical,
-              tooltip: widget.tooltip,
+              tooltip: tooltip,
               onPressed: sheetAction,
               usePrimary: widget.usePrimary,
             )
           : AxiIconButton(
               iconData: LucideIcons.ellipsisVertical,
-              tooltip: widget.tooltip,
+              tooltip: tooltip,
               onPressed: sheetAction,
             );
     }
@@ -140,13 +147,13 @@ class _AxiMoreState extends State<AxiMore> {
       child: widget.ghost
           ? AxiIconButton.ghost(
               iconData: LucideIcons.ellipsisVertical,
-              tooltip: widget.tooltip,
+              tooltip: tooltip,
               onPressed: popoverAction,
               usePrimary: widget.usePrimary,
             )
           : AxiIconButton(
               iconData: LucideIcons.ellipsisVertical,
-              tooltip: widget.tooltip,
+              tooltip: tooltip,
               onPressed: popoverAction,
             ),
     );

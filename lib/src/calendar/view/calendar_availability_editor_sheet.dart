@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
@@ -29,23 +30,6 @@ const double _availabilityEditorRemoveTapTargetSize = 36.0;
 const double _availabilityEditorRemoveCornerRadius = 12.0;
 const int _availabilityEditorDescriptionMinLines = 3;
 const int _availabilityEditorDescriptionMaxLines = 4;
-
-const String _availabilityEditorTitle = 'Availability windows';
-const String _availabilityEditorSubtitle =
-    'Define the time ranges you want to share.';
-const String _availabilityEditorWindowsLabel = 'Windows';
-const String _availabilityEditorWindowLabel = 'Window';
-const String _availabilityEditorAddWindowLabel = 'Add window';
-const String _availabilityEditorEmptyLabel = 'No windows yet.';
-const String _availabilityEditorSummaryLabel = 'Summary';
-const String _availabilityEditorSummaryHint = 'Optional label';
-const String _availabilityEditorDescriptionLabel = 'Notes';
-const String _availabilityEditorDescriptionHint = 'Optional details';
-const String _availabilityEditorSaveLabel = 'Save windows';
-const String _availabilityEditorInvalidRangeMessage =
-    'Check the window ranges before saving.';
-const String _availabilityEditorEmptyWindowsMessage =
-    'Add at least one availability window.';
 
 const EdgeInsets _availabilityEditorCardPadding = EdgeInsets.symmetric(
   horizontal: 16,
@@ -111,22 +95,23 @@ class _CalendarAvailabilityEditorSheetState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final header = AxiSheetHeader(
-      title: const Text(_availabilityEditorTitle),
-      subtitle: const Text(_availabilityEditorSubtitle),
+      title: Text(l10n.calendarAvailabilityWindowsTitle),
+      subtitle: Text(l10n.calendarAvailabilityWindowsSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     final body = AxiSheetScaffold.scroll(
       header: header,
       children: [
         TaskSectionHeader(
-          title: _availabilityEditorWindowsLabel,
+          title: l10n.calendarAvailabilityWindowsLabel,
           trailing: _AvailabilityEditorAddButton(onPressed: _handleAddWindow),
         ),
         const SizedBox(height: calendarGutterSm),
         if (_windowDrafts.isEmpty)
           Text(
-            _availabilityEditorEmptyLabel,
+            l10n.calendarAvailabilityNoWindows,
             style: context.textTheme.small.copyWith(
               color: context.colorScheme.mutedForeground,
             ),
@@ -143,7 +128,6 @@ class _CalendarAvailabilityEditorSheetState
                   child: _AvailabilityWindowCard(
                     key: ValueKey<String>(draft.id),
                     draft: draft,
-                    label: _availabilityEditorWindowLabel,
                     onStartChanged: (value) =>
                         _handleWindowStartChanged(draft, value),
                     onEndChanged: (value) =>
@@ -203,7 +187,10 @@ class _CalendarAvailabilityEditorSheetState
       return;
     }
     if (_windowDrafts.isEmpty) {
-      FeedbackSystem.showError(context, _availabilityEditorEmptyWindowsMessage);
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarAvailabilityEmptyWindowsError,
+      );
       return;
     }
     final List<_AvailabilityWindowDraft> drafts = List.from(_windowDrafts);
@@ -214,7 +201,10 @@ class _CalendarAvailabilityEditorSheetState
           !draft.end!.isAfter(draft.start!),
     );
     if (hasInvalid) {
-      FeedbackSystem.showError(context, _availabilityEditorInvalidRangeMessage);
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarAvailabilityInvalidRangeError,
+      );
       return;
     }
     setState(() {
@@ -294,20 +284,19 @@ class _AvailabilityWindowCard extends StatelessWidget {
   const _AvailabilityWindowCard({
     super.key,
     required this.draft,
-    required this.label,
     required this.onStartChanged,
     required this.onEndChanged,
     required this.onRemove,
   });
 
   final _AvailabilityWindowDraft draft;
-  final String label;
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       padding: _availabilityEditorCardPadding,
       decoration: BoxDecoration(
@@ -322,7 +311,7 @@ class _AvailabilityWindowCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TaskSectionHeader(
-            title: label,
+            title: l10n.calendarAvailabilityWindowLabel,
             trailing: _AvailabilityWindowRemoveButton(onPressed: onRemove),
           ),
           const SizedBox(height: _availabilityEditorGap),
@@ -335,14 +324,14 @@ class _AvailabilityWindowCard extends StatelessWidget {
           const SizedBox(height: _availabilityEditorSpacing),
           TaskTextField(
             controller: draft.summaryController,
-            labelText: _availabilityEditorSummaryLabel,
-            hintText: _availabilityEditorSummaryHint,
+            labelText: l10n.calendarAvailabilitySummaryLabel,
+            hintText: l10n.calendarAvailabilitySummaryHint,
           ),
           const SizedBox(height: _availabilityEditorGap),
           TaskTextField(
             controller: draft.descriptionController,
-            labelText: _availabilityEditorDescriptionLabel,
-            hintText: _availabilityEditorDescriptionHint,
+            labelText: l10n.calendarAvailabilityNotesLabel,
+            hintText: l10n.calendarAvailabilityNotesHint,
             minLines: _availabilityEditorDescriptionMinLines,
             maxLines: _availabilityEditorDescriptionMaxLines,
           ),
@@ -384,12 +373,12 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
     return ShadButton.ghost(
       size: ShadButtonSize.sm,
       onPressed: onPressed,
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
+          const Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
           SizedBox(width: calendarInsetSm),
-          Text(_availabilityEditorAddWindowLabel),
+          Text(context.l10n.calendarAvailabilityAddWindow),
         ],
       ),
     );
@@ -436,7 +425,7 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
               ),
               const SizedBox(width: _availabilityEditorGap),
             ],
-            const Text(_availabilityEditorSaveLabel),
+            Text(context.l10n.calendarAvailabilitySaveWindows),
           ],
         ),
       ),

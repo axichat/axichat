@@ -22,7 +22,10 @@ class DisplayFingerprint extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalized = fingerprint.trim();
     if (normalized.isEmpty) {
-      return Text('Fingerprint unavailable', style: context.textTheme.small);
+      return Text(
+        context.l10n.profileFingerprintUnavailable,
+        style: context.textTheme.small,
+      );
     }
 
     final chunks = <String>[];

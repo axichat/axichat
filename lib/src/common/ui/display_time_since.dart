@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 class DisplayTimeSince extends StatefulWidget {
@@ -38,23 +39,30 @@ class _DisplayTimeSinceState extends State<DisplayTimeSince> {
 
   @override
   Widget build(BuildContext context) {
-    final text = formatTimeSinceLabel(_now, widget.timestamp);
+    final text = formatTimeSinceLabel(context.l10n, _now, widget.timestamp);
     final style = widget.style ?? context.textTheme.muted;
     return Text(text, style: style);
   }
 }
 
-String formatTimeSinceLabel(DateTime now, DateTime timestamp) {
+String formatTimeSinceLabel(
+  AppLocalizations l10n,
+  DateTime now,
+  DateTime timestamp,
+) {
   final difference = now.difference(timestamp);
   return switch (difference) {
-    < const Duration(minutes: 1) => 'Just now',
-    < const Duration(hours: 1) => '${difference.inMinutes}min ago',
-    < const Duration(hours: 2) => '1hr ago',
-    < const Duration(days: 1) => '${difference.inHours}hrs ago',
-    < const Duration(days: 2) => '1 day ago',
-    < const Duration(days: 7) => '${difference.inDays} days ago',
-    < const Duration(days: 14) => '1 week ago',
-    < const Duration(days: 31) => '${difference.inDays ~/ 7} weeks ago',
-    _ => 'Months ago',
+    < const Duration(minutes: 1) => l10n.commonTimeJustNow,
+    < const Duration(hours: 1) =>
+      l10n.commonTimeMinutesAgo(difference.inMinutes),
+    < const Duration(hours: 2) => l10n.commonTimeHoursAgo(1),
+    < const Duration(days: 1) =>
+      l10n.commonTimeHoursAgo(difference.inHours),
+    < const Duration(days: 2) => l10n.commonTimeDaysAgo(1),
+    < const Duration(days: 7) => l10n.commonTimeDaysAgo(difference.inDays),
+    < const Duration(days: 14) => l10n.commonTimeWeeksAgo(1),
+    < const Duration(days: 31) =>
+      l10n.commonTimeWeeksAgo(difference.inDays ~/ 7),
+    _ => l10n.commonTimeMonthsAgo,
   };
 }

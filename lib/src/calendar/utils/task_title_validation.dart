@@ -4,20 +4,19 @@
 import 'package:characters/characters.dart';
 
 import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 
 /// Shared helpers for validating calendar task titles so inline inputs,
 /// quick-add surfaces, and full editors stay consistent.
 class TaskTitleValidation {
   const TaskTitleValidation._();
 
-  static const String requiredMessage = 'Enter a task title before continuing.';
-
-  static String? validate(String raw) {
+  static String? validate(String raw, AppLocalizations l10n) {
     if (raw.trim().isEmpty) {
-      return requiredMessage;
+      return l10n.calendarTaskTitleRequired;
     }
     if (isTooLong(raw)) {
-      return calendarTaskTitleFriendlyError;
+      return l10n.calendarTaskTitleTooLong(calendarTaskTitleMaxLength);
     }
     return null;
   }

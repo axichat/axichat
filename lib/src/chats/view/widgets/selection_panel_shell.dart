@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -44,7 +45,7 @@ class SelectionSummaryHeader extends StatelessWidget {
     super.key,
     required this.count,
     required this.onClear,
-    this.tooltip = 'Clear selection',
+    this.tooltip = '',
     this.textStyle,
   });
 
@@ -56,12 +57,20 @@ class SelectionSummaryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = textStyle ?? context.textTheme.muted;
+    final resolvedTooltip = tooltip.isEmpty
+        ? context.l10n.commonClearSelection
+        : tooltip;
     return Row(
       children: [
-        Expanded(child: Text('$count selected', style: resolvedStyle)),
+        Expanded(
+          child: Text(
+            context.l10n.commonSelectedCount(count),
+            style: resolvedStyle,
+          ),
+        ),
         AxiIconButton(
           iconData: LucideIcons.x,
-          tooltip: tooltip,
+          tooltip: resolvedTooltip,
           onPressed: onClear,
         ),
       ],

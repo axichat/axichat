@@ -5,11 +5,6 @@ const int calendarTaskTitleMaxLength = 300;
 const Duration calendarDefaultTaskDuration = Duration(hours: 1);
 const Duration calendarMinimumTaskDuration = Duration(minutes: 15);
 
-const String calendarTaskTitleLimitWarning =
-    'Task titles are limited to $calendarTaskTitleMaxLength characters. Shorten this text or move details into the description before saving.';
-
-const String calendarTaskTitleFriendlyError =
-    'Task title is too long. Please use fewer than $calendarTaskTitleMaxLength characters.';
 
 const List<Duration> calendarDefaultStartReminderOffsets = <Duration>[
   Duration(hours: 1),
@@ -44,8 +39,3 @@ const List<Duration> calendarReminderDeadlineOptions = <Duration>[
   Duration(minutes: 15),
   Duration.zero,
 ];
-
-const String calendarSnapshotUnavailableWarningTitle = 'Calendar sync';
-const String calendarSnapshotUnavailableWarningMessage =
-    'Calendar snapshot unavailable. Export your calendar JSON from another '
-    'device and import it here to restore.';

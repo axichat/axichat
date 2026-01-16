@@ -4,6 +4,7 @@
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -63,12 +64,17 @@ class _LanguageLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final text = style == LanguageLabelStyle.compact
-        ? language.abbreviation
-        : language.label;
+        ? language.abbreviation(l10n)
+        : language.label(l10n);
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [Text(language.flag), const SizedBox(width: 8), Text(text)],
+      children: [
+        Text(language.flag(l10n)),
+        const SizedBox(width: 8),
+        Text(text),
+      ],
     );
   }
 }

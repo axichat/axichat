@@ -4527,7 +4527,8 @@ class _ChatState extends State<Chat> {
                                                 bodyTextTrimmed == subjectText;
                                         final displayedBody =
                                             isSubjectOnlyBody ? '' : bodyText;
-                                        final errorLabel = e.error.asString;
+                                        final errorLabel =
+                                            e.error.label(context.l10n);
                                         MessageStatus statusFor(Message e) {
                                           if (e.error.isNotNone) {
                                             return MessageStatus.failed;
@@ -8373,8 +8374,9 @@ class _ChatState extends State<Chat> {
   String _displayTextForMessage(Message message) {
     final body = message.plainText.trim();
     if (message.error.isNotNone) {
-      final label = message.error.asString;
-      return body.isEmpty ? label : '$label: "$body"';
+      final l10n = context.l10n;
+      final label = message.error.label(l10n);
+      return body.isEmpty ? label : l10n.chatMessageErrorWithBody(label, body);
     }
     return body;
   }

@@ -2569,7 +2569,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (_quickTaskError != null) {
       return _quickTaskError;
     }
-    return TaskTitleValidation.validate(raw ?? '');
+    return TaskTitleValidation.validate(raw ?? '', context.l10n);
   }
 
   List<CalendarCriticalPath> _queuedPathsForState(CalendarState state) {
@@ -3948,7 +3948,7 @@ class _SidebarTaskTileBody extends StatelessWidget {
               const SizedBox(height: calendarInsetMd),
               Row(
                 children: [
-                  const Text('📍 ', style: TextStyle(fontSize: 11)),
+                  const Icon(Icons.location_on, size: 12),
                   Expanded(
                     child: Text(
                       task.location!,

@@ -20,6 +20,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -36,26 +37,6 @@ const double _taskShareLabelLetterSpacing = 1.1;
 const EdgeInsets _taskShareContentPadding =
     EdgeInsets.symmetric(horizontal: 16);
 
-const String _taskShareTitle = 'Share task';
-const String _taskShareSubtitle = 'Send a task to a chat as .ics.';
-const String _taskShareTargetLabel = 'Share with';
-const String _taskShareEditAccessLabel = 'Edit access';
-const String _taskShareReadOnlyLabel = 'Read only';
-const String _taskShareReadOnlyHint =
-    'Recipients can view this task, but only you can edit it.';
-const String _taskShareEditableHint =
-    'Recipients can edit this task, and updates sync back to your calendar.';
-const String _taskShareReadOnlyDisabledHint =
-    'Editing is only available for chat calendars.';
-const String _taskShareButtonLabel = 'Send';
-const String _taskShareMissingChatsMessage = 'No chats available.';
-const String _taskShareMissingRecipientMessage = 'Select a chat to share with.';
-const String _taskShareMissingServiceMessage =
-    'Calendar sharing is unavailable.';
-const String _taskShareDeniedMessage =
-    'Calendar cards are disabled for your role in this room.';
-const String _taskShareSendFailureMessage = 'Failed to share task.';
-const String _taskShareSendSuccessMessage = 'Task shared.';
 const String _taskShareIcsMimeType = 'text/calendar';
 const bool _taskShareReadOnlyDefault = true;
 
@@ -64,12 +45,13 @@ Future<void> showCalendarTaskShareSheet({
   required CalendarTask task,
   Chat? initialChat,
 }) async {
+  final l10n = context.l10n;
   final List<Chat> chats =
       context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
   final List<Chat> available =
       chats.where((chat) => chat.type != ChatType.note).toList(growable: false);
   if (available.isEmpty) {
-    FeedbackSystem.showInfo(context, _taskShareMissingChatsMessage);
+    FeedbackSystem.showInfo(context, l10n.calendarTaskShareMissingChats);
     return;
   }
   final result = await showAdaptiveBottomSheet<bool>(
@@ -85,7 +67,7 @@ Future<void> showCalendarTaskShareSheet({
   if (result != true || !context.mounted) {
     return;
   }
-  FeedbackSystem.showSuccess(context, _taskShareSendSuccessMessage);
+  FeedbackSystem.showSuccess(context, l10n.calendarTaskShareSuccess);
 }
 
 class CalendarTaskShareSheet extends StatefulWidget {
@@ -123,31 +105,34 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final Chat? selectedChat = _selectedChat;
     final bool readOnlyEnabled =
         selectedChat != null && selectedChat.supportsChatCalendar;
     final bool isReadOnly = readOnlyEnabled ? _isReadOnly : true;
     final String readOnlyHint = readOnlyEnabled
-        ? (isReadOnly ? _taskShareReadOnlyHint : _taskShareEditableHint)
-        : _taskShareReadOnlyDisabledHint;
+        ? (isReadOnly
+            ? l10n.calendarTaskShareReadOnlyHint
+            : l10n.calendarTaskShareEditableHint)
+        : l10n.calendarTaskShareReadOnlyDisabledHint;
     final header = AxiSheetHeader(
-      title: const Text(_taskShareTitle),
-      subtitle: const Text(_taskShareSubtitle),
+      title: Text(l10n.calendarTaskShareTitle),
+      subtitle: Text(l10n.calendarTaskShareSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     return AxiSheetScaffold.scroll(
       header: header,
       bodyPadding: EdgeInsets.zero,
       children: [
-        const Padding(
+        Padding(
           padding: _taskShareContentPadding,
-          child: _TaskShareSectionLabel(text: _taskShareTargetLabel),
+          child: _TaskShareSectionLabel(text: l10n.calendarTaskShareTarget),
         ),
         if (widget.availableChats.isEmpty)
-          const Padding(
+          Padding(
             padding: _taskShareContentPadding,
             child: _TaskShareEmptyMessage(
-              message: _taskShareMissingChatsMessage,
+              message: l10n.calendarTaskShareMissingChats,
             ),
           )
         else
@@ -163,9 +148,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             onRecipientToggled: _handleRecipientToggled,
           ),
         const SizedBox(height: _taskShareSectionSpacing),
-        const Padding(
+        Padding(
           padding: _taskShareContentPadding,
-          child: _TaskShareSectionLabel(text: _taskShareEditAccessLabel),
+          child: _TaskShareSectionLabel(text: l10n.calendarTaskShareEditAccess),
         ),
         Padding(
           padding: _taskShareContentPadding,
@@ -182,7 +167,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           child: _TaskShareActionRow(
             isBusy: _isSending,
             onPressed: _handleSharePressed,
-            label: _taskShareButtonLabel,
+            label: l10n.commonSend,
           ),
         ),
       ],
@@ -202,7 +187,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   void _handleRecipientAdded(FanOutTarget target) {
     final Chat? chat = target.chat;
     if (chat == null) {
-      FeedbackSystem.showInfo(context, _taskShareMissingRecipientMessage);
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.calendarTaskShareMissingRecipient,
+      );
       return;
     }
     if (!mounted) return;
@@ -247,7 +235,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   Future<void> _handleSharePressed() async {
     final Chat? selected = _selectedChat;
     if (selected == null) {
-      FeedbackSystem.showInfo(context, _taskShareMissingRecipientMessage);
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.calendarTaskShareMissingRecipient,
+      );
       return;
     }
     if (_isSending) {
@@ -263,7 +254,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     try {
       if (selected.defaultTransport.isEmail) {
         if (emailService == null) {
-          FeedbackSystem.showInfo(context, _taskShareMissingServiceMessage);
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarTaskShareServiceUnavailable,
+          );
           return;
         }
         final EmailAttachment? attachment = await _buildCalendarTaskAttachment(
@@ -273,7 +267,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           return;
         }
         if (attachment == null) {
-          FeedbackSystem.showError(context, _taskShareSendFailureMessage);
+          FeedbackSystem.showError(
+            context,
+            context.l10n.calendarTaskShareSendFailed,
+          );
           return;
         }
         final EmailAttachment resolvedAttachment = attachment.copyWith(
@@ -285,7 +282,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         );
       } else {
         if (xmppService == null) {
-          FeedbackSystem.showInfo(context, _taskShareMissingServiceMessage);
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarTaskShareServiceUnavailable,
+          );
           return;
         }
         final CalendarFragmentShareDecision decision =
@@ -294,7 +294,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           roomState: xmppService.roomStateFor(selected.jid),
         );
         if (!decision.canWrite) {
-          FeedbackSystem.showInfo(context, _taskShareDeniedMessage);
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarTaskShareDenied,
+          );
           return;
         }
         await xmppService.sendMessage(
@@ -315,7 +318,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       Navigator.of(context).pop(true);
     } on Exception {
       if (mounted) {
-        FeedbackSystem.showError(context, _taskShareSendFailureMessage);
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarTaskShareSendFailed,
+        );
       }
     } finally {
       if (mounted) {
@@ -385,7 +391,7 @@ class _TaskShareEditAccessToggle extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ShadSwitch(
-          label: const Text(_taskShareReadOnlyLabel),
+          label: Text(context.l10n.calendarTaskShareReadOnlyLabel),
           value: value,
           onChanged: isEnabled ? onChanged : null,
         ),

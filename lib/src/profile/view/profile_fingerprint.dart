@@ -40,7 +40,10 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Device Fingerprint', style: context.textTheme.small),
+              Text(
+                context.l10n.profileDeviceFingerprint,
+                style: context.textTheme.small,
+              ),
               ExpandIcon(
                 isExpanded: _showFingerprint,
                 onPressed: (_) => setState(() {
