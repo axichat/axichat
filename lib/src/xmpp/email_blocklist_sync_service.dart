@@ -52,12 +52,12 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
-          Timer.run(() async {
+          Future<void>(() async {
             await _flushPendingEmailBlocklistSync();
           });
           return;
         }
-        Timer.run(() async {
+        Future<void>(() async {
           await syncEmailBlocklistSnapshot();
         });
       })

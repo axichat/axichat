@@ -41,7 +41,7 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
   AttachmentGalleryCubit({required XmppService xmppService, this.chatJid})
       : _xmppService = xmppService,
         super(const AttachmentGalleryState()) {
-    Timer.run(() async {
+    Future<void>(() async {
       await _subscribe();
     });
   }

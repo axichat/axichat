@@ -167,7 +167,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      Timer.run(() async {
+      Future<void>(() async {
         await _bootstrap();
       });
       return super.onXmppEvent(event);
@@ -419,7 +419,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        Timer.run(() async {
+        Future<void>(() async {
           await _bootstrap();
         });
       }
@@ -557,7 +557,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _refreshFromServer();
       });
     }
@@ -655,7 +655,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _bootstrap();
       });
     }
@@ -671,7 +671,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _bootstrap();
       });
     }

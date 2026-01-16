@@ -110,7 +110,7 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_dependenciesInitialized && _shouldCleanupSeedAttachments) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _cleanupSeedAttachmentMetadata();
       });
     }
@@ -163,7 +163,7 @@ class _DraftFormState extends State<DraftForm> {
     _messageService = context.read<MessageService>();
     _recipients = _initialRecipients();
     if (widget.attachmentMetadataIds.isNotEmpty) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _hydrateAttachments();
       });
     }

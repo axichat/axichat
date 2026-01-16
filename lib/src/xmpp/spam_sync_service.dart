@@ -46,12 +46,12 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
-          Timer.run(() async {
+          Future<void>(() async {
             await _flushPendingSpamSync();
           });
           return;
         }
-        Timer.run(() async {
+        Future<void>(() async {
           await syncSpamSnapshot();
         });
       })

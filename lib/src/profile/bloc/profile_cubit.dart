@@ -55,7 +55,7 @@ class ProfileCubit extends Cubit<ProfileState> {
         );
       },
     );
-    Timer.run(() async {
+    Future<void>(() async {
       await _loadAvatar();
     });
     if (_omemoService != null) {

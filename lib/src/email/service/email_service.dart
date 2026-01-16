@@ -1834,7 +1834,7 @@ class EmailService {
     }
 
     _foregroundKeepaliveEnabled = true;
-    Timer.run(() async {
+    Future<void>(() async {
       await _foregroundKeepaliveTick();
     });
   }

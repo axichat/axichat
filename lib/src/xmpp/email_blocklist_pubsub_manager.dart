@@ -173,7 +173,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      Timer.run(() async {
+      Future<void>(() async {
         await _bootstrap();
       });
       return super.onXmppEvent(event);
@@ -427,7 +427,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        Timer.run(() async {
+        Future<void>(() async {
           await _bootstrap();
         });
       }
@@ -573,7 +573,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _refreshFromServer();
       });
     }
@@ -678,7 +678,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _bootstrap();
       });
     }
@@ -694,7 +694,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _bootstrap();
       });
     }
