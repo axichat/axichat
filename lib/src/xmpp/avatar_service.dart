@@ -1200,6 +1200,7 @@ mixin AvatarService on XmppBase, MucService {
     const publishModelPublishers = 'publishers';
     const maxPublishedAvatarItems = '1';
     const sendLastPublishedItemOnSub = 'on_sub';
+    const sendLastPublishedItemOnSubscribe = 'on_subscribe';
     const sendLastPublishedItemNever = 'never';
     const publishNotRetrievableMessage =
         'Avatar publish succeeded but is not retrievable';
@@ -1314,8 +1315,35 @@ mixin AvatarService on XmppBase, MucService {
       _avatarLog.fine(
         'Avatar node configure failed with ${configuredError.runtimeType}.',
       );
-      final shouldAttemptSendLastFallback = config.hasSendLastPublishedItem &&
-          !configuredError.indicatesMissingNode;
+      final sendLastValue = config.sendLastPublishedItem?.trim();
+      final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
+      if (hasSendLast &&
+          sendLastValue == sendLastPublishedItemOnSub &&
+          !configuredError.indicatesMissingNode) {
+        _avatarLog.fine(
+          'Retrying avatar node configure with send_last=on_subscribe.',
+        );
+        final subscribeConfig = config.withSendLastPublishedItem(
+          sendLastPublishedItemOnSubscribe,
+        );
+        final subscribeResult = await pubsub
+            .configureNode(host, node, subscribeConfig)
+            .timeout(_avatarPublishTimeout);
+        if (!subscribeResult.isType<mox.PubSubError>()) {
+          _avatarLog.fine(
+            'Avatar node configured with send_last=on_subscribe.',
+          );
+          _configuredAvatarNodes.add(cacheKey);
+          return;
+        }
+        configuredError = subscribeResult.get<mox.PubSubError>();
+        _avatarLog.fine(
+          'Avatar node configure failed with send_last=on_subscribe '
+          '(${configuredError.runtimeType}).',
+        );
+      }
+      final shouldAttemptSendLastFallback =
+          hasSendLast && !configuredError.indicatesMissingNode;
       if (shouldAttemptSendLastFallback) {
         _avatarLog.fine('Retrying avatar node configure without send_last.');
         final strippedConfig = config.withoutSendLastPublishedItem();

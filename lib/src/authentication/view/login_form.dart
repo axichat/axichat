@@ -189,15 +189,15 @@ class _LoginFormState extends State<LoginForm> {
                     child: Builder(
                       builder: (context) {
                         final spinner = AxiProgressIndicator(
-                          dimension: _loginSpinnerDimension,
+                          dimension: loginSpinnerDimension,
                           color: context.colorScheme.primaryForeground,
                           semanticsLabel: l10n.authLoginPending,
                         );
                         final spinnerSlot = ButtonSpinnerSlot(
                           isVisible: loading,
                           spinner: spinner,
-                          slotSize: _loginSpinnerSlotSize,
-                          gap: _loginSpinnerGap,
+                          slotSize: loginSpinnerSlotSize,
+                          gap: loginSpinnerGap,
                           duration: animationDuration,
                         );
                         final button = ShadButton(

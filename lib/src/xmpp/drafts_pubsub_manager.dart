@@ -41,6 +41,7 @@ const String _attachmentWidthAttr = 'width';
 const String _attachmentHeightAttr = 'height';
 const String _publishModelPublishers = 'publishers';
 const String _sendLastOnSub = 'on_sub';
+const String _sendLastOnSubscribe = 'on_subscribe';
 const String _defaultMaxItems = '$draftSyncMaxItems';
 const String _draftSourceIdFallback = draftSourceLegacyId;
 const bool _notifyEnabled = true;
@@ -554,7 +555,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (!configured.isType<mox.PubSubError>()) {
       return null;
     }
-    final error = configured.get<mox.PubSubError>();
+    var error = configured.get<mox.PubSubError>();
     logger.fine(
       'PubSub node config failed. node=$node '
       'accessModel=${config.accessModel.value} '
@@ -563,7 +564,39 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (error.indicatesMissingNode) {
       return error;
     }
-    if (!config.hasSendLastPublishedItem) {
+    final sendLastValue = config.sendLastPublishedItem?.trim();
+    final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
+    if (hasSendLast && sendLastValue == _sendLastOnSub) {
+      logger.fine(
+        'PubSub node config retry with send_last=on_subscribe. node=$node '
+        'accessModel=${config.accessModel.value}.',
+      );
+      final subscribeConfig = config.withSendLastPublishedItem(
+        _sendLastOnSubscribe,
+      );
+      final subscribeResult = await pubsub.configureNode(
+        host,
+        node,
+        subscribeConfig,
+      );
+      if (!subscribeResult.isType<mox.PubSubError>()) {
+        logger.fine(
+          'PubSub node configured with send_last=on_subscribe. node=$node '
+          'accessModel=${config.accessModel.value}.',
+        );
+        return null;
+      }
+      error = subscribeResult.get<mox.PubSubError>();
+      logger.fine(
+        'PubSub node config failed with send_last=on_subscribe. node=$node '
+        'accessModel=${config.accessModel.value} '
+        'error=${error.runtimeType}.',
+      );
+      if (error.indicatesMissingNode) {
+        return error;
+      }
+    }
+    if (!hasSendLast) {
       return error;
     }
     logger.fine(

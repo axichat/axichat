@@ -969,7 +969,7 @@ void main() {
             'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
         return [
           const AuthenticationSignUpInProgress(),
-          AuthenticationSignupFailure(
+          const AuthenticationSignupFailure(
             signupCleanupMessage,
             isCleanupBlocked: true,
           ),

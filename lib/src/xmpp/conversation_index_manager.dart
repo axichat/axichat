@@ -172,6 +172,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   static const String _defaultMaxItems = '1000';
   static const String _publishModelPublishers = 'publishers';
   static const String _sendLastOnSub = 'on_sub';
+  static const String _sendLastOnSubscribe = 'on_subscribe';
   static const bool _notifyEnabled = true;
   static const bool _deliverNotificationsEnabled = true;
   static const bool _deliverPayloadsEnabled = true;
@@ -227,7 +228,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (!configured.isType<mox.PubSubError>()) {
       return null;
     }
-    final error = configured.get<mox.PubSubError>();
+    var error = configured.get<mox.PubSubError>();
     logger.fine(
       'PubSub node config failed. node=$node '
       'accessModel=${config.accessModel.value} '
@@ -236,7 +237,39 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (error.indicatesMissingNode) {
       return error;
     }
-    if (!config.hasSendLastPublishedItem) {
+    final sendLastValue = config.sendLastPublishedItem?.trim();
+    final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
+    if (hasSendLast && sendLastValue == _sendLastOnSub) {
+      logger.fine(
+        'PubSub node config retry with send_last=on_subscribe. node=$node '
+        'accessModel=${config.accessModel.value}.',
+      );
+      final subscribeConfig = config.withSendLastPublishedItem(
+        _sendLastOnSubscribe,
+      );
+      final subscribeResult = await pubsub.configureNode(
+        host,
+        node,
+        subscribeConfig,
+      );
+      if (!subscribeResult.isType<mox.PubSubError>()) {
+        logger.fine(
+          'PubSub node configured with send_last=on_subscribe. node=$node '
+          'accessModel=${config.accessModel.value}.',
+        );
+        return null;
+      }
+      error = subscribeResult.get<mox.PubSubError>();
+      logger.fine(
+        'PubSub node config failed with send_last=on_subscribe. node=$node '
+        'accessModel=${config.accessModel.value} '
+        'error=${error.runtimeType}.',
+      );
+      if (error.indicatesMissingNode) {
+        return error;
+      }
+    }
+    if (!hasSendLast) {
       return error;
     }
     logger.fine(

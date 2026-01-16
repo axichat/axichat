@@ -4,8 +4,5 @@
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 extension PubSubErrorMissingNode on mox.PubSubError {
-  bool get indicatesMissingNode =>
-      this is mox.ItemNotFoundError ||
-      this is mox.UnknownPubSubError ||
-      this is mox.MalformedResponseError;
+  bool get indicatesMissingNode => this is mox.ItemNotFoundError;
 }
