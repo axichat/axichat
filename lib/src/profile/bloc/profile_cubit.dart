@@ -38,25 +38,24 @@ class ProfileCubit extends Cubit<ProfileState> {
     _statusSubscription = _presenceService?.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
-    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen((avatar) {
-      if (avatar == null || avatar.isEmpty) {
-        emit(state.copyWith(avatarPath: null, avatarHash: null));
-        return;
-      }
-      final path = avatar.path?.trim();
-      if (path != null && path.isNotEmpty) {
-        fireAndForget(
-          () => _xmppService.loadAvatarBytes(path),
-          operationName: 'ProfileCubit.loadAvatarBytes',
+    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen(
+      (avatar) async {
+        if (avatar == null || avatar.isEmpty) {
+          emit(state.copyWith(avatarPath: null, avatarHash: null));
+          return;
+        }
+        final path = avatar.path?.trim();
+        if (path != null && path.isNotEmpty) {
+          await _xmppService.loadAvatarBytes(path);
+        }
+        emit(
+          state.copyWith(
+            avatarPath: path ?? state.avatarPath,
+            avatarHash: avatar.hash ?? state.avatarHash,
+          ),
         );
-      }
-      emit(
-        state.copyWith(
-          avatarPath: path ?? state.avatarPath,
-          avatarHash: avatar.hash ?? state.avatarHash,
-        ),
-      );
-    });
+      },
+    );
     fireAndForget(
       _loadAvatar,
       operationName: 'ProfileCubit.loadAvatar',
@@ -110,10 +109,7 @@ class ProfileCubit extends Cubit<ProfileState> {
     if (stored == null || stored.isEmpty) return;
     final path = stored.path?.trim();
     if (path != null && path.isNotEmpty) {
-      fireAndForget(
-        () => _xmppService.loadAvatarBytes(path),
-        operationName: 'ProfileCubit.loadAvatarBytes',
-      );
+      await _xmppService.loadAvatarBytes(path);
     }
     emit(
       state.copyWith(

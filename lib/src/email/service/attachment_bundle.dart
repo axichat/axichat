@@ -6,7 +6,6 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:path/path.dart' as p;
@@ -206,9 +205,9 @@ bool _isBundledAttachmentFile(File file) {
 }
 
 void _scheduleBundleCleanup(File file) {
-  fireAndForget(
+  Timer(
+    _bundleCleanupDelay,
     () async {
-      await Future<void>.delayed(_bundleCleanupDelay);
       try {
         if (await file.exists()) {
           await file.delete();
@@ -217,6 +216,5 @@ void _scheduleBundleCleanup(File file) {
         return;
       }
     },
-    operationName: 'EmailAttachmentBundle.cleanupBundle',
   );
 }

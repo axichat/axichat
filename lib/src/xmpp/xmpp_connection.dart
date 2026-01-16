@@ -88,6 +88,8 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.discoManager);
       case == mox.PubSubManager:
         return getManagerById(mox.pubsubManager);
+      case == SafePubSubManager:
+        return getManagerById(mox.pubsubManager);
       case == XmppPresenceManager:
         return getManagerById(mox.presenceManager);
       case == XmppStreamManagementManager:

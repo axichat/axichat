@@ -263,7 +263,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _chatSubscription = _chatsService
           .chatStream(chatLookupJid)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
-      _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
+      fireAndForget(
+        () => _subscribeToMessages(
+          limit: messageBatchSize,
+          filter: state.viewFilter,
+        ),
+        operationName: 'ChatBloc.subscribeToMessages',
+      );
       fireAndForget(
         _initializeViewFilter,
         operationName: 'ChatBloc.initializeViewFilter',
@@ -281,7 +287,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       add(_XmppConnectionStateChanged(xmppService.connectionState));
       _connectivitySubscription = xmppService.connectivityStream.listen((
         connectionState,
-      ) {
+      ) async {
         add(_XmppConnectionStateChanged(connectionState));
         if (connectionState == ConnectionState.connected) {
           final chat = state.chat;
@@ -289,19 +295,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final streamReady = xmppService.lastStreamReady;
             final shouldCatchUp = streamReady?.isResumed != true;
             if (shouldCatchUp && !_shouldSkipInitialMamSync(chat)) {
-              fireAndForget(
-                _catchUpFromMam,
-                operationName: 'ChatBloc.catchUpFromMam',
-              );
+              await _catchUpFromMam();
             }
-            fireAndForget(
-              () => _prefetchPeerAvatar(chat),
-              operationName: 'ChatBloc.prefetchPeerAvatar',
-            );
-            fireAndForget(
-              () => _syncPinnedMessagesForChat(chat),
-              operationName: 'ChatBloc.syncPinnedMessagesForChat',
-            );
+            await _prefetchPeerAvatar(chat);
+            await _syncPinnedMessagesForChat(chat);
           }
         }
       });
@@ -315,14 +312,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _settingsState = state;
     });
     _lifecycleListener = AppLifecycleListener(
-      onResume: () => fireAndForget(
-        _handleLifecycleResumed,
-        operationName: 'ChatBloc.handleLifecycleResumed',
-      ),
-      onShow: () => fireAndForget(
-        _handleLifecycleResumed,
-        operationName: 'ChatBloc.handleLifecycleResumed',
-      ),
+      onResume: () async {
+        await _handleLifecycleResumed();
+      },
+      onShow: () async {
+        await _handleLifecycleResumed();
+      },
     );
   }
 
@@ -822,17 +817,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _subscribeToMessages({
+  Future<void> _subscribeToMessages({
     required int limit,
     required MessageTimelineFilter filter,
     bool forceXmppFallback = false,
-  }) {
+  }) async {
     final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
     if (targetJid == null) return;
-    fireAndForget(
-      () => _messageSubscription?.cancel(),
-      operationName: 'ChatBloc.cancelMessageSubscription',
-    );
+    await _messageSubscription?.cancel();
     _currentMessageLimit = limit;
     final chat = state.chat;
     final emailService = _emailService;
@@ -843,9 +835,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .messageStreamForChat(targetJid, end: limit, filter: filter)
           .listen(
         (items) => add(_ChatMessagesUpdated(items)),
-        onError: (Object error, StackTrace stackTrace) {
+        onError: (Object error, StackTrace stackTrace) async {
           _log.fine('Email message stream failed', error, stackTrace);
-          _subscribeToMessages(
+          await _subscribeToMessages(
             limit: limit,
             filter: filter,
             forceXmppFallback: true,
@@ -868,12 +860,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return trimmedChatJid;
   }
 
-  void _subscribeToPinnedMessages(Chat chat) {
+  Future<void> _subscribeToPinnedMessages(Chat chat) async {
     final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
-    fireAndForget(
-      () => _pinnedSubscription?.cancel(),
-      operationName: 'ChatBloc.cancelPinnedSubscription',
-    );
+    await _pinnedSubscription?.cancel();
     if (trimmedChatJid == null) {
       _pinnedSubscription = null;
       return;
@@ -889,25 +878,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .pinnedMessagesStream(trimmedChatJid)
           .listen((items) => add(_PinnedMessagesUpdated(items)));
     }
-    fireAndForget(
-      () => _syncPinnedMessagesForChat(chat),
-      operationName: 'ChatBloc.syncPinnedMessagesForChat',
-    );
+    await _syncPinnedMessagesForChat(chat);
   }
 
-  void _subscribeToTypingParticipants(Chat chat) {
+  Future<void> _subscribeToTypingParticipants(Chat chat) async {
     if (!_xmppAllowedForChat(chat)) {
-      fireAndForget(
-        () => _typingParticipantsSubscription?.cancel(),
-        operationName: 'ChatBloc.cancelTypingSubscription',
-      );
+      await _typingParticipantsSubscription?.cancel();
       _typingParticipantsSubscription = null;
       return;
     }
-    fireAndForget(
-      () => _typingParticipantsSubscription?.cancel(),
-      operationName: 'ChatBloc.cancelTypingSubscription',
-    );
+    await _typingParticipantsSubscription?.cancel();
     _typingParticipantsSubscription =
         _chatsService.typingParticipantsStream(chat.jid).listen(
               (participants) => add(_TypingParticipantsUpdated(participants)),
@@ -997,28 +977,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
     );
     if (resetContext) {
-      _subscribeToMessages(
+      await _subscribeToMessages(
         limit: _currentMessageLimit,
         filter: state.viewFilter,
       );
-      fireAndForget(
-        () => _prefetchPeerAvatar(event.chat),
-        operationName: 'ChatBloc.prefetchPeerAvatar',
-      );
+      await _prefetchPeerAvatar(event.chat);
     }
     if (typingContextChanged) {
-      _subscribeToTypingParticipants(event.chat);
+      await _subscribeToTypingParticipants(event.chat);
     }
     if (pinnedContextChanged) {
-      _subscribeToPinnedMessages(event.chat);
+      await _subscribeToPinnedMessages(event.chat);
     }
     _resetMamCursors(resetContext);
     if (_xmppAllowedForChat(event.chat) &&
         !_shouldSkipInitialMamSync(event.chat)) {
-      fireAndForget(
-        () => _hydrateLatestFromMam(event.chat),
-        operationName: 'ChatBloc.hydrateLatestFromMam',
-      );
+      await _hydrateLatestFromMam(event.chat);
     }
     await _roomSubscription?.cancel();
     _roomSubscription = null;
@@ -1027,22 +1001,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .roomStateStream(event.chat.jid)
           .listen((room) => add(_RoomStateUpdated(room)));
       if (resetContext || state.roomState == null) {
-        _primeRoomState(event.chat);
+        await _primeRoomState(event.chat);
       }
       if (!resetContext && state.items.isNotEmpty) {
         _mucService.trackOccupantsFromMessages(event.chat.jid, state.items);
       }
-      fireAndForget(
-        () => _ensureMucMembership(event.chat),
-        operationName: 'ChatBloc.ensureMucMembership',
-      );
+      await _ensureMucMembership(event.chat);
     } else {
       emit(state.copyWith(roomState: null));
     }
     await _primeDemoPendingAttachment(event.chat, emit);
   }
 
-  void _onRoomStateUpdated(_RoomStateUpdated event, Emitter<ChatState> emit) {
+  Future<void> _onRoomStateUpdated(
+    _RoomStateUpdated event,
+    Emitter<ChatState> emit,
+  ) async {
     final chatJid = _bareJid(state.chat?.jid);
     if (chatJid == null) return;
     if (chatJid != _bareJid(event.roomState.roomJid)) return;
@@ -1050,41 +1024,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
     _seedLocalRoomOccupant(chat, event.roomState);
-    fireAndForget(
-      () => _refreshRoomAffiliationsIfNeeded(
-        chat: chat,
-        roomState: event.roomState,
-      ),
-      operationName: 'ChatBloc.refreshRoomAffiliationsIfNeeded',
+    await _refreshRoomAffiliationsIfNeeded(
+      chat: chat,
+      roomState: event.roomState,
     );
   }
 
-  void _primeRoomState(Chat chat) {
+  Future<void> _primeRoomState(Chat chat) async {
     if (chat.type == ChatType.groupChat) {
-      fireAndForget(
-        () => _mucService.seedDummyRoomData(chat.jid),
-        operationName: 'ChatBloc.seedDummyRoomData',
-      );
+      await _mucService.seedDummyRoomData(chat.jid);
     }
     final cachedRoom = _mucService.roomStateFor(chat.jid);
     if (cachedRoom != null) {
       add(_RoomStateUpdated(cachedRoom));
     }
-    fireAndForget(
-      () async {
-        try {
-          final warmed =
-              await _mucService.warmRoomFromHistory(roomJid: chat.jid);
-          if (isClosed) return;
-          if (_bareJid(state.chat?.jid) != _bareJid(chat.jid)) return;
-          if (state.roomState != null) return;
-          add(_RoomStateUpdated(warmed));
-        } on Exception catch (error, stackTrace) {
-          _log.safeFine(_roomStateWarmFailedLogMessage, error, stackTrace);
-        }
-      },
-      operationName: 'ChatBloc.warmRoomFromHistory',
-    );
+    try {
+      final warmed = await _mucService.warmRoomFromHistory(roomJid: chat.jid);
+      if (isClosed) return;
+      if (_bareJid(state.chat?.jid) != _bareJid(chat.jid)) return;
+      if (state.roomState != null) return;
+      add(_RoomStateUpdated(warmed));
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_roomStateWarmFailedLogMessage, error, stackTrace);
+    }
   }
 
   Future<void> _primeDemoPendingAttachment(
@@ -1842,19 +1804,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  void _onXmppConnectionStateChanged(
+  Future<void> _onXmppConnectionStateChanged(
     _XmppConnectionStateChanged event,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
     if (state.xmppConnectionState == event.state) return;
     emit(state.copyWith(xmppConnectionState: event.state));
     final chat = state.chat;
     if (event.state == ConnectionState.connected &&
         chat?.type == ChatType.groupChat) {
-      fireAndForget(
-        () => _ensureMucMembership(chat!),
-        operationName: 'ChatBloc.ensureMucMembership',
-      );
+      await _ensureMucMembership(chat!);
     }
   }
 

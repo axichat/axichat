@@ -194,41 +194,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               lifeCycleState == AppLifecycleState.inactive,
         );
         if (lifeCycleState == AppLifecycleState.resumed) {
-          fireAndForget(
-            _triggerEmailReconnect,
-            operationName: 'AuthenticationCubit.triggerEmailReconnect',
-          );
+          await _triggerEmailReconnect();
         }
       },
     );
     _connectivitySubscription = xmppService.connectivityStream.listen((
       connectionState,
-    ) {
+    ) async {
       if (connectionState == ConnectionState.connected) {
-        fireAndForget(
-          _attemptEmailProvisioningRecovery,
-          operationName: 'AuthenticationCubit.emailProvisioningRecovery',
-        );
-        fireAndForget(
-          () async => _emailService?.handleNetworkAvailable(),
-          operationName: 'AuthenticationCubit.emailReconnect',
-        );
-        fireAndForget(
-          _publishPendingAvatar,
-          operationName: 'AuthenticationCubit.avatarPublish',
-        );
+        await _attemptEmailProvisioningRecovery();
+        await _emailService?.handleNetworkAvailable();
+        await _publishPendingAvatar();
         if (_authenticatedJid != null) {
-          fireAndForget(
-            _homeRefreshSyncService.syncOnLogin,
-            operationName: 'AuthenticationCubit.homeRefreshSync',
-          );
+          await _homeRefreshSyncService.syncOnLogin();
         }
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
-        fireAndForget(
-          () async => _emailService?.handleNetworkLost(),
-          operationName: 'AuthenticationCubit.emailDisconnect',
-        );
+        await _emailService?.handleNetworkLost();
       }
     });
     _foregroundListener = _handleForegroundServiceActiveChanged;
@@ -343,7 +325,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       value: jsonEncode(config.toJson()),
     );
     _emit(state);
-    _updateEmailForegroundKeepalive();
+    await _updateEmailForegroundKeepalive();
   }
 
   Future<void> resetEndpointConfig() =>
@@ -361,7 +343,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _endpointConfig = restored;
       _emailService?.updateEndpointConfig(restored);
       _emit(state);
-      _updateEmailForegroundKeepalive();
+      await _updateEmailForegroundKeepalive();
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to restore endpoint config', error, stackTrace);
     }
@@ -649,14 +631,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     if (_stickyAuthActive) {
-      fireAndForget(
-        _reconnectXmppForStickySession,
-        operationName: 'AuthenticationCubit.reconnectXmppForStickySession',
-      );
-      fireAndForget(
-        _triggerEmailReconnect,
-        operationName: 'AuthenticationCubit.triggerEmailReconnect',
-      );
+      await _reconnectXmppForStickySession();
+      await _triggerEmailReconnect();
       return;
     }
 
@@ -830,18 +806,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _sessionEmailCredentials = null;
   }
 
-  void _handleForegroundServiceActiveChanged() {
-    _updateEmailForegroundKeepalive();
+  Future<void> _handleForegroundServiceActiveChanged() async {
+    await _updateEmailForegroundKeepalive();
     if (!_endpointConfig.enableXmpp || !_stickyAuthActive) {
       return;
     }
     if (!withForeground || !foregroundServiceActive.value) {
       return;
     }
-    fireAndForget(
-      _xmppService.ensureForegroundSocketIfActive,
-      operationName: 'AuthenticationCubit.ensureForegroundSocketIfActive',
-    );
+    await _xmppService.ensureForegroundSocketIfActive();
   }
 
   Future<bool> hasStoredLoginCredentials() async {
@@ -1032,12 +1005,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
     _signupAvatarPublishRetryTimer = Timer(
       Duration(milliseconds: delayMillis),
-      () {
+      () async {
         _signupAvatarPublishRetryTimer = null;
-        fireAndForget(
-          _publishPendingAvatar,
-          operationName: 'AuthenticationCubit.publishPendingAvatar',
-        );
+        await _publishPendingAvatar();
       },
     );
   }
@@ -1476,7 +1446,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _endpointConfig = demoConfig;
         _emailService?.updateEndpointConfig(demoConfig);
         _emit(state);
-        _updateEmailForegroundKeepalive();
+        await _updateEmailForegroundKeepalive();
       }
       await _xmppService.resumeOfflineSession(
         jid: kDemoSelfJid,
@@ -1708,10 +1678,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _markSmtpProvisioned();
       try {
         await emailService.start();
-        fireAndForget(
-          emailService.handleNetworkAvailable,
-          operationName: 'AuthenticationCubit.emailNetworkAvailableAfterStart',
-        );
+        await emailService.handleNetworkAvailable();
       } on Exception catch (error, stackTrace) {
         _log.finer('Failed to start email sync', error, stackTrace);
       }
@@ -1826,7 +1793,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emit(completedState);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
-    _updateEmailForegroundKeepalive();
+    await _updateEmailForegroundKeepalive();
     await _publishPendingAvatar();
   }
 
@@ -2248,7 +2215,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _authenticatedJid = null;
     _demoSessionReady = false;
     _emit(const AuthenticationNone());
-    _updateEmailForegroundKeepalive();
+    await _updateEmailForegroundKeepalive();
   }
 
   Future<void> changePassword({
@@ -2603,17 +2570,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  void _updateEmailForegroundKeepalive() {
+  Future<void> _updateEmailForegroundKeepalive() async {
     final emailService = _emailService;
     if (emailService == null) return;
     final shouldRun = _endpointConfig.enableSmtp &&
         foregroundServiceActive.value &&
         _authenticatedJid != null &&
         state is AuthenticationComplete;
-    fireAndForget(
-      () => _setEmailForegroundKeepalive(emailService, shouldRun),
-      operationName: 'AuthenticationCubit.updateEmailForegroundKeepalive',
-    );
+    await _setEmailForegroundKeepalive(emailService, shouldRun);
   }
 
   Future<void> _setEmailForegroundKeepalive(

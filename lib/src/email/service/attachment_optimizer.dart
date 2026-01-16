@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -231,10 +230,9 @@ void _scheduleOptimizedCleanup(String path) {
   if (!_isOptimizedAttachmentFile(file)) {
     return;
   }
-  fireAndForget(
+  Timer(
+    EmailAttachmentOptimizer._optimizedCleanupDelay,
     () async {
-      await Future<void>.delayed(
-          EmailAttachmentOptimizer._optimizedCleanupDelay);
       try {
         if (await file.exists()) {
           await file.delete();
@@ -243,7 +241,6 @@ void _scheduleOptimizedCleanup(String path) {
         return;
       }
     },
-    operationName: 'EmailAttachmentOptimizer.cleanupOptimizedFile',
   );
 }
 

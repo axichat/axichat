@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:path_provider/path_provider.dart';
 
@@ -78,14 +77,11 @@ class ChatHistoryExporter {
     );
   }
 
-  static void scheduleCleanup(File file) {
+  static Future<void> scheduleCleanup(File file) async {
     if (file.path.trim().isEmpty) {
       return;
     }
-    fireAndForget(
-      () => _cleanupExportFile(file),
-      operationName: 'ChatHistoryExporter.cleanupExportFile',
-    );
+    await _cleanupExportFile(file);
   }
 
   static String sanitizeLabel(String input) {

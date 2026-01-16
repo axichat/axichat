@@ -211,6 +211,12 @@ mixin AvatarService on XmppBase, MucService {
           'hasHash=${event.hash.isNotEmpty}.',
         );
         if (event.hash.isEmpty) {
+          if (isSelf) {
+            _avatarLog.fine(
+              'VCard avatar hash empty; ignoring for self.',
+            );
+            return;
+          }
           if (_isPubSubAvatarPreferred(bareJid)) {
             _avatarLog.fine(
               'VCard avatar hash empty; keeping PubSub avatar. '
