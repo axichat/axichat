@@ -171,7 +171,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   static const String managerId = 'axi.conversation.index';
   static const String _defaultMaxItems = '1000';
   static const String _publishModelPublishers = 'publishers';
-  static const String _sendLastOnSubscribe = 'on_subscribe';
+  static const String _sendLastOnSub = 'on_sub';
   static const bool _notifyEnabled = true;
   static const bool _deliverNotificationsEnabled = true;
   static const bool _deliverPayloadsEnabled = true;
@@ -211,7 +211,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastOnSubscribe,
+        sendLastPublishedItem: _sendLastOnSub,
       );
 
   mox.NodeConfig _createNodeConfig() =>
@@ -233,6 +233,9 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       'accessModel=${config.accessModel.value} '
       'error=${error.runtimeType}.',
     );
+    if (error.indicatesMissingNode) {
+      return error;
+    }
     if (!config.hasSendLastPublishedItem) {
       return error;
     }
@@ -263,7 +266,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastOnSubscribe,
+        sendLastPublishedItem: _sendLastOnSub,
       );
 
   mox.JID? _selfPepHost() {
@@ -304,27 +307,27 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     }
 
     if (event is mox.PubSubNotificationEvent) {
-      await _handleNotification(event);
+      fireAndForget(() => _handleNotification(event));
       return;
     }
     if (event is mox.PubSubItemsRetractedEvent) {
-      await _handleRetractions(event);
+      fireAndForget(() => _handleRetractions(event));
       return;
     }
     if (event is PubSubItemsRefreshedEvent) {
-      await _handleRefreshEvent(event);
+      fireAndForget(() => _handleRefreshEvent(event));
       return;
     }
     if (event is PubSubSubscriptionChangedEvent) {
-      await _handleSubscriptionChanged(event);
+      fireAndForget(() => _handleSubscriptionChanged(event));
       return;
     }
     if (event is mox.PubSubNodeDeletedEvent) {
-      await _handleNodeDeleted(event);
+      fireAndForget(() => _handleNodeDeleted(event));
       return;
     }
     if (event is mox.PubSubNodePurgedEvent) {
-      await _handleNodePurged(event);
+      fireAndForget(() => _handleNodePurged(event));
       return;
     }
 

@@ -24,7 +24,7 @@ const String _spamJidAttr = 'jid';
 const String _spamUpdatedAtAttr = 'updated_at';
 const String _spamSourceIdAttr = 'source_id';
 const String _publishModelPublishers = 'publishers';
-const String _sendLastOnSubscribe = 'on_subscribe';
+const String _sendLastOnSub = 'on_sub';
 const String _defaultMaxItems = '$spamSyncMaxItems';
 const String _spamSourceIdFallback = syncLegacySourceId;
 const bool _notifyEnabled = true;
@@ -179,27 +179,27 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
-      await _handleNotification(event);
+      fireAndForget(() => _handleNotification(event));
       return;
     }
     if (event is mox.PubSubItemsRetractedEvent) {
-      await _handleRetractions(event);
+      fireAndForget(() => _handleRetractions(event));
       return;
     }
     if (event is PubSubItemsRefreshedEvent) {
-      await _handleRefreshEvent(event);
+      fireAndForget(() => _handleRefreshEvent(event));
       return;
     }
     if (event is PubSubSubscriptionChangedEvent) {
-      await _handleSubscriptionChanged(event);
+      fireAndForget(() => _handleSubscriptionChanged(event));
       return;
     }
     if (event is mox.PubSubNodeDeletedEvent) {
-      await _handleNodeDeleted(event);
+      fireAndForget(() => _handleNodeDeleted(event));
       return;
     }
     if (event is mox.PubSubNodePurgedEvent) {
-      await _handleNodePurged(event);
+      fireAndForget(() => _handleNodePurged(event));
       return;
     }
     return super.onXmppEvent(event);
@@ -227,7 +227,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastOnSubscribe,
+        sendLastPublishedItem: _sendLastOnSub,
       );
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
@@ -246,6 +246,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       'accessModel=${config.accessModel.value} '
       'error=${error.runtimeType}.',
     );
+    if (error.indicatesMissingNode) {
+      return error;
+    }
     if (!config.hasSendLastPublishedItem) {
       return error;
     }
@@ -276,7 +279,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastOnSubscribe,
+        sendLastPublishedItem: _sendLastOnSub,
       );
 
   mox.JID? _selfPepHost() {

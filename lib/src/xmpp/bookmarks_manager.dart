@@ -218,27 +218,27 @@ final class BookmarksManager extends mox.XmppManagerBase {
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
-      await _handleNotification(event);
+      fireAndForget(() => _handleNotification(event));
       return;
     }
     if (event is mox.PubSubItemsRetractedEvent) {
-      await _handleRetractions(event);
+      fireAndForget(() => _handleRetractions(event));
       return;
     }
     if (event is PubSubItemsRefreshedEvent) {
-      await _handleRefreshEvent(event);
+      fireAndForget(() => _handleRefreshEvent(event));
       return;
     }
     if (event is PubSubSubscriptionChangedEvent) {
-      await _handleSubscriptionChanged(event);
+      fireAndForget(() => _handleSubscriptionChanged(event));
       return;
     }
     if (event is mox.PubSubNodeDeletedEvent) {
-      await _handleNodeDeleted(event);
+      fireAndForget(() => _handleNodeDeleted(event));
       return;
     }
     if (event is mox.PubSubNodePurgedEvent) {
-      await _handleNodePurged(event);
+      fireAndForget(() => _handleNodePurged(event));
       return;
     }
     return super.onXmppEvent(event);
