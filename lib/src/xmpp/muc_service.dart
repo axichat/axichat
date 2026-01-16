@@ -71,7 +71,7 @@ const _mucJoinStatusCountLabel = 'status_count=';
 const _mucJoinHasSelfStatusLabel = 'has_self_status=';
 const _mucJoinErrorLabel = 'error=';
 const _mucJoinManagerJoinTimeoutLog =
-    'Timed out waiting for moxxmpp MUC join call.';
+    'moxxmpp joinRoom still pending; proceeding via self-presence.';
 const _roomAvatarFieldMissingLog =
     'Room configuration form missing avatar field.';
 const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
@@ -85,7 +85,7 @@ const _mucCreateRoomOperationName = 'MucService.createRoom';
 const _mucUpsertBookmarkOperationName = 'MucService.upsertBookmarkForRoom';
 const _mucJoinRoomOperationName = 'MucService.joinRoom';
 const _mucCreateRoomBookmarkTimeoutLog =
-    'Timed out updating bookmarks for newly created room.';
+    'Bookmark upsert still running for newly created room.';
 const bool _mucAvatarSupportEnabled = false;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
@@ -900,15 +900,20 @@ mixin MucService on XmppBase, BaseStreamService {
     _mucLog.fine('MUC create persisted. room=$roomJid');
     fireAndForget(
       () async {
-        await _upsertBookmarkForRoom(
-          roomJid: roomJid,
-          title: title,
-          nickname: nick,
-          autojoin: true,
-        ).timeout(
+        final slowTimer = Timer(
           _mucCreateRoomBookmarkTimeout,
-          onTimeout: () => _mucLog.warning(_mucCreateRoomBookmarkTimeoutLog),
+          () => _mucLog.fine(_mucCreateRoomBookmarkTimeoutLog),
         );
+        try {
+          await _upsertBookmarkForRoom(
+            roomJid: roomJid,
+            title: title,
+            nickname: nick,
+            autojoin: true,
+          );
+        } finally {
+          slowTimer.cancel();
+        }
       },
       operationName: _mucUpsertBookmarkOperationName,
     );
@@ -940,10 +945,12 @@ mixin MucService on XmppBase, BaseStreamService {
       () => Completer<void>(),
     );
     final joinAttemptId = _ensureJoinAttemptIdForKey(normalizedRoom);
+    final joinInFlightAdded = _mucJoinInFlight.add(normalizedRoom);
     final hasSelfPresence =
         _roomStates[normalizedRoom]?.hasSelfPresence == true;
     final joinCompleterActive = !joinCompleter.isCompleted;
-    final joinInFlight = _mucJoinInFlight.contains(normalizedRoom);
+    final joinInFlight = true;
+    final pollFuture = _pollForSelfPresenceFromMucManager(normalizedRoom);
     _logJoinEvent(
       message: _mucJoinRequestedLog,
       attemptId: joinAttemptId,
@@ -951,18 +958,17 @@ mixin MucService on XmppBase, BaseStreamService {
       joinCompleterActive: joinCompleterActive,
       joinInFlight: joinInFlight,
     );
-    if (clearExplicitLeave) {
-      _explicitlyLeftRooms.remove(normalizedRoom);
-    }
-    _markRoomJoined(normalizedRoom);
-    _roomNicknames[normalizedRoom] = nickname;
-    _rememberRoomNickname(roomJid: normalizedRoom, nickname: nickname);
-    _rememberRoomPassword(roomJid: normalizedRoom, password: password);
-    final manager = _connection.getManager<MUCManager>();
-    if (manager == null) throw XmppMessageException();
-
-    final pollFuture = _pollForSelfPresenceFromMucManager(normalizedRoom);
     try {
+      if (clearExplicitLeave) {
+        _explicitlyLeftRooms.remove(normalizedRoom);
+      }
+      _markRoomJoined(normalizedRoom);
+      _roomNicknames[normalizedRoom] = nickname;
+      _rememberRoomNickname(roomJid: normalizedRoom, nickname: nickname);
+      _rememberRoomPassword(roomJid: normalizedRoom, password: password);
+      final manager = _connection.getManager<MUCManager>();
+      if (manager == null) throw XmppMessageException();
+
       final resolvedHistoryStanzas =
           maxHistoryStanzas ?? _defaultMucJoinHistoryStanzas;
       final roomBare = mox.JID.fromString(normalizedRoom).toBare();
@@ -1029,6 +1035,10 @@ mixin MucService on XmppBase, BaseStreamService {
         stackTrace: stackTrace,
       );
       await pollFuture;
+    } finally {
+      if (joinInFlightAdded) {
+        _mucJoinInFlight.remove(normalizedRoom);
+      }
     }
   }
 
