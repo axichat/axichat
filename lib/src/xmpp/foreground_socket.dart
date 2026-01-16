@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -505,10 +504,9 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Sending to task: type=$type parts=${strings.length} '
       'payloadLen=$payloadLength',
     );
-    fireAndForget(
-      () => _bridge.send(strings),
-      operationName: 'ForegroundSocketTaskBridge.sendToTask',
-    );
+    Timer.run(() async {
+      await _bridge.send(strings);
+    });
   }
 
   @override

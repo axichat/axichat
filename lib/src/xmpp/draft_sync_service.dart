@@ -47,16 +47,14 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
-          fireAndForget(
-            _flushPendingDraftSync,
-            operationName: 'DraftSyncService.flushPendingDraftSync',
-          );
+          Timer.run(() async {
+            await _flushPendingDraftSync();
+          });
           return;
         }
-        fireAndForget(
-          syncDraftsOnLogin,
-          operationName: 'DraftSyncService.syncDraftsOnLogin',
-        );
+        Timer.run(() async {
+          await syncDraftsOnLogin();
+        });
       })
       ..registerHandler<DraftSyncUpdatedEvent>((event) async {
         await _applyDraftSyncUpdate(event.payload);

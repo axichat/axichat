@@ -17,7 +17,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -111,10 +110,9 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_dependenciesInitialized && _shouldCleanupSeedAttachments) {
-      fireAndForget(
-        _cleanupSeedAttachmentMetadata,
-        operationName: 'DraftForm.cleanupSeedAttachmentMetadata',
-      );
+      Timer.run(() async {
+        await _cleanupSeedAttachmentMetadata();
+      });
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -165,10 +163,9 @@ class _DraftFormState extends State<DraftForm> {
     _messageService = context.read<MessageService>();
     _recipients = _initialRecipients();
     if (widget.attachmentMetadataIds.isNotEmpty) {
-      fireAndForget(
-        _hydrateAttachments,
-        operationName: 'DraftForm.hydrateAttachments',
-      );
+      Timer.run(() async {
+        await _hydrateAttachments();
+      });
     }
     _dependenciesInitialized = true;
   }
@@ -202,7 +199,7 @@ class _DraftFormState extends State<DraftForm> {
         key: _formKey,
         autovalidateMode: autovalidateMode,
         child: BlocConsumer<DraftCubit, DraftState>(
-          listener: (context, state) {
+          listener: (context, state) async {
             if (state is DraftSaveComplete) {
               if (!state.autoSaved) {
                 ShadToaster.maybeOf(
@@ -242,7 +239,7 @@ class _DraftFormState extends State<DraftForm> {
                 });
               }
             } else if (state is DraftSendComplete) {
-              _handleSendComplete();
+              await _handleSendComplete();
             }
           },
           builder: (context, state) {
@@ -1041,13 +1038,13 @@ class _DraftFormState extends State<DraftForm> {
       }
       return;
     }
-    _handleSendComplete();
+    await _handleSendComplete();
     if (mounted && !_sendCompletionHandled && _sendingDraft) {
       setState(() => _sendingDraft = false);
     }
   }
 
-  void _handleSendComplete() {
+  Future<void> _handleSendComplete() async {
     final l10n = context.l10n;
     if (_sendCompletionHandled) {
       return;
@@ -1066,10 +1063,7 @@ class _DraftFormState extends State<DraftForm> {
       context,
     )?.show(FeedbackToast.success(title: l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
-      fireAndForget(
-        _cleanupSeedAttachmentMetadata,
-        operationName: 'DraftForm.cleanupSeedAttachmentMetadata',
-      );
+      await _cleanupSeedAttachmentMetadata();
     }
     final onClosed = widget.onClosed;
     if (onClosed != null) {

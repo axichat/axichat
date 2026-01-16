@@ -12,7 +12,6 @@ import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'base_calendar_bloc.dart';
 import 'calendar_event.dart';
@@ -74,12 +73,12 @@ class CalendarBloc extends BaseCalendarBloc {
     if (!modelChanged || coordinator == null) {
       return;
     }
-    fireAndForget(
-      () => coordinator.handleModelChanged(
+    Timer.run(() async {
+      await coordinator.handleModelChanged(
         source: availabilityShareSource,
         model: model,
-      ),
-    );
+      );
+    });
   }
 
   @override

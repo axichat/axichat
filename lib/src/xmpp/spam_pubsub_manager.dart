@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/jid_extensions.dart';
@@ -168,10 +167,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      fireAndForget(
-        _bootstrap,
-        operationName: 'SpamPubSubManager.bootstrap',
-      );
+      Timer.run(() async {
+        await _bootstrap();
+      });
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
@@ -378,10 +376,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        fireAndForget(
-          _bootstrap,
-          operationName: 'SpamPubSubManager.bootstrap',
-        );
+        Timer.run(() async {
+          await _bootstrap();
+        });
       }
     }
   }
@@ -517,10 +514,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      fireAndForget(
-        _refreshFromServer,
-        operationName: 'SpamPubSubManager.refreshFromServer',
-      );
+      Timer.run(() async {
+        await _refreshFromServer();
+      });
     }
     return false;
   }
@@ -616,10 +612,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      fireAndForget(
-        _bootstrap,
-        operationName: 'SpamPubSubManager.bootstrap',
-      );
+      Timer.run(() async {
+        await _bootstrap();
+      });
     }
   }
 
@@ -633,10 +628,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      fireAndForget(
-        _bootstrap,
-        operationName: 'SpamPubSubManager.bootstrap',
-      );
+      Timer.run(() async {
+        await _bootstrap();
+      });
     }
   }
 
