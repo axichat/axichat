@@ -865,7 +865,7 @@ mixin MessageService
           ? MessageStorageMode.local
           : _messageStorageMode;
 
-  void updateMessageStorageMode(MessageStorageMode mode) {
+  Future<void> updateMessageStorageMode(MessageStorageMode mode) async {
     final previous = messageStorageMode;
     _messageStorageMode = mode;
     final next = messageStorageMode;
@@ -875,10 +875,7 @@ mixin MessageService
       );
     }
     if (previous == next) return;
-    fireAndForget(
-      () => _applyMessageStorageModeChange(previous: previous, next: next),
-      operationName: 'MessageService.applyMessageStorageModeChange',
-    );
+    await _applyMessageStorageModeChange(previous: previous, next: next);
   }
 
   Future<void> _applyMessageStorageModeChange({
@@ -928,7 +925,7 @@ mixin MessageService
     _notifyDatabaseReloaded();
   }
 
-  void _updateMamSupport(bool supported) {
+  Future<void> _updateMamSupport(bool supported) async {
     if (_mamSupported == supported) return;
     final previousEffective = messageStorageMode;
     _mamSupported = supported;
@@ -937,21 +934,18 @@ mixin MessageService
     }
     final nextEffective = messageStorageMode;
     if (previousEffective != nextEffective) {
-      fireAndForget(
-        () => _applyMessageStorageModeChange(
-          previous: previousEffective,
-          next: nextEffective,
-        ),
-        operationName: 'MessageService.applyMessageStorageModeChange',
+      await _applyMessageStorageModeChange(
+        previous: previousEffective,
+        next: nextEffective,
       );
     }
   }
 
   @visibleForTesting
-  void setMamSupportOverride(bool? supported) {
+  Future<void> setMamSupportOverride(bool? supported) async {
     _mamSupportOverride = supported;
     if (supported != null) {
-      _updateMamSupport(supported);
+      await _updateMamSupport(supported);
     }
   }
 
@@ -1784,10 +1778,7 @@ mixin MessageService
         if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event, metadata: metadata)) return;
         if (_isInternalSyncEnvelope(message.body)) {
-          fireAndForget(
-            () => _acknowledgeMessage(event),
-            operationName: 'MessageService.acknowledgeInternalEnvelope',
-          );
+          await _acknowledgeMessage(event);
           return;
         }
 
@@ -1803,10 +1794,7 @@ mixin MessageService
           return;
         }
 
-        fireAndForget(
-          () => _acknowledgeMessage(event),
-          operationName: 'MessageService.acknowledgeInboundMessage',
-        );
+        await _acknowledgeMessage(event);
 
         if (shouldPersistAttachment) {
           await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
@@ -1889,13 +1877,10 @@ mixin MessageService
           );
         }
         if (isDirectChat) {
-          fireAndForget(
-            () => _upsertConversationIndexForPeer(
-              peerJid: message.chatJid,
-              lastTimestamp: message.timestamp ?? DateTime.timestamp(),
-              lastId: message.originID ?? message.stanzaID,
-            ),
-            operationName: 'MessageService.upsertConversationIndexInbound',
+          await _upsertConversationIndexForPeer(
+            peerJid: message.chatJid,
+            lastTimestamp: message.timestamp ?? DateTime.timestamp(),
+            lastId: message.originID ?? message.stanzaID,
           );
         }
 
@@ -2418,8 +2403,10 @@ mixin MessageService
     final occupantCount = roomState?.occupants.length ?? 0;
     final statusCount = roomState?.selfPresenceStatusCodes.length ?? 0;
     final socketWrapper = _connection.socketWrapper;
-    final socketType = socketWrapper == null ? 'none' : socketWrapper.runtimeType;
-    final resource = boundResource?.trim();
+    final socketType = socketWrapper.runtimeType;
+    final resource = _connection.hasConnectionSettings
+        ? _connection.connectionSettings.jid.resource.trim()
+        : null;
     final resourcePresent = resource?.isNotEmpty == true;
     final connectionId = identityHashCode(_connection);
     _log.fine(
@@ -4484,10 +4471,16 @@ mixin MessageService
     final MessageError error = _resolveMessageError(stanzaError);
     final StanzaErrorConditionData? errorCondition =
         event.extensions.get<StanzaErrorConditionData>();
+    final bool hasBody =
+        event.extensions.get<mox.MessageBodyData>()?.body?.isNotEmpty ?? false;
+    final bool isChatStateOnlyError =
+        event.extensions.get<mox.ChatState>() != null && !hasBody;
 
-    await _dbOp<XmppDatabase>(
-      (db) => db.saveMessageError(stanzaID: stanzaId, error: error),
-    );
+    if (!isChatStateOnlyError) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveMessageError(stanzaID: stanzaId, error: error),
+      );
+    }
     final _OutboundMessageSummary? summary = _outboundMessageSummaries.remove(
       stanzaId,
     );
@@ -4506,7 +4499,8 @@ mixin MessageService
         )) {
       final String resolvedRoomJid = roomJid;
       _markRoomNeedsJoin(resolvedRoomJid);
-      if (_shouldClearMucPresenceForError(errorCondition)) {
+      if (!isChatStateOnlyError &&
+          _shouldClearMucPresenceForError(errorCondition)) {
         _markRoomLeft(
           resolvedRoomJid,
           statusCodes: _emptyStatusCodes,
@@ -4519,7 +4513,9 @@ mixin MessageService
       );
     }
     if (summary == null) {
-      _log.info(_outboundMessageRejectedMissingSummaryLog);
+      if (!isChatStateOnlyError) {
+        _log.info(_outboundMessageRejectedMissingSummaryLog);
+      }
       return true;
     }
     final String errorName = stanzaError == null

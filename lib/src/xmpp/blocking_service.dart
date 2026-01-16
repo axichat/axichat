@@ -20,6 +20,8 @@ const String _stanzaIdByAttr = 'by';
 const String _stanzaIdIdAttr = 'id';
 const String _blockingIqTypeSet = 'set';
 const String _blockingIqTypeResult = 'result';
+const String _blockingPresenceUpdateFailureLog =
+    'Failed to update presence for newly blocked contacts.';
 
 enum SpamReportReason { spam, abuse }
 
@@ -67,7 +69,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     _blocklistSubscription = blocklistStream().listen(_updateBlocklistCache);
   }
 
-  void _updateBlocklistCache(List<BlocklistData> items) {
+  Future<void> _updateBlocklistCache(List<BlocklistData> items) async {
     final previous = Set<String>.from(_blockedJids);
     final next = <String>{
       for (final entry in items)
@@ -81,8 +83,8 @@ mixin BlockingService on XmppBase, BaseStreamService {
     if (newlyBlocked.isEmpty) {
       return;
     }
-    fireAndForget(
-      () => _dbOp<XmppDatabase>((db) async {
+    try {
+      await _dbOp<XmppDatabase>((db) async {
         for (final jid in newlyBlocked) {
           await db.updatePresence(
             jid: jid,
@@ -90,9 +92,14 @@ mixin BlockingService on XmppBase, BaseStreamService {
             status: null,
           );
         }
-      }),
-      operationName: 'BlockingService.updatePresenceForNewBlocks',
-    );
+      });
+    } catch (error, stackTrace) {
+      _blockingLogger.warning(
+        _blockingPresenceUpdateFailureLog,
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future<bool> isJidBlocked(String jid) async {
