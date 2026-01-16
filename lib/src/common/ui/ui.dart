@@ -111,6 +111,7 @@ const calendarSlotHoverAnimationDuration = Duration(milliseconds: 200);
 const basePageItemLimit = 15;
 
 const axiGreen = Color(0xff80ffa0);
+const axiWarning = Color(0xFFFD7E14);
 
 class CalendarPalette {
   CalendarPalette._();

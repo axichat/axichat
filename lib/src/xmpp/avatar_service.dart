@@ -1199,7 +1199,7 @@ mixin AvatarService on XmppBase, MucService {
     const avatarMetadataInfoTag = 'info';
     const publishModelPublishers = 'publishers';
     const maxPublishedAvatarItems = '1';
-    const sendLastPublishedItemOnSubscribe = 'on_sub';
+    const sendLastPublishedItemOnSubscribe = 'on_subscribe';
     const sendLastPublishedItemNever = 'never';
     const publishNotRetrievableMessage =
         'Avatar publish succeeded but is not retrievable';

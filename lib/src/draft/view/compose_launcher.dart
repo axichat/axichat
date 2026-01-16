@@ -18,7 +18,14 @@ void openComposeDraft(
   String subject = '',
   List<String> attachmentMetadataIds = const <String>[],
 }) {
-  if (resolveCommandSurface(context) != CommandSurface.sheet) {
+  final env = EnvScope.maybeOf(context);
+  final platform = Theme.of(context).platform;
+  final bool isDesktopPlatform = env?.isDesktopPlatform ??
+      (platform == TargetPlatform.macOS ||
+          platform == TargetPlatform.linux ||
+          platform == TargetPlatform.windows);
+  if (isDesktopPlatform ||
+      resolveCommandSurface(context) != CommandSurface.sheet) {
     context.read<ComposeWindowCubit>().openDraft(
           id: id,
           jids: jids,

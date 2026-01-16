@@ -118,16 +118,20 @@ class AppBarActions extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (var index = 0; index < actions.length; index++) ...[
-              actions[index].inline ??
-                  AxiIconButton.ghost(
-                    iconData: actions[index].iconData,
-                    icon: actions[index].icon,
-                    tooltip: actions[index].tooltip ?? actions[index].label,
-                    onPressed: actions[index].enabled
-                        ? actions[index].onPressed
-                        : null,
-                    usePrimary: actions[index].usePrimary,
-                  ),
+              KeyedSubtree(
+                key: ValueKey<String>(
+                    'app-bar-action-${actions[index].iconData}'),
+                child: actions[index].inline ??
+                    AxiIconButton.ghost(
+                      iconData: actions[index].iconData,
+                      icon: actions[index].icon,
+                      tooltip: actions[index].tooltip ?? actions[index].label,
+                      onPressed: actions[index].enabled
+                          ? actions[index].onPressed
+                          : null,
+                      usePrimary: actions[index].usePrimary,
+                    ),
+              ),
               if (index < actions.length - 1) SizedBox(width: spacing),
             ],
           ],
