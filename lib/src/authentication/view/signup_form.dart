@@ -18,7 +18,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -159,8 +158,7 @@ class _SignupFormState extends State<SignupForm>
         _lastBreachedPassword = null;
       }
     }
-    if ((_insecurePasswordReason == null || kReleaseMode) &&
-        allowInsecurePassword) {
+    if (_insecurePasswordReason == null && allowInsecurePassword) {
       allowInsecurePassword = false;
       _allowInsecureResetTick++;
     }
@@ -429,10 +427,9 @@ class _SignupFormState extends State<SignupForm>
 
   Future<void> _advanceFromPasswordStep(BuildContext context) async {
     final password = _passwordTextController.text;
-    final bool allowInsecureOverride = allowInsecurePassword && !kReleaseMode;
     if ((_passwordStrengthLevel == _PasswordStrengthLevel.weak ||
             _passwordBreached) &&
-        !allowInsecureOverride) {
+        !allowInsecurePassword) {
       if (!mounted) return;
       setState(() {
         _showAllowInsecureError = true;
@@ -441,7 +438,7 @@ class _SignupFormState extends State<SignupForm>
       return;
     }
 
-    if (allowInsecureOverride) {
+    if (allowInsecurePassword) {
       _goToNextSignupStep();
       return;
     }
@@ -501,7 +498,6 @@ class _SignupFormState extends State<SignupForm>
       },
       builder: (context, state) {
         final l10n = context.l10n;
-        const bool allowInsecureOverrideEnabled = !kReleaseMode;
         return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
           builder: (context, avatarState) {
             final avatarErrorText = _avatarErrorText(avatarState, l10n);
@@ -819,10 +815,7 @@ class _SignupFormState extends State<SignupForm>
                                     child: _SignupInsecurePasswordNotice(
                                       reason: _visibleInsecurePasswordReason,
                                       allowInsecurePassword:
-                                          allowInsecurePassword &&
-                                              allowInsecureOverrideEnabled,
-                                      overrideEnabled:
-                                          allowInsecureOverrideEnabled,
+                                          allowInsecurePassword,
                                       loading: loading,
                                       pwnedCheckInProgress:
                                           _pwnedCheckInProgress,
@@ -1776,7 +1769,6 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
   const _SignupInsecurePasswordNotice({
     required this.reason,
     required this.allowInsecurePassword,
-    required this.overrideEnabled,
     required this.loading,
     required this.pwnedCheckInProgress,
     required this.showAllowInsecureError,
@@ -1787,7 +1779,6 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
 
   final _InsecurePasswordReason? reason;
   final bool allowInsecurePassword;
-  final bool overrideEnabled;
   final bool loading;
   final bool pwnedCheckInProgress;
   final bool showAllowInsecureError;
@@ -1810,7 +1801,7 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
               children: [
                 AxiCheckboxFormField(
                   key: ValueKey('${reason!.name}-$resetTick'),
-                  enabled: overrideEnabled && !loading && !pwnedCheckInProgress,
+                  enabled: !loading && !pwnedCheckInProgress,
                   initialValue: allowInsecurePassword,
                   inputLabel: Text(l10n.signupRiskAcknowledgement),
                   inputSublabel: Text(_reasonDescription(reason!, l10n)),
