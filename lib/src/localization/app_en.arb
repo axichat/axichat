@@ -837,6 +837,8 @@
   "authCustomServerSmtpHostPlaceholder": "SMTP host (optional)",
   "authCustomServerImapHostPlaceholder": "IMAP host (optional)",
   "authCustomServerApiPortPlaceholder": "API port",
+  "authCustomServerEmailProvisioningUrlPlaceholder": "Email provisioning URL (optional)",
+  "authCustomServerEmailPublicTokenPlaceholder": "Email public token (optional)",
   "authCustomServerReset": "Reset to axi.im",
   "authCustomServerOpenSettings": "Open custom server settings",
   "authCustomServerAdvancedHint": "Advanced server options stay hidden until you tap the username suffix.",

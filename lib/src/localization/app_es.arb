@@ -760,6 +760,8 @@
   "authCustomServerSmtpHostPlaceholder": "Host SMTP (opcional)",
   "authCustomServerImapHostPlaceholder": "Host IMAP (opcional)",
   "authCustomServerApiPortPlaceholder": "Puerto API",
+  "authCustomServerEmailProvisioningUrlPlaceholder": "URL de aprovisionamiento de correo (opcional)",
+  "authCustomServerEmailPublicTokenPlaceholder": "Token público de correo (opcional)",
   "authCustomServerReset": "Restablecer a axi.im",
   "authCustomServerOpenSettings": "Abrir ajustes de servidor personalizado",
   "authCustomServerAdvancedHint": "Las opciones avanzadas del servidor se mantienen ocultas hasta que toques el sufijo de usuario.",
