@@ -2009,5 +2009,485 @@
   "calendarAvailabilityRequestTitleFallback": "請求的時間",
   "calendarFreeBusyFree": "空閒",
   "calendarFreeBusyBusy": "忙碌",
-  "calendarFreeBusyTentative": "暫定"
+  "calendarFreeBusyTentative": "暫定",
+  "calendarFreeBusyEditTitle": "編輯可用性",
+  "calendarFreeBusyEditSubtitle": "調整時間範圍和狀態。",
+  "calendarFreeBusyToggleLabel": "空閒/忙碌",
+  "calendarFreeBusySplitLabel": "拆分",
+  "calendarFreeBusySplitTooltip": "拆分片段",
+  "calendarFreeBusyMarkFree": "標記為空閒",
+  "calendarFreeBusyMarkBusy": "標記為忙碌",
+  "calendarFreeBusyRangeLabel": "範圍",
+  "commonWeekdayDayLabel": "{weekday} {day}",
+  "@commonWeekdayDayLabel": {
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      },
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarFragmentChecklistLabel": "清單",
+  "calendarFragmentChecklistSeparator": ", ",
+  "calendarFragmentChecklistSummary": "清單: {summary}",
+  "@calendarFragmentChecklistSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentChecklistSummaryMore": "清單: {summary}，以及另外 {count} 個",
+  "@calendarFragmentChecklistSummaryMore": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarFragmentRemindersLabel": "提醒",
+  "calendarFragmentReminderStartSummary": "開始: {summary}",
+  "@calendarFragmentReminderStartSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentReminderDeadlineSummary": "截止: {summary}",
+  "@calendarFragmentReminderDeadlineSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentRemindersSummary": "提醒: {summary}",
+  "@calendarFragmentRemindersSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentReminderSeparator": ", ",
+  "calendarFragmentEventTitleFallback": "未命名事件",
+  "calendarFragmentDayEventSummary": "{title} (日間事件: {range})",
+  "@calendarFragmentDayEventSummary": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentFreeBusySummary": "{label} (視窗: {range})",
+  "@calendarFragmentFreeBusySummary": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentCriticalPathLabel": "關鍵路徑",
+  "calendarFragmentCriticalPathSummary": "關鍵路徑: {name}",
+  "@calendarFragmentCriticalPathSummary": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentCriticalPathProgress": "{completed}/{total} 已完成",
+  "@calendarFragmentCriticalPathProgress": {
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarFragmentCriticalPathDetail": "{name} (關鍵路徑: {progress})",
+  "@calendarFragmentCriticalPathDetail": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "progress": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentAvailabilitySummary": "{summary} (可用性: {range})",
+  "@calendarFragmentAvailabilitySummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      },
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentAvailabilityFallback": "可用性: {range}",
+  "@calendarFragmentAvailabilityFallback": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarMonthOverflowMore": "+{count} 更多",
+  "@calendarMonthOverflowMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonPercentLabel": "{value}%",
+  "@commonPercentLabel": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "commonStart": "開始",
+  "commonEnd": "結束",
+  "commonSelectStart": "選擇開始",
+  "commonSelectEnd": "選擇結束",
+  "commonTimeLabel": "時間",
+  "commonListSeparator": "，",
+  "commonClauseSeparator": "；",
+  "commonSentenceSeparator": "。",
+  "commonSentenceTerminator": "。",
+  "commonListAnd": "{head}和{tail}",
+  "@commonListAnd": {
+    "placeholders": {
+      "head": {
+        "type": "String"
+      },
+      "tail": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAlarmsTitle": "鬧鐘",
+  "calendarAlarmsHelper": "提醒會匯出為顯示鬧鐘。",
+  "calendarAlarmsEmpty": "暫時沒有鬧鐘",
+  "calendarAlarmAddTooltip": "新增鬧鐘",
+  "calendarAlarmRemoveTooltip": "移除鬧鐘",
+  "calendarAlarmItemLabel": "鬧鐘 {index}",
+  "@calendarAlarmItemLabel": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarAlarmActionLabel": "動作",
+  "calendarAlarmActionDisplay": "顯示",
+  "calendarAlarmActionAudio": "音訊",
+  "calendarAlarmActionEmail": "電郵",
+  "calendarAlarmActionProcedure": "程序",
+  "calendarAlarmActionProcedureHelper": "程序鬧鐘會以唯讀方式匯入。",
+  "calendarAlarmTriggerLabel": "觸發",
+  "calendarAlarmTriggerRelative": "相對",
+  "calendarAlarmTriggerAbsolute": "絕對",
+  "calendarAlarmAbsolutePlaceholder": "選擇日期和時間",
+  "calendarAlarmRelativeToLabel": "相對於",
+  "calendarAlarmRelativeToStart": "開始",
+  "calendarAlarmRelativeToEnd": "結束",
+  "calendarAlarmDirectionLabel": "方向",
+  "calendarAlarmDirectionBefore": "之前",
+  "calendarAlarmDirectionAfter": "之後",
+  "calendarAlarmOffsetLabel": "偏移",
+  "calendarAlarmOffsetHint": "數量",
+  "calendarAlarmRepeatLabel": "重複",
+  "calendarAlarmRepeatCountHint": "次數",
+  "calendarAlarmRepeatEveryLabel": "每",
+  "calendarAlarmRecipientsLabel": "收件人",
+  "calendarAlarmRecipientAddressHint": "新增電郵",
+  "calendarAlarmRecipientNameHint": "名稱（可選）",
+  "calendarAlarmRecipientRemoveTooltip": "移除收件人",
+  "calendarAlarmRecipientDisplay": "{name} <{address}>",
+  "@calendarAlarmRecipientDisplay": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAlarmAcknowledgedLabel": "已確認",
+  "calendarAlarmUnitMinutes": "分鐘",
+  "calendarAlarmUnitHours": "小時",
+  "calendarAlarmUnitDays": "天",
+  "calendarAlarmUnitWeeks": "週",
+  "taskShareTitleFallback": "未命名任務",
+  "taskShareTitleLabel": "任務 \"{title}\"",
+  "@taskShareTitleLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareTitleWithQualifiers": "任務 \"{title}\"（{qualifiers}）",
+  "@taskShareTitleWithQualifiers": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "qualifiers": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareQualifierDone": "完成",
+  "taskSharePriorityImportant": "重要",
+  "taskSharePriorityUrgent": "緊急",
+  "taskSharePriorityCritical": "關鍵",
+  "taskShareLocationClause": " 在{location}",
+  "@taskShareLocationClause": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleNoTime": " 無固定時間",
+  "taskShareScheduleSameDay": " 於{date} {startTime}到{endTime}",
+  "@taskShareScheduleSameDay": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "startTime": {
+        "type": "String"
+      },
+      "endTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleRange": " 從{startDateTime}到{endDateTime}",
+  "@taskShareScheduleRange": {
+    "placeholders": {
+      "startDateTime": {
+        "type": "String"
+      },
+      "endDateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleStartDuration": " 於{date} {time}，持續{duration}",
+  "@taskShareScheduleStartDuration": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleStart": " 於{date} {time}",
+  "@taskShareScheduleStart": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleEnding": " 結束於{dateTime}",
+  "@taskShareScheduleEnding": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryOtherDay": " 每隔一天",
+  "taskShareRecurrenceEveryDays": " 每{count, plural, one{天} other{{count}天}}",
+  "@taskShareRecurrenceEveryDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryWeekdays": " 每{count, plural, one{個工作日} other{{count}個工作日}}",
+  "@taskShareRecurrenceEveryWeekdays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryWeeks": " 每{count, plural, one{週} other{{count}週}}",
+  "@taskShareRecurrenceEveryWeeks": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryMonths": " 每{count, plural, one{個月} other{{count}個月}}",
+  "@taskShareRecurrenceEveryMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryOtherYear": " 每隔一年",
+  "taskShareRecurrenceEveryYears": " 每{count, plural, one{年} other{{count}年}}",
+  "@taskShareRecurrenceEveryYears": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceOnDays": " 在{days}",
+  "@taskShareRecurrenceOnDays": {
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareRecurrenceUntil": " 直到{date}",
+  "@taskShareRecurrenceUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareRecurrenceCount": " 共{count}次",
+  "@taskShareRecurrenceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareDeadlineClause": "，截止到{dateTime}",
+  "@taskShareDeadlineClause": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareNotesClause": " 備註：{notes}。",
+  "@taskShareNotesClause": {
+    "placeholders": {
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareChangesClause": " 變更：{changes}",
+  "@taskShareChangesClause": {
+    "placeholders": {
+      "changes": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideMoveTo": "移到{dateTime}",
+  "@taskShareOverrideMoveTo": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideDuration": "持續{duration}",
+  "@taskShareOverrideDuration": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideEndAt": "結束於{dateTime}",
+  "@taskShareOverrideEndAt": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverridePriority": "優先級{priority}",
+  "@taskShareOverridePriority": {
+    "placeholders": {
+      "priority": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideCancelled": "已取消",
+  "taskShareOverrideDone": "完成",
+  "taskShareOverrideRenameTo": "重新命名為\"{title}\"",
+  "@taskShareOverrideRenameTo": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideNotes": "備註\"{notes}\"",
+  "@taskShareOverrideNotes": {
+    "placeholders": {
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideLocation": "位置\"{location}\"",
+  "@taskShareOverrideLocation": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideNoChanges": "無變更",
+  "taskShareOverrideSegment": "在{dateTime}：{actions}",
+  "@taskShareOverrideSegment": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      },
+      "actions": {
+        "type": "String"
+      }
+    }
+  }
 }

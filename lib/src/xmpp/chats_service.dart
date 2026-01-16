@@ -35,6 +35,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       'ChatsService.syncConversationIndexOnLogin';
   static const String _ensureJoinedForChatStateOperationName =
       'ChatsService.ensureJoinedForChatState';
+  static const String _mucChatStatePlaceholderBody = '';
+  static const List<mox.MessageProcessingHint> _mucChatStateProcessingHints = [
+    mox.MessageProcessingHint.noStore,
+  ];
   static const String _publishOpenChatOperationName =
       'ChatsService.publishConversationIndexForOpenChat';
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
@@ -435,6 +439,37 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   List<mox.XmppManagerBase> get featureManagers =>
       super.featureManagers..addAll([mox.ChatStateManager()]);
 
+  Future<void> _sendMucChatStateWithNoStore({
+    required String roomJid,
+    required mox.ChatState state,
+    required String messageType,
+  }) async {
+    if (_connection.getManager<mox.MessageManager>() case final mm?) {
+      late final mox.JID to;
+      try {
+        to = mox.JID.fromString(roomJid).toBare();
+      } on Exception {
+        return;
+      }
+      await mm.sendMessage(
+        to,
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          state,
+          const mox.MessageBodyData(_mucChatStatePlaceholderBody),
+          const mox.MessageProcessingHintData(_mucChatStateProcessingHints),
+        ]),
+        type: messageType,
+      );
+      return;
+    }
+
+    await _connection.sendChatState(
+      state: state,
+      jid: roomJid,
+      messageType: messageType,
+    );
+  }
+
   Future<void> sendChatState({
     required String jid,
     required mox.ChatState state,
@@ -443,11 +478,14 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       _chatLog.fine('Skipping chat state for foreign domain: $jid');
       return;
     }
+    final messageType = _chatStateMessageType(jid);
     final isMuc = _isMucChatJid(jid);
+    String? mucRoomJid;
     if (isMuc) {
       if (connectionState != ConnectionState.connected) return;
       final roomJid = _safeBareJid(jid);
       if (roomJid == null) return;
+      mucRoomJid = roomJid;
       final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
       if (!hasPresence) {
         fireAndForget(
@@ -459,7 +497,14 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         return;
       }
     }
-    final messageType = _chatStateMessageType(jid);
+    if (isMuc && messageType == 'groupchat' && mucRoomJid != null) {
+      await _sendMucChatStateWithNoStore(
+        roomJid: mucRoomJid,
+        state: state,
+        messageType: messageType,
+      );
+      return;
+    }
     await _connection.sendChatState(
       state: state,
       jid: jid,

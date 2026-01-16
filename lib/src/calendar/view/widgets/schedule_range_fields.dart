@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'deadline_picker_field.dart';
 
 /// Displays paired date/time inputs for start and end selections, matching the
@@ -15,10 +16,10 @@ class ScheduleRangeFields extends StatelessWidget {
     required this.end,
     required this.onStartChanged,
     required this.onEndChanged,
-    this.startLabel = 'START',
-    this.endLabel = 'END',
-    this.startPlaceholder = 'Select start',
-    this.endPlaceholder = 'Select end',
+    this.startLabel,
+    this.endLabel,
+    this.startPlaceholder,
+    this.endPlaceholder,
     this.showTimeSelectors = true,
     this.minDate,
     this.maxDate,
@@ -29,10 +30,10 @@ class ScheduleRangeFields extends StatelessWidget {
   final DateTime? end;
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
-  final String startLabel;
-  final String endLabel;
-  final String startPlaceholder;
-  final String endPlaceholder;
+  final String? startLabel;
+  final String? endLabel;
+  final String? startPlaceholder;
+  final String? endPlaceholder;
   final bool showTimeSelectors;
   final DateTime? minDate;
   final DateTime? maxDate;
@@ -42,10 +43,17 @@ class ScheduleRangeFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final l10n = context.l10n;
+        final String resolvedStartLabel = startLabel ?? l10n.commonStart;
+        final String resolvedEndLabel = endLabel ?? l10n.commonEnd;
+        final String resolvedStartPlaceholder =
+            startPlaceholder ?? l10n.commonSelectStart;
+        final String resolvedEndPlaceholder =
+            endPlaceholder ?? l10n.commonSelectEnd;
         final bool shouldStack = constraints.maxWidth < 420;
         final Widget startField = _ScheduleField(
-          label: startLabel,
-          placeholder: startPlaceholder,
+          label: resolvedStartLabel,
+          placeholder: resolvedStartPlaceholder,
           value: start,
           onChanged: onStartChanged,
           showTimeSelectors: showTimeSelectors,
@@ -54,8 +62,8 @@ class ScheduleRangeFields extends StatelessWidget {
           enabled: enabled,
         );
         final Widget endField = _ScheduleField(
-          label: endLabel,
-          placeholder: endPlaceholder,
+          label: resolvedEndLabel,
+          placeholder: resolvedEndPlaceholder,
           value: end,
           onChanged: onEndChanged,
           showTimeSelectors: showTimeSelectors,

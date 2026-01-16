@@ -1,6 +1,7 @@
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/localization/app_localizations_en.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -14,8 +15,10 @@ void main() {
         description: 'Discuss roadmap',
       );
 
-      final String baseline = TaskShareFormatter.describe(task);
+      final AppLocalizationsEn l10n = AppLocalizationsEn();
+      final String baseline = TaskShareFormatter.describe(l10n, task);
       final String withReminders = TaskShareFormatter.describe(
+        l10n,
         task.copyWith(
           reminders: const ReminderPreferences(
             enabled: true,
@@ -51,15 +54,19 @@ void main() {
             ),
           );
 
+      final AppLocalizationsEn l10n = AppLocalizationsEn();
       final String yearlyText = TaskShareFormatter.describe(
+        l10n,
         makeTask(yearlyInterval),
         now: reference,
       );
       final String everyOtherYearText = TaskShareFormatter.describe(
+        l10n,
         makeTask(everyOtherYearInterval),
         now: reference,
       );
       final String everyThreeYearsText = TaskShareFormatter.describe(
+        l10n,
         makeTask(everyThreeYearsInterval),
         now: reference,
       );

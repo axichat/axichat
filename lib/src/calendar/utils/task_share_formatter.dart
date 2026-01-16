@@ -10,12 +10,6 @@ import 'nl_schedule_adapter.dart';
 import 'schedule_parser.dart';
 import 'time_formatter.dart';
 
-const String _recurrenceEveryYearLabel = 'every year';
-const String _recurrenceEveryOtherYearLabel = 'every other year';
-const String _recurrenceYearsLabel = 'years';
-const String _recurrenceEveryYearsPattern = r'every\s+(\d+)\s+years';
-const int _recurrenceEveryOtherYearInterval = 2;
-
 class TaskShareFormatter {
   const TaskShareFormatter._();
 
@@ -25,90 +19,119 @@ class TaskShareFormatter {
     DateTime? now,
   }) {
     final DateTime reference = now ?? DateTime.now();
-    final title =
-        task.title.trim().isEmpty ? 'Untitled task' : task.title.trim();
+    final title = task.title.trim().isEmpty
+        ? l10n.taskShareTitleFallback
+        : task.title.trim();
     final qualifiers = <String>[];
-    final String? priority = _priorityWord(task.effectivePriority);
+    final String? priority = _priorityWord(task.effectivePriority, l10n);
     if (task.isCompleted) {
-      qualifiers.add('done');
+      qualifiers.add(l10n.taskShareQualifierDone);
     }
     if (priority != null) {
       qualifiers.add(priority);
     }
 
-    final buffer = StringBuffer('Task "$title"');
-    if (qualifiers.isNotEmpty) {
-      buffer.write(' (${qualifiers.join(', ')})');
-    }
+    final String qualifierLabel = qualifiers.join(l10n.commonListSeparator);
+    final buffer = StringBuffer(
+      qualifiers.isEmpty
+          ? l10n.taskShareTitleLabel(title)
+          : l10n.taskShareTitleWithQualifiers(title, qualifierLabel),
+    );
 
     if (task.location?.trim().isNotEmpty == true) {
-      buffer.write(' at ${_clean(task.location!)}');
+      buffer.write(l10n.taskShareLocationClause(_clean(task.location!)));
     }
 
-    final String? schedule = _scheduleClause(task, reference);
+    final String? schedule = _scheduleClause(l10n, task, reference);
     if (schedule != null && schedule.isNotEmpty) {
-      buffer.write(' $schedule');
+      buffer.write(schedule);
     }
 
     final String? recurrence = _recurrenceClause(
+      l10n,
       task.effectiveRecurrence,
       reference,
     );
     if (recurrence != null && recurrence.isNotEmpty) {
-      buffer.write(' $recurrence');
+      buffer.write(recurrence);
     }
 
     if (task.deadline != null) {
-      buffer.write(', due by ${_formatDateTime(task.deadline!, reference)}');
+      buffer.write(
+        l10n.taskShareDeadlineClause(
+          _formatDateTime(l10n, task.deadline!, reference),
+        ),
+      );
     }
 
-    buffer.write('.');
+    buffer.write(l10n.commonSentenceTerminator);
 
     if (task.description?.trim().isNotEmpty == true) {
-      buffer.write(' Notes: ${_clean(task.description!)}.');
+      buffer.write(l10n.taskShareNotesClause(_clean(task.description!)));
     }
 
-    final String? overrides = _overridesDescription(task, reference);
+    final String? overrides = _overridesDescription(l10n, task, reference);
     if (overrides != null && overrides.isNotEmpty) {
-      buffer.write(' Changes: $overrides');
+      buffer.write(l10n.taskShareChangesClause(overrides));
     }
 
     return buffer.toString().trim();
   }
 
-  static String? _scheduleClause(CalendarTask task, DateTime reference) {
+  static String? _scheduleClause(
+    AppLocalizations l10n,
+    CalendarTask task,
+    DateTime reference,
+  ) {
     final DateTime? start = task.scheduledTime;
     final DateTime? end = task.displayEnd;
     final Duration? span = task.effectiveDuration;
 
     if (start == null && end == null && !task.hasDeadline) {
-      return 'with no set time';
+      return l10n.taskShareScheduleNoTime;
     }
 
     if (start != null && end != null && !end.isAtSameMomentAs(start)) {
       if (_isSameDay(start, end)) {
         final String dateLabel = _formatDate(start, reference);
-        return 'on $dateLabel from ${TimeFormatter.formatTime(start)} to ${TimeFormatter.formatTime(end)}';
+        return l10n.taskShareScheduleSameDay(
+          dateLabel,
+          TimeFormatter.formatTime(start),
+          TimeFormatter.formatTime(end),
+        );
       }
-      return 'from ${_formatDateTime(start, reference)} to ${_formatDateTime(end, reference)}';
+      return l10n.taskShareScheduleRange(
+        _formatDateTime(l10n, start, reference),
+        _formatDateTime(l10n, end, reference),
+      );
     }
 
     if (start != null && span != null) {
-      return 'on ${_formatDate(start, reference)} at ${TimeFormatter.formatTime(start)} for ${TimeFormatter.formatDuration(l10n, span)}';
+      return l10n.taskShareScheduleStartDuration(
+        _formatDate(start, reference),
+        TimeFormatter.formatTime(start),
+        TimeFormatter.formatDuration(l10n, span),
+      );
     }
 
     if (start != null) {
-      return 'on ${_formatDate(start, reference)} at ${TimeFormatter.formatTime(start)}';
+      return l10n.taskShareScheduleStart(
+        _formatDate(start, reference),
+        TimeFormatter.formatTime(start),
+      );
     }
 
     if (end != null) {
-      return 'ending ${_formatDateTime(end, reference)}';
+      return l10n.taskShareScheduleEnding(
+        _formatDateTime(l10n, end, reference),
+      );
     }
 
     return null;
   }
 
   static String? _recurrenceClause(
+    AppLocalizations l10n,
     RecurrenceRule recurrence,
     DateTime reference,
   ) {
@@ -121,61 +144,64 @@ class TaskShareFormatter {
       case RecurrenceFrequency.daily:
         parts.add(
           recurrence.interval == 2
-              ? 'every other day'
-              : 'every ${recurrence.interval > 1 ? '${recurrence.interval} days' : 'day'}',
+              ? l10n.taskShareRecurrenceEveryOtherDay
+              : l10n.taskShareRecurrenceEveryDays(recurrence.interval),
         );
         break;
       case RecurrenceFrequency.weekdays:
-        parts.add(
-          recurrence.interval > 1
-              ? 'every ${recurrence.interval} weekdays'
-              : 'every weekday',
-        );
+        parts.add(l10n.taskShareRecurrenceEveryWeekdays(recurrence.interval));
         break;
       case RecurrenceFrequency.weekly:
         final List<String> weekdayLabels = recurrence.byWeekdays
-                ?.map(_weekdayLabel)
+                ?.map((value) => _weekdayLabel(l10n, value))
                 .whereType<String>()
                 .toList() ??
             const [];
-        final String dayPortion =
-            weekdayLabels.isEmpty ? '' : ' on ${_joinWithAnd(weekdayLabels)}';
+        final String dayPortion = weekdayLabels.isEmpty
+            ? ''
+            : l10n.taskShareRecurrenceOnDays(
+                _joinWithAnd(l10n, weekdayLabels),
+              );
         final String cadence =
-            recurrence.interval > 1 ? '${recurrence.interval} weeks' : 'week';
-        parts.add('every $cadence$dayPortion');
+            l10n.taskShareRecurrenceEveryWeeks(recurrence.interval);
+        parts.add('$cadence$dayPortion');
         break;
       case RecurrenceFrequency.monthly:
         parts.add(
-          recurrence.interval > 1
-              ? 'every ${recurrence.interval} months'
-              : 'every month',
+          l10n.taskShareRecurrenceEveryMonths(recurrence.interval),
         );
         break;
       case RecurrenceFrequency.yearly:
-        if (recurrence.interval == _recurrenceEveryOtherYearInterval) {
-          parts.add(_recurrenceEveryOtherYearLabel);
-        } else if (recurrence.interval > 1) {
-          parts.add('every ${recurrence.interval} $_recurrenceYearsLabel');
-        } else {
-          parts.add(_recurrenceEveryYearLabel);
-        }
+        parts.add(
+          recurrence.interval == 2
+              ? l10n.taskShareRecurrenceEveryOtherYear
+              : l10n.taskShareRecurrenceEveryYears(recurrence.interval),
+        );
         break;
       case RecurrenceFrequency.none:
         return null;
     }
 
     if (recurrence.until != null) {
-      parts.add('until ${_formatDate(recurrence.until!, reference)}');
+      parts.add(
+        l10n.taskShareRecurrenceUntil(
+          _formatDate(recurrence.until!, reference),
+        ),
+      );
     }
 
     if (recurrence.count != null) {
-      parts.add('for ${recurrence.count} occurrences');
+      parts.add(l10n.taskShareRecurrenceCount(recurrence.count!));
     }
 
-    return parts.join(' ');
+    return parts.join();
   }
 
-  static String? _overridesDescription(CalendarTask task, DateTime reference) {
+  static String? _overridesDescription(
+    AppLocalizations l10n,
+    CalendarTask task,
+    DateTime reference,
+  ) {
     if (task.occurrenceOverrides.isEmpty) {
       return null;
     }
@@ -205,43 +231,61 @@ class TaskShareFormatter {
 
       if (override.scheduledTime != null) {
         actions.add(
-          'move to ${_formatDateTime(override.scheduledTime!, reference)}',
+          l10n.taskShareOverrideMoveTo(
+            _formatDateTime(l10n, override.scheduledTime!, reference),
+          ),
         );
       }
       if (override.duration != null) {
         actions.add(
-          'for ${TimeFormatter.formatDuration(l10n, override.duration!)}',
+          l10n.taskShareOverrideDuration(
+            TimeFormatter.formatDuration(l10n, override.duration!),
+          ),
         );
       }
       if (override.endDate != null) {
-        actions.add('end at ${_formatDateTime(override.endDate!, reference)}');
+        actions.add(
+          l10n.taskShareOverrideEndAt(
+            _formatDateTime(l10n, override.endDate!, reference),
+          ),
+        );
       }
       if (override.priority != null) {
-        final String? label = _priorityWord(override.priority!);
+        final String? label = _priorityWord(override.priority!, l10n);
         if (label != null) {
-          actions.add('priority $label');
+          actions.add(l10n.taskShareOverridePriority(label));
         }
       }
       if (override.isCancelled == true) {
-        actions.add('cancelled');
+        actions.add(l10n.taskShareOverrideCancelled);
       }
       if (override.isCompleted == true) {
-        actions.add('done');
+        actions.add(l10n.taskShareOverrideDone);
       }
       if (override.title?.trim().isNotEmpty == true) {
-        actions.add('rename to "${_clean(override.title!)}"');
+        actions.add(
+          l10n.taskShareOverrideRenameTo(_clean(override.title!)),
+        );
       }
       if (override.description?.trim().isNotEmpty == true) {
-        actions.add('notes "${_clean(override.description!)}"');
+        actions.add(
+          l10n.taskShareOverrideNotes(_clean(override.description!)),
+        );
       }
       if (override.location?.trim().isNotEmpty == true) {
-        actions.add('location "${_clean(override.location!)}"');
+        actions.add(
+          l10n.taskShareOverrideLocation(_clean(override.location!)),
+        );
       }
 
-      final String actionsText =
-          actions.isEmpty ? 'no changes' : actions.join('; ');
+      final String actionsText = actions.isEmpty
+          ? l10n.taskShareOverrideNoChanges
+          : actions.join(l10n.commonClauseSeparator);
       segments.add(
-        'On ${_formatDateTime(occurrenceStart, reference)}: $actionsText',
+        l10n.taskShareOverrideSegment(
+          _formatDateTime(l10n, occurrenceStart, reference),
+          actionsText,
+        ),
       );
     }
 
@@ -249,24 +293,33 @@ class TaskShareFormatter {
       return null;
     }
 
-    return '${segments.join('. ')}.';
+    final String summary =
+        segments.join(l10n.commonSentenceSeparator).trimRight();
+    return summary + l10n.commonSentenceTerminator;
   }
 
-  static String? _priorityWord(TaskPriority priority) {
+  static String? _priorityWord(TaskPriority priority, AppLocalizations l10n) {
     switch (priority) {
       case TaskPriority.none:
         return null;
       case TaskPriority.important:
-        return 'important';
+        return l10n.taskSharePriorityImportant;
       case TaskPriority.urgent:
-        return 'urgent';
+        return l10n.taskSharePriorityUrgent;
       case TaskPriority.critical:
-        return 'critical';
+        return l10n.taskSharePriorityCritical;
     }
   }
 
-  static String _formatDateTime(DateTime dt, DateTime reference) =>
-      '${_formatDate(dt, reference)} at ${TimeFormatter.formatTime(dt)}';
+  static String _formatDateTime(
+    AppLocalizations l10n,
+    DateTime dt,
+    DateTime reference,
+  ) =>
+      l10n.commonDateTimeLabel(
+        _formatDate(dt, reference),
+        TimeFormatter.formatTime(dt),
+      );
 
   static String _formatDate(DateTime dt, DateTime reference) =>
       dt.year == reference.year
@@ -276,24 +329,13 @@ class TaskShareFormatter {
   static String _clean(String input) =>
       input.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-  static String? _weekdayLabel(int value) {
-    switch (value) {
-      case DateTime.monday:
-        return 'Monday';
-      case DateTime.tuesday:
-        return 'Tuesday';
-      case DateTime.wednesday:
-        return 'Wednesday';
-      case DateTime.thursday:
-        return 'Thursday';
-      case DateTime.friday:
-        return 'Friday';
-      case DateTime.saturday:
-        return 'Saturday';
-      case DateTime.sunday:
-        return 'Sunday';
+  static String? _weekdayLabel(AppLocalizations l10n, int value) {
+    if (value < DateTime.monday || value > DateTime.sunday) {
+      return null;
     }
-    return null;
+    final DateTime base = DateTime.utc(2024, 1, 1);
+    final DateTime target = base.add(Duration(days: value - DateTime.monday));
+    return DateFormat.EEEE(l10n.localeName).format(target);
   }
 
   static DateTime? _dateFromOccurrenceKey(String key) {
@@ -304,13 +346,14 @@ class TaskShareFormatter {
     return DateTime.fromMicrosecondsSinceEpoch(micros, isUtc: true);
   }
 
-  static String _joinWithAnd(List<String> items) {
+  static String _joinWithAnd(AppLocalizations l10n, List<String> items) {
     if (items.length <= 1) {
       return items.join();
     }
-    final String head = items.sublist(0, items.length - 1).join(', ');
+    final String head =
+        items.sublist(0, items.length - 1).join(l10n.commonListSeparator);
     final String tail = items.last;
-    return '$head and $tail';
+    return l10n.commonListAnd(head, tail);
   }
 
   static bool _isSameDay(DateTime a, DateTime b) =>
@@ -330,7 +373,7 @@ class TaskShareDecoder {
       return null;
     }
 
-    final String extractedTitle = match.group(1)?.trim() ?? 'Untitled task';
+    final String extractedTitle = match.group(1)?.trim() ?? '';
     final _ShareSections sections = _splitSections(input);
 
     final ScheduleParser parser = adapter.buildParser(context);
@@ -742,8 +785,12 @@ class TaskShareDecoder {
     String baseText,
     ParseContext context,
   ) {
+    const String recurrenceEveryYearLabel = 'every year';
+    const String recurrenceEveryOtherYearLabel = 'every other year';
+    const String recurrenceEveryYearsPattern = r'every\s+(\d+)\s+years';
+    const int recurrenceEveryOtherYearInterval = 2;
     final String lower = baseText.toLowerCase();
-    final RegExp everyYearsPattern = RegExp(_recurrenceEveryYearsPattern);
+    final RegExp everyYearsPattern = RegExp(recurrenceEveryYearsPattern);
     int interval = 1;
     RecurrenceFrequency frequency = RecurrenceFrequency.none;
     List<int>? weekdays;
@@ -814,16 +861,16 @@ class TaskShareDecoder {
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
-    } else if (lower.contains(_recurrenceEveryOtherYearLabel)) {
+    } else if (lower.contains(recurrenceEveryOtherYearLabel)) {
       frequency = RecurrenceFrequency.yearly;
-      interval = _recurrenceEveryOtherYearInterval;
+      interval = recurrenceEveryOtherYearInterval;
     } else if (everyYearsPattern.hasMatch(lower)) {
       frequency = RecurrenceFrequency.yearly;
       final RegExpMatch? intervalMatch = everyYearsPattern.firstMatch(lower);
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
-    } else if (lower.contains(_recurrenceEveryYearLabel)) {
+    } else if (lower.contains(recurrenceEveryYearLabel)) {
       frequency = RecurrenceFrequency.yearly;
     } else {
       return null;

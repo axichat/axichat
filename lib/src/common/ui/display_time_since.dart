@@ -56,8 +56,7 @@ String formatTimeSinceLabel(
     < const Duration(hours: 1) =>
       l10n.commonTimeMinutesAgo(difference.inMinutes),
     < const Duration(hours: 2) => l10n.commonTimeHoursAgo(1),
-    < const Duration(days: 1) =>
-      l10n.commonTimeHoursAgo(difference.inHours),
+    < const Duration(days: 1) => l10n.commonTimeHoursAgo(difference.inHours),
     < const Duration(days: 2) => l10n.commonTimeDaysAgo(1),
     < const Duration(days: 7) => l10n.commonTimeDaysAgo(difference.inDays),
     < const Duration(days: 14) => l10n.commonTimeWeeksAgo(1),

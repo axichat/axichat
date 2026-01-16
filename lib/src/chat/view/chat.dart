@@ -5921,9 +5921,11 @@ class _ChatState extends State<Chat> {
                                                                     : CalendarFragmentFormatter(
                                                                         context
                                                                             .l10n,
-                                                                      ).describe(
-                                                                        displayFragment,
-                                                                      ).trim();
+                                                                      )
+                                                                        .describe(
+                                                                          displayFragment,
+                                                                        )
+                                                                        .trim();
                                                             final bool hideFragmentText = fragmentFallbackText !=
                                                                     null &&
                                                                 fragmentFallbackText

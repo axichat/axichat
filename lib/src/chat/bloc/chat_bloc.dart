@@ -2226,8 +2226,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               emailBodyTrimmed?.isNotEmpty == true ? emailBody : null;
           final htmlCaptionForAttachments =
               captionForAttachments == null ? null : emailHtmlBody;
-          final calendarTaskCaption =
-              captionForAttachments ??
+          final calendarTaskCaption = captionForAttachments ??
               effectiveTaskForEmail?.toShareText(_l10n);
           var queuedAttachmentsSent = !hasQueuedEmailAttachments;
           if (hasQueuedEmailAttachments) {

@@ -417,8 +417,7 @@ class _CalendarAvailabilityShareScreenState
           content: AxiTextField(
             controller: controller,
             decoration: InputDecoration(
-              labelText:
-                  context.l10n.calendarAvailabilitySharePresetNameLabel,
+              labelText: context.l10n.calendarAvailabilitySharePresetNameLabel,
               hintText: context.l10n.calendarAvailabilitySharePresetNameHint,
             ),
           ),
@@ -1160,7 +1159,8 @@ class _AvailabilityPresetChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String label = preset.name?.trim() ?? _presetRangeLabel(preset);
+    final String label =
+        preset.name?.trim() ?? _presetRangeLabel(context, preset);
     return ShadButton.ghost(
       size: ShadButtonSize.sm,
       onPressed: onPressed,
@@ -1168,10 +1168,16 @@ class _AvailabilityPresetChip extends StatelessWidget {
     );
   }
 
-  String _presetRangeLabel(CalendarAvailabilityPreset preset) {
+  String _presetRangeLabel(
+    BuildContext context,
+    CalendarAvailabilityPreset preset,
+  ) {
     final DateTime start = preset.overlay.rangeStart.value;
     final DateTime end = preset.overlay.rangeEnd.value;
-    return '${start.month}/${start.day} - ${end.month}/${end.day}';
+    return context.l10n.commonRangeLabel(
+      DateFormat.Md().format(start),
+      DateFormat.Md().format(end),
+    );
   }
 }
 

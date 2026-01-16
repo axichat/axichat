@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 const double _feedbackProgressCornerRadius = 999.0;
 
@@ -301,7 +302,9 @@ class ProgressIndicator extends StatelessWidget {
             Text(label, style: Theme.of(context).textTheme.bodySmall),
             if (showPercentage && progress != null)
               Text(
-                '${(progress! * 100).toInt()}%',
+                context.l10n.commonPercentLabel(
+                  (progress! * 100).toInt(),
+                ),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
           ],

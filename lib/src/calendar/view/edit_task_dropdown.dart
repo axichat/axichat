@@ -575,11 +575,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     ],
                     _EditTaskTitleField(
                       controller: _titleController,
-                          validator: (value) =>
-                          TaskTitleValidation.validate(
-                            value ?? '',
-                            context.l10n,
-                          ),
+                      validator: (value) => TaskTitleValidation.validate(
+                        value ?? '',
+                        context.l10n,
+                      ),
                       onChanged: _handleTitleChanged,
                       focusNode: _titleFocusNode,
                       autovalidateMode: AutovalidateMode.disabled,

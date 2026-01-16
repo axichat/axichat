@@ -10,7 +10,6 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
-import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';

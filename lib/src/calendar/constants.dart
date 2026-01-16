@@ -5,7 +5,6 @@ const int calendarTaskTitleMaxLength = 300;
 const Duration calendarDefaultTaskDuration = Duration(hours: 1);
 const Duration calendarMinimumTaskDuration = Duration(minutes: 15);
 
-
 const List<Duration> calendarDefaultStartReminderOffsets = <Duration>[
   Duration(hours: 1),
   Duration(minutes: 30),

@@ -18,12 +18,10 @@ Future<bool?> confirm(
   bool barrierDismissible = true,
   TextAlign messageAlign = TextAlign.start,
 }) {
-  final resolvedTitle =
-      title.isEmpty ? context.l10n.commonConfirm : title;
+  final resolvedTitle = title.isEmpty ? context.l10n.commonConfirm : title;
   final resolvedMessage = message ?? text ?? context.l10n.commonAreYouSure;
-  final resolvedConfirmLabel = confirmLabel.isEmpty
-      ? context.l10n.commonContinue
-      : confirmLabel;
+  final resolvedConfirmLabel =
+      confirmLabel.isEmpty ? context.l10n.commonContinue : confirmLabel;
   final resolvedCancelLabel =
       cancelLabel.isEmpty ? context.l10n.commonCancel : cancelLabel;
   final Widget? dialogBody = resolvedMessage.isEmpty

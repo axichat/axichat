@@ -14,45 +14,9 @@ import 'package:axichat/src/calendar/view/widgets/deadline_picker_field.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
-const String _alarmsSectionTitle = 'Alarms';
-const String _alarmsSectionHelper = 'Reminders are exported as display alarms.';
-const String _alarmsEmptyLabel = 'No alarms yet';
-const String _alarmsAddTooltip = 'Add alarm';
-const String _alarmRemoveTooltip = 'Remove alarm';
-const String _alarmItemLabel = 'Alarm';
-const String _alarmActionLabel = 'Action';
-const String _alarmActionDisplayLabel = 'Display';
-const String _alarmActionAudioLabel = 'Audio';
-const String _alarmActionEmailLabel = 'Email';
-const String _alarmActionProcedureLabel = 'Procedure';
-const String _alarmActionProcedureHelper =
-    'Procedure alarms are imported read-only.';
-const String _alarmTriggerTypeLabel = 'Trigger';
-const String _alarmTriggerRelativeLabel = 'Relative';
-const String _alarmTriggerAbsoluteLabel = 'Absolute';
-const String _alarmAbsolutePlaceholder = 'Pick date and time';
-const String _alarmRelativeToLabel = 'Relative to';
-const String _alarmRelativeToStartLabel = 'Start';
-const String _alarmRelativeToEndLabel = 'End';
-const String _alarmDirectionLabel = 'Direction';
-const String _alarmDirectionBeforeLabel = 'Before';
-const String _alarmDirectionAfterLabel = 'After';
-const String _alarmOffsetLabel = 'Offset';
-const String _alarmOffsetHint = 'Amount';
-const String _alarmRepeatLabel = 'Repeat';
-const String _alarmRepeatCountHint = 'Times';
-const String _alarmRepeatEveryLabel = 'Every';
-const String _alarmRecipientsLabel = 'Recipients';
-const String _alarmRecipientAddressHint = 'Add email';
-const String _alarmRecipientNameHint = 'Name (optional)';
-const String _alarmRecipientRemoveTooltip = 'Remove recipient';
-const String _alarmAcknowledgedLabel = 'Acknowledged';
-const String _alarmUnitMinutesLabel = 'Minutes';
-const String _alarmUnitHoursLabel = 'Hours';
-const String _alarmUnitDaysLabel = 'Days';
-const String _alarmUnitWeeksLabel = 'Weeks';
 const String _emptyText = '';
 
 const int _alarmIndexOffset = 1;
@@ -86,11 +50,11 @@ final List<TextInputFormatter> _digitsOnlyInputFormatters =
 enum AlarmOffsetUnit { minutes, hours, days, weeks }
 
 extension AlarmOffsetUnitX on AlarmOffsetUnit {
-  String get label => switch (this) {
-        AlarmOffsetUnit.minutes => _alarmUnitMinutesLabel,
-        AlarmOffsetUnit.hours => _alarmUnitHoursLabel,
-        AlarmOffsetUnit.days => _alarmUnitDaysLabel,
-        AlarmOffsetUnit.weeks => _alarmUnitWeeksLabel,
+  String label(AppLocalizations l10n) => switch (this) {
+        AlarmOffsetUnit.minutes => l10n.calendarAlarmUnitMinutes,
+        AlarmOffsetUnit.hours => l10n.calendarAlarmUnitHours,
+        AlarmOffsetUnit.days => l10n.calendarAlarmUnitDays,
+        AlarmOffsetUnit.weeks => l10n.calendarAlarmUnitWeeks,
       };
 
   Duration toDuration(int value) => switch (this) {
@@ -116,32 +80,33 @@ extension AlarmOffsetUnitX on AlarmOffsetUnit {
 }
 
 extension CalendarAlarmActionLabelX on CalendarAlarmAction {
-  String get label => switch (this) {
-        CalendarAlarmAction.display => _alarmActionDisplayLabel,
-        CalendarAlarmAction.audio => _alarmActionAudioLabel,
-        CalendarAlarmAction.email => _alarmActionEmailLabel,
-        CalendarAlarmAction.procedure => _alarmActionProcedureLabel,
+  String label(AppLocalizations l10n) => switch (this) {
+        CalendarAlarmAction.display => l10n.calendarAlarmActionDisplay,
+        CalendarAlarmAction.audio => l10n.calendarAlarmActionAudio,
+        CalendarAlarmAction.email => l10n.calendarAlarmActionEmail,
+        CalendarAlarmAction.procedure => l10n.calendarAlarmActionProcedure,
       };
 }
 
 extension CalendarAlarmTriggerTypeLabelX on CalendarAlarmTriggerType {
-  String get label => switch (this) {
-        CalendarAlarmTriggerType.relative => _alarmTriggerRelativeLabel,
-        CalendarAlarmTriggerType.absolute => _alarmTriggerAbsoluteLabel,
+  String label(AppLocalizations l10n) => switch (this) {
+        CalendarAlarmTriggerType.relative => l10n.calendarAlarmTriggerRelative,
+        CalendarAlarmTriggerType.absolute => l10n.calendarAlarmTriggerAbsolute,
       };
 }
 
 extension CalendarAlarmRelativeToLabelX on CalendarAlarmRelativeTo {
-  String get label => switch (this) {
-        CalendarAlarmRelativeTo.start => _alarmRelativeToStartLabel,
-        CalendarAlarmRelativeTo.end => _alarmRelativeToEndLabel,
+  String label(AppLocalizations l10n) => switch (this) {
+        CalendarAlarmRelativeTo.start => l10n.calendarAlarmRelativeToStart,
+        CalendarAlarmRelativeTo.end => l10n.calendarAlarmRelativeToEnd,
       };
 }
 
 extension CalendarAlarmOffsetDirectionLabelX on CalendarAlarmOffsetDirection {
-  String get label => switch (this) {
-        CalendarAlarmOffsetDirection.before => _alarmDirectionBeforeLabel,
-        CalendarAlarmOffsetDirection.after => _alarmDirectionAfterLabel,
+  String label(AppLocalizations l10n) => switch (this) {
+        CalendarAlarmOffsetDirection.before =>
+          l10n.calendarAlarmDirectionBefore,
+        CalendarAlarmOffsetDirection.after => l10n.calendarAlarmDirectionAfter,
       };
 }
 
@@ -150,7 +115,7 @@ class CalendarAlarmsField extends StatelessWidget {
     super.key,
     required this.alarms,
     required this.onChanged,
-    this.title = _alarmsSectionTitle,
+    this.title,
     this.referenceStart,
     this.showReminderNote = true,
     this.showHeader = true,
@@ -158,7 +123,7 @@ class CalendarAlarmsField extends StatelessWidget {
 
   final List<CalendarAlarm> alarms;
   final ValueChanged<List<CalendarAlarm>> onChanged;
-  final String title;
+  final String? title;
   final DateTime? referenceStart;
   final bool showReminderNote;
   final bool showHeader;
@@ -166,6 +131,7 @@ class CalendarAlarmsField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<CalendarAlarm> items = alarms;
+    final String titleLabel = title ?? context.l10n.calendarAlarmsTitle;
     final Widget addButton = _AlarmAddButton(
       onPressed: () {
         final List<CalendarAlarm> next = List<CalendarAlarm>.from(items)
@@ -177,13 +143,13 @@ class CalendarAlarmsField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showHeader)
-          TaskSectionHeader(title: title, trailing: addButton)
+          TaskSectionHeader(title: titleLabel, trailing: addButton)
         else
           Align(alignment: Alignment.centerRight, child: addButton),
         if (showReminderNote) ...[
           const SizedBox(height: calendarInsetSm),
           Text(
-            _alarmsSectionHelper,
+            context.l10n.calendarAlarmsHelper,
             style: context.textTheme.muted.copyWith(
               fontWeight: FontWeight.w500,
             ),
@@ -232,7 +198,7 @@ class _AlarmEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      _alarmsEmptyLabel,
+      context.l10n.calendarAlarmsEmpty,
       style: context.textTheme.muted.copyWith(fontWeight: FontWeight.w500),
     );
   }
@@ -247,7 +213,7 @@ class _AlarmAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiIconButton(
       iconData: Icons.add,
-      tooltip: _alarmsAddTooltip,
+      tooltip: context.l10n.calendarAlarmAddTooltip,
       onPressed: onPressed,
       color: calendarPrimaryColor,
       backgroundColor: calendarContainerColor,
@@ -378,7 +344,10 @@ class _AlarmCardState extends State<_AlarmCard> {
           action: alarm.action,
           enabled: !isProcedure,
           helper: isProcedure
-              ? Text(_alarmActionProcedureHelper, style: helperStyle)
+              ? Text(
+                  context.l10n.calendarAlarmActionProcedureHelper,
+                  style: helperStyle,
+                )
               : null,
           onChanged: (next) {
             widget.onChanged(alarm.copyWith(action: next));
@@ -431,13 +400,14 @@ class _AlarmCardState extends State<_AlarmCard> {
               Row(
                 children: [
                   Text(
-                    '$_alarmItemLabel ${widget.index + _alarmIndexOffset}',
+                    context.l10n.calendarAlarmItemLabel(
+                        widget.index + _alarmIndexOffset),
                     style: titleStyle,
                   ),
                   const Spacer(),
                   AxiIconButton(
                     iconData: Icons.close,
-                    tooltip: _alarmRemoveTooltip,
+                    tooltip: context.l10n.calendarAlarmRemoveTooltip,
                     onPressed: widget.onRemove,
                     color: calendarSubtitleColor,
                     backgroundColor: calendarContainerColor,
@@ -549,11 +519,12 @@ class _AlarmActionField extends StatelessWidget {
                 .map(
                   (option) => ShadOption<CalendarAlarmAction>(
                     value: option,
-                    child: Text(option.label),
+                    child: Text(option.label(context.l10n)),
                   ),
                 )
                 .toList(growable: false),
-            selectedOptionBuilder: (context, selected) => Text(selected.label),
+            selectedOptionBuilder: (context, selected) =>
+                Text(selected.label(context.l10n)),
             decoration: ShadDecoration(
               color: calendarContainerColor,
               border: ShadBorder.all(
@@ -572,11 +543,11 @@ class _AlarmActionField extends StatelessWidget {
               color: calendarSubtitleColor,
             ),
           )
-        : Text(action.label, style: valueStyle);
+        : Text(action.label(context.l10n), style: valueStyle);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _AlarmFieldLabel(text: _alarmActionLabel),
+        _AlarmFieldLabel(text: context.l10n.calendarAlarmActionLabel),
         const SizedBox(height: calendarInsetSm),
         content,
         if (helperWidget != null) ...[
@@ -604,7 +575,7 @@ class _AlarmTriggerTypeField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _AlarmFieldLabel(text: _alarmTriggerTypeLabel),
+        _AlarmFieldLabel(text: context.l10n.calendarAlarmTriggerLabel),
         const SizedBox(height: calendarInsetSm),
         AxiSelect<CalendarAlarmTriggerType>(
           initialValue: trigger.type,
@@ -638,11 +609,12 @@ class _AlarmTriggerTypeField extends StatelessWidget {
               .map(
                 (option) => ShadOption<CalendarAlarmTriggerType>(
                   value: option,
-                  child: Text(option.label),
+                  child: Text(option.label(context.l10n)),
                 ),
               )
               .toList(growable: false),
-          selectedOptionBuilder: (context, selected) => Text(selected.label),
+          selectedOptionBuilder: (context, selected) =>
+              Text(selected.label(context.l10n)),
           decoration: ShadDecoration(
             color: calendarContainerColor,
             border: ShadBorder.all(
@@ -681,7 +653,7 @@ class _AlarmAbsoluteTriggerField extends StatelessWidget {
   Widget build(BuildContext context) {
     return DeadlinePickerField(
       value: value?.value,
-      placeholder: _alarmAbsolutePlaceholder,
+      placeholder: context.l10n.calendarAlarmAbsolutePlaceholder,
       showStatusColors: false,
       showTimeSelectors: true,
       onChanged: (selected) {
@@ -721,12 +693,12 @@ class _AlarmRelativeTriggerField extends StatelessWidget {
 
     final Widget relativeRow = _AlarmAdaptiveRow(
       leading: _AlarmRelativeSelectRow(
-        label: _alarmRelativeToLabel,
+        label: context.l10n.calendarAlarmRelativeToLabel,
         value: relativeTo,
         onChanged: (next) => onChanged(trigger.copyWith(relativeTo: next)),
       ),
       trailing: _AlarmOffsetDirectionRow(
-        label: _alarmDirectionLabel,
+        label: context.l10n.calendarAlarmDirectionLabel,
         value: direction,
         onChanged: (next) => onChanged(trigger.copyWith(offsetDirection: next)),
       ),
@@ -739,8 +711,8 @@ class _AlarmRelativeTriggerField extends StatelessWidget {
         relativeRow,
         const SizedBox(height: calendarInsetMd),
         _AlarmDurationRow(
-          label: _alarmOffsetLabel,
-          hintText: _alarmOffsetHint,
+          label: context.l10n.calendarAlarmOffsetLabel,
+          hintText: context.l10n.calendarAlarmOffsetHint,
           value: offset,
           allowZero: true,
           onChanged: (next) => onChanged(trigger.copyWith(offset: next)),
@@ -767,7 +739,7 @@ class _AlarmRelativeSelectRow extends StatelessWidget {
       label: label,
       value: value,
       options: CalendarAlarmRelativeTo.values,
-      labelFor: (value) => value.label,
+      labelFor: (value) => value.label(context.l10n),
       onChanged: onChanged,
     );
   }
@@ -790,7 +762,7 @@ class _AlarmOffsetDirectionRow extends StatelessWidget {
       label: label,
       value: value,
       options: CalendarAlarmOffsetDirection.values,
-      labelFor: (value) => value.label,
+      labelFor: (value) => value.label(context.l10n),
       onChanged: onChanged,
     );
   }
@@ -881,8 +853,8 @@ class _AlarmRepeatField extends StatelessWidget {
       onChanged: onRepeatChanged,
     );
     final Widget repeatEveryField = _AlarmDurationRow(
-      label: _alarmRepeatEveryLabel,
-      hintText: _alarmOffsetHint,
+      label: context.l10n.calendarAlarmRepeatEveryLabel,
+      hintText: context.l10n.calendarAlarmOffsetHint,
       value: duration,
       allowZero: false,
       onChanged: onDurationChanged,
@@ -890,7 +862,7 @@ class _AlarmRepeatField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _AlarmFieldLabel(text: _alarmRepeatLabel),
+        _AlarmFieldLabel(text: context.l10n.calendarAlarmRepeatLabel),
         const SizedBox(height: calendarInsetSm),
         _AlarmAdaptiveRow(
           leading: repeatCountField,
@@ -916,11 +888,11 @@ class _AlarmRepeatCountField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _AlarmFieldLabel(text: _alarmRepeatCountHint),
+        _AlarmFieldLabel(text: context.l10n.calendarAlarmRepeatCountHint),
         const SizedBox(height: calendarInsetSm),
         TaskTextField(
           controller: controller,
-          hintText: _alarmRepeatCountHint,
+          hintText: context.l10n.calendarAlarmRepeatCountHint,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           onChanged: (value) {
@@ -1041,11 +1013,12 @@ class _AlarmDurationFieldState extends State<AlarmDurationField> {
                 .map(
                   (option) => ShadOption<AlarmOffsetUnit>(
                     value: option,
-                    child: Text(option.label),
+                    child: Text(option.label(context.l10n)),
                   ),
                 )
                 .toList(growable: false),
-            selectedOptionBuilder: (context, selected) => Text(selected.label),
+            selectedOptionBuilder: (context, selected) =>
+                Text(selected.label(context.l10n)),
             decoration: ShadDecoration(
               color: calendarContainerColor,
               border: ShadBorder.all(
@@ -1154,18 +1127,18 @@ class _AlarmRecipientsFieldState extends State<_AlarmRecipientsField> {
     final Widget addressField = TaskTextField(
       controller: _addressController,
       focusNode: _addressFocusNode,
-      hintText: _alarmRecipientAddressHint,
+      hintText: context.l10n.calendarAlarmRecipientAddressHint,
       textInputAction: TextInputAction.next,
       keyboardType: TextInputType.emailAddress,
     );
     final Widget nameField = TaskTextField(
       controller: _nameController,
-      hintText: _alarmRecipientNameHint,
+      hintText: context.l10n.calendarAlarmRecipientNameHint,
       textInputAction: TextInputAction.done,
     );
     final Widget addButton = AxiIconButton(
       iconData: Icons.add,
-      tooltip: _alarmsAddTooltip,
+      tooltip: context.l10n.calendarAlarmAddTooltip,
       onPressed: _addRecipient,
       color: calendarPrimaryColor,
       backgroundColor: calendarContainerColor,
@@ -1197,7 +1170,7 @@ class _AlarmRecipientsFieldState extends State<_AlarmRecipientsField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _AlarmFieldLabel(text: _alarmRecipientsLabel),
+        _AlarmFieldLabel(text: context.l10n.calendarAlarmRecipientsLabel),
         const SizedBox(height: calendarInsetSm),
         inputRow,
         if (widget.recipients.isNotEmpty) ...[
@@ -1275,7 +1248,10 @@ class _AlarmRecipientChip extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
     final String display = recipient.commonName?.trim().isNotEmpty == true
-        ? '${recipient.commonName} <${recipient.address}>'
+        ? context.l10n.calendarAlarmRecipientDisplay(
+            recipient.commonName!,
+            recipient.address,
+          )
         : recipient.address;
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -1294,7 +1270,7 @@ class _AlarmRecipientChip extends StatelessWidget {
           const SizedBox(width: calendarInsetSm),
           AxiIconButton(
             iconData: Icons.close,
-            tooltip: _alarmRecipientRemoveTooltip,
+            tooltip: context.l10n.calendarAlarmRecipientRemoveTooltip,
             onPressed: onRemove,
             color: calendarSubtitleColor,
             backgroundColor: calendarContainerColor,
@@ -1320,7 +1296,7 @@ class _AlarmAcknowledgedRow extends StatelessWidget {
         TimeFormatter.formatFriendlyDateTime(context.l10n, value);
     return Row(
       children: [
-        const _AlarmFieldLabel(text: _alarmAcknowledgedLabel),
+        _AlarmFieldLabel(text: context.l10n.calendarAlarmAcknowledgedLabel),
         const SizedBox(width: calendarGutterSm),
         Expanded(
           child: Text(

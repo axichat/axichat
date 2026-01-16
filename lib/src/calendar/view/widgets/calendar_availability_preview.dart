@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
-import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';

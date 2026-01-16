@@ -11,7 +11,6 @@ import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
