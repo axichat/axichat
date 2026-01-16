@@ -112,6 +112,7 @@ const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
 const mox.PubSubAffiliation _pinAffiliationPublisher =
     mox.PubSubAffiliation.publisher;
 const String _pinSendLastOnSub = 'on_sub';
+const String _pinSendLastOnSubscribe = 'on_subscribe';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
 const bool _pinNotifyEnabled = true;
@@ -6540,8 +6541,38 @@ mixin MessageService
       'PubSub pin node config failed. node=$safeNodeLabel '
       'policy=${policy.name} error=${configuredError.runtimeType}.',
     );
-    final shouldAttemptSendLastFallback = config.hasSendLastPublishedItem &&
-        !configuredError.indicatesMissingNode;
+    final sendLastValue = config.sendLastPublishedItem?.trim();
+    final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
+    final shouldAttemptSendLastFallback =
+        hasSendLast && !configuredError.indicatesMissingNode;
+    if (shouldAttemptSendLastFallback && sendLastValue == _pinSendLastOnSub) {
+      _log.fine(
+        'PubSub pin node config retry with send_last=on_subscribe. '
+        'node=$safeNodeLabel policy=${policy.name}.',
+      );
+      final subscribeConfig =
+          config.withSendLastPublishedItem(_pinSendLastOnSubscribe);
+      configured = await pubsub.configureNode(host, nodeId, subscribeConfig);
+      if (!configured.isType<mox.PubSubError>()) {
+        _log.fine(
+          'PubSub pin node configured with send_last=on_subscribe. '
+          'node=$safeNodeLabel policy=${policy.name}.',
+        );
+        return _applyPinAffiliationsIfNeeded(
+          pubsub: pubsub,
+          host: host,
+          nodeId: nodeId,
+          policy: policy,
+          affiliations: affiliations,
+        );
+      }
+      configuredError = configured.get<mox.PubSubError>();
+      _log.fine(
+        'PubSub pin node config failed with send_last=on_subscribe. '
+        'node=$safeNodeLabel policy=${policy.name} '
+        'error=${configuredError.runtimeType}.',
+      );
+    }
     if (shouldAttemptSendLastFallback) {
       _log.fine(
         'PubSub pin node config retry without send_last. node=$safeNodeLabel '

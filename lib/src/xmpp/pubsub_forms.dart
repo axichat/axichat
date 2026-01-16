@@ -73,6 +73,22 @@ final class AxiPubSubNodeConfig {
     return normalized != null && normalized.isNotEmpty;
   }
 
+  AxiPubSubNodeConfig withSendLastPublishedItem(String? value) =>
+      AxiPubSubNodeConfig(
+        accessModel: accessModel,
+        publishModel: publishModel,
+        deliverNotifications: deliverNotifications,
+        deliverPayloads: deliverPayloads,
+        maxItems: maxItems,
+        notifyRetract: notifyRetract,
+        notifyDelete: notifyDelete,
+        notifyConfig: notifyConfig,
+        notifySub: notifySub,
+        presenceBasedDelivery: presenceBasedDelivery,
+        persistItems: persistItems,
+        sendLastPublishedItem: value,
+      );
+
   AxiPubSubNodeConfig withoutSendLastPublishedItem() => AxiPubSubNodeConfig(
         accessModel: accessModel,
         publishModel: publishModel,

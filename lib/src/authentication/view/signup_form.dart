@@ -501,7 +501,7 @@ class _SignupFormState extends State<SignupForm>
       },
       builder: (context, state) {
         final l10n = context.l10n;
-        final bool allowInsecureOverrideEnabled = !kReleaseMode;
+        const bool allowInsecureOverrideEnabled = !kReleaseMode;
         return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
           builder: (context, avatarState) {
             final avatarErrorText = _avatarErrorText(avatarState, l10n);
@@ -573,9 +573,11 @@ class _SignupFormState extends State<SignupForm>
                             ? Semantics(
                                 liveRegion: true,
                                 container: true,
-                                label: l10n.signupErrorPrefix(errorText!),
+                                label: l10n.signupErrorPrefix(
+                                  errorText ?? '',
+                                ),
                                 child: Text(
-                                  errorText!,
+                                  errorText ?? '',
                                   key: const ValueKey(
                                     'signup-global-error-text',
                                   ),
