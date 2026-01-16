@@ -300,7 +300,7 @@ class _InlineSyncControls extends StatelessWidget {
           if (lastSyncTime != null && !state.isSyncing) ...[
             const SizedBox(width: 6),
             Text(
-              TimeFormatter.formatSyncTime(lastSyncTime),
+              TimeFormatter.formatSyncTime(l10n, lastSyncTime),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).hintColor,
                   ),

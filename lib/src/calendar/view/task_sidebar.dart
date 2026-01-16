@@ -1713,7 +1713,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return '$startLabel → $endLabel';
     }
 
-    return TimeFormatter.formatFriendlyDateTime(start);
+    return TimeFormatter.formatFriendlyDateTime(context.l10n, start);
   }
 
   List<CalendarTask> _selectedTasks(CalendarState state) {
@@ -2074,7 +2074,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (deadline != null) {
       buffer.writeln(
         context.l10n.draftTaskDue(
-          TimeFormatter.formatFriendlyDateTime(deadline),
+          TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
         ),
       );
     }
@@ -3989,7 +3989,7 @@ Color _sidebarDeadlineBackgroundColor(DateTime deadline) {
 }
 
 String _sidebarDeadlineLabel(DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(deadline);
+  return TimeFormatter.formatFriendlyDateTime(context.l10n, deadline);
 }
 
 final TextStyle _sidebarSectionHeaderStyle = const TextStyle(

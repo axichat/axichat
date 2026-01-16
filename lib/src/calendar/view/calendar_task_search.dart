@@ -545,7 +545,10 @@ class _ResultMetadata extends StatelessWidget {
       tags.add(
         _MetadataTag(
           icon: Icons.schedule,
-          label: TimeFormatter.formatFriendlyDateTime(scheduled),
+          label: TimeFormatter.formatFriendlyDateTime(
+            context.l10n,
+            scheduled,
+          ),
         ),
       );
     }
@@ -698,7 +701,10 @@ class _SearchResultTile extends StatelessWidget {
 
   String? _subtitle(BuildContext context) {
     if (task.scheduledTime != null) {
-      return TimeFormatter.formatFriendlyDateTime(task.scheduledTime!);
+      return TimeFormatter.formatFriendlyDateTime(
+        context.l10n,
+        task.scheduledTime!,
+      );
     }
     if (task.deadline != null) {
       return _formatDeadlineLabel(context, task.deadline!);

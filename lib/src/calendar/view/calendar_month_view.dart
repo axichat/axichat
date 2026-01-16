@@ -153,18 +153,21 @@ class _WeekdayHeaderRow extends StatelessWidget {
 
   final ShadColorScheme colors;
 
-  static const List<String> labels = <String>[
-    'MON',
-    'TUE',
-    'WED',
-    'THU',
-    'FRI',
-    'SAT',
-    'SUN',
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final List<String> labels = [
+      DateTime.monday,
+      DateTime.tuesday,
+      DateTime.wednesday,
+      DateTime.thursday,
+      DateTime.friday,
+      DateTime.saturday,
+      DateTime.sunday,
+    ].map((weekday) {
+      final List<String> localized =
+          MaterialLocalizations.of(context).narrowWeekdays;
+      return localized[weekday % localized.length];
+    }).toList(growable: false);
     final TextStyle labelStyle = context.textTheme.small.copyWith(
       fontSize: 11,
       fontWeight: FontWeight.w700,

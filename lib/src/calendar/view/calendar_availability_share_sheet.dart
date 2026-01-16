@@ -288,8 +288,10 @@ class _CalendarAvailabilityShareScreenState
     if (start == null || end == null || !end.isAfter(start)) {
       return context.l10n.calendarAvailabilityShareInvalidRange;
     }
-    final String startLabel = TimeFormatter.formatFriendlyDateTime(start);
-    final String endLabel = TimeFormatter.formatFriendlyDateTime(end);
+    final String startLabel =
+        TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+    final String endLabel =
+        TimeFormatter.formatFriendlyDateTime(context.l10n, end);
     if (startLabel == endLabel) {
       return startLabel;
     }

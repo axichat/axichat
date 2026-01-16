@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
@@ -627,8 +628,10 @@ CalendarDateTime _wrapDateTime(CalendarDateTime template, DateTime value) {
 }
 
 String _formatRange(DateTime start, DateTime end) {
-  final String startLabel = TimeFormatter.formatFriendlyDateTime(start);
-  final String endLabel = TimeFormatter.formatFriendlyDateTime(end);
+  final String startLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+  final String endLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
   if (startLabel == endLabel) {
     return startLabel;
   }
