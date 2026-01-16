@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -100,9 +99,11 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
   bool _subjectsLoaded = false;
   Chat? _cachedChat;
 
-  void toggleActive() => setActive(!state.active);
+  Future<void> toggleActive() async {
+    await setActive(!state.active);
+  }
 
-  void setActive(bool active) {
+  Future<void> setActive(bool active) async {
     if (!active) {
       _debounce?.cancel();
       emit(
@@ -118,24 +119,21 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
       return;
     }
     emit(state.copyWith(active: true));
-    fireAndForget(
-      _maybeLoadSubjects,
-      operationName: 'ChatSearchCubit.maybeLoadSubjects',
-    );
+    await _maybeLoadSubjects();
     if (state.query.trim().isNotEmpty) {
-      _scheduleSearch(immediate: true);
+      await _scheduleSearch(immediate: true);
     }
   }
 
-  void updateQuery(String value) {
+  Future<void> updateQuery(String value) async {
     emit(state.copyWith(query: value));
-    _scheduleSearch();
+    await _scheduleSearch();
   }
 
-  void updateSort(SearchSortOrder sort) {
+  Future<void> updateSort(SearchSortOrder sort) async {
     if (state.sort == sort) return;
     emit(state.copyWith(sort: sort));
-    _scheduleSearch(immediate: true);
+    await _scheduleSearch(immediate: true);
   }
 
   void updateFilter(MessageTimelineFilter filter) {
@@ -179,21 +177,21 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     }
   }
 
-  void updateSubjectFilter(String? subject) {
+  Future<void> updateSubjectFilter(String? subject) async {
     emit(
       state.copyWith(
         subjectFilter: subject?.trim().isEmpty == true ? null : subject?.trim(),
       ),
     );
-    _scheduleSearch(immediate: true);
+    await _scheduleSearch(immediate: true);
   }
 
-  void toggleExcludeSubject(bool exclude) {
+  Future<void> toggleExcludeSubject(bool exclude) async {
     emit(state.copyWith(excludeSubject: exclude));
-    _scheduleSearch(immediate: true);
+    await _scheduleSearch(immediate: true);
   }
 
-  void _scheduleSearch({bool immediate = false}) {
+  Future<void> _scheduleSearch({bool immediate = false}) async {
     _debounce?.cancel();
     final hasQuery = state.query.trim().isNotEmpty;
     final hasSubject = state.subjectFilter?.isNotEmpty == true;
@@ -208,17 +206,11 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
       return;
     }
     if (immediate) {
-      fireAndForget(
-        _performSearch,
-        operationName: 'ChatSearchCubit.performSearch',
-      );
+      await _performSearch();
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      fireAndForget(
-        _performSearch,
-        operationName: 'ChatSearchCubit.performSearch',
-      );
+    _debounce = Timer(const Duration(milliseconds: 350), () async {
+      await _performSearch();
     });
   }
 
