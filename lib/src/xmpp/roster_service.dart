@@ -31,10 +31,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         _rosterLog.info('Fetching roster...');
-        fireAndForget(
-          requestRoster,
-          operationName: 'RosterService.requestRoster',
-        );
+        await requestRoster();
       })
       ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
         final requester = event.from.toBare().toString();
@@ -77,7 +74,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       awaitDatabase: true,
     );
     if (this is AvatarService) {
-      (this as AvatarService).scheduleAvatarRefresh(
+      await (this as AvatarService).scheduleAvatarRefresh(
         items.map((item) => item.jid),
       );
     }
@@ -123,7 +120,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       }
     }
     if (this is AvatarService) {
-      (this as AvatarService).scheduleAvatarRefresh([jid]);
+      await (this as AvatarService).scheduleAvatarRefresh([jid]);
     }
     await _ensureConversationIndexEntryForContact(jid);
   }
@@ -261,7 +258,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
       }
     }, awaitDatabase: true);
     if (owner is AvatarService && updatedJids.isNotEmpty) {
-      (owner as AvatarService).scheduleAvatarRefresh(updatedJids);
+      await (owner as AvatarService).scheduleAvatarRefresh(updatedJids);
     }
 
     if (version != null) {
