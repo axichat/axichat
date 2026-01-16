@@ -929,7 +929,7 @@ class DeltaEventConsumer {
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
       await _updateExistingMessage(existing: existing, msg: msg);
-      _scheduleOriginIdHydrationIfNeeded(
+      await _scheduleOriginIdHydrationIfNeeded(
         existing: existing,
         msgId: msg.id,
         accountId: deltaAccountId,
@@ -942,7 +942,7 @@ class DeltaEventConsumer {
     );
     if (existingByDeltaId != null) {
       await _updateExistingMessage(existing: existingByDeltaId, msg: msg);
-      _scheduleOriginIdHydrationIfNeeded(
+      await _scheduleOriginIdHydrationIfNeeded(
         existing: existingByDeltaId,
         msgId: msg.id,
         accountId: deltaAccountId,
@@ -955,7 +955,7 @@ class DeltaEventConsumer {
     );
     if (existingByChat != null) {
       await _updateExistingMessage(existing: existingByChat, msg: msg);
-      _scheduleOriginIdHydrationIfNeeded(
+      await _scheduleOriginIdHydrationIfNeeded(
         existing: existingByChat,
         msgId: msg.id,
         accountId: deltaAccountId,
@@ -980,7 +980,7 @@ class DeltaEventConsumer {
         await db.updateMessage(updatedPending);
       }
       await _updateExistingMessage(existing: updatedPending, msg: msg);
-      _scheduleOriginIdHydrationIfNeeded(
+      await _scheduleOriginIdHydrationIfNeeded(
         existing: updatedPending,
         msgId: msg.id,
         accountId: deltaAccountId,
@@ -1039,7 +1039,10 @@ class DeltaEventConsumer {
       msg: msg,
     );
     await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
-    _scheduleOriginIdHydration(msgId: msg.id, accountId: deltaAccountId);
+    await _scheduleOriginIdHydration(
+      msgId: msg.id,
+      accountId: deltaAccountId,
+    );
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
     if (!isOutgoing &&
@@ -1243,26 +1246,23 @@ class DeltaEventConsumer {
     return HtmlContentCodec.canonicalizeHtml(html) ?? _emptyHtml;
   }
 
-  void _scheduleOriginIdHydration({
+  Future<void> _scheduleOriginIdHydration({
     required int msgId,
     required int accountId,
-  }) {
-    fireAndForget(
-      () => _hydrateOriginId(msgId: msgId, accountId: accountId),
-      operationName: 'DeltaEventConsumer.hydrateOriginId',
-    );
+  }) async {
+    await _hydrateOriginId(msgId: msgId, accountId: accountId);
   }
 
-  void _scheduleOriginIdHydrationIfNeeded({
+  Future<void> _scheduleOriginIdHydrationIfNeeded({
     required Message existing,
     required int msgId,
     required int accountId,
-  }) {
+  }) async {
     final String? existingOrigin = existing.originID?.trim();
     if (existingOrigin != null && existingOrigin.isNotEmpty) {
       return;
     }
-    _scheduleOriginIdHydration(msgId: msgId, accountId: accountId);
+    await _scheduleOriginIdHydration(msgId: msgId, accountId: accountId);
   }
 
   Future<void> _hydrateOriginId({

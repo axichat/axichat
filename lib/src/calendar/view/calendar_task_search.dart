@@ -153,6 +153,9 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
       try {
         Navigator.of(context).maybePop();
         await Future<void>.delayed(Duration.zero);
+        if (!context.mounted) {
+          return;
+        }
         await showAdaptiveBottomSheet<void>(
           context: context,
           isScrollControlled: true,

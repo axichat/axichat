@@ -808,12 +808,9 @@ class EmailService {
     );
     _activeAccount = account;
     _ephemeralProvisionedScopes.add(scope);
-    fireAndForget(
-      () => _bootstrapFromCoreIfNeeded(
-        scope: scope,
-        databasePrefix: databasePrefix,
-      ),
-      operationName: 'EmailService.bootstrapFromCoreIfNeeded',
+    await _bootstrapFromCoreIfNeeded(
+      scope: scope,
+      databasePrefix: databasePrefix,
     );
     return account;
   }
@@ -1516,17 +1513,10 @@ class EmailService {
     }
     await ensureEventChannelActive();
     await _transport.notifyNetworkAvailable();
-    fireAndForget(
-      _bootstrapActiveAccountIfNeeded,
-      operationName: 'EmailService.bootstrapActiveAccountIfNeeded',
-    );
-    fireAndForget(
-      () => _runReconnectCatchUp().whenComplete(
-        () => _refreshConnectivityState(
-          source: _EmailSyncSource.networkAvailable,
-        ),
-      ),
-      operationName: 'EmailService.reconnectCatchUp',
+    await _bootstrapActiveAccountIfNeeded();
+    await _runReconnectCatchUp();
+    await _refreshConnectivityState(
+      source: _EmailSyncSource.networkAvailable,
     );
     fireAndForget(
       _scheduleReconnectRestartIfOffline,

@@ -176,12 +176,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final l10n = context.l10n;
 
     final xmppService = context.read<XmppService>();
-    final isChat = xmppService is ChatsService;
-    final isMessage = xmppService is MessageService;
-    final isRoster = xmppService is RosterService;
-    final isPresence = xmppService is PresenceService;
-    final isOmemo = xmppService is OmemoService;
-    final isBlocking = xmppService is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;
@@ -213,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
     final availabilityShareCoordinator = _availabilityShareCoordinator ??
-        (!isMessage || calendarStorage == null
+        (calendarStorage == null
             ? null
             : CalendarAvailabilityShareCoordinator(
                 store: CalendarAvailabilityShareStore(),
@@ -239,46 +233,42 @@ class _HomeScreenState extends State<HomeScreen> {
     final blocklistFilters = _blocklistSearchFilters(l10n);
 
     final tabs = <HomeTabEntry>[
-      if (isChat)
-        HomeTabEntry(
-          id: HomeTab.chats,
-          label: l10n.homeTabChats,
-          body: ChatsList(
-            key: const PageStorageKey('Chats'),
-            showCalendarShortcut: navPlacement != NavPlacement.rail,
-            calendarAvailable: hasCalendarBloc,
-          ),
-          fab: const _TabActionGroup(includePrimaryActions: true),
-          searchFilters: chatsFilters,
+      HomeTabEntry(
+        id: HomeTab.chats,
+        label: l10n.homeTabChats,
+        body: ChatsList(
+          key: const PageStorageKey('Chats'),
+          showCalendarShortcut: navPlacement != NavPlacement.rail,
+          calendarAvailable: hasCalendarBloc,
         ),
-      if (isMessage)
-        HomeTabEntry(
-          id: HomeTab.drafts,
-          label: l10n.homeTabDrafts,
-          body: const DraftsList(key: PageStorageKey('Drafts')),
-          fab: showDesktopPrimaryActions
-              ? const _TabActionGroup(includePrimaryActions: true)
-              : null,
-          searchFilters: draftsFilters,
-        ),
-      if (isChat)
-        HomeTabEntry(
-          id: HomeTab.spam,
-          label: l10n.homeTabSpam,
-          body: const SpamList(key: PageStorageKey('Spam')),
-          fab: showDesktopPrimaryActions
-              ? const _TabActionGroup(includePrimaryActions: true)
-              : null,
-          searchFilters: spamFilters,
-        ),
-      if (isBlocking)
-        HomeTabEntry(
-          id: HomeTab.blocked,
-          label: l10n.homeTabBlocked,
-          body: const BlocklistList(key: PageStorageKey('Blocked')),
-          fab: const _TabActionGroup(extraActions: [BlocklistAddButton()]),
-          searchFilters: blocklistFilters,
-        ),
+        fab: const _TabActionGroup(includePrimaryActions: true),
+        searchFilters: chatsFilters,
+      ),
+      HomeTabEntry(
+        id: HomeTab.drafts,
+        label: l10n.homeTabDrafts,
+        body: const DraftsList(key: PageStorageKey('Drafts')),
+        fab: showDesktopPrimaryActions
+            ? const _TabActionGroup(includePrimaryActions: true)
+            : null,
+        searchFilters: draftsFilters,
+      ),
+      HomeTabEntry(
+        id: HomeTab.spam,
+        label: l10n.homeTabSpam,
+        body: const SpamList(key: PageStorageKey('Spam')),
+        fab: showDesktopPrimaryActions
+            ? const _TabActionGroup(includePrimaryActions: true)
+            : null,
+        searchFilters: spamFilters,
+      ),
+      HomeTabEntry(
+        id: HomeTab.blocked,
+        label: l10n.homeTabBlocked,
+        body: const BlocklistList(key: PageStorageKey('Blocked')),
+        fab: const _TabActionGroup(extraActions: [BlocklistAddButton()]),
+        searchFilters: blocklistFilters,
+      ),
     ];
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));

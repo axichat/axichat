@@ -44,7 +44,7 @@ class _AxiMoreState extends State<AxiMore> {
   Future<void> _showSheetActions(List<AxiMenuAction> actions) async {
     if (!mounted) return;
     const double sheetItemSpacing = 4;
-    const double sheetPadding = 8;
+    const double sheetPadding = 16;
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,

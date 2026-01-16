@@ -47,28 +47,24 @@ class AxiSheetHeader extends StatelessWidget {
       ],
     );
 
-    return SafeArea(
-      top: true,
-      bottom: false,
-      child: Padding(
-        padding: padding,
-        child: Row(
-          children: [
-            if (leading != null) ...[leading!, const SizedBox(width: 10)],
-            Expanded(child: titleBlock),
-            AxiIconButton(
-              iconData: LucideIcons.x,
-              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-              onPressed: onClose,
-              iconSize: 16,
-              buttonSize: 34,
-              tapTargetSize: 40,
-              backgroundColor: Colors.transparent,
-              borderColor: Colors.transparent,
-              color: colors.mutedForeground,
-            ),
-          ],
-        ),
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 10)],
+          Expanded(child: titleBlock),
+          AxiIconButton(
+            iconData: LucideIcons.x,
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: onClose,
+            iconSize: 16,
+            buttonSize: 34,
+            tapTargetSize: 40,
+            backgroundColor: Colors.transparent,
+            borderColor: Colors.transparent,
+            color: colors.mutedForeground,
+          ),
+        ],
       ),
     );
   }
@@ -132,15 +128,134 @@ class AxiSheetScaffold extends StatelessWidget {
         header,
         Flexible(
           fit: FlexFit.loose,
-          child: ListView(
+          child: _AxiSheetScrollView(
             padding: padding,
-            shrinkWrap: true,
-            physics: scrollPhysics,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+            scrollPhysics: scrollPhysics,
             children: [
               ...?scrollChildren,
               if (footer != null) ...[const SizedBox(height: 12), footer!],
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AxiSheetScrollView extends StatefulWidget {
+  const _AxiSheetScrollView({
+    required this.padding,
+    required this.children,
+    this.scrollPhysics,
+  });
+
+  final EdgeInsets padding;
+  final List<Widget> children;
+  final ScrollPhysics? scrollPhysics;
+
+  @override
+  State<_AxiSheetScrollView> createState() => _AxiSheetScrollViewState();
+}
+
+class _AxiSheetScrollViewState extends State<_AxiSheetScrollView> {
+  static const double _edgeFadeExtent = 16.0;
+  static const Duration _edgeFadeDuration = Duration(milliseconds: 120);
+
+  late final ScrollController _controller = ScrollController()
+    ..addListener(_handleScrollChanged);
+
+  bool _showTopFade = false;
+  bool _showBottomFade = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncFades());
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleScrollChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleScrollChanged() => _syncFades();
+
+  void _syncFades() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    final bool nextTop = position.pixels > position.minScrollExtent;
+    final bool nextBottom = position.pixels < position.maxScrollExtent;
+    if (nextTop == _showTopFade && nextBottom == _showBottomFade) {
+      return;
+    }
+    setState(() {
+      _showTopFade = nextTop;
+      _showBottomFade = nextBottom;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fadeColor = ShadTheme.of(context).colorScheme.card;
+    return Stack(
+      children: [
+        ListView(
+          controller: _controller,
+          padding: widget.padding,
+          shrinkWrap: true,
+          physics: widget.scrollPhysics,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+          children: widget.children,
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: _edgeFadeExtent,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _showTopFade ? 1 : 0,
+              duration: _edgeFadeDuration,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      fadeColor,
+                      fadeColor.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: _edgeFadeExtent,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _showBottomFade ? 1 : 0,
+              duration: _edgeFadeDuration,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      fadeColor,
+                      fadeColor.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],

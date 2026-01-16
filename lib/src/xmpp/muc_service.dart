@@ -725,12 +725,12 @@ mixin MucService on XmppBase, BaseStreamService {
       ..[myOccupantId] = occupant.copyWith(isPresent: _occupantNotPresent);
   }
 
-  void _markRoomLeft(
+  Future<void> _markRoomLeft(
     String roomJid, {
     Set<String>? statusCodes,
     String? reason,
     bool preserveOccupants = _preserveOccupantsDefault,
-  }) {
+  }) async {
     final key = _roomKey(roomJid);
     _leftRooms.add(key);
     _instantRoomPendingRooms.remove(key);
@@ -756,10 +756,7 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     _roomStates[key] = room;
     _roomStreams[key]?.add(room);
-    fireAndForget(
-      () => _setMucManagerJoinedState(roomJid: key, joined: false),
-      operationName: 'MucService.setMucManagerJoinedState',
-    );
+    await _setMucManagerJoinedState(roomJid: key, joined: false);
   }
 
   void _updateRoomSubject(String roomJid, String? subject) {
@@ -968,7 +965,7 @@ mixin MucService on XmppBase, BaseStreamService {
           hasSelfPresence: hasSelfPresence,
         );
         _markRoomNeedsJoin(normalizedRoom);
-        _markRoomLeft(
+        await _markRoomLeft(
           normalizedRoom,
           statusCodes: _emptyStatusCodes,
           preserveOccupants: _preserveOccupantsOnJoinTimeout,
@@ -1230,7 +1227,7 @@ mixin MucService on XmppBase, BaseStreamService {
       _forgetRoomNickname(roomJid: roomJid);
       _forgetRoomPassword(roomJid: roomJid);
       _explicitlyLeftRooms.add(_roomKey(roomJid));
-      _markRoomLeft(roomJid, statusCodes: const <String>{});
+      await _markRoomLeft(roomJid, statusCodes: const <String>{});
       await _removeBookmarkForRoom(roomJid: roomJid);
       return;
     }
@@ -2252,7 +2249,7 @@ mixin MucService on XmppBase, BaseStreamService {
         // Ignore leave failures when applying bookmark updates.
       }
     }
-    _markRoomLeft(roomJid, statusCodes: const <String>{});
+    await _markRoomLeft(roomJid, statusCodes: const <String>{});
     await _dbOp<XmppDatabase>((db) async {
       final chat = await db.getChat(roomJid);
       if (chat == null) return;
@@ -2276,7 +2273,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (!event.isAvailable && !event.isNickChange) {
       final Set<String> statusCodes =
           event.isError ? const <String>{} : event.statusCodes;
-      _markRoomLeft(
+      await _markRoomLeft(
         roomJid,
         statusCodes: statusCodes,
         reason: event.reason,
@@ -2322,7 +2319,7 @@ mixin MucService on XmppBase, BaseStreamService {
         await _ensureInstantRoomConfiguration(roomJid: roomJid);
       } on Exception catch (error, stackTrace) {
         _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
-        _markRoomLeft(roomJid, statusCodes: _emptyStatusCodes);
+        await _markRoomLeft(roomJid, statusCodes: _emptyStatusCodes);
         _completeJoinAttempt(roomJid, error: XmppMessageException());
         return;
       }
