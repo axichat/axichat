@@ -513,7 +513,7 @@ AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
     );
 
 mox.NodeConfig _pinCreateNodeConfig(_PinNodePolicy policy) =>
-    _pinNodeConfig(policy).toNodeConfig();
+    _pinNodeConfig(policy).withoutSendLastPublishedItem().toNodeConfig();
 
 mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
     mox.PubSubPublishOptions(

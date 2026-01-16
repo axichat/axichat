@@ -542,7 +542,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       );
 
   mox.NodeConfig _createNodeConfig(mox.AccessModel accessModel) =>
-      _nodeConfig(accessModel).toNodeConfig();
+      _nodeConfig(accessModel).withoutSendLastPublishedItem().toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,

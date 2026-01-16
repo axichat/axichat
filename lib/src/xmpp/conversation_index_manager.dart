@@ -214,7 +214,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         sendLastPublishedItem: _sendLastOnSubscribe,
       );
 
-  mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
+  mox.NodeConfig _createNodeConfig() =>
+      _nodeConfig().withoutSendLastPublishedItem().toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,

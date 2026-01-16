@@ -126,11 +126,15 @@ class AppTheme {
   static ShadThemeData build({
     required ShadColor shadColor,
     required Brightness brightness,
+    ChatNeutrals neutrals = const ChatNeutrals(),
   }) {
     final baseScheme = ShadColorScheme.fromName(
       shadColor.name,
       brightness: brightness,
     );
+    final patchedScheme = brightness == Brightness.light
+        ? _lightScheme(baseScheme, neutrals)
+        : _darkScheme(baseScheme, neutrals);
     final baseTextTheme = ShadTextTheme();
     TextStyle inter(TextStyle style, {FontWeight? weight}) {
       return style.copyWith(
@@ -164,7 +168,7 @@ class AppTheme {
 
     return ShadThemeData(
       brightness: brightness,
-      colorScheme: baseScheme,
+      colorScheme: patchedScheme,
       textTheme: textTheme,
       decoration: const ShadDecoration(errorPadding: inputSubtextInsets),
       radius: const BorderRadius.all(Radius.circular(12)),
@@ -176,5 +180,33 @@ class AppTheme {
     ChatNeutrals neutrals = const ChatNeutrals(),
   }) {
     return ChatThemeTokens.fromNeutrals(neutrals, brightness);
+  }
+
+  static ShadColorScheme _lightScheme(
+    ShadColorScheme base,
+    ChatNeutrals neutrals,
+  ) {
+    return base.copyWith(
+      background: neutrals.backgroundLight,
+      card: neutrals.cardLight,
+      popover: neutrals.cardLight,
+      border: neutrals.borderLight,
+      foreground: neutrals.foregroundLight,
+      mutedForeground: neutrals.mutedFgLight,
+    );
+  }
+
+  static ShadColorScheme _darkScheme(
+    ShadColorScheme base,
+    ChatNeutrals neutrals,
+  ) {
+    return base.copyWith(
+      background: neutrals.backgroundDark,
+      card: neutrals.cardDark,
+      popover: neutrals.cardDark,
+      border: neutrals.borderDark,
+      foreground: neutrals.foregroundDark,
+      mutedForeground: neutrals.mutedFgDark,
+    );
   }
 }
