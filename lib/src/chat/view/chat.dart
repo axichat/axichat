@@ -1082,8 +1082,6 @@ class _ChatState extends State<Chat> {
   var _selectionDismissMoved = false;
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
       CalendarFragmentPolicy();
-  static const CalendarFragmentFormatter _calendarFragmentFormatter =
-      CalendarFragmentFormatter();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
 
@@ -5920,11 +5918,12 @@ class _ChatState extends State<Chat> {
                                                                 displayFragment ==
                                                                         null
                                                                     ? null
-                                                                    : _calendarFragmentFormatter
-                                                                        .describe(
-                                                                          displayFragment,
-                                                                        )
-                                                                        .trim();
+                                                                    : CalendarFragmentFormatter(
+                                                                        context
+                                                                            .l10n,
+                                                                      ).describe(
+                                                                        displayFragment,
+                                                                      ).trim();
                                                             final bool hideFragmentText = fragmentFallbackText !=
                                                                     null &&
                                                                 fragmentFallbackText
@@ -9226,7 +9225,9 @@ class _PinnedMessageTile extends StatelessWidget {
         ?.maybeMap(criticalPath: (value) => value, orElse: () => null);
     final bool hasCriticalPath = criticalPathFragment != null;
     final String? criticalPathShareText = hasCriticalPath
-        ? const CalendarFragmentFormatter().describe(calendarFragment!).trim()
+        ? CalendarFragmentFormatter(context.l10n)
+            .describe(calendarFragment!)
+            .trim()
         : null;
     final bool hideCriticalPathText = criticalPathShareText != null &&
         criticalPathShareText.isNotEmpty &&
