@@ -97,6 +97,19 @@ final XmppOperationEvent _mamMucFailureEvent = XmppOperationEvent(
   stage: XmppOperationStage.end,
   isSuccess: false,
 );
+final XmppOperationEvent _mamFetchStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamFetch,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _mamFetchSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamFetch,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _mamFetchFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamFetch,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 const String _conversationIndexUpdateFailedLog =
     'Failed to update conversation index.';
 const String _mucMutationRejectedLog =
@@ -2333,34 +2346,47 @@ mixin MessageService
     DateTime? start,
     int pageSize = mamLoginBackfillMessageLimit,
   }) async {
+    var success = false;
+    emitXmppOperation(_mamFetchStartEvent);
     final mamManager = _connection.getManager<mox.MAMManager>();
     if (mamManager == null) {
       _log.warning('MAM manager unavailable; ensure it is registered.');
       throw XmppMessageException();
     }
-    final options = mox.MAMQueryOptions(
-      withJid: null,
-      start: start,
-      formType: mox.mamXmlns,
-      forceForm: true,
-    );
-    final result = await mamManager.queryArchive(
-      to: null,
-      options: options,
-      rsm: mox.ResultSetManagement(before: before, after: after, max: pageSize),
-      timeout: _mamQueryTimeout,
-    );
-    if (result == null) {
-      _log.warning('Global MAM query failed.');
-      throw XmppMessageException();
+    try {
+      final options = mox.MAMQueryOptions(
+        withJid: null,
+        start: start,
+        formType: mox.mamXmlns,
+        forceForm: true,
+      );
+      final result = await mamManager.queryArchive(
+        to: null,
+        options: options,
+        rsm: mox.ResultSetManagement(
+          before: before,
+          after: after,
+          max: pageSize,
+        ),
+        timeout: _mamQueryTimeout,
+      );
+      if (result == null) {
+        _log.warning('Global MAM query failed.');
+        throw XmppMessageException();
+      }
+      final rsm = result.rsm;
+      success = true;
+      return MamPageResult(
+        complete: result.complete,
+        firstId: rsm?.first,
+        lastId: rsm?.last,
+        count: rsm?.count,
+      );
+    } finally {
+      emitXmppOperation(
+        success ? _mamFetchSuccessEvent : _mamFetchFailureEvent,
+      );
     }
-    final rsm = result.rsm;
-    return MamPageResult(
-      complete: result.complete,
-      firstId: rsm?.first,
-      lastId: rsm?.last,
-      count: rsm?.count,
-    );
   }
 
   bool _canQueryMucArchive(String jid) {
@@ -3802,35 +3828,48 @@ mixin MessageService
     if (isMuc && !_canQueryMucArchive(jid)) {
       return const MamPageResult(complete: true);
     }
+    var success = false;
+    emitXmppOperation(_mamFetchStartEvent);
     final mamManager = _connection.getManager<mox.MAMManager>();
     if (mamManager == null) {
       _log.warning('MAM manager unavailable; ensure it is registered.');
       throw XmppMessageException();
     }
-    final peerJid = mox.JID.fromString(jid);
-    final options = mox.MAMQueryOptions(
-      withJid: isMuc ? null : peerJid,
-      start: start,
-      formType: mox.mamXmlns,
-      forceForm: true,
-    );
-    final result = await mamManager.queryArchive(
-      to: isMuc ? peerJid : null,
-      options: options,
-      rsm: mox.ResultSetManagement(before: before, after: after, max: pageSize),
-      timeout: _mamQueryTimeout,
-    );
-    if (result == null) {
-      _log.warning('MAM query failed.');
-      throw XmppMessageException();
+    try {
+      final peerJid = mox.JID.fromString(jid);
+      final options = mox.MAMQueryOptions(
+        withJid: isMuc ? null : peerJid,
+        start: start,
+        formType: mox.mamXmlns,
+        forceForm: true,
+      );
+      final result = await mamManager.queryArchive(
+        to: isMuc ? peerJid : null,
+        options: options,
+        rsm: mox.ResultSetManagement(
+          before: before,
+          after: after,
+          max: pageSize,
+        ),
+        timeout: _mamQueryTimeout,
+      );
+      if (result == null) {
+        _log.warning('MAM query failed.');
+        throw XmppMessageException();
+      }
+      final rsm = result.rsm;
+      success = true;
+      return MamPageResult(
+        complete: result.complete,
+        firstId: rsm?.first,
+        lastId: rsm?.last,
+        count: rsm?.count,
+      );
+    } finally {
+      emitXmppOperation(
+        success ? _mamFetchSuccessEvent : _mamFetchFailureEvent,
+      );
     }
-    final rsm = result.rsm;
-    return MamPageResult(
-      complete: result.complete,
-      firstId: rsm?.first,
-      lastId: rsm?.last,
-      count: rsm?.count,
-    );
   }
 
   Future<List<String>> persistDraftAttachmentMetadata(
@@ -4639,7 +4678,6 @@ mixin MessageService
     roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
     if (roomJid != null &&
         _isMucChatJid(roomJid) &&
-        !isChatStateOnlyError &&
         _shouldAttemptMucRepairForRoom(
           roomJid: roomJid,
           conditionData: errorCondition,
