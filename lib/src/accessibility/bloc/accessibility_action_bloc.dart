@@ -134,11 +134,11 @@ class AccessibilityActionBloc
     _rebuildSections(emit, nextState);
   }
 
-  void _onMenuClosed(
+  Future<void> _onMenuClosed(
     AccessibilityMenuClosed event,
     Emitter<AccessibilityActionState> emit,
-  ) {
-    _clearMessageStream();
+  ) async {
+    await _clearMessageStream();
     final nextState = state.copyWith(
       visible: false,
       stack: const [AccessibilityStepEntry(kind: AccessibilityStepKind.root)],
@@ -156,10 +156,10 @@ class AccessibilityActionBloc
     _rebuildSections(emit, nextState);
   }
 
-  void _onMenuBack(
+  Future<void> _onMenuBack(
     AccessibilityMenuBack event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (state.stack.length <= 1) {
       emit(
         state.copyWith(
@@ -183,7 +183,7 @@ class AccessibilityActionBloc
             nextStack.last.kind == AccessibilityStepKind.composer ||
             nextStack.last.kind == AccessibilityStepKind.conversation);
     if (!keepChatMessages) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     final nextState = state.copyWith(
       stack: nextStack,
@@ -203,11 +203,11 @@ class AccessibilityActionBloc
     _rebuildSections(emit, nextState);
   }
 
-  void _onMenuReset(
+  Future<void> _onMenuReset(
     AccessibilityMenuReset event,
     Emitter<AccessibilityActionState> emit,
-  ) {
-    _clearMessageStream();
+  ) async {
+    await _clearMessageStream();
     final nextState = state.copyWith(
       stack: const [AccessibilityStepEntry(kind: AccessibilityStepKind.root)],
       composerText: '',
@@ -982,8 +982,8 @@ class AccessibilityActionBloc
     );
   }
 
-  void _clearMessageStream() {
-    fireAndForget(() => _messageSubscription?.cancel());
+  Future<void> _clearMessageStream() async {
+    await _messageSubscription?.cancel();
     _messageSubscription = null;
   }
 
