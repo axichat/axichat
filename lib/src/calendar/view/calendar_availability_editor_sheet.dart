@@ -377,7 +377,7 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
-          SizedBox(width: calendarInsetSm),
+          const SizedBox(width: calendarInsetSm),
           Text(context.l10n.calendarAvailabilityAddWindow),
         ],
       ),

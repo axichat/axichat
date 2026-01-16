@@ -16,33 +16,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 
-const String _fallbackEventTitle = 'Untitled event';
-
-const String _fragmentLabelChecklist = 'Checklist';
-const String _fragmentLabelDayEvent = 'Day event';
-const String _fragmentLabelAvailability = 'Availability';
-const String _fragmentLabelCriticalPath = 'Critical path';
-
-const String _fragmentRangeSeparator = ' - ';
-const String _fragmentChecklistSeparator = ', ';
-const String _fragmentChecklistMorePrefix = 'and ';
-const String _fragmentChecklistMoreSuffix = ' more';
-const String _fragmentReminderLabel = 'Reminders';
-const String _fragmentReminderStartLabel = 'Start';
-const String _fragmentReminderDeadlineLabel = 'Deadline';
-const String _fragmentReminderSeparator = ', ';
-const String _fragmentInfoSeparator = ': ';
-const String _fragmentDetailOpen = ' (';
-const String _fragmentDetailClose = ')';
-const String _fragmentFreeBusyLabel = 'Window';
-const String _fragmentFreeBusyLabelFree = 'Free';
-const String _fragmentFreeBusyLabelBusy = 'Busy';
-const String _fragmentFreeBusyLabelBusyUnavailable = 'Busy (unavailable)';
-const String _fragmentFreeBusyLabelBusyTentative = 'Busy (tentative)';
-const String _emptyText = '';
-const String _fragmentCriticalPathProgressSeparator = '/';
-const String _fragmentCriticalPathProgressSuffix = ' done';
-
 const int _fragmentChecklistPreviewLimit = 4;
 
 class CalendarFragmentShareDecision {
@@ -78,17 +51,6 @@ extension ChatCalendarSupportX on Chat {
   bool get supportsChatCalendar => defaultTransport.isXmpp;
 }
 
-extension CalendarFreeBusyTypeLabelX on CalendarFreeBusyType {
-  String get label => switch (this) {
-        CalendarFreeBusyType.free => _fragmentFreeBusyLabelFree,
-        CalendarFreeBusyType.busy => _fragmentFreeBusyLabelBusy,
-        CalendarFreeBusyType.busyUnavailable =>
-          _fragmentFreeBusyLabelBusyUnavailable,
-        CalendarFreeBusyType.busyTentative =>
-          _fragmentFreeBusyLabelBusyTentative,
-      };
-}
-
 class CalendarFragmentFormatter {
   const CalendarFragmentFormatter(this.l10n);
 
@@ -108,71 +70,66 @@ class CalendarFragmentFormatter {
 
   String _formatChecklist(List<TaskChecklistItem> checklist) {
     if (checklist.isEmpty) {
-      return _fragmentLabelChecklist;
+      return l10n.calendarFragmentChecklistLabel;
     }
     final labels = checklist
         .map((item) => item.label.trim())
         .where((label) => label.isNotEmpty)
         .toList(growable: false);
     if (labels.isEmpty) {
-      return _fragmentLabelChecklist;
+      return l10n.calendarFragmentChecklistLabel;
     }
     final visibleLabels = labels.length <= _fragmentChecklistPreviewLimit
         ? labels
         : labels.sublist(0, _fragmentChecklistPreviewLimit);
-    final summary = visibleLabels.join(_fragmentChecklistSeparator);
+    final summary = visibleLabels.join(l10n.calendarFragmentChecklistSeparator);
     if (labels.length <= _fragmentChecklistPreviewLimit) {
-      return '$_fragmentLabelChecklist$_fragmentInfoSeparator$summary';
+      return l10n.calendarFragmentChecklistSummary(summary);
     }
     final remaining = labels.length - _fragmentChecklistPreviewLimit;
-    return '$_fragmentLabelChecklist$_fragmentInfoSeparator$summary '
-        '$_fragmentChecklistMorePrefix$remaining$_fragmentChecklistMoreSuffix';
+    return l10n.calendarFragmentChecklistSummaryMore(summary, remaining);
   }
 
   String _formatReminders(ReminderPreferences reminders) {
     if (!reminders.isEnabled) {
-      return _fragmentReminderLabel;
+      return l10n.calendarFragmentRemindersLabel;
     }
     final startOffsets = _formatOffsets(reminders.startOffsets);
     final deadlineOffsets = _formatOffsets(reminders.deadlineOffsets);
     final parts = <String>[];
     if (startOffsets.isNotEmpty) {
-      parts.add(
-        '$_fragmentReminderStartLabel$_fragmentInfoSeparator$startOffsets',
-      );
+      parts.add(l10n.calendarFragmentReminderStartSummary(startOffsets));
     }
     if (deadlineOffsets.isNotEmpty) {
-      parts.add(
-        '$_fragmentReminderDeadlineLabel$_fragmentInfoSeparator$deadlineOffsets',
-      );
+      parts.add(l10n.calendarFragmentReminderDeadlineSummary(deadlineOffsets));
     }
     if (parts.isEmpty) {
-      return _fragmentReminderLabel;
+      return l10n.calendarFragmentRemindersLabel;
     }
-    return '$_fragmentReminderLabel$_fragmentInfoSeparator'
-        '${parts.join(_fragmentReminderSeparator)}';
+    return l10n.calendarFragmentRemindersSummary(
+      parts.join(l10n.calendarFragmentReminderSeparator),
+    );
   }
 
   String _formatOffsets(List<Duration> offsets) {
     if (offsets.isEmpty) {
-      return _emptyText;
+      return '';
     }
-    final labels =
-        offsets.map(TimeFormatter.formatDuration).toList(growable: false);
-    return labels.join(_fragmentReminderSeparator);
+    final labels = offsets
+        .map((offset) => TimeFormatter.formatDuration(l10n, offset))
+        .toList(growable: false);
+    return labels.join(l10n.calendarFragmentReminderSeparator);
   }
 
   String _formatDayEvent(DayEvent event) {
     final String title = event.title.trim().isNotEmpty
         ? event.title.trim()
-        : _fallbackEventTitle;
+        : l10n.calendarFragmentEventTitleFallback;
     final String range = _formatDateRange(
       start: event.startDate,
       end: event.endDate,
     );
-    return '$title$_fragmentDetailOpen'
-        '$_fragmentLabelDayEvent$_fragmentInfoSeparator$range'
-        '$_fragmentDetailClose';
+    return l10n.calendarFragmentDayEventSummary(title, range);
   }
 
   String _formatFreeBusy(CalendarFreeBusyInterval interval) {
@@ -180,9 +137,10 @@ class CalendarFragmentFormatter {
       start: interval.start.value,
       end: interval.end.value,
     );
-    return '${interval.type.label}$_fragmentDetailOpen'
-        '$_fragmentFreeBusyLabel$_fragmentInfoSeparator$range'
-        '$_fragmentDetailClose';
+    return l10n.calendarFragmentFreeBusySummary(
+      interval.type.label(l10n),
+      range,
+    );
   }
 
   String _formatCriticalPath(
@@ -191,16 +149,14 @@ class CalendarFragmentFormatter {
   ) {
     final String name = path.name.trim().isNotEmpty
         ? path.name.trim()
-        : _fragmentLabelCriticalPath;
+        : l10n.calendarFragmentCriticalPathLabel;
     if (tasks.isEmpty) {
-      return '$_fragmentLabelCriticalPath$_fragmentInfoSeparator$name';
+      return l10n.calendarFragmentCriticalPathSummary(name);
     }
     final int completed = tasks.where((task) => task.isCompleted).length;
-    final String progress = '$completed$_fragmentCriticalPathProgressSeparator'
-        '${tasks.length}$_fragmentCriticalPathProgressSuffix';
-    return '$name$_fragmentDetailOpen'
-        '$_fragmentLabelCriticalPath$_fragmentInfoSeparator$progress'
-        '$_fragmentDetailClose';
+    final String progress =
+        l10n.calendarFragmentCriticalPathProgress(completed, tasks.length);
+    return l10n.calendarFragmentCriticalPathDetail(name, progress);
   }
 
   String _formatAvailability(CalendarAvailabilityWindow window) {
@@ -210,11 +166,9 @@ class CalendarFragmentFormatter {
     );
     final summary = window.summary?.trim();
     if (summary?.isNotEmpty == true) {
-      return '$summary$_fragmentDetailOpen'
-          '$_fragmentLabelAvailability$_fragmentInfoSeparator$range'
-          '$_fragmentDetailClose';
+      return l10n.calendarFragmentAvailabilitySummary(summary!, range);
     }
-    return '$_fragmentLabelAvailability$_fragmentInfoSeparator$range';
+    return l10n.calendarFragmentAvailabilityFallback(range);
   }
 
   String _formatDateRange({required DateTime start, DateTime? end}) {
@@ -223,18 +177,18 @@ class CalendarFragmentFormatter {
     if (endLabel == null || endLabel == startLabel) {
       return startLabel;
     }
-    return '$startLabel$_fragmentRangeSeparator$endLabel';
+    return l10n.commonRangeLabel(startLabel, endLabel);
   }
 
   String _formatDateTimeRange({
     required DateTime start,
     required DateTime end,
   }) {
-    final startLabel = TimeFormatter.formatFriendlyDateTime(start);
-    final endLabel = TimeFormatter.formatFriendlyDateTime(end);
+    final startLabel = TimeFormatter.formatFriendlyDateTime(l10n, start);
+    final endLabel = TimeFormatter.formatFriendlyDateTime(l10n, end);
     if (startLabel == endLabel) {
       return startLabel;
     }
-    return '$startLabel$_fragmentRangeSeparator$endLabel';
+    return l10n.commonRangeLabel(startLabel, endLabel);
   }
 }

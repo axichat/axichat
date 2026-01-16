@@ -7,6 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class CalendarMonthView extends StatelessWidget {
@@ -350,7 +351,7 @@ class _MonthDayTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    '+$overflow more',
+                    context.l10n.calendarMonthOverflowMore(overflow),
                     style: textTheme.small.copyWith(
                       color: colors.primary,
                       fontSize: 11,

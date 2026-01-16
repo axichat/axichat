@@ -760,37 +760,33 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final deadlineDate = DateTime(date.year, date.month, date.day);
 
     if (deadlineDate == today) {
-      return 'Due Today';
+      return context.l10n.calendarDeadlineDueToday;
     }
     if (deadlineDate == today.add(const Duration(days: 1))) {
-      return 'Due Tomorrow';
+      return context.l10n.calendarDeadlineDueTomorrow;
     }
     return TimeFormatter.formatFriendlyDate(deadlineDate);
   }
 
   String _monthLabel(DateTime date) {
-    const months = [
-      '',
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return '${months[date.month]} ${date.year}';
+    return DateFormat.yMMMM().format(date);
   }
 
   int _roundToFive(int minute) {
     final rounded = (minute / 5).round() * 5;
     return rounded == 60 ? 0 : rounded;
   }
+}
+
+List<String> _weekdayLabels(BuildContext context) {
+  final localizations = MaterialLocalizations.of(context);
+  final List<String> weekdays = localizations.narrowWeekdays;
+  final int startIndex = localizations.firstDayOfWeekIndex;
+  return List<String>.generate(
+    weekdays.length,
+    (index) => weekdays[(index + startIndex) % weekdays.length],
+    growable: false,
+  );
 }
 
 class _OverlayGeometry {
@@ -1219,7 +1215,7 @@ class _DeadlineCalendarGrid extends StatelessWidget {
       child: Column(
         children: [
           Row(
-            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+            children: _weekdayLabels(context)
                 .map(
                   (label) => Expanded(
                     child: Center(
@@ -1349,7 +1345,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Time',
+            context.l10n.commonTimeLabel,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,

@@ -4535,10 +4535,19 @@ mixin MessageService
     final MessageError error = _resolveMessageError(stanzaError);
     final StanzaErrorConditionData? errorCondition =
         event.extensions.get<StanzaErrorConditionData>();
-    final bool hasBody =
-        event.extensions.get<mox.MessageBodyData>()?.body?.isNotEmpty ?? false;
+    final _OutboundMessageSummary? summary = _outboundMessageSummaries.remove(
+      stanzaId,
+    );
+    final bool summaryDisplayable = (summary?.hasBody ?? false) ||
+        (summary?.hasHtml ?? false) ||
+        (summary?.flags.contains(_OutboundMessageFlag.sfs) ?? false) ||
+        (summary?.flags.contains(_OutboundMessageFlag.oob) ?? false) ||
+        (summary?.flags.contains(_OutboundMessageFlag.uploadNotification) ??
+            false);
     final bool isChatStateOnlyError =
-        event.extensions.get<mox.ChatState>() != null && !hasBody;
+        event.extensions.get<mox.ChatState>() != null &&
+            !summaryDisplayable &&
+            !event.displayable;
     Message? persistedMessage;
     try {
       persistedMessage = await _dbOpReturning<XmppDatabase, Message?>(
@@ -4555,9 +4564,6 @@ mixin MessageService
         (db) => db.saveMessageError(stanzaID: stanzaId, error: error),
       );
     }
-    final _OutboundMessageSummary? summary = _outboundMessageSummaries.remove(
-      stanzaId,
-    );
     final String? mappedRoomJid = _takeOutboundGroupchatRoomJid(stanzaId);
     final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
     String? roomJid = summaryIsGroupChat

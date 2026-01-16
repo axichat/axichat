@@ -3512,44 +3512,43 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatChooseTextToAdd => '选择要添加的文本';
 
   @override
-  String get notificationChannelMessages => 'Messages';
+  String get notificationChannelMessages => '消息';
 
   @override
-  String get notificationNewMessageTitle => 'New message';
+  String get notificationNewMessageTitle => '新消息';
 
   @override
-  String get notificationOpenAction => 'Open notification';
+  String get notificationOpenAction => '打开通知';
 
   @override
-  String get notificationBackgroundConnectionDisabledTitle =>
-      'Background connection disabled';
+  String get notificationBackgroundConnectionDisabledTitle => '后台连接已禁用';
 
   @override
   String get notificationBackgroundConnectionDisabledBody =>
-      'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.';
+      'Android 阻止了 Axichat 的消息服务。请重新启用悬浮窗和电池优化权限以恢复后台消息。';
 
   @override
-  String get calendarReminderDeadlineNow => 'Deadline now';
+  String get calendarReminderDeadlineNow => '截止现在';
 
   @override
   String calendarReminderDueIn(Object duration) {
-    return 'Due in $duration';
+    return '$duration后到期';
   }
 
   @override
-  String get calendarReminderStartingNow => 'Starting now';
+  String get calendarReminderStartingNow => '现在开始';
 
   @override
   String calendarReminderStartsIn(Object duration) {
-    return 'Starts in $duration';
+    return '$duration后开始';
   }
 
   @override
-  String get calendarReminderHappeningToday => 'Happening today';
+  String get calendarReminderHappeningToday => '今天发生';
 
   @override
   String calendarReminderIn(Object duration) {
-    return 'In $duration';
+    return '$duration后';
   }
 
   @override
@@ -3557,8 +3556,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# days',
-      one: '# day',
+      other: '# 天',
+      one: '# 天',
     );
     return '$_temp0';
   }
@@ -3568,8 +3567,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# hours',
-      one: '# hour',
+      other: '# 小时',
+      one: '# 小时',
     );
     return '$_temp0';
   }
@@ -3579,92 +3578,92 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# minutes',
-      one: '# minute',
+      other: '# 分钟',
+      one: '# 分钟',
     );
     return '$_temp0';
   }
 
   @override
-  String get calendarExportCalendar => 'Export calendar';
+  String get calendarExportCalendar => '导出日历';
 
   @override
-  String get calendarImportCalendar => 'Import calendar';
+  String get calendarImportCalendar => '导入日历';
 
   @override
-  String get calendarSyncStatusSyncing => 'Syncing...';
+  String get calendarSyncStatusSyncing => '同步中...';
 
   @override
-  String get calendarSyncStatusFailed => 'Sync failed';
+  String get calendarSyncStatusFailed => '同步失败';
 
   @override
-  String get calendarSyncStatusSynced => 'Synced';
+  String get calendarSyncStatusSynced => '已同步';
 
   @override
-  String get calendarSyncStatusIdle => 'Idle';
+  String get calendarSyncStatusIdle => '尚未同步';
 
   @override
   String calendarSplitTaskAtTime(Object time) {
-    return 'Split task at $time';
+    return '在 $time 拆分任务';
   }
 
   @override
-  String get calendarSplitSelectTime => 'Select split time';
+  String get calendarSplitSelectTime => '选择拆分时间';
 
   @override
-  String get calendarTaskMarkIncomplete => 'Mark incomplete';
+  String get calendarTaskMarkIncomplete => '标记为未完成';
 
   @override
-  String get calendarTaskMarkComplete => 'Mark complete';
+  String get calendarTaskMarkComplete => '标记为完成';
 
   @override
-  String get calendarTaskRemoveImportant => 'Remove important flag';
+  String get calendarTaskRemoveImportant => '移除重要标记';
 
   @override
-  String get calendarTaskMarkImportant => 'Mark as important';
+  String get calendarTaskMarkImportant => '标记为重要';
 
   @override
-  String get calendarTaskRemoveUrgent => 'Remove urgent flag';
+  String get calendarTaskRemoveUrgent => '移除紧急标记';
 
   @override
-  String get calendarTaskMarkUrgent => 'Mark as urgent';
+  String get calendarTaskMarkUrgent => '标记为紧急';
 
   @override
-  String get calendarDeselectTask => 'Deselect task';
+  String get calendarDeselectTask => '取消选择任务';
 
   @override
-  String get calendarAddTaskToSelection => 'Add task to selection';
+  String get calendarAddTaskToSelection => '将任务加入选择';
 
   @override
-  String get calendarSelectTask => 'Select task';
+  String get calendarSelectTask => '选择任务';
 
   @override
-  String get calendarDeselectAllRepeats => 'Deselect all repeats';
+  String get calendarDeselectAllRepeats => '取消选择所有重复项';
 
   @override
-  String get calendarAddAllRepeats => 'Add all repeats';
+  String get calendarAddAllRepeats => '添加所有重复项';
 
   @override
-  String get calendarSelectAllRepeats => 'Select all repeats';
+  String get calendarSelectAllRepeats => '选择所有重复项';
 
   @override
-  String get calendarAddToSelection => 'Add to selection';
+  String get calendarAddToSelection => '加入选择';
 
   @override
-  String get calendarSelectAllTasks => 'Select all tasks';
+  String get calendarSelectAllTasks => '选择所有任务';
 
   @override
-  String get calendarExitSelectionMode => 'Exit selection mode';
+  String get calendarExitSelectionMode => '退出选择模式';
 
   @override
-  String get calendarSplitTask => 'Split task';
+  String get calendarSplitTask => '拆分任务';
 
   @override
-  String get calendarCopyTemplate => 'Copy template';
+  String get calendarCopyTemplate => '复制模板';
 
   @override
   String calendarTaskAddedMessage(Object title) {
-    return 'Task \"$title\" added';
+    return '已添加任务“$title”';
   }
 
   @override
@@ -3672,15 +3671,15 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# tasks added',
-      one: '# task added',
+      other: '# 个任务已添加',
+      one: '# 个任务已添加',
     );
     return '$_temp0';
   }
 
   @override
   String calendarTaskRemovedMessage(Object title) {
-    return 'Task \"$title\" removed';
+    return '已移除任务“$title”';
   }
 
   @override
@@ -3688,50 +3687,50 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# tasks removed',
-      one: '# task removed',
+      other: '# 个任务已移除',
+      one: '# 个任务已移除',
     );
     return '$_temp0';
   }
 
   @override
-  String get calendarTaskRemovedTitle => 'Task removed';
+  String get calendarTaskRemovedTitle => '任务已移除';
 
   @override
-  String get calendarDeadlinePlaceholder => 'Set deadline (optional)';
+  String get calendarDeadlinePlaceholder => '设置截止时间（可选）';
 
   @override
-  String get calendarTaskDescriptionHint => 'Description (optional)';
+  String get calendarTaskDescriptionHint => '描述（可选）';
 
   @override
-  String get calendarTaskLocationHint => 'Location (optional)';
+  String get calendarTaskLocationHint => '地点（可选）';
 
   @override
-  String get calendarPickDateLabel => 'Pick date';
+  String get calendarPickDateLabel => '选择日期';
 
   @override
-  String get calendarPickTimeLabel => 'Pick time';
+  String get calendarPickTimeLabel => '选择时间';
 
   @override
-  String get calendarReminderLabel => 'Reminder';
+  String get calendarReminderLabel => '提醒';
 
   @override
-  String get calendarEditDayEventTitle => 'Edit day event';
+  String get calendarEditDayEventTitle => '编辑全天事件';
 
   @override
-  String get calendarNewDayEventTitle => 'New day event';
+  String get calendarNewDayEventTitle => '新建全天事件';
 
   @override
-  String get commonAdd => 'Add';
+  String get commonAdd => '添加';
 
   @override
-  String get commonTitle => 'Title';
+  String get commonTitle => '标题';
 
   @override
-  String get calendarShareUnavailable => 'Calendar sharing is unavailable.';
+  String get calendarShareUnavailable => '日历共享不可用。';
 
   @override
-  String get calendarShareAvailability => 'Share availability';
+  String get calendarShareAvailability => '共享可用时间';
 
   @override
   String get calendarShortcutUndo => 'Ctrl/Cmd+Z';
@@ -3741,24 +3740,1065 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String commonShortcutTooltip(Object tooltip, Object shortcut) {
-    return '$tooltip ($shortcut)';
+    return '$tooltip（$shortcut）';
   }
 
   @override
-  String get calendarDragCanceled => 'Drag canceled';
+  String get calendarDragCanceled => '拖动已取消';
 
   @override
-  String get calendarZoomLabelCompact => 'Compact';
+  String get calendarZoomLabelCompact => '紧凑';
 
   @override
-  String get calendarZoomLabelComfort => 'Comfort';
+  String get calendarZoomLabelComfort => '舒适';
 
   @override
-  String get calendarZoomLabelExpanded => 'Expanded';
+  String get calendarZoomLabelExpanded => '扩展';
 
   @override
   String calendarZoomLabelMinutes(Object minutes) {
-    return '${minutes}m';
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get calendarGuestModeNotice => '访客模式 - 任务仅保存在此设备本地';
+
+  @override
+  String get calendarGuestSignUpToSync => '注册以同步';
+
+  @override
+  String get calendarGuestExportNoData => '没有可导出的日历数据。';
+
+  @override
+  String get calendarGuestExportTitle => '导出访客日历';
+
+  @override
+  String get calendarGuestExportShareSubject => 'Axichat 访客日历导出';
+
+  @override
+  String calendarGuestExportShareText(Object format) {
+    return 'Axichat 访客日历导出（$format）';
+  }
+
+  @override
+  String calendarGuestExportFailed(Object error) {
+    return '导出日历失败：$error';
+  }
+
+  @override
+  String get calendarGuestImportTitle => '导入日历';
+
+  @override
+  String get calendarGuestImportWarningMessage => '导入将合并数据并覆盖当前日历中匹配的条目。继续？';
+
+  @override
+  String get calendarGuestImportConfirmLabel => '导入';
+
+  @override
+  String get calendarGuestImportFileAccessError => '无法访问所选文件。';
+
+  @override
+  String get calendarGuestImportNoData => '所选文件中未检测到日历数据。';
+
+  @override
+  String get calendarGuestImportFailed => '导入未能应用更改。';
+
+  @override
+  String get calendarGuestImportSuccess => '已导入日历数据。';
+
+  @override
+  String get calendarGuestImportNoTasks => '所选文件中未检测到任务。';
+
+  @override
+  String calendarGuestImportTasksSuccess(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 个任务',
+      one: '# 个任务',
+    );
+    return '已导入 $_temp0。';
+  }
+
+  @override
+  String calendarGuestImportError(Object error) {
+    return '导入失败：$error';
+  }
+
+  @override
+  String get blocklistEmpty => '未屏蔽任何人';
+
+  @override
+  String get chatMessageSubjectLabel => '主题';
+
+  @override
+  String get chatMessageRecipientsLabel => '收件人';
+
+  @override
+  String get chatMessageAlsoSentToLabel => '也发送给';
+
+  @override
+  String chatMessageFromLabel(Object sender) {
+    return '来自 $sender';
+  }
+
+  @override
+  String get chatMessageReactionsLabel => '回应';
+
+  @override
+  String get commonClearSelection => '清除选择';
+
+  @override
+  String commonSelectedCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 个',
+      one: '# 个',
+    );
+    return '已选择 $_temp0';
+  }
+
+  @override
+  String get profileDeviceFingerprint => '设备指纹';
+
+  @override
+  String get profileFingerprintUnavailable => '指纹不可用';
+
+  @override
+  String get axiVersionCurrentFeatures => '当前功能：';
+
+  @override
+  String get axiVersionCurrentFeaturesList => '消息、在线状态';
+
+  @override
+  String get axiVersionComingNext => '即将推出：';
+
+  @override
+  String get axiVersionComingNextList => '群聊、多媒体';
+
+  @override
+  String get commonMoreOptions => '更多选项';
+
+  @override
+  String get commonAreYouSure => '确定吗？';
+
+  @override
+  String get commonAll => '全部';
+
+  @override
+  String get languageSystem => '系统';
+
+  @override
+  String get languageEnglish => '英语';
+
+  @override
+  String get languageGerman => '德语';
+
+  @override
+  String get languageSpanish => '西班牙语';
+
+  @override
+  String get languageFrench => '法语';
+
+  @override
+  String get languageChineseSimplified => '简体中文';
+
+  @override
+  String get languageChineseHongKong => '繁體中文（香港）';
+
+  @override
+  String get languageSystemShort => 'SYS';
+
+  @override
+  String get languageEnglishShort => 'EN';
+
+  @override
+  String get languageGermanShort => 'DE';
+
+  @override
+  String get languageSpanishShort => 'ES';
+
+  @override
+  String get languageFrenchShort => 'FR';
+
+  @override
+  String get languageChineseSimplifiedShort => 'ZH';
+
+  @override
+  String get languageChineseHongKongShort => 'ZH-HK';
+
+  @override
+  String get languageSystemFlag => '🌐';
+
+  @override
+  String get languageEnglishFlag => '🇬🇧';
+
+  @override
+  String get languageGermanFlag => '🇩🇪';
+
+  @override
+  String get languageSpanishFlag => '🇪🇸';
+
+  @override
+  String get languageFrenchFlag => '🇫🇷';
+
+  @override
+  String get languageChineseSimplifiedFlag => '🇨🇳';
+
+  @override
+  String get languageChineseHongKongFlag => '🇭🇰';
+
+  @override
+  String get calendarTransferNoDataExport => '没有可导出的日历数据。';
+
+  @override
+  String get calendarTransferExportSubject => 'Axichat 日历导出';
+
+  @override
+  String calendarTransferExportText(String format) {
+    return 'Axichat 日历导出（$format）';
+  }
+
+  @override
+  String get calendarTransferExportReady => '导出已准备好分享。';
+
+  @override
+  String calendarTransferExportFailed(String error) {
+    return '日历导出失败：$error';
+  }
+
+  @override
+  String get calendarTransferImportWarning => '导入将合并数据并覆盖当前日历中匹配的项目。继续？';
+
+  @override
+  String get calendarTransferImportConfirm => '导入';
+
+  @override
+  String get calendarTransferFileAccessFailed => '无法访问所选文件。';
+
+  @override
+  String get calendarTransferNoDataImport => '所选文件中未检测到日历数据。';
+
+  @override
+  String get calendarTransferImportFailed => '导入未能应用更改。';
+
+  @override
+  String get calendarTransferImportSuccess => '已导入日历数据。';
+
+  @override
+  String get calendarTransferNoTasksDetected => '所选文件中未检测到任务。';
+
+  @override
+  String calendarTransferImportTasksSuccess(int count) {
+    return '已导入 $count 项任务。';
+  }
+
+  @override
+  String calendarTransferImportFailedWithError(String error) {
+    return '导入失败：$error';
+  }
+
+  @override
+  String get calendarExportChooseFormat => '选择导出格式';
+
+  @override
+  String get calendarAvailabilityWindowsTitle => '可用时间窗口';
+
+  @override
+  String get calendarAvailabilityWindowsSubtitle => '定义你想分享的时间范围。';
+
+  @override
+  String get calendarAvailabilityWindowsLabel => '窗口';
+
+  @override
+  String get calendarAvailabilityNoWindows => '暂无窗口。';
+
+  @override
+  String get calendarAvailabilityWindowLabel => '窗口';
+
+  @override
+  String get calendarAvailabilitySummaryLabel => '摘要';
+
+  @override
+  String get calendarAvailabilitySummaryHint => '可选标签';
+
+  @override
+  String get calendarAvailabilityNotesLabel => '备注';
+
+  @override
+  String get calendarAvailabilityNotesHint => '可选详情';
+
+  @override
+  String get calendarAvailabilityAddWindow => '添加窗口';
+
+  @override
+  String get calendarAvailabilitySaveWindows => '保存窗口';
+
+  @override
+  String get calendarAvailabilityEmptyWindowsError => '请至少添加一个可用时间窗口。';
+
+  @override
+  String get calendarAvailabilityInvalidRangeError => '保存前请检查时间范围。';
+
+  @override
+  String get calendarTaskShareTitle => '分享任务';
+
+  @override
+  String get calendarTaskShareSubtitle => '将任务以 .ics 发送到聊天。';
+
+  @override
+  String get calendarTaskShareTarget => '分享给';
+
+  @override
+  String get calendarTaskShareEditAccess => '编辑权限';
+
+  @override
+  String get calendarTaskShareReadOnlyLabel => '只读';
+
+  @override
+  String get calendarTaskShareReadOnlyHint => '收件人可以查看此任务，但只有你可以编辑。';
+
+  @override
+  String get calendarTaskShareEditableHint => '收件人可以编辑此任务，更新会同步回你的日历。';
+
+  @override
+  String get calendarTaskShareReadOnlyDisabledHint => '编辑仅适用于聊天日历。';
+
+  @override
+  String get calendarTaskShareMissingChats => '没有可用的聊天。';
+
+  @override
+  String get calendarTaskShareMissingRecipient => '请选择要分享的聊天。';
+
+  @override
+  String get calendarTaskShareServiceUnavailable => '日历共享不可用。';
+
+  @override
+  String get calendarTaskShareDenied => '该房间中你的角色已禁用日历卡片。';
+
+  @override
+  String get calendarTaskShareSendFailed => '分享任务失败。';
+
+  @override
+  String get calendarTaskShareSuccess => '任务已分享。';
+
+  @override
+  String get commonTimeJustNow => '刚刚';
+
+  @override
+  String commonTimeMinutesAgo(int count) {
+    return '$count 分钟前';
+  }
+
+  @override
+  String commonTimeHoursAgo(int count) {
+    return '$count 小时前';
+  }
+
+  @override
+  String commonTimeDaysAgo(int count) {
+    return '$count 天前';
+  }
+
+  @override
+  String commonTimeWeeksAgo(int count) {
+    return '$count 周前';
+  }
+
+  @override
+  String get commonTimeMonthsAgo => '数月前';
+
+  @override
+  String get connectivityStatusConnected => '已连接';
+
+  @override
+  String get connectivityStatusConnecting => '正在连接...';
+
+  @override
+  String get connectivityStatusNotConnected => '未连接。';
+
+  @override
+  String get connectivityStatusFailed => '连接失败。';
+
+  @override
+  String get commonShare => '分享';
+
+  @override
+  String get commonRecipients => '收件人';
+
+  @override
+  String commonRangeLabel(String start, String end) {
+    return '$start - $end';
+  }
+
+  @override
+  String get commonOwnerFallback => '所有者';
+
+  @override
+  String commonDurationMinutes(int count) {
+    return '$count 分钟';
+  }
+
+  @override
+  String commonDurationHours(int count) {
+    return '$count 小时';
+  }
+
+  @override
+  String commonDurationMinutesShort(int count) {
+    return '${count}m';
+  }
+
+  @override
+  String commonDurationHoursShort(int count) {
+    return '${count}h';
+  }
+
+  @override
+  String commonDateTimeLabel(String date, String time) {
+    return '$date · $time';
+  }
+
+  @override
+  String get calendarAvailabilityShareTitle => '分享可用性';
+
+  @override
+  String get calendarAvailabilityShareSubtitle => '选择范围，编辑空闲/忙碌，然后分享。';
+
+  @override
+  String get calendarAvailabilityShareChatSubtitle => '选择范围，编辑空闲/忙碌，然后在此聊天中分享。';
+
+  @override
+  String get calendarAvailabilityShareRangeLabel => '范围';
+
+  @override
+  String get calendarAvailabilityShareEditHint => '点击可拆分，拖动可调整大小，或切换空闲/忙碌。';
+
+  @override
+  String get calendarAvailabilityShareSavePreset => '保存为预设';
+
+  @override
+  String get calendarAvailabilitySharePresetNameTitle => '保存空闲/忙碌表';
+
+  @override
+  String get calendarAvailabilitySharePresetNameLabel => '名称';
+
+  @override
+  String get calendarAvailabilitySharePresetNameHint => '团队时间';
+
+  @override
+  String get calendarAvailabilitySharePresetNameMissing => '输入名称以保存此表。';
+
+  @override
+  String get calendarAvailabilityShareInvalidRange => '请选择有效范围进行分享。';
+
+  @override
+  String get calendarAvailabilityShareMissingJid => '日历共享不可用。';
+
+  @override
+  String get calendarAvailabilityShareRecipientsRequired => '请至少选择一个收件人。';
+
+  @override
+  String get calendarAvailabilityShareMissingChats => '没有可用的合格聊天。';
+
+  @override
+  String get calendarAvailabilityShareLockedChatUnavailable => '此聊天无法接收可用性分享。';
+
+  @override
+  String get calendarAvailabilityShareSuccess => '可用性已分享。';
+
+  @override
+  String get calendarAvailabilityShareFailed => '分享可用性失败。';
+
+  @override
+  String get calendarAvailabilitySharePartialFailure => '部分分享未发送成功。';
+
+  @override
+  String get calendarAvailabilitySharePresetLabel => '最近的表';
+
+  @override
+  String get calendarAvailabilitySharePresetEmpty => '暂无最近的表。';
+
+  @override
+  String calendarAvailabilityShareRecentPreset(String range) {
+    return '已分享 $range';
+  }
+
+  @override
+  String get calendarAvailabilityPreviewEmpty => '暂无可用时间段。';
+
+  @override
+  String calendarAvailabilityPreviewMore(int count) {
+    return '以及另外 $count 个';
+  }
+
+  @override
+  String get calendarTaskTitleRequired => '请先输入任务标题再继续。';
+
+  @override
+  String calendarTaskTitleTooLong(int max) {
+    return '任务标题过长。请使用少于 $max 个字符。';
+  }
+
+  @override
+  String calendarTaskTitleLimitWarning(int max) {
+    return '任务标题限制为 $max 个字符。请缩短此文本或在保存前将细节移至描述中。';
+  }
+
+  @override
+  String calendarTaskTitleCharacterCount(int count, int limit) {
+    return '$count / $limit 个字符';
+  }
+
+  @override
+  String get axiVersionWelcomeTitle => '欢迎使用 Axichat';
+
+  @override
+  String axiVersionLabel(String version) {
+    return 'v$version';
+  }
+
+  @override
+  String get axiVersionTagAlpha => 'alpha';
+
+  @override
+  String get calendarSyncWarningSnapshotTitle => '日历同步';
+
+  @override
+  String get calendarSyncWarningSnapshotMessage =>
+      '日历快照不可用。请从另一台设备导出日历 JSON 并在此导入以恢复。';
+
+  @override
+  String commonLabelValue(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get calendarAvailabilityRequestTitle => '请求时间';
+
+  @override
+  String get calendarAvailabilityRequestSubtitle => '选择一个空闲时段并分享详情。';
+
+  @override
+  String get calendarAvailabilityRequestDetailsLabel => '详情';
+
+  @override
+  String get calendarAvailabilityRequestRangeLabel => '范围';
+
+  @override
+  String get calendarAvailabilityRequestTitleLabel => '标题';
+
+  @override
+  String get calendarAvailabilityRequestTitlePlaceholder => '这是做什么用的？';
+
+  @override
+  String get calendarAvailabilityRequestDescriptionLabel => '描述';
+
+  @override
+  String get calendarAvailabilityRequestDescriptionPlaceholder => '添加上下文（可选）。';
+
+  @override
+  String get calendarAvailabilityRequestSendLabel => '发送请求';
+
+  @override
+  String get calendarAvailabilityRequestInvalidRange => '请选择有效时间范围。';
+
+  @override
+  String get calendarAvailabilityRequestNotFree => '发送前请选择空闲时段。';
+
+  @override
+  String get calendarAvailabilityDecisionTitle => '接受请求';
+
+  @override
+  String get calendarAvailabilityDecisionSubtitle => '选择哪些日历应接收它。';
+
+  @override
+  String get calendarAvailabilityDecisionPersonalLabel => '添加到个人日历';
+
+  @override
+  String get calendarAvailabilityDecisionChatLabel => '添加到聊天日历';
+
+  @override
+  String get calendarAvailabilityDecisionMissingSelection => '请至少选择一个日历。';
+
+  @override
+  String get calendarAvailabilityDecisionSummaryLabel => '已请求';
+
+  @override
+  String get calendarAvailabilityRequestTitleFallback => '请求的时间';
+
+  @override
+  String get calendarFreeBusyFree => '空闲';
+
+  @override
+  String get calendarFreeBusyBusy => '忙碌';
+
+  @override
+  String get calendarFreeBusyTentative => '暂定';
+
+  @override
+  String get calendarFreeBusyEditTitle => '编辑可用性';
+
+  @override
+  String get calendarFreeBusyEditSubtitle => '调整时间范围和状态。';
+
+  @override
+  String get calendarFreeBusyToggleLabel => '空闲/忙碌';
+
+  @override
+  String get calendarFreeBusySplitLabel => '拆分';
+
+  @override
+  String get calendarFreeBusySplitTooltip => '拆分片段';
+
+  @override
+  String get calendarFreeBusyMarkFree => '标记为空闲';
+
+  @override
+  String get calendarFreeBusyMarkBusy => '标记为忙碌';
+
+  @override
+  String get calendarFreeBusyRangeLabel => '范围';
+
+  @override
+  String commonWeekdayDayLabel(String weekday, int day) {
+    return '$weekday $day';
+  }
+
+  @override
+  String get calendarFragmentChecklistLabel => '清单';
+
+  @override
+  String get calendarFragmentChecklistSeparator => ', ';
+
+  @override
+  String calendarFragmentChecklistSummary(String summary) {
+    return '清单: $summary';
+  }
+
+  @override
+  String calendarFragmentChecklistSummaryMore(String summary, int count) {
+    return '清单: $summary，以及另外 $count 个';
+  }
+
+  @override
+  String get calendarFragmentRemindersLabel => '提醒';
+
+  @override
+  String calendarFragmentReminderStartSummary(String summary) {
+    return '开始: $summary';
+  }
+
+  @override
+  String calendarFragmentReminderDeadlineSummary(String summary) {
+    return '截止: $summary';
+  }
+
+  @override
+  String calendarFragmentRemindersSummary(String summary) {
+    return '提醒: $summary';
+  }
+
+  @override
+  String get calendarFragmentReminderSeparator => ', ';
+
+  @override
+  String get calendarFragmentEventTitleFallback => '未命名事件';
+
+  @override
+  String calendarFragmentDayEventSummary(String title, String range) {
+    return '$title (日间事件: $range)';
+  }
+
+  @override
+  String calendarFragmentFreeBusySummary(String label, String range) {
+    return '$label (窗口: $range)';
+  }
+
+  @override
+  String get calendarFragmentCriticalPathLabel => '关键路径';
+
+  @override
+  String calendarFragmentCriticalPathSummary(String name) {
+    return '关键路径: $name';
+  }
+
+  @override
+  String calendarFragmentCriticalPathProgress(int completed, int total) {
+    return '$completed/$total 已完成';
+  }
+
+  @override
+  String calendarFragmentCriticalPathDetail(String name, String progress) {
+    return '$name (关键路径: $progress)';
+  }
+
+  @override
+  String calendarFragmentAvailabilitySummary(String summary, String range) {
+    return '$summary (可用性: $range)';
+  }
+
+  @override
+  String calendarFragmentAvailabilityFallback(String range) {
+    return '可用性: $range';
+  }
+
+  @override
+  String calendarMonthOverflowMore(int count) {
+    return '+$count 更多';
+  }
+
+  @override
+  String commonPercentLabel(int value) {
+    return '$value%';
+  }
+
+  @override
+  String get commonStart => '开始';
+
+  @override
+  String get commonEnd => '结束';
+
+  @override
+  String get commonSelectStart => '选择开始';
+
+  @override
+  String get commonSelectEnd => '选择结束';
+
+  @override
+  String get commonTimeLabel => '时间';
+
+  @override
+  String get commonListSeparator => '，';
+
+  @override
+  String get commonClauseSeparator => '；';
+
+  @override
+  String get commonSentenceSeparator => '。';
+
+  @override
+  String get commonSentenceTerminator => '。';
+
+  @override
+  String commonListAnd(String head, String tail) {
+    return '$head和$tail';
+  }
+
+  @override
+  String get calendarAlarmsTitle => '闹钟';
+
+  @override
+  String get calendarAlarmsHelper => '提醒会导出为显示闹钟。';
+
+  @override
+  String get calendarAlarmsEmpty => '还没有闹钟';
+
+  @override
+  String get calendarAlarmAddTooltip => '添加闹钟';
+
+  @override
+  String get calendarAlarmRemoveTooltip => '移除闹钟';
+
+  @override
+  String calendarAlarmItemLabel(int index) {
+    return '闹钟 $index';
+  }
+
+  @override
+  String get calendarAlarmActionLabel => '操作';
+
+  @override
+  String get calendarAlarmActionDisplay => '显示';
+
+  @override
+  String get calendarAlarmActionAudio => '音频';
+
+  @override
+  String get calendarAlarmActionEmail => '邮件';
+
+  @override
+  String get calendarAlarmActionProcedure => '过程';
+
+  @override
+  String get calendarAlarmActionProcedureHelper => '过程闹钟以只读方式导入。';
+
+  @override
+  String get calendarAlarmTriggerLabel => '触发';
+
+  @override
+  String get calendarAlarmTriggerRelative => '相对';
+
+  @override
+  String get calendarAlarmTriggerAbsolute => '绝对';
+
+  @override
+  String get calendarAlarmAbsolutePlaceholder => '选择日期和时间';
+
+  @override
+  String get calendarAlarmRelativeToLabel => '相对于';
+
+  @override
+  String get calendarAlarmRelativeToStart => '开始';
+
+  @override
+  String get calendarAlarmRelativeToEnd => '结束';
+
+  @override
+  String get calendarAlarmDirectionLabel => '方向';
+
+  @override
+  String get calendarAlarmDirectionBefore => '之前';
+
+  @override
+  String get calendarAlarmDirectionAfter => '之后';
+
+  @override
+  String get calendarAlarmOffsetLabel => '偏移';
+
+  @override
+  String get calendarAlarmOffsetHint => '数量';
+
+  @override
+  String get calendarAlarmRepeatLabel => '重复';
+
+  @override
+  String get calendarAlarmRepeatCountHint => '次数';
+
+  @override
+  String get calendarAlarmRepeatEveryLabel => '每';
+
+  @override
+  String get calendarAlarmRecipientsLabel => '收件人';
+
+  @override
+  String get calendarAlarmRecipientAddressHint => '添加邮箱';
+
+  @override
+  String get calendarAlarmRecipientNameHint => '名称（可选）';
+
+  @override
+  String get calendarAlarmRecipientRemoveTooltip => '移除收件人';
+
+  @override
+  String calendarAlarmRecipientDisplay(String name, String address) {
+    return '$name <$address>';
+  }
+
+  @override
+  String get calendarAlarmAcknowledgedLabel => '已确认';
+
+  @override
+  String get calendarAlarmUnitMinutes => '分钟';
+
+  @override
+  String get calendarAlarmUnitHours => '小时';
+
+  @override
+  String get calendarAlarmUnitDays => '天';
+
+  @override
+  String get calendarAlarmUnitWeeks => '周';
+
+  @override
+  String get taskShareTitleFallback => '未命名任务';
+
+  @override
+  String taskShareTitleLabel(String title) {
+    return '任务 \"$title\"';
+  }
+
+  @override
+  String taskShareTitleWithQualifiers(String title, String qualifiers) {
+    return '任务 \"$title\"（$qualifiers）';
+  }
+
+  @override
+  String get taskShareQualifierDone => '完成';
+
+  @override
+  String get taskSharePriorityImportant => '重要';
+
+  @override
+  String get taskSharePriorityUrgent => '紧急';
+
+  @override
+  String get taskSharePriorityCritical => '关键';
+
+  @override
+  String taskShareLocationClause(String location) {
+    return ' 在$location';
+  }
+
+  @override
+  String get taskShareScheduleNoTime => ' 无固定时间';
+
+  @override
+  String taskShareScheduleSameDay(
+      String date, String startTime, String endTime) {
+    return ' 于$date $startTime到$endTime';
+  }
+
+  @override
+  String taskShareScheduleRange(String startDateTime, String endDateTime) {
+    return ' 从$startDateTime到$endDateTime';
+  }
+
+  @override
+  String taskShareScheduleStartDuration(
+      String date, String time, String duration) {
+    return ' 于$date $time持续$duration';
+  }
+
+  @override
+  String taskShareScheduleStart(String date, String time) {
+    return ' 于$date $time';
+  }
+
+  @override
+  String taskShareScheduleEnding(String dateTime) {
+    return ' 结束于$dateTime';
+  }
+
+  @override
+  String get taskShareRecurrenceEveryOtherDay => ' 每隔一天';
+
+  @override
+  String taskShareRecurrenceEveryDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count天',
+      one: '天',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryWeekdays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count个工作日',
+      one: '个工作日',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count周',
+      one: '周',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count个月',
+      one: '个月',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String get taskShareRecurrenceEveryOtherYear => ' 每隔一年';
+
+  @override
+  String taskShareRecurrenceEveryYears(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count年',
+      one: '年',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceOnDays(String days) {
+    return ' 在$days';
+  }
+
+  @override
+  String taskShareRecurrenceUntil(String date) {
+    return ' 直到$date';
+  }
+
+  @override
+  String taskShareRecurrenceCount(int count) {
+    return ' 共$count次';
+  }
+
+  @override
+  String taskShareDeadlineClause(String dateTime) {
+    return '，截止到$dateTime';
+  }
+
+  @override
+  String taskShareNotesClause(String notes) {
+    return ' 备注：$notes。';
+  }
+
+  @override
+  String taskShareChangesClause(String changes) {
+    return ' 变更：$changes';
+  }
+
+  @override
+  String taskShareOverrideMoveTo(String dateTime) {
+    return '移到$dateTime';
+  }
+
+  @override
+  String taskShareOverrideDuration(String duration) {
+    return '持续$duration';
+  }
+
+  @override
+  String taskShareOverrideEndAt(String dateTime) {
+    return '结束于$dateTime';
+  }
+
+  @override
+  String taskShareOverridePriority(String priority) {
+    return '优先级$priority';
+  }
+
+  @override
+  String get taskShareOverrideCancelled => '已取消';
+
+  @override
+  String get taskShareOverrideDone => '完成';
+
+  @override
+  String taskShareOverrideRenameTo(String title) {
+    return '重命名为\"$title\"';
+  }
+
+  @override
+  String taskShareOverrideNotes(String notes) {
+    return '备注\"$notes\"';
+  }
+
+  @override
+  String taskShareOverrideLocation(String location) {
+    return '位置\"$location\"';
+  }
+
+  @override
+  String get taskShareOverrideNoChanges => '无变更';
+
+  @override
+  String taskShareOverrideSegment(String dateTime, String actions) {
+    return '在$dateTime：$actions';
   }
 }
 
@@ -7268,4 +8308,1294 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatChooseTextToAdd => '選擇要新增的文字';
+
+  @override
+  String get notificationChannelMessages => '訊息';
+
+  @override
+  String get notificationNewMessageTitle => '新訊息';
+
+  @override
+  String get notificationOpenAction => '開啟通知';
+
+  @override
+  String get notificationBackgroundConnectionDisabledTitle => '背景連線已停用';
+
+  @override
+  String get notificationBackgroundConnectionDisabledBody =>
+      'Android 阻止了 Axichat 的訊息服務。請重新啟用覆蓋層和電池最佳化權限以恢復背景訊息。';
+
+  @override
+  String get calendarReminderDeadlineNow => '立即到期';
+
+  @override
+  String calendarReminderDueIn(Object duration) {
+    return '$duration後到期';
+  }
+
+  @override
+  String get calendarReminderStartingNow => '現在開始';
+
+  @override
+  String calendarReminderStartsIn(Object duration) {
+    return '$duration後開始';
+  }
+
+  @override
+  String get calendarReminderHappeningToday => '今天進行';
+
+  @override
+  String calendarReminderIn(Object duration) {
+    return '$duration後';
+  }
+
+  @override
+  String calendarReminderDurationDays(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 天',
+      one: '# 天',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarReminderDurationHours(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 小時',
+      one: '# 小時',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarReminderDurationMinutes(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 分鐘',
+      one: '# 分鐘',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarExportCalendar => '匯出日曆';
+
+  @override
+  String get calendarImportCalendar => '匯入日曆';
+
+  @override
+  String get calendarSyncStatusSyncing => '同步中...';
+
+  @override
+  String get calendarSyncStatusFailed => '同步失敗';
+
+  @override
+  String get calendarSyncStatusSynced => '已同步';
+
+  @override
+  String get calendarSyncStatusIdle => '尚未同步';
+
+  @override
+  String calendarSplitTaskAtTime(Object time) {
+    return '於 $time 拆分任務';
+  }
+
+  @override
+  String get calendarSplitSelectTime => '選擇拆分時間';
+
+  @override
+  String get calendarTaskMarkIncomplete => '標記為未完成';
+
+  @override
+  String get calendarTaskMarkComplete => '標記為完成';
+
+  @override
+  String get calendarTaskRemoveImportant => '移除重要標記';
+
+  @override
+  String get calendarTaskMarkImportant => '標記為重要';
+
+  @override
+  String get calendarTaskRemoveUrgent => '移除緊急標記';
+
+  @override
+  String get calendarTaskMarkUrgent => '標記為緊急';
+
+  @override
+  String get calendarDeselectTask => '取消選取任務';
+
+  @override
+  String get calendarAddTaskToSelection => '將任務加入選取';
+
+  @override
+  String get calendarSelectTask => '選取任務';
+
+  @override
+  String get calendarDeselectAllRepeats => '取消選取所有重複項';
+
+  @override
+  String get calendarAddAllRepeats => '加入所有重複項';
+
+  @override
+  String get calendarSelectAllRepeats => '選取所有重複項';
+
+  @override
+  String get calendarAddToSelection => '加入選取';
+
+  @override
+  String get calendarSelectAllTasks => '選取所有任務';
+
+  @override
+  String get calendarExitSelectionMode => '離開選取模式';
+
+  @override
+  String get calendarSplitTask => '拆分任務';
+
+  @override
+  String get calendarCopyTemplate => '複製範本';
+
+  @override
+  String calendarTaskAddedMessage(Object title) {
+    return '已新增任務「$title」';
+  }
+
+  @override
+  String calendarTasksAddedMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 個任務已新增',
+      one: '# 個任務已新增',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarTaskRemovedMessage(Object title) {
+    return '已移除任務「$title」';
+  }
+
+  @override
+  String calendarTasksRemovedMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 個任務已移除',
+      one: '# 個任務已移除',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarTaskRemovedTitle => '任務已移除';
+
+  @override
+  String get calendarDeadlinePlaceholder => '設定截止時間（可選）';
+
+  @override
+  String get calendarTaskDescriptionHint => '描述（可選）';
+
+  @override
+  String get calendarTaskLocationHint => '地點（可選）';
+
+  @override
+  String get calendarPickDateLabel => '選擇日期';
+
+  @override
+  String get calendarPickTimeLabel => '選擇時間';
+
+  @override
+  String get calendarReminderLabel => '提醒';
+
+  @override
+  String get calendarEditDayEventTitle => '編輯全天事件';
+
+  @override
+  String get calendarNewDayEventTitle => '新建全天事件';
+
+  @override
+  String get commonAdd => '新增';
+
+  @override
+  String get commonTitle => '標題';
+
+  @override
+  String get calendarShareUnavailable => '日曆分享不可用。';
+
+  @override
+  String get calendarShareAvailability => '分享可用時間';
+
+  @override
+  String get calendarShortcutUndo => 'Ctrl/Cmd+Z';
+
+  @override
+  String get calendarShortcutRedo => 'Ctrl/Cmd+Shift+Z';
+
+  @override
+  String commonShortcutTooltip(Object tooltip, Object shortcut) {
+    return '$tooltip（$shortcut）';
+  }
+
+  @override
+  String get calendarDragCanceled => '拖曳已取消';
+
+  @override
+  String get calendarZoomLabelCompact => '精簡';
+
+  @override
+  String get calendarZoomLabelComfort => '舒適';
+
+  @override
+  String get calendarZoomLabelExpanded => '擴展';
+
+  @override
+  String calendarZoomLabelMinutes(Object minutes) {
+    return '$minutes 分鐘';
+  }
+
+  @override
+  String get calendarGuestModeNotice => '訪客模式 - 任務只會儲存在此裝置上';
+
+  @override
+  String get calendarGuestSignUpToSync => '註冊以同步';
+
+  @override
+  String get calendarGuestExportNoData => '沒有可匯出的日曆資料。';
+
+  @override
+  String get calendarGuestExportTitle => '匯出訪客日曆';
+
+  @override
+  String get calendarGuestExportShareSubject => 'Axichat 訪客日曆匯出';
+
+  @override
+  String calendarGuestExportShareText(Object format) {
+    return 'Axichat 訪客日曆匯出（$format）';
+  }
+
+  @override
+  String calendarGuestExportFailed(Object error) {
+    return '匯出日曆失敗：$error';
+  }
+
+  @override
+  String get calendarGuestImportTitle => '匯入日曆';
+
+  @override
+  String get calendarGuestImportWarningMessage => '匯入會合併資料並覆蓋目前日曆中相符的項目。繼續？';
+
+  @override
+  String get calendarGuestImportConfirmLabel => '匯入';
+
+  @override
+  String get calendarGuestImportFileAccessError => '無法存取所選檔案。';
+
+  @override
+  String get calendarGuestImportNoData => '所選檔案未偵測到日曆資料。';
+
+  @override
+  String get calendarGuestImportFailed => '匯入未能套用變更。';
+
+  @override
+  String get calendarGuestImportSuccess => '已匯入日曆資料。';
+
+  @override
+  String get calendarGuestImportNoTasks => '所選檔案未偵測到任務。';
+
+  @override
+  String calendarGuestImportTasksSuccess(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 個任務',
+      one: '# 個任務',
+    );
+    return '已匯入 $_temp0。';
+  }
+
+  @override
+  String calendarGuestImportError(Object error) {
+    return '匯入失敗：$error';
+  }
+
+  @override
+  String get blocklistEmpty => '未封鎖任何人';
+
+  @override
+  String get chatMessageSubjectLabel => '主旨';
+
+  @override
+  String get chatMessageRecipientsLabel => '收件人';
+
+  @override
+  String get chatMessageAlsoSentToLabel => '亦發送給';
+
+  @override
+  String chatMessageFromLabel(Object sender) {
+    return '來自 $sender';
+  }
+
+  @override
+  String get chatMessageReactionsLabel => '回應';
+
+  @override
+  String get commonClearSelection => '清除選取';
+
+  @override
+  String commonSelectedCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 個',
+      one: '# 個',
+    );
+    return '已選取 $_temp0';
+  }
+
+  @override
+  String get profileDeviceFingerprint => '裝置指紋';
+
+  @override
+  String get profileFingerprintUnavailable => '指紋不可用';
+
+  @override
+  String get axiVersionCurrentFeatures => '目前功能：';
+
+  @override
+  String get axiVersionCurrentFeaturesList => '訊息、狀態';
+
+  @override
+  String get axiVersionComingNext => '即將推出：';
+
+  @override
+  String get axiVersionComingNextList => '群聊、多媒體';
+
+  @override
+  String get commonMoreOptions => '更多選項';
+
+  @override
+  String get commonAreYouSure => '確定嗎？';
+
+  @override
+  String get commonAll => '全部';
+
+  @override
+  String get languageSystem => '系統';
+
+  @override
+  String get languageEnglish => '英文';
+
+  @override
+  String get languageGerman => '德文';
+
+  @override
+  String get languageSpanish => '西班牙文';
+
+  @override
+  String get languageFrench => '法文';
+
+  @override
+  String get languageChineseSimplified => '簡體中文';
+
+  @override
+  String get languageChineseHongKong => '繁體中文（香港）';
+
+  @override
+  String get languageSystemShort => 'SYS';
+
+  @override
+  String get languageEnglishShort => 'EN';
+
+  @override
+  String get languageGermanShort => 'DE';
+
+  @override
+  String get languageSpanishShort => 'ES';
+
+  @override
+  String get languageFrenchShort => 'FR';
+
+  @override
+  String get languageChineseSimplifiedShort => 'ZH';
+
+  @override
+  String get languageChineseHongKongShort => 'ZH-HK';
+
+  @override
+  String get languageSystemFlag => '🌐';
+
+  @override
+  String get languageEnglishFlag => '🇬🇧';
+
+  @override
+  String get languageGermanFlag => '🇩🇪';
+
+  @override
+  String get languageSpanishFlag => '🇪🇸';
+
+  @override
+  String get languageFrenchFlag => '🇫🇷';
+
+  @override
+  String get languageChineseSimplifiedFlag => '🇨🇳';
+
+  @override
+  String get languageChineseHongKongFlag => '🇭🇰';
+
+  @override
+  String get calendarTransferNoDataExport => '沒有可匯出的日曆資料。';
+
+  @override
+  String get calendarTransferExportSubject => 'Axichat 日曆匯出';
+
+  @override
+  String calendarTransferExportText(String format) {
+    return 'Axichat 日曆匯出（$format）';
+  }
+
+  @override
+  String get calendarTransferExportReady => '匯出已準備好分享。';
+
+  @override
+  String calendarTransferExportFailed(String error) {
+    return '日曆匯出失敗：$error';
+  }
+
+  @override
+  String get calendarTransferImportWarning => '匯入將合併資料並覆蓋目前日曆中的相符項目。繼續？';
+
+  @override
+  String get calendarTransferImportConfirm => '匯入';
+
+  @override
+  String get calendarTransferFileAccessFailed => '無法存取所選檔案。';
+
+  @override
+  String get calendarTransferNoDataImport => '所選檔案中未偵測到日曆資料。';
+
+  @override
+  String get calendarTransferImportFailed => '匯入未能套用變更。';
+
+  @override
+  String get calendarTransferImportSuccess => '已匯入日曆資料。';
+
+  @override
+  String get calendarTransferNoTasksDetected => '所選檔案中未偵測到工作。';
+
+  @override
+  String calendarTransferImportTasksSuccess(int count) {
+    return '已匯入 $count 項工作。';
+  }
+
+  @override
+  String calendarTransferImportFailedWithError(String error) {
+    return '匯入失敗：$error';
+  }
+
+  @override
+  String get calendarExportChooseFormat => '選擇匯出格式';
+
+  @override
+  String get calendarAvailabilityWindowsTitle => '可用時段視窗';
+
+  @override
+  String get calendarAvailabilityWindowsSubtitle => '定義你想分享的時間範圍。';
+
+  @override
+  String get calendarAvailabilityWindowsLabel => '視窗';
+
+  @override
+  String get calendarAvailabilityNoWindows => '暫無視窗。';
+
+  @override
+  String get calendarAvailabilityWindowLabel => '視窗';
+
+  @override
+  String get calendarAvailabilitySummaryLabel => '摘要';
+
+  @override
+  String get calendarAvailabilitySummaryHint => '可選標籤';
+
+  @override
+  String get calendarAvailabilityNotesLabel => '備註';
+
+  @override
+  String get calendarAvailabilityNotesHint => '可選詳細資料';
+
+  @override
+  String get calendarAvailabilityAddWindow => '新增視窗';
+
+  @override
+  String get calendarAvailabilitySaveWindows => '儲存視窗';
+
+  @override
+  String get calendarAvailabilityEmptyWindowsError => '請至少新增一個可用時段視窗。';
+
+  @override
+  String get calendarAvailabilityInvalidRangeError => '儲存前請檢查時間範圍。';
+
+  @override
+  String get calendarTaskShareTitle => '分享工作';
+
+  @override
+  String get calendarTaskShareSubtitle => '將工作以 .ics 傳送到聊天。';
+
+  @override
+  String get calendarTaskShareTarget => '分享給';
+
+  @override
+  String get calendarTaskShareEditAccess => '編輯權限';
+
+  @override
+  String get calendarTaskShareReadOnlyLabel => '唯讀';
+
+  @override
+  String get calendarTaskShareReadOnlyHint => '收件人可查看此工作，但只有你可以編輯。';
+
+  @override
+  String get calendarTaskShareEditableHint => '收件人可以編輯此工作，更新會同步回你的日曆。';
+
+  @override
+  String get calendarTaskShareReadOnlyDisabledHint => '編輯僅適用於聊天日曆。';
+
+  @override
+  String get calendarTaskShareMissingChats => '沒有可用的聊天。';
+
+  @override
+  String get calendarTaskShareMissingRecipient => '請選擇要分享的聊天。';
+
+  @override
+  String get calendarTaskShareServiceUnavailable => '日曆分享不可用。';
+
+  @override
+  String get calendarTaskShareDenied => '此聊天室中你的角色已停用日曆卡片。';
+
+  @override
+  String get calendarTaskShareSendFailed => '分享工作失敗。';
+
+  @override
+  String get calendarTaskShareSuccess => '工作已分享。';
+
+  @override
+  String get commonTimeJustNow => '剛剛';
+
+  @override
+  String commonTimeMinutesAgo(int count) {
+    return '$count 分鐘前';
+  }
+
+  @override
+  String commonTimeHoursAgo(int count) {
+    return '$count 小時前';
+  }
+
+  @override
+  String commonTimeDaysAgo(int count) {
+    return '$count 天前';
+  }
+
+  @override
+  String commonTimeWeeksAgo(int count) {
+    return '$count 週前';
+  }
+
+  @override
+  String get commonTimeMonthsAgo => '數月前';
+
+  @override
+  String get connectivityStatusConnected => '已連線';
+
+  @override
+  String get connectivityStatusConnecting => '正在連線...';
+
+  @override
+  String get connectivityStatusNotConnected => '未連線。';
+
+  @override
+  String get connectivityStatusFailed => '連線失敗。';
+
+  @override
+  String get commonShare => '分享';
+
+  @override
+  String get commonRecipients => '收件人';
+
+  @override
+  String commonRangeLabel(String start, String end) {
+    return '$start - $end';
+  }
+
+  @override
+  String get commonOwnerFallback => '擁有者';
+
+  @override
+  String commonDurationMinutes(int count) {
+    return '$count 分鐘';
+  }
+
+  @override
+  String commonDurationHours(int count) {
+    return '$count 小時';
+  }
+
+  @override
+  String commonDurationMinutesShort(int count) {
+    return '${count}m';
+  }
+
+  @override
+  String commonDurationHoursShort(int count) {
+    return '${count}h';
+  }
+
+  @override
+  String commonDateTimeLabel(String date, String time) {
+    return '$date · $time';
+  }
+
+  @override
+  String get calendarAvailabilityShareTitle => '分享可用性';
+
+  @override
+  String get calendarAvailabilityShareSubtitle => '選擇範圍，編輯空閒/忙碌，然後分享。';
+
+  @override
+  String get calendarAvailabilityShareChatSubtitle => '選擇範圍，編輯空閒/忙碌，然後在此聊天中分享。';
+
+  @override
+  String get calendarAvailabilityShareRangeLabel => '範圍';
+
+  @override
+  String get calendarAvailabilityShareEditHint => '點擊可拆分，拖動可調整大小，或切換空閒/忙碌。';
+
+  @override
+  String get calendarAvailabilityShareSavePreset => '儲存為預設';
+
+  @override
+  String get calendarAvailabilitySharePresetNameTitle => '儲存空閒/忙碌表';
+
+  @override
+  String get calendarAvailabilitySharePresetNameLabel => '名稱';
+
+  @override
+  String get calendarAvailabilitySharePresetNameHint => '團隊時間';
+
+  @override
+  String get calendarAvailabilitySharePresetNameMissing => '輸入名稱以儲存此表。';
+
+  @override
+  String get calendarAvailabilityShareInvalidRange => '請選擇有效範圍進行分享。';
+
+  @override
+  String get calendarAvailabilityShareMissingJid => '日曆分享不可用。';
+
+  @override
+  String get calendarAvailabilityShareRecipientsRequired => '請至少選擇一個收件人。';
+
+  @override
+  String get calendarAvailabilityShareMissingChats => '沒有可用的合格聊天。';
+
+  @override
+  String get calendarAvailabilityShareLockedChatUnavailable => '此聊天無法接收可用性分享。';
+
+  @override
+  String get calendarAvailabilityShareSuccess => '可用性已分享。';
+
+  @override
+  String get calendarAvailabilityShareFailed => '分享可用性失敗。';
+
+  @override
+  String get calendarAvailabilitySharePartialFailure => '部分分享未傳送成功。';
+
+  @override
+  String get calendarAvailabilitySharePresetLabel => '最近的表';
+
+  @override
+  String get calendarAvailabilitySharePresetEmpty => '暫無最近的表。';
+
+  @override
+  String calendarAvailabilityShareRecentPreset(String range) {
+    return '已分享 $range';
+  }
+
+  @override
+  String get calendarAvailabilityPreviewEmpty => '暫無可用時段。';
+
+  @override
+  String calendarAvailabilityPreviewMore(int count) {
+    return '以及另外 $count 個';
+  }
+
+  @override
+  String get calendarTaskTitleRequired => '請先輸入工作標題再繼續。';
+
+  @override
+  String calendarTaskTitleTooLong(int max) {
+    return '工作標題過長。請使用少於 $max 個字元。';
+  }
+
+  @override
+  String calendarTaskTitleLimitWarning(int max) {
+    return '工作標題限制為 $max 個字元。請縮短此文字或在儲存前將細節移至描述中。';
+  }
+
+  @override
+  String calendarTaskTitleCharacterCount(int count, int limit) {
+    return '$count / $limit 個字元';
+  }
+
+  @override
+  String get axiVersionWelcomeTitle => '歡迎使用 Axichat';
+
+  @override
+  String axiVersionLabel(String version) {
+    return 'v$version';
+  }
+
+  @override
+  String get axiVersionTagAlpha => 'alpha';
+
+  @override
+  String get calendarSyncWarningSnapshotTitle => '日曆同步';
+
+  @override
+  String get calendarSyncWarningSnapshotMessage =>
+      '日曆快照不可用。請從另一部裝置匯出日曆 JSON 並在此匯入以恢復。';
+
+  @override
+  String commonLabelValue(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get calendarAvailabilityRequestTitle => '請求時間';
+
+  @override
+  String get calendarAvailabilityRequestSubtitle => '選擇一個空閒時段並分享詳情。';
+
+  @override
+  String get calendarAvailabilityRequestDetailsLabel => '詳情';
+
+  @override
+  String get calendarAvailabilityRequestRangeLabel => '範圍';
+
+  @override
+  String get calendarAvailabilityRequestTitleLabel => '標題';
+
+  @override
+  String get calendarAvailabilityRequestTitlePlaceholder => '這是做什麼用的？';
+
+  @override
+  String get calendarAvailabilityRequestDescriptionLabel => '描述';
+
+  @override
+  String get calendarAvailabilityRequestDescriptionPlaceholder => '新增背景資訊（可選）。';
+
+  @override
+  String get calendarAvailabilityRequestSendLabel => '傳送請求';
+
+  @override
+  String get calendarAvailabilityRequestInvalidRange => '請選擇有效時間範圍。';
+
+  @override
+  String get calendarAvailabilityRequestNotFree => '傳送前請選擇空閒時段。';
+
+  @override
+  String get calendarAvailabilityDecisionTitle => '接受請求';
+
+  @override
+  String get calendarAvailabilityDecisionSubtitle => '選擇哪些日曆應接收它。';
+
+  @override
+  String get calendarAvailabilityDecisionPersonalLabel => '加入個人日曆';
+
+  @override
+  String get calendarAvailabilityDecisionChatLabel => '加入聊天日曆';
+
+  @override
+  String get calendarAvailabilityDecisionMissingSelection => '請至少選擇一個日曆。';
+
+  @override
+  String get calendarAvailabilityDecisionSummaryLabel => '已請求';
+
+  @override
+  String get calendarAvailabilityRequestTitleFallback => '請求的時間';
+
+  @override
+  String get calendarFreeBusyFree => '空閒';
+
+  @override
+  String get calendarFreeBusyBusy => '忙碌';
+
+  @override
+  String get calendarFreeBusyTentative => '暫定';
+
+  @override
+  String get calendarFreeBusyEditTitle => '編輯可用性';
+
+  @override
+  String get calendarFreeBusyEditSubtitle => '調整時間範圍和狀態。';
+
+  @override
+  String get calendarFreeBusyToggleLabel => '空閒/忙碌';
+
+  @override
+  String get calendarFreeBusySplitLabel => '拆分';
+
+  @override
+  String get calendarFreeBusySplitTooltip => '拆分片段';
+
+  @override
+  String get calendarFreeBusyMarkFree => '標記為空閒';
+
+  @override
+  String get calendarFreeBusyMarkBusy => '標記為忙碌';
+
+  @override
+  String get calendarFreeBusyRangeLabel => '範圍';
+
+  @override
+  String commonWeekdayDayLabel(String weekday, int day) {
+    return '$weekday $day';
+  }
+
+  @override
+  String get calendarFragmentChecklistLabel => '清單';
+
+  @override
+  String get calendarFragmentChecklistSeparator => ', ';
+
+  @override
+  String calendarFragmentChecklistSummary(String summary) {
+    return '清單: $summary';
+  }
+
+  @override
+  String calendarFragmentChecklistSummaryMore(String summary, int count) {
+    return '清單: $summary，以及另外 $count 個';
+  }
+
+  @override
+  String get calendarFragmentRemindersLabel => '提醒';
+
+  @override
+  String calendarFragmentReminderStartSummary(String summary) {
+    return '開始: $summary';
+  }
+
+  @override
+  String calendarFragmentReminderDeadlineSummary(String summary) {
+    return '截止: $summary';
+  }
+
+  @override
+  String calendarFragmentRemindersSummary(String summary) {
+    return '提醒: $summary';
+  }
+
+  @override
+  String get calendarFragmentReminderSeparator => ', ';
+
+  @override
+  String get calendarFragmentEventTitleFallback => '未命名事件';
+
+  @override
+  String calendarFragmentDayEventSummary(String title, String range) {
+    return '$title (日間事件: $range)';
+  }
+
+  @override
+  String calendarFragmentFreeBusySummary(String label, String range) {
+    return '$label (視窗: $range)';
+  }
+
+  @override
+  String get calendarFragmentCriticalPathLabel => '關鍵路徑';
+
+  @override
+  String calendarFragmentCriticalPathSummary(String name) {
+    return '關鍵路徑: $name';
+  }
+
+  @override
+  String calendarFragmentCriticalPathProgress(int completed, int total) {
+    return '$completed/$total 已完成';
+  }
+
+  @override
+  String calendarFragmentCriticalPathDetail(String name, String progress) {
+    return '$name (關鍵路徑: $progress)';
+  }
+
+  @override
+  String calendarFragmentAvailabilitySummary(String summary, String range) {
+    return '$summary (可用性: $range)';
+  }
+
+  @override
+  String calendarFragmentAvailabilityFallback(String range) {
+    return '可用性: $range';
+  }
+
+  @override
+  String calendarMonthOverflowMore(int count) {
+    return '+$count 更多';
+  }
+
+  @override
+  String commonPercentLabel(int value) {
+    return '$value%';
+  }
+
+  @override
+  String get commonStart => '開始';
+
+  @override
+  String get commonEnd => '結束';
+
+  @override
+  String get commonSelectStart => '選擇開始';
+
+  @override
+  String get commonSelectEnd => '選擇結束';
+
+  @override
+  String get commonTimeLabel => '時間';
+
+  @override
+  String get commonListSeparator => '，';
+
+  @override
+  String get commonClauseSeparator => '；';
+
+  @override
+  String get commonSentenceSeparator => '。';
+
+  @override
+  String get commonSentenceTerminator => '。';
+
+  @override
+  String commonListAnd(String head, String tail) {
+    return '$head和$tail';
+  }
+
+  @override
+  String get calendarAlarmsTitle => '鬧鐘';
+
+  @override
+  String get calendarAlarmsHelper => '提醒會匯出為顯示鬧鐘。';
+
+  @override
+  String get calendarAlarmsEmpty => '暫時沒有鬧鐘';
+
+  @override
+  String get calendarAlarmAddTooltip => '新增鬧鐘';
+
+  @override
+  String get calendarAlarmRemoveTooltip => '移除鬧鐘';
+
+  @override
+  String calendarAlarmItemLabel(int index) {
+    return '鬧鐘 $index';
+  }
+
+  @override
+  String get calendarAlarmActionLabel => '動作';
+
+  @override
+  String get calendarAlarmActionDisplay => '顯示';
+
+  @override
+  String get calendarAlarmActionAudio => '音訊';
+
+  @override
+  String get calendarAlarmActionEmail => '電郵';
+
+  @override
+  String get calendarAlarmActionProcedure => '程序';
+
+  @override
+  String get calendarAlarmActionProcedureHelper => '程序鬧鐘會以唯讀方式匯入。';
+
+  @override
+  String get calendarAlarmTriggerLabel => '觸發';
+
+  @override
+  String get calendarAlarmTriggerRelative => '相對';
+
+  @override
+  String get calendarAlarmTriggerAbsolute => '絕對';
+
+  @override
+  String get calendarAlarmAbsolutePlaceholder => '選擇日期和時間';
+
+  @override
+  String get calendarAlarmRelativeToLabel => '相對於';
+
+  @override
+  String get calendarAlarmRelativeToStart => '開始';
+
+  @override
+  String get calendarAlarmRelativeToEnd => '結束';
+
+  @override
+  String get calendarAlarmDirectionLabel => '方向';
+
+  @override
+  String get calendarAlarmDirectionBefore => '之前';
+
+  @override
+  String get calendarAlarmDirectionAfter => '之後';
+
+  @override
+  String get calendarAlarmOffsetLabel => '偏移';
+
+  @override
+  String get calendarAlarmOffsetHint => '數量';
+
+  @override
+  String get calendarAlarmRepeatLabel => '重複';
+
+  @override
+  String get calendarAlarmRepeatCountHint => '次數';
+
+  @override
+  String get calendarAlarmRepeatEveryLabel => '每';
+
+  @override
+  String get calendarAlarmRecipientsLabel => '收件人';
+
+  @override
+  String get calendarAlarmRecipientAddressHint => '新增電郵';
+
+  @override
+  String get calendarAlarmRecipientNameHint => '名稱（可選）';
+
+  @override
+  String get calendarAlarmRecipientRemoveTooltip => '移除收件人';
+
+  @override
+  String calendarAlarmRecipientDisplay(String name, String address) {
+    return '$name <$address>';
+  }
+
+  @override
+  String get calendarAlarmAcknowledgedLabel => '已確認';
+
+  @override
+  String get calendarAlarmUnitMinutes => '分鐘';
+
+  @override
+  String get calendarAlarmUnitHours => '小時';
+
+  @override
+  String get calendarAlarmUnitDays => '天';
+
+  @override
+  String get calendarAlarmUnitWeeks => '週';
+
+  @override
+  String get taskShareTitleFallback => '未命名任務';
+
+  @override
+  String taskShareTitleLabel(String title) {
+    return '任務 \"$title\"';
+  }
+
+  @override
+  String taskShareTitleWithQualifiers(String title, String qualifiers) {
+    return '任務 \"$title\"（$qualifiers）';
+  }
+
+  @override
+  String get taskShareQualifierDone => '完成';
+
+  @override
+  String get taskSharePriorityImportant => '重要';
+
+  @override
+  String get taskSharePriorityUrgent => '緊急';
+
+  @override
+  String get taskSharePriorityCritical => '關鍵';
+
+  @override
+  String taskShareLocationClause(String location) {
+    return ' 在$location';
+  }
+
+  @override
+  String get taskShareScheduleNoTime => ' 無固定時間';
+
+  @override
+  String taskShareScheduleSameDay(
+      String date, String startTime, String endTime) {
+    return ' 於$date $startTime到$endTime';
+  }
+
+  @override
+  String taskShareScheduleRange(String startDateTime, String endDateTime) {
+    return ' 從$startDateTime到$endDateTime';
+  }
+
+  @override
+  String taskShareScheduleStartDuration(
+      String date, String time, String duration) {
+    return ' 於$date $time，持續$duration';
+  }
+
+  @override
+  String taskShareScheduleStart(String date, String time) {
+    return ' 於$date $time';
+  }
+
+  @override
+  String taskShareScheduleEnding(String dateTime) {
+    return ' 結束於$dateTime';
+  }
+
+  @override
+  String get taskShareRecurrenceEveryOtherDay => ' 每隔一天';
+
+  @override
+  String taskShareRecurrenceEveryDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count天',
+      one: '天',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryWeekdays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count個工作日',
+      one: '個工作日',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count週',
+      one: '週',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count個月',
+      one: '個月',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String get taskShareRecurrenceEveryOtherYear => ' 每隔一年';
+
+  @override
+  String taskShareRecurrenceEveryYears(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count年',
+      one: '年',
+    );
+    return ' 每$_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceOnDays(String days) {
+    return ' 在$days';
+  }
+
+  @override
+  String taskShareRecurrenceUntil(String date) {
+    return ' 直到$date';
+  }
+
+  @override
+  String taskShareRecurrenceCount(int count) {
+    return ' 共$count次';
+  }
+
+  @override
+  String taskShareDeadlineClause(String dateTime) {
+    return '，截止到$dateTime';
+  }
+
+  @override
+  String taskShareNotesClause(String notes) {
+    return ' 備註：$notes。';
+  }
+
+  @override
+  String taskShareChangesClause(String changes) {
+    return ' 變更：$changes';
+  }
+
+  @override
+  String taskShareOverrideMoveTo(String dateTime) {
+    return '移到$dateTime';
+  }
+
+  @override
+  String taskShareOverrideDuration(String duration) {
+    return '持續$duration';
+  }
+
+  @override
+  String taskShareOverrideEndAt(String dateTime) {
+    return '結束於$dateTime';
+  }
+
+  @override
+  String taskShareOverridePriority(String priority) {
+    return '優先級$priority';
+  }
+
+  @override
+  String get taskShareOverrideCancelled => '已取消';
+
+  @override
+  String get taskShareOverrideDone => '完成';
+
+  @override
+  String taskShareOverrideRenameTo(String title) {
+    return '重新命名為\"$title\"';
+  }
+
+  @override
+  String taskShareOverrideNotes(String notes) {
+    return '備註\"$notes\"';
+  }
+
+  @override
+  String taskShareOverrideLocation(String location) {
+    return '位置\"$location\"';
+  }
+
+  @override
+  String get taskShareOverrideNoChanges => '無變更';
+
+  @override
+  String taskShareOverrideSegment(String dateTime, String actions) {
+    return '在$dateTime：$actions';
+  }
 }

@@ -855,8 +855,10 @@ class _DateLabelState extends State<_DateLabel> {
   Widget build(BuildContext context) {
     final label = switch (widget.state.viewMode) {
       CalendarView.day => _formatDay(widget.state.selectedDate),
-      CalendarView.week =>
-        '${_formatDay(widget.state.weekStart)} – ${_formatDay(widget.state.weekEnd)}',
+      CalendarView.week => context.l10n.commonRangeLabel(
+          _formatDay(widget.state.weekStart),
+          _formatDay(widget.state.weekEnd),
+        ),
       CalendarView.month => DateFormat.yMMMM().format(
           widget.state.selectedDate,
         ),
@@ -1188,7 +1190,7 @@ class _CalendarDropdown extends StatelessWidget {
                       vertical: calendarInsetLg,
                     ),
                     child: Text(
-                      '${date.day}',
+                      date.day.toString(),
                       style: calendarBodyTextStyle.copyWith(
                         fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
                         color: textColor,

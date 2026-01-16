@@ -81,10 +81,9 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             final String? timeLabel = scheduledTime != null
                 ? TimeFormatter.formatDateTime(scheduledTime)
                 : null;
-            final String? durationLabel =
-                task.duration != null
-                    ? _formatDuration(context, task.duration!)
-                    : null;
+            final String? durationLabel = task.duration != null
+                ? _formatDuration(context, task.duration!)
+                : null;
             final Color timeColor = _getTimeColor(context);
             final FontWeight? timeFontWeight =
                 _isOverdue() ? FontWeight.bold : null;

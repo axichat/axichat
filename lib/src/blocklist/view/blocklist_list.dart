@@ -75,7 +75,8 @@ class _BlocklistListBody extends StatelessWidget {
 
     if (visibleItems.isEmpty) {
       return Center(
-        child: Text(context.l10n.blocklistEmpty, style: context.textTheme.muted),
+        child:
+            Text(context.l10n.blocklistEmpty, style: context.textTheme.muted),
       );
     }
 

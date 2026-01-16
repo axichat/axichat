@@ -6606,7 +6606,7 @@ abstract class AppLocalizations {
   /// No description provided for @calendarSyncStatusIdle.
   ///
   /// In en, this message translates to:
-  /// **'Idle'**
+  /// **'Not synced yet'**
   String get calendarSyncStatusIdle;
 
   /// No description provided for @calendarSplitTaskAtTime.
@@ -6872,6 +6872,1712 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{minutes}m'**
   String calendarZoomLabelMinutes(Object minutes);
+
+  /// No description provided for @calendarGuestModeNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest Mode - Tasks saved locally on this device only'**
+  String get calendarGuestModeNotice;
+
+  /// No description provided for @calendarGuestSignUpToSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Up to Sync'**
+  String get calendarGuestSignUpToSync;
+
+  /// No description provided for @calendarGuestExportNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'No calendar data available to export.'**
+  String get calendarGuestExportNoData;
+
+  /// No description provided for @calendarGuestExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export guest calendar'**
+  String get calendarGuestExportTitle;
+
+  /// No description provided for @calendarGuestExportShareSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat guest calendar export'**
+  String get calendarGuestExportShareSubject;
+
+  /// No description provided for @calendarGuestExportShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat guest calendar export ({format})'**
+  String calendarGuestExportShareText(Object format);
+
+  /// No description provided for @calendarGuestExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to export calendar: {error}'**
+  String calendarGuestExportFailed(Object error);
+
+  /// No description provided for @calendarGuestImportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import calendar'**
+  String get calendarGuestImportTitle;
+
+  /// No description provided for @calendarGuestImportWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing will merge data and override matching items in your current calendar. Continue?'**
+  String get calendarGuestImportWarningMessage;
+
+  /// No description provided for @calendarGuestImportConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get calendarGuestImportConfirmLabel;
+
+  /// No description provided for @calendarGuestImportFileAccessError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to access the selected file.'**
+  String get calendarGuestImportFileAccessError;
+
+  /// No description provided for @calendarGuestImportNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'No calendar data detected in the selected file.'**
+  String get calendarGuestImportNoData;
+
+  /// No description provided for @calendarGuestImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed to apply changes.'**
+  String get calendarGuestImportFailed;
+
+  /// No description provided for @calendarGuestImportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported calendar data.'**
+  String get calendarGuestImportSuccess;
+
+  /// No description provided for @calendarGuestImportNoTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks detected in the selected file.'**
+  String get calendarGuestImportNoTasks;
+
+  /// No description provided for @calendarGuestImportTasksSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count, plural, one {# task} other {# tasks}}.'**
+  String calendarGuestImportTasksSuccess(num count);
+
+  /// No description provided for @calendarGuestImportError.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: {error}'**
+  String calendarGuestImportError(Object error);
+
+  /// No description provided for @blocklistEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody blocked'**
+  String get blocklistEmpty;
+
+  /// No description provided for @chatMessageSubjectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get chatMessageSubjectLabel;
+
+  /// No description provided for @chatMessageRecipientsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients'**
+  String get chatMessageRecipientsLabel;
+
+  /// No description provided for @chatMessageAlsoSentToLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Also sent to'**
+  String get chatMessageAlsoSentToLabel;
+
+  /// No description provided for @chatMessageFromLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'From {sender}'**
+  String chatMessageFromLabel(Object sender);
+
+  /// No description provided for @chatMessageReactionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactions'**
+  String get chatMessageReactionsLabel;
+
+  /// No description provided for @commonClearSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get commonClearSelection;
+
+  /// No description provided for @commonSelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {# selected} other {# selected}}'**
+  String commonSelectedCount(num count);
+
+  /// No description provided for @profileDeviceFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Device Fingerprint'**
+  String get profileDeviceFingerprint;
+
+  /// No description provided for @profileFingerprintUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Fingerprint unavailable'**
+  String get profileFingerprintUnavailable;
+
+  /// No description provided for @axiVersionCurrentFeatures.
+  ///
+  /// In en, this message translates to:
+  /// **'Current features:'**
+  String get axiVersionCurrentFeatures;
+
+  /// No description provided for @axiVersionCurrentFeaturesList.
+  ///
+  /// In en, this message translates to:
+  /// **'Messaging, presence'**
+  String get axiVersionCurrentFeaturesList;
+
+  /// No description provided for @axiVersionComingNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming next:'**
+  String get axiVersionComingNext;
+
+  /// No description provided for @axiVersionComingNextList.
+  ///
+  /// In en, this message translates to:
+  /// **'Groupchat, multimedia'**
+  String get axiVersionComingNextList;
+
+  /// No description provided for @commonMoreOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get commonMoreOptions;
+
+  /// No description provided for @commonAreYouSure.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure?'**
+  String get commonAreYouSure;
+
+  /// No description provided for @commonAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get commonAll;
+
+  /// No description provided for @languageSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get languageSystem;
+
+  /// No description provided for @languageEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
+  /// No description provided for @languageGerman.
+  ///
+  /// In en, this message translates to:
+  /// **'Deutsch'**
+  String get languageGerman;
+
+  /// No description provided for @languageSpanish.
+  ///
+  /// In en, this message translates to:
+  /// **'Español'**
+  String get languageSpanish;
+
+  /// No description provided for @languageFrench.
+  ///
+  /// In en, this message translates to:
+  /// **'Français'**
+  String get languageFrench;
+
+  /// No description provided for @languageChineseSimplified.
+  ///
+  /// In en, this message translates to:
+  /// **'简体中文'**
+  String get languageChineseSimplified;
+
+  /// No description provided for @languageChineseHongKong.
+  ///
+  /// In en, this message translates to:
+  /// **'繁體中文 (香港)'**
+  String get languageChineseHongKong;
+
+  /// No description provided for @languageSystemShort.
+  ///
+  /// In en, this message translates to:
+  /// **'SYS'**
+  String get languageSystemShort;
+
+  /// No description provided for @languageEnglishShort.
+  ///
+  /// In en, this message translates to:
+  /// **'EN'**
+  String get languageEnglishShort;
+
+  /// No description provided for @languageGermanShort.
+  ///
+  /// In en, this message translates to:
+  /// **'DE'**
+  String get languageGermanShort;
+
+  /// No description provided for @languageSpanishShort.
+  ///
+  /// In en, this message translates to:
+  /// **'ES'**
+  String get languageSpanishShort;
+
+  /// No description provided for @languageFrenchShort.
+  ///
+  /// In en, this message translates to:
+  /// **'FR'**
+  String get languageFrenchShort;
+
+  /// No description provided for @languageChineseSimplifiedShort.
+  ///
+  /// In en, this message translates to:
+  /// **'ZH'**
+  String get languageChineseSimplifiedShort;
+
+  /// No description provided for @languageChineseHongKongShort.
+  ///
+  /// In en, this message translates to:
+  /// **'ZH-HK'**
+  String get languageChineseHongKongShort;
+
+  /// No description provided for @languageSystemFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🌐'**
+  String get languageSystemFlag;
+
+  /// No description provided for @languageEnglishFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🇬🇧'**
+  String get languageEnglishFlag;
+
+  /// No description provided for @languageGermanFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🇩🇪'**
+  String get languageGermanFlag;
+
+  /// No description provided for @languageSpanishFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🇪🇸'**
+  String get languageSpanishFlag;
+
+  /// No description provided for @languageFrenchFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🇫🇷'**
+  String get languageFrenchFlag;
+
+  /// No description provided for @languageChineseSimplifiedFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🇨🇳'**
+  String get languageChineseSimplifiedFlag;
+
+  /// No description provided for @languageChineseHongKongFlag.
+  ///
+  /// In en, this message translates to:
+  /// **'🇭🇰'**
+  String get languageChineseHongKongFlag;
+
+  /// No description provided for @calendarTransferNoDataExport.
+  ///
+  /// In en, this message translates to:
+  /// **'No calendar data available to export.'**
+  String get calendarTransferNoDataExport;
+
+  /// No description provided for @calendarTransferExportSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat calendar export'**
+  String get calendarTransferExportSubject;
+
+  /// No description provided for @calendarTransferExportText.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat calendar export ({format})'**
+  String calendarTransferExportText(String format);
+
+  /// No description provided for @calendarTransferExportReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Export ready to share.'**
+  String get calendarTransferExportReady;
+
+  /// No description provided for @calendarTransferExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to export calendar: {error}'**
+  String calendarTransferExportFailed(String error);
+
+  /// No description provided for @calendarTransferImportWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing will merge data and override matching items in your current calendar. Continue?'**
+  String get calendarTransferImportWarning;
+
+  /// No description provided for @calendarTransferImportConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get calendarTransferImportConfirm;
+
+  /// No description provided for @calendarTransferFileAccessFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to access the selected file.'**
+  String get calendarTransferFileAccessFailed;
+
+  /// No description provided for @calendarTransferNoDataImport.
+  ///
+  /// In en, this message translates to:
+  /// **'No calendar data detected in the selected file.'**
+  String get calendarTransferNoDataImport;
+
+  /// No description provided for @calendarTransferImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed to apply changes.'**
+  String get calendarTransferImportFailed;
+
+  /// No description provided for @calendarTransferImportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported calendar data.'**
+  String get calendarTransferImportSuccess;
+
+  /// No description provided for @calendarTransferNoTasksDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks detected in the selected file.'**
+  String get calendarTransferNoTasksDetected;
+
+  /// No description provided for @calendarTransferImportTasksSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} task{count, plural, one{} other{s}}.'**
+  String calendarTransferImportTasksSuccess(int count);
+
+  /// No description provided for @calendarTransferImportFailedWithError.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: {error}'**
+  String calendarTransferImportFailedWithError(String error);
+
+  /// No description provided for @calendarExportChooseFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose export format'**
+  String get calendarExportChooseFormat;
+
+  /// No description provided for @calendarAvailabilityWindowsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability windows'**
+  String get calendarAvailabilityWindowsTitle;
+
+  /// No description provided for @calendarAvailabilityWindowsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Define the time ranges you want to share.'**
+  String get calendarAvailabilityWindowsSubtitle;
+
+  /// No description provided for @calendarAvailabilityWindowsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows'**
+  String get calendarAvailabilityWindowsLabel;
+
+  /// No description provided for @calendarAvailabilityNoWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'No windows yet.'**
+  String get calendarAvailabilityNoWindows;
+
+  /// No description provided for @calendarAvailabilityWindowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get calendarAvailabilityWindowLabel;
+
+  /// No description provided for @calendarAvailabilitySummaryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get calendarAvailabilitySummaryLabel;
+
+  /// No description provided for @calendarAvailabilitySummaryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional label'**
+  String get calendarAvailabilitySummaryHint;
+
+  /// No description provided for @calendarAvailabilityNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get calendarAvailabilityNotesLabel;
+
+  /// No description provided for @calendarAvailabilityNotesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional details'**
+  String get calendarAvailabilityNotesHint;
+
+  /// No description provided for @calendarAvailabilityAddWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Add window'**
+  String get calendarAvailabilityAddWindow;
+
+  /// No description provided for @calendarAvailabilitySaveWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Save windows'**
+  String get calendarAvailabilitySaveWindows;
+
+  /// No description provided for @calendarAvailabilityEmptyWindowsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one availability window.'**
+  String get calendarAvailabilityEmptyWindowsError;
+
+  /// No description provided for @calendarAvailabilityInvalidRangeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the window ranges before saving.'**
+  String get calendarAvailabilityInvalidRangeError;
+
+  /// No description provided for @calendarTaskShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share task'**
+  String get calendarTaskShareTitle;
+
+  /// No description provided for @calendarTaskShareSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a task to a chat as .ics.'**
+  String get calendarTaskShareSubtitle;
+
+  /// No description provided for @calendarTaskShareTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Share with'**
+  String get calendarTaskShareTarget;
+
+  /// No description provided for @calendarTaskShareEditAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit access'**
+  String get calendarTaskShareEditAccess;
+
+  /// No description provided for @calendarTaskShareReadOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Read only'**
+  String get calendarTaskShareReadOnlyLabel;
+
+  /// No description provided for @calendarTaskShareReadOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients can view this task, but only you can edit it.'**
+  String get calendarTaskShareReadOnlyHint;
+
+  /// No description provided for @calendarTaskShareEditableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients can edit this task, and updates sync back to your calendar.'**
+  String get calendarTaskShareEditableHint;
+
+  /// No description provided for @calendarTaskShareReadOnlyDisabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing is only available for chat calendars.'**
+  String get calendarTaskShareReadOnlyDisabledHint;
+
+  /// No description provided for @calendarTaskShareMissingChats.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats available.'**
+  String get calendarTaskShareMissingChats;
+
+  /// No description provided for @calendarTaskShareMissingRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a chat to share with.'**
+  String get calendarTaskShareMissingRecipient;
+
+  /// No description provided for @calendarTaskShareServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sharing is unavailable.'**
+  String get calendarTaskShareServiceUnavailable;
+
+  /// No description provided for @calendarTaskShareDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar cards are disabled for your role in this room.'**
+  String get calendarTaskShareDenied;
+
+  /// No description provided for @calendarTaskShareSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to share task.'**
+  String get calendarTaskShareSendFailed;
+
+  /// No description provided for @calendarTaskShareSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Task shared.'**
+  String get calendarTaskShareSuccess;
+
+  /// No description provided for @commonTimeJustNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get commonTimeJustNow;
+
+  /// No description provided for @commonTimeMinutesAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min{count, plural, one{} other{s}} ago'**
+  String commonTimeMinutesAgo(int count);
+
+  /// No description provided for @commonTimeHoursAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} hour{count, plural, one{} other{s}} ago'**
+  String commonTimeHoursAgo(int count);
+
+  /// No description provided for @commonTimeDaysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} day{count, plural, one{} other{s}} ago'**
+  String commonTimeDaysAgo(int count);
+
+  /// No description provided for @commonTimeWeeksAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} week{count, plural, one{} other{s}} ago'**
+  String commonTimeWeeksAgo(int count);
+
+  /// No description provided for @commonTimeMonthsAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'Months ago'**
+  String get commonTimeMonthsAgo;
+
+  /// No description provided for @connectivityStatusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get connectivityStatusConnected;
+
+  /// No description provided for @connectivityStatusConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting...'**
+  String get connectivityStatusConnecting;
+
+  /// No description provided for @connectivityStatusNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected.'**
+  String get connectivityStatusNotConnected;
+
+  /// No description provided for @connectivityStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to connect.'**
+  String get connectivityStatusFailed;
+
+  /// No description provided for @commonShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get commonShare;
+
+  /// No description provided for @commonRecipients.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients'**
+  String get commonRecipients;
+
+  /// No description provided for @commonRangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} - {end}'**
+  String commonRangeLabel(String start, String end);
+
+  /// No description provided for @commonOwnerFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'owner'**
+  String get commonOwnerFallback;
+
+  /// No description provided for @commonDurationMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min{count, plural, one{} other{s}}'**
+  String commonDurationMinutes(int count);
+
+  /// No description provided for @commonDurationHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} hour{count, plural, one{} other{s}}'**
+  String commonDurationHours(int count);
+
+  /// No description provided for @commonDurationMinutesShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}m'**
+  String commonDurationMinutesShort(int count);
+
+  /// No description provided for @commonDurationHoursShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}h'**
+  String commonDurationHoursShort(int count);
+
+  /// No description provided for @commonDateTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} · {time}'**
+  String commonDateTimeLabel(String date, String time);
+
+  /// No description provided for @calendarAvailabilityShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share availability'**
+  String get calendarAvailabilityShareTitle;
+
+  /// No description provided for @calendarAvailabilityShareSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a range, edit free/busy, then share.'**
+  String get calendarAvailabilityShareSubtitle;
+
+  /// No description provided for @calendarAvailabilityShareChatSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a range, edit free/busy, then share in this chat.'**
+  String get calendarAvailabilityShareChatSubtitle;
+
+  /// No description provided for @calendarAvailabilityShareRangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Range'**
+  String get calendarAvailabilityShareRangeLabel;
+
+  /// No description provided for @calendarAvailabilityShareEditHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to split, drag to resize, or toggle free/busy.'**
+  String get calendarAvailabilityShareEditHint;
+
+  /// No description provided for @calendarAvailabilityShareSavePreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as preset'**
+  String get calendarAvailabilityShareSavePreset;
+
+  /// No description provided for @calendarAvailabilitySharePresetNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save free/busy sheet'**
+  String get calendarAvailabilitySharePresetNameTitle;
+
+  /// No description provided for @calendarAvailabilitySharePresetNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get calendarAvailabilitySharePresetNameLabel;
+
+  /// No description provided for @calendarAvailabilitySharePresetNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Team hours'**
+  String get calendarAvailabilitySharePresetNameHint;
+
+  /// No description provided for @calendarAvailabilitySharePresetNameMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name to save this sheet.'**
+  String get calendarAvailabilitySharePresetNameMissing;
+
+  /// No description provided for @calendarAvailabilityShareInvalidRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a valid range to share.'**
+  String get calendarAvailabilityShareInvalidRange;
+
+  /// No description provided for @calendarAvailabilityShareMissingJid.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sharing is unavailable.'**
+  String get calendarAvailabilityShareMissingJid;
+
+  /// No description provided for @calendarAvailabilityShareRecipientsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one recipient.'**
+  String get calendarAvailabilityShareRecipientsRequired;
+
+  /// No description provided for @calendarAvailabilityShareMissingChats.
+  ///
+  /// In en, this message translates to:
+  /// **'No eligible chats available.'**
+  String get calendarAvailabilityShareMissingChats;
+
+  /// No description provided for @calendarAvailabilityShareLockedChatUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This chat cannot receive availability shares.'**
+  String get calendarAvailabilityShareLockedChatUnavailable;
+
+  /// No description provided for @calendarAvailabilityShareSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability shared.'**
+  String get calendarAvailabilityShareSuccess;
+
+  /// No description provided for @calendarAvailabilityShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to share availability.'**
+  String get calendarAvailabilityShareFailed;
+
+  /// No description provided for @calendarAvailabilitySharePartialFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Some shares failed to send.'**
+  String get calendarAvailabilitySharePartialFailure;
+
+  /// No description provided for @calendarAvailabilitySharePresetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent sheets'**
+  String get calendarAvailabilitySharePresetLabel;
+
+  /// No description provided for @calendarAvailabilitySharePresetEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent sheets yet.'**
+  String get calendarAvailabilitySharePresetEmpty;
+
+  /// No description provided for @calendarAvailabilityShareRecentPreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared {range}'**
+  String calendarAvailabilityShareRecentPreset(String range);
+
+  /// No description provided for @calendarAvailabilityPreviewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No availability intervals.'**
+  String get calendarAvailabilityPreviewEmpty;
+
+  /// No description provided for @calendarAvailabilityPreviewMore.
+  ///
+  /// In en, this message translates to:
+  /// **'and {count} more'**
+  String calendarAvailabilityPreviewMore(int count);
+
+  /// No description provided for @calendarTaskTitleRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a task title before continuing.'**
+  String get calendarTaskTitleRequired;
+
+  /// No description provided for @calendarTaskTitleTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Task title is too long. Please use fewer than {max} characters.'**
+  String calendarTaskTitleTooLong(int max);
+
+  /// No description provided for @calendarTaskTitleLimitWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Task titles are limited to {max} characters. Shorten this text or move details into the description before saving.'**
+  String calendarTaskTitleLimitWarning(int max);
+
+  /// No description provided for @calendarTaskTitleCharacterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} / {limit} characters'**
+  String calendarTaskTitleCharacterCount(int count, int limit);
+
+  /// No description provided for @axiVersionWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Axichat'**
+  String get axiVersionWelcomeTitle;
+
+  /// No description provided for @axiVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'v{version}'**
+  String axiVersionLabel(String version);
+
+  /// No description provided for @axiVersionTagAlpha.
+  ///
+  /// In en, this message translates to:
+  /// **'alpha'**
+  String get axiVersionTagAlpha;
+
+  /// No description provided for @calendarSyncWarningSnapshotTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sync'**
+  String get calendarSyncWarningSnapshotTitle;
+
+  /// No description provided for @calendarSyncWarningSnapshotMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar snapshot unavailable. Export your calendar JSON from another device and import it here to restore.'**
+  String get calendarSyncWarningSnapshotMessage;
+
+  /// No description provided for @commonLabelValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String commonLabelValue(String label, String value);
+
+  /// No description provided for @calendarAvailabilityRequestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request time'**
+  String get calendarAvailabilityRequestTitle;
+
+  /// No description provided for @calendarAvailabilityRequestSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a free slot and share details.'**
+  String get calendarAvailabilityRequestSubtitle;
+
+  /// No description provided for @calendarAvailabilityRequestDetailsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get calendarAvailabilityRequestDetailsLabel;
+
+  /// No description provided for @calendarAvailabilityRequestRangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Range'**
+  String get calendarAvailabilityRequestRangeLabel;
+
+  /// No description provided for @calendarAvailabilityRequestTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get calendarAvailabilityRequestTitleLabel;
+
+  /// No description provided for @calendarAvailabilityRequestTitlePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'What is this for?'**
+  String get calendarAvailabilityRequestTitlePlaceholder;
+
+  /// No description provided for @calendarAvailabilityRequestDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get calendarAvailabilityRequestDescriptionLabel;
+
+  /// No description provided for @calendarAvailabilityRequestDescriptionPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Add context (optional).'**
+  String get calendarAvailabilityRequestDescriptionPlaceholder;
+
+  /// No description provided for @calendarAvailabilityRequestSendLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get calendarAvailabilityRequestSendLabel;
+
+  /// No description provided for @calendarAvailabilityRequestInvalidRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a valid time range.'**
+  String get calendarAvailabilityRequestInvalidRange;
+
+  /// No description provided for @calendarAvailabilityRequestNotFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a free slot before sending.'**
+  String get calendarAvailabilityRequestNotFree;
+
+  /// No description provided for @calendarAvailabilityDecisionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept request'**
+  String get calendarAvailabilityDecisionTitle;
+
+  /// No description provided for @calendarAvailabilityDecisionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose which calendars should receive it.'**
+  String get calendarAvailabilityDecisionSubtitle;
+
+  /// No description provided for @calendarAvailabilityDecisionPersonalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to personal calendar'**
+  String get calendarAvailabilityDecisionPersonalLabel;
+
+  /// No description provided for @calendarAvailabilityDecisionChatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to chat calendar'**
+  String get calendarAvailabilityDecisionChatLabel;
+
+  /// No description provided for @calendarAvailabilityDecisionMissingSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one calendar.'**
+  String get calendarAvailabilityDecisionMissingSelection;
+
+  /// No description provided for @calendarAvailabilityDecisionSummaryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested'**
+  String get calendarAvailabilityDecisionSummaryLabel;
+
+  /// No description provided for @calendarAvailabilityRequestTitleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested time'**
+  String get calendarAvailabilityRequestTitleFallback;
+
+  /// No description provided for @calendarFreeBusyFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get calendarFreeBusyFree;
+
+  /// No description provided for @calendarFreeBusyBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get calendarFreeBusyBusy;
+
+  /// No description provided for @calendarFreeBusyTentative.
+  ///
+  /// In en, this message translates to:
+  /// **'Tentative'**
+  String get calendarFreeBusyTentative;
+
+  /// No description provided for @calendarFreeBusyEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit availability'**
+  String get calendarFreeBusyEditTitle;
+
+  /// No description provided for @calendarFreeBusyEditSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust the time range and status.'**
+  String get calendarFreeBusyEditSubtitle;
+
+  /// No description provided for @calendarFreeBusyToggleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Free/Busy'**
+  String get calendarFreeBusyToggleLabel;
+
+  /// No description provided for @calendarFreeBusySplitLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Split'**
+  String get calendarFreeBusySplitLabel;
+
+  /// No description provided for @calendarFreeBusySplitTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Split segment'**
+  String get calendarFreeBusySplitTooltip;
+
+  /// No description provided for @calendarFreeBusyMarkFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark free'**
+  String get calendarFreeBusyMarkFree;
+
+  /// No description provided for @calendarFreeBusyMarkBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark busy'**
+  String get calendarFreeBusyMarkBusy;
+
+  /// No description provided for @calendarFreeBusyRangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Range'**
+  String get calendarFreeBusyRangeLabel;
+
+  /// No description provided for @commonWeekdayDayLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{weekday} {day}'**
+  String commonWeekdayDayLabel(String weekday, int day);
+
+  /// No description provided for @calendarFragmentChecklistLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get calendarFragmentChecklistLabel;
+
+  /// No description provided for @calendarFragmentChecklistSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get calendarFragmentChecklistSeparator;
+
+  /// No description provided for @calendarFragmentChecklistSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist: {summary}'**
+  String calendarFragmentChecklistSummary(String summary);
+
+  /// No description provided for @calendarFragmentChecklistSummaryMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist: {summary} and {count} more'**
+  String calendarFragmentChecklistSummaryMore(String summary, int count);
+
+  /// No description provided for @calendarFragmentRemindersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get calendarFragmentRemindersLabel;
+
+  /// No description provided for @calendarFragmentReminderStartSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Start: {summary}'**
+  String calendarFragmentReminderStartSummary(String summary);
+
+  /// No description provided for @calendarFragmentReminderDeadlineSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Deadline: {summary}'**
+  String calendarFragmentReminderDeadlineSummary(String summary);
+
+  /// No description provided for @calendarFragmentRemindersSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders: {summary}'**
+  String calendarFragmentRemindersSummary(String summary);
+
+  /// No description provided for @calendarFragmentReminderSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get calendarFragmentReminderSeparator;
+
+  /// No description provided for @calendarFragmentEventTitleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled event'**
+  String get calendarFragmentEventTitleFallback;
+
+  /// No description provided for @calendarFragmentDayEventSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{title} (Day event: {range})'**
+  String calendarFragmentDayEventSummary(String title, String range);
+
+  /// No description provided for @calendarFragmentFreeBusySummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} (Window: {range})'**
+  String calendarFragmentFreeBusySummary(String label, String range);
+
+  /// No description provided for @calendarFragmentCriticalPathLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical path'**
+  String get calendarFragmentCriticalPathLabel;
+
+  /// No description provided for @calendarFragmentCriticalPathSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical path: {name}'**
+  String calendarFragmentCriticalPathSummary(String name);
+
+  /// No description provided for @calendarFragmentCriticalPathProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{completed}/{total} done'**
+  String calendarFragmentCriticalPathProgress(int completed, int total);
+
+  /// No description provided for @calendarFragmentCriticalPathDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (Critical path: {progress})'**
+  String calendarFragmentCriticalPathDetail(String name, String progress);
+
+  /// No description provided for @calendarFragmentAvailabilitySummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{summary} (Availability: {range})'**
+  String calendarFragmentAvailabilitySummary(String summary, String range);
+
+  /// No description provided for @calendarFragmentAvailabilityFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability: {range}'**
+  String calendarFragmentAvailabilityFallback(String range);
+
+  /// No description provided for @calendarMonthOverflowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more'**
+  String calendarMonthOverflowMore(int count);
+
+  /// No description provided for @commonPercentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}%'**
+  String commonPercentLabel(int value);
+
+  /// No description provided for @commonStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get commonStart;
+
+  /// No description provided for @commonEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get commonEnd;
+
+  /// No description provided for @commonSelectStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Select start'**
+  String get commonSelectStart;
+
+  /// No description provided for @commonSelectEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'Select end'**
+  String get commonSelectEnd;
+
+  /// No description provided for @commonTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get commonTimeLabel;
+
+  /// No description provided for @commonListSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get commonListSeparator;
+
+  /// No description provided for @commonClauseSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get commonClauseSeparator;
+
+  /// No description provided for @commonSentenceSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **'. '**
+  String get commonSentenceSeparator;
+
+  /// No description provided for @commonSentenceTerminator.
+  ///
+  /// In en, this message translates to:
+  /// **'.'**
+  String get commonSentenceTerminator;
+
+  /// No description provided for @commonListAnd.
+  ///
+  /// In en, this message translates to:
+  /// **'{head} and {tail}'**
+  String commonListAnd(String head, String tail);
+
+  /// No description provided for @calendarAlarmsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms'**
+  String get calendarAlarmsTitle;
+
+  /// No description provided for @calendarAlarmsHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders are exported as display alarms.'**
+  String get calendarAlarmsHelper;
+
+  /// No description provided for @calendarAlarmsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No alarms yet'**
+  String get calendarAlarmsEmpty;
+
+  /// No description provided for @calendarAlarmAddTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Add alarm'**
+  String get calendarAlarmAddTooltip;
+
+  /// No description provided for @calendarAlarmRemoveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove alarm'**
+  String get calendarAlarmRemoveTooltip;
+
+  /// No description provided for @calendarAlarmItemLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm {index}'**
+  String calendarAlarmItemLabel(int index);
+
+  /// No description provided for @calendarAlarmActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get calendarAlarmActionLabel;
+
+  /// No description provided for @calendarAlarmActionDisplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Display'**
+  String get calendarAlarmActionDisplay;
+
+  /// No description provided for @calendarAlarmActionAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get calendarAlarmActionAudio;
+
+  /// No description provided for @calendarAlarmActionEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get calendarAlarmActionEmail;
+
+  /// No description provided for @calendarAlarmActionProcedure.
+  ///
+  /// In en, this message translates to:
+  /// **'Procedure'**
+  String get calendarAlarmActionProcedure;
+
+  /// No description provided for @calendarAlarmActionProcedureHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Procedure alarms are imported read-only.'**
+  String get calendarAlarmActionProcedureHelper;
+
+  /// No description provided for @calendarAlarmTriggerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger'**
+  String get calendarAlarmTriggerLabel;
+
+  /// No description provided for @calendarAlarmTriggerRelative.
+  ///
+  /// In en, this message translates to:
+  /// **'Relative'**
+  String get calendarAlarmTriggerRelative;
+
+  /// No description provided for @calendarAlarmTriggerAbsolute.
+  ///
+  /// In en, this message translates to:
+  /// **'Absolute'**
+  String get calendarAlarmTriggerAbsolute;
+
+  /// No description provided for @calendarAlarmAbsolutePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick date and time'**
+  String get calendarAlarmAbsolutePlaceholder;
+
+  /// No description provided for @calendarAlarmRelativeToLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Relative to'**
+  String get calendarAlarmRelativeToLabel;
+
+  /// No description provided for @calendarAlarmRelativeToStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get calendarAlarmRelativeToStart;
+
+  /// No description provided for @calendarAlarmRelativeToEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get calendarAlarmRelativeToEnd;
+
+  /// No description provided for @calendarAlarmDirectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Direction'**
+  String get calendarAlarmDirectionLabel;
+
+  /// No description provided for @calendarAlarmDirectionBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'Before'**
+  String get calendarAlarmDirectionBefore;
+
+  /// No description provided for @calendarAlarmDirectionAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'After'**
+  String get calendarAlarmDirectionAfter;
+
+  /// No description provided for @calendarAlarmOffsetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Offset'**
+  String get calendarAlarmOffsetLabel;
+
+  /// No description provided for @calendarAlarmOffsetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get calendarAlarmOffsetHint;
+
+  /// No description provided for @calendarAlarmRepeatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get calendarAlarmRepeatLabel;
+
+  /// No description provided for @calendarAlarmRepeatCountHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Times'**
+  String get calendarAlarmRepeatCountHint;
+
+  /// No description provided for @calendarAlarmRepeatEveryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Every'**
+  String get calendarAlarmRepeatEveryLabel;
+
+  /// No description provided for @calendarAlarmRecipientsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients'**
+  String get calendarAlarmRecipientsLabel;
+
+  /// No description provided for @calendarAlarmRecipientAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add email'**
+  String get calendarAlarmRecipientAddressHint;
+
+  /// No description provided for @calendarAlarmRecipientNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (optional)'**
+  String get calendarAlarmRecipientNameHint;
+
+  /// No description provided for @calendarAlarmRecipientRemoveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove recipient'**
+  String get calendarAlarmRecipientRemoveTooltip;
+
+  /// No description provided for @calendarAlarmRecipientDisplay.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} <{address}>'**
+  String calendarAlarmRecipientDisplay(String name, String address);
+
+  /// No description provided for @calendarAlarmAcknowledgedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged'**
+  String get calendarAlarmAcknowledgedLabel;
+
+  /// No description provided for @calendarAlarmUnitMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get calendarAlarmUnitMinutes;
+
+  /// No description provided for @calendarAlarmUnitHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get calendarAlarmUnitHours;
+
+  /// No description provided for @calendarAlarmUnitDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get calendarAlarmUnitDays;
+
+  /// No description provided for @calendarAlarmUnitWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **'Weeks'**
+  String get calendarAlarmUnitWeeks;
+
+  /// No description provided for @taskShareTitleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled task'**
+  String get taskShareTitleFallback;
+
+  /// No description provided for @taskShareTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Task \"{title}\"'**
+  String taskShareTitleLabel(String title);
+
+  /// No description provided for @taskShareTitleWithQualifiers.
+  ///
+  /// In en, this message translates to:
+  /// **'Task \"{title}\" ({qualifiers})'**
+  String taskShareTitleWithQualifiers(String title, String qualifiers);
+
+  /// No description provided for @taskShareQualifierDone.
+  ///
+  /// In en, this message translates to:
+  /// **'done'**
+  String get taskShareQualifierDone;
+
+  /// No description provided for @taskSharePriorityImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'important'**
+  String get taskSharePriorityImportant;
+
+  /// No description provided for @taskSharePriorityUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'urgent'**
+  String get taskSharePriorityUrgent;
+
+  /// No description provided for @taskSharePriorityCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'critical'**
+  String get taskSharePriorityCritical;
+
+  /// No description provided for @taskShareLocationClause.
+  ///
+  /// In en, this message translates to:
+  /// **' at {location}'**
+  String taskShareLocationClause(String location);
+
+  /// No description provided for @taskShareScheduleNoTime.
+  ///
+  /// In en, this message translates to:
+  /// **' with no set time'**
+  String get taskShareScheduleNoTime;
+
+  /// No description provided for @taskShareScheduleSameDay.
+  ///
+  /// In en, this message translates to:
+  /// **' on {date} from {startTime} to {endTime}'**
+  String taskShareScheduleSameDay(
+      String date, String startTime, String endTime);
+
+  /// No description provided for @taskShareScheduleRange.
+  ///
+  /// In en, this message translates to:
+  /// **' from {startDateTime} to {endDateTime}'**
+  String taskShareScheduleRange(String startDateTime, String endDateTime);
+
+  /// No description provided for @taskShareScheduleStartDuration.
+  ///
+  /// In en, this message translates to:
+  /// **' on {date} at {time} for {duration}'**
+  String taskShareScheduleStartDuration(
+      String date, String time, String duration);
+
+  /// No description provided for @taskShareScheduleStart.
+  ///
+  /// In en, this message translates to:
+  /// **' on {date} at {time}'**
+  String taskShareScheduleStart(String date, String time);
+
+  /// No description provided for @taskShareScheduleEnding.
+  ///
+  /// In en, this message translates to:
+  /// **' ending {dateTime}'**
+  String taskShareScheduleEnding(String dateTime);
+
+  /// No description provided for @taskShareRecurrenceEveryOtherDay.
+  ///
+  /// In en, this message translates to:
+  /// **' every other day'**
+  String get taskShareRecurrenceEveryOtherDay;
+
+  /// No description provided for @taskShareRecurrenceEveryDays.
+  ///
+  /// In en, this message translates to:
+  /// **' every {count, plural, one{day} other{{count} days}}'**
+  String taskShareRecurrenceEveryDays(int count);
+
+  /// No description provided for @taskShareRecurrenceEveryWeekdays.
+  ///
+  /// In en, this message translates to:
+  /// **' every {count, plural, one{weekday} other{{count} weekdays}}'**
+  String taskShareRecurrenceEveryWeekdays(int count);
+
+  /// No description provided for @taskShareRecurrenceEveryWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **' every {count, plural, one{week} other{{count} weeks}}'**
+  String taskShareRecurrenceEveryWeeks(int count);
+
+  /// No description provided for @taskShareRecurrenceEveryMonths.
+  ///
+  /// In en, this message translates to:
+  /// **' every {count, plural, one{month} other{{count} months}}'**
+  String taskShareRecurrenceEveryMonths(int count);
+
+  /// No description provided for @taskShareRecurrenceEveryOtherYear.
+  ///
+  /// In en, this message translates to:
+  /// **' every other year'**
+  String get taskShareRecurrenceEveryOtherYear;
+
+  /// No description provided for @taskShareRecurrenceEveryYears.
+  ///
+  /// In en, this message translates to:
+  /// **' every {count, plural, one{year} other{{count} years}}'**
+  String taskShareRecurrenceEveryYears(int count);
+
+  /// No description provided for @taskShareRecurrenceOnDays.
+  ///
+  /// In en, this message translates to:
+  /// **' on {days}'**
+  String taskShareRecurrenceOnDays(String days);
+
+  /// No description provided for @taskShareRecurrenceUntil.
+  ///
+  /// In en, this message translates to:
+  /// **' until {date}'**
+  String taskShareRecurrenceUntil(String date);
+
+  /// No description provided for @taskShareRecurrenceCount.
+  ///
+  /// In en, this message translates to:
+  /// **' for {count} occurrences'**
+  String taskShareRecurrenceCount(int count);
+
+  /// No description provided for @taskShareDeadlineClause.
+  ///
+  /// In en, this message translates to:
+  /// **', due by {dateTime}'**
+  String taskShareDeadlineClause(String dateTime);
+
+  /// No description provided for @taskShareNotesClause.
+  ///
+  /// In en, this message translates to:
+  /// **' Notes: {notes}.'**
+  String taskShareNotesClause(String notes);
+
+  /// No description provided for @taskShareChangesClause.
+  ///
+  /// In en, this message translates to:
+  /// **' Changes: {changes}'**
+  String taskShareChangesClause(String changes);
+
+  /// No description provided for @taskShareOverrideMoveTo.
+  ///
+  /// In en, this message translates to:
+  /// **'move to {dateTime}'**
+  String taskShareOverrideMoveTo(String dateTime);
+
+  /// No description provided for @taskShareOverrideDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'for {duration}'**
+  String taskShareOverrideDuration(String duration);
+
+  /// No description provided for @taskShareOverrideEndAt.
+  ///
+  /// In en, this message translates to:
+  /// **'end at {dateTime}'**
+  String taskShareOverrideEndAt(String dateTime);
+
+  /// No description provided for @taskShareOverridePriority.
+  ///
+  /// In en, this message translates to:
+  /// **'priority {priority}'**
+  String taskShareOverridePriority(String priority);
+
+  /// No description provided for @taskShareOverrideCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'cancelled'**
+  String get taskShareOverrideCancelled;
+
+  /// No description provided for @taskShareOverrideDone.
+  ///
+  /// In en, this message translates to:
+  /// **'done'**
+  String get taskShareOverrideDone;
+
+  /// No description provided for @taskShareOverrideRenameTo.
+  ///
+  /// In en, this message translates to:
+  /// **'rename to \"{title}\"'**
+  String taskShareOverrideRenameTo(String title);
+
+  /// No description provided for @taskShareOverrideNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'notes \"{notes}\"'**
+  String taskShareOverrideNotes(String notes);
+
+  /// No description provided for @taskShareOverrideLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'location \"{location}\"'**
+  String taskShareOverrideLocation(String location);
+
+  /// No description provided for @taskShareOverrideNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'no changes'**
+  String get taskShareOverrideNoChanges;
+
+  /// No description provided for @taskShareOverrideSegment.
+  ///
+  /// In en, this message translates to:
+  /// **'On {dateTime}: {actions}'**
+  String taskShareOverrideSegment(String dateTime, String actions);
 }
 
 class _AppLocalizationsDelegate

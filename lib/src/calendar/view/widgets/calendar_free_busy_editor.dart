@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -46,32 +47,11 @@ const int _freeBusyStartHour = 0;
 const int _freeBusyEndHour = 24;
 const Duration _freeBusyDayStep = Duration(days: 1);
 const Duration _freeBusyMinimumDuration = calendarMinimumTaskDuration;
-const String _freeBusyFreeLabel = 'Free';
-const String _freeBusyBusyLabel = 'Busy';
-const String _freeBusyMutualLabel = 'Mutual';
-const String _freeBusyEditTitle = 'Edit availability';
-const String _freeBusyEditSubtitle = 'Adjust the time range and status.';
-const String _freeBusyToggleLabel = 'Free/Busy';
-const String _freeBusySplitLabel = 'Split';
-const String _freeBusySplitTooltip = 'Split segment';
-const String _freeBusyToggleToFreeLabel = 'Mark free';
-const String _freeBusyToggleToBusyLabel = 'Mark busy';
-const String _freeBusyRangeLabel = 'Range';
 const Uuid _freeBusySegmentIdGenerator = Uuid();
 const EdgeInsets _freeBusyPopoverPadding = EdgeInsets.symmetric(
   horizontal: calendarGutterMd,
   vertical: calendarGutterSm,
 );
-
-const List<String> _freeBusyDayNames = <String>[
-  'SUNDAY',
-  'MONDAY',
-  'TUESDAY',
-  'WEDNESDAY',
-  'THURSDAY',
-  'FRIDAY',
-  'SATURDAY',
-];
 
 class CalendarFreeBusyEditor extends StatefulWidget {
   const CalendarFreeBusyEditor({
@@ -751,8 +731,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     }
     return (context, request) {
       final String toggleLabel = segment.type.isFree
-          ? _freeBusyToggleToBusyLabel
-          : _freeBusyToggleToFreeLabel;
+          ? context.l10n.calendarFreeBusyMarkBusy
+          : context.l10n.calendarFreeBusyMarkFree;
       final List<Widget> items = [
         ShadContextMenuItem(
           leading: const Icon(Icons.swap_horiz),
@@ -930,7 +910,7 @@ class _FreeBusyDayHeader extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          _dayLabel(date),
+          _dayLabel(context, date),
           style: context.textTheme.small.copyWith(
             fontSize: _freeBusyHeaderFontSize,
             fontWeight: FontWeight.w600,
@@ -1187,7 +1167,9 @@ class _FreeBusyTaskTile extends StatelessWidget {
       segment.start,
       segment.end,
     );
-    final CalendarTask task = segment.asTask(titleOverride: customTitle);
+    final String resolvedTitle =
+        customTitle ?? segment.type.label(context.l10n);
+    final CalendarTask task = segment.asTask(title: resolvedTitle);
     final Color accentColor = segment.type.tileColor;
     final bool showControls =
         !isReadOnly && height >= _freeBusyTileControlMinHeight;
@@ -1376,7 +1358,7 @@ class _FreeBusyTileControls extends StatelessWidget {
               const SizedBox(width: _freeBusyTileOverlayGap),
               AxiIconButton.ghost(
                 iconData: Icons.call_split,
-                tooltip: _freeBusySplitTooltip,
+                tooltip: context.l10n.calendarFreeBusySplitTooltip,
                 onPressed: onSplit,
                 iconSize: _freeBusyTileSplitIconSize,
               ),
@@ -1424,13 +1406,6 @@ extension _FreeBusyTypeLabelX on CalendarFreeBusyType {
   CalendarFreeBusyType get toggled =>
       isFree ? CalendarFreeBusyType.busy : CalendarFreeBusyType.free;
 
-  String get label => switch (this) {
-        CalendarFreeBusyType.free => _freeBusyFreeLabel,
-        CalendarFreeBusyType.busy => _freeBusyBusyLabel,
-        CalendarFreeBusyType.busyUnavailable => _freeBusyBusyLabel,
-        CalendarFreeBusyType.busyTentative => _freeBusyMutualLabel,
-      };
-
   Color get tileColor => switch (this) {
         CalendarFreeBusyType.free => calendarSuccessColor,
         CalendarFreeBusyType.busy => calendarDangerColor,
@@ -1440,11 +1415,10 @@ extension _FreeBusyTypeLabelX on CalendarFreeBusyType {
 }
 
 extension _FreeBusySegmentTaskX on _FreeBusySegment {
-  CalendarTask asTask({String? titleOverride}) {
-    final String resolvedTitle = titleOverride ?? type.label;
+  CalendarTask asTask({required String title}) {
     return CalendarTask(
       id: id,
-      title: resolvedTitle,
+      title: title,
       scheduledTime: start,
       duration: end.difference(start),
       createdAt: createdAt,
@@ -1700,8 +1674,8 @@ class _FreeBusyEditSheetState extends State<_FreeBusyEditSheet> {
   @override
   Widget build(BuildContext context) {
     final header = AxiSheetHeader(
-      title: const Text(_freeBusyEditTitle),
-      subtitle: const Text(_freeBusyEditSubtitle),
+      title: Text(context.l10n.calendarFreeBusyEditTitle),
+      subtitle: Text(context.l10n.calendarFreeBusyEditSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     return AxiSheetScaffold.scroll(
@@ -1713,7 +1687,9 @@ class _FreeBusyEditSheetState extends State<_FreeBusyEditSheet> {
           onSplit: widget.onSplit,
         ),
         const SizedBox(height: _freeBusySheetSpacing),
-        const _FreeBusySheetSectionLabel(text: _freeBusyRangeLabel),
+        _FreeBusySheetSectionLabel(
+          text: context.l10n.calendarFreeBusyRangeLabel,
+        ),
         ScheduleRangeFields(
           start: _start,
           end: _end,
@@ -1792,7 +1768,7 @@ class _FreeBusySheetActions extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _freeBusyToggleLabel,
+                    context.l10n.calendarFreeBusyToggleLabel,
                     style: context.textTheme.small.copyWith(
                       fontWeight: FontWeight.w600,
                       color: context.colorScheme.mutedForeground,
@@ -1808,7 +1784,7 @@ class _FreeBusySheetActions extends StatelessWidget {
         ShadButton.outline(
           size: ShadButtonSize.sm,
           onPressed: onSplit,
-          child: const Text(_freeBusySplitLabel),
+          child: Text(context.l10n.calendarFreeBusySplitLabel),
         ),
       ],
     );
@@ -1859,11 +1835,14 @@ List<DateTime> _resolveColumns(DateTime rangeStart, DateTime rangeEnd) {
   return columns;
 }
 
-String _dayLabel(DateTime date) {
-  final int index = date.weekday % _freeBusyDayNames.length;
-  final String dayName = _freeBusyDayNames[index];
-  final String shortName = dayName.substring(0, _freeBusyDayLabelLength);
-  return '$shortName ${date.day}';
+String _dayLabel(BuildContext context, DateTime date) {
+  final List<String> weekdays =
+      MaterialLocalizations.of(context).narrowWeekdays;
+  final String dayName = weekdays[date.weekday % weekdays.length];
+  final String shortName = dayName.length > _freeBusyDayLabelLength
+      ? dayName.substring(0, _freeBusyDayLabelLength)
+      : dayName;
+  return context.l10n.commonWeekdayDayLabel(shortName, date.day);
 }
 
 DateTime _startOfDay(DateTime value) {

@@ -235,7 +235,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 accentColor: accentColor,
                 accentWidth: _accentWidth,
                 accentPadding: _accentPadding,
-                timeLabel: _formatTimeRange(),
+                timeLabel: _formatTimeRange(context),
                 overlay: widget.overlay,
               );
 
@@ -289,26 +289,17 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     );
   }
 
-  String _formatTimeRange() {
+  String _formatTimeRange(BuildContext context) {
     if (widget.task.scheduledTime == null) return '';
 
     final startTime = widget.task.scheduledTime!;
     final duration = widget.task.duration ?? const Duration(hours: 1);
     final endTime = startTime.add(duration);
 
-    String formatTime(DateTime time) {
-      final hour = time.hour;
-      final min = time.minute;
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour == 0
-          ? 12
-          : hour > 12
-              ? hour - 12
-              : hour;
-      return '$displayHour:${min.toString().padLeft(2, '0')} $period';
-    }
-
-    return '${formatTime(startTime)} - ${formatTime(endTime)}';
+    return context.l10n.commonRangeLabel(
+      TimeFormatter.formatTime(startTime),
+      TimeFormatter.formatTime(endTime),
+    );
   }
 
   Offset get debugContextMenuLocalPosition => _contextMenuLocalPosition;

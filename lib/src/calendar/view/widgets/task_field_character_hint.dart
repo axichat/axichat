@@ -44,12 +44,11 @@ class TaskFieldCharacterHint extends StatelessWidget {
             children: [
               if (showWarningText && overLimit)
                 Padding(
-                  padding: EdgeInsets.only(
+                  padding: const EdgeInsets.only(
                     bottom: _taskTitleLimitWarningBottomPadding,
                   ),
                   child: _TaskTitleLimitWarningText(
-                    message:
-                        context.l10n.calendarTaskTitleLimitWarning(limit),
+                    message: context.l10n.calendarTaskTitleLimitWarning(limit),
                   ),
                 ),
               Text(

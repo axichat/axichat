@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 
@@ -95,7 +96,10 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     final duration = widget.task.duration ?? const Duration(hours: 1);
     final endTime = startTime.add(duration);
 
-    return '${TimeFormatter.formatTime(startTime)} - ${TimeFormatter.formatTime(endTime)}';
+    return context.l10n.commonRangeLabel(
+      TimeFormatter.formatTime(startTime),
+      TimeFormatter.formatTime(endTime),
+    );
   }
 
   double get _adjustedWidth {

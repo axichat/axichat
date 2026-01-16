@@ -2009,5 +2009,485 @@
   "calendarAvailabilityRequestTitleFallback": "Heure demandée",
   "calendarFreeBusyFree": "Libre",
   "calendarFreeBusyBusy": "Occupé",
-  "calendarFreeBusyTentative": "Provisoire"
+  "calendarFreeBusyTentative": "Provisoire",
+  "calendarFreeBusyEditTitle": "Modifier la disponibilite",
+  "calendarFreeBusyEditSubtitle": "Ajustez la plage horaire et le statut.",
+  "calendarFreeBusyToggleLabel": "Libre/Occupe",
+  "calendarFreeBusySplitLabel": "Scinder",
+  "calendarFreeBusySplitTooltip": "Scinder le segment",
+  "calendarFreeBusyMarkFree": "Marquer comme libre",
+  "calendarFreeBusyMarkBusy": "Marquer comme occupe",
+  "calendarFreeBusyRangeLabel": "Plage",
+  "commonWeekdayDayLabel": "{weekday} {day}",
+  "@commonWeekdayDayLabel": {
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      },
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarFragmentChecklistLabel": "Liste de controle",
+  "calendarFragmentChecklistSeparator": ", ",
+  "calendarFragmentChecklistSummary": "Liste de controle : {summary}",
+  "@calendarFragmentChecklistSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentChecklistSummaryMore": "Liste de controle : {summary} et {count} de plus",
+  "@calendarFragmentChecklistSummaryMore": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarFragmentRemindersLabel": "Rappels",
+  "calendarFragmentReminderStartSummary": "Debut : {summary}",
+  "@calendarFragmentReminderStartSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentReminderDeadlineSummary": "Echeance : {summary}",
+  "@calendarFragmentReminderDeadlineSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentRemindersSummary": "Rappels : {summary}",
+  "@calendarFragmentRemindersSummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentReminderSeparator": ", ",
+  "calendarFragmentEventTitleFallback": "Evenement sans titre",
+  "calendarFragmentDayEventSummary": "{title} (Evenement de jour : {range})",
+  "@calendarFragmentDayEventSummary": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentFreeBusySummary": "{label} (Fenetre : {range})",
+  "@calendarFragmentFreeBusySummary": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentCriticalPathLabel": "Chemin critique",
+  "calendarFragmentCriticalPathSummary": "Chemin critique : {name}",
+  "@calendarFragmentCriticalPathSummary": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentCriticalPathProgress": "{completed}/{total} termine",
+  "@calendarFragmentCriticalPathProgress": {
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarFragmentCriticalPathDetail": "{name} (Chemin critique : {progress})",
+  "@calendarFragmentCriticalPathDetail": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "progress": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentAvailabilitySummary": "{summary} (Disponibilite : {range})",
+  "@calendarFragmentAvailabilitySummary": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      },
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarFragmentAvailabilityFallback": "Disponibilite : {range}",
+  "@calendarFragmentAvailabilityFallback": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarMonthOverflowMore": "+{count} de plus",
+  "@calendarMonthOverflowMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonPercentLabel": "{value}%",
+  "@commonPercentLabel": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "commonStart": "Debut",
+  "commonEnd": "Fin",
+  "commonSelectStart": "Selectionner le debut",
+  "commonSelectEnd": "Selectionner la fin",
+  "commonTimeLabel": "Heure",
+  "commonListSeparator": ", ",
+  "commonClauseSeparator": "; ",
+  "commonSentenceSeparator": ". ",
+  "commonSentenceTerminator": ".",
+  "commonListAnd": "{head} et {tail}",
+  "@commonListAnd": {
+    "placeholders": {
+      "head": {
+        "type": "String"
+      },
+      "tail": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAlarmsTitle": "Alarmes",
+  "calendarAlarmsHelper": "Les rappels sont exportes comme alarmes d’affichage.",
+  "calendarAlarmsEmpty": "Aucune alarme pour le moment",
+  "calendarAlarmAddTooltip": "Ajouter une alarme",
+  "calendarAlarmRemoveTooltip": "Supprimer l’alarme",
+  "calendarAlarmItemLabel": "Alarme {index}",
+  "@calendarAlarmItemLabel": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarAlarmActionLabel": "Action",
+  "calendarAlarmActionDisplay": "Affichage",
+  "calendarAlarmActionAudio": "Audio",
+  "calendarAlarmActionEmail": "E-mail",
+  "calendarAlarmActionProcedure": "Procedure",
+  "calendarAlarmActionProcedureHelper": "Les alarmes de procedure sont importees en lecture seule.",
+  "calendarAlarmTriggerLabel": "Declencheur",
+  "calendarAlarmTriggerRelative": "Relatif",
+  "calendarAlarmTriggerAbsolute": "Absolu",
+  "calendarAlarmAbsolutePlaceholder": "Choisir la date et l’heure",
+  "calendarAlarmRelativeToLabel": "Par rapport a",
+  "calendarAlarmRelativeToStart": "Debut",
+  "calendarAlarmRelativeToEnd": "Fin",
+  "calendarAlarmDirectionLabel": "Direction",
+  "calendarAlarmDirectionBefore": "Avant",
+  "calendarAlarmDirectionAfter": "Apres",
+  "calendarAlarmOffsetLabel": "Decalage",
+  "calendarAlarmOffsetHint": "Quantite",
+  "calendarAlarmRepeatLabel": "Repeter",
+  "calendarAlarmRepeatCountHint": "Fois",
+  "calendarAlarmRepeatEveryLabel": "Chaque",
+  "calendarAlarmRecipientsLabel": "Destinataires",
+  "calendarAlarmRecipientAddressHint": "Ajouter un e-mail",
+  "calendarAlarmRecipientNameHint": "Nom (facultatif)",
+  "calendarAlarmRecipientRemoveTooltip": "Supprimer le destinataire",
+  "calendarAlarmRecipientDisplay": "{name} <{address}>",
+  "@calendarAlarmRecipientDisplay": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAlarmAcknowledgedLabel": "Confirme",
+  "calendarAlarmUnitMinutes": "Minutes",
+  "calendarAlarmUnitHours": "Heures",
+  "calendarAlarmUnitDays": "Jours",
+  "calendarAlarmUnitWeeks": "Semaines",
+  "taskShareTitleFallback": "Tache sans titre",
+  "taskShareTitleLabel": "Tache \"{title}\"",
+  "@taskShareTitleLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareTitleWithQualifiers": "Tache \"{title}\" ({qualifiers})",
+  "@taskShareTitleWithQualifiers": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "qualifiers": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareQualifierDone": "terminee",
+  "taskSharePriorityImportant": "importante",
+  "taskSharePriorityUrgent": "urgente",
+  "taskSharePriorityCritical": "critique",
+  "taskShareLocationClause": " a {location}",
+  "@taskShareLocationClause": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleNoTime": " sans horaire defini",
+  "taskShareScheduleSameDay": " le {date} de {startTime} a {endTime}",
+  "@taskShareScheduleSameDay": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "startTime": {
+        "type": "String"
+      },
+      "endTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleRange": " de {startDateTime} a {endDateTime}",
+  "@taskShareScheduleRange": {
+    "placeholders": {
+      "startDateTime": {
+        "type": "String"
+      },
+      "endDateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleStartDuration": " le {date} a {time} pour {duration}",
+  "@taskShareScheduleStartDuration": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleStart": " le {date} a {time}",
+  "@taskShareScheduleStart": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareScheduleEnding": " se termine {dateTime}",
+  "@taskShareScheduleEnding": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryOtherDay": " un jour sur deux",
+  "taskShareRecurrenceEveryDays": " chaque {count, plural, one{jour} other{{count} jours}}",
+  "@taskShareRecurrenceEveryDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryWeekdays": " chaque {count, plural, one{jour ouvre} other{{count} jours ouvres}}",
+  "@taskShareRecurrenceEveryWeekdays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryWeeks": " chaque {count, plural, one{semaine} other{{count} semaines}}",
+  "@taskShareRecurrenceEveryWeeks": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryMonths": " chaque {count, plural, one{mois} other{{count} mois}}",
+  "@taskShareRecurrenceEveryMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceEveryOtherYear": " un an sur deux",
+  "taskShareRecurrenceEveryYears": " chaque {count, plural, one{an} other{{count} ans}}",
+  "@taskShareRecurrenceEveryYears": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareRecurrenceOnDays": " le {days}",
+  "@taskShareRecurrenceOnDays": {
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareRecurrenceUntil": " jusqu’au {date}",
+  "@taskShareRecurrenceUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareRecurrenceCount": " pour {count} occurrences",
+  "@taskShareRecurrenceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskShareDeadlineClause": ", a rendre avant {dateTime}",
+  "@taskShareDeadlineClause": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareNotesClause": " Notes : {notes}.",
+  "@taskShareNotesClause": {
+    "placeholders": {
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareChangesClause": " Modifications : {changes}",
+  "@taskShareChangesClause": {
+    "placeholders": {
+      "changes": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideMoveTo": "deplacer a {dateTime}",
+  "@taskShareOverrideMoveTo": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideDuration": "pendant {duration}",
+  "@taskShareOverrideDuration": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideEndAt": "se termine a {dateTime}",
+  "@taskShareOverrideEndAt": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverridePriority": "priorite {priority}",
+  "@taskShareOverridePriority": {
+    "placeholders": {
+      "priority": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideCancelled": "annulee",
+  "taskShareOverrideDone": "terminee",
+  "taskShareOverrideRenameTo": "renommer en \"{title}\"",
+  "@taskShareOverrideRenameTo": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideNotes": "notes \"{notes}\"",
+  "@taskShareOverrideNotes": {
+    "placeholders": {
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideLocation": "lieu \"{location}\"",
+  "@taskShareOverrideLocation": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "taskShareOverrideNoChanges": "aucun changement",
+  "taskShareOverrideSegment": "Le {dateTime} : {actions}",
+  "@taskShareOverrideSegment": {
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      },
+      "actions": {
+        "type": "String"
+      }
+    }
+  }
 }

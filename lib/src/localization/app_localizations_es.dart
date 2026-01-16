@@ -3651,44 +3651,44 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatChooseTextToAdd => 'Elegir texto para añadir';
 
   @override
-  String get notificationChannelMessages => 'Messages';
+  String get notificationChannelMessages => 'Mensajes';
 
   @override
-  String get notificationNewMessageTitle => 'New message';
+  String get notificationNewMessageTitle => 'Nuevo mensaje';
 
   @override
-  String get notificationOpenAction => 'Open notification';
+  String get notificationOpenAction => 'Abrir notificación';
 
   @override
   String get notificationBackgroundConnectionDisabledTitle =>
-      'Background connection disabled';
+      'Conexión en segundo plano desactivada';
 
   @override
   String get notificationBackgroundConnectionDisabledBody =>
-      'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.';
+      'Android bloqueó el servicio de mensajes de Axichat. Vuelve a habilitar los permisos de superposición y optimización de batería para restaurar la mensajería en segundo plano.';
 
   @override
-  String get calendarReminderDeadlineNow => 'Deadline now';
+  String get calendarReminderDeadlineNow => 'Vence ahora';
 
   @override
   String calendarReminderDueIn(Object duration) {
-    return 'Due in $duration';
+    return 'Vence en $duration';
   }
 
   @override
-  String get calendarReminderStartingNow => 'Starting now';
+  String get calendarReminderStartingNow => 'Empieza ahora';
 
   @override
   String calendarReminderStartsIn(Object duration) {
-    return 'Starts in $duration';
+    return 'Empieza en $duration';
   }
 
   @override
-  String get calendarReminderHappeningToday => 'Happening today';
+  String get calendarReminderHappeningToday => 'Sucede hoy';
 
   @override
   String calendarReminderIn(Object duration) {
-    return 'In $duration';
+    return 'En $duration';
   }
 
   @override
@@ -3696,8 +3696,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# days',
-      one: '# day',
+      other: '# días',
+      one: '# día',
     );
     return '$_temp0';
   }
@@ -3707,8 +3707,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# hours',
-      one: '# hour',
+      other: '# horas',
+      one: '# hora',
     );
     return '$_temp0';
   }
@@ -3718,92 +3718,93 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# minutes',
-      one: '# minute',
+      other: '# minutos',
+      one: '# minuto',
     );
     return '$_temp0';
   }
 
   @override
-  String get calendarExportCalendar => 'Export calendar';
+  String get calendarExportCalendar => 'Exportar calendario';
 
   @override
-  String get calendarImportCalendar => 'Import calendar';
+  String get calendarImportCalendar => 'Importar calendario';
 
   @override
-  String get calendarSyncStatusSyncing => 'Syncing...';
+  String get calendarSyncStatusSyncing => 'Sincronizando...';
 
   @override
-  String get calendarSyncStatusFailed => 'Sync failed';
+  String get calendarSyncStatusFailed => 'Sincronización fallida';
 
   @override
-  String get calendarSyncStatusSynced => 'Synced';
+  String get calendarSyncStatusSynced => 'Sincronizado';
 
   @override
-  String get calendarSyncStatusIdle => 'Idle';
+  String get calendarSyncStatusIdle => 'Aún no sincronizado';
 
   @override
   String calendarSplitTaskAtTime(Object time) {
-    return 'Split task at $time';
+    return 'Dividir tarea a las $time';
   }
 
   @override
-  String get calendarSplitSelectTime => 'Select split time';
+  String get calendarSplitSelectTime => 'Seleccionar hora de división';
 
   @override
-  String get calendarTaskMarkIncomplete => 'Mark incomplete';
+  String get calendarTaskMarkIncomplete => 'Marcar como incompleta';
 
   @override
-  String get calendarTaskMarkComplete => 'Mark complete';
+  String get calendarTaskMarkComplete => 'Marcar como completa';
 
   @override
-  String get calendarTaskRemoveImportant => 'Remove important flag';
+  String get calendarTaskRemoveImportant => 'Quitar marca importante';
 
   @override
-  String get calendarTaskMarkImportant => 'Mark as important';
+  String get calendarTaskMarkImportant => 'Marcar como importante';
 
   @override
-  String get calendarTaskRemoveUrgent => 'Remove urgent flag';
+  String get calendarTaskRemoveUrgent => 'Quitar marca urgente';
 
   @override
-  String get calendarTaskMarkUrgent => 'Mark as urgent';
+  String get calendarTaskMarkUrgent => 'Marcar como urgente';
 
   @override
-  String get calendarDeselectTask => 'Deselect task';
+  String get calendarDeselectTask => 'Deseleccionar tarea';
 
   @override
-  String get calendarAddTaskToSelection => 'Add task to selection';
+  String get calendarAddTaskToSelection => 'Añadir tarea a la selección';
 
   @override
-  String get calendarSelectTask => 'Select task';
+  String get calendarSelectTask => 'Seleccionar tarea';
 
   @override
-  String get calendarDeselectAllRepeats => 'Deselect all repeats';
+  String get calendarDeselectAllRepeats =>
+      'Deseleccionar todas las repeticiones';
 
   @override
-  String get calendarAddAllRepeats => 'Add all repeats';
+  String get calendarAddAllRepeats => 'Añadir todas las repeticiones';
 
   @override
-  String get calendarSelectAllRepeats => 'Select all repeats';
+  String get calendarSelectAllRepeats => 'Seleccionar todas las repeticiones';
 
   @override
-  String get calendarAddToSelection => 'Add to selection';
+  String get calendarAddToSelection => 'Añadir a la selección';
 
   @override
-  String get calendarSelectAllTasks => 'Select all tasks';
+  String get calendarSelectAllTasks => 'Seleccionar todas las tareas';
 
   @override
-  String get calendarExitSelectionMode => 'Exit selection mode';
+  String get calendarExitSelectionMode => 'Salir del modo de selección';
 
   @override
-  String get calendarSplitTask => 'Split task';
+  String get calendarSplitTask => 'Dividir tarea';
 
   @override
-  String get calendarCopyTemplate => 'Copy template';
+  String get calendarCopyTemplate => 'Copiar plantilla';
 
   @override
   String calendarTaskAddedMessage(Object title) {
-    return 'Task \"$title\" added';
+    return 'Tarea \"$title\" añadida';
   }
 
   @override
@@ -3811,15 +3812,15 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# tasks added',
-      one: '# task added',
+      other: '# tareas añadidas',
+      one: '# tarea añadida',
     );
     return '$_temp0';
   }
 
   @override
   String calendarTaskRemovedMessage(Object title) {
-    return 'Task \"$title\" removed';
+    return 'Tarea \"$title\" eliminada';
   }
 
   @override
@@ -3827,50 +3828,52 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# tasks removed',
-      one: '# task removed',
+      other: '# tareas eliminadas',
+      one: '# tarea eliminada',
     );
     return '$_temp0';
   }
 
   @override
-  String get calendarTaskRemovedTitle => 'Task removed';
+  String get calendarTaskRemovedTitle => 'Tarea eliminada';
 
   @override
-  String get calendarDeadlinePlaceholder => 'Set deadline (optional)';
+  String get calendarDeadlinePlaceholder =>
+      'Establecer fecha límite (opcional)';
 
   @override
-  String get calendarTaskDescriptionHint => 'Description (optional)';
+  String get calendarTaskDescriptionHint => 'Descripción (opcional)';
 
   @override
-  String get calendarTaskLocationHint => 'Location (optional)';
+  String get calendarTaskLocationHint => 'Ubicación (opcional)';
 
   @override
-  String get calendarPickDateLabel => 'Pick date';
+  String get calendarPickDateLabel => 'Elegir fecha';
 
   @override
-  String get calendarPickTimeLabel => 'Pick time';
+  String get calendarPickTimeLabel => 'Elegir hora';
 
   @override
-  String get calendarReminderLabel => 'Reminder';
+  String get calendarReminderLabel => 'Recordatorio';
 
   @override
-  String get calendarEditDayEventTitle => 'Edit day event';
+  String get calendarEditDayEventTitle => 'Editar evento del día';
 
   @override
-  String get calendarNewDayEventTitle => 'New day event';
+  String get calendarNewDayEventTitle => 'Nuevo evento del día';
 
   @override
-  String get commonAdd => 'Add';
+  String get commonAdd => 'Añadir';
 
   @override
-  String get commonTitle => 'Title';
+  String get commonTitle => 'Título';
 
   @override
-  String get calendarShareUnavailable => 'Calendar sharing is unavailable.';
+  String get calendarShareUnavailable =>
+      'El uso compartido del calendario no está disponible.';
 
   @override
-  String get calendarShareAvailability => 'Share availability';
+  String get calendarShareAvailability => 'Compartir disponibilidad';
 
   @override
   String get calendarShortcutUndo => 'Ctrl/Cmd+Z';
@@ -3884,19 +3887,1142 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get calendarDragCanceled => 'Drag canceled';
+  String get calendarDragCanceled => 'Arrastre cancelado';
 
   @override
-  String get calendarZoomLabelCompact => 'Compact';
+  String get calendarZoomLabelCompact => 'Compacto';
 
   @override
-  String get calendarZoomLabelComfort => 'Comfort';
+  String get calendarZoomLabelComfort => 'Cómodo';
 
   @override
-  String get calendarZoomLabelExpanded => 'Expanded';
+  String get calendarZoomLabelExpanded => 'Expandido';
 
   @override
   String calendarZoomLabelMinutes(Object minutes) {
     return '${minutes}m';
+  }
+
+  @override
+  String get calendarGuestModeNotice =>
+      'Modo invitado: las tareas se guardan solo en este dispositivo';
+
+  @override
+  String get calendarGuestSignUpToSync => 'Regístrate para sincronizar';
+
+  @override
+  String get calendarGuestExportNoData =>
+      'No hay datos del calendario para exportar.';
+
+  @override
+  String get calendarGuestExportTitle => 'Exportar calendario de invitado';
+
+  @override
+  String get calendarGuestExportShareSubject =>
+      'Exportación del calendario de invitado de Axichat';
+
+  @override
+  String calendarGuestExportShareText(Object format) {
+    return 'Exportación del calendario de invitado de Axichat ($format)';
+  }
+
+  @override
+  String calendarGuestExportFailed(Object error) {
+    return 'Error al exportar el calendario: $error';
+  }
+
+  @override
+  String get calendarGuestImportTitle => 'Importar calendario';
+
+  @override
+  String get calendarGuestImportWarningMessage =>
+      'La importación combinará datos y sobrescribirá los elementos coincidentes en tu calendario actual. ¿Continuar?';
+
+  @override
+  String get calendarGuestImportConfirmLabel => 'Importar';
+
+  @override
+  String get calendarGuestImportFileAccessError =>
+      'No se puede acceder al archivo seleccionado.';
+
+  @override
+  String get calendarGuestImportNoData =>
+      'No se detectaron datos de calendario en el archivo seleccionado.';
+
+  @override
+  String get calendarGuestImportFailed =>
+      'La importación no pudo aplicar los cambios.';
+
+  @override
+  String get calendarGuestImportSuccess => 'Datos del calendario importados.';
+
+  @override
+  String get calendarGuestImportNoTasks =>
+      'No se detectaron tareas en el archivo seleccionado.';
+
+  @override
+  String calendarGuestImportTasksSuccess(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# tareas',
+      one: '# tarea',
+    );
+    return 'Se importaron $_temp0.';
+  }
+
+  @override
+  String calendarGuestImportError(Object error) {
+    return 'Falló la importación: $error';
+  }
+
+  @override
+  String get blocklistEmpty => 'Nadie bloqueado';
+
+  @override
+  String get chatMessageSubjectLabel => 'Asunto';
+
+  @override
+  String get chatMessageRecipientsLabel => 'Destinatarios';
+
+  @override
+  String get chatMessageAlsoSentToLabel => 'También enviado a';
+
+  @override
+  String chatMessageFromLabel(Object sender) {
+    return 'De $sender';
+  }
+
+  @override
+  String get chatMessageReactionsLabel => 'Reacciones';
+
+  @override
+  String get commonClearSelection => 'Borrar selección';
+
+  @override
+  String commonSelectedCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# seleccionados',
+      one: '# seleccionado',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileDeviceFingerprint => 'Huella del dispositivo';
+
+  @override
+  String get profileFingerprintUnavailable => 'Huella no disponible';
+
+  @override
+  String get axiVersionCurrentFeatures => 'Funciones actuales:';
+
+  @override
+  String get axiVersionCurrentFeaturesList => 'Mensajería, presencia';
+
+  @override
+  String get axiVersionComingNext => 'Próximamente:';
+
+  @override
+  String get axiVersionComingNextList => 'Chat grupal, multimedia';
+
+  @override
+  String get commonMoreOptions => 'Más opciones';
+
+  @override
+  String get commonAreYouSure => '¿Estás seguro?';
+
+  @override
+  String get commonAll => 'Todos';
+
+  @override
+  String get languageSystem => 'Sistema';
+
+  @override
+  String get languageEnglish => 'Inglés';
+
+  @override
+  String get languageGerman => 'Alemán';
+
+  @override
+  String get languageSpanish => 'Español';
+
+  @override
+  String get languageFrench => 'Francés';
+
+  @override
+  String get languageChineseSimplified => 'Chino simplificado';
+
+  @override
+  String get languageChineseHongKong => 'Chino (Hong Kong)';
+
+  @override
+  String get languageSystemShort => 'SYS';
+
+  @override
+  String get languageEnglishShort => 'EN';
+
+  @override
+  String get languageGermanShort => 'DE';
+
+  @override
+  String get languageSpanishShort => 'ES';
+
+  @override
+  String get languageFrenchShort => 'FR';
+
+  @override
+  String get languageChineseSimplifiedShort => 'ZH';
+
+  @override
+  String get languageChineseHongKongShort => 'ZH-HK';
+
+  @override
+  String get languageSystemFlag => '🌐';
+
+  @override
+  String get languageEnglishFlag => '🇬🇧';
+
+  @override
+  String get languageGermanFlag => '🇩🇪';
+
+  @override
+  String get languageSpanishFlag => '🇪🇸';
+
+  @override
+  String get languageFrenchFlag => '🇫🇷';
+
+  @override
+  String get languageChineseSimplifiedFlag => '🇨🇳';
+
+  @override
+  String get languageChineseHongKongFlag => '🇭🇰';
+
+  @override
+  String get calendarTransferNoDataExport =>
+      'No hay datos de calendario disponibles para exportar.';
+
+  @override
+  String get calendarTransferExportSubject =>
+      'Exportación de calendario de Axichat';
+
+  @override
+  String calendarTransferExportText(String format) {
+    return 'Exportación de calendario de Axichat ($format)';
+  }
+
+  @override
+  String get calendarTransferExportReady => 'Exportación lista para compartir.';
+
+  @override
+  String calendarTransferExportFailed(String error) {
+    return 'Error al exportar el calendario: $error';
+  }
+
+  @override
+  String get calendarTransferImportWarning =>
+      'La importación fusionará los datos y sobrescribirá los elementos coincidentes en tu calendario actual. ¿Continuar?';
+
+  @override
+  String get calendarTransferImportConfirm => 'Importar';
+
+  @override
+  String get calendarTransferFileAccessFailed =>
+      'No se puede acceder al archivo seleccionado.';
+
+  @override
+  String get calendarTransferNoDataImport =>
+      'No se detectaron datos de calendario en el archivo seleccionado.';
+
+  @override
+  String get calendarTransferImportFailed =>
+      'No se pudieron aplicar los cambios de la importación.';
+
+  @override
+  String get calendarTransferImportSuccess => 'Datos de calendario importados.';
+
+  @override
+  String get calendarTransferNoTasksDetected =>
+      'No se detectaron tareas en el archivo seleccionado.';
+
+  @override
+  String calendarTransferImportTasksSuccess(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return 'Se importó $count tarea$_temp0.';
+  }
+
+  @override
+  String calendarTransferImportFailedWithError(String error) {
+    return 'Falló la importación: $error';
+  }
+
+  @override
+  String get calendarExportChooseFormat => 'Elegir formato de exportación';
+
+  @override
+  String get calendarAvailabilityWindowsTitle => 'Ventanas de disponibilidad';
+
+  @override
+  String get calendarAvailabilityWindowsSubtitle =>
+      'Define los rangos de tiempo que quieres compartir.';
+
+  @override
+  String get calendarAvailabilityWindowsLabel => 'Ventanas';
+
+  @override
+  String get calendarAvailabilityNoWindows => 'Aún no hay ventanas.';
+
+  @override
+  String get calendarAvailabilityWindowLabel => 'Ventana';
+
+  @override
+  String get calendarAvailabilitySummaryLabel => 'Resumen';
+
+  @override
+  String get calendarAvailabilitySummaryHint => 'Etiqueta opcional';
+
+  @override
+  String get calendarAvailabilityNotesLabel => 'Notas';
+
+  @override
+  String get calendarAvailabilityNotesHint => 'Detalles opcionales';
+
+  @override
+  String get calendarAvailabilityAddWindow => 'Añadir ventana';
+
+  @override
+  String get calendarAvailabilitySaveWindows => 'Guardar ventanas';
+
+  @override
+  String get calendarAvailabilityEmptyWindowsError =>
+      'Añade al menos una ventana de disponibilidad.';
+
+  @override
+  String get calendarAvailabilityInvalidRangeError =>
+      'Revisa los rangos de las ventanas antes de guardar.';
+
+  @override
+  String get calendarTaskShareTitle => 'Compartir tarea';
+
+  @override
+  String get calendarTaskShareSubtitle =>
+      'Envía una tarea a un chat como .ics.';
+
+  @override
+  String get calendarTaskShareTarget => 'Compartir con';
+
+  @override
+  String get calendarTaskShareEditAccess => 'Acceso de edición';
+
+  @override
+  String get calendarTaskShareReadOnlyLabel => 'Solo lectura';
+
+  @override
+  String get calendarTaskShareReadOnlyHint =>
+      'Los destinatarios pueden ver esta tarea, pero solo tú puedes editarla.';
+
+  @override
+  String get calendarTaskShareEditableHint =>
+      'Los destinatarios pueden editar esta tarea y las actualizaciones se sincronizan con tu calendario.';
+
+  @override
+  String get calendarTaskShareReadOnlyDisabledHint =>
+      'La edición solo está disponible para calendarios de chat.';
+
+  @override
+  String get calendarTaskShareMissingChats => 'No hay chats disponibles.';
+
+  @override
+  String get calendarTaskShareMissingRecipient =>
+      'Selecciona un chat para compartir.';
+
+  @override
+  String get calendarTaskShareServiceUnavailable =>
+      'El uso compartido del calendario no está disponible.';
+
+  @override
+  String get calendarTaskShareDenied =>
+      'Las tarjetas de calendario están deshabilitadas para tu rol en esta sala.';
+
+  @override
+  String get calendarTaskShareSendFailed => 'No se pudo compartir la tarea.';
+
+  @override
+  String get calendarTaskShareSuccess => 'Tarea compartida.';
+
+  @override
+  String get commonTimeJustNow => 'Justo ahora';
+
+  @override
+  String commonTimeMinutesAgo(int count) {
+    return 'Hace $count min';
+  }
+
+  @override
+  String commonTimeHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return 'Hace $count hora$_temp0';
+  }
+
+  @override
+  String commonTimeDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return 'Hace $count día$_temp0';
+  }
+
+  @override
+  String commonTimeWeeksAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return 'Hace $count semana$_temp0';
+  }
+
+  @override
+  String get commonTimeMonthsAgo => 'Hace meses';
+
+  @override
+  String get connectivityStatusConnected => 'Conectado';
+
+  @override
+  String get connectivityStatusConnecting => 'Conectando...';
+
+  @override
+  String get connectivityStatusNotConnected => 'No conectado.';
+
+  @override
+  String get connectivityStatusFailed => 'Error al conectar.';
+
+  @override
+  String get commonShare => 'Compartir';
+
+  @override
+  String get commonRecipients => 'Destinatarios';
+
+  @override
+  String commonRangeLabel(String start, String end) {
+    return '$start - $end';
+  }
+
+  @override
+  String get commonOwnerFallback => 'propietario';
+
+  @override
+  String commonDurationMinutes(int count) {
+    return '$count min';
+  }
+
+  @override
+  String commonDurationHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return '$count hora$_temp0';
+  }
+
+  @override
+  String commonDurationMinutesShort(int count) {
+    return '${count}m';
+  }
+
+  @override
+  String commonDurationHoursShort(int count) {
+    return '${count}h';
+  }
+
+  @override
+  String commonDateTimeLabel(String date, String time) {
+    return '$date · $time';
+  }
+
+  @override
+  String get calendarAvailabilityShareTitle => 'Compartir disponibilidad';
+
+  @override
+  String get calendarAvailabilityShareSubtitle =>
+      'Elige un rango, edita libre/ocupado y luego comparte.';
+
+  @override
+  String get calendarAvailabilityShareChatSubtitle =>
+      'Elige un rango, edita libre/ocupado y luego comparte en este chat.';
+
+  @override
+  String get calendarAvailabilityShareRangeLabel => 'Rango';
+
+  @override
+  String get calendarAvailabilityShareEditHint =>
+      'Toca para dividir, arrastra para cambiar el tamaño o alterna libre/ocupado.';
+
+  @override
+  String get calendarAvailabilityShareSavePreset => 'Guardar como preset';
+
+  @override
+  String get calendarAvailabilitySharePresetNameTitle =>
+      'Guardar hoja libre/ocupado';
+
+  @override
+  String get calendarAvailabilitySharePresetNameLabel => 'Nombre';
+
+  @override
+  String get calendarAvailabilitySharePresetNameHint => 'Horario del equipo';
+
+  @override
+  String get calendarAvailabilitySharePresetNameMissing =>
+      'Ingresa un nombre para guardar esta hoja.';
+
+  @override
+  String get calendarAvailabilityShareInvalidRange =>
+      'Selecciona un rango válido para compartir.';
+
+  @override
+  String get calendarAvailabilityShareMissingJid =>
+      'El uso compartido del calendario no está disponible.';
+
+  @override
+  String get calendarAvailabilityShareRecipientsRequired =>
+      'Selecciona al menos un destinatario.';
+
+  @override
+  String get calendarAvailabilityShareMissingChats =>
+      'No hay chats elegibles disponibles.';
+
+  @override
+  String get calendarAvailabilityShareLockedChatUnavailable =>
+      'Este chat no puede recibir disponibilidades.';
+
+  @override
+  String get calendarAvailabilityShareSuccess => 'Disponibilidad compartida.';
+
+  @override
+  String get calendarAvailabilityShareFailed =>
+      'No se pudo compartir la disponibilidad.';
+
+  @override
+  String get calendarAvailabilitySharePartialFailure =>
+      'Algunos envíos no se pudieron enviar.';
+
+  @override
+  String get calendarAvailabilitySharePresetLabel => 'Hojas recientes';
+
+  @override
+  String get calendarAvailabilitySharePresetEmpty =>
+      'Aún no hay hojas recientes.';
+
+  @override
+  String calendarAvailabilityShareRecentPreset(String range) {
+    return 'Compartido $range';
+  }
+
+  @override
+  String get calendarAvailabilityPreviewEmpty =>
+      'No hay intervalos de disponibilidad.';
+
+  @override
+  String calendarAvailabilityPreviewMore(int count) {
+    return 'y $count más';
+  }
+
+  @override
+  String get calendarTaskTitleRequired =>
+      'Ingresa un título de tarea antes de continuar.';
+
+  @override
+  String calendarTaskTitleTooLong(int max) {
+    return 'El título de la tarea es demasiado largo. Usa menos de $max caracteres.';
+  }
+
+  @override
+  String calendarTaskTitleLimitWarning(int max) {
+    return 'Los títulos de tareas están limitados a $max caracteres. Acorta este texto o mueve los detalles a la descripción antes de guardar.';
+  }
+
+  @override
+  String calendarTaskTitleCharacterCount(int count, int limit) {
+    return '$count / $limit caracteres';
+  }
+
+  @override
+  String get axiVersionWelcomeTitle => 'Bienvenido a Axichat';
+
+  @override
+  String axiVersionLabel(String version) {
+    return 'v$version';
+  }
+
+  @override
+  String get axiVersionTagAlpha => 'alpha';
+
+  @override
+  String get calendarSyncWarningSnapshotTitle => 'Sincronizacion de calendario';
+
+  @override
+  String get calendarSyncWarningSnapshotMessage =>
+      'Instantanea del calendario no disponible. Exporta el JSON del calendario desde otro dispositivo e importalo aqui para restaurar.';
+
+  @override
+  String commonLabelValue(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get calendarAvailabilityRequestTitle => 'Solicitar hora';
+
+  @override
+  String get calendarAvailabilityRequestSubtitle =>
+      'Elige un espacio libre y comparte detalles.';
+
+  @override
+  String get calendarAvailabilityRequestDetailsLabel => 'Detalles';
+
+  @override
+  String get calendarAvailabilityRequestRangeLabel => 'Rango';
+
+  @override
+  String get calendarAvailabilityRequestTitleLabel => 'Título';
+
+  @override
+  String get calendarAvailabilityRequestTitlePlaceholder =>
+      '¿Para qué es esto?';
+
+  @override
+  String get calendarAvailabilityRequestDescriptionLabel => 'Descripción';
+
+  @override
+  String get calendarAvailabilityRequestDescriptionPlaceholder =>
+      'Agregar contexto (opcional).';
+
+  @override
+  String get calendarAvailabilityRequestSendLabel => 'Enviar solicitud';
+
+  @override
+  String get calendarAvailabilityRequestInvalidRange =>
+      'Elige un rango de tiempo válido.';
+
+  @override
+  String get calendarAvailabilityRequestNotFree =>
+      'Selecciona un espacio libre antes de enviar.';
+
+  @override
+  String get calendarAvailabilityDecisionTitle => 'Aceptar solicitud';
+
+  @override
+  String get calendarAvailabilityDecisionSubtitle =>
+      'Elige qué calendarios deben recibirlo.';
+
+  @override
+  String get calendarAvailabilityDecisionPersonalLabel =>
+      'Agregar al calendario personal';
+
+  @override
+  String get calendarAvailabilityDecisionChatLabel =>
+      'Agregar al calendario del chat';
+
+  @override
+  String get calendarAvailabilityDecisionMissingSelection =>
+      'Selecciona al menos un calendario.';
+
+  @override
+  String get calendarAvailabilityDecisionSummaryLabel => 'Solicitado';
+
+  @override
+  String get calendarAvailabilityRequestTitleFallback => 'Hora solicitada';
+
+  @override
+  String get calendarFreeBusyFree => 'Libre';
+
+  @override
+  String get calendarFreeBusyBusy => 'Ocupado';
+
+  @override
+  String get calendarFreeBusyTentative => 'Tentativo';
+
+  @override
+  String get calendarFreeBusyEditTitle => 'Editar disponibilidad';
+
+  @override
+  String get calendarFreeBusyEditSubtitle =>
+      'Ajusta el rango de tiempo y el estado.';
+
+  @override
+  String get calendarFreeBusyToggleLabel => 'Libre/Ocupado';
+
+  @override
+  String get calendarFreeBusySplitLabel => 'Dividir';
+
+  @override
+  String get calendarFreeBusySplitTooltip => 'Dividir segmento';
+
+  @override
+  String get calendarFreeBusyMarkFree => 'Marcar como libre';
+
+  @override
+  String get calendarFreeBusyMarkBusy => 'Marcar como ocupado';
+
+  @override
+  String get calendarFreeBusyRangeLabel => 'Rango';
+
+  @override
+  String commonWeekdayDayLabel(String weekday, int day) {
+    return '$weekday $day';
+  }
+
+  @override
+  String get calendarFragmentChecklistLabel => 'Lista de verificacion';
+
+  @override
+  String get calendarFragmentChecklistSeparator => ', ';
+
+  @override
+  String calendarFragmentChecklistSummary(String summary) {
+    return 'Lista de verificacion: $summary';
+  }
+
+  @override
+  String calendarFragmentChecklistSummaryMore(String summary, int count) {
+    return 'Lista de verificacion: $summary y $count mas';
+  }
+
+  @override
+  String get calendarFragmentRemindersLabel => 'Recordatorios';
+
+  @override
+  String calendarFragmentReminderStartSummary(String summary) {
+    return 'Inicio: $summary';
+  }
+
+  @override
+  String calendarFragmentReminderDeadlineSummary(String summary) {
+    return 'Fecha limite: $summary';
+  }
+
+  @override
+  String calendarFragmentRemindersSummary(String summary) {
+    return 'Recordatorios: $summary';
+  }
+
+  @override
+  String get calendarFragmentReminderSeparator => ', ';
+
+  @override
+  String get calendarFragmentEventTitleFallback => 'Evento sin titulo';
+
+  @override
+  String calendarFragmentDayEventSummary(String title, String range) {
+    return '$title (Evento de dia: $range)';
+  }
+
+  @override
+  String calendarFragmentFreeBusySummary(String label, String range) {
+    return '$label (Ventana: $range)';
+  }
+
+  @override
+  String get calendarFragmentCriticalPathLabel => 'Ruta critica';
+
+  @override
+  String calendarFragmentCriticalPathSummary(String name) {
+    return 'Ruta critica: $name';
+  }
+
+  @override
+  String calendarFragmentCriticalPathProgress(int completed, int total) {
+    return '$completed/$total hecho';
+  }
+
+  @override
+  String calendarFragmentCriticalPathDetail(String name, String progress) {
+    return '$name (Ruta critica: $progress)';
+  }
+
+  @override
+  String calendarFragmentAvailabilitySummary(String summary, String range) {
+    return '$summary (Disponibilidad: $range)';
+  }
+
+  @override
+  String calendarFragmentAvailabilityFallback(String range) {
+    return 'Disponibilidad: $range';
+  }
+
+  @override
+  String calendarMonthOverflowMore(int count) {
+    return '+$count mas';
+  }
+
+  @override
+  String commonPercentLabel(int value) {
+    return '$value%';
+  }
+
+  @override
+  String get commonStart => 'Inicio';
+
+  @override
+  String get commonEnd => 'Fin';
+
+  @override
+  String get commonSelectStart => 'Seleccionar inicio';
+
+  @override
+  String get commonSelectEnd => 'Seleccionar fin';
+
+  @override
+  String get commonTimeLabel => 'Hora';
+
+  @override
+  String get commonListSeparator => ', ';
+
+  @override
+  String get commonClauseSeparator => '; ';
+
+  @override
+  String get commonSentenceSeparator => '. ';
+
+  @override
+  String get commonSentenceTerminator => '.';
+
+  @override
+  String commonListAnd(String head, String tail) {
+    return '$head y $tail';
+  }
+
+  @override
+  String get calendarAlarmsTitle => 'Alarmas';
+
+  @override
+  String get calendarAlarmsHelper =>
+      'Los recordatorios se exportan como alarmas de visualización.';
+
+  @override
+  String get calendarAlarmsEmpty => 'Aún no hay alarmas';
+
+  @override
+  String get calendarAlarmAddTooltip => 'Agregar alarma';
+
+  @override
+  String get calendarAlarmRemoveTooltip => 'Eliminar alarma';
+
+  @override
+  String calendarAlarmItemLabel(int index) {
+    return 'Alarma $index';
+  }
+
+  @override
+  String get calendarAlarmActionLabel => 'Acción';
+
+  @override
+  String get calendarAlarmActionDisplay => 'Mostrar';
+
+  @override
+  String get calendarAlarmActionAudio => 'Audio';
+
+  @override
+  String get calendarAlarmActionEmail => 'Correo';
+
+  @override
+  String get calendarAlarmActionProcedure => 'Procedimiento';
+
+  @override
+  String get calendarAlarmActionProcedureHelper =>
+      'Las alarmas de procedimiento se importan en modo solo lectura.';
+
+  @override
+  String get calendarAlarmTriggerLabel => 'Disparador';
+
+  @override
+  String get calendarAlarmTriggerRelative => 'Relativo';
+
+  @override
+  String get calendarAlarmTriggerAbsolute => 'Absoluto';
+
+  @override
+  String get calendarAlarmAbsolutePlaceholder => 'Seleccionar fecha y hora';
+
+  @override
+  String get calendarAlarmRelativeToLabel => 'Relativo a';
+
+  @override
+  String get calendarAlarmRelativeToStart => 'Inicio';
+
+  @override
+  String get calendarAlarmRelativeToEnd => 'Fin';
+
+  @override
+  String get calendarAlarmDirectionLabel => 'Dirección';
+
+  @override
+  String get calendarAlarmDirectionBefore => 'Antes';
+
+  @override
+  String get calendarAlarmDirectionAfter => 'Después';
+
+  @override
+  String get calendarAlarmOffsetLabel => 'Desfase';
+
+  @override
+  String get calendarAlarmOffsetHint => 'Cantidad';
+
+  @override
+  String get calendarAlarmRepeatLabel => 'Repetir';
+
+  @override
+  String get calendarAlarmRepeatCountHint => 'Veces';
+
+  @override
+  String get calendarAlarmRepeatEveryLabel => 'Cada';
+
+  @override
+  String get calendarAlarmRecipientsLabel => 'Destinatarios';
+
+  @override
+  String get calendarAlarmRecipientAddressHint => 'Agregar correo';
+
+  @override
+  String get calendarAlarmRecipientNameHint => 'Nombre (opcional)';
+
+  @override
+  String get calendarAlarmRecipientRemoveTooltip => 'Eliminar destinatario';
+
+  @override
+  String calendarAlarmRecipientDisplay(String name, String address) {
+    return '$name <$address>';
+  }
+
+  @override
+  String get calendarAlarmAcknowledgedLabel => 'Confirmado';
+
+  @override
+  String get calendarAlarmUnitMinutes => 'Minutos';
+
+  @override
+  String get calendarAlarmUnitHours => 'Horas';
+
+  @override
+  String get calendarAlarmUnitDays => 'Días';
+
+  @override
+  String get calendarAlarmUnitWeeks => 'Semanas';
+
+  @override
+  String get taskShareTitleFallback => 'Tarea sin título';
+
+  @override
+  String taskShareTitleLabel(String title) {
+    return 'Tarea \"$title\"';
+  }
+
+  @override
+  String taskShareTitleWithQualifiers(String title, String qualifiers) {
+    return 'Tarea \"$title\" ($qualifiers)';
+  }
+
+  @override
+  String get taskShareQualifierDone => 'hecho';
+
+  @override
+  String get taskSharePriorityImportant => 'importante';
+
+  @override
+  String get taskSharePriorityUrgent => 'urgente';
+
+  @override
+  String get taskSharePriorityCritical => 'crítica';
+
+  @override
+  String taskShareLocationClause(String location) {
+    return ' en $location';
+  }
+
+  @override
+  String get taskShareScheduleNoTime => ' sin hora establecida';
+
+  @override
+  String taskShareScheduleSameDay(
+      String date, String startTime, String endTime) {
+    return ' el $date de $startTime a $endTime';
+  }
+
+  @override
+  String taskShareScheduleRange(String startDateTime, String endDateTime) {
+    return ' desde $startDateTime hasta $endDateTime';
+  }
+
+  @override
+  String taskShareScheduleStartDuration(
+      String date, String time, String duration) {
+    return ' el $date a las $time durante $duration';
+  }
+
+  @override
+  String taskShareScheduleStart(String date, String time) {
+    return ' el $date a las $time';
+  }
+
+  @override
+  String taskShareScheduleEnding(String dateTime) {
+    return ' termina $dateTime';
+  }
+
+  @override
+  String get taskShareRecurrenceEveryOtherDay => ' día por medio';
+
+  @override
+  String taskShareRecurrenceEveryDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count días',
+      one: 'día',
+    );
+    return ' cada $_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryWeekdays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count días laborables',
+      one: 'día laborable',
+    );
+    return ' cada $_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count semanas',
+      one: 'semana',
+    );
+    return ' cada $_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceEveryMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count meses',
+      one: 'mes',
+    );
+    return ' cada $_temp0';
+  }
+
+  @override
+  String get taskShareRecurrenceEveryOtherYear => ' cada dos años';
+
+  @override
+  String taskShareRecurrenceEveryYears(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count años',
+      one: 'año',
+    );
+    return ' cada $_temp0';
+  }
+
+  @override
+  String taskShareRecurrenceOnDays(String days) {
+    return ' en $days';
+  }
+
+  @override
+  String taskShareRecurrenceUntil(String date) {
+    return ' hasta $date';
+  }
+
+  @override
+  String taskShareRecurrenceCount(int count) {
+    return ' por $count ocurrencias';
+  }
+
+  @override
+  String taskShareDeadlineClause(String dateTime) {
+    return ', vence el $dateTime';
+  }
+
+  @override
+  String taskShareNotesClause(String notes) {
+    return ' Notas: $notes.';
+  }
+
+  @override
+  String taskShareChangesClause(String changes) {
+    return ' Cambios: $changes';
+  }
+
+  @override
+  String taskShareOverrideMoveTo(String dateTime) {
+    return 'mover a $dateTime';
+  }
+
+  @override
+  String taskShareOverrideDuration(String duration) {
+    return 'durante $duration';
+  }
+
+  @override
+  String taskShareOverrideEndAt(String dateTime) {
+    return 'termina a las $dateTime';
+  }
+
+  @override
+  String taskShareOverridePriority(String priority) {
+    return 'prioridad $priority';
+  }
+
+  @override
+  String get taskShareOverrideCancelled => 'cancelada';
+
+  @override
+  String get taskShareOverrideDone => 'hecho';
+
+  @override
+  String taskShareOverrideRenameTo(String title) {
+    return 'renombrar a \"$title\"';
+  }
+
+  @override
+  String taskShareOverrideNotes(String notes) {
+    return 'notas \"$notes\"';
+  }
+
+  @override
+  String taskShareOverrideLocation(String location) {
+    return 'ubicación \"$location\"';
+  }
+
+  @override
+  String get taskShareOverrideNoChanges => 'sin cambios';
+
+  @override
+  String taskShareOverrideSegment(String dateTime, String actions) {
+    return 'El $dateTime: $actions';
   }
 }

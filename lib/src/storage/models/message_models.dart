@@ -105,8 +105,7 @@ enum MessageError {
         emailSendFailure => l10n.messageErrorEmailSendFailure,
         emailAttachmentTooLarge => l10n.messageErrorEmailAttachmentTooLarge,
         emailRecipientRejected => l10n.messageErrorEmailRecipientRejected,
-        emailAuthenticationFailed =>
-          l10n.messageErrorEmailAuthenticationFailed,
+        emailAuthenticationFailed => l10n.messageErrorEmailAuthenticationFailed,
         emailBounced => l10n.messageErrorEmailBounced,
         emailThrottled => l10n.messageErrorEmailThrottled,
         _ => l10n.messageErrorUnknown,

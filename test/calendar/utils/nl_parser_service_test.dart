@@ -5,6 +5,7 @@ import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
 import 'package:axichat/src/calendar/utils/schedule_parser.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/localization/app_localizations_en.dart';
 import 'package:test/test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -35,6 +36,7 @@ void main() {
 
   group('task share formatting', () {
     test('omits current-year suffix and avoids repeating same-day date', () {
+      final AppLocalizationsEn l10n = AppLocalizationsEn();
       final DateTime reference = DateTime.utc(2024, 3, 1);
       final DateTime start = DateTime.utc(2024, 3, 15, 9);
       final CalendarTask task = CalendarTask(
@@ -46,7 +48,7 @@ void main() {
         modifiedAt: reference,
       );
 
-      final String shareText = task.toShareText(now: reference);
+      final String shareText = task.toShareText(l10n, now: reference);
 
       expect(shareText, isNot(contains('2024')));
       expect(shareText, contains('on Mar 15 from 9:00 AM to 10:30 AM'));
@@ -54,6 +56,7 @@ void main() {
     });
 
     test('keeps explicit year for non-current schedules', () {
+      final AppLocalizationsEn l10n = AppLocalizationsEn();
       final DateTime reference = DateTime.utc(2024, 3, 1);
       final DateTime start = DateTime.utc(2025, 3, 15, 9);
       final CalendarTask task = CalendarTask(
@@ -65,7 +68,7 @@ void main() {
         modifiedAt: reference,
       );
 
-      final String shareText = task.toShareText(now: reference);
+      final String shareText = task.toShareText(l10n, now: reference);
 
       expect(shareText, contains('on Mar 15, 2025 from 9:00 AM to 10:30 AM'));
     });
@@ -115,7 +118,8 @@ void main() {
       occurrenceOverrides: overrides,
     );
 
-    final String shareText = task.toShareText(now: ctx.reference);
+    final AppLocalizationsEn l10n = AppLocalizationsEn();
+    final String shareText = task.toShareText(l10n, now: ctx.reference);
     final NlScheduleParserService service = NlScheduleParserService();
     final NlAdapterResult result = await service.parse(shareText, context: ctx);
     final CalendarTask parsed = result.task;
@@ -178,7 +182,8 @@ void main() {
       ),
     );
 
-    final String shareText = task.toShareText(now: reference);
+    final AppLocalizationsEn l10n = AppLocalizationsEn();
+    final String shareText = task.toShareText(l10n, now: reference);
     final NlScheduleParserService service = NlScheduleParserService();
     final NlAdapterResult result = await service.parse(shareText, context: ctx);
 
@@ -210,7 +215,8 @@ void main() {
       modifiedAt: reference,
     );
 
-    final String shareText = task.toShareText(now: reference);
+    final AppLocalizationsEn l10n = AppLocalizationsEn();
+    final String shareText = task.toShareText(l10n, now: reference);
     expect(shareText, isNot(contains('2024')));
     expect(shareText, contains('on Aug 20 from 4:00 PM to 6:00 PM'));
 
