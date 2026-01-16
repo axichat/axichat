@@ -9,7 +9,6 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
@@ -2320,7 +2319,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (response.statusCode == 404) {
         _emit(
           const AuthenticationPasswordChangeFailure(
-              _passwordChangeRejectedMessage),
+            _passwordChangeRejectedMessage,
+          ),
         );
         return;
       }

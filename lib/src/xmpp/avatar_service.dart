@@ -197,10 +197,7 @@ mixin AvatarService on XmppBase, MucService {
         if (peerJid.isEmpty) return;
         if (peerJid == myJid) return;
         if (!await _shouldRefreshConversationAvatar(peerJid)) return;
-        fireAndForget(
-          () => _refreshConversationAvatars([peerJid]),
-          operationName: 'AvatarService.refreshConversationAvatars',
-        );
+        await _refreshConversationAvatars([peerJid]);
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
@@ -298,14 +295,8 @@ mixin AvatarService on XmppBase, MucService {
         );
         _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
-          fireAndForget(
-            _notifyCachedSelfAvatarIfAvailable,
-            operationName: 'AvatarService.notifyCachedSelfAvatarIfAvailable',
-          );
-          fireAndForget(
-            refreshSelfAvatarIfNeeded,
-            operationName: 'AvatarService.refreshSelfAvatarIfNeeded',
-          );
+          await _notifyCachedSelfAvatarIfAvailable();
+          await refreshSelfAvatarIfNeeded();
         }
         if (event.resumed) return;
         await _refreshRosterAvatarsFromCache();
@@ -350,28 +341,32 @@ mixin AvatarService on XmppBase, MucService {
   void _startSelfAvatarRefreshTimer() {
     _selfAvatarRefreshTimer?.cancel();
     _selfAvatarRefreshTimer = Timer.periodic(_selfAvatarRefreshInterval, (_) {
-      if (connectionState != ConnectionState.connected) return;
-      if (avatarEncryptionKey == null) return;
-      fireAndForget(
-        refreshSelfAvatarIfNeeded,
-        operationName: 'AvatarService.refreshSelfAvatarIfNeeded',
-      );
+      _handleSelfAvatarRefreshTick();
     });
   }
 
-  void scheduleAvatarRefresh(Iterable<String> jids, {bool force = false}) {
+  Future<void> _handleSelfAvatarRefreshTick() async {
+    if (connectionState != ConnectionState.connected) return;
+    if (avatarEncryptionKey == null) return;
+    await refreshSelfAvatarIfNeeded();
+  }
+
+  Future<void> scheduleAvatarRefresh(
+    Iterable<String> jids, {
+    bool force = false,
+  }) async {
+    final refreshes = <Future<void>>[];
     for (final jid in jids) {
       if (_isMucAvatarJid(jid)) continue;
-      fireAndForget(
-        () => _refreshAvatarForJid(jid, force: force),
-        operationName: 'AvatarService.refreshAvatarForJid',
-      );
+      refreshes.add(_refreshAvatarForJid(jid, force: force));
     }
+    if (refreshes.isEmpty) return;
+    await Future.wait(refreshes);
   }
 
   Future<void> _refreshConversationAvatars(Iterable<String> jids) async {
     if (jids.isEmpty) return;
-    scheduleAvatarRefresh(jids);
+    await scheduleAvatarRefresh(jids);
   }
 
   Future<bool> _shouldRefreshConversationAvatar(String jid) async {
@@ -659,7 +654,7 @@ mixin AvatarService on XmppBase, MucService {
     }
     _avatarLog.fine('Refreshing roster avatars from cache.');
     if (rosterJids.isEmpty) return;
-    scheduleAvatarRefresh(rosterJids);
+    await scheduleAvatarRefresh(rosterJids);
   }
 
   Future<void> _refreshAvatarForJid(
