@@ -1658,10 +1658,11 @@ class _EditTaskDeadlineField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const TaskSectionHeader(title: 'Deadline'),
+        TaskSectionHeader(title: l10n.calendarDeadlineLabel),
         const SizedBox(height: calendarInsetMd),
         DeadlinePickerField(
           value: deadline,

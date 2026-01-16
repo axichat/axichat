@@ -83,13 +83,14 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   }
 
   void _showAddedFeedback(BuildContext context, List<CalendarTask> tasks) {
+    final l10n = context.l10n;
     final message = tasks.length == 1
-        ? 'Task "${tasks.first.title}" added'
-        : '${tasks.length} tasks added';
+        ? l10n.calendarTaskAddedMessage(tasks.first.title)
+        : l10n.calendarTasksAddedMessage(tasks.length);
     FeedbackSystem.showSuccess(
       context,
       message,
-      actionLabel: 'Undo',
+      actionLabel: l10n.calendarUndo,
       onAction: () {
         _awaitingUndoRemoval = true;
         _expectedRemovalIds = tasks.map((task) => task.id).toSet();
@@ -99,6 +100,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   }
 
   void _showRemovedFeedback(BuildContext context, List<CalendarTask> tasks) {
+    final l10n = context.l10n;
     final removedIds = tasks.map((task) => task.id).toSet();
     final removalMatchesUndo = _awaitingUndoRemoval &&
         removedIds.containsAll(_expectedRemovalIds) &&
@@ -108,14 +110,14 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     _expectedRemovalIds = const <String>{};
 
     final message = tasks.length == 1
-        ? 'Task "${tasks.first.title}" removed'
-        : '${tasks.length} tasks removed';
+        ? l10n.calendarTaskRemovedMessage(tasks.first.title)
+        : l10n.calendarTasksRemovedMessage(tasks.length);
 
     FeedbackSystem.showWarning(
       context,
       message,
-      title: 'Task removed',
-      actionLabel: 'Undo',
+      title: l10n.calendarTaskRemovedTitle,
+      actionLabel: l10n.calendarUndo,
       onAction: () {
         if (removalMatchesUndo) {
           context.read<B>().add(const CalendarEvent.redoRequested());

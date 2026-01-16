@@ -1597,5 +1597,135 @@
   "emailForwardingGuideSettingsHint": "You can do this later in Settings.",
   "emailForwardingProviderGmail": "Gmail",
   "emailForwardingProviderOutlook": "Outlook",
-  "chatChooseTextToAdd": "Choose text to add"
+  "chatChooseTextToAdd": "Choose text to add",
+  "notificationChannelMessages": "Messages",
+  "notificationNewMessageTitle": "New message",
+  "notificationOpenAction": "Open notification",
+  "notificationBackgroundConnectionDisabledTitle": "Background connection disabled",
+  "notificationBackgroundConnectionDisabledBody": "Android blocked Axichat's message service. Re-enable overlay and battery optimization permissions to restore background messaging.",
+  "calendarReminderDeadlineNow": "Deadline now",
+  "calendarReminderDueIn": "Due in {duration}",
+  "calendarReminderStartingNow": "Starting now",
+  "calendarReminderStartsIn": "Starts in {duration}",
+  "calendarReminderHappeningToday": "Happening today",
+  "calendarReminderIn": "In {duration}",
+  "calendarReminderDurationDays": "{count, plural, one {# day} other {# days}}",
+  "calendarReminderDurationHours": "{count, plural, one {# hour} other {# hours}}",
+  "calendarReminderDurationMinutes": "{count, plural, one {# minute} other {# minutes}}",
+  "calendarExportCalendar": "Export calendar",
+  "calendarImportCalendar": "Import calendar",
+  "calendarSyncStatusSyncing": "Syncing...",
+  "calendarSyncStatusFailed": "Sync failed",
+  "calendarSyncStatusSynced": "Synced",
+  "calendarSyncStatusIdle": "Idle",
+  "calendarSplitTaskAtTime": "Split task at {time}",
+  "calendarSplitSelectTime": "Select split time",
+  "calendarTaskMarkIncomplete": "Mark incomplete",
+  "calendarTaskMarkComplete": "Mark complete",
+  "calendarTaskRemoveImportant": "Remove important flag",
+  "calendarTaskMarkImportant": "Mark as important",
+  "calendarTaskRemoveUrgent": "Remove urgent flag",
+  "calendarTaskMarkUrgent": "Mark as urgent",
+  "calendarDeselectTask": "Deselect task",
+  "calendarAddTaskToSelection": "Add task to selection",
+  "calendarSelectTask": "Select task",
+  "calendarDeselectAllRepeats": "Deselect all repeats",
+  "calendarAddAllRepeats": "Add all repeats",
+  "calendarSelectAllRepeats": "Select all repeats",
+  "calendarAddToSelection": "Add to selection",
+  "calendarSelectAllTasks": "Select all tasks",
+  "calendarExitSelectionMode": "Exit selection mode",
+  "calendarSplitTask": "Split task",
+  "calendarCopyTemplate": "Copy template",
+  "calendarTaskAddedMessage": "Task \"{title}\" added",
+  "calendarTasksAddedMessage": "{count, plural, one {# task added} other {# tasks added}}",
+  "calendarTaskRemovedMessage": "Task \"{title}\" removed",
+  "calendarTasksRemovedMessage": "{count, plural, one {# task removed} other {# tasks removed}}",
+  "calendarTaskRemovedTitle": "Task removed",
+  "calendarDeadlinePlaceholder": "Set deadline (optional)",
+  "calendarTaskDescriptionHint": "Description (optional)",
+  "calendarTaskLocationHint": "Location (optional)",
+  "calendarPickDateLabel": "Pick date",
+  "calendarPickTimeLabel": "Pick time",
+  "calendarReminderLabel": "Reminder",
+  "calendarEditDayEventTitle": "Edit day event",
+  "calendarNewDayEventTitle": "New day event",
+  "commonAdd": "Add",
+  "commonTitle": "Title",
+  "calendarShareUnavailable": "Calendar sharing is unavailable.",
+  "calendarShareAvailability": "Share availability",
+  "calendarShortcutUndo": "Ctrl/Cmd+Z",
+  "calendarShortcutRedo": "Ctrl/Cmd+Shift+Z",
+  "commonShortcutTooltip": "{tooltip} ({shortcut})",
+  "calendarDragCanceled": "Drag canceled",
+  "calendarZoomLabelCompact": "Compact",
+  "calendarZoomLabelComfort": "Comfort",
+  "calendarZoomLabelExpanded": "Expanded",
+  "calendarZoomLabelMinutes": "{minutes}m",
+  "@calendarReminderDueIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderStartsIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderDurationDays": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarReminderDurationHours": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarReminderDurationMinutes": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarSplitTaskAtTime": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "@calendarTaskAddedMessage": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "@calendarTasksAddedMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarTaskRemovedMessage": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "@calendarTasksRemovedMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@commonShortcutTooltip": {
+    "placeholders": {
+      "tooltip": {},
+      "shortcut": {}
+    }
+  },
+  "@calendarZoomLabelMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  }
 }

@@ -163,6 +163,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final bool isEditing = widget.existing != null;
     final colors = context.colorScheme;
     final TextStyle titleStyle = calendarTitleTextStyle.copyWith(fontSize: 18);
@@ -213,7 +214,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             TaskPrimaryButton(
-              label: isEditing ? 'Save' : 'Add',
+              label: isEditing ? l10n.commonSave : l10n.commonAdd,
               onPressed: canSubmit ? _submit : null,
             ),
           ],
@@ -239,7 +240,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
               child: Row(
                 children: [
                   Text(
-                    isEditing ? 'Edit day event' : 'New day event',
+                    isEditing
+                        ? l10n.calendarEditDayEventTitle
+                        : l10n.calendarNewDayEventTitle,
                     style: titleStyle,
                   ),
                   const Spacer(),
@@ -270,7 +273,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     TaskTitleField(
                       controller: _titleController,
                       autofocus: true,
-                      labelText: 'Title',
+                      labelText: l10n.commonTitle,
                       hintText: context.l10n.calendarDayEventHint,
                       focusNode: _titleFocusNode,
                       onChanged: _handleTitleChanged,
@@ -335,7 +338,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       onAdvancedAlarmsChanged: (value) =>
                           setState(() => _advancedAlarms = value),
                       referenceStart: _startDate,
-                      title: 'Reminder',
+                      title: l10n.calendarReminderLabel,
                       anchor: ReminderAnchor.start,
                     ),
                     TaskSectionDivider(

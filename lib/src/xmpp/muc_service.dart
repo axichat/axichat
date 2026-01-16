@@ -216,7 +216,7 @@ mixin MucService on XmppBase, BaseStreamService {
   final _leftRooms = <String>{};
   final _explicitlyLeftRooms = <String>{};
   final _roomsNeedingJoin = <String>{};
-  final _mucJoinInFlight = <String>{};
+  final _mucJoinInFlightCounts = <String, int>{};
   final _mucJoinCompleters = <String, Completer<void>>{};
   static const int _mucJoinAttemptIdStart = 1;
   int _nextMucJoinAttemptId = _mucJoinAttemptIdStart;
@@ -655,6 +655,24 @@ mixin MucService on XmppBase, BaseStreamService {
     return _roomsNeedingJoin.contains(_roomKey(roomJid));
   }
 
+  int _mucJoinInFlightCount(String roomKey) =>
+      _mucJoinInFlightCounts[roomKey] ?? 0;
+
+  bool _mucJoinInFlight(String roomKey) => _mucJoinInFlightCount(roomKey) > 0;
+
+  void _incrementMucJoinInFlight(String roomKey) {
+    _mucJoinInFlightCounts[roomKey] = _mucJoinInFlightCount(roomKey) + 1;
+  }
+
+  void _decrementMucJoinInFlight(String roomKey) {
+    final current = _mucJoinInFlightCount(roomKey);
+    if (current <= 1) {
+      _mucJoinInFlightCounts.remove(roomKey);
+      return;
+    }
+    _mucJoinInFlightCounts[roomKey] = current - 1;
+  }
+
   Future<void> _clearSelfPresenceOnDisconnect() async {
     if (_roomStates.isEmpty) return;
     _roomsNeedingJoin.clear();
@@ -945,11 +963,11 @@ mixin MucService on XmppBase, BaseStreamService {
       () => Completer<void>(),
     );
     final joinAttemptId = _ensureJoinAttemptIdForKey(normalizedRoom);
-    final joinInFlightAdded = _mucJoinInFlight.add(normalizedRoom);
+    _incrementMucJoinInFlight(normalizedRoom);
     final hasSelfPresence =
         _roomStates[normalizedRoom]?.hasSelfPresence == true;
     final joinCompleterActive = !joinCompleter.isCompleted;
-    final joinInFlight = true;
+    final joinInFlight = _mucJoinInFlight(normalizedRoom);
     final pollFuture = _pollForSelfPresenceFromMucManager(normalizedRoom);
     _logJoinEvent(
       message: _mucJoinRequestedLog,
@@ -1036,9 +1054,7 @@ mixin MucService on XmppBase, BaseStreamService {
       );
       await pollFuture;
     } finally {
-      if (joinInFlightAdded) {
-        _mucJoinInFlight.remove(normalizedRoom);
-      }
+      _decrementMucJoinInFlight(normalizedRoom);
     }
   }
 
@@ -1072,7 +1088,7 @@ mixin MucService on XmppBase, BaseStreamService {
       _explicitlyLeftRooms.remove(key);
       _leftRooms.remove(key);
     }
-    if (_mucJoinInFlight.contains(key)) {
+    if (_mucJoinInFlight(key)) {
       final joinCompleter = _mucJoinCompleters[key];
       if (joinCompleter != null && !joinCompleter.isCompleted) {
         try {
@@ -1091,7 +1107,7 @@ mixin MucService on XmppBase, BaseStreamService {
     final resolvedNick = rememberedNick?.isNotEmpty == true
         ? rememberedNick!
         : _nickForRoom(null);
-    _mucJoinInFlight.add(key);
+    _incrementMucJoinInFlight(key);
     try {
       await joinRoom(
         roomJid: roomJid,
@@ -1101,7 +1117,7 @@ mixin MucService on XmppBase, BaseStreamService {
       );
       await _awaitInstantRoomConfigurationIfNeeded(key);
     } finally {
-      _mucJoinInFlight.remove(key);
+      _decrementMucJoinInFlight(key);
     }
   }
 
@@ -2754,7 +2770,7 @@ mixin MucService on XmppBase, BaseStreamService {
         nick.toLowerCase() == (_roomNicknames[key]?.toLowerCase() ?? '');
     final isKnownSelf =
         _isSelfOccupant(next) || existing.myOccupantId == occupantId;
-    final allowNickMatch = _mucJoinInFlight.contains(key);
+    final allowNickMatch = _mucJoinInFlight(key);
     updated[occupantId] = next;
     var myOccupantId = existing.myOccupantId;
     final shouldMarkSelf = isKnownSelf || (allowNickMatch && isNickMatch);

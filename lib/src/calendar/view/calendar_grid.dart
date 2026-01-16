@@ -17,6 +17,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
@@ -305,11 +306,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             const _ZoomIntent(_ZoomAction.reset),
       };
 
-  String get _zoomLabel {
+  String zoomLabel(AppLocalizations l10n) {
     if (!_isZoomEnabled) {
-      return '15m';
+      return l10n.calendarZoomLabelMinutes(15);
     }
-    return _currentZoom.label;
+    return _currentZoom.localizedLabel(l10n);
   }
 
   void zoomIn() {
@@ -2593,10 +2594,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     bool includeSplitAction = false,
     bool stripTaskKeyword = false,
   }) {
+    final l10n = context.l10n;
     final List<TaskContextAction> actions = <TaskContextAction>[
       TaskContextAction(
         icon: Icons.copy_outlined,
-        label: 'Copy Task',
+        label: l10n.calendarCopyTask,
         onSelected: () => _copyTaskInstance(task),
       ),
       TaskContextAction(
@@ -2611,12 +2613,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
       TaskContextAction(
         icon: Icons.share_outlined,
-        label: 'Copy to Clipboard',
+        label: l10n.calendarCopyToClipboardAction,
         onSelected: () => _copyTaskToClipboard(task),
       ),
       TaskContextAction(
         icon: Icons.route,
-        label: 'Add to Critical Path',
+        label: l10n.calendarAddToCriticalPath,
         onSelected: () => _showAddToCriticalPathPicker(task),
       ),
     ];
@@ -2625,7 +2627,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: task.isCompleted ? Icons.undo : Icons.check_circle_outline,
-          label: task.isCompleted ? 'Mark Incomplete' : 'Mark Complete',
+          label: task.isCompleted
+              ? l10n.calendarTaskMarkIncomplete
+              : l10n.calendarTaskMarkComplete,
           onSelected: () => _toggleTaskCompletion(task),
         ),
       );
@@ -2638,7 +2642,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: importantFlag ? Icons.label_off : Icons.label_important_outline,
-          label: importantFlag ? 'Remove Important Flag' : 'Mark as Important',
+          label: importantFlag
+              ? l10n.calendarTaskRemoveImportant
+              : l10n.calendarTaskMarkImportant,
           onSelected: () => _updateTaskPriority(
             task,
             important: !importantFlag,
@@ -2650,7 +2656,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: urgentFlag ? Icons.flash_on : Icons.flash_off,
-          label: urgentFlag ? 'Remove Urgent Flag' : 'Mark as Urgent',
+          label: urgentFlag
+              ? l10n.calendarTaskRemoveUrgent
+              : l10n.calendarTaskMarkUrgent,
           onSelected: () => _updateTaskPriority(
             task,
             important: importantFlag,
@@ -2685,8 +2693,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     if (isSeriesTask) {
       final String occurrenceLabel = selectionModeActive
-          ? (isOccurrenceSelected ? 'Deselect Task' : 'Add Task to Selection')
-          : 'Select Task';
+          ? (isOccurrenceSelected
+              ? l10n.calendarDeselectTask
+              : l10n.calendarAddTaskToSelection)
+          : l10n.calendarSelectTask;
       actions.add(
         TaskContextAction(
           icon: isOccurrenceSelected
@@ -2704,8 +2714,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
 
       final String seriesLabel = selectionModeActive
-          ? (isSeriesSelected ? 'Deselect All Repeats' : 'Add All Repeats')
-          : 'Select All Repeats';
+          ? (isSeriesSelected
+              ? l10n.calendarDeselectAllRepeats
+              : l10n.calendarAddAllRepeats)
+          : l10n.calendarSelectAllRepeats;
       actions.add(
         TaskContextAction(
           icon: isSeriesSelected
@@ -2727,8 +2739,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
     } else {
       final String selectionLabel = selectionModeActive
-          ? (isSelected ? 'Deselect Task' : 'Add to Selection')
-          : 'Select Task';
+          ? (isSelected
+              ? l10n.calendarDeselectTask
+              : l10n.calendarAddToSelection)
+          : l10n.calendarSelectTask;
       actions.add(
         TaskContextAction(
           icon: isSelected ? Icons.check_box : Icons.check_box_outline_blank,
@@ -2748,7 +2762,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: Icons.select_all,
-          label: 'Select All Tasks',
+          label: l10n.calendarSelectAllTasks,
           onSelected: () {
             context.read<T>().add(const CalendarEvent.selectionAllRequested());
           },
@@ -2760,7 +2774,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: Icons.highlight_off,
-          label: 'Exit Selection Mode',
+          label: l10n.calendarExitSelectionMode,
           onSelected: _clearSelectionMode,
         ),
       );
@@ -2770,7 +2784,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: Icons.call_split,
-          label: 'Split Task',
+          label: l10n.calendarSplitTask,
           onSelected: () => _promptSplitTask(task),
         ),
       );
@@ -2780,7 +2794,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: Icons.copy_outlined,
-          label: 'Copy Template',
+          label: l10n.calendarCopyTemplate,
           onSelected: () => _copyTaskTemplate(task),
         ),
       );
@@ -2790,7 +2804,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: Icons.delete_outline,
-          label: 'Delete Task',
+          label: l10n.calendarDeleteTask,
           destructive: true,
           onSelected: () {
             context.read<T>().add(CalendarEvent.taskDeleted(taskId: task.id));
@@ -2859,7 +2873,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               menuController.hide();
               _splitTask(task, splitTime);
             },
-            child: Text('Split at ${TimeFormatter.formatTime(splitTime)}'),
+            child: Text(
+              context.l10n
+                  .calendarSplitTaskAtTime(TimeFormatter.formatTime(splitTime)),
+            ),
           ),
         );
       }
@@ -4093,7 +4110,7 @@ class _CalendarZoomControls extends StatelessWidget {
               padding: EdgeInsets.symmetric(
                 horizontal: gridState._zoomControlsLabelPaddingHorizontal + 2,
               ),
-              child: Text(gridState._zoomLabel, style: labelStyle),
+              child: Text(gridState.zoomLabel(context.l10n), style: labelStyle),
             ),
             buildButton(
               tooltip: context.l10n.calendarZoomIn,
@@ -4176,7 +4193,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
               _selected = _clamp(value);
             });
           },
-          placeholder: 'Select split time',
+          placeholder: context.l10n.calendarSplitSelectTime,
           showStatusColors: false,
           minDate: widget.minTime,
           maxDate: widget.maxTime,
@@ -4194,7 +4211,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
             ),
             Expanded(
               child: TaskPrimaryButton(
-                label: 'Split Task',
+                label: context.l10n.calendarSplitTask,
                 onPressed: _handleSubmit,
               ),
             ),

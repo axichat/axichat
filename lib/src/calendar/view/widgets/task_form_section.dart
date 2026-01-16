@@ -416,7 +416,7 @@ class TaskTitleField extends StatelessWidget {
     super.key,
     required this.controller,
     this.focusNode,
-    this.hintText = 'Task title',
+    this.hintText = '',
     this.labelText,
     this.textInputAction,
     this.autofocus = false,
@@ -445,12 +445,14 @@ class TaskTitleField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String resolvedHint =
+        hintText.isEmpty ? context.l10n.calendarTaskTitleHint : hintText;
     return TaskTextFormField(
       controller: controller,
       focusNode: focusNode,
       autofocus: autofocus,
       labelText: labelText,
-      hintText: hintText,
+      hintText: resolvedHint,
       textCapitalization: TextCapitalization.sentences,
       textInputAction: textInputAction,
       onChanged: onChanged,
@@ -730,8 +732,8 @@ class TaskDateTimeToolbarField {
     required this.onSelectTime,
     this.selectedDate,
     this.selectedTime,
-    this.emptyDateLabel = 'Pick date',
-    this.emptyTimeLabel = 'Pick time',
+    this.emptyDateLabel = '',
+    this.emptyTimeLabel = '',
     this.dateIcon = Icons.calendar_today,
     this.timeIcon = Icons.schedule,
     this.dateLabelBuilder,
@@ -756,7 +758,9 @@ class TaskDateTimeToolbarField {
   String dateLabel(BuildContext context) {
     final DateTime? date = selectedDate;
     if (date == null) {
-      return emptyDateLabel;
+      return emptyDateLabel.isEmpty
+          ? context.l10n.calendarPickDateLabel
+          : emptyDateLabel;
     }
     if (dateLabelBuilder != null) {
       return dateLabelBuilder!(context, date);
@@ -776,7 +780,9 @@ class TaskDateTimeToolbarField {
   String timeLabel(BuildContext context) {
     final TimeOfDay? time = selectedTime;
     if (time == null) {
-      return emptyTimeLabel;
+      return emptyTimeLabel.isEmpty
+          ? context.l10n.calendarPickTimeLabel
+          : emptyTimeLabel;
     }
     if (timeLabelBuilder != null) {
       return timeLabelBuilder!(context, time);
@@ -1100,7 +1106,7 @@ class TaskDescriptionField extends StatelessWidget {
     required this.controller,
     this.focusNode,
     this.labelText,
-    this.hintText = 'Description (optional)',
+    this.hintText = '',
     this.minLines = 3,
     this.maxLines,
     this.textCapitalization = TextCapitalization.sentences,
@@ -1128,11 +1134,13 @@ class TaskDescriptionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String resolvedHint =
+        hintText.isEmpty ? context.l10n.calendarTaskDescriptionHint : hintText;
     return TaskTextField(
       controller: controller,
       focusNode: focusNode,
       labelText: labelText,
-      hintText: hintText,
+      hintText: resolvedHint,
       minLines: minLines,
       maxLines: maxLines ?? minLines,
       textCapitalization: textCapitalization,
@@ -1158,7 +1166,7 @@ class TaskLocationField extends StatefulWidget {
     required this.controller,
     this.focusNode,
     this.labelText,
-    this.hintText = 'Location (optional)',
+    this.hintText = '',
     this.textCapitalization = TextCapitalization.words,
     this.autofocus = false,
     this.onChanged,
@@ -1209,13 +1217,16 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
 
   @override
   Widget build(BuildContext context) {
+    final String resolvedHint = widget.hintText.isEmpty
+        ? context.l10n.calendarTaskLocationHint
+        : widget.hintText;
     final helper = widget.autocomplete;
     if (helper == null || !widget.enabled) {
       return _TaskLocationTextInput(
         controller: widget.controller,
         focusNode: _effectiveFocusNode,
         labelText: widget.labelText,
-        hintText: widget.hintText,
+        hintText: resolvedHint,
         textCapitalization: widget.textCapitalization,
         autofocus: widget.autofocus,
         onChanged: widget.onChanged,
@@ -1242,7 +1253,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
           controller: textController,
           focusNode: focusNode,
           labelText: widget.labelText,
-          hintText: widget.hintText,
+          hintText: resolvedHint,
           textCapitalization: widget.textCapitalization,
           autofocus: widget.autofocus,
           onChanged: widget.onChanged,

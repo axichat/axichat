@@ -9,9 +9,11 @@ import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -61,6 +63,7 @@ class NotificationService {
 
   bool mute = false;
   bool notificationPreviewsEnabled = false;
+  AppLocalizations? _localizations;
 
   bool get needsPermissions =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -72,9 +75,21 @@ class NotificationService {
 
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
-  static const String _genericMessageNotificationTitle = 'New message';
 
-  String get channel => 'Messages';
+  AppLocalizations get _l10n =>
+      _localizations ??
+      AppLocalizations.lookupAppLocalizations(const Locale('en'));
+
+  void updateLocalizations(AppLocalizations localizations) {
+    _localizations = localizations;
+  }
+
+  String get channel => _l10n.notificationChannelMessages;
+
+  String get _genericMessageNotificationTitle =>
+      _l10n.notificationNewMessageTitle;
+
+  AppLocalizations get localizations => _l10n;
 
   Future<void> init() => _ensureInitialized();
 
@@ -102,11 +117,13 @@ class NotificationService {
           AndroidInitializationSettings(androidIconPath);
       const DarwinInitializationSettings initializationSettingsDarwin =
           DarwinInitializationSettings();
-      const LinuxInitializationSettings initializationSettingsLinux =
-          LinuxInitializationSettings(defaultActionName: 'Open notification');
-      const WindowsInitializationSettings initializationSettingsWindows =
+      final LinuxInitializationSettings initializationSettingsLinux =
+          LinuxInitializationSettings(
+        defaultActionName: _l10n.notificationOpenAction,
+      );
+      final WindowsInitializationSettings initializationSettingsWindows =
           WindowsInitializationSettings(
-        appName: 'Axichat',
+        appName: _l10n.appTitle,
         appUserModelId: 'Im.Axi.Axichat',
         guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
       );
@@ -308,6 +325,14 @@ class NotificationService {
       }
       return false;
     }
+  }
+
+  Future<void> sendBackgroundConnectionDisabledNotification() async {
+    await sendNotification(
+      title: _l10n.notificationBackgroundConnectionDisabledTitle,
+      body: _l10n.notificationBackgroundConnectionDisabledBody,
+      allowForeground: true,
+    );
   }
 
   Future<void> scheduleNotification({
