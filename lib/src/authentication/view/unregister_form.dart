@@ -13,22 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _unregisterErrorPaddingValue = 10.0;
-const double _unregisterFieldPaddingValue = 8.0;
-const double _unregisterSpacerHeight = 40.0;
-const double _unregisterButtonGap = 16.0;
-const double _unregisterSpinnerDimension = 16.0;
-const double _unregisterSpinnerPadding = 1.0;
-const double _unregisterSpinnerSlotSize =
-    _unregisterSpinnerDimension + (_unregisterSpinnerPadding * 2);
-const double _unregisterSpinnerGap = 8.0;
-const EdgeInsets _unregisterErrorPadding = EdgeInsets.all(
-  _unregisterErrorPaddingValue,
-);
-const EdgeInsets _unregisterFieldPadding = EdgeInsets.all(
-  _unregisterFieldPaddingValue,
-);
-
 class UnregisterForm extends StatefulWidget {
   const UnregisterForm({super.key});
 
@@ -82,6 +66,21 @@ class _UnregisterFormState extends State<UnregisterForm> {
         final loading = state is AuthenticationUnregisterInProgress;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
+        const unregisterErrorPaddingValue = 10.0;
+        const unregisterFieldPaddingValue = 8.0;
+        const unregisterSpacerHeight = 40.0;
+        const unregisterButtonGap = 16.0;
+        const unregisterSpinnerDimension = 16.0;
+        const unregisterSpinnerPadding = 1.0;
+        const unregisterSpinnerSlotSize =
+            unregisterSpinnerDimension + (unregisterSpinnerPadding * 2);
+        const unregisterSpinnerGap = 8.0;
+        const unregisterErrorPadding = EdgeInsets.all(
+          unregisterErrorPaddingValue,
+        );
+        const unregisterFieldPadding = EdgeInsets.all(
+          unregisterFieldPaddingValue,
+        );
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -89,7 +88,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
               Text(UnregisterForm.title(l10n), style: context.textTheme.h3),
               state is AuthenticationUnregisterFailure
                   ? Padding(
-                      padding: _unregisterErrorPadding,
+                      padding: unregisterErrorPadding,
                       child: Text(
                         state.errorText,
                         textAlign: TextAlign.center,
@@ -98,28 +97,28 @@ class _UnregisterFormState extends State<UnregisterForm> {
                         ),
                       ),
                     )
-                  : const SizedBox(height: _unregisterSpacerHeight),
+                  : const SizedBox(height: unregisterSpacerHeight),
               Padding(
-                padding: _unregisterFieldPadding,
+                padding: unregisterFieldPadding,
                 child: PasswordInput(
                   placeholder: l10n.authPasswordPlaceholder,
                   enabled: !loading,
                   controller: _passwordTextController,
                 ),
               ),
-              const SizedBox.square(dimension: _unregisterButtonGap),
+              const SizedBox.square(dimension: unregisterButtonGap),
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(
-                    dimension: _unregisterSpinnerDimension,
+                    dimension: unregisterSpinnerDimension,
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel: l10n.authUnregisterProgressLabel,
                   );
                   final spinnerSlot = ButtonSpinnerSlot(
                     isVisible: loading,
                     spinner: spinner,
-                    slotSize: _unregisterSpinnerSlotSize,
-                    gap: _unregisterSpinnerGap,
+                    slotSize: unregisterSpinnerSlotSize,
+                    gap: unregisterSpinnerGap,
                     duration: animationDuration,
                   );
                   return ShadButton.destructive(

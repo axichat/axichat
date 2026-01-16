@@ -49,27 +49,6 @@ enum _PasswordStrengthLevel { empty, weak, medium, stronger }
 
 enum _InsecurePasswordReason { weak, breached }
 
-const _strengthMediumColor = Color(0xFFF97316);
-const _strengthStrongColor = Color(0xFF22C55E);
-const int _captchaXmlMaxBytes = 1 << 20;
-const int _captchaXmlMaxNodes = 4000;
-const int _captchaXmlMaxDepth = 32;
-const Duration _captchaXmlMaxParseDuration = Duration(seconds: 5);
-const String _captchaAllowedScheme = 'https';
-const bool _allowInsecurePasswordOverrideEnabled = !kReleaseMode;
-const int _httpOkStatus = 200;
-const double _signupButtonSpinnerDimension = 16.0;
-const double _signupButtonSpinnerPadding = 1.0;
-const double _signupButtonSpinnerSlotSize =
-    _signupButtonSpinnerDimension + (_signupButtonSpinnerPadding * 2);
-const double _signupButtonSpinnerGap = 8.0;
-const XmlParseLimits _captchaXmlParseLimits = XmlParseLimits(
-  maxBytes: _captchaXmlMaxBytes,
-  maxNodes: _captchaXmlMaxNodes,
-  maxDepth: _captchaXmlMaxDepth,
-  maxDuration: _captchaXmlMaxParseDuration,
-);
-
 class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
   late TextEditingController _jidTextController;
@@ -183,9 +162,8 @@ class _SignupFormState extends State<SignupForm>
         _lastBreachedPassword = null;
       }
     }
-    final bool shouldResetInsecureOverride = _insecurePasswordReason == null ||
-        !_allowInsecurePasswordOverrideEnabled;
-    if (shouldResetInsecureOverride && allowInsecurePassword) {
+    if ((_insecurePasswordReason == null || kReleaseMode) &&
+        allowInsecurePassword) {
       allowInsecurePassword = false;
       _allowInsecureResetTick++;
     }
@@ -463,8 +441,7 @@ class _SignupFormState extends State<SignupForm>
   Future<void> _advanceFromPasswordStep(BuildContext context) async {
     final password = _passwordTextController.text;
     final isWeak = _passwordStrengthLevel == _PasswordStrengthLevel.weak;
-    final bool allowInsecureOverride =
-        allowInsecurePassword && _allowInsecurePasswordOverrideEnabled;
+    final bool allowInsecureOverride = allowInsecurePassword && !kReleaseMode;
     if ((isWeak || _passwordBreached) && !allowInsecureOverride) {
       if (!mounted) return;
       setState(() {

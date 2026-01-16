@@ -2450,8 +2450,11 @@ mixin MessageService
     final expectedOccupantIdMatches = managerNickPresent &&
         myOccupantIdPresent &&
         myOccupantId == '$normalizedRoom/$managerNick';
-    final occupantPresent = expectedOccupantIdMatches &&
+    final selfOccupantPresent = myOccupantIdPresent &&
         roomState?.occupants[myOccupantId]?.isPresent == true;
+    final hasPresenceForSend = await _hasMucPresenceForSend(
+      roomJid: normalizedRoom,
+    );
     final occupantCount = roomState?.occupants.length ?? 0;
     final statusCount = roomState?.selfPresenceStatusCodes.length ?? 0;
     final socketWrapper = _connection.socketWrapper;
@@ -2475,7 +2478,8 @@ mixin MessageService
       'selfStatus=$hasSelfStatus '
       'occupantId=$myOccupantIdPresent '
       'occupantIdMatch=$expectedOccupantIdMatches '
-      'occupantPresent=$occupantPresent '
+      'occupantPresent=$selfOccupantPresent '
+      'presenceForSend=$hasPresenceForSend '
       'occupants=$occupantCount '
       'statusCodes=$statusCount',
     );

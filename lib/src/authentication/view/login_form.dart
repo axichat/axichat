@@ -17,12 +17,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _loginSpinnerDimension = 16.0;
-const double _loginSpinnerPadding = 1.0;
-const double _loginSpinnerSlotSize =
-    _loginSpinnerDimension + (_loginSpinnerPadding * 2);
-const double _loginSpinnerGap = 8.0;
-
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key, this.onSubmitStart});
 
@@ -38,8 +32,6 @@ class _LoginFormState extends State<LoginForm> {
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
   bool rememberMe = true;
-
-  static final _usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
 
   @override
   void initState() {
@@ -86,6 +78,12 @@ class _LoginFormState extends State<LoginForm> {
             state is AuthenticationComplete;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
+        final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
+        const loginSpinnerDimension = 16.0;
+        const loginSpinnerPadding = 1.0;
+        const loginSpinnerSlotSize =
+            loginSpinnerDimension + (loginSpinnerPadding * 2);
+        const loginSpinnerGap = 8.0;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const errorMessagePadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
@@ -140,7 +138,7 @@ class _LoginFormState extends State<LoginForm> {
                         autocorrect: false,
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
-                            _usernameCharactersPattern,
+                            usernameCharactersPattern,
                           ),
                         ],
                         keyboardType: TextInputType.emailAddress,

@@ -33,77 +33,6 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'authentication_state.dart';
 
-const _missingDatabaseSecretsErrorText =
-    'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
-const _emailAuthFailureErrorText =
-    'Email authentication failed. Please log in again.';
-const _storageLockedErrorText =
-    'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
-const _smtpProvisioningMaxAttempts = 3;
-const _smtpProvisioningMaxDuration = Duration(seconds: 20);
-const _smtpProvisioningInitialDelay = Duration(seconds: 2);
-const _smtpProvisioningMaxDelay = Duration(seconds: 8);
-const _emailProvisioningRetryCooldown = Duration(seconds: 30);
-const _emailProvisioningRetryLogFailedCredentials =
-    'Failed to read email credentials for retry';
-const String _incorrectPasswordMessage =
-    'Incorrect password. Please try again.';
-const String _passwordChangeRejectedMessage =
-    'Current password is incorrect, or the new password does not meet server requirements.';
-const String _passwordChangeDisabledMessage =
-    'Password changes are disabled for this account.';
-const String _accountDeletionDisabledMessage =
-    'Account deletion is disabled for this account.';
-const int _loginBackoffBaseSeconds = 2;
-const int _loginBackoffMaxMinutes = 2;
-const int _loginBackoffMinSeconds = 1;
-const int _loginBackoffMultiplier = 2;
-const int _loginBackoffAttemptIncrement = 1;
-const int _loginBackoffExponentOffset = 1;
-const Duration _loginBackoffBaseDelay = Duration(
-  seconds: _loginBackoffBaseSeconds,
-);
-const Duration _loginBackoffMaxDelay = Duration(
-  minutes: _loginBackoffMaxMinutes,
-);
-const String _loginBackoffMessagePrefix = 'Too many attempts. Wait ';
-const String _loginBackoffMessageSuffix = ' seconds before trying again.';
-const String _signupRollbackStageSkippedLog =
-    'Skipping rollback staging for previously authenticated account.';
-const String _authApiSchemeHttps = 'https';
-const String _authApiSchemeHttp = 'http';
-const String _signupRollbackSkippedLog =
-    'Skipping rollback for previously authenticated account.';
-const String _signupRollbackRequestSkippedLog =
-    'Skipping rollback request for previously authenticated account.';
-const String _signupCleanupBlockedLog =
-    'Signup blocked because cleanup is still pending.';
-const String _databaseSecretsCheckFailedLog =
-    'Failed to check database secrets for pending signup cleanup.';
-const String _databasePrefixKeySuffix = '_database_prefix';
-const String _databasePassphraseKeySuffix = '_database_passphrase';
-const String _registerPathNew = '/register/new/';
-const String _registerPathChangePassword = '/register/change_password/';
-const String _registerPathChangePasswordLegacy = '/register/password/';
-const String _registerPathDeleteAccount = '/register/delete/';
-const String _registerPathDeleteAccountLegacy = '/register/unregister/';
-const String _registerBodyKeyUsername = 'username';
-const String _registerBodyKeyHost = 'host';
-const String _registerBodyKeyPassword = 'password';
-const String _registerBodyKeyPassword2 = 'password2';
-const String _registerBodyKeyPasswordOld = 'passwordold';
-const String _registerBodyKeyPasswordOldLegacy = 'oldpassword';
-const int _pendingSignupRollbackRememberedDays = 7;
-const int _pendingSignupRollbackEphemeralHours = 24;
-const Duration _pendingSignupRollbackMaxAgeRemembered = Duration(
-  days: _pendingSignupRollbackRememberedDays,
-);
-const Duration _pendingSignupRollbackMaxAgeEphemeral = Duration(
-  hours: _pendingSignupRollbackEphemeralHours,
-);
-const Duration _pendingSignupRollbackLegacyMaxAge =
-    _pendingSignupRollbackMaxAgeRemembered;
-
 enum LogoutSeverity {
   auto,
   normal,
@@ -253,9 +182,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final _log = Logger('AuthenticationCubit');
 
-  static const String domain = EndpointConfig.defaultDomain;
-  static const String signupCleanupInProgressMessage =
-      'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
+  static const String _databasePrefixKeySuffix = '_database_prefix';
+  static const String _databasePassphraseKeySuffix = '_database_passphrase';
+  static const String _registerBodyKeyUsername = 'username';
+  static const String _registerBodyKeyHost = 'host';
+  static const String _registerBodyKeyPassword = 'password';
+  static const String _registerBodyKeyPassword2 = 'password2';
+  static const String _registerBodyKeyPasswordOld = 'passwordold';
+  static const String _registerBodyKeyPasswordOldLegacy = 'oldpassword';
 
   Uri get registrationUrl => _buildRegistrationUrl();
 
@@ -307,11 +241,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   var _signupAvatarPublishInFlight = false;
   Timer? _signupAvatarPublishRetryTimer;
   var _signupAvatarPublishRetryAttempts = 0;
-  static const _signupAvatarPublishRetryInitialDelay = Duration(
-    milliseconds: 250,
-  );
-  static const _signupAvatarPublishRetryMaxDelay = Duration(seconds: 3);
-  static const _signupAvatarPublishMaxRetryAttempts = 10;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
   late final Future<void> _endpointConfigRecoveryFuture;
@@ -384,11 +313,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   String _resolveAuthApiScheme() {
-    const allowInsecure = !kReleaseMode;
-    if (!allowInsecure) {
-      return _authApiSchemeHttps;
+    const httpsScheme = 'https';
+    const httpScheme = 'http';
+    if (kReleaseMode) {
+      return httpsScheme;
     }
-    return endpointConfig.apiUseTls ? _authApiSchemeHttps : _authApiSchemeHttp;
+    return endpointConfig.apiUseTls ? httpsScheme : httpScheme;
   }
 
   Uri _buildBaseUrl() => Uri(
@@ -397,20 +327,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         port: endpointConfig.apiPort,
       );
 
-  Uri _buildRegistrationUrl() =>
-      _buildBaseUrl().replace(path: _registerPathNew);
+  Uri _buildRegistrationUrl() {
+    const registerPath = '/register/new/';
+    return _buildBaseUrl().replace(path: registerPath);
+  }
 
-  Uri _buildChangePasswordUrl() =>
-      _buildBaseUrl().replace(path: _registerPathChangePassword);
+  Uri _buildChangePasswordUrl() {
+    const changePasswordPath = '/register/change_password/';
+    return _buildBaseUrl().replace(path: changePasswordPath);
+  }
 
-  Uri _buildChangePasswordLegacyUrl() =>
-      _buildBaseUrl().replace(path: _registerPathChangePasswordLegacy);
+  Uri _buildChangePasswordLegacyUrl() {
+    const changePasswordLegacyPath = '/register/password/';
+    return _buildBaseUrl().replace(path: changePasswordLegacyPath);
+  }
 
-  Uri _buildDeleteAccountUrl() =>
-      _buildBaseUrl().replace(path: _registerPathDeleteAccount);
+  Uri _buildDeleteAccountUrl() {
+    const deleteAccountPath = '/register/delete/';
+    return _buildBaseUrl().replace(path: deleteAccountPath);
+  }
 
-  Uri _buildDeleteAccountLegacyUrl() =>
-      _buildBaseUrl().replace(path: _registerPathDeleteAccountLegacy);
+  Uri _buildDeleteAccountLegacyUrl() {
+    const deleteAccountLegacyPath = '/register/unregister/';
+    return _buildBaseUrl().replace(path: deleteAccountLegacyPath);
+  }
 
   String? _registerErrorDetail(http.Response response) {
     final raw = response.body.trim();
@@ -483,7 +423,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _recordLoginFailure() {
-    _failedLoginAttempts += _loginBackoffAttemptIncrement;
+    const attemptIncrement = 1;
+    _failedLoginAttempts += attemptIncrement;
     final delay = _loginBackoffDelay(_failedLoginAttempts);
     _nextLoginAllowedAt = DateTime.now().add(delay);
   }
@@ -494,23 +435,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Duration _loginBackoffDelay(int attempt) {
-    final exponent = attempt - _loginBackoffExponentOffset;
-    final multiplier = math.pow(_loginBackoffMultiplier, exponent).round();
-    final baseSeconds = _loginBackoffBaseDelay.inSeconds;
+    const exponentOffset = 1;
+    const multiplierBase = 2;
+    const baseDelay = Duration(seconds: 2);
+    const maxDelay = Duration(minutes: 2);
+    final exponent = attempt - exponentOffset;
+    final multiplier = math.pow(multiplierBase, exponent).round();
+    final baseSeconds = baseDelay.inSeconds;
     final rawSeconds = baseSeconds * multiplier;
     final clampedSeconds = rawSeconds.clamp(
-      _loginBackoffBaseDelay.inSeconds,
-      _loginBackoffMaxDelay.inSeconds,
+      baseDelay.inSeconds,
+      maxDelay.inSeconds,
     );
     return Duration(seconds: clampedSeconds);
   }
 
   String _loginBackoffMessage(Duration remaining) {
+    const minSeconds = 1;
+    const prefix = 'Too many attempts. Wait ';
+    const suffix = ' seconds before trying again.';
     final seconds = remaining.inSeconds;
-    final normalizedSeconds =
-        seconds < _loginBackoffMinSeconds ? _loginBackoffMinSeconds : seconds;
-    return '$_loginBackoffMessagePrefix'
-        '$normalizedSeconds$_loginBackoffMessageSuffix';
+    final normalizedSeconds = seconds < minSeconds ? minSeconds : seconds;
+    return '$prefix$normalizedSeconds$suffix';
   }
 
   String? _activeLoginBackoffMessage(DateTime now) {
@@ -747,19 +693,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final lastError = _lastEmailProvisioningError;
     final syncState = emailService.syncState;
-    final shouldRetry = lastError?.isRecoverable ?? false;
-    final shouldProbe = lastError == null && syncState.requiresAttention;
-    final needsBootstrap = !emailService.hasActiveSession;
-    if (!shouldRetry && !shouldProbe && !needsBootstrap) {
+    if (!(lastError?.isRecoverable ?? false) &&
+        !(lastError == null && syncState.requiresAttention) &&
+        emailService.hasActiveSession) {
       return;
     }
     if (_emailProvisioningRetryInFlight) {
       return;
     }
+    const retryCooldown = Duration(seconds: 30);
     final now = DateTime.timestamp();
     final lastAttempt = _lastEmailProvisioningRetryAt;
-    if (lastAttempt != null &&
-        now.difference(lastAttempt) < _emailProvisioningRetryCooldown) {
+    if (lastAttempt != null && now.difference(lastAttempt) < retryCooldown) {
       return;
     }
     final jid = _authenticatedJid;
@@ -774,11 +719,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       account = await emailService.currentAccount(jid);
     } on Exception catch (error, stackTrace) {
-      _log.finer(
-        _emailProvisioningRetryLogFailedCredentials,
-        error,
-        stackTrace,
-      );
+      const logMessage = 'Failed to read email credentials for retry';
+      _log.finer(logMessage, error, stackTrace);
       return;
     }
     String? normalizeCredential(String? value) {
@@ -1036,16 +978,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (_signupAvatarPublishRetryTimer != null) {
       return;
     }
+    const maxRetryAttempts = 10;
+    const initialDelay = Duration(milliseconds: 250);
+    const maxDelay = Duration(seconds: 3);
     final int clampedAttempts = (_signupAvatarPublishRetryAttempts + 1).clamp(
       1,
-      _signupAvatarPublishMaxRetryAttempts,
+      maxRetryAttempts,
     );
     _signupAvatarPublishRetryAttempts = clampedAttempts;
     final int delayMillis =
-        (_signupAvatarPublishRetryInitialDelay.inMilliseconds * clampedAttempts)
-            .clamp(
-      _signupAvatarPublishRetryInitialDelay.inMilliseconds,
-      _signupAvatarPublishRetryMaxDelay.inMilliseconds,
+        (initialDelay.inMilliseconds * clampedAttempts).clamp(
+      initialDelay.inMilliseconds,
+      maxDelay.inMilliseconds,
     );
     _signupAvatarPublishRetryTimer = Timer(
       Duration(milliseconds: delayMillis),
@@ -1169,10 +1113,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           'Stored login credentials found without database secrets; blocking auto-login.',
         );
         if (usingStoredCredentials) {
+          const missingSecretsErrorText =
+              'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
           await persistRememberMeChoice(false);
           _authenticatedJid = null;
           await _xmppService.disconnect();
-          _emit(const AuthenticationFailure(_missingDatabaseSecretsErrorText));
+          _emit(const AuthenticationFailure(missingSecretsErrorText));
           return;
         }
       }
@@ -1324,10 +1270,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             }
           } on Exception catch (error) {
             if (_looksLikeStorageLock(error)) {
+              const storageLockedErrorText =
+                  'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
               _log.warning('Storage lock detected during login.', error);
               await _xmppService.disconnect();
               _authenticatedJid = null;
-              _emit(const AuthenticationFailure(_storageLockedErrorText));
+              _emit(const AuthenticationFailure(storageLockedErrorText));
               return;
             }
             final canResumeOffline = usingStoredCredentials &&
@@ -1626,8 +1574,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     provisioning.EmailProvisioningCredentials? emailCredentials,
     bool persistCredentials = true,
   }) async {
+    const maxAttempts = 3;
+    const maxDuration = Duration(seconds: 20);
+    const initialDelay = Duration(seconds: 2);
+    const maxDelay = Duration(seconds: 8);
     var attempts = 0;
-    var delay = _smtpProvisioningInitialDelay;
+    var delay = initialDelay;
     final start = DateTime.timestamp();
     while (true) {
       final status = await _ensureEmailProvisioned(
@@ -1653,16 +1605,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       attempts += 1;
       final elapsed = DateTime.timestamp().difference(start);
-      if (attempts >= _smtpProvisioningMaxAttempts ||
-          elapsed >= _smtpProvisioningMaxDuration) {
+      if (attempts >= maxAttempts || elapsed >= maxDuration) {
         return _ProvisioningStatus.blockedTransient;
       }
       await Future.delayed(delay);
       final nextDelayMs = delay.inMilliseconds * 2;
       delay = Duration(
         milliseconds: nextDelayMs.clamp(
-          _smtpProvisioningInitialDelay.inMilliseconds,
-          _smtpProvisioningMaxDelay.inMilliseconds,
+          initialDelay.inMilliseconds,
+          maxDelay.inMilliseconds,
         ),
       );
     }
@@ -2020,7 +1971,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await logout(severity: LogoutSeverity.normal);
-    _emit(const AuthenticationFailure(_emailAuthFailureErrorText));
+    const emailAuthFailureErrorText =
+        'Email authentication failed. Please log in again.';
+    _emit(const AuthenticationFailure(emailAuthFailureErrorText));
   }
 
   Future<void> signup({
@@ -2036,6 +1989,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _loginToDemoMode();
       return;
     }
+    const signupCleanupInProgressMessage =
+        'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
     final config = endpointConfig;
     _log.info(
       'Signup requested '
@@ -2079,16 +2034,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           rememberMe: rememberMe,
         );
       }
+      const captchaIdKey = 'id';
+      const captchaKeyKey = 'key';
+      const registerKey = 'register';
+      const registerValue = 'Register';
       final response = await _httpClient.post(
         registrationUrl,
         body: {
-          'username': username,
-          'host': host,
-          'password': password,
-          'password2': confirmPassword,
-          'id': captchaID,
-          'key': captcha,
-          'register': 'Register',
+          _registerBodyKeyUsername: username,
+          _registerBodyKeyHost: host,
+          _registerBodyKeyPassword: password,
+          _registerBodyKeyPassword2: confirmPassword,
+          captchaIdKey: captchaID,
+          captchaKeyKey: captcha,
+          registerKey: registerValue,
         },
       );
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
@@ -2144,9 +2103,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
     required bool rememberMe,
   }) async {
+    const rollbackStageSkippedLog =
+        'Skipping rollback staging for previously authenticated account.';
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
-      _log.info(_signupRollbackStageSkippedLog);
+      _log.info(rollbackStageSkippedLog);
       return;
     }
     final entry = _PendingAccountDeletion.fromSignup(
@@ -2186,9 +2147,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
     required bool rememberMe,
   }) async {
+    const rollbackSkippedLog =
+        'Skipping rollback for previously authenticated account.';
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
-      _log.info(_signupRollbackSkippedLog);
+      _log.info(rollbackSkippedLog);
       return;
     }
     final deletion = _PendingAccountDeletion.fromSignup(
@@ -2285,15 +2248,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
+    const passwordChangeDisabledMessage =
+        'Password changes are disabled for this account.';
+    const passwordChangeRejectedMessage =
+        'Current password is incorrect, or the new password does not meet server requirements.';
+    const passwordChangeFallback =
+        'Unable to change password. Please try again later.';
     _emit(const AuthenticationPasswordChangeInProgress());
     final normalizedUsername = username.trim();
     final configuredHost = endpointConfig.domain.trim();
     final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
     if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
       _emit(
-        const AuthenticationPasswordChangeFailure(
-          'Unable to change password. Please try again later.',
-        ),
+        const AuthenticationPasswordChangeFailure(passwordChangeFallback),
       );
       return;
     }
@@ -2308,14 +2275,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         : null;
     try {
       if (!shouldChangeXmppPassword) {
-        if (!shouldChangeEmailPassword || resolvedEmail == null) {
-          _emit(
-            const AuthenticationPasswordChangeFailure(
-              _passwordChangeDisabledMessage,
-            ),
-          );
-          return;
-        }
+      if (!shouldChangeEmailPassword || resolvedEmail == null) {
+        _emit(
+          const AuthenticationPasswordChangeFailure(
+            passwordChangeDisabledMessage,
+          ),
+        );
+        return;
+      }
         final emailError = await _changeProvisionedEmailPassword(
           email: resolvedEmail,
           oldPassword: oldPassword,
@@ -2401,25 +2368,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (response.statusCode == 404) {
         _emit(
           const AuthenticationPasswordChangeFailure(
-            _passwordChangeRejectedMessage,
+            passwordChangeRejectedMessage,
           ),
         );
         return;
       }
-      const fallback = 'Unable to change password. Please try again later.';
       final detail = _registerErrorDetail(response);
       _emit(
         AuthenticationPasswordChangeFailure(
-          detail ?? fallback,
+          detail ?? passwordChangeFallback,
         ),
       );
       _log.warning('Password change failed (${response.statusCode}).');
     } on Exception catch (error, stackTrace) {
       _log.warning('Password change failed', error, stackTrace);
       _emit(
-        const AuthenticationPasswordChangeFailure(
-          'Unable to change password. Please try again later.',
-        ),
+        const AuthenticationPasswordChangeFailure(passwordChangeFallback),
       );
     }
   }
@@ -2506,6 +2470,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
   }) async {
     _emit(const AuthenticationUnregisterInProgress());
+    const accountDeletionDisabledMessage =
+        'Account deletion is disabled for this account.';
+    const incorrectPasswordMessage = 'Incorrect password. Please try again.';
+    const unregisterFallback =
+        'Unable to delete account. Please try again later.';
     final normalizedUsername = username.trim();
     final configuredHost = endpointConfig.domain.trim();
     final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
@@ -2517,12 +2486,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
-    const fallback = 'Unable to delete account. Please try again later.';
     final shouldDeleteEmailAccount = endpointConfig.enableSmtp;
     final shouldDeleteXmppAccount = endpointConfig.enableXmpp;
     if (!shouldDeleteEmailAccount && !shouldDeleteXmppAccount) {
       _emit(
-        const AuthenticationUnregisterFailure(_accountDeletionDisabledMessage),
+        const AuthenticationUnregisterFailure(accountDeletionDisabledMessage),
       );
       return;
     }
@@ -2556,7 +2524,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         logContext: 'during unregister',
       );
       if (response == null) {
-        _emit(const AuthenticationUnregisterFailure(fallback));
+        _emit(const AuthenticationUnregisterFailure(unregisterFallback));
         return;
       }
       if (response.statusCode == 200) {
@@ -2565,19 +2533,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
-        _emit(const AuthenticationUnregisterFailure(_incorrectPasswordMessage));
+        _emit(const AuthenticationUnregisterFailure(incorrectPasswordMessage));
         return;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
         _emit(
-          const AuthenticationUnregisterFailure(_incorrectPasswordMessage),
+          const AuthenticationUnregisterFailure(incorrectPasswordMessage),
         );
         return;
       }
       final detail = _registerErrorDetail(response);
       _emit(
         AuthenticationUnregisterFailure(
-          detail ?? fallback,
+          detail ?? unregisterFallback,
         ),
       );
       _log.warning('Account deletion failed (${response.statusCode}).');
@@ -2690,6 +2658,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
     required String logContext,
   }) async {
+    const incorrectPasswordMessage = 'Incorrect password. Please try again.';
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty) {
       return null;
@@ -2711,7 +2680,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       if (error.code ==
           provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
-        return _incorrectPasswordMessage;
+        return incorrectPasswordMessage;
       }
       if (error.isRecoverable) {
         return error.message;
@@ -2758,6 +2727,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> _processPendingAccountDeletions() async {
     try {
+      const rollbackSkippedLog =
+          'Skipping rollback for previously authenticated account.';
       final pending = await _readPendingAccountDeletions();
       if (pending.isEmpty) {
         return;
@@ -2774,7 +2745,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           request.host,
         );
         if (await _hasCompletedAuthentication(normalizedKey)) {
-          _log.fine(_signupRollbackSkippedLog);
+          _log.fine(rollbackSkippedLog);
           continue;
         }
         final succeeded = await _performAccountDeletion(request);
@@ -2819,7 +2790,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (cleanupPending) {
       _blockedSignupCredentialKey = normalizedKey;
-      _log.warning(_signupCleanupBlockedLog);
+      const signupCleanupBlockedLog =
+          'Signup blocked because cleanup is still pending.';
+      _log.warning(signupCleanupBlockedLog);
     } else if (_blockedSignupCredentialKey == normalizedKey) {
       _blockedSignupCredentialKey = null;
     }
@@ -2829,7 +2802,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<bool> _performAccountDeletion(_PendingAccountDeletion deletion) async {
     final normalizedKey = _normalizeSignupKey(deletion.username, deletion.host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
-      _log.fine(_signupRollbackRequestSkippedLog);
+      const rollbackRequestSkippedLog =
+          'Skipping rollback request for previously authenticated account.';
+      _log.fine(rollbackRequestSkippedLog);
       return true;
     }
     final emailDeleted = await _deleteProvisionedEmailAccountIfAvailable(
@@ -2982,7 +2957,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final secrets = await _readDatabaseSecrets(normalizedKey);
       return secrets.hasSecrets;
     } on Exception catch (error, stackTrace) {
-      _log.warning(_databaseSecretsCheckFailedLog, error, stackTrace);
+      const databaseSecretsCheckFailedLog =
+          'Failed to check database secrets for pending signup cleanup.';
+      _log.warning(databaseSecretsCheckFailedLog, error, stackTrace);
       return false;
     }
   }
@@ -3211,15 +3188,14 @@ class _PendingAccountDeletion {
     required bool rememberMe,
   }) {
     final now = DateTime.now();
+    const rememberedMaxAge = Duration(days: 7);
+    const ephemeralMaxAge = Duration(hours: 24);
     final expiry = now.add(
-      rememberMe
-          ? _pendingSignupRollbackMaxAgeRemembered
-          : _pendingSignupRollbackMaxAgeEphemeral,
+      rememberMe ? rememberedMaxAge : ephemeralMaxAge,
     );
     return _PendingAccountDeletion(
       username: username,
-      host: host,
-      password: password,
+      host: hconst      password: password,
       email: email,
       createdAt: now.toIso8601String(),
       expiresAt: expiry.toIso8601String(),
@@ -3227,6 +3203,7 @@ class _PendingAccountDeletion {
   }
 
   factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
+    const fallbackHost = EndpointConfig.defaultDomain;
     final rawEmail = json[_emailJsonKey] as String? ?? '';
     final rawCreatedAt = json[_createdAtJsonKey] as String?;
     final createdAt = rawCreatedAt?.trim().isNotEmpty == true
@@ -3238,8 +3215,7 @@ class _PendingAccountDeletion {
     );
     return _PendingAccountDeletion(
       username: (json[_usernameJsonKey] as String? ?? '').trim(),
-      host:
-          (json[_hostJsonKey] as String? ?? AuthenticationCubit.domain).trim(),
+      host: (json[_hostJsonKey] as String? ?? fallbackHost).trim(),
       password: json[_passwordJsonKey] as String? ?? '',
       email: rawEmail.trim().isEmpty ? null : rawEmail.trim(),
       createdAt: createdAt,
@@ -3300,12 +3276,13 @@ class _PendingAccountDeletion {
     required String createdAt,
     required String? expiresAt,
   }) {
+    const legacyMaxAge = Duration(days: 7);
     final trimmedExpiry = expiresAt?.trim();
     if (trimmedExpiry != null && trimmedExpiry.isNotEmpty) {
       return trimmedExpiry;
     }
     final createdAtTimestamp = DateTime.tryParse(createdAt);
     final base = createdAtTimestamp ?? DateTime.now();
-    return base.add(_pendingSignupRollbackLegacyMaxAge).toIso8601String();
+    return base.add(legacyMaxAge).toIso8601String();
   }
 }

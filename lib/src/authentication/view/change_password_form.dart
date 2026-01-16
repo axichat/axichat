@@ -13,12 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _changePasswordSpinnerDimension = 16.0;
-const double _changePasswordSpinnerPadding = 1.0;
-const double _changePasswordSpinnerSlotSize =
-    _changePasswordSpinnerDimension + (_changePasswordSpinnerPadding * 2);
-const double _changePasswordSpinnerGap = 8.0;
-
 class ChangePasswordForm extends StatefulWidget {
   const ChangePasswordForm({super.key});
 
@@ -71,6 +65,11 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
         final loading = state is AuthenticationPasswordChangeInProgress;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
+        const changePasswordSpinnerDimension = 16.0;
+        const changePasswordSpinnerPadding = 1.0;
+        const changePasswordSpinnerSlotSize =
+            changePasswordSpinnerDimension + (changePasswordSpinnerPadding * 2);
+        const changePasswordSpinnerGap = 8.0;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -131,15 +130,15 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(
-                    dimension: _changePasswordSpinnerDimension,
+                    dimension: changePasswordSpinnerDimension,
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel: l10n.authChangePasswordProgressLabel,
                   );
                   final spinnerSlot = ButtonSpinnerSlot(
                     isVisible: loading,
                     spinner: spinner,
-                    slotSize: _changePasswordSpinnerSlotSize,
-                    gap: _changePasswordSpinnerGap,
+                    slotSize: changePasswordSpinnerSlotSize,
+                    gap: changePasswordSpinnerGap,
                     duration: animationDuration,
                   );
                   return ShadButton(

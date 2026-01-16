@@ -190,22 +190,12 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
         final slideAnimation = Tween<Offset>(
           begin: _connectivityIndicatorSlideOffset,
           end: Offset.zero,
-        ).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: _connectivityIndicatorInCurve,
-          ),
-        );
-        final curvedAnimation = CurvedAnimation(
-          parent: animation,
-          curve: _connectivityIndicatorInCurve,
-          reverseCurve: _connectivityIndicatorOutCurve,
-        );
+        ).animate(animation);
         return SizeTransition(
-          sizeFactor: curvedAnimation,
+          sizeFactor: animation,
           axisAlignment: -1.0,
           child: FadeTransition(
-            opacity: curvedAnimation,
+            opacity: animation,
             child: SlideTransition(
               position: slideAnimation,
               child: child,
