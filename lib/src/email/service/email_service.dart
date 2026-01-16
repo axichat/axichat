@@ -1772,7 +1772,9 @@ class EmailService {
   Future<void> setForegroundKeepalive(bool enabled) async {
     if (!enabled) {
       await _stopForegroundKeepalive();
-      _startImapSyncLoop();
+      if (hasActiveSession) {
+        _startImapSyncLoop();
+      }
       return;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -1784,7 +1786,9 @@ class EmailService {
     final bridge = _foregroundBridge;
     if (bridge == null) {
       _log.fine('Foreground bridge unavailable, skipping keepalive.');
-      _startImapSyncLoop();
+      if (hasActiveSession) {
+        _startImapSyncLoop();
+      }
       return;
     }
 
@@ -2729,6 +2733,9 @@ class EmailService {
   }
 
   void _startImapSyncLoop() {
+    if (!hasActiveSession) {
+      return;
+    }
     if (_imapSyncLoopActive) {
       return;
     }
@@ -2743,7 +2750,9 @@ class EmailService {
   }
 
   void _scheduleNextImapSync() {
-    if (!_imapSyncLoopActive || _foregroundKeepaliveEnabled) {
+    if (!_imapSyncLoopActive ||
+        _foregroundKeepaliveEnabled ||
+        !hasActiveSession) {
       return;
     }
     final interval = _imapSyncInterval();
@@ -2755,6 +2764,10 @@ class EmailService {
 
   Future<void> _runImapSyncTick() async {
     if (!_imapSyncLoopActive || _foregroundKeepaliveEnabled) {
+      return;
+    }
+    if (!hasActiveSession) {
+      _stopImapSyncLoop();
       return;
     }
     if (_imapSyncInFlight) {

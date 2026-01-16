@@ -31,6 +31,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const int _openChatPreloadMessageDisabledLimit = 0;
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
+  static const String _conversationIndexLoginSyncOperationName =
+      'ChatsService.syncConversationIndexOnLogin';
+  static const String _ensureJoinedForChatStateOperationName =
+      'ChatsService.ensureJoinedForChatState';
+  static const String _publishOpenChatOperationName =
+      'ChatsService.publishConversationIndexForOpenChat';
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
   static const List<Chat> _emptyChatList = <Chat>[];
   final Map<String, Set<String>> _typingParticipants = {};
@@ -50,9 +56,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
-        Future<void>(() async {
-          await syncConversationIndexOnLogin();
-        });
+        fireAndForget(
+          syncConversationIndexOnLogin,
+          operationName: _conversationIndexLoginSyncOperationName,
+        );
       })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
         await applyConversationIndexItems([event.item]);
@@ -443,9 +450,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       if (roomJid == null) return;
       final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
       if (!hasPresence) {
-        Future<void>(() async {
-          await ensureJoined(roomJid: roomJid, allowRejoin: true);
-        });
+        fireAndForget(
+          () async {
+            await ensureJoined(roomJid: roomJid, allowRejoin: true);
+          },
+          operationName: _ensureJoinedForChatStateOperationName,
+        );
         return;
       }
     }
@@ -472,9 +482,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
-    Future<void>(() async {
-      await _publishConversationIndexForOpenChat(jid);
-    });
+    fireAndForget(
+      () async {
+        await _publishConversationIndexForOpenChat(jid);
+      },
+      operationName: _publishOpenChatOperationName,
+    );
   }
 
   Future<void> closeChat() async {

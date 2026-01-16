@@ -13,6 +13,10 @@ const String _draftRecipientRoleDefault = 'to';
 const String _draftAttachmentUploadStanzaId = 'draft-attachment-upload';
 const int _draftsSnapshotStart = 0;
 const int _draftsSnapshotEnd = 0;
+const String _draftSyncFlushPendingOperationName =
+    'DraftSyncService.flushPendingOnResume';
+const String _draftSyncLoginOperationName =
+    'DraftSyncService.syncDraftsOnLogin';
 
 final _draftSyncSourceKey = XmppStateStore.registerKey(_draftSyncSourceKeyName);
 final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -47,14 +51,16 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
-          Future<void>(() async {
-            await _flushPendingDraftSync();
-          });
+          fireAndForget(
+            _flushPendingDraftSync,
+            operationName: _draftSyncFlushPendingOperationName,
+          );
           return;
         }
-        Future<void>(() async {
-          await syncDraftsOnLogin();
-        });
+        fireAndForget(
+          syncDraftsOnLogin,
+          operationName: _draftSyncLoginOperationName,
+        );
       })
       ..registerHandler<DraftSyncUpdatedEvent>((event) async {
         await _applyDraftSyncUpdate(event.payload);

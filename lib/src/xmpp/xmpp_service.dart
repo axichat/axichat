@@ -757,38 +757,45 @@ class XmppService extends XmppBase
         _repairConnectionStateFromTraffic(
           reason: _connectivityRepairReasonStreamNegotiationsDone,
         );
-        if (_connection.carbonsEnabled != true) {
-          _xmppLogger.info('Enabling carbons...');
-          if (!await _connection.enableCarbons()) {
-            _xmppLogger.warning('Failed to enable carbons.');
-          }
-        }
-        // Device publishing is now handled internally by OmemoManager.
-        if (!event.resumed && _streamResumptionAttempted) {
-          final sm = _connection.getManager<XmppStreamManagementManager>();
-          await sm?.handleFailedResumption();
-          fireAndForget(
-            _syncAfterReconnect,
-            operationName: 'XmppService.syncAfterReconnect',
-          );
-        }
+        final resumed = event.resumed;
+        final shouldHandleFailedResumption =
+            !resumed && _streamResumptionAttempted;
         _streamResumptionAttempted = false;
-        if (!event.resumed) {
-          try {
-            final presenceManager =
-                _connection.getManager<XmppPresenceManager>();
-            await presenceManager?.sendInitialPresence();
-          } catch (error, stackTrace) {
-            _xmppLogger.warning(
-              'Failed to send initial presence.',
-              error,
-              stackTrace,
-            );
-          }
-        }
-        if (event.resumed) return;
-        await _refreshHttpUploadSupport();
-        await _refreshPubSubSupport();
+        fireAndForget(
+          () async {
+            if (_connection.carbonsEnabled != true) {
+              _xmppLogger.info('Enabling carbons...');
+              if (!await _connection.enableCarbons()) {
+                _xmppLogger.warning('Failed to enable carbons.');
+              }
+            }
+            // Device publishing is now handled internally by OmemoManager.
+            if (shouldHandleFailedResumption) {
+              final sm = _connection.getManager<XmppStreamManagementManager>();
+              await sm?.handleFailedResumption();
+              fireAndForget(
+                _syncAfterReconnect,
+                operationName: _syncAfterReconnectOperationName,
+              );
+            }
+            if (!resumed) {
+              try {
+                final presenceManager =
+                    _connection.getManager<XmppPresenceManager>();
+                await presenceManager?.sendInitialPresence();
+              } catch (error, stackTrace) {
+                _xmppLogger.warning(
+                  'Failed to send initial presence.',
+                  error,
+                  stackTrace,
+                );
+              }
+              await _refreshHttpUploadSupport();
+              await _refreshPubSubSupport();
+            }
+          },
+          operationName: _postNegotiationsSetupOperationName,
+        );
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -940,6 +947,14 @@ class XmppService extends XmppBase
   static const _connectivityRepairReasonStanzaAcked = 'stanza acked';
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
+  static const _postNegotiationsSetupOperationName =
+      'XmppService.postNegotiationsSetup';
+  static const _syncAfterReconnectOperationName =
+      'XmppService.syncAfterReconnect';
+  static const _connectivityNotificationUpdateOperationName =
+      'XmppService.updateConnectivityNotification';
+  static const _cancelSocketSubscriptionOperationName =
+      'XmppService.cancelSocketSubscription';
   static const _nonRecoverableReconnectDisableLog =
       'Failed to disable reconnection after non-recoverable error.';
   static const _reconnectEnableFailedLog =
@@ -981,17 +996,20 @@ class XmppService extends XmppBase
   }
 
   void _scheduleConnectivityNotificationUpdate(ConnectionState state) {
-    Future<void>(() async {
-      try {
-        await _connection.updateConnectivityNotification(state);
-      } catch (error, stackTrace) {
-        _xmppLogger.fine(
-          _connectivityNotificationFailedLog,
-          error,
-          stackTrace,
-        );
-      }
-    });
+    fireAndForget(
+      () async {
+        try {
+          await _connection.updateConnectivityNotification(state);
+        } catch (error, stackTrace) {
+          _xmppLogger.fine(
+            _connectivityNotificationFailedLog,
+            error,
+            stackTrace,
+          );
+        }
+      },
+      operationName: _connectivityNotificationUpdateOperationName,
+    );
   }
 
   void _recordStreamReady(bool resumed) {
@@ -3251,13 +3269,16 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   void _cancelSocketSubscription(StreamSubscription<dynamic>? subscription) {
     if (subscription == null) return;
-    Future<void>(() async {
-      try {
-        await subscription.cancel();
-      } catch (error, stackTrace) {
-        _log.fine(_socketCancelFailedLog, error, stackTrace);
-      }
-    });
+    fireAndForget(
+      () async {
+        try {
+          await subscription.cancel();
+        } catch (error, stackTrace) {
+          _log.fine(_socketCancelFailedLog, error, stackTrace);
+        }
+      },
+      operationName: _cancelSocketSubscriptionOperationName,
+    );
   }
 
   void _markSocketClosed(Socket socket) {

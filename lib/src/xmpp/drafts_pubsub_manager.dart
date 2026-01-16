@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
@@ -48,6 +49,10 @@ const bool _deliverPayloadsEnabled = true;
 const bool _persistItemsEnabled = true;
 const bool _presenceBasedDeliveryDisabled = false;
 const Duration _ensureNodeBackoff = Duration(minutes: 5);
+const String _draftsPubSubBootstrapOperationName =
+    'DraftsPubSubManager.bootstrapOnNegotiations';
+const String _draftsPubSubRefreshOperationName =
+    'DraftsPubSubManager.refreshFromServer';
 
 final class DraftRecipient {
   const DraftRecipient({required this.jid, required this.role});
@@ -478,9 +483,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      Future<void>(() async {
-        await _bootstrap();
-      });
+      fireAndForget(
+        _bootstrap,
+        operationName: _draftsPubSubBootstrapOperationName,
+      );
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
@@ -733,9 +739,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        Future<void>(() async {
-          await _bootstrap();
-        });
+        fireAndForget(
+          _bootstrap,
+          operationName: _draftsPubSubBootstrapOperationName,
+        );
       }
     }
   }
@@ -874,9 +881,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      Future<void>(() async {
-        await _refreshFromServer();
-      });
+      fireAndForget(
+        _refreshFromServer,
+        operationName: _draftsPubSubRefreshOperationName,
+      );
     }
     return false;
   }
@@ -972,9 +980,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Future<void>(() async {
-        await _bootstrap();
-      });
+      fireAndForget(
+        _bootstrap,
+        operationName: _draftsPubSubBootstrapOperationName,
+      );
     }
   }
 
@@ -988,9 +997,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Future<void>(() async {
-        await _bootstrap();
-      });
+      fireAndForget(
+        _bootstrap,
+        operationName: _draftsPubSubBootstrapOperationName,
+      );
     }
   }
 

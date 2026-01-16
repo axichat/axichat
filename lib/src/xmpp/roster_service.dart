@@ -23,6 +23,8 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       );
 
   final _rosterLog = Logger('RosterService');
+  static const String _rosterFetchOnLoginOperationName =
+      'RosterService.requestRosterOnLogin';
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -31,7 +33,10 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         _rosterLog.info('Fetching roster...');
-        await requestRoster();
+        fireAndForget(
+          requestRoster,
+          operationName: _rosterFetchOnLoginOperationName,
+        );
       })
       ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
         final requester = event.from.toBare().toString();

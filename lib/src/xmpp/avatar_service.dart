@@ -6,6 +6,11 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 String _base64EncodeAvatarPublishPayload(Uint8List bytes) =>
     base64Encode(bytes);
 
+const String _avatarSelfRefreshOperationName =
+    'AvatarService.refreshSelfAvatarOnNegotiations';
+const String _avatarRosterRefreshOperationName =
+    'AvatarService.refreshRosterAvatarsOnNegotiations';
+
 class AvatarUploadPayload {
   const AvatarUploadPayload({
     required this.bytes,
@@ -295,11 +300,19 @@ mixin AvatarService on XmppBase, MucService {
         );
         _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
-          await _notifyCachedSelfAvatarIfAvailable();
-          await refreshSelfAvatarIfNeeded();
+          fireAndForget(
+            () async {
+              await _notifyCachedSelfAvatarIfAvailable();
+              await refreshSelfAvatarIfNeeded();
+            },
+            operationName: _avatarSelfRefreshOperationName,
+          );
         }
         if (event.resumed) return;
-        await _refreshRosterAvatarsFromCache();
+        fireAndForget(
+          _refreshRosterAvatarsFromCache,
+          operationName: _avatarRosterRefreshOperationName,
+        );
       });
   }
 
