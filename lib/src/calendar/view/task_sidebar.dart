@@ -735,6 +735,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           setState(() => _hideCompletedCriticalPath = value),
                       onCloseOrdering: _closeActiveCriticalPath,
                       onAddTaskToFocusedPath: _openCriticalPathSearch,
+                      onAddTaskToPath: _openCriticalPathSearchForPath,
                     );
 
                     List<CalendarTask> unscheduledTasks = const [];
@@ -2215,6 +2216,34 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       bloc: context.read<B>(),
       locate: context.read,
       targetPath: targetPath,
+      requiresLongPressForDrag: requiresLongPressForDrag,
+      taskTileBuilder: (
+        CalendarTask task, {
+        Widget? trailing,
+        bool requiresLongPress = false,
+        VoidCallback? onTap,
+        VoidCallback? onDragStart,
+        bool allowContextMenu = false,
+      }) =>
+          buildSearchTaskTile(
+        task,
+        trailing: trailing,
+        requiresLongPress: requiresLongPress,
+        onTap: onTap,
+        onDragStart: onDragStart,
+        allowContextMenu: allowContextMenu,
+      ),
+    );
+  }
+
+  Future<void> _openCriticalPathSearchForPath(CalendarCriticalPath path) async {
+    final Set<String> excludedTaskIds = <String>{}..addAll(path.taskIds);
+    await showCalendarTaskSearch(
+      context: context,
+      bloc: context.read<B>(),
+      locate: context.read,
+      targetPath: path,
+      excludedTaskIds: excludedTaskIds,
       requiresLongPressForDrag: requiresLongPressForDrag,
       taskTileBuilder: (
         CalendarTask task, {
@@ -4203,6 +4232,10 @@ class _AddTaskSection extends StatelessWidget {
                 );
               },
             ),
+            if (uiState.showAdvancedOptions) ...[
+              const SizedBox(height: calendarSidebarToggleSpacing),
+              _AdvancedToggle(uiState: uiState, onPressed: onAdvancedToggle),
+            ],
           ],
         ),
       ),

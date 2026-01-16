@@ -42,9 +42,10 @@ extension CalendarCriticalPathX on CalendarCriticalPath {
     if (sanitizedId.isEmpty) {
       return this;
     }
-    final existing = List<String>.from(
-      taskIds.where((id) => id != sanitizedId),
-    );
+    if (taskIds.contains(sanitizedId)) {
+      return this;
+    }
+    final existing = List<String>.from(taskIds);
     final insertionIndex =
         index != null ? index.clamp(0, existing.length) : existing.length;
     existing.insert(insertionIndex, sanitizedId);

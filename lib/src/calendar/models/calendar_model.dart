@@ -410,6 +410,9 @@ class CalendarModel with _$CalendarModel {
     if (path == null || path.isArchived) {
       return this;
     }
+    if (path.taskIds.contains(normalizedTaskId)) {
+      return this;
+    }
     final CalendarCriticalPath updatedPath = path.addTask(
       normalizedTaskId,
       index: index,

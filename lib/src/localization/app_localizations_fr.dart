@@ -2929,6 +2929,17 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String calendarCriticalPathAlreadyContainsTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Les tâches sont déjà dans ce chemin critique.',
+      one: 'La tâche est déjà dans ce chemin critique.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get calendarCriticalPathCreateFailed =>
       'Impossible de créer un chemin critique.';
 

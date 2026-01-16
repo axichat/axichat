@@ -84,6 +84,18 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
   if (resolvedTargetPath != null) {
     defaultHandler = (CalendarTask task) async {
       final B resolvedBloc = resolveBloc();
+      final CalendarCriticalPath? latestPath =
+          resolvedBloc.state.model.criticalPaths[resolvedTargetPath.id];
+      final CalendarCriticalPath effectivePath =
+          latestPath ?? resolvedTargetPath;
+      if (effectivePath.taskIds.contains(task.baseId)) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n
+              .calendarCriticalPathAlreadyContainsTasks(_taskSearchSingleCount),
+        );
+        return;
+      }
       resolvedBloc.add(
         CalendarEvent.criticalPathTaskAdded(
           pathId: resolvedTargetPath.id,

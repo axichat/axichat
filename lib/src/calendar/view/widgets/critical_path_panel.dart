@@ -49,6 +49,7 @@ class CriticalPathPanel extends StatelessWidget {
     this.onExpandedChanged,
     this.onCloseOrdering,
     this.onAddTaskToFocusedPath,
+    this.onAddTaskToPath,
   });
 
   final List<CalendarCriticalPath> paths;
@@ -77,6 +78,7 @@ class CriticalPathPanel extends StatelessWidget {
   final ValueChanged<bool>? onExpandedChanged;
   final VoidCallback? onCloseOrdering;
   final VoidCallback? onAddTaskToFocusedPath;
+  final Future<void> Function(CalendarCriticalPath path)? onAddTaskToPath;
 
   @override
   Widget build(BuildContext context) {
@@ -219,6 +221,9 @@ class CriticalPathPanel extends StatelessWidget {
                         onRename: () => onRenamePath(path),
                         onDelete: () => onDeletePath(path),
                         onShare: () => onSharePath(path, _tasksForPath(path)),
+                        onAddTask: onAddTaskToPath == null
+                            ? null
+                            : () => unawaited(onAddTaskToPath!(path)),
                         onOpen: () {
                           _handleExpand();
                           onOpenPath(path);
@@ -325,6 +330,7 @@ class CriticalPathCard extends StatelessWidget {
     required this.onDelete,
     required this.onShare,
     required this.animationDuration,
+    this.onAddTask,
     required this.onOpen,
   });
 
@@ -337,6 +343,7 @@ class CriticalPathCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onShare;
   final Duration animationDuration;
+  final VoidCallback? onAddTask;
   final VoidCallback onOpen;
 
   @override
@@ -378,6 +385,7 @@ class CriticalPathCard extends StatelessWidget {
                 ),
                 _PathActions(
                   onFocus: onFocus,
+                  onAddTask: onAddTask,
                   onRename: onRename,
                   onDelete: onDelete,
                   onShare: onShare,
@@ -510,6 +518,7 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
 class _PathActions extends StatefulWidget {
   const _PathActions({
     required this.onFocus,
+    required this.onAddTask,
     required this.onRename,
     required this.onDelete,
     required this.onShare,
@@ -517,6 +526,7 @@ class _PathActions extends StatefulWidget {
   });
 
   final VoidCallback onFocus;
+  final VoidCallback? onAddTask;
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final VoidCallback onShare;
@@ -583,6 +593,15 @@ class _PathActionsState extends State<_PathActions> {
             popover: (context) {
               return AxiMenu(
                 actions: [
+                  if (widget.onAddTask != null)
+                    AxiMenuAction(
+                      icon: Icons.add,
+                      label: l10n.calendarCriticalPathAddTask,
+                      onPressed: () {
+                        _closeMenu();
+                        widget.onAddTask?.call();
+                      },
+                    ),
                   AxiMenuAction(
                     icon: Icons.drive_file_rename_outline,
                     label: context.l10n.commonRename,
@@ -1301,7 +1320,27 @@ Future<void> addTasksToCriticalPath({
     paths: paths,
     stayOpen: true,
     onPathSelected: (path) async {
-      for (final CalendarTask task in tasks) {
+      final Set<String> existingTaskIds = <String>{}..addAll(path.taskIds);
+      final List<CalendarTask> tasksToAdd = tasks
+          .where((task) => !existingTaskIds.contains(baseTaskIdFrom(task.id)))
+          .toList();
+      final int skippedCount = taskCount - tasksToAdd.length;
+      if (skippedCount == taskCount) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAlreadyContainsTasks(taskCount),
+        );
+        return null;
+      }
+      if (skippedCount > 0) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAlreadyContainsTasks(skippedCount),
+        );
+      }
+      final Set<String> addedTaskIds = <String>{}
+        ..addAll(tasksToAdd.map((task) => baseTaskIdFrom(task.id)));
+      for (final CalendarTask task in tasksToAdd) {
         bloc.add(
           CalendarEvent.criticalPathTaskAdded(pathId: path.id, taskId: task.id),
         );
@@ -1309,7 +1348,7 @@ Future<void> addTasksToCriticalPath({
       final bool added = await _waitForTasksInCriticalPath(
         bloc: bloc,
         pathId: path.id,
-        taskIds: targetTaskIds,
+        taskIds: addedTaskIds,
       );
       if (!context.mounted) {
         return null;
@@ -1317,7 +1356,7 @@ Future<void> addTasksToCriticalPath({
       if (!added) {
         FeedbackSystem.showError(
           context,
-          context.l10n.calendarCriticalPathAddFailed(taskCount),
+          context.l10n.calendarCriticalPathAddFailed(tasksToAdd.length),
         );
         return null;
       }
@@ -1329,12 +1368,12 @@ Future<void> addTasksToCriticalPath({
       if (resolvedName == null) {
         FeedbackSystem.showError(
           context,
-          context.l10n.calendarCriticalPathAddFailed(taskCount),
+          context.l10n.calendarCriticalPathAddFailed(tasksToAdd.length),
         );
         return null;
       }
       return context.l10n.calendarCriticalPathAddSuccess(
-        taskCount,
+        tasksToAdd.length,
         resolvedName,
       );
     },
