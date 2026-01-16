@@ -99,11 +99,16 @@ class CalendarTransferService {
     return file;
   }
 
-  static Future<void> scheduleCleanup(File file) async {
+  static void scheduleCleanup(File file) {
     if (file.path.trim().isEmpty) {
       return;
     }
-    await _cleanupExportFile(file);
+    Timer(
+      _exportCleanupDelay,
+      () async {
+        await _cleanupExportFile(file);
+      },
+    );
   }
 
   Future<File> exportTaskIcs({

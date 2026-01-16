@@ -46,6 +46,8 @@ const _smtpProvisioningMaxDelay = Duration(seconds: 8);
 const _emailProvisioningRetryCooldown = Duration(seconds: 30);
 const _emailProvisioningRetryLogFailedCredentials =
     'Failed to read email credentials for retry';
+const String _incorrectPasswordMessage =
+    'Incorrect password. Please try again.';
 const int _loginBackoffBaseSeconds = 2;
 const int _loginBackoffMaxMinutes = 2;
 const int _loginBackoffMinSeconds = 1;
@@ -394,6 +396,49 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return true;
     }
     return false;
+  }
+
+  String? _registerErrorDetail(http.Response response) {
+    final raw = response.body.trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+    if (raw.contains('<') && raw.contains('>')) {
+      return null;
+    }
+    final colonIndex = raw.indexOf(':');
+    if (colonIndex != -1 && colonIndex + 1 < raw.length) {
+      final suffix = raw.substring(colonIndex + 1).trim();
+      if (suffix.isNotEmpty) {
+        return suffix;
+      }
+    }
+    return raw;
+  }
+
+  bool _looksLikeAccountMissing(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains("doesn't exist") ||
+        lower.contains('does not exist') ||
+        lower.contains('account not found') ||
+        lower.contains('user not found');
+  }
+
+  bool _looksLikeInvalidPassword(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('incorrect password') ||
+        lower.contains('wrong password') ||
+        lower.contains('invalid password') ||
+        lower.contains('authentication failed');
+  }
+
+  bool _looksLikePasswordPolicyFailure(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('too short') ||
+        lower.contains('password policy') ||
+        lower.contains('must be at least') ||
+        lower.contains('minimum') && lower.contains('character') ||
+        lower.contains('weak password');
   }
 
   Future<http.Response> _postRegisterForm({
@@ -806,7 +851,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _sessionEmailCredentials = null;
   }
 
-  Future<void> _handleForegroundServiceActiveChanged() {
+  Future<void> _handleForegroundServiceActiveChanged() async {
     await _updateEmailForegroundKeepalive();
     if (!_endpointConfig.enableXmpp || !_stickyAuthActive) {
       return;
@@ -2322,6 +2367,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           );
           return;
         }
+        final detail = _registerErrorDetail(response);
+        if (detail != null && _looksLikePasswordPolicyFailure(detail)) {
+          _emit(AuthenticationPasswordChangeFailure(detail));
+          return;
+        }
+        if (detail != null &&
+            !_looksLikeAccountMissing(detail) &&
+            !_looksLikeInvalidPassword(detail)) {
+          _emit(AuthenticationPasswordChangeFailure(detail));
+          return;
+        }
         _emit(
           const AuthenticationPasswordChangeFailure(
             'Current password is incorrect.',
@@ -2475,18 +2531,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _emit(const AuthenticationUnregisterFailure(fallback));
           return;
         }
-        _emit(
-          const AuthenticationUnregisterFailure(
-            'Incorrect password. Please try again.',
-          ),
-        );
+        final detail = _registerErrorDetail(response);
+        if (detail != null &&
+            !_looksLikeAccountMissing(detail) &&
+            !_looksLikeInvalidPassword(detail)) {
+          _emit(AuthenticationUnregisterFailure(detail));
+          return;
+        }
+        _emit(const AuthenticationUnregisterFailure(_incorrectPasswordMessage));
         return;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
         _emit(
-          const AuthenticationUnregisterFailure(
-            'Incorrect password. Please try again.',
-          ),
+          const AuthenticationUnregisterFailure(_incorrectPasswordMessage),
         );
         return;
       }
@@ -2627,7 +2684,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       if (error.code ==
           provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
-        return 'Incorrect password. Please try again.';
+        return _incorrectPasswordMessage;
       }
       if (error.isRecoverable) {
         return error.message;

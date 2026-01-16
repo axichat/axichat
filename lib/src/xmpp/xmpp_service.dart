@@ -2101,6 +2101,7 @@ class XmppService extends XmppBase
     try {
       _setConnectionState(ConnectionState.connecting);
       _xmppLogger.info('Migrating XMPP connection to foreground socket.');
+      _clearSelfPresenceOnDisconnect();
       await _eventSubscription?.cancel();
       _eventSubscription = null;
 
@@ -2261,6 +2262,7 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _setConnectionState(ConnectionState.notConnected);
+    _clearSelfPresenceOnDisconnect();
     _connectInFlight = false;
 
     // Only disable session reconnect for fatal errors (auth/database).

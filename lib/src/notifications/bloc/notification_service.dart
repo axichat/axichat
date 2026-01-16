@@ -6,7 +6,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
-rt';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';

@@ -102,15 +102,12 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     }
   }
 
-  void _handleTaskData(dynamic data) {
+  Future<void> _handleTaskData(dynamic data) async {
     if (data is! String) {
       return;
     }
     for (final handler in List.of(_listeners.values)) {
-      fireAndForget(
-        () => handler(data),
-        operationName: 'ForegroundSocketTaskBridge.handleTaskData',
-      );
+      await handler(data);
     }
   }
 
