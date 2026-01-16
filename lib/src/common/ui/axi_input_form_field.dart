@@ -6,9 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide SpellCheckConfiguration;
 import 'package:flutter/services.dart';
-import 'package:shadcn_ui/src/components/form/field.dart';
-import 'package:shadcn_ui/src/theme/components/decorator.dart';
-import 'package:shadcn_ui/src/theme/theme.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'axi_editable_text.dart' as axi;
 import 'axi_input.dart';
@@ -81,7 +79,6 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
     ScrollController? scrollController,
     Iterable<String>? autofillHints,
     Clip clipBehavior = Clip.hardEdge,
-    bool scribbleEnabled = true,
     bool enableIMEPersonalizedLearning = true,
     ContentInsertionConfiguration? contentInsertionConfiguration,
     axi.EditableTextContextMenuBuilder? contextMenuBuilder,
@@ -148,7 +145,6 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
               scrollPhysics: scrollPhysics,
               autofillHints: autofillHints,
               clipBehavior: clipBehavior,
-              scribbleEnabled: scribbleEnabled,
               enableIMEPersonalizedLearning: enableIMEPersonalizedLearning,
               contentInsertionConfiguration: contentInsertionConfiguration,
               contextMenuBuilder: contextMenuBuilder,

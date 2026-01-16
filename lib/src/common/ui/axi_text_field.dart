@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// ignore_for_file: implementation_imports
+
 library;
 
 import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
@@ -9,6 +11,7 @@ import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
 import 'package:flutter/cupertino.dart' hide SpellCheckConfiguration;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart' show MaterialLocalizations;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -19,10 +22,6 @@ import 'package:flutter/src/material/debug.dart';
 import 'package:flutter/src/material/desktop_text_selection.dart';
 import 'package:flutter/src/material/input_decorator.dart';
 import 'package:flutter/src/material/magnifier.dart';
-import 'package:flutter/src/material/material_localizations.dart';
-import 'package:flutter/src/material/material_state.dart';
-import 'package:flutter/src/material/selectable_text.dart'
-    show iOSHorizontalOffset;
 import 'package:flutter/src/material/spell_check_suggestions_toolbar.dart';
 import 'package:flutter/src/material/text_selection.dart';
 import 'package:flutter/src/material/theme.dart';
@@ -55,6 +54,7 @@ const double _transparentCursorAlpha = 0.0;
 const double _selectionColorOpacity = 0.4;
 const double _disabledSelectionOpacity = 0.38;
 const int _spellCheckMaxSuggestions = 3;
+const int _iosHorizontalOffset = -2;
 const String _spellCheckBringIntoViewLabel =
     'AxiSpellCheckSuggestionsToolbar.bringIntoView';
 
@@ -1300,7 +1300,7 @@ class _AxiTextFieldState extends State<AxiTextField>
             );
         cursorRadius ??= const Radius.circular(2.0);
         cursorOffset = Offset(
-          iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context),
+          _iosHorizontalOffset / MediaQuery.devicePixelRatioOf(context),
           0,
         );
         autocorrectionTextRectColor = selectionColor;
@@ -1317,10 +1317,12 @@ class _AxiTextFieldState extends State<AxiTextField>
                 selectionStyle.cursorColor ??
                 cupertinoTheme.primaryColor;
         selectionColor = selectionStyle.selectionColor ??
-            cupertinoTheme.primaryColor.withOpacity(0.40);
+            cupertinoTheme.primaryColor.withValues(
+              alpha: _selectionColorOpacity,
+            );
         cursorRadius ??= const Radius.circular(2.0);
         cursorOffset = Offset(
-          iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context),
+          _iosHorizontalOffset / MediaQuery.devicePixelRatioOf(context),
           0,
         );
         handleDidGainAccessibilityFocus = () {
@@ -1361,7 +1363,9 @@ class _AxiTextFieldState extends State<AxiTextField>
                 selectionStyle.cursorColor ??
                 theme.colorScheme.primary;
         selectionColor = selectionStyle.selectionColor ??
-            theme.colorScheme.primary.withOpacity(0.40);
+            theme.colorScheme.primary.withValues(
+              alpha: _selectionColorOpacity,
+            );
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
           if (!_effectiveFocusNode.hasFocus &&
@@ -1384,7 +1388,9 @@ class _AxiTextFieldState extends State<AxiTextField>
                 selectionStyle.cursorColor ??
                 theme.colorScheme.primary;
         selectionColor = selectionStyle.selectionColor ??
-            theme.colorScheme.primary.withOpacity(0.40);
+            theme.colorScheme.primary.withValues(
+              alpha: _selectionColorOpacity,
+            );
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
           if (!_effectiveFocusNode.hasFocus &&
@@ -1610,11 +1616,10 @@ TextStyle? _m3StateInputStyle(BuildContext context) =>
     WidgetStateTextStyle.resolveWith((Set<WidgetState> states) {
       if (states.contains(WidgetState.disabled)) {
         return TextStyle(
-            color: Theme.of(context)
-                .textTheme
-                .bodyLarge!
-                .color
-                ?.withOpacity(0.38));
+          color: Theme.of(context).textTheme.bodyLarge!.color?.withValues(
+                alpha: _disabledSelectionOpacity,
+              ),
+        );
       }
       return TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color);
     });

@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -23,12 +24,14 @@ void main() {
   });
 
   late MockCredentialStore credentialStore;
+  late EndpointConfigCubit endpointConfigCubit;
   late MockXmppService xmppService;
   late MockHttpClient httpClient;
   late MockEmailProvisioningClient provisioningClient;
 
   setUp(() {
     credentialStore = MockCredentialStore();
+    endpointConfigCubit = EndpointConfigCubit(credentialStore: credentialStore);
     xmppService = MockXmppService();
     httpClient = MockHttpClient();
     provisioningClient = MockEmailProvisioningClient();
@@ -50,6 +53,8 @@ void main() {
       () => credentialStore.delete(key: any(named: 'key')),
     ).thenAnswer((_) async => true);
     when(() => credentialStore.close()).thenAnswer((_) async {});
+
+    addTearDown(endpointConfigCubit.close);
   });
 
   test('checkNotPwned does not emit AuthenticationState changes', () async {
@@ -59,6 +64,7 @@ void main() {
 
     final cubit = AuthenticationCubit(
       credentialStore: credentialStore,
+      endpointConfigCubit: endpointConfigCubit,
       xmppService: xmppService,
       httpClient: httpClient,
       emailProvisioningClient: provisioningClient,
@@ -89,6 +95,7 @@ void main() {
 
     final cubit = AuthenticationCubit(
       credentialStore: credentialStore,
+      endpointConfigCubit: endpointConfigCubit,
       xmppService: xmppService,
       httpClient: httpClient,
       emailProvisioningClient: provisioningClient,

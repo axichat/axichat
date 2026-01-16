@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// ignore_for_file: implementation_imports, deprecated_member_use, deprecated_member_use_from_same_package
+
 library;
 
 import 'dart:async';
@@ -742,12 +744,6 @@ class EditableText extends StatefulWidget {
   ///  * [textWidthBasis], which controls the calculation of text width.
   final bool forceLine;
 
-  /// Configuration of toolbar options.
-  ///
-  /// By default, all options are enabled. If [readOnly] is true, paste and cut
-  /// will be disabled regardless. If [obscureText] is true, cut and copy will
-  /// be disabled regardless. If [readOnly] and [obscureText] are both true,
-  /// select all will also be disabled.
   /// Whether to show selection handles.
   ///
   /// When a selection is active, there will be two handles at each side of
@@ -7314,7 +7310,7 @@ class _UpdateTextSelectionAction<T extends DirectionalCaretMovementIntent>
   final TextBoundary Function() getTextBoundary;
   final _ApplyTextBoundary applyTextBoundary;
 
-  static const int NEWLINE_CODE_UNIT = 10;
+  static const int newlineCodeUnit = 10;
 
   // Returns true iff the given position is at a wordwrap boundary in the
   // upstream position.
@@ -7326,7 +7322,7 @@ class _UpdateTextSelectionAction<T extends DirectionalCaretMovementIntent>
     return end == position &&
         end.offset != state.textEditingValue.text.length &&
         state.textEditingValue.text.codeUnitAt(position.offset) !=
-            NEWLINE_CODE_UNIT;
+            newlineCodeUnit;
   }
 
   // Returns true if the given position at a wordwrap boundary in the
@@ -7338,7 +7334,7 @@ class _UpdateTextSelectionAction<T extends DirectionalCaretMovementIntent>
     return start == position &&
         start.offset != 0 &&
         state.textEditingValue.text.codeUnitAt(position.offset - 1) !=
-            NEWLINE_CODE_UNIT;
+            newlineCodeUnit;
   }
 
   @override

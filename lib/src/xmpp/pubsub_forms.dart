@@ -66,38 +66,62 @@ final class AxiPubSubNodeConfig {
   final bool notifySub;
   final bool presenceBasedDelivery;
   final bool persistItems;
-  final String sendLastPublishedItem;
+  final String? sendLastPublishedItem;
+
+  bool get hasSendLastPublishedItem {
+    final normalized = sendLastPublishedItem?.trim();
+    return normalized != null && normalized.isNotEmpty;
+  }
+
+  AxiPubSubNodeConfig withoutSendLastPublishedItem() => AxiPubSubNodeConfig(
+        accessModel: accessModel,
+        publishModel: publishModel,
+        deliverNotifications: deliverNotifications,
+        deliverPayloads: deliverPayloads,
+        maxItems: maxItems,
+        notifyRetract: notifyRetract,
+        notifyDelete: notifyDelete,
+        notifyConfig: notifyConfig,
+        notifySub: notifySub,
+        presenceBasedDelivery: presenceBasedDelivery,
+        persistItems: persistItems,
+        sendLastPublishedItem: null,
+      );
 
   mox.XMLNode toForm() {
+    final fields = <mox.XMLNode>[
+      _formField(
+        _formTypeField,
+        _nodeConfigFormType,
+        type: _dataFormTypeHidden,
+      ),
+      _formField(_accessModelField, accessModel.value),
+      _formField(_publishModelField, publishModel),
+      _formField(
+        _deliverNotificationsField,
+        _boolValue(deliverNotifications),
+      ),
+      _formField(_deliverPayloadsField, _boolValue(deliverPayloads)),
+      _formField(_maxItemsField, maxItems),
+      _formField(_persistItemsField, _boolValue(persistItems)),
+      _formField(_notifyRetractField, _boolValue(notifyRetract)),
+      _formField(_notifyDeleteField, _boolValue(notifyDelete)),
+      _formField(_notifyConfigField, _boolValue(notifyConfig)),
+      _formField(_notifySubField, _boolValue(notifySub)),
+      _formField(
+        _presenceBasedDeliveryField,
+        _boolValue(presenceBasedDelivery),
+      ),
+    ];
+    final sendLastValue = sendLastPublishedItem?.trim();
+    if (sendLastValue != null && sendLastValue.isNotEmpty) {
+      fields.add(_formField(_sendLastPublishedItemField, sendLastValue));
+    }
     return mox.XMLNode.xmlns(
       tag: _dataFormTag,
       xmlns: _dataFormXmlns,
       attributes: const {_typeAttr: _dataFormTypeSubmit},
-      children: [
-        _formField(
-          _formTypeField,
-          _nodeConfigFormType,
-          type: _dataFormTypeHidden,
-        ),
-        _formField(_accessModelField, accessModel.value),
-        _formField(_publishModelField, publishModel),
-        _formField(
-          _deliverNotificationsField,
-          _boolValue(deliverNotifications),
-        ),
-        _formField(_deliverPayloadsField, _boolValue(deliverPayloads)),
-        _formField(_maxItemsField, maxItems),
-        _formField(_persistItemsField, _boolValue(persistItems)),
-        _formField(_notifyRetractField, _boolValue(notifyRetract)),
-        _formField(_notifyDeleteField, _boolValue(notifyDelete)),
-        _formField(_notifyConfigField, _boolValue(notifyConfig)),
-        _formField(_notifySubField, _boolValue(notifySub)),
-        _formField(
-          _presenceBasedDeliveryField,
-          _boolValue(presenceBasedDelivery),
-        ),
-        _formField(_sendLastPublishedItemField, sendLastPublishedItem),
-      ],
+      children: fields,
     );
   }
 
