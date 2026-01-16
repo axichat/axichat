@@ -4,8 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
-const double _operationProgressCornerRadius = 999.0;
-
 class OperationProgressController {
   OperationProgressController({required TickerProvider vsync})
       : _controller = AnimationController(
@@ -110,7 +108,8 @@ class OperationProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final borderRadius = BorderRadius.circular(_operationProgressCornerRadius);
+    const progressCornerRadius = 999.0;
+    final borderRadius = BorderRadius.circular(progressCornerRadius);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: !visible
