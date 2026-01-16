@@ -28,6 +28,8 @@ const String _calendarSyncUnauthorizedLog =
     'Rejected calendar sync message; sender role insufficient.';
 const String _calendarSyncMamBypassLog =
     'Allowing calendar sync message without sender role (MAM history).';
+const String _calendarSyncAckFailedLog =
+    'Failed to acknowledge calendar sync message.';
 const String _calendarSyncReadOnlyRejectedLog =
     'Rejected calendar sync message targeting read-only task.';
 const String _attachmentUploadStartLog =
@@ -42,6 +44,8 @@ const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
 const String _mamGlobalNoProgressLog =
     'Global MAM sync stalled; stopping to avoid churn.';
+const String _conversationIndexUpdateFailedLog =
+    'Failed to update conversation index.';
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
 const bool _mucSendAllowRejoin = true;
@@ -1877,11 +1881,15 @@ mixin MessageService
           );
         }
         if (isDirectChat) {
-          await _upsertConversationIndexForPeer(
-            peerJid: message.chatJid,
-            lastTimestamp: message.timestamp ?? DateTime.timestamp(),
-            lastId: message.originID ?? message.stanzaID,
-          );
+          try {
+            await _upsertConversationIndexForPeer(
+              peerJid: message.chatJid,
+              lastTimestamp: message.timestamp ?? DateTime.timestamp(),
+              lastId: message.originID ?? message.stanzaID,
+            );
+          } catch (error, stackTrace) {
+            _log.fine(_conversationIndexUpdateFailedLog, error, stackTrace);
+          }
         }
 
         _messageStream.add(message);
@@ -2693,14 +2701,15 @@ mixin MessageService
         );
       }
       if (chatType == ChatType.chat && !_isMucChatJid(jid)) {
-        fireAndForget(
-          () => _upsertConversationIndexForPeer(
+        try {
+          await _upsertConversationIndexForPeer(
             peerJid: jid,
             lastTimestamp: message.timestamp ?? DateTime.timestamp(),
             lastId: message.originID ?? message.stanzaID,
-          ),
-          operationName: 'MessageService.upsertConversationIndexOutbound',
-        );
+          );
+        } catch (error, stackTrace) {
+          _log.fine(_conversationIndexUpdateFailedLog, error, stackTrace);
+        }
       }
     } catch (error, stackTrace) {
       _log.warning(
@@ -4002,20 +4011,20 @@ mixin MessageService
 
   Future<void> _resolveMamSupportForAccount() async {
     if (_mamSupportOverride != null) {
-      _updateMamSupport(_mamSupportOverride!);
+      await _updateMamSupport(_mamSupportOverride!);
       return;
     }
     final accountJid = myJid;
     if (accountJid == null) {
-      _updateMamSupport(false);
+      await _updateMamSupport(false);
       return;
     }
     try {
       final supported = await _supportsMam(accountJid);
-      _updateMamSupport(supported);
+      await _updateMamSupport(supported);
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to resolve MAM support.', error, stackTrace);
-      _updateMamSupport(false);
+      await _updateMamSupport(false);
     }
   }
 
@@ -4029,7 +4038,7 @@ mixin MessageService
           'Archive queries may be limited: server did not advertise MAM v2.',
         );
       }
-      _updateMamSupport(supportsMam);
+      await _updateMamSupport(supportsMam);
     }
 
     List<Chat> chats;
@@ -4066,7 +4075,7 @@ mixin MessageService
         'Archive backfill may be incomplete: one or more group chats did not advertise MAM v2.',
       );
     }
-    _updateMamSupport(_mamSupported);
+    await _updateMamSupport(_mamSupported);
   }
 
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
@@ -4501,7 +4510,7 @@ mixin MessageService
       _markRoomNeedsJoin(resolvedRoomJid);
       if (!isChatStateOnlyError &&
           _shouldClearMucPresenceForError(errorCondition)) {
-        _markRoomLeft(
+        await _markRoomLeft(
           resolvedRoomJid,
           statusCodes: _emptyStatusCodes,
           preserveOccupants: _preserveOccupantsOnMucError,
@@ -5177,10 +5186,11 @@ mixin MessageService
           isFromMam: event.isFromMAM,
         );
         final applied = await callback(inbound);
-        fireAndForget(
-          () => _acknowledgeMessage(event),
-          operationName: 'MessageService.acknowledgeCalendarSync',
-        );
+        try {
+          await _acknowledgeMessage(event);
+        } catch (error, stackTrace) {
+          _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
+        }
         return applied;
       } catch (e) {
         _log.warning('Calendar sync callback failed: $e');
@@ -5254,10 +5264,11 @@ mixin MessageService
           inbound: inbound,
         );
         await (owner as XmppService)._chatCalendarSyncCallback!(envelope);
-        fireAndForget(
-          () => _acknowledgeMessage(event),
-          operationName: 'MessageService.acknowledgeChatCalendarSync',
-        );
+        try {
+          await _acknowledgeMessage(event);
+        } catch (error, stackTrace) {
+          _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
+        }
       } catch (e) {
         _log.warning('Chat calendar sync callback failed: $e');
       }

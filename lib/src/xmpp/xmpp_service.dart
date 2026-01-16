@@ -1203,7 +1203,7 @@ class XmppService extends XmppBase
     await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
     if (_demoOfflineMode) {
-      updateMessageStorageMode(MessageStorageMode.local);
+      await updateMessageStorageMode(MessageStorageMode.local);
     }
     _setConnectionState(ConnectionState.notConnected);
     await _seedDemoChatsIfNeeded();
