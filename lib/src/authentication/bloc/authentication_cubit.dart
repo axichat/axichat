@@ -2325,10 +2325,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       const fallback = 'Unable to change password. Please try again later.';
-      final responseBody = response.body.trim();
+      final detail = _registerErrorDetail(response);
       _emit(
         AuthenticationPasswordChangeFailure(
-          responseBody.isEmpty ? fallback : responseBody,
+          detail ?? fallback,
         ),
       );
       _log.warning('Password change failed (${response.statusCode}).');
@@ -2475,10 +2475,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         return;
       }
-      final responseBody = response.body.trim();
+      final detail = _registerErrorDetail(response);
       _emit(
         AuthenticationUnregisterFailure(
-          responseBody.isEmpty ? fallback : responseBody,
+          detail ?? fallback,
         ),
       );
       _log.warning('Account deletion failed (${response.statusCode}).');
@@ -2753,8 +2753,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return true;
     }
     _log.warning(
-      'Signup rollback delete failed (${response.statusCode}) '
-      '${response.body.trim()}',
+      'Signup rollback delete failed (${response.statusCode}).',
     );
     return false;
   }

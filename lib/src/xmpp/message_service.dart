@@ -2356,6 +2356,7 @@ mixin MessageService
     } on Exception {
       // Join failures are surfaced by the follow-up presence check.
     }
+    await _awaitMucJoinCompleterIfActive(normalizedRoom);
 
     await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'post-join');
     if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
@@ -2364,6 +2365,19 @@ mixin MessageService
     }
 
     throw XmppMessageException();
+  }
+
+  Future<void> _awaitMucJoinCompleterIfActive(String roomJid) async {
+    final String normalizedRoom = _roomKey(roomJid);
+    final joinCompleter = _mucJoinCompleters[normalizedRoom];
+    if (joinCompleter == null || joinCompleter.isCompleted) return;
+    try {
+      await joinCompleter.future.timeout(MucService._mucJoinTimeout);
+    } on TimeoutException {
+      // Join timeouts are handled by the join attempt that owns the completer.
+    } on Exception {
+      // Join failures are surfaced by the follow-up presence check.
+    }
   }
 
   Future<void> _logMucSendDiagnostics({
@@ -2403,8 +2417,16 @@ mixin MessageService
         roomState?.occupants[myOccupantId]?.isPresent == true;
     final occupantCount = roomState?.occupants.length ?? 0;
     final statusCount = roomState?.selfPresenceStatusCodes.length ?? 0;
+    final socketWrapper = _connection.socketWrapper;
+    final socketType = socketWrapper == null ? 'none' : socketWrapper.runtimeType;
+    final resource = boundResource?.trim();
+    final resourcePresent = resource?.isNotEmpty == true;
+    final connectionId = identityHashCode(_connection);
     _log.fine(
       'MUC send diagnostics ($phase): '
+      'conn=$connectionId '
+      'socket=$socketType '
+      'resource=$resourcePresent '
       'needsJoin=$needsJoin '
       'managerState=${managerState != null} '
       'managerJoined=$managerJoined '

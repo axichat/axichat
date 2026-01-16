@@ -19,6 +19,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   final Logger _chatLog = Logger('ChatsService');
+  static const bool _sendChatStatesToMucRooms = false;
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
   static const int _conversationIndexSnapshotStart = 0;
@@ -438,6 +439,15 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     }
     final isMuc = _isMucChatJid(jid);
     if (isMuc) {
+      if (!_sendChatStatesToMucRooms) {
+        try {
+          if (mox.JID.fromString(jid).resource.isEmpty) {
+            return;
+          }
+        } on Exception {
+          return;
+        }
+      }
       if (connectionState != ConnectionState.connected) return;
       final roomJid = _safeBareJid(jid);
       if (roomJid == null) return;
