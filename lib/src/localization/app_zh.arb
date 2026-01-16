@@ -1206,6 +1206,15 @@
       }
     }
   },
+  "calendarCriticalPathAlreadyContainsTasks": "{count, plural, one {任务已在此关键路径中。} other {任务已在此关键路径中。}}",
+  "@calendarCriticalPathAlreadyContainsTasks": {
+    "description": "Error message shown when a task is already a member of the selected critical path.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendarCriticalPathCreateFailed": "无法创建关键路径。",
   "calendarTaskSearchTitle": "搜索任务",
   "calendarTaskSearchAddToTitle": "添加到{name}",

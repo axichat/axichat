@@ -1206,6 +1206,15 @@
       }
     }
   },
+  "calendarCriticalPathAlreadyContainsTasks": "{count, plural, one {La tâche est déjà dans ce chemin critique.} other {Les tâches sont déjà dans ce chemin critique.}}",
+  "@calendarCriticalPathAlreadyContainsTasks": {
+    "description": "Error message shown when a task is already a member of the selected critical path.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendarCriticalPathCreateFailed": "Impossible de créer un chemin critique.",
   "calendarTaskSearchTitle": "Rechercher des tâches",
   "calendarTaskSearchAddToTitle": "Ajouter à {name}",

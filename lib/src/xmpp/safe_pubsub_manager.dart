@@ -117,7 +117,8 @@ class SafePubSubManager extends mox.PubSubManager {
   }) async {
     logger.fine('PubSub publish start. node=${_safeNodeLabel(node)}.');
     final operationKind = _operationKindForNode(node);
-    final attrs = getAttributes()..sendEvent(_operationStartEvent(operationKind));
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
     var success = false;
     try {
       final result = await super.publish(
@@ -186,66 +187,74 @@ class SafePubSubManager extends mox.PubSubManager {
     String node,
   ) async {
     logger.fine('PubSub subscribe start. node=${_safeNodeLabel(node)}.');
-    final attrs = getAttributes();
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
     final subscriberJid = attrs.getFullJID().toBare().toString();
-    final result = await attrs.sendStanza(
-      mox.StanzaDetails(
-        mox.Stanza.iq(
-          type: _iqSet,
-          to: jid.toString(),
-          children: [
-            (mox.XmlBuilder.withNamespace('pubsub', mox.pubsubXmlns)
-                  ..child(
-                    (mox.XmlBuilder('subscribe')
-                          ..attr('jid', subscriberJid)
-                          ..attr('node', node))
-                        .build(),
-                  ))
-                .build(),
-          ],
+    var success = false;
+    try {
+      final result = await attrs.sendStanza(
+        mox.StanzaDetails(
+          mox.Stanza.iq(
+            type: _iqSet,
+            to: jid.toString(),
+            children: [
+              (mox.XmlBuilder.withNamespace('pubsub', mox.pubsubXmlns)
+                    ..child(
+                      (mox.XmlBuilder('subscribe')
+                            ..attr('jid', subscriberJid)
+                            ..attr('node', node))
+                          .build(),
+                    ))
+                  .build(),
+            ],
+          ),
+          shouldEncrypt: false,
         ),
-        shouldEncrypt: false,
-      ),
-    );
+      );
 
-    if (result == null) {
-      logger.fine('PubSub subscribe failed: null response.');
-      return moxlib.Result(mox.UnknownPubSubError());
-    }
+      if (result == null) {
+        logger.fine('PubSub subscribe failed: null response.');
+        return moxlib.Result(mox.UnknownPubSubError());
+      }
 
-    if (result.attributes['type'] != _iqResult) {
-      logger.fine('PubSub subscribe failed: error response.');
-      return moxlib.Result(mox.getPubSubError(result));
-    }
+      if (result.attributes['type'] != _iqResult) {
+        logger.fine('PubSub subscribe failed: error response.');
+        return moxlib.Result(mox.getPubSubError(result));
+      }
 
-    final pubsub = result.firstTag('pubsub', xmlns: mox.pubsubXmlns);
-    if (pubsub == null) {
-      logger.fine('PubSub subscribe failed: missing pubsub element.');
-      return moxlib.Result(mox.UnknownPubSubError());
-    }
-    final subscription = pubsub.firstTag('subscription');
-    if (subscription == null) {
-      logger.fine('PubSub subscribe failed: missing subscription element.');
-      return moxlib.Result(mox.UnknownPubSubError());
-    }
-    final state = mox.SubscriptionState.fromString(
-          subscription.attributes['subscription'] as String?,
-        ) ??
-        mox.SubscriptionState.none;
-    final subId = subscription.attributes['subid'] as String?;
-    final configurationRequired =
-        subscription.attributes['subscription'] == 'unconfigured';
+      final pubsub = result.firstTag('pubsub', xmlns: mox.pubsubXmlns);
+      if (pubsub == null) {
+        logger.fine('PubSub subscribe failed: missing pubsub element.');
+        return moxlib.Result(mox.UnknownPubSubError());
+      }
+      final subscription = pubsub.firstTag('subscription');
+      if (subscription == null) {
+        logger.fine('PubSub subscribe failed: missing subscription element.');
+        return moxlib.Result(mox.UnknownPubSubError());
+      }
+      final state = mox.SubscriptionState.fromString(
+            subscription.attributes['subscription'] as String?,
+          ) ??
+          mox.SubscriptionState.none;
+      final subId = subscription.attributes['subid'] as String?;
+      final configurationRequired =
+          subscription.attributes['subscription'] == 'unconfigured';
 
-    final subscriptionInfo = mox.SubscriptionInfo(
-      jid: subscriberJid,
-      node: node,
-      state: state,
-      subId: subId,
-      configurationRequired: configurationRequired,
-    );
-    _recordSubscription(subscriptionInfo);
-    logger.fine('PubSub subscribe succeeded. node=${_safeNodeLabel(node)}.');
-    return moxlib.Result(subscriptionInfo);
+      final subscriptionInfo = mox.SubscriptionInfo(
+        jid: subscriberJid,
+        node: node,
+        state: state,
+        subId: subId,
+        configurationRequired: configurationRequired,
+      );
+      _recordSubscription(subscriptionInfo);
+      logger.fine('PubSub subscribe succeeded. node=${_safeNodeLabel(node)}.');
+      success = true;
+      return moxlib.Result(subscriptionInfo);
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
+    }
   }
 
   @override
@@ -255,28 +264,37 @@ class SafePubSubManager extends mox.PubSubManager {
     String? subId,
   }) async {
     logger.fine('PubSub unsubscribe start. node=${_safeNodeLabel(node)}.');
-    final attrs = getAttributes();
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
     final subscriberJid = attrs.getFullJID().toBare().toString();
-    final result = await super.unsubscribe(jid, node, subId: subId);
-    if (result.isType<mox.PubSubError>() &&
-        result.get<mox.PubSubError>() is mox.MalformedResponseError) {
-      logger.fine(
-        'PubSub unsubscribe accepted malformed response. '
-        'node=${_safeNodeLabel(node)}.',
-      );
-      return const moxlib.Result(true);
-    }
-    if (!result.isType<mox.PubSubError>()) {
+    var success = false;
+    try {
+      final result = await super.unsubscribe(jid, node, subId: subId);
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        if (error is mox.MalformedResponseError) {
+          logger.fine(
+            'PubSub unsubscribe accepted malformed response. '
+            'node=${_safeNodeLabel(node)}.',
+          );
+          success = true;
+          return const moxlib.Result(true);
+        }
+        logger.fine(
+          'PubSub unsubscribe failed. node=${_safeNodeLabel(node)} '
+          'error=${error.runtimeType}.',
+        );
+        return result;
+      }
       _removeSubscription(jid: subscriberJid, node: node, subId: subId);
       logger
           .fine('PubSub unsubscribe succeeded. node=${_safeNodeLabel(node)}.');
-    } else {
-      logger.fine(
-        'PubSub unsubscribe failed. node=${_safeNodeLabel(node)} '
-        'error=${result.get<mox.PubSubError>().runtimeType}.',
-      );
+      success = true;
+      return result;
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-    return result;
   }
 
   Future<moxlib.Result<mox.PubSubError, bool>> configureNode(
@@ -293,43 +311,51 @@ class SafePubSubManager extends mox.PubSubManager {
     String node,
     mox.XMLNode form,
   ) async {
-    final attrs = getAttributes();
-    final result = await attrs.sendStanza(
-      mox.StanzaDetails(
-        mox.Stanza.iq(
-          type: _iqSet,
-          to: jid.toString(),
-          children: [
-            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
-                  ..child(
-                    (mox.XmlBuilder(_configureTag)
-                          ..attr(_nodeAttr, node)
-                          ..child(form))
-                        .build(),
-                  ))
-                .build(),
-          ],
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
+    try {
+      final result = await attrs.sendStanza(
+        mox.StanzaDetails(
+          mox.Stanza.iq(
+            type: _iqSet,
+            to: jid.toString(),
+            children: [
+              (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
+                    ..child(
+                      (mox.XmlBuilder(_configureTag)
+                            ..attr(_nodeAttr, node)
+                            ..child(form))
+                          .build(),
+                    ))
+                  .build(),
+            ],
+          ),
+          shouldEncrypt: false,
         ),
-        shouldEncrypt: false,
-      ),
-    );
-
-    if (result == null) {
-      logger.fine('PubSub configure failed: null response.');
-      return moxlib.Result(mox.UnknownPubSubError());
-    }
-
-    if (result.attributes['type'] != _iqResult) {
-      final error = mox.getPubSubError(result);
-      logger.fine(
-        'PubSub configure failed. node=${_safeNodeLabel(node)} '
-        'error=${error.runtimeType} missingNode=${error.indicatesMissingNode}.',
       );
-      return moxlib.Result(error);
-    }
 
-    logger.fine('PubSub configure succeeded. node=${_safeNodeLabel(node)}.');
-    return const moxlib.Result(true);
+      if (result == null) {
+        logger.fine('PubSub configure failed: null response.');
+        return moxlib.Result(mox.UnknownPubSubError());
+      }
+
+      if (result.attributes['type'] != _iqResult) {
+        final error = mox.getPubSubError(result);
+        logger.fine(
+          'PubSub configure failed. node=${_safeNodeLabel(node)} '
+          'error=${error.runtimeType} missingNode=${error.indicatesMissingNode}.',
+        );
+        return moxlib.Result(error);
+      }
+
+      logger.fine('PubSub configure succeeded. node=${_safeNodeLabel(node)}.');
+      success = true;
+      return const moxlib.Result(true);
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
+    }
   }
 
   @override
@@ -362,43 +388,51 @@ class SafePubSubManager extends mox.PubSubManager {
     if (affiliationNodes.isEmpty) {
       return const moxlib.Result(true);
     }
-    final attrs = getAttributes();
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
     final affiliationsBuilder = mox.XmlBuilder(_affiliationsTag)
       ..attr(_nodeAttr, node);
     for (final node in affiliationNodes) {
       affiliationsBuilder.child(node);
     }
-    final result = await attrs.sendStanza(
-      mox.StanzaDetails(
-        mox.Stanza.iq(
-          type: _iqSet,
-          to: jid.toString(),
-          children: [
-            (mox.XmlBuilder.withNamespace(
-              _pubsubTag,
-              _pubsubOwnerXmlns,
-            )..child(affiliationsBuilder.build()))
-                .build(),
-          ],
+    try {
+      final result = await attrs.sendStanza(
+        mox.StanzaDetails(
+          mox.Stanza.iq(
+            type: _iqSet,
+            to: jid.toString(),
+            children: [
+              (mox.XmlBuilder.withNamespace(
+                _pubsubTag,
+                _pubsubOwnerXmlns,
+              )..child(affiliationsBuilder.build()))
+                  .build(),
+            ],
+          ),
+          shouldEncrypt: false,
         ),
-        shouldEncrypt: false,
-      ),
-    );
+      );
 
-    if (result == null) {
-      logger.fine('PubSub setAffiliations failed: null response.');
-      return moxlib.Result(mox.UnknownPubSubError());
+      if (result == null) {
+        logger.fine('PubSub setAffiliations failed: null response.');
+        return moxlib.Result(mox.UnknownPubSubError());
+      }
+
+      if (result.attributes['type'] != _iqResult) {
+        logger.fine('PubSub setAffiliations failed: error response.');
+        return moxlib.Result(mox.getPubSubError(result));
+      }
+
+      logger.fine(
+        'PubSub setAffiliations succeeded. node=${_safeNodeLabel(node)}.',
+      );
+      success = true;
+      return const moxlib.Result(true);
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-
-    if (result.attributes['type'] != _iqResult) {
-      logger.fine('PubSub setAffiliations failed: error response.');
-      return moxlib.Result(mox.getPubSubError(result));
-    }
-
-    logger.fine(
-      'PubSub setAffiliations succeeded. node=${_safeNodeLabel(node)}.',
-    );
-    return const moxlib.Result(true);
   }
 
   @override
@@ -408,20 +442,29 @@ class SafePubSubManager extends mox.PubSubManager {
     int? maxItems,
   }) async {
     logger.fine('PubSub getItems start. node=${_safeNodeLabel(node)}.');
-    final result = await super.getItems(jid, node, maxItems: maxItems);
-    if (result.isType<mox.PubSubError>()) {
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
+    try {
+      final result = await super.getItems(jid, node, maxItems: maxItems);
+      success = !result.isType<mox.PubSubError>();
+      if (!success) {
+        logger.fine(
+          'PubSub getItems failed. node=${_safeNodeLabel(node)} '
+          'error=${result.get<mox.PubSubError>().runtimeType}.',
+        );
+        return result;
+      }
+      final items = result.get<List<mox.PubSubItem>>();
       logger.fine(
-        'PubSub getItems failed. node=${_safeNodeLabel(node)} '
-        'error=${result.get<mox.PubSubError>().runtimeType}.',
+        'PubSub getItems succeeded. node=${_safeNodeLabel(node)} '
+        'count=${items.length}.',
       );
       return result;
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-    final items = result.get<List<mox.PubSubItem>>();
-    logger.fine(
-      'PubSub getItems succeeded. node=${_safeNodeLabel(node)} '
-      'count=${items.length}.',
-    );
-    return result;
   }
 
   @override
@@ -431,16 +474,25 @@ class SafePubSubManager extends mox.PubSubManager {
     String id,
   ) async {
     logger.fine('PubSub getItem start. node=${_safeNodeLabel(node)}.');
-    final result = await super.getItem(jid, node, id);
-    if (result.isType<mox.PubSubError>()) {
-      logger.fine(
-        'PubSub getItem failed. node=${_safeNodeLabel(node)} '
-        'error=${result.get<mox.PubSubError>().runtimeType}.',
-      );
-    } else {
-      logger.fine('PubSub getItem succeeded. node=${_safeNodeLabel(node)}.');
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
+    try {
+      final result = await super.getItem(jid, node, id);
+      success = !result.isType<mox.PubSubError>();
+      if (!success) {
+        logger.fine(
+          'PubSub getItem failed. node=${_safeNodeLabel(node)} '
+          'error=${result.get<mox.PubSubError>().runtimeType}.',
+        );
+      } else {
+        logger.fine('PubSub getItem succeeded. node=${_safeNodeLabel(node)}.');
+      }
+      return result;
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-    return result;
   }
 
   @override
@@ -448,15 +500,26 @@ class SafePubSubManager extends mox.PubSubManager {
     logger.fine(
       'PubSub createNode start. node=${_safeNodeLabel(nodeId)}.',
     );
-    final result = await super.createNode(jid, nodeId: nodeId);
-    if (result == null) {
-      logger.fine('PubSub createNode failed. node=${_safeNodeLabel(nodeId)}.');
-    } else {
-      logger.fine(
-        'PubSub createNode succeeded. node=${_safeNodeLabel(nodeId)}.',
-      );
+    final operationKind = _operationKindForNode(nodeId);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
+    try {
+      final result = await super.createNode(jid, nodeId: nodeId);
+      success = result != null;
+      if (result == null) {
+        logger.fine(
+          'PubSub createNode failed. node=${_safeNodeLabel(nodeId)}.',
+        );
+      } else {
+        logger.fine(
+          'PubSub createNode succeeded. node=${_safeNodeLabel(nodeId)}.',
+        );
+      }
+      return result;
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-    return result;
   }
 
   @override
@@ -468,22 +531,32 @@ class SafePubSubManager extends mox.PubSubManager {
     logger.fine(
       'PubSub createNodeWithConfig start. node=${_safeNodeLabel(nodeId)}.',
     );
-    final result = await super.createNodeWithConfig(
-      jid,
-      config,
-      nodeId: nodeId,
-    );
-    if (result == null) {
-      logger.fine(
-        'PubSub createNodeWithConfig failed. node=${_safeNodeLabel(nodeId)}.',
+    final operationKind = _operationKindForNode(nodeId);
+    final attrs = getAttributes()
+      ..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
+    try {
+      final result = await super.createNodeWithConfig(
+        jid,
+        config,
+        nodeId: nodeId,
       );
-    } else {
-      logger.fine(
-        'PubSub createNodeWithConfig succeeded. '
-        'node=${_safeNodeLabel(nodeId)}.',
-      );
+      success = result != null;
+      if (result == null) {
+        logger.fine(
+          'PubSub createNodeWithConfig failed. '
+          'node=${_safeNodeLabel(nodeId)}.',
+        );
+      } else {
+        logger.fine(
+          'PubSub createNodeWithConfig succeeded. '
+          'node=${_safeNodeLabel(nodeId)}.',
+        );
+      }
+      return result;
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-    return result;
   }
 
   Future<mox.StanzaHandlerData> _onPubSubEvent(
