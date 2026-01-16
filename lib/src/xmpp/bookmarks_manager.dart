@@ -409,11 +409,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
       final missing =
           error is mox.ItemNotFoundError || error is mox.NoItemReturnedError;
       if (missing) {
-        _cache.clear();
-        return const PubSubFetchResult(
-          items: _emptyMucBookmarks,
+        final cached = _cache.values.toList(growable: false);
+        return PubSubFetchResult(
+          items: List<MucBookmark>.unmodifiable(cached),
           isSuccess: true,
-          isComplete: true,
+          isComplete: false,
         );
       }
       return const PubSubFetchResult(
@@ -634,7 +634,9 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
   Future<void> _refreshFromServer() async {
     final previousCache = Map<String, MucBookmark>.from(_cache);
-    final items = await fetchAll();
+    final result = await fetchAllWithStatus();
+    if (!result.isSuccess) return;
+    final items = result.items;
     final freshIds =
         items.map((item) => item.roomBare.toBare().toString()).toSet();
     _cache.clear();
@@ -646,6 +648,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       _emitUpdate(merged);
     }
 
+    if (!result.isComplete) return;
     final removedIds = previousCache.keys
         .where((id) => !freshIds.contains(id))
         .toList(growable: false);

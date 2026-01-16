@@ -68,6 +68,8 @@ class EmailProvisioningClient {
   }
 
   factory EmailProvisioningClient.fromEnvironment({
+    Uri? baseUrlOverride,
+    String? publicTokenOverride,
     http.Client? httpClient,
     Logger? logger,
   }) {
@@ -79,12 +81,18 @@ class EmailProvisioningClient {
       _publicTokenDefineKey,
       defaultValue: _publicTokenPlaceholder,
     );
-    final baseUrl = envBaseUrl.isEmpty
-        ? Uri.parse(_defaultProvisioningBaseUrl)
-        : Uri.parse(envBaseUrl);
+    final overrideBaseUrl = baseUrlOverride;
+    final baseUrl = (overrideBaseUrl != null &&
+            overrideBaseUrl.scheme.isNotEmpty &&
+            overrideBaseUrl.host.isNotEmpty)
+        ? overrideBaseUrl
+        : envBaseUrl.isEmpty
+            ? Uri.parse(_defaultProvisioningBaseUrl)
+            : Uri.parse(envBaseUrl);
+    final overrideToken = publicTokenOverride?.trim() ?? '';
     return EmailProvisioningClient(
       baseUrl: baseUrl,
-      publicToken: envPublicToken,
+      publicToken: overrideToken.isNotEmpty ? overrideToken : envPublicToken,
       httpClient: httpClient,
       logger: logger,
     );

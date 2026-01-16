@@ -147,7 +147,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             ),
         _endpointResolver = endpointResolver,
         super(initialState ?? const AuthenticationNone()) {
+    _ownsHttpClient = httpClient == null;
     _httpClient = httpClient ?? http.Client();
+    _emailProvisioningClientInjected = emailProvisioningClient != null;
     _emailProvisioningClient = emailProvisioningClient ??
         provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
@@ -285,8 +287,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
+  late final bool _ownsHttpClient;
   late final http.Client _httpClient;
-  late final provisioning.EmailProvisioningClient _emailProvisioningClient;
+  late final bool _emailProvisioningClientInjected;
+  late provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
   bool _emailProvisioningRetryInFlight = false;
@@ -328,9 +332,55 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> resetEndpointConfig() => _endpointConfigCubit.reset();
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {
+    _rebuildEmailProvisioningClient(config);
     _emailService?.updateEndpointConfig(config);
     emit(state.copyWithConfig(config));
     _updateEmailForegroundKeepalive();
+  }
+
+  Uri? _tryParseEmailProvisioningBaseUrl(String? value) {
+    final candidate = value?.trim() ?? '';
+    if (candidate.isEmpty) {
+      return null;
+    }
+    try {
+      final uri = Uri.parse(candidate);
+      if (uri.scheme.isEmpty || uri.host.isEmpty) {
+        return null;
+      }
+      return uri;
+    } on FormatException {
+      _log.warning('Ignoring invalid email provisioning base URL override.');
+      return null;
+    }
+  }
+
+  void _rebuildEmailProvisioningClient(EndpointConfig config) {
+    if (_emailProvisioningClientInjected) {
+      return;
+    }
+    final baseUrlOverride =
+        _tryParseEmailProvisioningBaseUrl(config.emailProvisioningBaseUrl);
+    final publicTokenOverride = config.emailProvisioningPublicToken;
+    provisioning.EmailProvisioningClient next;
+    try {
+      next = provisioning.EmailProvisioningClient.fromEnvironment(
+        baseUrlOverride: baseUrlOverride,
+        publicTokenOverride: publicTokenOverride,
+        httpClient: _httpClient,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to apply email provisioning overrides.',
+        error,
+        stackTrace,
+      );
+      next = provisioning.EmailProvisioningClient.fromEnvironment(
+        httpClient: _httpClient,
+      );
+    }
+    _emailProvisioningClient.close();
+    _emailProvisioningClient = next;
   }
 
   String _resolveAuthApiScheme() {
@@ -972,6 +1022,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
+    _emailProvisioningClient.close();
+    if (_ownsHttpClient) {
+      _httpClient.close();
+    }
     return super.close();
   }
 
