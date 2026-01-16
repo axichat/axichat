@@ -1206,6 +1206,15 @@
       }
     }
   },
+  "calendarCriticalPathAlreadyContainsTasks": "{count, plural, one {Aufgabe ist bereits in diesem kritischen Pfad.} other {Aufgaben sind bereits in diesem kritischen Pfad.}}",
+  "@calendarCriticalPathAlreadyContainsTasks": {
+    "description": "Error message shown when a task is already a member of the selected critical path.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendarCriticalPathCreateFailed": "Kritischer Pfad konnte nicht erstellt werden.",
   "calendarTaskSearchTitle": "Aufgaben suchen",
   "calendarTaskSearchAddToTitle": "Zu {name} hinzufügen",
