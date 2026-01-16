@@ -1199,7 +1199,7 @@ mixin AvatarService on XmppBase, MucService {
     const avatarMetadataInfoTag = 'info';
     const publishModelPublishers = 'publishers';
     const maxPublishedAvatarItems = '1';
-    const sendLastPublishedItemOnSubscribe = 'on_subscribe';
+    const sendLastPublishedItemOnSub = 'on_sub';
     const sendLastPublishedItemNever = 'never';
     const publishNotRetrievableMessage =
         'Avatar publish succeeded but is not retrievable';
@@ -1234,7 +1234,7 @@ mixin AvatarService on XmppBase, MucService {
       maxItems: maxPublishedAvatarItems,
       persistItems: persistItemsEnabled,
       publishModel: publishModelPublishers,
-      sendLastPublishedItem: sendLastPublishedItemOnSubscribe,
+      sendLastPublishedItem: sendLastPublishedItemOnSub,
     );
     final createNodeAccessModel =
         public ? mox.AccessModel.open : mox.AccessModel.presence;
@@ -1264,7 +1264,7 @@ mixin AvatarService on XmppBase, MucService {
       notifySub: notifyEnabled,
       presenceBasedDelivery: presenceBasedDelivery,
       persistItems: persistItemsEnabled,
-      sendLastPublishedItem: sendLastPublishedItemOnSubscribe,
+      sendLastPublishedItem: sendLastPublishedItemOnSub,
     );
 
     final encodedData = await compute(
@@ -1314,7 +1314,9 @@ mixin AvatarService on XmppBase, MucService {
       _avatarLog.fine(
         'Avatar node configure failed with ${configuredError.runtimeType}.',
       );
-      if (config.hasSendLastPublishedItem) {
+      final shouldAttemptSendLastFallback = config.hasSendLastPublishedItem &&
+          !configuredError.indicatesMissingNode;
+      if (shouldAttemptSendLastFallback) {
         _avatarLog.fine('Retrying avatar node configure without send_last.');
         final strippedConfig = config.withoutSendLastPublishedItem();
         final strippedResult = await pubsub

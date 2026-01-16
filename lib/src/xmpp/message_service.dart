@@ -111,7 +111,7 @@ const String _pinPublishModelPublishers = 'publishers';
 const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
 const mox.PubSubAffiliation _pinAffiliationPublisher =
     mox.PubSubAffiliation.publisher;
-const String _pinSendLastOnSubscribe = 'on_subscribe';
+const String _pinSendLastOnSub = 'on_sub';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
 const bool _pinNotifyEnabled = true;
@@ -509,7 +509,7 @@ AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
       notifySub: _pinNotifyEnabled,
       presenceBasedDelivery: _pinPresenceBasedDeliveryDisabled,
       persistItems: _pinPersistItemsEnabled,
-      sendLastPublishedItem: _pinSendLastOnSubscribe,
+      sendLastPublishedItem: _pinSendLastOnSub,
     );
 
 mox.NodeConfig _pinCreateNodeConfig(_PinNodePolicy policy) =>
@@ -521,7 +521,7 @@ mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
       maxItems: _pinSyncMaxItemsValue,
       persistItems: _pinPersistItemsEnabled,
       publishModel: _pinPublishModelForPolicy(policy),
-      sendLastPublishedItem: _pinSendLastOnSubscribe,
+      sendLastPublishedItem: _pinSendLastOnSub,
     );
 
 String _safePinNodeLabel(String? nodeId) {
@@ -6536,7 +6536,9 @@ mixin MessageService
       'PubSub pin node config failed. node=$safeNodeLabel '
       'policy=${policy.name} error=${configuredError.runtimeType}.',
     );
-    if (config.hasSendLastPublishedItem) {
+    final shouldAttemptSendLastFallback = config.hasSendLastPublishedItem &&
+        !configuredError.indicatesMissingNode;
+    if (shouldAttemptSendLastFallback) {
       _log.fine(
         'PubSub pin node config retry without send_last. node=$safeNodeLabel '
         'policy=${policy.name}.',

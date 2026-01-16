@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -22,7 +23,7 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is PubSubItemsRefreshedEvent) {
-      await _handleRefreshEvent(event);
+      fireAndForget(() => _handleRefreshEvent(event));
       return;
     }
 
@@ -30,34 +31,37 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
       return super.onXmppEvent(event);
     }
 
-    if (event.item.node != mox.userAvatarMetadataXmlns) return;
+    fireAndForget(() async {
+      if (event.item.node != mox.userAvatarMetadataXmlns) return;
 
-    final fromRaw = event.from.trim();
-    if (fromRaw.isEmpty) return;
+      final fromRaw = event.from.trim();
+      if (fromRaw.isEmpty) return;
 
-    late final mox.JID from;
-    try {
-      from = mox.JID.fromString(fromRaw);
-    } on Exception {
-      return;
-    }
-    if (_shouldSkipAvatarJid(from)) {
-      logger.fine('Avatar notification skipped; jid marked skippable.');
-      return;
-    }
+      late final mox.JID from;
+      try {
+        from = mox.JID.fromString(fromRaw);
+      } on Exception {
+        return;
+      }
+      if (_shouldSkipAvatarJid(from)) {
+        logger.fine('Avatar notification skipped; jid marked skippable.');
+        return;
+      }
 
-    if (event.item.payload case final payload?) {
-      logger.fine('Avatar notification received with inline payload.');
-      await _emitFromPayload(from: from, payload: payload);
-      return;
-    }
+      if (event.item.payload case final payload?) {
+        logger.fine('Avatar notification received with inline payload.');
+        await _emitFromPayload(from: from, payload: payload);
+        return;
+      }
 
-    final itemId = event.item.id.trim();
-    logger.fine('Avatar notification received without payload; refreshing.');
-    await _refreshMetadata(
-      from: from,
-      itemId: itemId.isNotEmpty ? itemId : null,
-    );
+      final itemId = event.item.id.trim();
+      logger.fine('Avatar notification received without payload; refreshing.');
+      await _refreshMetadata(
+        from: from,
+        itemId: itemId.isNotEmpty ? itemId : null,
+      );
+    });
+    return;
   }
 
   Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {

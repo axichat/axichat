@@ -82,6 +82,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     final duration = _pressed ? widget.pressDuration : widget.releaseDuration;
     final curve = _pressed ? widget.pressCurve : widget.releaseCurve;
     return GestureDetector(
+      excludeFromSemantics: true,
       behavior: HitTestBehavior.translucent,
       onTapDown: _handleTapDown,
       onTapUp: _handleTapUp,
