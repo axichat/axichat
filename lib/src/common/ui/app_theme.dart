@@ -24,15 +24,15 @@ class ChatNeutrals {
     this.timestampLight = const Color(0xFF9CA3AF),
     this.scrollbarLight = const Color(0xFFCBD5E1),
     this.scrollbarHoverLight = const Color(0xFF94A3B8),
-    this.backgroundDark = const Color(0xFF111827),
-    this.cardDark = const Color(0xFF1F2937),
-    this.borderDark = const Color(0xFF374151),
-    this.foregroundDark = const Color(0xFFF9FAFB),
-    this.mutedFgDark = const Color(0xFF9CA3AF),
-    this.recvEdgeDark = const Color(0xFF4B5563),
-    this.timestampDark = const Color(0xFF6B7280),
-    this.scrollbarDark = const Color(0xFF4B5563),
-    this.scrollbarHoverDark = const Color(0xFF6B7280),
+    this.backgroundDark = const Color(0xFF0B0B0B),
+    this.cardDark = const Color(0xFF141414),
+    this.borderDark = const Color(0xFF2A2A2A),
+    this.foregroundDark = const Color(0xFFF5F5F5),
+    this.mutedFgDark = const Color(0xFF9B9B9B),
+    this.recvEdgeDark = const Color(0xFF3A3A3A),
+    this.timestampDark = const Color(0xFF7B7B7B),
+    this.scrollbarDark = const Color(0xFF3A3A3A),
+    this.scrollbarHoverDark = const Color(0xFF4A4A4A),
   });
 
   final Color backgroundLight;
@@ -126,16 +126,11 @@ class AppTheme {
   static ShadThemeData build({
     required ShadColor shadColor,
     required Brightness brightness,
-    ChatNeutrals neutrals = const ChatNeutrals(),
   }) {
     final baseScheme = ShadColorScheme.fromName(
       shadColor.name,
       brightness: brightness,
     );
-
-    final patchedScheme = brightness == Brightness.light
-        ? _lightScheme(baseScheme, neutrals)
-        : _darkScheme(baseScheme, neutrals);
     final baseTextTheme = ShadTextTheme();
     TextStyle inter(TextStyle style, {FontWeight? weight}) {
       return style.copyWith(
@@ -169,7 +164,7 @@ class AppTheme {
 
     return ShadThemeData(
       brightness: brightness,
-      colorScheme: patchedScheme,
+      colorScheme: baseScheme,
       textTheme: textTheme,
       decoration: const ShadDecoration(errorPadding: inputSubtextInsets),
       radius: const BorderRadius.all(Radius.circular(12)),
@@ -181,33 +176,5 @@ class AppTheme {
     ChatNeutrals neutrals = const ChatNeutrals(),
   }) {
     return ChatThemeTokens.fromNeutrals(neutrals, brightness);
-  }
-
-  static ShadColorScheme _lightScheme(
-    ShadColorScheme base,
-    ChatNeutrals neutrals,
-  ) {
-    return base.copyWith(
-      background: neutrals.backgroundLight,
-      card: neutrals.cardLight,
-      popover: neutrals.cardLight,
-      border: neutrals.borderLight,
-      foreground: neutrals.foregroundLight,
-      mutedForeground: neutrals.mutedFgLight,
-    );
-  }
-
-  static ShadColorScheme _darkScheme(
-    ShadColorScheme base,
-    ChatNeutrals neutrals,
-  ) {
-    return base.copyWith(
-      background: neutrals.backgroundDark,
-      card: neutrals.cardDark,
-      popover: neutrals.cardDark,
-      border: neutrals.borderDark,
-      foreground: neutrals.foregroundDark,
-      mutedForeground: neutrals.mutedFgDark,
-    );
   }
 }

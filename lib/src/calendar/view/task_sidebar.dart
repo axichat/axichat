@@ -2274,8 +2274,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       showCloseButton: false,
       builder: (sheetContext) {
         return SafeArea(
-          top: true,
-          bottom: true,
+          top: false,
+          bottom: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

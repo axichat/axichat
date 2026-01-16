@@ -1925,6 +1925,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authCustomServerApiPortPlaceholder => 'Port API';
 
   @override
+  String get authCustomServerEmailProvisioningUrlPlaceholder =>
+      'URL de provisionnement e-mail (optionnel)';
+
+  @override
+  String get authCustomServerEmailPublicTokenPlaceholder =>
+      'Jeton public e-mail (optionnel)';
+
+  @override
   String get authCustomServerReset => 'Réinitialiser vers axi.im';
 
   @override

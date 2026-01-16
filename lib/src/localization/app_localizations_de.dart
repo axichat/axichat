@@ -1923,6 +1923,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authCustomServerApiPortPlaceholder => 'API-Port';
 
   @override
+  String get authCustomServerEmailProvisioningUrlPlaceholder =>
+      'E-Mail-Provisioning-URL (optional)';
+
+  @override
+  String get authCustomServerEmailPublicTokenPlaceholder =>
+      'Öffentlicher E-Mail-Token (optional)';
+
+  @override
   String get authCustomServerReset => 'Auf axi.im zurücksetzen';
 
   @override

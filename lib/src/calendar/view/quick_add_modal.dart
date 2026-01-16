@@ -170,7 +170,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   Widget build(BuildContext context) {
     if (widget.surface == QuickAddModalSurface.bottomSheet) {
       return SafeArea(
-        top: true,
+        top: false,
         bottom: false,
         child: Form(
           key: _formKey,

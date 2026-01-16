@@ -1834,6 +1834,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authCustomServerApiPortPlaceholder => 'API 端口';
 
   @override
+  String get authCustomServerEmailProvisioningUrlPlaceholder =>
+      '邮箱开通服务 URL（可选）';
+
+  @override
+  String get authCustomServerEmailPublicTokenPlaceholder => '邮箱公共令牌（可选）';
+
+  @override
   String get authCustomServerReset => '重置为 axi.im';
 
   @override
@@ -5333,6 +5340,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authCustomServerApiPortPlaceholder => 'API 連接埠';
+
+  @override
+  String get authCustomServerEmailProvisioningUrlPlaceholder =>
+      '電郵開通服務 URL（可選）';
+
+  @override
+  String get authCustomServerEmailPublicTokenPlaceholder => '電郵公開代幣（可選）';
 
   @override
   String get authCustomServerReset => '重設為 axi.im';

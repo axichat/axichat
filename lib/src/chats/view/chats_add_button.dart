@@ -37,7 +37,6 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
   static const _restrictedRoomNameCharacter = '+';
   static const _fieldPadding = EdgeInsets.all(8.0);
   static const _errorPadding = EdgeInsets.fromLTRB(8, 0, 8, 8);
-  static const _dialogMaxHeightRatio = 0.8;
 
   String _title = '';
   String? _validationError;
@@ -86,44 +85,33 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
       builder: (context, state) {
         final loading = state.creationStatus.isLoading;
         final canSubmit = _title.trim().isNotEmpty && !loading;
-        final dialogMaxHeight =
-            MediaQuery.sizeOf(context).height * _dialogMaxHeightRatio;
-        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         return AxiInputDialog(
           title: Text(l10n.chatsCreateChatRoomTitle),
-          content: Padding(
-            padding: EdgeInsets.only(bottom: keyboardInset),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: dialogMaxHeight),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: _fieldPadding,
-                      child: AxiTextFormField(
-                        placeholder: Text(l10n.chatsRoomNamePlaceholder),
-                        enabled: !loading,
-                        onChanged: _handleTitleChanged,
-                      ),
-                    ),
-                    if (_validationError != null)
-                      Padding(
-                        padding: _errorPadding,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _validationError!,
-                            style: context.textTheme.small.copyWith(
-                              color: context.colorScheme.destructive,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: _fieldPadding,
+                child: AxiTextFormField(
+                  placeholder: Text(l10n.chatsRoomNamePlaceholder),
+                  enabled: !loading,
+                  onChanged: _handleTitleChanged,
                 ),
               ),
-            ),
+              if (_validationError != null)
+                Padding(
+                  padding: _errorPadding,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _validationError!,
+                      style: context.textTheme.small.copyWith(
+                        color: context.colorScheme.destructive,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           callbackText: l10n.chatsCreateChatRoomAction,
           loading: loading,

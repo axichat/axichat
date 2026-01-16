@@ -1919,6 +1919,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authCustomServerApiPortPlaceholder => 'Puerto API';
 
   @override
+  String get authCustomServerEmailProvisioningUrlPlaceholder =>
+      'URL de aprovisionamiento de correo (opcional)';
+
+  @override
+  String get authCustomServerEmailPublicTokenPlaceholder =>
+      'Token público de correo (opcional)';
+
+  @override
   String get authCustomServerReset => 'Restablecer a axi.im';
 
   @override

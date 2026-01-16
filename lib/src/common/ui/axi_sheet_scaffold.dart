@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:math' as math;
-
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -101,6 +99,7 @@ class AxiSheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget? fixedBody = body;
     final List<Widget>? scrollChildren = _scrollChildren;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     if (fixedBody != null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -108,15 +107,16 @@ class AxiSheetScaffold extends StatelessWidget {
         children: [
           header,
           Flexible(fit: FlexFit.loose, child: fixedBody),
-          if (footer != null) footer!,
+          if (footer != null)
+            Padding(
+              padding: EdgeInsets.only(bottom: keyboardInset),
+              child: footer!,
+            ),
         ],
       );
     }
 
-    final mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double safeBottom = mediaQuery.viewPadding.bottom;
-    final double bottomInset = math.max(keyboardInset, safeBottom);
+    final double bottomInset = keyboardInset;
     final EdgeInsets padding = (bodyPadding ?? EdgeInsets.zero).copyWith(
       bottom: (bodyPadding?.bottom ?? 0) + bottomInset,
     );
