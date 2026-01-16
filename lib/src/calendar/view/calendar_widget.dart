@@ -57,10 +57,7 @@ class CalendarNavSurface extends StatelessWidget {
 }
 
 const double _calendarShareActionSpacing = 8.0;
-const String _calendarAvailabilityShareTooltip = 'Share availability';
 const bool _calendarAvailabilityShareVisible = false;
-const String _calendarAvailabilityShareMissingJidMessage =
-    'Calendar sharing is unavailable.';
 const bool _calendarActionShowTransferMenu = false;
 const bool _calendarActionMenuGhost = true;
 const bool _calendarActionUsePrimary = true;
@@ -284,12 +281,13 @@ class _CalendarWidgetState
     CalendarState state,
     CalendarAvailabilityShareCoordinator coordinator,
   ) async {
+    final l10n = context.l10n;
     final xmpp = context.read<XmppService>();
     final ownerJid = xmpp.myJid?.trim();
     if (ownerJid == null || ownerJid.isEmpty) {
       FeedbackSystem.showError(
         context,
-        _calendarAvailabilityShareMissingJidMessage,
+        l10n.calendarShareUnavailable,
       );
       return;
     }
@@ -404,7 +402,7 @@ class _CalendarActionRow extends StatelessWidget {
         if (onShareAvailability != null && _calendarAvailabilityShareVisible)
           AxiIconButton.ghost(
             iconData: LucideIcons.send,
-            tooltip: _calendarAvailabilityShareTooltip,
+            tooltip: context.l10n.calendarShareAvailability,
             onPressed: onShareAvailability,
             usePrimary: _calendarActionUsePrimary,
           ),

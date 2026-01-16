@@ -4557,6 +4557,7 @@ mixin MessageService
     roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
     if (roomJid != null &&
         _isMucChatJid(roomJid) &&
+        !isChatStateOnlyError &&
         _shouldAttemptMucRepairForRoom(
           roomJid: roomJid,
           conditionData: errorCondition,
@@ -4580,6 +4581,9 @@ mixin MessageService
       if (!isChatStateOnlyError) {
         _log.info(_outboundMessageRejectedMissingSummaryLog);
       }
+      return true;
+    }
+    if (isChatStateOnlyError) {
       return true;
     }
     final String errorName = stanzaError == null

@@ -287,7 +287,7 @@ class _InlineSyncControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusText = _statusTextFor(state);
+    final statusText = _statusTextFor(state, l10n);
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);
     final List<Widget> children = [
@@ -345,11 +345,11 @@ class _CompactSyncControls extends StatelessWidget {
   }
 }
 
-String _statusTextFor(CalendarState state) {
-  if (state.isSyncing) return 'Syncing...';
-  if (state.syncError != null) return 'Sync failed';
-  if (state.lastSyncTime != null) return 'Synced';
-  return 'Idle';
+String _statusTextFor(CalendarState state, AppLocalizations l10n) {
+  if (state.isSyncing) return l10n.calendarSyncStatusSyncing;
+  if (state.syncError != null) return l10n.calendarSyncStatusFailed;
+  if (state.lastSyncTime != null) return l10n.calendarSyncStatusSynced;
+  return l10n.calendarSyncStatusIdle;
 }
 
 Color _statusColorFor(BuildContext context, CalendarState state) {
@@ -379,19 +379,20 @@ class CalendarTransferMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final bool canExport = hasCalendarData && !busy;
     final bool canImport = !busy;
     return AxiMore(
       actions: [
         AxiMenuAction(
           icon: LucideIcons.upload,
-          label: 'Export calendar',
+          label: l10n.calendarExportCalendar,
           enabled: canExport,
           onPressed: canExport ? onExport : null,
         ),
         AxiMenuAction(
           icon: LucideIcons.download,
-          label: 'Import calendar',
+          label: l10n.calendarImportCalendar,
           enabled: canImport,
           onPressed: canImport ? onImport : null,
         ),

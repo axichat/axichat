@@ -23,7 +23,7 @@ class DeadlinePickerField extends StatefulWidget {
     super.key,
     required this.value,
     required this.onChanged,
-    this.placeholder = 'Set deadline (optional)',
+    this.placeholder = '',
     this.showStatusColors = true,
     this.showTimeSelectors = true,
     this.overlayWidth = _deadlinePickerOverlayWidth,
@@ -610,6 +610,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
+    final String placeholder = widget.placeholder.isEmpty
+        ? context.l10n.calendarDeadlinePlaceholder
+        : widget.placeholder;
     final borderColor = _borderColor(widget.value);
     final backgroundColor = _backgroundColor(widget.value);
     final iconColor = _iconColor(widget.value);
@@ -650,7 +653,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: _DeadlineFieldContent(
-                  placeholder: widget.placeholder,
+                  placeholder: placeholder,
                   valueText: displayDate,
                   statusLabel: statusLabel,
                   showStatusLabel: showStatusLabel,

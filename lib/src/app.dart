@@ -310,6 +310,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       },
       builder: (context, state) {
         final localeOverride = state.language.locale;
+        final locale = localeOverride ?? Localizations.localeOf(context);
+        context.read<NotificationService>().updateLocalizations(
+              AppLocalizations.lookupAppLocalizations(locale),
+            );
         const chatNeutrals = ChatNeutrals();
         final lightTheme = AppTheme.build(
           shadColor: state.shadColor,

@@ -247,6 +247,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     if (!isDragSwitcherEnabled) {
       return const SizedBox.shrink();
     }
+    final l10n = context.l10n;
     final bool visible = _isAnyDragActive;
     if (!visible && _activeCancelPayload != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -300,10 +301,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   key: const ValueKey('calendar.drag.cancel-bucket'),
                   button: true,
                   enabled: _activeCancelPayload != null,
-                  label: 'Cancel drag',
+                  label: l10n.calendarCancelDragLabel,
                   hint: _activeCancelPayload != null
-                      ? 'Press Enter, Space, or Escape to cancel the current drag.'
-                      : 'Move a dragged task here to cancel it.',
+                      ? l10n.calendarCancelDragHintActive
+                      : l10n.calendarCancelDragHintIdle,
                   onTap: _activeCancelPayload == null
                       ? null
                       : _triggerCancelBucketAction,

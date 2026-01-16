@@ -304,9 +304,11 @@ class CalendarNavigation extends StatelessWidget {
     required VoidCallback? onPressed,
     required bool compact,
   }) {
-    final shortcut =
-        icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
-    final String message = '$tooltip ($shortcut)';
+    final shortcut = icon == Icons.undo_rounded
+        ? context.l10n.calendarShortcutUndo
+        : context.l10n.calendarShortcutRedo;
+    final String message =
+        context.l10n.commonShortcutTooltip(tooltip, shortcut);
     final bool enabled = onPressed != null;
     return _compactNavButton(
       context: context,
@@ -1289,13 +1291,12 @@ class _CalendarDropdown extends StatelessWidget {
 class _DayHeaders extends StatelessWidget {
   const _DayHeaders();
 
-  static const _days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
   @override
   Widget build(BuildContext context) {
+    final labels = MaterialLocalizations.of(context).narrowWeekdays;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: _days
+      children: labels
           .map(
             (label) => Expanded(
               child: Center(

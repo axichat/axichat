@@ -1003,12 +1003,8 @@ class XmppService extends XmppBase
 
           if (!_foregroundServiceNotificationSent) {
             try {
-              await _notificationService.sendNotification(
-                title: 'Background connection disabled',
-                body:
-                    'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.',
-                allowForeground: true,
-              );
+              await _notificationService
+                  .sendBackgroundConnectionDisabledNotification();
             } catch (error, stackTrace) {
               _xmppLogger.warning(
                 _foregroundNotificationFailedLog,

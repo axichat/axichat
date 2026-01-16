@@ -44,11 +44,8 @@ const EdgeInsets _participantStripPadding = EdgeInsets.symmetric(
 const int _participantMaxAvatars = 7;
 const String _participantOverflowLabel = '...';
 const double _chatCalendarShareActionSpacing = 8.0;
-const String _chatCalendarAvailabilityShareTooltip = 'Send availability';
 const bool _chatCalendarAvailabilityShareVisible = false;
 const double _chatCalendarParticipantsSpacing = 12.0;
-const String _chatCalendarAvailabilityShareMissingJidMessage =
-    'Calendar sharing is unavailable.';
 const bool _chatCalendarActionShowTransferMenu = false;
 const bool _chatCalendarActionMenuGhost = true;
 const bool _chatCalendarActionUsePrimary = true;
@@ -338,6 +335,7 @@ class _ChatCalendarWidgetState
     CalendarState state,
     CalendarAvailabilityShareCoordinator coordinator,
   ) async {
+    final l10n = context.l10n;
     final xmpp = context.read<XmppService>();
     final String? ownerJid = _resolveAvailabilityOwnerJid(
       xmppService: xmpp,
@@ -346,7 +344,7 @@ class _ChatCalendarWidgetState
     if (ownerJid == null || ownerJid.isEmpty) {
       FeedbackSystem.showError(
         context,
-        _chatCalendarAvailabilityShareMissingJidMessage,
+        l10n.calendarShareUnavailable,
       );
       return;
     }
@@ -467,7 +465,7 @@ class _ChatCalendarActionRow extends StatelessWidget {
             _chatCalendarAvailabilityShareVisible)
           AxiIconButton.ghost(
             iconData: LucideIcons.send,
-            tooltip: _chatCalendarAvailabilityShareTooltip,
+            tooltip: context.l10n.calendarShareAvailability,
             onPressed: onShareAvailability,
             usePrimary: _chatCalendarActionUsePrimary,
           ),

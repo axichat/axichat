@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 
 /// Manages scheduling and cancellation of local notifications for calendar
@@ -69,10 +70,12 @@ class CalendarReminderController {
   ) async {
     await _cancelEntry(entryKey);
 
+    final AppLocalizations l10n = _notificationService.localizations;
     final DateTime now = _now();
     final List<_ScheduledReminder> reminders = subject.when(
-      task: (CalendarTask task) => _reminderScheduleForTask(task, now),
-      dayEvent: (DayEvent event) => _reminderScheduleForDayEvent(event, now),
+      task: (CalendarTask task) => _reminderScheduleForTask(task, now, l10n),
+      dayEvent: (DayEvent event) =>
+          _reminderScheduleForDayEvent(event, now, l10n),
     );
     if (reminders.isEmpty) {
       return;
@@ -115,6 +118,7 @@ class CalendarReminderController {
   List<_ScheduledReminder> _reminderScheduleForTask(
     CalendarTask task,
     DateTime now,
+    AppLocalizations l10n,
   ) {
     final ReminderPreferences prefs = task.effectiveReminders;
     if (!prefs.isEnabled) {
@@ -130,8 +134,8 @@ class CalendarReminderController {
           continue;
         }
         final String label = offset == Duration.zero
-            ? 'Deadline now'
-            : 'Due in ${_humanizeDuration(offset)}';
+            ? l10n.calendarReminderDeadlineNow
+            : l10n.calendarReminderDueIn(_humanizeDuration(l10n, offset));
         reminders.add(
           _ScheduledReminder(
             time: time,
@@ -150,8 +154,8 @@ class CalendarReminderController {
           continue;
         }
         final String label = lead == Duration.zero
-            ? 'Starting now'
-            : 'Starts in ${_humanizeDuration(lead)}';
+            ? l10n.calendarReminderStartingNow
+            : l10n.calendarReminderStartsIn(_humanizeDuration(l10n, lead));
         reminders.add(
           _ScheduledReminder(
             time: time,
@@ -169,6 +173,7 @@ class CalendarReminderController {
   List<_ScheduledReminder> _reminderScheduleForDayEvent(
     DayEvent event,
     DateTime now,
+    AppLocalizations l10n,
   ) {
     final ReminderPreferences prefs = event.effectiveReminders;
     if (!prefs.isEnabled || prefs.startOffsets.isEmpty) {
@@ -182,8 +187,8 @@ class CalendarReminderController {
         continue;
       }
       final String label = lead == Duration.zero
-          ? 'Happening today'
-          : 'In ${_humanizeDuration(lead)}';
+          ? l10n.calendarReminderHappeningToday
+          : l10n.calendarReminderIn(_humanizeDuration(l10n, lead));
       reminders.add(
         _ScheduledReminder(
           time: time,
@@ -205,17 +210,17 @@ class CalendarReminderController {
 
   String _dayEventKey(String id) => 'day:$id';
 
-  String _humanizeDuration(Duration duration) {
+  String _humanizeDuration(AppLocalizations l10n, Duration duration) {
     if (duration.inHours >= 24) {
       final days = duration.inDays;
-      return '$days day${days == 1 ? '' : 's'}';
+      return l10n.calendarReminderDurationDays(days);
     }
     if (duration.inHours >= 1) {
       final hours = duration.inHours;
-      return '$hours hour${hours == 1 ? '' : 's'}';
+      return l10n.calendarReminderDurationHours(hours);
     }
     final minutes = max(duration.inMinutes, 1);
-    return '$minutes minute${minutes == 1 ? '' : 's'}';
+    return l10n.calendarReminderDurationMinutes(minutes);
   }
 }
 

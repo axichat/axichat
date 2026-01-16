@@ -774,7 +774,10 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
               _contextMenuController.hide();
               _handleSplitSegmentAt(segment, splitTime);
             },
-            child: Text('Split at ${TimeFormatter.formatTime(splitTime)}'),
+            child: Text(
+              context.l10n
+                  .calendarSplitTaskAtTime(TimeFormatter.formatTime(splitTime)),
+            ),
           ),
         );
       }

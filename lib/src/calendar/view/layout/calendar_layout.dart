@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -96,13 +97,36 @@ class CalendarZoomLevel {
   final double hourHeight;
   final int daySubdivisions;
   final String label;
+
+  String localizedLabel(AppLocalizations l10n) => switch (label) {
+        _calendarZoomLabelCompact => l10n.calendarZoomLabelCompact,
+        _calendarZoomLabelComfort => l10n.calendarZoomLabelComfort,
+        _calendarZoomLabelExpanded => l10n.calendarZoomLabelExpanded,
+        _ => label,
+      };
 }
 
 const List<CalendarZoomLevel> kCalendarZoomLevels = <CalendarZoomLevel>[
-  CalendarZoomLevel(hourHeight: 64, daySubdivisions: 4, label: 'Compact'),
-  CalendarZoomLevel(hourHeight: 120, daySubdivisions: 4, label: 'Comfort'),
-  CalendarZoomLevel(hourHeight: 184, daySubdivisions: 4, label: 'Expanded'),
+  CalendarZoomLevel(
+    hourHeight: 64,
+    daySubdivisions: 4,
+    label: _calendarZoomLabelCompact,
+  ),
+  CalendarZoomLevel(
+    hourHeight: 120,
+    daySubdivisions: 4,
+    label: _calendarZoomLabelComfort,
+  ),
+  CalendarZoomLevel(
+    hourHeight: 184,
+    daySubdivisions: 4,
+    label: _calendarZoomLabelExpanded,
+  ),
 ];
+
+const String _calendarZoomLabelCompact = 'compact';
+const String _calendarZoomLabelComfort = 'comfort';
+const String _calendarZoomLabelExpanded = 'expanded';
 
 const Duration _overlapFallbackDuration = Duration(hours: 1);
 
