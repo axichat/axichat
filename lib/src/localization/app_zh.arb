@@ -1843,5 +1843,171 @@
   "connectivityStatusConnected": "已连接",
   "connectivityStatusConnecting": "正在连接...",
   "connectivityStatusNotConnected": "未连接。",
-  "connectivityStatusFailed": "连接失败。"
+  "connectivityStatusFailed": "连接失败。",
+  "commonShare": "分享",
+  "commonRecipients": "收件人",
+  "commonRangeLabel": "{start} - {end}",
+  "@commonRangeLabel": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "commonOwnerFallback": "所有者",
+  "commonDurationMinutes": "{count} 分钟",
+  "@commonDurationMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationHours": "{count} 小时",
+  "@commonDurationHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationMinutesShort": "{count}m",
+  "@commonDurationMinutesShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationHoursShort": "{count}h",
+  "@commonDurationHoursShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDateTimeLabel": "{date} · {time}",
+  "@commonDateTimeLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityShareTitle": "分享可用性",
+  "calendarAvailabilityShareSubtitle": "选择范围，编辑空闲/忙碌，然后分享。",
+  "calendarAvailabilityShareChatSubtitle": "选择范围，编辑空闲/忙碌，然后在此聊天中分享。",
+  "calendarAvailabilityShareRangeLabel": "范围",
+  "calendarAvailabilityShareEditHint": "点击可拆分，拖动可调整大小，或切换空闲/忙碌。",
+  "calendarAvailabilityShareSavePreset": "保存为预设",
+  "calendarAvailabilitySharePresetNameTitle": "保存空闲/忙碌表",
+  "calendarAvailabilitySharePresetNameLabel": "名称",
+  "calendarAvailabilitySharePresetNameHint": "团队时间",
+  "calendarAvailabilitySharePresetNameMissing": "输入名称以保存此表。",
+  "calendarAvailabilityShareInvalidRange": "请选择有效范围进行分享。",
+  "calendarAvailabilityShareMissingJid": "日历共享不可用。",
+  "calendarAvailabilityShareRecipientsRequired": "请至少选择一个收件人。",
+  "calendarAvailabilityShareMissingChats": "没有可用的合格聊天。",
+  "calendarAvailabilityShareLockedChatUnavailable": "此聊天无法接收可用性分享。",
+  "calendarAvailabilityShareSuccess": "可用性已分享。",
+  "calendarAvailabilityShareFailed": "分享可用性失败。",
+  "calendarAvailabilitySharePartialFailure": "部分分享未发送成功。",
+  "calendarAvailabilitySharePresetLabel": "最近的表",
+  "calendarAvailabilitySharePresetEmpty": "暂无最近的表。",
+  "calendarAvailabilityShareRecentPreset": "已分享 {range}",
+  "@calendarAvailabilityShareRecentPreset": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityPreviewEmpty": "暂无可用时间段。",
+  "calendarAvailabilityPreviewMore": "以及另外 {count} 个",
+  "@calendarAvailabilityPreviewMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleRequired": "请先输入任务标题再继续。",
+  "calendarTaskTitleTooLong": "任务标题过长。请使用少于 {max} 个字符。",
+  "@calendarTaskTitleTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleLimitWarning": "任务标题限制为 {max} 个字符。请缩短此文本或在保存前将细节移至描述中。",
+  "@calendarTaskTitleLimitWarning": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleCharacterCount": "{count} / {limit} 个字符",
+  "@calendarTaskTitleCharacterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "axiVersionWelcomeTitle": "欢迎使用 Axichat",
+  "axiVersionLabel": "v{version}",
+  "@axiVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "axiVersionTagAlpha": "alpha",
+  "calendarSyncWarningSnapshotTitle": "日历同步",
+  "calendarSyncWarningSnapshotMessage": "日历快照不可用。请从另一台设备导出日历 JSON 并在此导入以恢复。",
+  "commonLabelValue": "{label}: {value}",
+  "@commonLabelValue": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityRequestTitle": "请求时间",
+  "calendarAvailabilityRequestSubtitle": "选择一个空闲时段并分享详情。",
+  "calendarAvailabilityRequestDetailsLabel": "详情",
+  "calendarAvailabilityRequestRangeLabel": "范围",
+  "calendarAvailabilityRequestTitleLabel": "标题",
+  "calendarAvailabilityRequestTitlePlaceholder": "这是做什么用的？",
+  "calendarAvailabilityRequestDescriptionLabel": "描述",
+  "calendarAvailabilityRequestDescriptionPlaceholder": "添加上下文（可选）。",
+  "calendarAvailabilityRequestSendLabel": "发送请求",
+  "calendarAvailabilityRequestInvalidRange": "请选择有效时间范围。",
+  "calendarAvailabilityRequestNotFree": "发送前请选择空闲时段。",
+  "calendarAvailabilityDecisionTitle": "接受请求",
+  "calendarAvailabilityDecisionSubtitle": "选择哪些日历应接收它。",
+  "calendarAvailabilityDecisionPersonalLabel": "添加到个人日历",
+  "calendarAvailabilityDecisionChatLabel": "添加到聊天日历",
+  "calendarAvailabilityDecisionMissingSelection": "请至少选择一个日历。",
+  "calendarAvailabilityDecisionSummaryLabel": "已请求",
+  "calendarAvailabilityRequestTitleFallback": "请求的时间",
+  "calendarFreeBusyFree": "空闲",
+  "calendarFreeBusyBusy": "忙碌",
+  "calendarFreeBusyTentative": "暂定"
 }

@@ -4,6 +4,8 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 
+import 'package:axichat/src/localization/app_localizations.dart';
+
 import 'calendar_date_time.dart';
 import 'calendar_ics_meta.dart';
 
@@ -69,6 +71,13 @@ enum CalendarFreeBusyType {
   bool get isBusy => this == CalendarFreeBusyType.busy;
   bool get isBusyUnavailable => this == CalendarFreeBusyType.busyUnavailable;
   bool get isBusyTentative => this == CalendarFreeBusyType.busyTentative;
+
+  String label(AppLocalizations l10n) => switch (this) {
+        CalendarFreeBusyType.free => l10n.calendarFreeBusyFree,
+        CalendarFreeBusyType.busy => l10n.calendarFreeBusyBusy,
+        CalendarFreeBusyType.busyUnavailable => l10n.calendarFreeBusyBusy,
+        CalendarFreeBusyType.busyTentative => l10n.calendarFreeBusyTentative,
+      };
 
   String get icsValue => switch (this) {
         CalendarFreeBusyType.free => _calendarFreeBusyTypeFreeIcs,

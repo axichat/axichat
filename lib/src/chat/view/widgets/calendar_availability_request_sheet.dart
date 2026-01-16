@@ -28,32 +28,6 @@ const int _availabilityRequestDescriptionMaxLines = 6;
 const int _availabilityTextFieldDefaultMinLines = 1;
 const int _availabilityTextFieldDefaultMaxLines = 1;
 
-const String _availabilityRequestTitle = 'Request time';
-const String _availabilityRequestSubtitle =
-    'Choose a free slot and share details.';
-const String _availabilityRequestLabel = 'Details';
-const String _availabilityRequestRangeLabel = 'Range';
-const String _availabilityRequestTitleLabel = 'Title';
-const String _availabilityRequestTitlePlaceholder = 'What is this for?';
-const String _availabilityRequestDescriptionLabel = 'Description';
-const String _availabilityRequestDescriptionPlaceholder =
-    'Add context (optional).';
-const String _availabilityRequestSendLabel = 'Send request';
-const String _availabilityRequestInvalidRangeMessage =
-    'Pick a valid time range.';
-const String _availabilityRequestNotFreeMessage =
-    'Select a free slot before sending.';
-const String _availabilityDecisionTitle = 'Accept request';
-const String _availabilityDecisionSubtitle =
-    'Choose which calendars should receive it.';
-const String _availabilityDecisionPersonalLabel = 'Add to personal calendar';
-const String _availabilityDecisionChatLabel = 'Add to chat calendar';
-const String _availabilityDecisionConfirmLabel = 'Confirm';
-const String _availabilityDecisionMissingSelectionMessage =
-    'Select at least one calendar.';
-const String _availabilityDecisionSummaryLabel = 'Requested';
-const String _availabilityRangeSeparator = ' - ';
-const String _availabilityRequestTitleFallback = 'Requested time';
 const IconData _availabilityRequestIcon = LucideIcons.send;
 const IconData _availabilityDecisionIcon = LucideIcons.check;
 
@@ -156,15 +130,15 @@ class _CalendarAvailabilityRequestSheetState
   @override
   Widget build(BuildContext context) {
     final header = AxiSheetHeader(
-      title: const Text(_availabilityRequestTitle),
-      subtitle: const Text(_availabilityRequestSubtitle),
+      title: Text(context.l10n.calendarAvailabilityRequestTitle),
+      subtitle: Text(context.l10n.calendarAvailabilityRequestSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     final body = AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _AvailabilitySheetSectionLabel(
-          text: _availabilityRequestRangeLabel,
+        _AvailabilitySheetSectionLabel(
+          text: context.l10n.calendarAvailabilityRequestRangeLabel,
         ),
         ScheduleRangeFields(
           start: _start,
@@ -175,16 +149,19 @@ class _CalendarAvailabilityRequestSheetState
           maxDate: widget.share.overlay.rangeEnd.value,
         ),
         const SizedBox(height: _availabilityRequestSheetSpacing),
-        const _AvailabilitySheetSectionLabel(text: _availabilityRequestLabel),
+        _AvailabilitySheetSectionLabel(
+          text: context.l10n.calendarAvailabilityRequestDetailsLabel,
+        ),
         _AvailabilityTextField(
-          label: _availabilityRequestTitleLabel,
-          placeholder: _availabilityRequestTitlePlaceholder,
+          label: context.l10n.calendarAvailabilityRequestTitleLabel,
+          placeholder: context.l10n.calendarAvailabilityRequestTitlePlaceholder,
           controller: _titleController,
         ),
         const SizedBox(height: _availabilityRequestSheetGap),
         _AvailabilityTextField(
-          label: _availabilityRequestDescriptionLabel,
-          placeholder: _availabilityRequestDescriptionPlaceholder,
+          label: context.l10n.calendarAvailabilityRequestDescriptionLabel,
+          placeholder:
+              context.l10n.calendarAvailabilityRequestDescriptionPlaceholder,
           controller: _descriptionController,
           minLines: _availabilityRequestDescriptionMinLines,
           maxLines: _availabilityRequestDescriptionMaxLines,
@@ -194,7 +171,7 @@ class _CalendarAvailabilityRequestSheetState
         _AvailabilitySheetActionRow(
           isBusy: _isSending,
           onPressed: _handleSendPressed,
-          label: _availabilityRequestSendLabel,
+          label: context.l10n.calendarAvailabilityRequestSendLabel,
           iconData: _availabilityRequestIcon,
         ),
       ],
@@ -227,14 +204,17 @@ class _CalendarAvailabilityRequestSheetState
     if (start == null || end == null || !end.isAfter(start)) {
       FeedbackSystem.showError(
         context,
-        _availabilityRequestInvalidRangeMessage,
+        context.l10n.calendarAvailabilityRequestInvalidRange,
       );
       return;
     }
     final overlay = widget.share.overlay;
     final isFree = _isRangeFree(overlay, start, end);
     if (!isFree) {
-      FeedbackSystem.showError(context, _availabilityRequestNotFreeMessage);
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarAvailabilityRequestNotFree,
+      );
       return;
     }
     final title = _titleController.text.trim();
@@ -301,21 +281,21 @@ class _CalendarAvailabilityDecisionSheetState
   @override
   Widget build(BuildContext context) {
     final header = AxiSheetHeader(
-      title: const Text(_availabilityDecisionTitle),
-      subtitle: const Text(_availabilityDecisionSubtitle),
+      title: Text(context.l10n.calendarAvailabilityDecisionTitle),
+      subtitle: Text(context.l10n.calendarAvailabilityDecisionSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     final body = AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _AvailabilitySheetSectionLabel(
-          text: _availabilityDecisionSummaryLabel,
+        _AvailabilitySheetSectionLabel(
+          text: context.l10n.calendarAvailabilityDecisionSummaryLabel,
         ),
         _AvailabilityDecisionSummary(request: widget.request),
         const SizedBox(height: _availabilityRequestSheetSpacing),
         if (widget.canAddToPersonal)
           _AvailabilityDecisionToggle(
-            label: _availabilityDecisionPersonalLabel,
+            label: context.l10n.calendarAvailabilityDecisionPersonalLabel,
             value: _addToPersonal,
             onChanged: (value) => setState(() {
               _addToPersonal = value;
@@ -324,7 +304,7 @@ class _CalendarAvailabilityDecisionSheetState
         if (widget.canAddToChat) ...[
           const SizedBox(height: _availabilityDecisionSpacing),
           _AvailabilityDecisionToggle(
-            label: _availabilityDecisionChatLabel,
+            label: context.l10n.calendarAvailabilityDecisionChatLabel,
             value: _addToChat,
             onChanged: (value) => setState(() {
               _addToChat = value;
@@ -335,7 +315,7 @@ class _CalendarAvailabilityDecisionSheetState
         _AvailabilitySheetActionRow(
           isBusy: false,
           onPressed: _handleConfirmPressed,
-          label: _availabilityDecisionConfirmLabel,
+          label: context.l10n.commonConfirm,
           iconData: _availabilityDecisionIcon,
         ),
       ],
@@ -347,7 +327,7 @@ class _CalendarAvailabilityDecisionSheetState
     if (!_addToPersonal && !_addToChat) {
       FeedbackSystem.showError(
         context,
-        _availabilityDecisionMissingSelectionMessage,
+        context.l10n.calendarAvailabilityDecisionMissingSelection,
       );
       return;
     }
@@ -438,8 +418,12 @@ class _AvailabilityDecisionSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = request.title?.trim().isNotEmpty == true
         ? request.title!.trim()
-        : _availabilityRequestTitleFallback;
-    final range = _formatRange(request.start.value, request.end.value);
+        : context.l10n.calendarAvailabilityRequestTitleFallback;
+    final range = _formatRange(
+      context,
+      request.start.value,
+      request.end.value,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -627,7 +611,7 @@ CalendarDateTime _wrapDateTime(CalendarDateTime template, DateTime value) {
   );
 }
 
-String _formatRange(DateTime start, DateTime end) {
+String _formatRange(BuildContext context, DateTime start, DateTime end) {
   final String startLabel =
       TimeFormatter.formatFriendlyDateTime(context.l10n, start);
   final String endLabel =
@@ -635,5 +619,5 @@ String _formatRange(DateTime start, DateTime end) {
   if (startLabel == endLabel) {
     return startLabel;
   }
-  return '$startLabel$_availabilityRangeSeparator$endLabel';
+  return context.l10n.commonRangeLabel(startLabel, endLabel);
 }

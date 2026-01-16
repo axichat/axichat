@@ -2088,7 +2088,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _copyTaskShareText(CalendarTask task) async {
-    final String payload = task.toShareText();
+    final String payload = task.toShareText(context.l10n);
     await Clipboard.setData(ClipboardData(text: payload));
     if (mounted) {
       FeedbackSystem.showSuccess(

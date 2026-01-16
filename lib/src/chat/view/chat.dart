@@ -1230,7 +1230,8 @@ class _ChatState extends State<Chat> {
   }
 
   void _appendTaskShareText(CalendarTask task, {String? shareText}) {
-    final String resolvedShareText = shareText ?? task.toShareText();
+    final String resolvedShareText =
+        shareText ?? task.toShareText(context.l10n);
     final String existing = _textController.text;
     final String separator =
         existing.trim().isEmpty ? _emptyText : _composerShareSeparator;
@@ -1251,7 +1252,7 @@ class _ChatState extends State<Chat> {
       chat: context.read<ChatBloc>().state.chat!,
       roomState: context.read<ChatBloc>().state.roomState,
     );
-    final String shareText = task.toShareText().trim();
+    final String shareText = task.toShareText(context.l10n).trim();
     if (shareText.isEmpty) {
       return null;
     }
@@ -5909,7 +5910,10 @@ class _ChatState extends State<Chat> {
                                                             final String?
                                                                 taskShareText =
                                                                 calendarTaskIcs
-                                                                    ?.toShareText()
+                                                                    ?.toShareText(
+                                                                      context
+                                                                          .l10n,
+                                                                    )
                                                                     .trim();
                                                             final String?
                                                                 fragmentFallbackText =
@@ -9212,7 +9216,8 @@ class _PinnedMessageTile extends StatelessWidget {
     final hasMessageText = messageText?.isNotEmpty == true;
     final CalendarTask? calendarTask = message?.calendarTaskIcs;
     final bool hasCalendarTask = calendarTask != null;
-    final String? taskShareText = calendarTask?.toShareText().trim();
+    final String? taskShareText =
+        calendarTask?.toShareText(context.l10n).trim();
     final bool hideTaskText = taskShareText != null &&
         taskShareText.isNotEmpty &&
         taskShareText == messageText;

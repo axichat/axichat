@@ -102,8 +102,10 @@ class _AvailabilityIntervalRow extends StatelessWidget {
         const SizedBox(width: _availabilityPreviewDotSpacing),
         Expanded(
           child: Text(
-            '${interval.type.label}: '
-            _formatRange(context, interval.start, interval.end),
+            context.l10n.commonLabelValue(
+              interval.type.label(context.l10n),
+              _formatRange(context, interval.start, interval.end),
+            ),
             style: textStyle,
             maxLines: _availabilityPreviewMaxLines,
             overflow: TextOverflow.ellipsis,

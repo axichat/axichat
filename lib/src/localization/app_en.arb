@@ -1920,5 +1920,171 @@
   "connectivityStatusConnected": "Connected",
   "connectivityStatusConnecting": "Connecting...",
   "connectivityStatusNotConnected": "Not connected.",
-  "connectivityStatusFailed": "Failed to connect."
+  "connectivityStatusFailed": "Failed to connect.",
+  "commonShare": "Share",
+  "commonRecipients": "Recipients",
+  "commonRangeLabel": "{start} - {end}",
+  "@commonRangeLabel": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "commonOwnerFallback": "owner",
+  "commonDurationMinutes": "{count} min{count, plural, one{} other{s}}",
+  "@commonDurationMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationHours": "{count} hour{count, plural, one{} other{s}}",
+  "@commonDurationHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationMinutesShort": "{count}m",
+  "@commonDurationMinutesShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationHoursShort": "{count}h",
+  "@commonDurationHoursShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDateTimeLabel": "{date} · {time}",
+  "@commonDateTimeLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityShareTitle": "Share availability",
+  "calendarAvailabilityShareSubtitle": "Pick a range, edit free/busy, then share.",
+  "calendarAvailabilityShareChatSubtitle": "Pick a range, edit free/busy, then share in this chat.",
+  "calendarAvailabilityShareRangeLabel": "Range",
+  "calendarAvailabilityShareEditHint": "Tap to split, drag to resize, or toggle free/busy.",
+  "calendarAvailabilityShareSavePreset": "Save as preset",
+  "calendarAvailabilitySharePresetNameTitle": "Save free/busy sheet",
+  "calendarAvailabilitySharePresetNameLabel": "Name",
+  "calendarAvailabilitySharePresetNameHint": "Team hours",
+  "calendarAvailabilitySharePresetNameMissing": "Enter a name to save this sheet.",
+  "calendarAvailabilityShareInvalidRange": "Select a valid range to share.",
+  "calendarAvailabilityShareMissingJid": "Calendar sharing is unavailable.",
+  "calendarAvailabilityShareRecipientsRequired": "Select at least one recipient.",
+  "calendarAvailabilityShareMissingChats": "No eligible chats available.",
+  "calendarAvailabilityShareLockedChatUnavailable": "This chat cannot receive availability shares.",
+  "calendarAvailabilityShareSuccess": "Availability shared.",
+  "calendarAvailabilityShareFailed": "Failed to share availability.",
+  "calendarAvailabilitySharePartialFailure": "Some shares failed to send.",
+  "calendarAvailabilitySharePresetLabel": "Recent sheets",
+  "calendarAvailabilitySharePresetEmpty": "No recent sheets yet.",
+  "calendarAvailabilityShareRecentPreset": "Shared {range}",
+  "@calendarAvailabilityShareRecentPreset": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityPreviewEmpty": "No availability intervals.",
+  "calendarAvailabilityPreviewMore": "and {count} more",
+  "@calendarAvailabilityPreviewMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleRequired": "Enter a task title before continuing.",
+  "calendarTaskTitleTooLong": "Task title is too long. Please use fewer than {max} characters.",
+  "@calendarTaskTitleTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleLimitWarning": "Task titles are limited to {max} characters. Shorten this text or move details into the description before saving.",
+  "@calendarTaskTitleLimitWarning": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleCharacterCount": "{count} / {limit} characters",
+  "@calendarTaskTitleCharacterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "axiVersionWelcomeTitle": "Welcome to Axichat",
+  "axiVersionLabel": "v{version}",
+  "@axiVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "axiVersionTagAlpha": "alpha",
+  "calendarSyncWarningSnapshotTitle": "Calendar sync",
+  "calendarSyncWarningSnapshotMessage": "Calendar snapshot unavailable. Export your calendar JSON from another device and import it here to restore.",
+  "commonLabelValue": "{label}: {value}",
+  "@commonLabelValue": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityRequestTitle": "Request time",
+  "calendarAvailabilityRequestSubtitle": "Choose a free slot and share details.",
+  "calendarAvailabilityRequestDetailsLabel": "Details",
+  "calendarAvailabilityRequestRangeLabel": "Range",
+  "calendarAvailabilityRequestTitleLabel": "Title",
+  "calendarAvailabilityRequestTitlePlaceholder": "What is this for?",
+  "calendarAvailabilityRequestDescriptionLabel": "Description",
+  "calendarAvailabilityRequestDescriptionPlaceholder": "Add context (optional).",
+  "calendarAvailabilityRequestSendLabel": "Send request",
+  "calendarAvailabilityRequestInvalidRange": "Pick a valid time range.",
+  "calendarAvailabilityRequestNotFree": "Select a free slot before sending.",
+  "calendarAvailabilityDecisionTitle": "Accept request",
+  "calendarAvailabilityDecisionSubtitle": "Choose which calendars should receive it.",
+  "calendarAvailabilityDecisionPersonalLabel": "Add to personal calendar",
+  "calendarAvailabilityDecisionChatLabel": "Add to chat calendar",
+  "calendarAvailabilityDecisionMissingSelection": "Select at least one calendar.",
+  "calendarAvailabilityDecisionSummaryLabel": "Requested",
+  "calendarAvailabilityRequestTitleFallback": "Requested time",
+  "calendarFreeBusyFree": "Free",
+  "calendarFreeBusyBusy": "Busy",
+  "calendarFreeBusyTentative": "Tentative"
 }

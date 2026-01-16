@@ -245,7 +245,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       return;
     }
     setState(() => _isSending = true);
-    final String shareText = widget.task.toShareText();
+    final String shareText = widget.task.toShareText(context.l10n);
     final bool readOnly = _isReadOnly || !selected.supportsChatCalendar;
     final XmppService? xmppService = _maybeReadXmppService(context);
     final EmailService? emailService = RepositoryProvider.of<EmailService?>(
