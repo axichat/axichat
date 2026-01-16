@@ -4567,6 +4567,7 @@ mixin MessageService
     roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
     if (roomJid != null &&
         _isMucChatJid(roomJid) &&
+        !isChatStateOnlyError &&
         _shouldAttemptMucRepairForRoom(
           roomJid: roomJid,
           conditionData: errorCondition,

@@ -85,8 +85,6 @@ class CalendarCriticalPathShareSheet extends StatefulWidget {
 
 class _CalendarCriticalPathShareSheetState
     extends State<CalendarCriticalPathShareSheet> {
-  static const CalendarFragmentFormatter _fragmentFormatter =
-      CalendarFragmentFormatter();
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
 
@@ -233,7 +231,8 @@ class _CalendarCriticalPathShareSheetState
         return;
       }
       final CalendarFragment fragment = _buildFragment();
-      final String shareText = _fragmentFormatter.describe(fragment).trim();
+      final String shareText =
+          CalendarFragmentFormatter(context.l10n).describe(fragment).trim();
       await xmppService.sendMessage(
         jid: selected.jid,
         text: shareText,
