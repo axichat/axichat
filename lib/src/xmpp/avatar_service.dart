@@ -1384,7 +1384,29 @@ mixin AvatarService on XmppBase, MucService {
           _configuredAvatarNodes.add(cacheKey);
           return;
         }
-        if (config.hasSendLastPublishedItem) {
+        var confirmedError = confirmed.get<mox.PubSubError>();
+        if (hasSendLast &&
+            sendLastValue == sendLastPublishedItemOnSub &&
+            !confirmedError.indicatesMissingNode) {
+          final subscribeConfirmed = await pubsub
+              .configureNode(
+                host,
+                node,
+                config.withSendLastPublishedItem(
+                  sendLastPublishedItemOnSubscribe,
+                ),
+              )
+              .timeout(_avatarPublishTimeout);
+          if (!subscribeConfirmed.isType<mox.PubSubError>()) {
+            _avatarLog.fine(
+              'Avatar node configured after create with send_last=on_subscribe.',
+            );
+            _configuredAvatarNodes.add(cacheKey);
+            return;
+          }
+          confirmedError = subscribeConfirmed.get<mox.PubSubError>();
+        }
+        if (hasSendLast) {
           final strippedConfirmed = await pubsub
               .configureNode(host, node, config.withoutSendLastPublishedItem())
               .timeout(_avatarPublishTimeout);
@@ -1412,7 +1434,29 @@ mixin AvatarService on XmppBase, MucService {
           _configuredAvatarNodes.add(cacheKey);
           return;
         }
-        if (config.hasSendLastPublishedItem) {
+        var confirmedError = confirmed.get<mox.PubSubError>();
+        if (hasSendLast &&
+            sendLastValue == sendLastPublishedItemOnSub &&
+            !confirmedError.indicatesMissingNode) {
+          final subscribeConfirmed = await pubsub
+              .configureNode(
+                host,
+                node,
+                config.withSendLastPublishedItem(
+                  sendLastPublishedItemOnSubscribe,
+                ),
+              )
+              .timeout(_avatarPublishTimeout);
+          if (!subscribeConfirmed.isType<mox.PubSubError>()) {
+            _avatarLog.fine(
+              'Avatar node configured after create with send_last=on_subscribe.',
+            );
+            _configuredAvatarNodes.add(cacheKey);
+            return;
+          }
+          confirmedError = subscribeConfirmed.get<mox.PubSubError>();
+        }
+        if (hasSendLast) {
           final strippedConfirmed = await pubsub
               .configureNode(host, node, config.withoutSendLastPublishedItem())
               .timeout(_avatarPublishTimeout);
