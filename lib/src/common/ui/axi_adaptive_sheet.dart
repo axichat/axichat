@@ -37,7 +37,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
       context: context,
       isScrollControlled: isScrollControlled,
       useSafeArea: false,
-      showDragHandle: showDragHandle,
+      showDragHandle: false,
       enableDrag: enableDrag,
       isDismissible: isDismissible,
       backgroundColor: Colors.transparent,
@@ -53,6 +53,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           top: Radius.circular(18),
         );
         final Widget child = _AxiSheetChrome(
+          showDragHandle: showDragHandle,
           showCloseButton: showCloseButton,
           onClose: () => Navigator.of(sheetContext).maybePop(),
           child: builder(sheetContext),
@@ -68,15 +69,20 @@ Future<T?> showAdaptiveBottomSheet<T>({
             child: child,
           ),
         );
-        if (!useSafeArea) return surface;
         return MediaQuery(
           data: windowMediaQuery,
           child: SafeArea(
             top: false,
-            bottom: true,
+            bottom: useSafeArea,
             left: false,
             right: false,
-            child: surface,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: windowMediaQuery.size.height -
+                    (useSafeArea ? windowMediaQuery.padding.top : 0),
+              ),
+              child: surface,
+            ),
           ),
         );
       },
@@ -100,6 +106,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
       final EdgeInsets viewInsets = mediaQuery.viewInsets;
       final Widget child = _AxiSheetChrome(
         showCloseButton: showCloseButton,
+        showDragHandle: false,
         onClose: () => Navigator.of(dialogContext).maybePop(),
         child: builder(dialogContext),
       );
@@ -139,8 +146,13 @@ class _AxiSheetChrome extends StatelessWidget {
     required this.child,
     required this.onClose,
     required this.showCloseButton,
+    required this.showDragHandle,
   });
 
+  static const EdgeInsets _dragHandlePadding =
+      EdgeInsets.only(top: 12, bottom: 8);
+  static const double _dragHandleWidth = 34;
+  static const double _dragHandleHeight = 4;
   static const EdgeInsets _closeButtonPadding = EdgeInsets.only(
     top: 4,
     right: 4,
@@ -152,10 +164,11 @@ class _AxiSheetChrome extends StatelessWidget {
   final Widget child;
   final VoidCallback onClose;
   final bool showCloseButton;
+  final bool showDragHandle;
 
   @override
   Widget build(BuildContext context) {
-    if (!showCloseButton) {
+    if (!showCloseButton && !showDragHandle) {
       return child;
     }
 
@@ -173,15 +186,28 @@ class _AxiSheetChrome extends StatelessWidget {
         onPressed: onClose,
       ),
     );
+    final dragHandle = Center(
+      child: Container(
+        width: _dragHandleWidth,
+        height: _dragHandleHeight,
+        decoration: BoxDecoration(
+          color: colors.border.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: _closeButtonPadding,
-          child: Align(alignment: Alignment.centerRight, child: closeButton),
-        ),
+        if (showDragHandle)
+          Padding(padding: _dragHandlePadding, child: dragHandle),
+        if (showCloseButton)
+          Padding(
+            padding: _closeButtonPadding,
+            child: Align(alignment: Alignment.centerRight, child: closeButton),
+          ),
         Flexible(fit: FlexFit.loose, child: child),
       ],
     );

@@ -44,7 +44,6 @@ class _AxiMoreState extends State<AxiMore> {
   Future<void> _showSheetActions(List<AxiMenuAction> actions) async {
     if (!mounted) return;
     const double sheetItemSpacing = 4;
-    const double sheetPadding = 16;
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -57,18 +56,6 @@ class _AxiMoreState extends State<AxiMore> {
           header: AxiSheetHeader(
             title: Text(widget.tooltip),
             onClose: () => Navigator.of(sheetContext).maybePop(),
-            padding: const EdgeInsets.fromLTRB(
-              sheetPadding,
-              sheetPadding,
-              sheetPadding,
-              sheetPadding,
-            ),
-          ),
-          bodyPadding: const EdgeInsets.fromLTRB(
-            sheetPadding,
-            0,
-            sheetPadding,
-            sheetPadding,
           ),
           children: [
             for (final action in actions) ...[

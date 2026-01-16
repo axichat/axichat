@@ -52,6 +52,8 @@ typedef InputCounterWidgetBuilder = Widget? Function(
 });
 
 const double _transparentCursorAlpha = 0.0;
+const double _selectionColorOpacity = 0.4;
+const double _disabledSelectionOpacity = 0.38;
 const int _spellCheckMaxSuggestions = 3;
 const String _spellCheckBringIntoViewLabel =
     'AxiSpellCheckSuggestionsToolbar.bringIntoView';
@@ -91,11 +93,6 @@ class AxiTextField extends StatefulWidget {
     this.textAlignVertical,
     this.textDirection,
     this.readOnly = false,
-    @Deprecated(
-      'Use `contextMenuBuilder` instead. '
-      'This feature was deprecated after v3.3.0-0.5.pre.',
-    )
-    this.toolbarOptions,
     this.showCursor,
     this.autofocus = false,
     this.statesController,
@@ -143,11 +140,6 @@ class AxiTextField extends StatefulWidget {
     this.contentInsertionConfiguration,
     this.clipBehavior = Clip.hardEdge,
     this.restorationId,
-    @Deprecated(
-      'Use `stylusHandwritingEnabled` instead. '
-      'This feature was deprecated after v3.27.0-0.2.pre.',
-    )
-    this.scribbleEnabled = true,
     this.stylusHandwritingEnabled =
         axi.EditableText.defaultStylusHandwritingEnabled,
     this.enableIMEPersonalizedLearning = true,
@@ -220,7 +212,7 @@ class AxiTextField extends StatefulWidget {
 
   final bool autofocus;
 
-  final MaterialStatesController? statesController;
+  final WidgetStatesController? statesController;
 
   final String obscuringCharacter;
 
@@ -241,12 +233,6 @@ class AxiTextField extends StatefulWidget {
   final bool expands;
 
   final bool readOnly;
-
-  @Deprecated(
-    'Use `contextMenuBuilder` instead. '
-    'This feature was deprecated after v3.3.0-0.5.pre.',
-  )
-  final ToolbarOptions? toolbarOptions;
 
   final bool? showCursor;
 
@@ -321,12 +307,6 @@ class AxiTextField extends StatefulWidget {
   final Clip clipBehavior;
 
   final String? restorationId;
-
-  @Deprecated(
-    'Use `stylusHandwritingEnabled` instead. '
-    'This feature was deprecated after v3.27.0-0.2.pre.',
-  )
-  final bool scribbleEnabled;
 
   final bool stylusHandwritingEnabled;
 
@@ -770,13 +750,6 @@ class AxiTextField extends StatefulWidget {
     );
     properties.add(
       DiagnosticsProperty<bool>(
-        'scribbleEnabled',
-        scribbleEnabled,
-        defaultValue: true,
-      ),
-    );
-    properties.add(
-      DiagnosticsProperty<bool>(
         'stylusHandwritingEnabled',
         stylusHandwritingEnabled,
         defaultValue: axi.EditableText.defaultStylusHandwritingEnabled,
@@ -1175,19 +1148,19 @@ class _AxiTextFieldState extends State<AxiTextField>
   }
 
   // Material states controller.
-  MaterialStatesController? _internalStatesController;
+  WidgetStatesController? _internalStatesController;
 
   void _handleStatesControllerChange() {
     // Force a rebuild to resolve WidgetStateProperty properties.
     setState(() {});
   }
 
-  MaterialStatesController get _statesController =>
+  WidgetStatesController get _statesController =>
       widget.statesController ?? _internalStatesController!;
 
   void _initStatesController() {
     if (widget.statesController == null) {
-      _internalStatesController = MaterialStatesController();
+      _internalStatesController = WidgetStatesController();
     }
     _statesController.update(WidgetState.disabled, !_isEnabled);
     _statesController.update(WidgetState.hovered, _isHovering);
@@ -1322,7 +1295,9 @@ class _AxiTextFieldState extends State<AxiTextField>
                 selectionStyle.cursorColor ??
                 cupertinoTheme.primaryColor;
         selectionColor = selectionStyle.selectionColor ??
-            cupertinoTheme.primaryColor.withOpacity(0.40);
+            cupertinoTheme.primaryColor.withValues(
+              alpha: _selectionColorOpacity,
+            );
         cursorRadius ??= const Radius.circular(2.0);
         cursorOffset = Offset(
           iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context),
@@ -1371,7 +1346,9 @@ class _AxiTextFieldState extends State<AxiTextField>
                 selectionStyle.cursorColor ??
                 theme.colorScheme.primary;
         selectionColor = selectionStyle.selectionColor ??
-            theme.colorScheme.primary.withOpacity(0.40);
+            theme.colorScheme.primary.withValues(
+              alpha: _selectionColorOpacity,
+            );
 
       case TargetPlatform.linux:
         forcePressEnabled = false;
@@ -1430,7 +1407,6 @@ class _AxiTextFieldState extends State<AxiTextField>
         child: axi.EditableText(
           key: editableTextKey,
           readOnly: widget.readOnly || !_isEnabled,
-          toolbarOptions: widget.toolbarOptions,
           showCursor: widget.showCursor,
           showSelectionHandles: _showSelectionHandles,
           controller: controller,
@@ -1492,7 +1468,6 @@ class _AxiTextFieldState extends State<AxiTextField>
           autocorrectionTextRectColor: autocorrectionTextRectColor,
           clipBehavior: widget.clipBehavior,
           restorationId: 'editable',
-          scribbleEnabled: widget.scribbleEnabled,
           stylusHandwritingEnabled: widget.stylusHandwritingEnabled,
           enableIMEPersonalizedLearning: widget.enableIMEPersonalizedLearning,
           contentInsertionConfiguration: widget.contentInsertionConfiguration,

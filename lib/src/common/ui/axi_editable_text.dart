@@ -16,7 +16,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
-    show ContentInsertionConfiguration, TextEditingController, ToolbarOptions;
+    show ContentInsertionConfiguration, TextEditingController;
 import 'package:flutter/src/widgets/_web_browser_detection_io.dart'
     if (dart.library.js_interop) 'package:flutter/src/widgets/_web_browser_detection_web.dart';
 import 'package:flutter/src/widgets/actions.dart';
@@ -628,11 +628,6 @@ class EditableText extends StatefulWidget {
     this.scrollController,
     this.scrollPhysics,
     this.autocorrectionTextRectColor,
-    @Deprecated(
-      'Use `contextMenuBuilder` instead. '
-      'This feature was deprecated after v3.3.0-0.5.pre.',
-    )
-    ToolbarOptions? toolbarOptions,
     this.autofillHints = const <String>[],
     this.autofillClient,
     this.clipBehavior = Clip.hardEdge,
@@ -669,27 +664,6 @@ class EditableText extends StatefulWidget {
         enableInteractiveSelection =
             enableInteractiveSelection ?? (!readOnly || !obscureText),
         selectAllOnFocus = selectAllOnFocus ?? _defaultSelectAllOnFocus,
-        toolbarOptions = selectionControls is TextSelectionHandleControls &&
-                toolbarOptions == null
-            ? ToolbarOptions.empty
-            : toolbarOptions ??
-                (obscureText
-                    ? (readOnly
-                        // No point in even offering "Select All" in a read-only obscured
-                        // field.
-                        ? ToolbarOptions.empty
-                        // Writable, but obscured.
-                        : const ToolbarOptions(selectAll: true, paste: true))
-                    : (readOnly
-                        // Read-only, not obscured.
-                        ? const ToolbarOptions(selectAll: true, copy: true)
-                        // Writable, not obscured.
-                        : const ToolbarOptions(
-                            copy: true,
-                            cut: true,
-                            selectAll: true,
-                            paste: true,
-                          ))),
         assert(
           spellCheckConfiguration == null ||
               spellCheckConfiguration ==
@@ -774,8 +748,6 @@ class EditableText extends StatefulWidget {
   /// will be disabled regardless. If [obscureText] is true, cut and copy will
   /// be disabled regardless. If [readOnly] and [obscureText] are both true,
   /// select all will also be disabled.
-  final ToolbarOptions toolbarOptions;
-
   /// Whether to show selection handles.
   ///
   /// When a selection is active, there will be two handles at each side of
@@ -1113,7 +1085,7 @@ class EditableText extends StatefulWidget {
   /// by [contextMenuBuilder] instead. However, for backwards compatibility, when
   /// [selectionControls] is set to an object that does not mix in
   /// [TextSelectionHandleControls], [contextMenuBuilder] is ignored and the
-  /// [TextSelectionControls.buildToolbar] method is used instead.
+  /// the selection controls' toolbar builder is used instead.
   /// {@endtemplate}
   ///
   /// See also:
@@ -1738,7 +1710,7 @@ class EditableText extends StatefulWidget {
   /// For backwards compatibility, when [EditableText.selectionControls] is set
   /// to an object that does not mix in [TextSelectionHandleControls],
   /// [contextMenuBuilder] is ignored and the
-  /// [TextSelectionControls.buildToolbar] method is used instead.
+  /// the selection controls' toolbar builder is used instead.
   ///
   /// {@tool dartpad}
   /// This example shows how to customize the menu, in this case by keeping the
@@ -2497,11 +2469,6 @@ class EditableTextState extends State<EditableText>
 
   @override
   bool get cutEnabled {
-    if (widget.selectionControls is! TextSelectionHandleControls) {
-      return widget.toolbarOptions.cut &&
-          !widget.readOnly &&
-          !widget.obscureText;
-    }
     return !widget.readOnly &&
         !widget.obscureText &&
         !textEditingValue.selection.isCollapsed;
@@ -2509,29 +2476,17 @@ class EditableTextState extends State<EditableText>
 
   @override
   bool get copyEnabled {
-    if (widget.selectionControls is! TextSelectionHandleControls) {
-      return widget.toolbarOptions.copy && !widget.obscureText;
-    }
     return !widget.obscureText && !textEditingValue.selection.isCollapsed;
   }
 
   @override
   bool get pasteEnabled {
-    if (widget.selectionControls is! TextSelectionHandleControls) {
-      return widget.toolbarOptions.paste && !widget.readOnly;
-    }
     return !widget.readOnly &&
         (clipboardStatus.value == ClipboardStatus.pasteable);
   }
 
   @override
   bool get selectAllEnabled {
-    if (widget.selectionControls is! TextSelectionHandleControls) {
-      return widget.toolbarOptions.selectAll &&
-          (!widget.readOnly || !widget.obscureText) &&
-          widget.enableInteractiveSelection;
-    }
-
     if (!widget.enableInteractiveSelection ||
         (widget.readOnly && widget.obscureText)) {
       return false;
@@ -2932,50 +2887,6 @@ class EditableTextState extends State<EditableText>
     );
   }
 
-  /// Returns the [ContextMenuButtonItem]s for the given [ToolbarOptions].
-  @Deprecated(
-    'Use `contextMenuBuilder` instead of `toolbarOptions`. '
-    'This feature was deprecated after v3.3.0-0.5.pre.',
-  )
-  List<ContextMenuButtonItem>? buttonItemsForToolbarOptions([
-    TargetPlatform? targetPlatform,
-  ]) {
-    final ToolbarOptions toolbarOptions = widget.toolbarOptions;
-    if (toolbarOptions == ToolbarOptions.empty) {
-      return null;
-    }
-    return <ContextMenuButtonItem>[
-      if (toolbarOptions.cut && cutEnabled)
-        ContextMenuButtonItem(
-          onPressed: () {
-            cutSelection(SelectionChangedCause.toolbar);
-          },
-          type: ContextMenuButtonType.cut,
-        ),
-      if (toolbarOptions.copy && copyEnabled)
-        ContextMenuButtonItem(
-          onPressed: () {
-            copySelection(SelectionChangedCause.toolbar);
-          },
-          type: ContextMenuButtonType.copy,
-        ),
-      if (toolbarOptions.paste && pasteEnabled)
-        ContextMenuButtonItem(
-          onPressed: () {
-            pasteText(SelectionChangedCause.toolbar);
-          },
-          type: ContextMenuButtonType.paste,
-        ),
-      if (toolbarOptions.selectAll && selectAllEnabled)
-        ContextMenuButtonItem(
-          onPressed: () {
-            selectAll(SelectionChangedCause.toolbar);
-          },
-          type: ContextMenuButtonType.selectAll,
-        ),
-    ];
-  }
-
   /// Gets the line heights at the start and end of the selection for the given
   /// [EditableTextState].
   ///
@@ -3077,35 +2988,31 @@ class EditableTextState extends State<EditableText>
   /// * [AdaptiveTextSelectionToolbar.getAdaptiveButtons], which builds the
   ///   button Widgets for the current platform given [ContextMenuButtonItem]s.
   List<ContextMenuButtonItem> get contextMenuButtonItems {
-    return buttonItemsForToolbarOptions() ??
-        EditableText.getEditableButtonItems(
-          clipboardStatus: clipboardStatus.value,
-          onCopy: copyEnabled
-              ? () => copySelection(SelectionChangedCause.toolbar)
-              : null,
-          onCut: cutEnabled
-              ? () => cutSelection(SelectionChangedCause.toolbar)
-              : null,
-          onPaste: pasteEnabled
-              ? () => pasteText(SelectionChangedCause.toolbar)
-              : null,
-          onSelectAll: selectAllEnabled
-              ? () => selectAll(SelectionChangedCause.toolbar)
-              : null,
-          onLookUp: lookUpEnabled
-              ? () => lookUpSelection(SelectionChangedCause.toolbar)
-              : null,
-          onSearchWeb: searchWebEnabled
-              ? () => searchWebForSelection(SelectionChangedCause.toolbar)
-              : null,
-          onShare: shareEnabled
-              ? () => shareSelection(SelectionChangedCause.toolbar)
-              : null,
-          onLiveTextInput: liveTextInputEnabled
-              ? () => _startLiveTextInput(SelectionChangedCause.toolbar)
-              : null,
-        )
-      ..addAll(_textProcessingActionButtonItems);
+    return EditableText.getEditableButtonItems(
+      clipboardStatus: clipboardStatus.value,
+      onCopy: copyEnabled
+          ? () => copySelection(SelectionChangedCause.toolbar)
+          : null,
+      onCut:
+          cutEnabled ? () => cutSelection(SelectionChangedCause.toolbar) : null,
+      onPaste:
+          pasteEnabled ? () => pasteText(SelectionChangedCause.toolbar) : null,
+      onSelectAll: selectAllEnabled
+          ? () => selectAll(SelectionChangedCause.toolbar)
+          : null,
+      onLookUp: lookUpEnabled
+          ? () => lookUpSelection(SelectionChangedCause.toolbar)
+          : null,
+      onSearchWeb: searchWebEnabled
+          ? () => searchWebForSelection(SelectionChangedCause.toolbar)
+          : null,
+      onShare: shareEnabled
+          ? () => shareSelection(SelectionChangedCause.toolbar)
+          : null,
+      onLiveTextInput: liveTextInputEnabled
+          ? () => _startLiveTextInput(SelectionChangedCause.toolbar)
+          : null,
+    )..addAll(_textProcessingActionButtonItems);
   }
 
   List<ContextMenuButtonItem> get _textProcessingActionButtonItems {
@@ -4649,12 +4556,13 @@ class EditableTextState extends State<EditableText>
   }
 
   void _onCursorColorTick() {
+    final double cursorAlpha = widget.cursorColor.a;
     final double effectiveOpacity = math.min(
-      widget.cursorColor.alpha / 255.0,
+      cursorAlpha,
       _cursorBlinkOpacityController.value,
     );
-    renderEditable.cursorColor = widget.cursorColor.withOpacity(
-      effectiveOpacity,
+    renderEditable.cursorColor = widget.cursorColor.withValues(
+      alpha: effectiveOpacity,
     );
     _typingCaretPainter?.caretColor = _typingCaretColor;
     _cursorVisibilityNotifier.value = widget.showCursor &&
