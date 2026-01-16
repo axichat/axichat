@@ -58,6 +58,45 @@ const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
 const String _mamGlobalNoProgressLog =
     'Global MAM sync stalled; stopping to avoid churn.';
+final XmppOperationEvent _mamLoginStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamLoginSync,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _mamLoginSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamLoginSync,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _mamLoginFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamLoginSync,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
+final XmppOperationEvent _mamGlobalStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamGlobalSync,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _mamGlobalSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamGlobalSync,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _mamGlobalFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamGlobalSync,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
+final XmppOperationEvent _mamMucStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamMucSync,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _mamMucSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamMucSync,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _mamMucFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mamMucSync,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 const String _conversationIndexUpdateFailedLog =
     'Failed to update conversation index.';
 const String _mucMutationRejectedLog =
@@ -2026,6 +2065,8 @@ mixin MessageService
     if (_mamLoginSyncInFlight) return;
     if (connectionState != ConnectionState.connected) return;
     _mamLoginSyncInFlight = true;
+    var success = false;
+    emitXmppOperation(_mamLoginStartEvent);
     try {
       await database;
       if (connectionState != ConnectionState.connected) return;
@@ -2079,10 +2120,14 @@ mixin MessageService
           );
         }
       }
+      success = true;
     } on XmppAbortedException {
       return;
     } finally {
       _mamLoginSyncInFlight = false;
+      emitXmppOperation(
+        success ? _mamLoginSuccessEvent : _mamLoginFailureEvent,
+      );
       if (_mucJoinMamDeferredRooms.isNotEmpty) {
         final deferred = List<String>.from(_mucJoinMamDeferredRooms);
         _mucJoinMamDeferredRooms.clear();
@@ -2102,10 +2147,14 @@ mixin MessageService
     final normalizedRoom = _roomKey(roomJid);
     if (_mucJoinMamSyncRooms.contains(normalizedRoom)) return;
     _mucJoinMamSyncRooms.add(normalizedRoom);
+    var started = false;
+    var success = false;
     try {
       final mamSupported = await resolveMamSupport();
       if (!mamSupported) return;
       if (!_canQueryMucArchive(normalizedRoom)) return;
+      started = true;
+      emitXmppOperation(_mamMucStartEvent);
       final localCount = await countLocalMessages(
         jid: normalizedRoom,
         includePseudoMessages: false,
@@ -2121,6 +2170,7 @@ mixin MessageService
           pageSize: mamLoginBackfillMessageLimit,
           isMuc: true,
         );
+        success = true;
         return;
       }
 
@@ -2129,10 +2179,16 @@ mixin MessageService
         since: lastSeen,
         isMuc: true,
       );
+      success = true;
     } on XmppAbortedException {
       return;
     } finally {
       _mucJoinMamSyncRooms.remove(normalizedRoom);
+      if (started) {
+        emitXmppOperation(
+          success ? _mamMucSuccessEvent : _mamMucFailureEvent,
+        );
+      }
     }
   }
 
@@ -2196,6 +2252,8 @@ mixin MessageService
       return MamGlobalSyncOutcome.failed;
     }
     _mamGlobalSyncInFlight = true;
+    var started = false;
+    var success = false;
     try {
       await database;
       _mamGlobalMaxTimestamp = null;
@@ -2212,6 +2270,8 @@ mixin MessageService
         return MamGlobalSyncOutcome.skippedDenied;
       }
 
+      started = true;
+      emitXmppOperation(_mamGlobalStartEvent);
       String? after = await _loadMamGlobalLastId();
       final anchor = await _loadMamGlobalLastSync();
       DateTime? start = after == null ? anchor : null;
@@ -2248,6 +2308,7 @@ mixin MessageService
       await _storeMamGlobalLastSync(anchorTimestamp);
       await _storeMamGlobalDeniedUntil(null);
       _mamGlobalSyncCompletedAt = DateTime.timestamp();
+      success = true;
       return MamGlobalSyncOutcome.completed;
     } on XmppAbortedException {
       return MamGlobalSyncOutcome.failed;
@@ -2258,6 +2319,11 @@ mixin MessageService
       return MamGlobalSyncOutcome.failed;
     } finally {
       _mamGlobalSyncInFlight = false;
+      if (started) {
+        emitXmppOperation(
+          success ? _mamGlobalSuccessEvent : _mamGlobalFailureEvent,
+        );
+      }
     }
   }
 

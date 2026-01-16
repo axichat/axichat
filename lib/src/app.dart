@@ -32,6 +32,7 @@ import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
+import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/share/share_intent_cubit.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -41,6 +42,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -201,6 +203,10 @@ class _AxichatState extends State<Axichat> {
           BlocProvider(
             create: (context) =>
                 OmemoActivityCubit(xmppBase: context.read<XmppService>()),
+          ),
+          BlocProvider(
+            create: (context) =>
+                XmppActivityCubit(xmppBase: context.read<XmppService>()),
           ),
           BlocProvider(create: (context) => ShareIntentCubit()..initialize()),
           BlocProvider(
@@ -576,6 +582,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         builder: (context) => const Material(
                           type: MaterialType.transparency,
                           child: OmemoOperationOverlay(),
+                        ),
+                      ),
+                      OverlayEntry(
+                        maintainState: true,
+                        builder: (context) => const Material(
+                          type: MaterialType.transparency,
+                          child: XmppOperationOverlay(),
                         ),
                       ),
                     ],

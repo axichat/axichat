@@ -12,6 +12,7 @@ import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const String spamPubSubNode = 'urn:axi:spam';
@@ -38,6 +39,19 @@ const String _spamPubSubBootstrapOperationName =
     'SpamPubSubManager.bootstrapOnNegotiations';
 const String _spamPubSubRefreshOperationName =
     'SpamPubSubManager.refreshFromServer';
+final XmppOperationEvent _spamEnsureStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubSpam,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _spamEnsureSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubSpam,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _spamEnsureFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubSpam,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 
 final class SpamSyncPayload {
   const SpamSyncPayload({
@@ -361,6 +375,8 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     if (!_shouldAttemptEnsureNode()) return;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
+    var success = false;
+    getAttributes().sendEvent(_spamEnsureStartEvent);
     try {
       final primaryConfig = _nodeConfig(mox.AccessModel.whitelist);
       final primaryError = await _configureNodeWithFallback(
@@ -371,6 +387,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       );
       if (primaryError == null) {
         _setAccessModel(mox.AccessModel.whitelist);
+        success = true;
         return;
       }
 
@@ -383,6 +400,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       );
       if (fallbackError == null) {
         _setAccessModel(mox.AccessModel.authorize);
+        success = true;
         return;
       }
       final shouldCreateNode = primaryError.indicatesMissingNode ||
@@ -406,6 +424,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         );
         if (appliedError == null) {
           _setAccessModel(mox.AccessModel.whitelist);
+          success = true;
           return;
         }
       } on Exception {
@@ -426,6 +445,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         );
         if (appliedError == null) {
           _setAccessModel(mox.AccessModel.authorize);
+          success = true;
           return;
         }
       } on Exception {
@@ -442,6 +462,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         );
         if (appliedPrimaryError == null) {
           _setAccessModel(mox.AccessModel.whitelist);
+          success = true;
           return;
         }
         final appliedFallbackError = await _configureNodeWithFallback(
@@ -452,12 +473,16 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         );
         if (appliedFallbackError == null) {
           _setAccessModel(mox.AccessModel.authorize);
+          success = true;
         }
       } on Exception {
         return;
       }
     } finally {
       _ensureNodeInFlight = false;
+      getAttributes().sendEvent(
+        success ? _spamEnsureSuccessEvent : _spamEnsureFailureEvent,
+      );
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {

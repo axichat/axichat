@@ -65,6 +65,7 @@ import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:axichat/src/xmpp/spam_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
@@ -391,6 +392,10 @@ abstract interface class XmppBase {
 
   bool get isStateStoreReady;
 
+  Stream<XmppOperationEvent> get xmppOperationStream;
+
+  void emitXmppOperation(XmppOperationEvent event) {}
+
   Stream<mox.OmemoActivityEvent> get omemoActivityStream;
 
   void emitOmemoActivity(mox.OmemoActivityEvent event) {}
@@ -579,6 +584,8 @@ class XmppService extends XmppBase
     'avatar_encryption_salt',
   );
 
+  final StreamController<XmppOperationEvent> _xmppOperationController =
+      StreamController<XmppOperationEvent>.broadcast();
   final StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
   StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
@@ -595,6 +602,16 @@ class XmppService extends XmppBase
 
   @override
   bool get isStateStoreReady => _stateStore.isCompleted;
+
+  @override
+  Stream<XmppOperationEvent> get xmppOperationStream =>
+      _xmppOperationController.stream;
+
+  @override
+  void emitXmppOperation(XmppOperationEvent event) {
+    if (_xmppOperationController.isClosed) return;
+    _xmppOperationController.add(event);
+  }
 
   @override
   Stream<mox.OmemoActivityEvent> get omemoActivityStream =>
@@ -634,6 +651,9 @@ class XmppService extends XmppBase
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
+      ..registerHandler<XmppOperationEvent>((event) async {
+        emitXmppOperation(event);
+      })
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         _setConnectionState(event.state);
         if (event.state != ConnectionState.connected) {
