@@ -8,7 +8,6 @@ import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _contactExportSheetPadding = 16.0;
 const double _contactExportOptionSpacing = 8.0;
 const double _contactExportIconPadding = 10.0;
 const double _contactExportIconSize = 18.0;
@@ -31,18 +30,6 @@ Future<ContactExportFormat?> showContactExportFormatSheet(
         header: AxiSheetHeader(
           title: Text(resolvedTitle),
           onClose: () => Navigator.of(sheetContext).maybePop(),
-          padding: const EdgeInsets.fromLTRB(
-            _contactExportSheetPadding,
-            _contactExportSheetPadding,
-            _contactExportSheetPadding,
-            _contactExportSheetPadding,
-          ),
-        ),
-        bodyPadding: const EdgeInsets.fromLTRB(
-          _contactExportSheetPadding,
-          0,
-          _contactExportSheetPadding,
-          _contactExportSheetPadding,
         ),
         children: [
           for (final format in ContactExportFormat.values) ...[

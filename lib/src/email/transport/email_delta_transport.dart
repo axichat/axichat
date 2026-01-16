@@ -4,7 +4,8 @@
 import 'dart:async';
 import 'dart:io';
 
-ort 'package:axichat/src/email/email_metadata.dart';
+import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
@@ -57,6 +58,12 @@ const String _emailSecurityModeUnknownPrefix =
 const String _emailSecurityModeUnknownSuffix = ' connections.';
 const String _emailAccountNotReadyError =
     'Email account not hydrated; wait for email sync.';
+const String _accountHydrationFailedLog =
+    'Failed to hydrate email account address.';
+const String _originIdHydrationFailedLog =
+    'Failed to hydrate Delta origin ID.';
+const String _attachmentHydrationFailedLog =
+    'Failed to hydrate attachment metadata.';
 const String _missingOutgoingDeltaIdError =
     'Outgoing email message missing delta ID.';
 const int _deltaMessageIdUnset = DeltaMessageId.none;
@@ -162,10 +169,14 @@ class EmailDeltaTransport implements ChatTransport {
     required DeltaContextHandle context,
     required int accountId,
   }) async {
-    await _hydrateAccountAddressFromCore(
-      context: context,
-      accountId: accountId,
-    );
+    try {
+      await _hydrateAccountAddressFromCore(
+        context: context,
+        accountId: accountId,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(_accountHydrationFailedLog, error, stackTrace);
+    }
   }
 
   Future<void> _hydrateAccountAddressFromCore({
@@ -1626,11 +1637,15 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required int accountId,
   }) async {
-    await _hydrateOriginId(
-      context: context,
-      msgId: msgId,
-      accountId: accountId,
-    );
+    try {
+      await _hydrateOriginId(
+        context: context,
+        msgId: msgId,
+        accountId: accountId,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(_originIdHydrationFailedLog, error, stackTrace);
+    }
   }
 
   Future<void> _scheduleAttachmentMetadataHydration({
@@ -1638,11 +1653,15 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required FileMetadataData metadata,
   }) async {
-    await _hydrateAttachmentMetadata(
-      context: context,
-      msgId: msgId,
-      metadata: metadata,
-    );
+    try {
+      await _hydrateAttachmentMetadata(
+        context: context,
+        msgId: msgId,
+        metadata: metadata,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(_attachmentHydrationFailedLog, error, stackTrace);
+    }
   }
 
   Future<void> _hydrateAttachmentMetadata({

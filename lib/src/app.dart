@@ -290,14 +290,14 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   Widget build(BuildContext context) {
     return BlocConsumer<SettingsCubit, SettingsState>(
       listener: (context, state) async {
-        context.read<NotificationService>()
+        final notificationService = context.read<NotificationService>();
+        final xmppService = context.read<XmppService>();
+        final emailService = context.read<EmailService>();
+        notificationService
           ..mute = state.mute
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
-        final xmppService = context.read<XmppService>();
         await xmppService.updateMessageStorageMode(state.messageStorageMode);
-        context.read<EmailService>().updateMessageStorageMode(
-              xmppService.messageStorageMode,
-            );
+        emailService.updateMessageStorageMode(xmppService.messageStorageMode);
         xmppService.toggleAllChatsMarkerResponsive(
           responsive: state.chatReadReceipts,
         );
