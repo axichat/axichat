@@ -72,9 +72,23 @@ const _mucJoinHasSelfStatusLabel = 'has_self_status=';
 const _mucJoinErrorLabel = 'error=';
 const _mucJoinManagerJoinTimeoutLog =
     'moxxmpp joinRoom still pending; proceeding via self-presence.';
+final XmppOperationEvent _mucJoinStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mucJoin,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _mucJoinSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mucJoin,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _mucJoinFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.mucJoin,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 const _roomAvatarFieldMissingLog =
     'Room configuration form missing avatar field.';
 const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
+const _roomConfigSubmitTimeoutLog = 'Room configuration update timed out.';
 const _instantRoomConfigFailedLog = 'Instant room configuration failed.';
 const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
@@ -84,6 +98,8 @@ const _mucBootstrapOperationName = 'MucService.bootstrapOnLogin';
 const _mucCreateRoomOperationName = 'MucService.createRoom';
 const _mucUpsertBookmarkOperationName = 'MucService.upsertBookmarkForRoom';
 const _mucJoinRoomOperationName = 'MucService.joinRoom';
+const _mucInstantRoomConfigOperationName =
+    'MucService.ensureInstantRoomConfiguration';
 const _mucCreateRoomBookmarkTimeoutLog =
     'Bookmark upsert still running for newly created room.';
 const bool _mucAvatarSupportEnabled = false;
@@ -199,6 +215,7 @@ mixin MucService on XmppBase, BaseStreamService {
   final _mucLog = Logger('MucService');
   static const Duration _mucJoinTimeout = Duration(seconds: 10);
   static const Duration _mucJoinManagerTimeout = Duration(seconds: 3);
+  static const Duration _roomConfigSubmitTimeout = Duration(seconds: 5);
   static const Duration _mucCreateRoomBookmarkTimeout = Duration(seconds: 5);
   static const int _mucJoinSelfPresencePollIntervalMs = 200;
   static const Duration _mucJoinSelfPresencePollInterval = Duration(
@@ -700,6 +717,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final key = _roomKey(roomJid);
     final attemptId = _joinAttemptIdForKey(key);
     if (attemptId != null) {
+      emitXmppOperation(
+        error == null ? _mucJoinSuccessEvent : _mucJoinFailureEvent,
+      );
       _logJoinEvent(
         message: _mucJoinCompletedLog,
         attemptId: attemptId,
@@ -962,7 +982,12 @@ mixin MucService on XmppBase, BaseStreamService {
       normalizedRoom,
       () => Completer<void>(),
     );
-    final joinAttemptId = _ensureJoinAttemptIdForKey(normalizedRoom);
+    final existingAttemptId = _joinAttemptIdForKey(normalizedRoom);
+    final joinAttemptId =
+        existingAttemptId ?? _ensureJoinAttemptIdForKey(normalizedRoom);
+    if (existingAttemptId == null) {
+      emitXmppOperation(_mucJoinStartEvent);
+    }
     _incrementMucJoinInFlight(normalizedRoom);
     final hasSelfPresence =
         _roomStates[normalizedRoom]?.hasSelfPresence == true;
@@ -1038,12 +1063,18 @@ mixin MucService on XmppBase, BaseStreamService {
           attemptId: _joinAttemptIdForKey(normalizedRoom),
           hasSelfPresence: hasSelfPresence,
         );
+        _completeJoinAttempt(
+          normalizedRoom,
+          error: XmppMessageException(),
+        );
         _markRoomNeedsJoin(normalizedRoom);
         await _markRoomLeft(
           normalizedRoom,
           statusCodes: _emptyStatusCodes,
           preserveOccupants: _preserveOccupantsOnJoinTimeout,
         );
+      } else {
+        _completeJoinAttempt(normalizedRoom);
       }
       await pollFuture;
     } on Exception catch (error, stackTrace) {
@@ -1554,9 +1585,19 @@ mixin MucService on XmppBase, BaseStreamService {
         ),
       ],
     );
-    final result = await _connection.sendStanza(
-      mox.StanzaDetails(stanza, shouldEncrypt: false),
-    );
+    mox.XMLNode? result;
+    try {
+      result = await _connection
+          .sendStanza(
+            mox.StanzaDetails(stanza, shouldEncrypt: false),
+          )
+          .timeout(_roomConfigSubmitTimeout);
+    } on TimeoutException {
+      _mucLog.fine(_roomConfigSubmitTimeoutLog);
+      return false;
+    } on Exception {
+      return false;
+    }
     if (result == null) return false;
     final type = result.attributes[_iqTypeAttr]?.toString();
     if (type == _iqTypeResult) return true;
@@ -1883,7 +1924,16 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> _awaitInstantRoomConfigurationIfNeeded(String roomJid) async {
     final key = _roomKey(roomJid);
     if (!_shouldAttemptInstantRoomConfiguration(key)) return;
-    await _ensureInstantRoomConfiguration(roomJid: key);
+    fireAndForget(
+      () async {
+        try {
+          await _ensureInstantRoomConfiguration(roomJid: key);
+        } on Exception catch (error, stackTrace) {
+          _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
+        }
+      },
+      operationName: _mucInstantRoomConfigOperationName,
+    );
   }
 
   bool _isAvatarMimeField(String fieldName) {
@@ -2402,14 +2452,16 @@ mixin MucService on XmppBase, BaseStreamService {
     if (event.statusCodes.contains(mucStatusRoomCreated)) {
       _instantRoomConfiguredRooms.remove(roomJid);
       _instantRoomPendingRooms.add(roomJid);
-      try {
-        await _ensureInstantRoomConfiguration(roomJid: roomJid);
-      } on Exception catch (error, stackTrace) {
-        _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
-        await _markRoomLeft(roomJid, statusCodes: _emptyStatusCodes);
-        _completeJoinAttempt(roomJid, error: XmppMessageException());
-        return;
-      }
+      fireAndForget(
+        () async {
+          try {
+            await _ensureInstantRoomConfiguration(roomJid: roomJid);
+          } on Exception catch (error, stackTrace) {
+            _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
+          }
+        },
+        operationName: _mucInstantRoomConfigOperationName,
+      );
     }
     _completeJoinAttempt(roomJid);
     if (event.statusCodes.contains(mucStatusConfigurationChanged)) {
