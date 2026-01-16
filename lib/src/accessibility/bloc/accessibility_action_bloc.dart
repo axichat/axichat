@@ -274,15 +274,15 @@ class AccessibilityActionBloc
       return;
     }
     if (action is AccessibilityNavigateAction) {
-      await _handleNavigateAction(action, emit);
+      _handleNavigateAction(action, emit);
       return;
     }
     if (action is AccessibilityCommandAction) {
-      await _handleCommandAction(action, emit);
+      _handleCommandAction(action, emit);
       return;
     }
     if (action is AccessibilitySelectContactAction) {
-      await _handleContactSelection(action.contact, emit);
+      _handleContactSelection(action.contact, emit);
       return;
     }
     if (action is AccessibilityInviteDecisionAction) {
@@ -495,7 +495,7 @@ class AccessibilityActionBloc
       chatType: ChatType.chat,
       unreadCount: 0,
     );
-    await _handleContactSelection(contact, emit);
+    _handleContactSelection(contact, emit);
   }
 
   void _onLocaleUpdated(

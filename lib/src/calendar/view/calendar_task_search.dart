@@ -163,7 +163,6 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
             final double maxHeight =
                 mediaQuery.size.height - mediaQuery.viewPadding.vertical;
             void closeSheet() {
-              TaskEditSessionTracker.instance.end(task.id, resolvedBloc);
               Navigator.of(sheetContext).maybePop();
             }
 
