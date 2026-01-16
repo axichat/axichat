@@ -176,6 +176,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final l10n = context.l10n;
 
     final xmppService = context.read<XmppService>();
+    // ignore: unnecessary_type_check
+    final isRoster = xmppService is RosterService;
+    // ignore: unnecessary_type_check
+    final isPresence = xmppService is PresenceService;
+    // ignore: unnecessary_type_check
+    final isBlocking = xmppService is BlockingService;
+    final isOmemo = xmppService is OmemoService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;

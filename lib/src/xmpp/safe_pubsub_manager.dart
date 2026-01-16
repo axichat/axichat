@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -265,8 +266,12 @@ class SafePubSubManager extends mox.PubSubManager {
     }
 
     if (result.attributes['type'] != _iqResult) {
-      logger.fine('PubSub configure failed: error response.');
-      return moxlib.Result(mox.getPubSubError(result));
+      final error = mox.getPubSubError(result);
+      logger.fine(
+        'PubSub configure failed. node=${_safeNodeLabel(node)} '
+        'error=${error.runtimeType} missingNode=${error.indicatesMissingNode}.',
+      );
+      return moxlib.Result(error);
     }
 
     logger.fine('PubSub configure succeeded. node=${_safeNodeLabel(node)}.');

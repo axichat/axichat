@@ -85,6 +85,9 @@ const String _outboundSummaryFlagUploadNotification = 'upload_notification';
 const String _outboundSummaryFlagXhtml = 'xhtml';
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
+const String _pinNodeLabelUnknown = '<unknown>';
+const String _pinNodeLabelRedacted = '<redacted>';
+const String _pinNodeLabelJidMarker = '@';
 const String _pinTag = 'pin';
 const String _pinMessageIdAttr = 'message_id';
 const String _pinPinnedAtAttr = 'pinned_at';
@@ -506,6 +509,17 @@ mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
       publishModel: _pinPublishModelForPolicy(policy),
       sendLastPublishedItem: _pinSendLastOnSubscribe,
     );
+
+String _safePinNodeLabel(String? nodeId) {
+  final normalized = nodeId?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return _pinNodeLabelUnknown;
+  }
+  if (normalized.contains(_pinNodeLabelJidMarker)) {
+    return _pinNodeLabelRedacted;
+  }
+  return normalized;
+}
 
 final class _PinnedMessageSyncPayload {
   const _PinnedMessageSyncPayload({
@@ -6470,7 +6484,8 @@ mixin MessageService
     Map<String, mox.PubSubAffiliation>? affiliations,
   }) async {
     final config = _pinNodeConfig(policy);
-    final configured = await pubsub.configureNode(host, nodeId, config);
+    final safeNodeLabel = _safePinNodeLabel(nodeId);
+    var configured = await pubsub.configureNode(host, nodeId, config);
     if (!configured.isType<mox.PubSubError>()) {
       return _applyPinAffiliationsIfNeeded(
         pubsub: pubsub,
@@ -6480,19 +6495,60 @@ mixin MessageService
         affiliations: affiliations,
       );
     }
-    final configuredError = configured.get<mox.PubSubError>();
+    var configuredError = configured.get<mox.PubSubError>();
+    _log.fine(
+      'PubSub pin node config failed. node=$safeNodeLabel '
+      'policy=${policy.name} error=${configuredError.runtimeType}.',
+    );
+    if (config.hasSendLastPublishedItem) {
+      _log.fine(
+        'PubSub pin node config retry without send_last. node=$safeNodeLabel '
+        'policy=${policy.name}.',
+      );
+      final stripped = config.withoutSendLastPublishedItem();
+      configured = await pubsub.configureNode(host, nodeId, stripped);
+      if (!configured.isType<mox.PubSubError>()) {
+        _log.fine(
+          'PubSub pin node configured without send_last. node=$safeNodeLabel '
+          'policy=${policy.name}.',
+        );
+        return _applyPinAffiliationsIfNeeded(
+          pubsub: pubsub,
+          host: host,
+          nodeId: nodeId,
+          policy: policy,
+          affiliations: affiliations,
+        );
+      }
+      configuredError = configured.get<mox.PubSubError>();
+      _log.fine(
+        'PubSub pin node config failed without send_last. '
+        'node=$safeNodeLabel policy=${policy.name} '
+        'error=${configuredError.runtimeType}.',
+      );
+    }
     final shouldCreateNode = configuredError.indicatesMissingNode;
     if (!shouldCreateNode) {
       return false;
     }
+    _log.fine('PubSub pin node missing; creating node=$safeNodeLabel.');
 
     try {
       await pubsub.createNodeWithConfig(
         host,
-        _pinCreateNodeConfig(policy),
+        config.withoutSendLastPublishedItem().toNodeConfig(),
         nodeId: nodeId,
       );
-      final applied = await pubsub.configureNode(host, nodeId, config);
+      var applied = await pubsub.configureNode(host, nodeId, config);
+      if (applied.isType<mox.PubSubError>() &&
+          config.hasSendLastPublishedItem) {
+        _log.fine(
+          'PubSub pin node config retry after create without send_last. '
+          'node=$safeNodeLabel policy=${policy.name}.',
+        );
+        final stripped = config.withoutSendLastPublishedItem();
+        applied = await pubsub.configureNode(host, nodeId, stripped);
+      }
       if (applied.isType<mox.PubSubError>()) {
         return false;
       }
@@ -6509,7 +6565,16 @@ mixin MessageService
 
     try {
       await pubsub.createNode(host, nodeId: nodeId);
-      final applied = await pubsub.configureNode(host, nodeId, config);
+      var applied = await pubsub.configureNode(host, nodeId, config);
+      if (applied.isType<mox.PubSubError>() &&
+          config.hasSendLastPublishedItem) {
+        _log.fine(
+          'PubSub pin node config retry after create without send_last. '
+          'node=$safeNodeLabel policy=${policy.name}.',
+        );
+        final stripped = config.withoutSendLastPublishedItem();
+        applied = await pubsub.configureNode(host, nodeId, stripped);
+      }
       if (applied.isType<mox.PubSubError>()) {
         return false;
       }

@@ -2,9 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -69,28 +69,20 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_dependenciesInitialized) return;
-    _enableXmpp = context.read<AuthenticationCubit>().endpointConfig.enableXmpp;
-    _enableSmtp = context.read<AuthenticationCubit>().endpointConfig.enableSmtp;
-    _useDns = context.read<AuthenticationCubit>().endpointConfig.useDns;
-    _useSrv = context.read<AuthenticationCubit>().endpointConfig.useSrv;
-    _requireDnssec =
-        context.read<AuthenticationCubit>().endpointConfig.requireDnssec;
-    _domainController.text =
-        context.read<AuthenticationCubit>().endpointConfig.domain;
-    _xmppHostController.text =
-        context.read<AuthenticationCubit>().endpointConfig.xmppHost ?? '';
-    _imapHostController.text =
-        context.read<AuthenticationCubit>().endpointConfig.imapHost ?? '';
-    _smtpHostController.text =
-        context.read<AuthenticationCubit>().endpointConfig.smtpHost ?? '';
-    _xmppPortController.text =
-        context.read<AuthenticationCubit>().endpointConfig.xmppPort.toString();
-    _imapPortController.text =
-        context.read<AuthenticationCubit>().endpointConfig.imapPort.toString();
-    _smtpPortController.text =
-        context.read<AuthenticationCubit>().endpointConfig.smtpPort.toString();
-    _apiPortController.text =
-        context.read<AuthenticationCubit>().endpointConfig.apiPort.toString();
+    final config = context.read<EndpointConfigCubit>().state;
+    _enableXmpp = config.enableXmpp;
+    _enableSmtp = config.enableSmtp;
+    _useDns = config.useDns;
+    _useSrv = config.useSrv;
+    _requireDnssec = config.requireDnssec;
+    _domainController.text = config.domain;
+    _xmppHostController.text = config.xmppHost ?? '';
+    _imapHostController.text = config.imapHost ?? '';
+    _smtpHostController.text = config.smtpHost ?? '';
+    _xmppPortController.text = config.xmppPort.toString();
+    _imapPortController.text = config.imapPort.toString();
+    _smtpPortController.text = config.smtpPort.toString();
+    _apiPortController.text = config.apiPort.toString();
     _dependenciesInitialized = true;
   }
 
@@ -153,15 +145,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
   Future<void> _save() async {
     final updated = _buildConfig(
-      context.read<AuthenticationCubit>().endpointConfig,
+      context.read<EndpointConfigCubit>().state,
     );
-    await context.read<AuthenticationCubit>().updateEndpointConfig(updated);
+    await context.read<EndpointConfigCubit>().updateConfig(updated);
     if (!mounted) return;
     Navigator.of(context).pop();
   }
 
   Future<void> _reset() async {
-    await context.read<AuthenticationCubit>().resetEndpointConfig();
+    await context.read<EndpointConfigCubit>().reset();
     if (!mounted) return;
     Navigator.of(context).pop();
   }

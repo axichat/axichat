@@ -38,6 +38,7 @@ const String _deltaAttachmentLabelPrefix = '📎 ';
 const String _unknownAttachmentSizeLabel = 'Unknown size';
 const String _emptyJid = '';
 const String _emptyHtml = '';
+const String _originIdHydrationFailedLog = 'Failed to hydrate Delta origin ID.';
 const int _emailChatInitialTimestampMillis = 0;
 const int _attachmentSizeUnitBase = 1024;
 const double _attachmentSizePrecisionThreshold = 10;
@@ -1250,7 +1251,11 @@ class DeltaEventConsumer {
     required int msgId,
     required int accountId,
   }) async {
-    await _hydrateOriginId(msgId: msgId, accountId: accountId);
+    try {
+      await _hydrateOriginId(msgId: msgId, accountId: accountId);
+    } on Exception catch (error, stackTrace) {
+      _log.fine(_originIdHydrationFailedLog, error, stackTrace);
+    }
   }
 
   Future<void> _scheduleOriginIdHydrationIfNeeded({

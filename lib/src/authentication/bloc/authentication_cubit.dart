@@ -9,6 +9,7 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
@@ -124,6 +125,7 @@ enum LogoutSeverity {
 class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
+    required EndpointConfigCubit endpointConfigCubit,
     required XmppService xmppService,
     EmailService? emailService,
     HomeRefreshSyncService? homeRefreshSyncService,
@@ -135,6 +137,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EndpointConfig? initialEndpointConfig,
     EndpointResolver endpointResolver = const EndpointResolver(),
   })  : _credentialStore = credentialStore,
+        _endpointConfigCubit = endpointConfigCubit,
         _xmppService = xmppService,
         _emailService = emailService,
         _homeRefreshSyncService = homeRefreshSyncService ??
@@ -143,21 +146,26 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               emailService: emailService,
             ),
         _endpointResolver = endpointResolver,
-        _endpointConfig = initialState?.config ??
-            initialEndpointConfig ??
-            const EndpointConfig(),
         super(initialState ?? const AuthenticationNone()) {
     _httpClient = httpClient ?? http.Client();
     _emailProvisioningClient = emailProvisioningClient ??
         provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
         );
-    _emailService?.updateEndpointConfig(_endpointConfig);
+    final initialConfig = initialState?.config ?? initialEndpointConfig;
+    if (initialConfig != null) {
+      _endpointConfigCubit.overrideEphemeral(initialConfig);
+    }
+    _emailService?.updateEndpointConfig(endpointConfig);
     if (state is AuthenticationComplete) {
       _homeRefreshSyncService.start();
     }
     _authRecoveryFuture = _recoverAuthTransaction();
-    _endpointConfigRecoveryFuture = _restoreEndpointConfig();
+    _endpointConfigRecoveryFuture = _endpointConfigCubit.restore();
+    _endpointConfigSubscription = _endpointConfigCubit.stream.listen(
+      _handleEndpointConfigUpdated,
+    );
+    _handleEndpointConfigUpdated(_endpointConfigCubit.state);
     _lifecycleListener = AppLifecycleListener(
       onResume: _loginIfStoredCredentials,
       onShow: _loginIfStoredCredentials,
@@ -267,19 +275,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final _legacySignupDraftClosedAtStorageKey = CredentialStore.registerKey(
     'signup_draft_last_closed_at',
   );
-  final endpointConfigStorageKey = CredentialStore.registerKey(
-    'endpoint_config_v1',
-  );
   final authTransactionStorageKey = CredentialStore.registerKey(
     'auth_transaction_v1',
   );
 
   final CredentialStore _credentialStore;
+  final EndpointConfigCubit _endpointConfigCubit;
   final XmppService _xmppService;
   final EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
-  EndpointConfig _endpointConfig;
   late final http.Client _httpClient;
   late final provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
@@ -289,6 +294,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
+  StreamSubscription<EndpointConfig>? _endpointConfigSubscription;
   VoidCallback? _foregroundListener;
   Future<void>? _pendingAccountDeletionFlush;
   String? _blockedSignupCredentialKey;
@@ -314,38 +320,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   late final AppLifecycleListener _lifecycleListener;
 
-  EndpointConfig get endpointConfig => _endpointConfig;
+  EndpointConfig get endpointConfig => _endpointConfigCubit.state;
 
-  Future<void> updateEndpointConfig(EndpointConfig config) async {
-    _endpointConfig = config;
+  Future<void> updateEndpointConfig(EndpointConfig config) =>
+      _endpointConfigCubit.updateConfig(config);
+
+  Future<void> resetEndpointConfig() => _endpointConfigCubit.reset();
+
+  void _handleEndpointConfigUpdated(EndpointConfig config) {
     _emailService?.updateEndpointConfig(config);
-    await _credentialStore.write(
-      key: endpointConfigStorageKey,
-      value: jsonEncode(config.toJson()),
-    );
-    _emit(state);
-    await _updateEmailForegroundKeepalive();
-  }
-
-  Future<void> resetEndpointConfig() =>
-      updateEndpointConfig(const EndpointConfig());
-
-  Future<void> _restoreEndpointConfig() async {
-    try {
-      final stored =
-          await _credentialStore.read(key: endpointConfigStorageKey) ?? '';
-      if (stored.isEmpty) {
-        return;
-      }
-      final decoded = jsonDecode(stored) as Map<String, dynamic>;
-      final restored = EndpointConfig.fromJson(decoded);
-      _endpointConfig = restored;
-      _emailService?.updateEndpointConfig(restored);
-      _emit(state);
-      await _updateEmailForegroundKeepalive();
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to restore endpoint config', error, stackTrace);
-    }
+    emit(state.copyWithConfig(config));
+    _updateEmailForegroundKeepalive();
   }
 
   String _resolveAuthApiScheme() {
@@ -353,13 +338,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!allowInsecure) {
       return _authApiSchemeHttps;
     }
-    return _endpointConfig.apiUseTls ? _authApiSchemeHttps : _authApiSchemeHttp;
+    return endpointConfig.apiUseTls ? _authApiSchemeHttps : _authApiSchemeHttp;
   }
 
   Uri _buildBaseUrl() => Uri(
         scheme: _resolveAuthApiScheme(),
-        host: _endpointConfig.domain,
-        port: _endpointConfig.apiPort,
+        host: endpointConfig.domain,
+        port: endpointConfig.apiPort,
       );
 
   Uri _buildRegistrationUrl() =>
@@ -434,7 +419,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is AuthenticationComplete) {
       _homeRefreshSyncService.start();
     }
-    emit(state.copyWithConfig(_endpointConfig));
+    emit(state.copyWithConfig(endpointConfig));
   }
 
   void _updateLoginBackoff(AuthenticationState nextState) {
@@ -594,7 +579,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String jid, {
     bool preserveActiveSession = false,
   }) async {
-    if (!_endpointConfig.enableSmtp) {
+    if (!endpointConfig.enableSmtp) {
       return;
     }
     await _emailService?.clearStoredCredentials(
@@ -653,7 +638,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _reconnectXmppForStickySession() async {
-    if (!_endpointConfig.enableXmpp) {
+    if (!endpointConfig.enableXmpp) {
       return;
     }
     if (withForeground && foregroundServiceActive.value) {
@@ -691,7 +676,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _triggerEmailReconnect() async {
-    if (!_endpointConfig.enableSmtp) return;
+    if (!endpointConfig.enableSmtp) return;
     final emailService = _emailService;
     if (emailService == null) return;
     try {
@@ -703,7 +688,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _attemptEmailProvisioningRecovery() async {
-    if (!_endpointConfig.enableSmtp) {
+    if (!endpointConfig.enableSmtp) {
       return;
     }
     final emailService = _emailService;
@@ -812,7 +797,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> _handleForegroundServiceActiveChanged() async {
     await _updateEmailForegroundKeepalive();
-    if (!_endpointConfig.enableXmpp || !_stickyAuthActive) {
+    if (!endpointConfig.enableXmpp || !_stickyAuthActive) {
       return;
     }
     if (!withForeground || !foregroundServiceActive.value) {
@@ -977,6 +962,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
+    await _endpointConfigSubscription?.cancel();
     _signupAvatarPublishRetryTimer?.cancel();
     _signupAvatarPublishRetryTimer = null;
     if (_foregroundListener != null) {
@@ -1039,17 +1025,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _loginInFlight = true;
     try {
+      final currentConfig = endpointConfig;
       _log.info(
         'Login requested '
         '(usingStoredCredentials: ${username == null && password == null}, '
-        'xmppEnabled: ${_endpointConfig.enableXmpp}, '
-        'smtpEnabled: ${_endpointConfig.enableSmtp})',
+        'xmppEnabled: ${currentConfig.enableXmpp}, '
+        'smtpEnabled: ${currentConfig.enableSmtp})',
       );
       _lastEmailProvisioningError = null;
       final AuthenticationState previousState = state;
       final usingStoredCredentials = username == null && password == null;
       final wasAuthenticated = previousState is AuthenticationComplete;
-      final configBeforeRecovery = _endpointConfig;
+      final configBeforeRecovery = currentConfig;
       final loginState = _activeSignupCredentialKey != null
           ? AuthenticationLogInInProgress(
               fromSignup: true,
@@ -1065,7 +1052,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       await _endpointConfigRecoveryFuture;
-      final config = _endpointConfig;
+      final config = endpointConfig;
       final xmppEnabled = config.enableXmpp;
       final smtpEnabled = config.enableSmtp;
       if (!xmppEnabled && !smtpEnabled) {
@@ -1444,7 +1431,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       if (state is! AuthenticationInProgress &&
           state is! AuthenticationComplete) {
-        _emit(AuthenticationLogInInProgress(config: _endpointConfig));
+        _emit(AuthenticationLogInInProgress(config: endpointConfig));
       }
       await _authRecoveryFuture;
       final demoDomain = kDemoSelfJid.split('@').last;
@@ -1453,11 +1440,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         enableXmpp: false,
         enableSmtp: false,
       );
-      if (_endpointConfig != demoConfig) {
-        _endpointConfig = demoConfig;
-        _emailService?.updateEndpointConfig(demoConfig);
-        _emit(state);
-        _updateEmailForegroundKeepalive();
+      if (endpointConfig != demoConfig) {
+        _endpointConfigCubit.overrideEphemeral(demoConfig);
       }
       await _xmppService.resumeOfflineSession(
         jid: kDemoSelfJid,
@@ -1643,7 +1627,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? addressOverride,
     bool persistCredentials = true,
   }) async {
-    if (!_endpointConfig.enableSmtp) {
+    if (!endpointConfig.enableSmtp) {
       return _ProvisioningStatus.ready;
     }
     final emailService = _emailService;
@@ -1816,7 +1800,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     if (!rememberMe) {
       await _clearLoginSecrets(jid: jid);
-      if (_endpointConfig.enableSmtp) {
+      if (endpointConfig.enableSmtp) {
         await _emailService?.clearStoredCredentials(
           jid: jid,
           preserveActiveSession: true,
@@ -1832,7 +1816,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphraseStorageKey: databasePassphraseStorageKey,
         databasePassphrase: databasePassphrase,
       );
-      if (_endpointConfig.enableSmtp) {
+      if (endpointConfig.enableSmtp) {
         await _emailService?.persistActiveCredentials(jid: jid);
       }
       await _credentialStore.write(key: jidStorageKey, value: jid);
@@ -1847,7 +1831,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      if (_endpointConfig.enableSmtp) {
+      if (endpointConfig.enableSmtp) {
         await _emailService?.clearStoredCredentials(
           jid: jid,
           preserveActiveSession: true,
@@ -1998,13 +1982,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _loginToDemoMode();
       return;
     }
+    final config = endpointConfig;
     _log.info(
       'Signup requested '
-      '(xmppEnabled: ${_endpointConfig.enableXmpp}, '
-      'smtpEnabled: ${_endpointConfig.enableSmtp})',
+      '(xmppEnabled: ${config.enableXmpp}, '
+      'smtpEnabled: ${config.enableSmtp})',
     );
     _emit(const AuthenticationSignUpInProgress());
-    final host = _endpointConfig.domain;
+    final host = config.domain;
     _signupAvatarDraft = avatar;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
       username: username,
@@ -2029,7 +2014,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     var signupComplete = false;
     provisioning.EmailProvisioningCredentials? emailProvisioningCredentials;
     try {
-      if (_emailService != null && _endpointConfig.enableSmtp) {
+      if (_emailService != null && config.enableSmtp) {
         emailProvisioningCredentials = await _emailProvisioningClient
             .createAccount(localpart: username, password: password);
         await _recordEmailProvisioning(
@@ -2190,7 +2175,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final currentJid = _authenticatedJid;
 
     await _homeRefreshSyncService.close();
-    if (_endpointConfig.enableSmtp) {
+    if (endpointConfig.enableSmtp) {
       if (severity == LogoutSeverity.burn) {
         await _emailService?.burn(jid: currentJid);
       } else {
@@ -2242,7 +2227,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _emit(const AuthenticationPasswordChangeInProgress());
     final normalizedUsername = username.trim();
-    final configuredHost = _endpointConfig.domain.trim();
+    final configuredHost = endpointConfig.domain.trim();
     final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
     if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
       _emit(
@@ -2253,8 +2238,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final resolvedJid = '$normalizedUsername@$resolvedHost';
-    final shouldChangeXmppPassword = _endpointConfig.enableXmpp;
-    final shouldChangeEmailPassword = _endpointConfig.enableSmtp;
+    final shouldChangeXmppPassword = endpointConfig.enableXmpp;
+    final shouldChangeEmailPassword = endpointConfig.enableSmtp;
     final resolvedEmail = shouldChangeEmailPassword
         ? await _resolveEmailAddress(
             username: normalizedUsername,
@@ -2462,7 +2447,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     _emit(const AuthenticationUnregisterInProgress());
     final normalizedUsername = username.trim();
-    final configuredHost = _endpointConfig.domain.trim();
+    final configuredHost = endpointConfig.domain.trim();
     final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
     if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
       _emit(
@@ -2473,11 +2458,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     const fallback = 'Unable to delete account. Please try again later.';
-    final shouldDeleteEmailAccount = _endpointConfig.enableSmtp;
-    final shouldDeleteXmppAccount = _endpointConfig.enableXmpp;
+    final shouldDeleteEmailAccount = endpointConfig.enableSmtp;
+    final shouldDeleteXmppAccount = endpointConfig.enableXmpp;
     if (!shouldDeleteEmailAccount && !shouldDeleteXmppAccount) {
-      _emit(const AuthenticationUnregisterFailure(
-          _accountDeletionDisabledMessage));
+      _emit(
+        const AuthenticationUnregisterFailure(_accountDeletionDisabledMessage),
+      );
       return;
     }
     try {
@@ -2611,7 +2597,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _updateEmailForegroundKeepalive() async {
     final emailService = _emailService;
     if (emailService == null) return;
-    final shouldRun = _endpointConfig.enableSmtp &&
+    final shouldRun = endpointConfig.enableSmtp &&
         foregroundServiceActive.value &&
         _authenticatedJid != null &&
         state is AuthenticationComplete;

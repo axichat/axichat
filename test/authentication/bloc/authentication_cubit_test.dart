@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
@@ -46,12 +47,15 @@ void main() {
   late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
   late MockHomeRefreshSyncService mockHomeRefreshSyncService;
+  late EndpointConfigCubit endpointConfigCubit;
   late Map<String, String?> credentialStorage;
 
   setUp(() {
     mockXmppService = MockXmppService();
     mockConnection = MockXmppConnection();
     mockCredentialStore = MockCredentialStore();
+    endpointConfigCubit =
+        EndpointConfigCubit(credentialStore: mockCredentialStore);
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
@@ -179,11 +183,14 @@ void main() {
         password: any(named: 'password'),
       ),
     ).thenAnswer((_) async {});
+
+    addTearDown(endpointConfigCubit.close);
   });
 
   test('Remember me choice defaults to true and persists updates', () async {
     final localBloc = AuthenticationCubit(
       credentialStore: mockCredentialStore,
+      endpointConfigCubit: endpointConfigCubit,
       xmppService: mockXmppService,
       httpClient: mockHttpClient,
       emailProvisioningClient: mockProvisioningClient,
@@ -200,6 +207,7 @@ void main() {
     setUp(() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -465,6 +473,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -545,6 +554,7 @@ void main() {
       'Persisting with rememberMe true writes SMTP credentials atomically after success.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -585,6 +595,7 @@ void main() {
       'Persisting with rememberMe false keeps SMTP session only in memory and stores only DB secrets.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -692,6 +703,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -728,6 +740,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -793,6 +806,7 @@ void main() {
       'Rolls back the account if login fails after registration.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -833,6 +847,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -886,6 +901,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -934,6 +950,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -977,6 +994,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1038,6 +1056,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -1087,6 +1106,7 @@ void main() {
       });
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1130,6 +1150,7 @@ void main() {
       'If authentication is not complete, does nothing.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1149,6 +1170,7 @@ void main() {
       'Automatic logout disconnects the xmpp service without forgetting credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1169,6 +1191,7 @@ void main() {
       'User initiated logout disconnects the xmpp service, forgets credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
@@ -1198,6 +1221,7 @@ void main() {
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
@@ -1221,6 +1245,7 @@ void main() {
       'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1239,6 +1264,7 @@ void main() {
       'Burn logout clears email storage when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
+        endpointConfigCubit: endpointConfigCubit,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,

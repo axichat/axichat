@@ -211,6 +211,47 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
 
+  Future<mox.PubSubError?> _configureNodeWithFallback(
+    SafePubSubManager pubsub,
+    mox.JID host,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async {
+    final configured = await pubsub.configureNode(host, node, config);
+    if (!configured.isType<mox.PubSubError>()) {
+      return null;
+    }
+    final error = configured.get<mox.PubSubError>();
+    logger.fine(
+      'PubSub node config failed. node=$node '
+      'accessModel=${config.accessModel.value} '
+      'error=${error.runtimeType}.',
+    );
+    if (!config.hasSendLastPublishedItem) {
+      return error;
+    }
+    logger.fine(
+      'PubSub node config retry without send_last. node=$node '
+      'accessModel=${config.accessModel.value}.',
+    );
+    final stripped = config.withoutSendLastPublishedItem();
+    final strippedResult = await pubsub.configureNode(host, node, stripped);
+    if (!strippedResult.isType<mox.PubSubError>()) {
+      logger.fine(
+        'PubSub node configured without send_last. node=$node '
+        'accessModel=${config.accessModel.value}.',
+      );
+      return null;
+    }
+    final strippedError = strippedResult.get<mox.PubSubError>();
+    logger.fine(
+      'PubSub node config failed without send_last. node=$node '
+      'accessModel=${config.accessModel.value} '
+      'error=${strippedError.runtimeType}.',
+    );
+    return strippedError;
+  }
+
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
         accessModel: mox.AccessModel.whitelist.value,
         maxItems: _maxItems,
@@ -322,33 +363,37 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     try {
       final config = _nodeConfig();
 
-      final configured = await pubsub.configureNode(
+      final configuredError = await _configureNodeWithFallback(
+        pubsub,
         host,
         conversationIndexNode,
         config,
       );
-      if (!configured.isType<mox.PubSubError>()) {
+      if (configuredError == null) {
         _nodeReady = true;
         return;
       }
-      final configuredError = configured.get<mox.PubSubError>();
       final shouldCreateNode = configuredError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
       }
+      logger.fine(
+        'PubSub node missing; creating node=$conversationIndexNode.',
+      );
 
       try {
         await pubsub.createNodeWithConfig(
           host,
-          _createNodeConfig(),
+          config.withoutSendLastPublishedItem().toNodeConfig(),
           nodeId: conversationIndexNode,
         );
-        final applied = await pubsub.configureNode(
+        final appliedError = await _configureNodeWithFallback(
+          pubsub,
           host,
           conversationIndexNode,
           config,
         );
-        if (!applied.isType<mox.PubSubError>()) {
+        if (appliedError == null) {
           _nodeReady = true;
           return;
         }
@@ -358,12 +403,13 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
       try {
         await pubsub.createNode(host, nodeId: conversationIndexNode);
-        final applied = await pubsub.configureNode(
+        final appliedError = await _configureNodeWithFallback(
+          pubsub,
           host,
           conversationIndexNode,
           config,
         );
-        if (!applied.isType<mox.PubSubError>()) {
+        if (appliedError == null) {
           _nodeReady = true;
         }
       } on Exception {

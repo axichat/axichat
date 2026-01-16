@@ -60,8 +60,7 @@ const String _emailAccountNotReadyError =
     'Email account not hydrated; wait for email sync.';
 const String _accountHydrationFailedLog =
     'Failed to hydrate email account address.';
-const String _originIdHydrationFailedLog =
-    'Failed to hydrate Delta origin ID.';
+const String _originIdHydrationFailedLog = 'Failed to hydrate Delta origin ID.';
 const String _attachmentHydrationFailedLog =
     'Failed to hydrate attachment metadata.';
 const String _missingOutgoingDeltaIdError =

@@ -9,6 +9,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -106,6 +107,7 @@ class ProfileScreen extends StatelessWidget {
                 EmailContactImportCubit(emailService: locate<EmailService>()),
           ),
           BlocProvider.value(value: locate<SettingsCubit>()),
+          BlocProvider.value(value: locate<EndpointConfigCubit>()),
           BlocProvider.value(value: locate<AuthenticationCubit>()),
           BlocProvider(
             create: (context) => ProfileExportCubit(

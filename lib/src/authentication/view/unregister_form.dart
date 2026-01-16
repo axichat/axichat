@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -67,7 +68,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
     if (!context.mounted || approved != true) return;
     await context.read<AuthenticationCubit>().unregister(
           username: context.read<ProfileCubit>().state.username,
-          host: context.read<AuthenticationCubit>().endpointConfig.domain,
+          host: context.read<EndpointConfigCubit>().state.domain,
           password: _passwordTextController.value.text,
         );
     _passwordTextController.clear();

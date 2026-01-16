@@ -538,6 +538,47 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   mox.NodeConfig _createNodeConfig(mox.AccessModel accessModel) =>
       _nodeConfig(accessModel).toNodeConfig();
 
+  Future<mox.PubSubError?> _configureNodeWithFallback(
+    SafePubSubManager pubsub,
+    mox.JID host,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async {
+    final configured = await pubsub.configureNode(host, node, config);
+    if (!configured.isType<mox.PubSubError>()) {
+      return null;
+    }
+    final error = configured.get<mox.PubSubError>();
+    logger.fine(
+      'PubSub node config failed. node=$node '
+      'accessModel=${config.accessModel.value} '
+      'error=${error.runtimeType}.',
+    );
+    if (!config.hasSendLastPublishedItem) {
+      return error;
+    }
+    logger.fine(
+      'PubSub node config retry without send_last. node=$node '
+      'accessModel=${config.accessModel.value}.',
+    );
+    final stripped = config.withoutSendLastPublishedItem();
+    final strippedResult = await pubsub.configureNode(host, node, stripped);
+    if (!strippedResult.isType<mox.PubSubError>()) {
+      logger.fine(
+        'PubSub node configured without send_last. node=$node '
+        'accessModel=${config.accessModel.value}.',
+      );
+      return null;
+    }
+    final strippedError = strippedResult.get<mox.PubSubError>();
+    logger.fine(
+      'PubSub node config failed without send_last. node=$node '
+      'accessModel=${config.accessModel.value} '
+      'error=${strippedError.runtimeType}.',
+    );
+    return strippedError;
+  }
+
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
         accessModel: _accessModel.value,
         maxItems: _maxItems,
@@ -594,46 +635,48 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = DateTime.timestamp();
     try {
       final primaryConfig = _nodeConfig(mox.AccessModel.whitelist);
-      final configured = await pubsub.configureNode(
+      final primaryError = await _configureNodeWithFallback(
+        pubsub,
         host,
         draftsPubSubNode,
         primaryConfig,
       );
-      if (!configured.isType<mox.PubSubError>()) {
+      if (primaryError == null) {
         _setAccessModel(mox.AccessModel.whitelist);
         return;
       }
 
       final fallbackConfig = _nodeConfig(mox.AccessModel.authorize);
-      final fallbackConfigured = await pubsub.configureNode(
+      final fallbackError = await _configureNodeWithFallback(
+        pubsub,
         host,
         draftsPubSubNode,
         fallbackConfig,
       );
-      if (!fallbackConfigured.isType<mox.PubSubError>()) {
+      if (fallbackError == null) {
         _setAccessModel(mox.AccessModel.authorize);
         return;
       }
-      final configuredError = configured.get<mox.PubSubError>();
-      final fallbackError = fallbackConfigured.get<mox.PubSubError>();
-      final shouldCreateNode = configuredError.indicatesMissingNode ||
+      final shouldCreateNode = primaryError.indicatesMissingNode ||
           fallbackError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
       }
+      logger.fine('PubSub node missing; creating node=$draftsPubSubNode.');
 
       try {
         await pubsub.createNodeWithConfig(
           host,
-          _createNodeConfig(mox.AccessModel.whitelist),
+          primaryConfig.withoutSendLastPublishedItem().toNodeConfig(),
           nodeId: draftsPubSubNode,
         );
-        final applied = await pubsub.configureNode(
+        final appliedError = await _configureNodeWithFallback(
+          pubsub,
           host,
           draftsPubSubNode,
           primaryConfig,
         );
-        if (!applied.isType<mox.PubSubError>()) {
+        if (appliedError == null) {
           _setAccessModel(mox.AccessModel.whitelist);
           return;
         }
@@ -644,15 +687,16 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          _createNodeConfig(mox.AccessModel.authorize),
+          fallbackConfig.withoutSendLastPublishedItem().toNodeConfig(),
           nodeId: draftsPubSubNode,
         );
-        final applied = await pubsub.configureNode(
+        final appliedError = await _configureNodeWithFallback(
+          pubsub,
           host,
           draftsPubSubNode,
           fallbackConfig,
         );
-        if (!applied.isType<mox.PubSubError>()) {
+        if (appliedError == null) {
           _setAccessModel(mox.AccessModel.authorize);
           return;
         }
@@ -662,21 +706,23 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
 
       try {
         await pubsub.createNode(host, nodeId: draftsPubSubNode);
-        final appliedPrimary = await pubsub.configureNode(
+        final appliedPrimaryError = await _configureNodeWithFallback(
+          pubsub,
           host,
           draftsPubSubNode,
           primaryConfig,
         );
-        if (!appliedPrimary.isType<mox.PubSubError>()) {
+        if (appliedPrimaryError == null) {
           _setAccessModel(mox.AccessModel.whitelist);
           return;
         }
-        final appliedFallback = await pubsub.configureNode(
+        final appliedFallbackError = await _configureNodeWithFallback(
+          pubsub,
           host,
           draftsPubSubNode,
           fallbackConfig,
         );
-        if (!appliedFallback.isType<mox.PubSubError>()) {
+        if (appliedFallbackError == null) {
           _setAccessModel(mox.AccessModel.authorize);
         }
       } on Exception {
