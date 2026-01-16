@@ -1617,7 +1617,7 @@
   "calendarSyncStatusSyncing": "Syncing...",
   "calendarSyncStatusFailed": "Sync failed",
   "calendarSyncStatusSynced": "Synced",
-  "calendarSyncStatusIdle": "Idle",
+  "calendarSyncStatusIdle": "Not synced yet",
   "calendarSplitTaskAtTime": "Split task at {time}",
   "calendarSplitSelectTime": "Select split time",
   "calendarTaskMarkIncomplete": "Mark incomplete",
@@ -1727,5 +1727,198 @@
     "placeholders": {
       "minutes": {}
     }
-  }
+  },
+  "calendarGuestModeNotice": "Guest Mode - Tasks saved locally on this device only",
+  "calendarGuestSignUpToSync": "Sign Up to Sync",
+  "calendarGuestExportNoData": "No calendar data available to export.",
+  "calendarGuestExportTitle": "Export guest calendar",
+  "calendarGuestExportShareSubject": "Axichat guest calendar export",
+  "calendarGuestExportShareText": "Axichat guest calendar export ({format})",
+  "calendarGuestExportFailed": "Failed to export calendar: {error}",
+  "calendarGuestImportTitle": "Import calendar",
+  "calendarGuestImportWarningMessage": "Importing will merge data and override matching items in your current calendar. Continue?",
+  "calendarGuestImportConfirmLabel": "Import",
+  "calendarGuestImportFileAccessError": "Unable to access the selected file.",
+  "calendarGuestImportNoData": "No calendar data detected in the selected file.",
+  "calendarGuestImportFailed": "Import failed to apply changes.",
+  "calendarGuestImportSuccess": "Imported calendar data.",
+  "calendarGuestImportNoTasks": "No tasks detected in the selected file.",
+  "calendarGuestImportTasksSuccess": "Imported {count, plural, one {# task} other {# tasks}}.",
+  "calendarGuestImportError": "Import failed: {error}",
+  "@calendarGuestExportShareText": {
+    "placeholders": {
+      "format": {}
+    }
+  },
+  "@calendarGuestExportFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@calendarGuestImportTasksSuccess": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarGuestImportError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "blocklistEmpty": "Nobody blocked",
+  "chatMessageSubjectLabel": "Subject",
+  "chatMessageRecipientsLabel": "Recipients",
+  "chatMessageAlsoSentToLabel": "Also sent to",
+  "chatMessageFromLabel": "From {sender}",
+  "chatMessageReactionsLabel": "Reactions",
+  "@chatMessageFromLabel": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "commonClearSelection": "Clear selection",
+  "commonSelectedCount": "{count, plural, one {# selected} other {# selected}}",
+  "@commonSelectedCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "profileDeviceFingerprint": "Device Fingerprint",
+  "profileFingerprintUnavailable": "Fingerprint unavailable",
+  "axiVersionCurrentFeatures": "Current features:",
+  "axiVersionCurrentFeaturesList": "Messaging, presence",
+  "axiVersionComingNext": "Coming next:",
+  "axiVersionComingNextList": "Groupchat, multimedia",
+  "commonMoreOptions": "More options",
+  "commonAreYouSure": "Are you sure?",
+  "commonAll": "All",
+  "languageSystem": "System",
+  "languageEnglish": "English",
+  "languageGerman": "Deutsch",
+  "languageSpanish": "Español",
+  "languageFrench": "Français",
+  "languageChineseSimplified": "简体中文",
+  "languageChineseHongKong": "繁體中文 (香港)",
+  "languageSystemShort": "SYS",
+  "languageEnglishShort": "EN",
+  "languageGermanShort": "DE",
+  "languageSpanishShort": "ES",
+  "languageFrenchShort": "FR",
+  "languageChineseSimplifiedShort": "ZH",
+  "languageChineseHongKongShort": "ZH-HK",
+  "languageSystemFlag": "🌐",
+  "languageEnglishFlag": "🇬🇧",
+  "languageGermanFlag": "🇩🇪",
+  "languageSpanishFlag": "🇪🇸",
+  "languageFrenchFlag": "🇫🇷",
+  "languageChineseSimplifiedFlag": "🇨🇳",
+  "languageChineseHongKongFlag": "🇭🇰",
+  "calendarTransferNoDataExport": "No calendar data available to export.",
+  "calendarTransferExportSubject": "Axichat calendar export",
+  "calendarTransferExportText": "Axichat calendar export ({format})",
+  "@calendarTransferExportText": {
+    "placeholders": {
+      "format": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarTransferExportReady": "Export ready to share.",
+  "calendarTransferExportFailed": "Failed to export calendar: {error}",
+  "@calendarTransferExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarTransferImportWarning": "Importing will merge data and override matching items in your current calendar. Continue?",
+  "calendarTransferImportConfirm": "Import",
+  "calendarTransferFileAccessFailed": "Unable to access the selected file.",
+  "calendarTransferNoDataImport": "No calendar data detected in the selected file.",
+  "calendarTransferImportFailed": "Import failed to apply changes.",
+  "calendarTransferImportSuccess": "Imported calendar data.",
+  "calendarTransferNoTasksDetected": "No tasks detected in the selected file.",
+  "calendarTransferImportTasksSuccess": "Imported {count} task{count, plural, one{} other{s}}.",
+  "@calendarTransferImportTasksSuccess": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTransferImportFailedWithError": "Import failed: {error}",
+  "@calendarTransferImportFailedWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarExportChooseFormat": "Choose export format",
+  "calendarAvailabilityWindowsTitle": "Availability windows",
+  "calendarAvailabilityWindowsSubtitle": "Define the time ranges you want to share.",
+  "calendarAvailabilityWindowsLabel": "Windows",
+  "calendarAvailabilityNoWindows": "No windows yet.",
+  "calendarAvailabilityWindowLabel": "Window",
+  "calendarAvailabilitySummaryLabel": "Summary",
+  "calendarAvailabilitySummaryHint": "Optional label",
+  "calendarAvailabilityNotesLabel": "Notes",
+  "calendarAvailabilityNotesHint": "Optional details",
+  "calendarAvailabilityAddWindow": "Add window",
+  "calendarAvailabilitySaveWindows": "Save windows",
+  "calendarAvailabilityEmptyWindowsError": "Add at least one availability window.",
+  "calendarAvailabilityInvalidRangeError": "Check the window ranges before saving.",
+  "calendarTaskShareTitle": "Share task",
+  "calendarTaskShareSubtitle": "Send a task to a chat as .ics.",
+  "calendarTaskShareTarget": "Share with",
+  "calendarTaskShareEditAccess": "Edit access",
+  "calendarTaskShareReadOnlyLabel": "Read only",
+  "calendarTaskShareReadOnlyHint": "Recipients can view this task, but only you can edit it.",
+  "calendarTaskShareEditableHint": "Recipients can edit this task, and updates sync back to your calendar.",
+  "calendarTaskShareReadOnlyDisabledHint": "Editing is only available for chat calendars.",
+  "calendarTaskShareMissingChats": "No chats available.",
+  "calendarTaskShareMissingRecipient": "Select a chat to share with.",
+  "calendarTaskShareServiceUnavailable": "Calendar sharing is unavailable.",
+  "calendarTaskShareDenied": "Calendar cards are disabled for your role in this room.",
+  "calendarTaskShareSendFailed": "Failed to share task.",
+  "calendarTaskShareSuccess": "Task shared.",
+  "commonTimeJustNow": "Just now",
+  "commonTimeMinutesAgo": "{count} min{count, plural, one{} other{s}} ago",
+  "@commonTimeMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeHoursAgo": "{count} hour{count, plural, one{} other{s}} ago",
+  "@commonTimeHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeDaysAgo": "{count} day{count, plural, one{} other{s}} ago",
+  "@commonTimeDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeWeeksAgo": "{count} week{count, plural, one{} other{s}} ago",
+  "@commonTimeWeeksAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeMonthsAgo": "Months ago",
+  "connectivityStatusConnected": "Connected",
+  "connectivityStatusConnecting": "Connecting...",
+  "connectivityStatusNotConnected": "Not connected.",
+  "connectivityStatusFailed": "Failed to connect."
 }

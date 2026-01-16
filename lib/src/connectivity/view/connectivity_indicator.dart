@@ -7,6 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -92,34 +93,35 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
     final brightness = Theme.of(context).brightness;
     final darkForeground =
         brightness == Brightness.dark ? colors.background : colors.foreground;
+    final l10n = context.l10n;
     final presentation = switch (_connectivityState) {
       ConnectivityConnected() => _ConnectivityIndicatorPresentation(
           show: _showConnectedSuccess,
           color: axiGreen,
           foregroundColor: darkForeground,
           iconData: LucideIcons.cloud,
-          text: 'Connected',
+          text: l10n.connectivityStatusConnected,
         ),
       ConnectivityConnecting() => _ConnectivityIndicatorPresentation(
           show: true,
           color: colors.primary,
           foregroundColor: colors.primaryForeground,
           iconData: LucideIcons.cloudCog,
-          text: 'Connecting...',
+          text: l10n.connectivityStatusConnecting,
         ),
       ConnectivityNotConnected() => _ConnectivityIndicatorPresentation(
           show: true,
           color: axiWarning,
           foregroundColor: darkForeground,
           iconData: LucideIcons.cloudOff,
-          text: 'Not connected.',
+          text: l10n.connectivityStatusNotConnected,
         ),
       ConnectivityError() => _ConnectivityIndicatorPresentation(
           show: true,
           color: colors.destructive,
           foregroundColor: colors.destructiveForeground,
           iconData: LucideIcons.cloudOff,
-          text: 'Failed to connect.',
+          text: l10n.connectivityStatusFailed,
         ),
     };
 

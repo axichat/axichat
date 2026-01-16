@@ -33,6 +33,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -357,6 +358,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final MucService _mucService;
   final SettingsCubit _settingsCubit;
   SettingsState _settingsState;
+
+  AppLocalizations get _l10n {
+    final locale = _settingsState.language.locale ?? const Locale('en');
+    return AppLocalizations.lookupAppLocalizations(locale);
+  }
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
@@ -2326,7 +2332,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final nextHydrationId = ++_composerHydrationSeed;
         emit(
           state.copyWith(
-            composerError: mappedError.asString,
+            composerError: mappedError.label(_l10n),
             composerHydrationId: nextHydrationId,
             composerHydrationText: trimmedText,
           ),
@@ -3175,7 +3181,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on DeltaChatException catch (error, stackTrace) {
       _log.safeWarning(_attachmentSendFailedLogMessage, error, stackTrace);
       final mappedError = DeltaErrorMapper.resolve(error.message);
-      final readableMessage = mappedError.asString;
+      final readableMessage = mappedError.label(_l10n);
       _markPendingAttachmentFailed(current.id, emit, message: readableMessage);
       emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
@@ -3260,7 +3266,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
       final mappedError = DeltaErrorMapper.resolve(error.message);
-      final readableMessage = mappedError.asString;
+      final readableMessage = mappedError.label(_l10n);
       emit(state.copyWith(composerError: readableMessage));
       return false;
     } on Exception catch (error, stackTrace) {
@@ -3404,7 +3410,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           stackTrace,
         );
         final mappedError = DeltaErrorMapper.resolve(error.message);
-        final readableMessage = mappedError.asString;
+        final readableMessage = mappedError.label(_l10n);
         _markPendingAttachmentsFailed(
           attachments,
           emit,
@@ -4377,7 +4383,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
-            ? message.error.asString
+            ? message.error.label(_l10n)
             : state.composerError,
         emailSubject: shouldHydrateSubject ? nextSubject : state.emailSubject,
         emailSubjectHydrationId: shouldHydrateSubject
@@ -4645,7 +4651,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
-            ? message.error.asString
+            ? message.error.label(_l10n)
             : state.composerError,
         pendingAttachments: pendingAttachments,
       ),
@@ -4883,9 +4889,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final mappedError = DeltaErrorMapper.resolve(error.message);
       emit(
         _attachToast(
-          state.copyWith(composerError: mappedError.asString),
-          const ChatToast(
-            message: 'Email resend failed. Check the error bubble for details.',
+          state.copyWith(composerError: mappedError.label(_l10n)),
+          ChatToast(
+            message: _l10n.chatEmailResendFailedDetails,
             variant: ChatToastVariant.destructive,
           ),
         ),

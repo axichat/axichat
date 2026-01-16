@@ -245,7 +245,10 @@ class ChatMessageDetails extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text('Subject', style: context.textTheme.muted),
+                          Text(
+                            context.l10n.chatMessageSubjectLabel,
+                            style: context.textTheme.muted,
+                          ),
                           Text(
                             shareContext!.subject!,
                             style: Theme.of(context)
@@ -261,7 +264,10 @@ class ChatMessageDetails extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text('Recipients', style: context.textTheme.muted),
+                          Text(
+                            context.l10n.chatMessageRecipientsLabel,
+                            style: context.textTheme.muted,
+                          ),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -285,7 +291,10 @@ class ChatMessageDetails extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text('Also sent to', style: context.textTheme.muted),
+                          Text(
+                            context.l10n.chatMessageAlsoSentToLabel,
+                            style: context.textTheme.muted,
+                          ),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -435,7 +444,7 @@ class ChatMessageDetails extends StatelessWidget {
                             style: context.textTheme.muted,
                           ),
                           Text(
-                            message.error.asString,
+                            message.error.label(l10n),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -868,7 +877,10 @@ class _RecipientsRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (sender != null)
-          Text('From $sender', style: context.textTheme.muted),
+          Text(
+            context.l10n.chatMessageFromLabel(sender),
+            style: context.textTheme.muted,
+          ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -901,7 +913,10 @@ class _ReactionsRow extends StatelessWidget {
       spacing: 8,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('Reactions', style: context.textTheme.muted),
+        Text(
+          context.l10n.chatMessageReactionsLabel,
+          style: context.textTheme.muted,
+        ),
         Wrap(
           spacing: 8,
           runSpacing: 8,

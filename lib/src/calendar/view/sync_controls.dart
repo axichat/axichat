@@ -27,16 +27,6 @@ const bool _defaultShowTransferMenu = true;
 const bool _defaultTransferMenuGhost = false;
 const bool _defaultTransferMenuUsePrimary = false;
 
-const String _noCalendarDataImportMessage =
-    'No calendar data detected in the selected file.';
-const String _calendarImportSuccessMessage = 'Imported calendar data.';
-const String _calendarImportFailureMessage = 'Import failed to apply changes.';
-const String _calendarImportWarningTitle = 'Import calendar';
-const String _calendarImportWarningMessage =
-    'Importing will merge data and override matching items in your current '
-    'calendar. Continue?';
-const String _calendarImportConfirmLabel = 'Import';
-
 class SyncControls extends StatelessWidget {
   const SyncControls({
     super.key,
@@ -114,9 +104,10 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
   }
 
   Future<void> _exportAll() async {
+    final l10n = context.l10n;
     final model = state.model;
     if (!model.hasCalendarData) {
-      FeedbackSystem.showInfo(context, 'No calendar data available to export.');
+      FeedbackSystem.showInfo(context, l10n.calendarTransferNoDataExport);
       return;
     }
     final format = await showCalendarExportFormatSheet(context);
@@ -127,8 +118,8 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
           : await _transferService.exportIcs(model: model);
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
-        subject: 'Axichat calendar export',
-        text: 'Axichat calendar export (${format.label})',
+        subject: l10n.calendarTransferExportSubject,
+        text: l10n.calendarTransferExportText(format.label),
       );
       if (!mounted) return;
       FeedbackSystem.showSuccess(
@@ -136,21 +127,25 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         calendarShareSuccessMessage(
           outcome: shareOutcome,
           filePath: file.path,
-          sharedText: 'Export ready to share.',
+          sharedText: l10n.calendarTransferExportReady,
         ),
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(context, 'Failed to export calendar: $error');
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarTransferExportFailed(error.toString()),
+      );
     }
   }
 
   Future<void> _importCalendar() async {
+    final l10n = context.l10n;
     final shouldImport = await confirm(
       context,
-      title: _calendarImportWarningTitle,
-      message: _calendarImportWarningMessage,
-      confirmLabel: _calendarImportConfirmLabel,
+      title: l10n.calendarImportCalendar,
+      message: l10n.calendarTransferImportWarning,
+      confirmLabel: l10n.calendarTransferImportConfirm,
     );
     if (shouldImport != true) {
       return;
@@ -166,7 +161,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
     final path = result.files.single.path;
     if (path == null) {
       if (!mounted) return;
-      FeedbackSystem.showError(context, 'Unable to access the selected file.');
+      FeedbackSystem.showError(context, l10n.calendarTransferFileAccessFailed);
       return;
     }
     final file = File(path);
@@ -176,7 +171,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         final importedModel = result.model!;
         if (!importedModel.hasCalendarData) {
           if (!mounted) return;
-          FeedbackSystem.showInfo(context, _noCalendarDataImportMessage);
+          FeedbackSystem.showInfo(context, l10n.calendarTransferNoDataImport);
           return;
         }
         if (!mounted) return;
@@ -192,19 +187,16 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
           return;
         }
         if (!imported) {
-          FeedbackSystem.showError(context, _calendarImportFailureMessage);
+          FeedbackSystem.showError(context, l10n.calendarTransferImportFailed);
           return;
         }
-        FeedbackSystem.showSuccess(context, _calendarImportSuccessMessage);
+        FeedbackSystem.showSuccess(context, l10n.calendarTransferImportSuccess);
         return;
       }
       final tasks = result.tasks;
       if (tasks.isEmpty) {
         if (!mounted) return;
-        FeedbackSystem.showInfo(
-          context,
-          'No tasks detected in the selected file.',
-        );
+        FeedbackSystem.showInfo(context, l10n.calendarTransferNoTasksDetected);
         return;
       }
       if (!mounted) return;
@@ -220,17 +212,19 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         return;
       }
       if (!imported) {
-        FeedbackSystem.showError(context, _calendarImportFailureMessage);
+        FeedbackSystem.showError(context, l10n.calendarTransferImportFailed);
         return;
       }
-      final String taskLabel = tasks.length == 1 ? '' : 's';
       FeedbackSystem.showSuccess(
         context,
-        'Imported ${tasks.length} task$taskLabel.',
+        l10n.calendarTransferImportTasksSuccess(tasks.length),
       );
     } catch (error) {
       if (!mounted) return;
-      FeedbackSystem.showError(context, 'Import failed: $error');
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarTransferImportFailedWithError(error.toString()),
+      );
     }
   }
 }
@@ -250,9 +244,10 @@ class SyncStatusIndicator extends StatelessWidget {
   }
 
   (String, Widget) _resolveVisual(BuildContext context) {
+    final l10n = context.l10n;
     if (state.isSyncing) {
       return (
-        'Syncing…',
+        l10n.calendarSyncStatusSyncing,
         const SizedBox(
           width: 16,
           height: 16,
@@ -262,20 +257,20 @@ class SyncStatusIndicator extends StatelessWidget {
     }
     if (state.syncError != null) {
       return (
-        'Sync failed',
+        l10n.calendarSyncStatusFailed,
         const Icon(LucideIcons.cloudAlert, size: 16, color: Colors.red),
       );
     }
     if (state.lastSyncTime != null) {
       return (
-        'Synced',
+        l10n.calendarSyncStatusSynced,
         const Icon(LucideIcons.cloudCheck, size: 16, color: Colors.green),
       );
     }
     final Color fallbackColor =
         Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
     return (
-      'Not synced yet',
+      l10n.calendarSyncStatusIdle,
       Icon(LucideIcons.cloud, size: 16, color: fallbackColor),
     );
   }

@@ -3,21 +3,29 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<bool?> confirm(
   BuildContext context, {
-  String title = 'Confirm',
+  String title = '',
   String? message,
   String? text,
-  String confirmLabel = 'Continue',
-  String cancelLabel = 'Cancel',
+  String confirmLabel = '',
+  String cancelLabel = '',
   bool destructiveConfirm = true,
   bool barrierDismissible = true,
   TextAlign messageAlign = TextAlign.start,
 }) {
-  final resolvedMessage = message ?? text ?? 'Are you sure?';
+  final resolvedTitle =
+      title.isEmpty ? context.l10n.commonConfirm : title;
+  final resolvedMessage = message ?? text ?? context.l10n.commonAreYouSure;
+  final resolvedConfirmLabel = confirmLabel.isEmpty
+      ? context.l10n.commonContinue
+      : confirmLabel;
+  final resolvedCancelLabel =
+      cancelLabel.isEmpty ? context.l10n.commonCancel : cancelLabel;
   final Widget? dialogBody = resolvedMessage.isEmpty
       ? null
       : Text(
@@ -33,15 +41,18 @@ Future<bool?> confirm(
       final Widget confirmButton = destructiveConfirm
           ? ShadButton.destructive(
               onPressed: () => pop(true),
-              child: Text(confirmLabel),
+              child: Text(resolvedConfirmLabel),
             )
-          : ShadButton(onPressed: () => pop(true), child: Text(confirmLabel));
+          : ShadButton(
+              onPressed: () => pop(true),
+              child: Text(resolvedConfirmLabel),
+            );
       return ShadDialog(
-        title: Text(title, style: context.modalHeaderTextStyle),
+        title: Text(resolvedTitle, style: context.modalHeaderTextStyle),
         actions: [
           ShadButton.outline(
             onPressed: () => pop(false),
-            child: Text(cancelLabel),
+            child: Text(resolvedCancelLabel),
           ).withTapBounce(),
           confirmButton.withTapBounce(),
         ],

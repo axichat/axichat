@@ -458,7 +458,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       builder: (context, value, _) {
         final bool canSave = editMode.isChecklistOnly
             ? true
-            : TaskTitleValidation.validate(value.text) == null;
+            : TaskTitleValidation.validate(value.text, context.l10n) == null;
         return _EditTaskHeader(
           onClose: widget.onClose,
           onSave: allowsAnyEdits && canSave ? _handleSave : null,
@@ -513,7 +513,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           valueListenable: _titleController,
           builder: (context, value, _) {
             final bool canSave =
-                TaskTitleValidation.validate(value.text) == null;
+                TaskTitleValidation.validate(value.text, context.l10n) == null;
             return _EditTaskActionsRow(
               task: widget.task,
               onDelete: () {
@@ -575,8 +575,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     ],
                     _EditTaskTitleField(
                       controller: _titleController,
-                      validator: (value) =>
-                          TaskTitleValidation.validate(value ?? ''),
+                          validator: (value) =>
+                          TaskTitleValidation.validate(
+                            value ?? '',
+                            context.l10n,
+                          ),
                       onChanged: _handleTitleChanged,
                       focusNode: _titleFocusNode,
                       autovalidateMode: AutovalidateMode.disabled,

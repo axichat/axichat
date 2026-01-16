@@ -1520,5 +1520,328 @@
   "emailForwardingGuideSettingsHint": "You can do this later in Settings.",
   "emailForwardingProviderGmail": "Gmail",
   "emailForwardingProviderOutlook": "Outlook",
-  "chatChooseTextToAdd": "選擇要新增的文字"
+  "chatChooseTextToAdd": "選擇要新增的文字",
+  "notificationChannelMessages": "訊息",
+  "notificationNewMessageTitle": "新訊息",
+  "notificationOpenAction": "開啟通知",
+  "notificationBackgroundConnectionDisabledTitle": "背景連線已停用",
+  "notificationBackgroundConnectionDisabledBody": "Android 阻止了 Axichat 的訊息服務。請重新啟用覆蓋層和電池最佳化權限以恢復背景訊息。",
+  "calendarReminderDeadlineNow": "立即到期",
+  "calendarReminderDueIn": "{duration}後到期",
+  "calendarReminderStartingNow": "現在開始",
+  "calendarReminderStartsIn": "{duration}後開始",
+  "calendarReminderHappeningToday": "今天進行",
+  "calendarReminderIn": "{duration}後",
+  "calendarReminderDurationDays": "{count, plural, one {# 天} other {# 天}}",
+  "calendarReminderDurationHours": "{count, plural, one {# 小時} other {# 小時}}",
+  "calendarReminderDurationMinutes": "{count, plural, one {# 分鐘} other {# 分鐘}}",
+  "calendarExportCalendar": "匯出日曆",
+  "calendarImportCalendar": "匯入日曆",
+  "calendarSyncStatusSyncing": "同步中...",
+  "calendarSyncStatusFailed": "同步失敗",
+  "calendarSyncStatusSynced": "已同步",
+  "calendarSyncStatusIdle": "尚未同步",
+  "calendarSplitTaskAtTime": "於 {time} 拆分任務",
+  "calendarSplitSelectTime": "選擇拆分時間",
+  "calendarTaskMarkIncomplete": "標記為未完成",
+  "calendarTaskMarkComplete": "標記為完成",
+  "calendarTaskRemoveImportant": "移除重要標記",
+  "calendarTaskMarkImportant": "標記為重要",
+  "calendarTaskRemoveUrgent": "移除緊急標記",
+  "calendarTaskMarkUrgent": "標記為緊急",
+  "calendarDeselectTask": "取消選取任務",
+  "calendarAddTaskToSelection": "將任務加入選取",
+  "calendarSelectTask": "選取任務",
+  "calendarDeselectAllRepeats": "取消選取所有重複項",
+  "calendarAddAllRepeats": "加入所有重複項",
+  "calendarSelectAllRepeats": "選取所有重複項",
+  "calendarAddToSelection": "加入選取",
+  "calendarSelectAllTasks": "選取所有任務",
+  "calendarExitSelectionMode": "離開選取模式",
+  "calendarSplitTask": "拆分任務",
+  "calendarCopyTemplate": "複製範本",
+  "calendarTaskAddedMessage": "已新增任務「{title}」",
+  "calendarTasksAddedMessage": "{count, plural, one {# 個任務已新增} other {# 個任務已新增}}",
+  "calendarTaskRemovedMessage": "已移除任務「{title}」",
+  "calendarTasksRemovedMessage": "{count, plural, one {# 個任務已移除} other {# 個任務已移除}}",
+  "calendarTaskRemovedTitle": "任務已移除",
+  "calendarDeadlinePlaceholder": "設定截止時間（可選）",
+  "calendarTaskDescriptionHint": "描述（可選）",
+  "calendarTaskLocationHint": "地點（可選）",
+  "calendarPickDateLabel": "選擇日期",
+  "calendarPickTimeLabel": "選擇時間",
+  "calendarReminderLabel": "提醒",
+  "calendarEditDayEventTitle": "編輯全天事件",
+  "calendarNewDayEventTitle": "新建全天事件",
+  "commonAdd": "新增",
+  "commonTitle": "標題",
+  "calendarShareUnavailable": "日曆分享不可用。",
+  "calendarShareAvailability": "分享可用時間",
+  "calendarShortcutUndo": "Ctrl/Cmd+Z",
+  "calendarShortcutRedo": "Ctrl/Cmd+Shift+Z",
+  "commonShortcutTooltip": "{tooltip}（{shortcut}）",
+  "calendarDragCanceled": "拖曳已取消",
+  "calendarZoomLabelCompact": "精簡",
+  "calendarZoomLabelComfort": "舒適",
+  "calendarZoomLabelExpanded": "擴展",
+  "calendarZoomLabelMinutes": "{minutes} 分鐘",
+  "calendarGuestModeNotice": "訪客模式 - 任務只會儲存在此裝置上",
+  "calendarGuestSignUpToSync": "註冊以同步",
+  "calendarGuestExportNoData": "沒有可匯出的日曆資料。",
+  "calendarGuestExportTitle": "匯出訪客日曆",
+  "calendarGuestExportShareSubject": "Axichat 訪客日曆匯出",
+  "calendarGuestExportShareText": "Axichat 訪客日曆匯出（{format}）",
+  "calendarGuestExportFailed": "匯出日曆失敗：{error}",
+  "calendarGuestImportTitle": "匯入日曆",
+  "calendarGuestImportWarningMessage": "匯入會合併資料並覆蓋目前日曆中相符的項目。繼續？",
+  "calendarGuestImportConfirmLabel": "匯入",
+  "calendarGuestImportFileAccessError": "無法存取所選檔案。",
+  "calendarGuestImportNoData": "所選檔案未偵測到日曆資料。",
+  "calendarGuestImportFailed": "匯入未能套用變更。",
+  "calendarGuestImportSuccess": "已匯入日曆資料。",
+  "calendarGuestImportNoTasks": "所選檔案未偵測到任務。",
+  "calendarGuestImportTasksSuccess": "已匯入 {count, plural, one {# 個任務} other {# 個任務}}。",
+  "calendarGuestImportError": "匯入失敗：{error}",
+  "@calendarReminderDueIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderStartsIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderDurationDays": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarReminderDurationHours": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarReminderDurationMinutes": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarSplitTaskAtTime": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "@calendarTaskAddedMessage": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "@calendarTasksAddedMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarTaskRemovedMessage": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "@calendarTasksRemovedMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarGuestExportShareText": {
+    "placeholders": {
+      "format": {}
+    }
+  },
+  "@calendarGuestExportFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@calendarGuestImportTasksSuccess": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarGuestImportError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@commonShortcutTooltip": {
+    "placeholders": {
+      "tooltip": {},
+      "shortcut": {}
+    }
+  },
+  "@calendarZoomLabelMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
+  "blocklistEmpty": "未封鎖任何人",
+  "chatMessageSubjectLabel": "主旨",
+  "chatMessageRecipientsLabel": "收件人",
+  "chatMessageAlsoSentToLabel": "亦發送給",
+  "chatMessageFromLabel": "來自 {sender}",
+  "chatMessageReactionsLabel": "回應",
+  "@chatMessageFromLabel": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "commonClearSelection": "清除選取",
+  "commonSelectedCount": "已選取 {count, plural, one {# 個} other {# 個}}",
+  "@commonSelectedCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "profileDeviceFingerprint": "裝置指紋",
+  "profileFingerprintUnavailable": "指紋不可用",
+  "axiVersionCurrentFeatures": "目前功能：",
+  "axiVersionCurrentFeaturesList": "訊息、狀態",
+  "axiVersionComingNext": "即將推出：",
+  "axiVersionComingNextList": "群聊、多媒體",
+  "commonMoreOptions": "更多選項",
+  "commonAreYouSure": "確定嗎？",
+  "commonAll": "全部",
+  "languageSystem": "系統",
+  "languageEnglish": "英文",
+  "languageGerman": "德文",
+  "languageSpanish": "西班牙文",
+  "languageFrench": "法文",
+  "languageChineseSimplified": "簡體中文",
+  "languageChineseHongKong": "繁體中文（香港）",
+  "languageSystemShort": "SYS",
+  "languageEnglishShort": "EN",
+  "languageGermanShort": "DE",
+  "languageSpanishShort": "ES",
+  "languageFrenchShort": "FR",
+  "languageChineseSimplifiedShort": "ZH",
+  "languageChineseHongKongShort": "ZH-HK",
+  "languageSystemFlag": "🌐",
+  "languageEnglishFlag": "🇬🇧",
+  "languageGermanFlag": "🇩🇪",
+  "languageSpanishFlag": "🇪🇸",
+  "languageFrenchFlag": "🇫🇷",
+  "languageChineseSimplifiedFlag": "🇨🇳",
+  "languageChineseHongKongFlag": "🇭🇰",
+  "calendarTransferNoDataExport": "沒有可匯出的日曆資料。",
+  "calendarTransferExportSubject": "Axichat 日曆匯出",
+  "calendarTransferExportText": "Axichat 日曆匯出（{format}）",
+  "@calendarTransferExportText": {
+    "placeholders": {
+      "format": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarTransferExportReady": "匯出已準備好分享。",
+  "calendarTransferExportFailed": "日曆匯出失敗：{error}",
+  "@calendarTransferExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarTransferImportWarning": "匯入將合併資料並覆蓋目前日曆中的相符項目。繼續？",
+  "calendarTransferImportConfirm": "匯入",
+  "calendarTransferFileAccessFailed": "無法存取所選檔案。",
+  "calendarTransferNoDataImport": "所選檔案中未偵測到日曆資料。",
+  "calendarTransferImportFailed": "匯入未能套用變更。",
+  "calendarTransferImportSuccess": "已匯入日曆資料。",
+  "calendarTransferNoTasksDetected": "所選檔案中未偵測到工作。",
+  "calendarTransferImportTasksSuccess": "已匯入 {count} 項工作。",
+  "@calendarTransferImportTasksSuccess": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTransferImportFailedWithError": "匯入失敗：{error}",
+  "@calendarTransferImportFailedWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarExportChooseFormat": "選擇匯出格式",
+  "calendarAvailabilityWindowsTitle": "可用時段視窗",
+  "calendarAvailabilityWindowsSubtitle": "定義你想分享的時間範圍。",
+  "calendarAvailabilityWindowsLabel": "視窗",
+  "calendarAvailabilityNoWindows": "暫無視窗。",
+  "calendarAvailabilityWindowLabel": "視窗",
+  "calendarAvailabilitySummaryLabel": "摘要",
+  "calendarAvailabilitySummaryHint": "可選標籤",
+  "calendarAvailabilityNotesLabel": "備註",
+  "calendarAvailabilityNotesHint": "可選詳細資料",
+  "calendarAvailabilityAddWindow": "新增視窗",
+  "calendarAvailabilitySaveWindows": "儲存視窗",
+  "calendarAvailabilityEmptyWindowsError": "請至少新增一個可用時段視窗。",
+  "calendarAvailabilityInvalidRangeError": "儲存前請檢查時間範圍。",
+  "calendarTaskShareTitle": "分享工作",
+  "calendarTaskShareSubtitle": "將工作以 .ics 傳送到聊天。",
+  "calendarTaskShareTarget": "分享給",
+  "calendarTaskShareEditAccess": "編輯權限",
+  "calendarTaskShareReadOnlyLabel": "唯讀",
+  "calendarTaskShareReadOnlyHint": "收件人可查看此工作，但只有你可以編輯。",
+  "calendarTaskShareEditableHint": "收件人可以編輯此工作，更新會同步回你的日曆。",
+  "calendarTaskShareReadOnlyDisabledHint": "編輯僅適用於聊天日曆。",
+  "calendarTaskShareMissingChats": "沒有可用的聊天。",
+  "calendarTaskShareMissingRecipient": "請選擇要分享的聊天。",
+  "calendarTaskShareServiceUnavailable": "日曆分享不可用。",
+  "calendarTaskShareDenied": "此聊天室中你的角色已停用日曆卡片。",
+  "calendarTaskShareSendFailed": "分享工作失敗。",
+  "calendarTaskShareSuccess": "工作已分享。",
+  "commonTimeJustNow": "剛剛",
+  "commonTimeMinutesAgo": "{count} 分鐘前",
+  "@commonTimeMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeHoursAgo": "{count} 小時前",
+  "@commonTimeHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeDaysAgo": "{count} 天前",
+  "@commonTimeDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeWeeksAgo": "{count} 週前",
+  "@commonTimeWeeksAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeMonthsAgo": "數月前",
+  "connectivityStatusConnected": "已連線",
+  "connectivityStatusConnecting": "正在連線...",
+  "connectivityStatusNotConnected": "未連線。",
+  "connectivityStatusFailed": "連線失敗。"
 }

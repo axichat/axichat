@@ -95,7 +95,7 @@ class ErrorDisplay extends StatelessWidget {
         return l10n.calendarErrorTitleEmpty;
       }
       if (error.contains('Title too long')) {
-        return calendarTaskTitleFriendlyError;
+        return l10n.calendarTaskTitleTooLong(calendarTaskTitleMaxLength);
       }
       if (error.contains('Description too long')) {
         return l10n.calendarErrorDescriptionTooLong;

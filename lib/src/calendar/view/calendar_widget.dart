@@ -110,10 +110,17 @@ class _CalendarWidgetState
     }
     final warning = state.syncWarning;
     if (warning != null && mounted) {
+      final l10n = context.l10n;
+      final (String title, String message) = switch (warning.type) {
+        CalendarSyncWarningType.snapshotUnavailable => (
+            l10n.calendarSyncWarningSnapshotTitle,
+            l10n.calendarSyncWarningSnapshotMessage,
+          ),
+      };
       FeedbackSystem.showWarning(
         context,
-        warning.message,
-        title: warning.title,
+        message,
+        title: title,
       );
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }

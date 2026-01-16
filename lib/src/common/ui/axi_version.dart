@@ -30,11 +30,23 @@ class AxiVersion extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox.square(dimension: 16.0),
-                  Text('Current features:', style: context.textTheme.table),
-                  Text('Messaging, presence', style: context.textTheme.list),
+                  Text(
+                    context.l10n.axiVersionCurrentFeatures,
+                    style: context.textTheme.table,
+                  ),
+                  Text(
+                    context.l10n.axiVersionCurrentFeaturesList,
+                    style: context.textTheme.list,
+                  ),
                   const SizedBox.square(dimension: 16.0),
-                  Text('Coming next:', style: context.textTheme.table),
-                  Text('Groupchat, multimedia', style: context.textTheme.list),
+                  Text(
+                    context.l10n.axiVersionComingNext,
+                    style: context.textTheme.table,
+                  ),
+                  Text(
+                    context.l10n.axiVersionComingNextList,
+                    style: context.textTheme.list,
+                  ),
                 ],
               ),
             ),

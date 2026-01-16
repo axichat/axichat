@@ -1520,5 +1520,328 @@
   "emailForwardingGuideSettingsHint": "You can do this later in Settings.",
   "emailForwardingProviderGmail": "Gmail",
   "emailForwardingProviderOutlook": "Outlook",
-  "chatChooseTextToAdd": "Elegir texto para añadir"
+  "chatChooseTextToAdd": "Elegir texto para añadir",
+  "notificationChannelMessages": "Mensajes",
+  "notificationNewMessageTitle": "Nuevo mensaje",
+  "notificationOpenAction": "Abrir notificación",
+  "notificationBackgroundConnectionDisabledTitle": "Conexión en segundo plano desactivada",
+  "notificationBackgroundConnectionDisabledBody": "Android bloqueó el servicio de mensajes de Axichat. Vuelve a habilitar los permisos de superposición y optimización de batería para restaurar la mensajería en segundo plano.",
+  "calendarReminderDeadlineNow": "Vence ahora",
+  "calendarReminderDueIn": "Vence en {duration}",
+  "calendarReminderStartingNow": "Empieza ahora",
+  "calendarReminderStartsIn": "Empieza en {duration}",
+  "calendarReminderHappeningToday": "Sucede hoy",
+  "calendarReminderIn": "En {duration}",
+  "calendarReminderDurationDays": "{count, plural, one {# día} other {# días}}",
+  "calendarReminderDurationHours": "{count, plural, one {# hora} other {# horas}}",
+  "calendarReminderDurationMinutes": "{count, plural, one {# minuto} other {# minutos}}",
+  "calendarExportCalendar": "Exportar calendario",
+  "calendarImportCalendar": "Importar calendario",
+  "calendarSyncStatusSyncing": "Sincronizando...",
+  "calendarSyncStatusFailed": "Sincronización fallida",
+  "calendarSyncStatusSynced": "Sincronizado",
+  "calendarSyncStatusIdle": "Aún no sincronizado",
+  "calendarSplitTaskAtTime": "Dividir tarea a las {time}",
+  "calendarSplitSelectTime": "Seleccionar hora de división",
+  "calendarTaskMarkIncomplete": "Marcar como incompleta",
+  "calendarTaskMarkComplete": "Marcar como completa",
+  "calendarTaskRemoveImportant": "Quitar marca importante",
+  "calendarTaskMarkImportant": "Marcar como importante",
+  "calendarTaskRemoveUrgent": "Quitar marca urgente",
+  "calendarTaskMarkUrgent": "Marcar como urgente",
+  "calendarDeselectTask": "Deseleccionar tarea",
+  "calendarAddTaskToSelection": "Añadir tarea a la selección",
+  "calendarSelectTask": "Seleccionar tarea",
+  "calendarDeselectAllRepeats": "Deseleccionar todas las repeticiones",
+  "calendarAddAllRepeats": "Añadir todas las repeticiones",
+  "calendarSelectAllRepeats": "Seleccionar todas las repeticiones",
+  "calendarAddToSelection": "Añadir a la selección",
+  "calendarSelectAllTasks": "Seleccionar todas las tareas",
+  "calendarExitSelectionMode": "Salir del modo de selección",
+  "calendarSplitTask": "Dividir tarea",
+  "calendarCopyTemplate": "Copiar plantilla",
+  "calendarTaskAddedMessage": "Tarea \"{title}\" añadida",
+  "calendarTasksAddedMessage": "{count, plural, one {# tarea añadida} other {# tareas añadidas}}",
+  "calendarTaskRemovedMessage": "Tarea \"{title}\" eliminada",
+  "calendarTasksRemovedMessage": "{count, plural, one {# tarea eliminada} other {# tareas eliminadas}}",
+  "calendarTaskRemovedTitle": "Tarea eliminada",
+  "calendarDeadlinePlaceholder": "Establecer fecha límite (opcional)",
+  "calendarTaskDescriptionHint": "Descripción (opcional)",
+  "calendarTaskLocationHint": "Ubicación (opcional)",
+  "calendarPickDateLabel": "Elegir fecha",
+  "calendarPickTimeLabel": "Elegir hora",
+  "calendarReminderLabel": "Recordatorio",
+  "calendarEditDayEventTitle": "Editar evento del día",
+  "calendarNewDayEventTitle": "Nuevo evento del día",
+  "commonAdd": "Añadir",
+  "commonTitle": "Título",
+  "calendarShareUnavailable": "El uso compartido del calendario no está disponible.",
+  "calendarShareAvailability": "Compartir disponibilidad",
+  "calendarShortcutUndo": "Ctrl/Cmd+Z",
+  "calendarShortcutRedo": "Ctrl/Cmd+Shift+Z",
+  "commonShortcutTooltip": "{tooltip} ({shortcut})",
+  "calendarDragCanceled": "Arrastre cancelado",
+  "calendarZoomLabelCompact": "Compacto",
+  "calendarZoomLabelComfort": "Cómodo",
+  "calendarZoomLabelExpanded": "Expandido",
+  "calendarZoomLabelMinutes": "{minutes}m",
+  "calendarGuestModeNotice": "Modo invitado: las tareas se guardan solo en este dispositivo",
+  "calendarGuestSignUpToSync": "Regístrate para sincronizar",
+  "calendarGuestExportNoData": "No hay datos del calendario para exportar.",
+  "calendarGuestExportTitle": "Exportar calendario de invitado",
+  "calendarGuestExportShareSubject": "Exportación del calendario de invitado de Axichat",
+  "calendarGuestExportShareText": "Exportación del calendario de invitado de Axichat ({format})",
+  "calendarGuestExportFailed": "Error al exportar el calendario: {error}",
+  "calendarGuestImportTitle": "Importar calendario",
+  "calendarGuestImportWarningMessage": "La importación combinará datos y sobrescribirá los elementos coincidentes en tu calendario actual. ¿Continuar?",
+  "calendarGuestImportConfirmLabel": "Importar",
+  "calendarGuestImportFileAccessError": "No se puede acceder al archivo seleccionado.",
+  "calendarGuestImportNoData": "No se detectaron datos de calendario en el archivo seleccionado.",
+  "calendarGuestImportFailed": "La importación no pudo aplicar los cambios.",
+  "calendarGuestImportSuccess": "Datos del calendario importados.",
+  "calendarGuestImportNoTasks": "No se detectaron tareas en el archivo seleccionado.",
+  "calendarGuestImportTasksSuccess": "Se importaron {count, plural, one {# tarea} other {# tareas}}.",
+  "calendarGuestImportError": "Falló la importación: {error}",
+  "@calendarReminderDueIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderStartsIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderIn": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@calendarReminderDurationDays": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarReminderDurationHours": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarReminderDurationMinutes": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarSplitTaskAtTime": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "@calendarTaskAddedMessage": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "@calendarTasksAddedMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarTaskRemovedMessage": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "@calendarTasksRemovedMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarGuestExportShareText": {
+    "placeholders": {
+      "format": {}
+    }
+  },
+  "@calendarGuestExportFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@calendarGuestImportTasksSuccess": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@calendarGuestImportError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@commonShortcutTooltip": {
+    "placeholders": {
+      "tooltip": {},
+      "shortcut": {}
+    }
+  },
+  "@calendarZoomLabelMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
+  "blocklistEmpty": "Nadie bloqueado",
+  "chatMessageSubjectLabel": "Asunto",
+  "chatMessageRecipientsLabel": "Destinatarios",
+  "chatMessageAlsoSentToLabel": "También enviado a",
+  "chatMessageFromLabel": "De {sender}",
+  "chatMessageReactionsLabel": "Reacciones",
+  "@chatMessageFromLabel": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "commonClearSelection": "Borrar selección",
+  "commonSelectedCount": "{count, plural, one {# seleccionado} other {# seleccionados}}",
+  "@commonSelectedCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "profileDeviceFingerprint": "Huella del dispositivo",
+  "profileFingerprintUnavailable": "Huella no disponible",
+  "axiVersionCurrentFeatures": "Funciones actuales:",
+  "axiVersionCurrentFeaturesList": "Mensajería, presencia",
+  "axiVersionComingNext": "Próximamente:",
+  "axiVersionComingNextList": "Chat grupal, multimedia",
+  "commonMoreOptions": "Más opciones",
+  "commonAreYouSure": "¿Estás seguro?",
+  "commonAll": "Todos",
+  "languageSystem": "Sistema",
+  "languageEnglish": "Inglés",
+  "languageGerman": "Alemán",
+  "languageSpanish": "Español",
+  "languageFrench": "Francés",
+  "languageChineseSimplified": "Chino simplificado",
+  "languageChineseHongKong": "Chino (Hong Kong)",
+  "languageSystemShort": "SYS",
+  "languageEnglishShort": "EN",
+  "languageGermanShort": "DE",
+  "languageSpanishShort": "ES",
+  "languageFrenchShort": "FR",
+  "languageChineseSimplifiedShort": "ZH",
+  "languageChineseHongKongShort": "ZH-HK",
+  "languageSystemFlag": "🌐",
+  "languageEnglishFlag": "🇬🇧",
+  "languageGermanFlag": "🇩🇪",
+  "languageSpanishFlag": "🇪🇸",
+  "languageFrenchFlag": "🇫🇷",
+  "languageChineseSimplifiedFlag": "🇨🇳",
+  "languageChineseHongKongFlag": "🇭🇰",
+  "calendarTransferNoDataExport": "No hay datos de calendario disponibles para exportar.",
+  "calendarTransferExportSubject": "Exportación de calendario de Axichat",
+  "calendarTransferExportText": "Exportación de calendario de Axichat ({format})",
+  "@calendarTransferExportText": {
+    "placeholders": {
+      "format": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarTransferExportReady": "Exportación lista para compartir.",
+  "calendarTransferExportFailed": "Error al exportar el calendario: {error}",
+  "@calendarTransferExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarTransferImportWarning": "La importación fusionará los datos y sobrescribirá los elementos coincidentes en tu calendario actual. ¿Continuar?",
+  "calendarTransferImportConfirm": "Importar",
+  "calendarTransferFileAccessFailed": "No se puede acceder al archivo seleccionado.",
+  "calendarTransferNoDataImport": "No se detectaron datos de calendario en el archivo seleccionado.",
+  "calendarTransferImportFailed": "No se pudieron aplicar los cambios de la importación.",
+  "calendarTransferImportSuccess": "Datos de calendario importados.",
+  "calendarTransferNoTasksDetected": "No se detectaron tareas en el archivo seleccionado.",
+  "calendarTransferImportTasksSuccess": "Se importó {count} tarea{count, plural, one{} other{s}}.",
+  "@calendarTransferImportTasksSuccess": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTransferImportFailedWithError": "Falló la importación: {error}",
+  "@calendarTransferImportFailedWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarExportChooseFormat": "Elegir formato de exportación",
+  "calendarAvailabilityWindowsTitle": "Ventanas de disponibilidad",
+  "calendarAvailabilityWindowsSubtitle": "Define los rangos de tiempo que quieres compartir.",
+  "calendarAvailabilityWindowsLabel": "Ventanas",
+  "calendarAvailabilityNoWindows": "Aún no hay ventanas.",
+  "calendarAvailabilityWindowLabel": "Ventana",
+  "calendarAvailabilitySummaryLabel": "Resumen",
+  "calendarAvailabilitySummaryHint": "Etiqueta opcional",
+  "calendarAvailabilityNotesLabel": "Notas",
+  "calendarAvailabilityNotesHint": "Detalles opcionales",
+  "calendarAvailabilityAddWindow": "Añadir ventana",
+  "calendarAvailabilitySaveWindows": "Guardar ventanas",
+  "calendarAvailabilityEmptyWindowsError": "Añade al menos una ventana de disponibilidad.",
+  "calendarAvailabilityInvalidRangeError": "Revisa los rangos de las ventanas antes de guardar.",
+  "calendarTaskShareTitle": "Compartir tarea",
+  "calendarTaskShareSubtitle": "Envía una tarea a un chat como .ics.",
+  "calendarTaskShareTarget": "Compartir con",
+  "calendarTaskShareEditAccess": "Acceso de edición",
+  "calendarTaskShareReadOnlyLabel": "Solo lectura",
+  "calendarTaskShareReadOnlyHint": "Los destinatarios pueden ver esta tarea, pero solo tú puedes editarla.",
+  "calendarTaskShareEditableHint": "Los destinatarios pueden editar esta tarea y las actualizaciones se sincronizan con tu calendario.",
+  "calendarTaskShareReadOnlyDisabledHint": "La edición solo está disponible para calendarios de chat.",
+  "calendarTaskShareMissingChats": "No hay chats disponibles.",
+  "calendarTaskShareMissingRecipient": "Selecciona un chat para compartir.",
+  "calendarTaskShareServiceUnavailable": "El uso compartido del calendario no está disponible.",
+  "calendarTaskShareDenied": "Las tarjetas de calendario están deshabilitadas para tu rol en esta sala.",
+  "calendarTaskShareSendFailed": "No se pudo compartir la tarea.",
+  "calendarTaskShareSuccess": "Tarea compartida.",
+  "commonTimeJustNow": "Justo ahora",
+  "commonTimeMinutesAgo": "Hace {count} min",
+  "@commonTimeMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeHoursAgo": "Hace {count} hora{count, plural, one{} other{s}}",
+  "@commonTimeHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeDaysAgo": "Hace {count} día{count, plural, one{} other{s}}",
+  "@commonTimeDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeWeeksAgo": "Hace {count} semana{count, plural, one{} other{s}}",
+  "@commonTimeWeeksAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonTimeMonthsAgo": "Hace meses",
+  "connectivityStatusConnected": "Conectado",
+  "connectivityStatusConnecting": "Conectando...",
+  "connectivityStatusNotConnected": "No conectado.",
+  "connectivityStatusFailed": "Error al conectar."
 }

@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class CalendarSyncWarning {
-  const CalendarSyncWarning({required this.title, required this.message});
+  const CalendarSyncWarning({required this.type});
 
-  final String title;
-  final String message;
+  final CalendarSyncWarningType type;
 }
+
+enum CalendarSyncWarningType { snapshotUnavailable }

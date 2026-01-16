@@ -709,7 +709,7 @@ class _TaskLocationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Text('📍 ', style: TextStyle(fontSize: 11)),
+        const Icon(Icons.location_on, size: 12),
         Expanded(
           child: Text(
             location,

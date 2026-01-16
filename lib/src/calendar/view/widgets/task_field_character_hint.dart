@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 const double _taskTitleLimitWarningBottomPadding = 4;
 const double _taskTitleLimitWarningFontSize = 12;
@@ -42,14 +43,17 @@ class TaskFieldCharacterHint extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (showWarningText && overLimit)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(
                     bottom: _taskTitleLimitWarningBottomPadding,
                   ),
-                  child: _TaskTitleLimitWarningText(),
+                  child: _TaskTitleLimitWarningText(
+                    message:
+                        context.l10n.calendarTaskTitleLimitWarning(limit),
+                  ),
                 ),
               Text(
-                '$length / $limit characters',
+                context.l10n.calendarTaskTitleCharacterCount(length, limit),
                 style: TextStyle(
                   color: counterColor,
                   fontSize: _taskTitleLimitWarningFontSize,
@@ -64,12 +68,14 @@ class TaskFieldCharacterHint extends StatelessWidget {
 }
 
 class _TaskTitleLimitWarningText extends StatelessWidget {
-  const _TaskTitleLimitWarningText();
+  const _TaskTitleLimitWarningText({required this.message});
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      calendarTaskTitleLimitWarning,
+      message,
       style: TextStyle(
         color: calendarDangerColor,
         fontSize: _taskTitleLimitWarningFontSize,

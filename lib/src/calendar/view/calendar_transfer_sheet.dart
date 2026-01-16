@@ -9,8 +9,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   BuildContext context, {
-  String title = 'Choose export format',
+  String? title,
 }) {
+  final resolvedTitle = title ?? context.l10n.calendarExportChooseFormat;
   return showAdaptiveBottomSheet<CalendarExportFormat>(
     context: context,
     useSafeArea: true,
@@ -19,7 +20,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
     builder: (sheetContext) {
       return AxiSheetScaffold.scroll(
         header: AxiSheetHeader(
-          title: Text(title),
+          title: Text(resolvedTitle),
           onClose: () => Navigator.of(sheetContext).maybePop(),
         ),
         children: [

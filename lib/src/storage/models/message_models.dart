@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/drift.dart' hide JsonKey;
@@ -68,45 +69,47 @@ enum MessageError {
 
   bool get isNotNone => this != none;
 
-  String? get tooltip {
+  String? tooltip(AppLocalizations l10n) {
     if (this == serviceUnavailable) {
-      return 'Recipient\'s client or server does not support this action.';
+      return l10n.messageErrorServiceUnavailableTooltip;
     }
     return null;
   }
 
-  String get asString => switch (this) {
-        serviceUnavailable =>
-          'Recipient\'s client or server does not support this action',
-        serverNotFound => 'Could not reach server',
-        serverTimeout => 'Server timeout',
-        unknown =>
-          'Message failed to send. Check your connection and try again.',
-        notEncryptedForDevice => 'Message not encrypted for this device',
-        malformedKey => 'Message has malformed encrypted key',
-        unknownSPK => 'Message has unknown Signed Prekey',
-        noDeviceSession => 'No session with this device',
-        skippingTooManyKeys => 'Message would skip too many keys',
-        invalidHMAC => 'Invalid HMAC',
-        malformedCiphertext => 'Malformed ciphertext',
-        noKeyMaterial => 'Can\'t find contact\'s devices',
-        invalidKEX => 'Invalid Key Exchange Signature',
-        unknownOmemoError => 'Unknown encryption error',
-        invalidAffixElements => 'Invalid affix elements',
-        emptyDeviceList => 'Contact has no devices to encrypt for',
-        omemoUnsupported => 'Contact doesn\'t support encryption',
-        encryptionFailure => 'Encryption failed',
-        invalidEnvelope => 'Invalid contents',
-        plaintextFileInOmemo =>
-          'Attachment could not be encrypted. Please try again.',
-        emailSendFailure => 'Email failed to send',
-        emailAttachmentTooLarge => 'Attachment is too large to send',
-        emailRecipientRejected => 'Recipient email server rejected the message',
+  String label(AppLocalizations l10n) => switch (this) {
+        serviceUnavailable => l10n.messageErrorServiceUnavailable,
+        serverNotFound => l10n.messageErrorServerNotFound,
+        serverTimeout => l10n.messageErrorServerTimeout,
+        unknown => l10n.messageErrorUnknown,
+        notEncryptedForDevice => l10n.messageErrorNotEncryptedForDevice,
+        malformedKey => l10n.messageErrorMalformedKey,
+        unknownSPK => l10n.messageErrorUnknownSignedPrekey,
+        noDeviceSession => l10n.messageErrorNoDeviceSession,
+        skippingTooManyKeys => l10n.messageErrorSkippingTooManyKeys,
+        invalidHMAC => l10n.messageErrorInvalidHmac,
+        malformedCiphertext => l10n.messageErrorMalformedCiphertext,
+        noKeyMaterial => l10n.messageErrorNoKeyMaterial,
+        noDecryptionKey => l10n.messageErrorNoDecryptionKey,
+        invalidKEX => l10n.messageErrorInvalidKex,
+        unknownOmemoError => l10n.messageErrorUnknownOmemo,
+        invalidAffixElements => l10n.messageErrorInvalidAffixElements,
+        emptyDeviceList => l10n.messageErrorEmptyDeviceList,
+        omemoUnsupported => l10n.messageErrorOmemoUnsupported,
+        encryptionFailure => l10n.messageErrorEncryptionFailure,
+        invalidEnvelope => l10n.messageErrorInvalidEnvelope,
+        fileDownloadFailure => l10n.messageErrorFileDownloadFailure,
+        fileUploadFailure => l10n.messageErrorFileUploadFailure,
+        fileDecryptionFailure => l10n.messageErrorFileDecryptionFailure,
+        fileEncryptionFailure => l10n.messageErrorFileEncryptionFailure,
+        plaintextFileInOmemo => l10n.messageErrorPlaintextFileInOmemo,
+        emailSendFailure => l10n.messageErrorEmailSendFailure,
+        emailAttachmentTooLarge => l10n.messageErrorEmailAttachmentTooLarge,
+        emailRecipientRejected => l10n.messageErrorEmailRecipientRejected,
         emailAuthenticationFailed =>
-          'Email credentials were rejected by the server',
-        emailBounced => 'Email bounced back from the recipient',
-        emailThrottled => 'Email sending temporarily throttled',
-        _ => toString(),
+          l10n.messageErrorEmailAuthenticationFailed,
+        emailBounced => l10n.messageErrorEmailBounced,
+        emailThrottled => l10n.messageErrorEmailThrottled,
+        _ => l10n.messageErrorUnknown,
       };
 
   static MessageError fromOmemo(Object? error) => switch (error) {

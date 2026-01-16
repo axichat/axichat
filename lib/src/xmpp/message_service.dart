@@ -5275,8 +5275,7 @@ mixin MessageService
     if (owner is XmppService &&
         (owner as XmppService)._calendarSyncWarningCallback != null) {
       const warning = CalendarSyncWarning(
-        title: calendarSnapshotUnavailableWarningTitle,
-        message: calendarSnapshotUnavailableWarningMessage,
+        type: CalendarSyncWarningType.snapshotUnavailable,
       );
       try {
         await (owner as XmppService)._calendarSyncWarningCallback!(warning);
