@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/jid_extensions.dart';
@@ -32,6 +33,10 @@ const bool _deliverPayloadsEnabled = true;
 const bool _persistItemsEnabled = true;
 const bool _presenceBasedDeliveryDisabled = false;
 const Duration _ensureNodeBackoff = Duration(minutes: 5);
+const String _emailBlocklistBootstrapOperationName =
+    'EmailBlocklistPubSubManager.bootstrapOnNegotiations';
+const String _emailBlocklistRefreshOperationName =
+    'EmailBlocklistPubSubManager.refreshFromServer';
 
 final class EmailBlocklistSyncPayload {
   const EmailBlocklistSyncPayload({
@@ -173,9 +178,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      Future<void>(() async {
-        await _bootstrap();
-      });
+      fireAndForget(
+        _bootstrap,
+        operationName: _emailBlocklistBootstrapOperationName,
+      );
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {
@@ -427,9 +433,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
-        Future<void>(() async {
-          await _bootstrap();
-        });
+        fireAndForget(
+          _bootstrap,
+          operationName: _emailBlocklistBootstrapOperationName,
+        );
       }
     }
   }
@@ -573,9 +580,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       return true;
     }
     if (_rateLimiter.shouldRefreshNow()) {
-      Future<void>(() async {
-        await _refreshFromServer();
-      });
+      fireAndForget(
+        _refreshFromServer,
+        operationName: _emailBlocklistRefreshOperationName,
+      );
     }
     return false;
   }
@@ -678,9 +686,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Future<void>(() async {
-        await _bootstrap();
-      });
+      fireAndForget(
+        _bootstrap,
+        operationName: _emailBlocklistBootstrapOperationName,
+      );
     }
   }
 
@@ -694,9 +703,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
-      Future<void>(() async {
-        await _bootstrap();
-      });
+      fireAndForget(
+        _bootstrap,
+        operationName: _emailBlocklistBootstrapOperationName,
+      );
     }
   }
 

@@ -125,11 +125,16 @@ mixin BlockingService on XmppBase, BaseStreamService {
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     _startBlocklistCache();
+    const String blocklistFetchOnLoginOperationName =
+        'BlockingService.requestBlocklistOnLogin';
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
         _spamReportingSupportResolved = false;
         _blockingLogger.info('Fetching blocklist...');
-        requestBlocklist();
+        fireAndForget(
+          requestBlocklist,
+          operationName: blocklistFetchOnLoginOperationName,
+        );
       })
       ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
         await _dbOp<XmppDatabase>((db) => db.blockJids(event.items));

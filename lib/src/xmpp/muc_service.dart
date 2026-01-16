@@ -78,6 +78,7 @@ const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
 const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
+const _mucBootstrapOperationName = 'MucService.bootstrapOnLogin';
 const bool _mucAvatarSupportEnabled = false;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
@@ -459,7 +460,10 @@ mixin MucService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
-        await _bootstrapMucOnLogin();
+        fireAndForget(
+          _bootstrapMucOnLogin,
+          operationName: _mucBootstrapOperationName,
+        );
       });
   }
 

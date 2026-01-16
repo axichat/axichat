@@ -9,6 +9,9 @@ const String _spamSyncPendingRetractionsKeyName =
     'spam_sync_pending_retractions';
 const String _spamSyncSnapshotAtKeyName = 'spam_sync_last_snapshot_at';
 const String _spamSyncSnapshotIdsKeyName = 'spam_sync_last_snapshot_ids';
+const String _spamSyncFlushPendingOperationName =
+    'SpamSyncService.flushPendingOnResume';
+const String _spamSyncOperationName = 'SpamSyncService.syncOnLogin';
 
 final _spamSyncSourceKey = XmppStateStore.registerKey(_spamSyncSourceKeyName);
 final _spamSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -46,14 +49,16 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
-          Future<void>(() async {
-            await _flushPendingSpamSync();
-          });
+          fireAndForget(
+            _flushPendingSpamSync,
+            operationName: _spamSyncFlushPendingOperationName,
+          );
           return;
         }
-        Future<void>(() async {
-          await syncSpamSnapshot();
-        });
+        fireAndForget(
+          syncSpamSnapshot,
+          operationName: _spamSyncOperationName,
+        );
       })
       ..registerHandler<SpamSyncUpdatedEvent>((event) async {
         await _applySpamSyncUpdate(event.payload);

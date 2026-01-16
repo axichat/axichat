@@ -7,6 +7,8 @@ final _presenceStatusesKey = XmppStateStore.registerKey('presence_statuses');
 final _directedPresenceTargetsKey = XmppStateStore.registerKey(
   'presence_directed_targets',
 );
+const String _presenceLoadOperationName =
+    'PresenceService.ensurePresenceLoaded';
 
 mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');
@@ -19,18 +21,20 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   Presence get presence {
     final cachedPresence = _cachedPresence;
     if (cachedPresence != null) return cachedPresence;
-    Future<void>(() async {
-      await _ensurePresenceLoaded();
-    });
+    fireAndForget(
+      _ensurePresenceLoaded,
+      operationName: _presenceLoadOperationName,
+    );
     return Presence.chat;
   }
 
   String? get status {
     final cachedStatus = _cachedStatus;
     if (cachedStatus != null || _presenceLoaded) return cachedStatus;
-    Future<void>(() async {
-      await _ensurePresenceLoaded();
-    });
+    fireAndForget(
+      _ensurePresenceLoaded,
+      operationName: _presenceLoadOperationName,
+    );
     return null;
   }
 

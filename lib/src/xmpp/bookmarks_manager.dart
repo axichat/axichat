@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
@@ -28,6 +29,8 @@ const _deliverPayloadsEnabled = true;
 const _persistItemsEnabled = true;
 const _presenceBasedDeliveryDisabled = false;
 const Duration _ensureNodeBackoff = Duration(minutes: 5);
+const String _bookmarksBootstrapOperationName =
+    'BookmarksManager.bootstrapOnNegotiations';
 
 final class MucBookmark {
   const MucBookmark({
@@ -208,7 +211,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
-      await _bootstrap();
+      fireAndForget(
+        _bootstrap,
+        operationName: _bookmarksBootstrapOperationName,
+      );
       return super.onXmppEvent(event);
     }
     if (event is mox.PubSubNotificationEvent) {

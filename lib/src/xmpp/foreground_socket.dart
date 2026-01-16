@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -18,6 +19,8 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 const join = '::';
 const connectPrefix = 'Connect';
 const securePrefix = 'Secure';
+const String _foregroundSocketSendOperationName =
+    'ForegroundSocket.sendToTask';
 const writePrefix = 'Write';
 const closePrefix = 'Close';
 const destroyPrefix = 'Destroy';
@@ -504,9 +507,12 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Sending to task: type=$type parts=${strings.length} '
       'payloadLen=$payloadLength',
     );
-    Future<void>(() async {
-      await _bridge.send(strings);
-    });
+    fireAndForget(
+      () async {
+        await _bridge.send(strings);
+      },
+      operationName: _foregroundSocketSendOperationName,
+    );
   }
 
   @override

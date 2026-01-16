@@ -36,6 +36,20 @@ const String _attachmentUploadStartLog =
     'Uploading attachment to HTTP upload slot.';
 const String _attachmentUploadCompleteLog = 'Upload complete for attachment.';
 const String _attachmentUploadFailedLog = 'Failed to upload attachment.';
+const String _pinSyncFlushFailedLog = 'Failed to flush pending pin sync.';
+const String _pinSyncFlushAbortedLog = 'Pending pin sync aborted.';
+const String _pinSyncEmailReconnectFailedLog =
+    'Failed to sync email pinned messages after reconnect.';
+const String _pinSyncEmailReconnectAbortedLog =
+    'Email pin sync after reconnect aborted.';
+const String _pinSyncFlushOperationName =
+    'MessageService.flushPendingPinSyncOnNegotiations';
+const String _pinSyncEmailReconnectOperationName =
+    'MessageService.syncEmailPinsOnNegotiations';
+const String _draftSyncPublishFailedLog = 'Failed to publish draft sync.';
+const String _draftSyncPublishAbortedLog = 'Draft sync publish aborted.';
+const String _draftSyncRetractFailedLog = 'Failed to retract draft sync.';
+const String _draftSyncRetractAbortedLog = 'Draft sync retract aborted.';
 const String _uploadSlotRequestLog = 'Requesting HTTP upload slot.';
 const String _uploadSlotRequestFailedLog = 'Failed to request upload slot.';
 const String _carbonOriginRejectedLog =
@@ -1978,12 +1992,28 @@ mixin MessageService
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         fireAndForget(
-          _flushPendingPinSync,
-          operationName: 'MessageService.flushPendingPinSync',
+          () async {
+            try {
+              await _flushPendingPinSync();
+            } on XmppAbortedException {
+              _log.fine(_pinSyncFlushAbortedLog);
+            } on Exception catch (error, stackTrace) {
+              _log.fine(_pinSyncFlushFailedLog, error, stackTrace);
+            }
+          },
+          operationName: _pinSyncFlushOperationName,
         );
         fireAndForget(
-          _syncEmailPinnedMessagesOnReconnect,
-          operationName: 'MessageService.syncEmailPinnedMessagesOnReconnect',
+          () async {
+            try {
+              await _syncEmailPinnedMessagesOnReconnect();
+            } on XmppAbortedException {
+              _log.fine(_pinSyncEmailReconnectAbortedLog);
+            } on Exception catch (error, stackTrace) {
+              _log.fine(_pinSyncEmailReconnectFailedLog, error, stackTrace);
+            }
+          },
+          operationName: _pinSyncEmailReconnectOperationName,
         );
       });
   }
@@ -3796,10 +3826,13 @@ mixin MessageService
       (db) => db.getDraft(savedId),
     );
     if (savedDraft != null) {
-      fireAndForget(
-        () => publishDraftSync(savedDraft),
-        operationName: 'MessageService.publishDraftSync',
-      );
+      try {
+        await publishDraftSync(savedDraft);
+      } on XmppAbortedException {
+        _log.fine(_draftSyncPublishAbortedLog);
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_draftSyncPublishFailedLog, error, stackTrace);
+      }
     }
     final draftCount = await _dbOpReturning<XmppDatabase, int>(
       (db) => db.countDrafts(),
@@ -3878,10 +3911,13 @@ mixin MessageService
       await _deleteAttachmentMetadata(metadataIds);
     }
     if (syncId.trim().isNotEmpty) {
-      fireAndForget(
-        () => retractDraftSync(syncId),
-        operationName: 'MessageService.retractDraftSync',
-      );
+      try {
+        await retractDraftSync(syncId);
+      } on XmppAbortedException {
+        _log.fine(_draftSyncRetractAbortedLog);
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_draftSyncRetractFailedLog, error, stackTrace);
+      }
     }
   }
 
