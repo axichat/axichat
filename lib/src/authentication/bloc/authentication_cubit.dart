@@ -806,7 +806,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _sessionEmailCredentials = null;
   }
 
-  Future<void> _handleForegroundServiceActiveChanged() async {
+  Future<void> _handleForegroundServiceActiveChanged() {
     await _updateEmailForegroundKeepalive();
     if (!_endpointConfig.enableXmpp || !_stickyAuthActive) {
       return;
@@ -1446,7 +1446,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _endpointConfig = demoConfig;
         _emailService?.updateEndpointConfig(demoConfig);
         _emit(state);
-        await _updateEmailForegroundKeepalive();
+        _updateEmailForegroundKeepalive();
       }
       await _xmppService.resumeOfflineSession(
         jid: kDemoSelfJid,
@@ -1793,7 +1793,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emit(completedState);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
-    await _updateEmailForegroundKeepalive();
+    _updateEmailForegroundKeepalive();
     await _publishPendingAvatar();
   }
 
@@ -2215,7 +2215,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _authenticatedJid = null;
     _demoSessionReady = false;
     _emit(const AuthenticationNone());
-    await _updateEmailForegroundKeepalive();
+    _updateEmailForegroundKeepalive();
   }
 
   Future<void> changePassword({
