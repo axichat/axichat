@@ -608,7 +608,7 @@ class _FreeBusyFragmentBody extends StatelessWidget {
       children: [
         const _FragmentLabel(text: _fragmentLabelFreeBusy),
         Text(
-          interval.type.label,
+          interval.type.label(context.l10n),
           style: context.textTheme.small.copyWith(
             color: context.colorScheme.foreground,
           ),

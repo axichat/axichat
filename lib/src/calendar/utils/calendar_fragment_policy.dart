@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 
@@ -89,11 +90,13 @@ extension CalendarFreeBusyTypeLabelX on CalendarFreeBusyType {
 }
 
 class CalendarFragmentFormatter {
-  const CalendarFragmentFormatter();
+  const CalendarFragmentFormatter(this.l10n);
+
+  final AppLocalizations l10n;
 
   String describe(CalendarFragment fragment) {
     return fragment.when(
-      task: (task) => task.toShareText(),
+      task: (task) => task.toShareText(l10n),
       checklist: (taskId, checklist) => _formatChecklist(checklist),
       reminder: (taskId, reminders) => _formatReminders(reminders),
       dayEvent: (event) => _formatDayEvent(event),

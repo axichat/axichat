@@ -4539,8 +4539,18 @@ mixin MessageService
         event.extensions.get<mox.MessageBodyData>()?.body?.isNotEmpty ?? false;
     final bool isChatStateOnlyError =
         event.extensions.get<mox.ChatState>() != null && !hasBody;
+    Message? persistedMessage;
+    try {
+      persistedMessage = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByStanzaID(stanzaId),
+      );
+    } on XmppException {
+      persistedMessage = null;
+    }
+    final bool shouldPersistError =
+        persistedMessage != null && !isChatStateOnlyError;
 
-    if (!isChatStateOnlyError) {
+    if (shouldPersistError) {
       await _dbOp<XmppDatabase>(
         (db) => db.saveMessageError(stanzaID: stanzaId, error: error),
       );
@@ -4557,14 +4567,13 @@ mixin MessageService
     roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
     if (roomJid != null &&
         _isMucChatJid(roomJid) &&
-        !isChatStateOnlyError &&
         _shouldAttemptMucRepairForRoom(
           roomJid: roomJid,
           conditionData: errorCondition,
         )) {
       final String resolvedRoomJid = roomJid;
       _markRoomNeedsJoin(resolvedRoomJid);
-      if (!isChatStateOnlyError &&
+      if (shouldPersistError &&
           _shouldClearMucPresenceForError(errorCondition)) {
         await _markRoomLeft(
           resolvedRoomJid,
@@ -4578,7 +4587,7 @@ mixin MessageService
       );
     }
     if (summary == null) {
-      if (!isChatStateOnlyError) {
+      if (shouldPersistError) {
         _log.info(_outboundMessageRejectedMissingSummaryLog);
       }
       return true;

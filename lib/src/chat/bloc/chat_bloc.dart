@@ -361,8 +361,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   AppLocalizations get _l10n {
     final locale = _settingsState.language.locale ?? const Locale('en');
-    return AppLocalizations.lookupAppLocalizations(locale);
+    return lookupAppLocalizations(locale);
   }
+
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
@@ -2226,7 +2227,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           final htmlCaptionForAttachments =
               captionForAttachments == null ? null : emailHtmlBody;
           final calendarTaskCaption =
-              captionForAttachments ?? effectiveTaskForEmail?.toShareText();
+              captionForAttachments ??
+              effectiveTaskForEmail?.toShareText(_l10n);
           var queuedAttachmentsSent = !hasQueuedEmailAttachments;
           if (hasQueuedEmailAttachments) {
             final attachmentsSent = shouldBundleEmailAttachments

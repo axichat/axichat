@@ -823,7 +823,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Future<void> _copyTaskToClipboard(CalendarTask task) async {
-    final String payload = task.toShareText();
+    final String payload = task.toShareText(context.l10n);
     await Clipboard.setData(ClipboardData(text: payload));
     if (!mounted) {
       return;

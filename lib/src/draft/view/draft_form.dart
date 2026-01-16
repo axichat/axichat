@@ -144,7 +144,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   void _appendTaskShareText(CalendarTask task) {
-    final String shareText = task.toShareText();
+    final String shareText = task.toShareText(context.l10n);
     final String existing = _bodyTextController.text;
     final String separator = existing.trim().isEmpty ? '' : '\n\n';
     final String nextText = '$existing$separator$shareText';

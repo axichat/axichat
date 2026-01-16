@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'nl_schedule_adapter.dart';
 import 'schedule_parser.dart';
 import 'time_formatter.dart';
@@ -18,7 +19,11 @@ const int _recurrenceEveryOtherYearInterval = 2;
 class TaskShareFormatter {
   const TaskShareFormatter._();
 
-  static String describe(CalendarTask task, {DateTime? now}) {
+  static String describe(
+    AppLocalizations l10n,
+    CalendarTask task, {
+    DateTime? now,
+  }) {
     final DateTime reference = now ?? DateTime.now();
     final title =
         task.title.trim().isEmpty ? 'Untitled task' : task.title.trim();
@@ -89,7 +94,7 @@ class TaskShareFormatter {
     }
 
     if (start != null && span != null) {
-      return 'on ${_formatDate(start, reference)} at ${TimeFormatter.formatTime(start)} for ${TimeFormatter.formatDuration(span)}';
+      return 'on ${_formatDate(start, reference)} at ${TimeFormatter.formatTime(start)} for ${TimeFormatter.formatDuration(l10n, span)}';
     }
 
     if (start != null) {
@@ -204,7 +209,9 @@ class TaskShareFormatter {
         );
       }
       if (override.duration != null) {
-        actions.add('for ${TimeFormatter.formatDuration(override.duration!)}');
+        actions.add(
+          'for ${TimeFormatter.formatDuration(l10n, override.duration!)}',
+        );
       }
       if (override.endDate != null) {
         actions.add('end at ${_formatDateTime(override.endDate!, reference)}');
@@ -983,6 +990,6 @@ class _ShareSections {
 }
 
 extension CalendarTaskShareX on CalendarTask {
-  String toShareText({DateTime? now}) =>
-      TaskShareFormatter.describe(this, now: now);
+  String toShareText(AppLocalizations l10n, {DateTime? now}) =>
+      TaskShareFormatter.describe(l10n, this, now: now);
 }

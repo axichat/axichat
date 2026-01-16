@@ -1843,5 +1843,171 @@
   "connectivityStatusConnected": "Connecté",
   "connectivityStatusConnecting": "Connexion…",
   "connectivityStatusNotConnected": "Non connecté.",
-  "connectivityStatusFailed": "Échec de la connexion."
+  "connectivityStatusFailed": "Échec de la connexion.",
+  "commonShare": "Partager",
+  "commonRecipients": "Destinataires",
+  "commonRangeLabel": "{start} - {end}",
+  "@commonRangeLabel": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "commonOwnerFallback": "propriétaire",
+  "commonDurationMinutes": "{count} min",
+  "@commonDurationMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationHours": "{count} heure{count, plural, one{} other{s}}",
+  "@commonDurationHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationMinutesShort": "{count}m",
+  "@commonDurationMinutesShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDurationHoursShort": "{count}h",
+  "@commonDurationHoursShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonDateTimeLabel": "{date} · {time}",
+  "@commonDateTimeLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityShareTitle": "Partager la disponibilité",
+  "calendarAvailabilityShareSubtitle": "Choisissez une plage, modifiez libre/occupé, puis partagez.",
+  "calendarAvailabilityShareChatSubtitle": "Choisissez une plage, modifiez libre/occupé, puis partagez dans ce chat.",
+  "calendarAvailabilityShareRangeLabel": "Plage",
+  "calendarAvailabilityShareEditHint": "Touchez pour scinder, faites glisser pour redimensionner ou basculez libre/occupé.",
+  "calendarAvailabilityShareSavePreset": "Enregistrer comme préréglage",
+  "calendarAvailabilitySharePresetNameTitle": "Enregistrer la feuille libre/occupé",
+  "calendarAvailabilitySharePresetNameLabel": "Nom",
+  "calendarAvailabilitySharePresetNameHint": "Horaires de l’équipe",
+  "calendarAvailabilitySharePresetNameMissing": "Saisissez un nom pour enregistrer cette feuille.",
+  "calendarAvailabilityShareInvalidRange": "Sélectionnez une plage valide à partager.",
+  "calendarAvailabilityShareMissingJid": "Le partage de calendrier n’est pas disponible.",
+  "calendarAvailabilityShareRecipientsRequired": "Sélectionnez au moins un destinataire.",
+  "calendarAvailabilityShareMissingChats": "Aucun chat éligible disponible.",
+  "calendarAvailabilityShareLockedChatUnavailable": "Ce chat ne peut pas recevoir de disponibilités.",
+  "calendarAvailabilityShareSuccess": "Disponibilité partagée.",
+  "calendarAvailabilityShareFailed": "Échec du partage de la disponibilité.",
+  "calendarAvailabilitySharePartialFailure": "Certaines partages n’ont pas pu être envoyés.",
+  "calendarAvailabilitySharePresetLabel": "Feuilles récentes",
+  "calendarAvailabilitySharePresetEmpty": "Pas encore de feuilles récentes.",
+  "calendarAvailabilityShareRecentPreset": "Partagé {range}",
+  "@calendarAvailabilityShareRecentPreset": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityPreviewEmpty": "Aucun intervalle de disponibilité.",
+  "calendarAvailabilityPreviewMore": "et {count} de plus",
+  "@calendarAvailabilityPreviewMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleRequired": "Saisissez un titre de tâche avant de continuer.",
+  "calendarTaskTitleTooLong": "Le titre de la tâche est trop long. Utilisez moins de {max} caractères.",
+  "@calendarTaskTitleTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleLimitWarning": "Les titres de tâches sont limités à {max} caractères. Raccourcissez ce texte ou déplacez les détails dans la description avant d’enregistrer.",
+  "@calendarTaskTitleLimitWarning": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarTaskTitleCharacterCount": "{count} / {limit} caractères",
+  "@calendarTaskTitleCharacterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "axiVersionWelcomeTitle": "Bienvenue sur Axichat",
+  "axiVersionLabel": "v{version}",
+  "@axiVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "axiVersionTagAlpha": "alpha",
+  "calendarSyncWarningSnapshotTitle": "Synchronisation du calendrier",
+  "calendarSyncWarningSnapshotMessage": "Instantane du calendrier indisponible. Exportez le JSON du calendrier depuis un autre appareil et importez-le ici pour le restaurer.",
+  "commonLabelValue": "{label} : {value}",
+  "@commonLabelValue": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarAvailabilityRequestTitle": "Demander un horaire",
+  "calendarAvailabilityRequestSubtitle": "Choisissez un créneau libre et partagez les détails.",
+  "calendarAvailabilityRequestDetailsLabel": "Détails",
+  "calendarAvailabilityRequestRangeLabel": "Plage",
+  "calendarAvailabilityRequestTitleLabel": "Titre",
+  "calendarAvailabilityRequestTitlePlaceholder": "À quoi cela sert-il ?",
+  "calendarAvailabilityRequestDescriptionLabel": "Description",
+  "calendarAvailabilityRequestDescriptionPlaceholder": "Ajouter du contexte (facultatif).",
+  "calendarAvailabilityRequestSendLabel": "Envoyer la demande",
+  "calendarAvailabilityRequestInvalidRange": "Choisissez une plage horaire valide.",
+  "calendarAvailabilityRequestNotFree": "Sélectionnez un créneau libre avant d’envoyer.",
+  "calendarAvailabilityDecisionTitle": "Accepter la demande",
+  "calendarAvailabilityDecisionSubtitle": "Choisissez quels calendriers doivent le recevoir.",
+  "calendarAvailabilityDecisionPersonalLabel": "Ajouter au calendrier personnel",
+  "calendarAvailabilityDecisionChatLabel": "Ajouter au calendrier du chat",
+  "calendarAvailabilityDecisionMissingSelection": "Sélectionnez au moins un calendrier.",
+  "calendarAvailabilityDecisionSummaryLabel": "Demandé",
+  "calendarAvailabilityRequestTitleFallback": "Heure demandée",
+  "calendarFreeBusyFree": "Libre",
+  "calendarFreeBusyBusy": "Occupé",
+  "calendarFreeBusyTentative": "Provisoire"
 }
