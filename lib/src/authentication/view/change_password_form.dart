@@ -117,6 +117,13 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   placeholder: l10n.authPasswordConfirmNewPlaceholder,
                   enabled: !loading,
                   controller: _newPassword2TextController,
+                  validator: (value) {
+                    final newPassword = _newPasswordTextController.text;
+                    if (newPassword.isNotEmpty && value != newPassword) {
+                      return l10n.authPasswordsMismatch;
+                    }
+                    return null;
+                  },
                 ),
               ),
               const SizedBox.square(dimension: 16.0),

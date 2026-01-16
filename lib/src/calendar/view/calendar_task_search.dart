@@ -13,14 +13,16 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'unified_task_input.dart';
 import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_text_field.dart';
@@ -125,8 +127,107 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
       );
     };
   } else {
-    defaultHandler = (CalendarTask task) =>
-        showUnifiedTaskInput<B>(context, editingTask: task);
+    defaultHandler = (CalendarTask task) async {
+      final B resolvedBloc = resolveBloc();
+      final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+      final LocationAutocompleteHelper locationHelper =
+          LocationAutocompleteHelper.fromState(resolvedBloc.state);
+      final collectionMethod = resolvedBloc.state.model.collection?.method;
+      final String baseId = baseTaskIdFrom(task.id);
+      final CalendarTask latestTask =
+          resolvedBloc.state.model.tasks[baseId] ?? task;
+      final CalendarTask? storedTask = resolvedBloc.state.model.tasks[task.id];
+      final String? occurrenceKey = occurrenceKeyFrom(task.id);
+      final CalendarTask? occurrenceTask =
+          storedTask == null && occurrenceKey != null
+              ? latestTask.occurrenceForId(task.id)
+              : null;
+      final CalendarTask displayTask =
+          storedTask ?? occurrenceTask ?? latestTask;
+      final bool shouldUpdateOccurrence =
+          storedTask == null && occurrenceTask != null;
+
+      if (!TaskEditSessionTracker.instance.begin(task.id, resolvedBloc)) {
+        return;
+      }
+      try {
+        Navigator.of(context).maybePop();
+        await Future<void>.delayed(Duration.zero);
+        await showAdaptiveBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          showCloseButton: false,
+          builder: (sheetContext) {
+            final mediaQuery = MediaQuery.of(sheetContext);
+            final double maxHeight =
+                mediaQuery.size.height - mediaQuery.viewPadding.vertical;
+            void closeSheet() {
+              TaskEditSessionTracker.instance.end(task.id, resolvedBloc);
+              Navigator.of(sheetContext).maybePop();
+            }
+
+            return BlocProvider.value(
+              value: resolvedBloc,
+              child: Builder(
+                builder: (context) => EditTaskDropdown<B>(
+                  task: displayTask,
+                  maxHeight: maxHeight,
+                  isSheet: true,
+                  collectionMethod: collectionMethod,
+                  onClose: closeSheet,
+                  scaffoldMessenger: scaffoldMessenger,
+                  locationHelper: locationHelper,
+                  onTaskUpdated: (updatedTask) {
+                    context
+                        .read<B>()
+                        .add(CalendarEvent.taskUpdated(task: updatedTask));
+                  },
+                  onOccurrenceUpdated: shouldUpdateOccurrence
+                      ? (
+                          updatedTask,
+                          scope, {
+                          required bool scheduleTouched,
+                          required bool checklistTouched,
+                        }) {
+                          if (scheduleTouched || checklistTouched) {
+                            context.read<B>().add(
+                                  CalendarEvent.taskOccurrenceUpdated(
+                                    taskId: baseId,
+                                    occurrenceId: task.id,
+                                    scheduledTime: scheduleTouched
+                                        ? updatedTask.scheduledTime
+                                        : null,
+                                    duration: scheduleTouched
+                                        ? updatedTask.duration
+                                        : null,
+                                    endDate: scheduleTouched
+                                        ? updatedTask.endDate
+                                        : null,
+                                    checklist: checklistTouched
+                                        ? updatedTask.checklist
+                                        : null,
+                                    range: scope.range,
+                                  ),
+                                );
+                          }
+                        }
+                      : null,
+                  onTaskDeleted: (taskId) {
+                    context
+                        .read<B>()
+                        .add(CalendarEvent.taskDeleted(taskId: taskId));
+                    closeSheet();
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      } finally {
+        TaskEditSessionTracker.instance.end(task.id, resolvedBloc);
+      }
+    };
   }
 
   await showAdaptiveBottomSheet<void>(

@@ -48,6 +48,8 @@ const _emailProvisioningRetryLogFailedCredentials =
     'Failed to read email credentials for retry';
 const String _incorrectPasswordMessage =
     'Incorrect password. Please try again.';
+const String _passwordChangeRejectedMessage =
+    'Current password is incorrect, or the new password does not meet server requirements.';
 const int _loginBackoffBaseSeconds = 2;
 const int _loginBackoffMaxMinutes = 2;
 const int _loginBackoffMinSeconds = 1;
@@ -372,24 +374,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Uri _buildDeleteAccountLegacyUrl() =>
       _buildBaseUrl().replace(path: _registerPathDeleteAccountLegacy);
 
-  bool _looksLikeMissingRegisterEndpoint(http.Response response) {
-    if (response.statusCode != 404) {
-      return false;
-    }
-    final body = response.body.trim();
-    if (body.isEmpty) {
-      return true;
-    }
-    final lower = body.toLowerCase();
-    if (lower == 'not found' || lower == '404' || lower == '404 not found') {
-      return true;
-    }
-    if (lower.contains('not found') && !lower.contains('account')) {
-      return true;
-    }
-    return false;
-  }
-
   String? _registerErrorDetail(http.Response response) {
     final raw = response.body.trim();
     if (raw.isEmpty) {
@@ -406,31 +390,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     }
     return raw;
-  }
-
-  bool _looksLikeAccountMissing(String message) {
-    final lower = message.toLowerCase();
-    return lower.contains("doesn't exist") ||
-        lower.contains('does not exist') ||
-        lower.contains('account not found') ||
-        lower.contains('user not found');
-  }
-
-  bool _looksLikeInvalidPassword(String message) {
-    final lower = message.toLowerCase();
-    return lower.contains('incorrect password') ||
-        lower.contains('wrong password') ||
-        lower.contains('invalid password') ||
-        lower.contains('authentication failed');
-  }
-
-  bool _looksLikePasswordPolicyFailure(String message) {
-    final lower = message.toLowerCase();
-    return lower.contains('too short') ||
-        lower.contains('password policy') ||
-        lower.contains('must be at least') ||
-        lower.contains('minimum') && lower.contains('character') ||
-        lower.contains('weak password');
   }
 
   Future<http.Response> _postRegisterForm({
@@ -450,12 +409,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (fallbackResponse.statusCode != 404) {
       return fallbackResponse;
     }
-
-    final primaryLooksMissing = _looksLikeMissingRegisterEndpoint(response);
-    final fallbackLooksMissing = _looksLikeMissingRegisterEndpoint(
-      fallbackResponse,
-    );
-    if (primaryLooksMissing && !fallbackLooksMissing) {
+    final primaryDetail = _registerErrorDetail(response);
+    final fallbackDetail = _registerErrorDetail(fallbackResponse);
+    if (primaryDetail == null && fallbackDetail != null) {
+      return fallbackResponse;
+    }
+    if (primaryDetail != null && fallbackDetail == null) {
+      return response;
+    }
+    if (primaryDetail != null &&
+        fallbackDetail != null &&
+        fallbackDetail.length > primaryDetail.length) {
       return fallbackResponse;
     }
     return response;
@@ -2354,29 +2318,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
-        if (_looksLikeMissingRegisterEndpoint(response)) {
-          _emit(
-            const AuthenticationPasswordChangeFailure(
-              'Password change is not available on this server.',
-            ),
-          );
-          return;
-        }
-        final detail = _registerErrorDetail(response);
-        if (detail != null && _looksLikePasswordPolicyFailure(detail)) {
-          _emit(AuthenticationPasswordChangeFailure(detail));
-          return;
-        }
-        if (detail != null &&
-            !_looksLikeAccountMissing(detail) &&
-            !_looksLikeInvalidPassword(detail)) {
-          _emit(AuthenticationPasswordChangeFailure(detail));
-          return;
-        }
         _emit(
           const AuthenticationPasswordChangeFailure(
-            'Current password is incorrect.',
-          ),
+              _passwordChangeRejectedMessage),
         );
         return;
       }
@@ -2522,17 +2466,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
-        if (_looksLikeMissingRegisterEndpoint(response)) {
-          _emit(const AuthenticationUnregisterFailure(fallback));
-          return;
-        }
-        final detail = _registerErrorDetail(response);
-        if (detail != null &&
-            !_looksLikeAccountMissing(detail) &&
-            !_looksLikeInvalidPassword(detail)) {
-          _emit(AuthenticationUnregisterFailure(detail));
-          return;
-        }
         _emit(const AuthenticationUnregisterFailure(_incorrectPasswordMessage));
         return;
       }
@@ -2817,9 +2750,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return true;
     }
     if (response.statusCode == 404) {
-      if (_looksLikeMissingRegisterEndpoint(response)) {
-        return false;
-      }
       return true;
     }
     _log.warning(

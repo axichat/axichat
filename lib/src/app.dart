@@ -14,7 +14,6 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
@@ -99,10 +98,9 @@ class _AxichatState extends State<Axichat> {
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
-    fireAndForget(
-      _reminderController.clearAll,
-      operationName: 'Axichat.clearReminders',
-    );
+    Timer.run(() async {
+      await _reminderController.clearAll();
+    });
     super.dispose();
   }
 

@@ -19,20 +19,18 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   Presence get presence {
     final cachedPresence = _cachedPresence;
     if (cachedPresence != null) return cachedPresence;
-    fireAndForget(
-      _ensurePresenceLoaded,
-      operationName: 'PresenceService.ensurePresenceLoaded',
-    );
+    Timer.run(() async {
+      await _ensurePresenceLoaded();
+    });
     return Presence.chat;
   }
 
   String? get status {
     final cachedStatus = _cachedStatus;
     if (cachedStatus != null || _presenceLoaded) return cachedStatus;
-    fireAndForget(
-      _ensurePresenceLoaded,
-      operationName: 'PresenceService.ensurePresenceLoaded',
-    );
+    Timer.run(() async {
+      await _ensurePresenceLoaded();
+    });
     return null;
   }
 

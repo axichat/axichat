@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/ui/jid_input.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -266,24 +265,24 @@ class AccessibilityActionBloc
     _rebuildSections(emit, state);
   }
 
-  void _onMenuActionTriggered(
+  Future<void> _onMenuActionTriggered(
     AccessibilityMenuActionTriggered event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     final action = event.action;
     if (action is AccessibilityNoopAction) {
       return;
     }
     if (action is AccessibilityNavigateAction) {
-      _handleNavigateAction(action, emit);
+      await _handleNavigateAction(action, emit);
       return;
     }
     if (action is AccessibilityCommandAction) {
-      _handleCommandAction(action, emit);
+      await _handleCommandAction(action, emit);
       return;
     }
     if (action is AccessibilitySelectContactAction) {
-      _handleContactSelection(action.contact, emit);
+      await _handleContactSelection(action.contact, emit);
       return;
     }
     if (action is AccessibilityInviteDecisionAction) {
@@ -478,10 +477,10 @@ class AccessibilityActionBloc
     _rebuildSections(emit, state);
   }
 
-  void _onConfirmNewContact(
+  Future<void> _onConfirmNewContact(
     AccessibilityConfirmNewContact event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     final trimmed = state.newContactInput.trim();
     if (!trimmed.isValidJid) {
       emit(state.copyWith(errorMessage: _textInvalidAddress));
@@ -496,7 +495,7 @@ class AccessibilityActionBloc
       chatType: ChatType.chat,
       unreadCount: 0,
     );
-    _handleContactSelection(contact, emit);
+    await _handleContactSelection(contact, emit);
   }
 
   void _onLocaleUpdated(
