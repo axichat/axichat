@@ -4,6 +4,7 @@
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -27,6 +28,11 @@ class SafePubSubManager extends mox.PubSubManager {
   static const String _affiliationsTag = 'affiliations';
   static const String _affiliationTag = 'affiliation';
   static const String _nodeAttr = 'node';
+  static const String _bookmarksNode = 'urn:xmpp:bookmarks:1';
+  static const String _conversationIndexNode = 'urn:axi:conversations';
+  static const String _draftsNode = 'urn:axi:drafts';
+  static const String _spamNode = 'urn:axi:spam';
+  static const String _emailBlocklistNode = 'urn:axi:email-blocklist';
   static const String _jidAttr = 'jid';
   static const String _subIdAttr = 'subid';
   static const String _subscriptionAttr = 'subscription';
@@ -45,6 +51,36 @@ class SafePubSubManager extends mox.PubSubManager {
 
   final Map<_SubscriptionCacheKey, mox.SubscriptionInfo> _subscriptionCache =
       {};
+
+  XmppOperationKind _operationKindForNode(String? node) {
+    final trimmed = node?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return XmppOperationKind.pubSubFetch;
+    }
+    return switch (trimmed) {
+      _bookmarksNode => XmppOperationKind.pubSubBookmarks,
+      _conversationIndexNode => XmppOperationKind.pubSubConversations,
+      _draftsNode => XmppOperationKind.pubSubDrafts,
+      _spamNode => XmppOperationKind.pubSubSpam,
+      _emailBlocklistNode => XmppOperationKind.pubSubEmailBlocklist,
+      mox.userAvatarMetadataXmlns => XmppOperationKind.pubSubAvatarMetadata,
+      mox.userAvatarDataXmlns => XmppOperationKind.pubSubAvatarMetadata,
+      _ => XmppOperationKind.pubSubFetch,
+    };
+  }
+
+  XmppOperationEvent _operationStartEvent(XmppOperationKind kind) =>
+      XmppOperationEvent(kind: kind, stage: XmppOperationStage.start);
+
+  XmppOperationEvent _operationEndEvent(
+    XmppOperationKind kind, {
+    required bool isSuccess,
+  }) =>
+      XmppOperationEvent(
+        kind: kind,
+        stage: XmppOperationStage.end,
+        isSuccess: isSuccess,
+      );
 
   String _safeNodeLabel(String? node) {
     final trimmed = node?.trim();
@@ -80,24 +116,42 @@ class SafePubSubManager extends mox.PubSubManager {
     mox.NodeConfig? createNodeConfig,
   }) async {
     logger.fine('PubSub publish start. node=${_safeNodeLabel(node)}.');
-    final result = await super.publish(
-      jid,
-      node,
-      payload,
-      id: id,
-      options: options,
-      autoCreate: autoCreate,
-      createNodeConfig: createNodeConfig,
-    );
-    if (result.isType<mox.PubSubError>()) {
-      logger.fine(
-        'PubSub publish failed. node=${_safeNodeLabel(node)} '
-        'error=${result.get<mox.PubSubError>().runtimeType}.',
+    final operationKind = _operationKindForNode(node);
+    final attrs = getAttributes()..sendEvent(_operationStartEvent(operationKind));
+    var success = false;
+    try {
+      final result = await super.publish(
+        jid,
+        node,
+        payload,
+        id: id,
+        options: options,
+        autoCreate: autoCreate,
+        createNodeConfig: createNodeConfig,
       );
-    } else {
-      logger.fine('PubSub publish succeeded. node=${_safeNodeLabel(node)}.');
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        final acceptedMalformed = error is mox.MalformedResponseError;
+        success = acceptedMalformed;
+        if (acceptedMalformed) {
+          logger.fine(
+            'PubSub publish accepted malformed response. '
+            'node=${_safeNodeLabel(node)}.',
+          );
+        } else {
+          logger.fine(
+            'PubSub publish failed. node=${_safeNodeLabel(node)} '
+            'error=${error.runtimeType}.',
+          );
+        }
+      } else {
+        success = true;
+        logger.fine('PubSub publish succeeded. node=${_safeNodeLabel(node)}.');
+      }
+      return result;
+    } finally {
+      attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
-    return result;
   }
 
   @override

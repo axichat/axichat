@@ -2921,6 +2921,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String calendarCriticalPathAlreadyContainsTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Aufgaben sind bereits in diesem kritischen Pfad.',
+      one: 'Aufgabe ist bereits in diesem kritischen Pfad.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get calendarCriticalPathCreateFailed =>
       'Kritischer Pfad konnte nicht erstellt werden.';
 

@@ -2917,6 +2917,17 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String calendarCriticalPathAlreadyContainsTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Las tareas ya están en esta ruta crítica.',
+      one: 'La tarea ya está en esta ruta crítica.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get calendarCriticalPathCreateFailed =>
       'No se pudo crear una ruta crítica.';
 

@@ -2522,6 +2522,9 @@ abstract class BaseCalendarBloc
       if (task == null) {
         throw CalendarTaskNotFoundException(event.taskId);
       }
+      if (path.taskIds.contains(task.baseId)) {
+        return;
+      }
 
       _recordUndoSnapshot();
       final CalendarModel updatedModel = state.model.addTaskToCriticalPath(

@@ -5162,6 +5162,13 @@ abstract class AppLocalizations {
   /// **'{count, plural, one {Unable to add task to a critical path.} other {Unable to add tasks to a critical path.}}'**
   String calendarCriticalPathAddFailed(int count);
 
+  /// Error message shown when a task is already a member of the selected
+  /// critical path.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Task already in this critical path.} other {Tasks already in this critical path.}}'**
+  String calendarCriticalPathAlreadyContainsTasks(int count);
+
   /// No description provided for @calendarCriticalPathCreateFailed.
   ///
   /// In en, this message translates to:

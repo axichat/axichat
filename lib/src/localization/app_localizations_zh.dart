@@ -2795,6 +2795,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String calendarCriticalPathAlreadyContainsTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '任务已在此关键路径中。',
+      one: '任务已在此关键路径中。',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get calendarCriticalPathCreateFailed => '无法创建关键路径。';
 
   @override
@@ -7993,6 +8004,17 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       locale: localeName,
       other: '無法將這些任務新增到關鍵路徑。',
       one: '無法將任務新增到關鍵路徑。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathAlreadyContainsTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '任務已在此關鍵路徑中。',
+      one: '任務已在此關鍵路徑中。',
     );
     return '$_temp0';
   }
