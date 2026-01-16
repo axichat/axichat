@@ -19,7 +19,6 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/event_transform.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -263,17 +262,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _chatSubscription = _chatsService
           .chatStream(chatLookupJid)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
-      fireAndForget(
-        () => _subscribeToMessages(
+      Timer.run(() async {
+        await _subscribeToMessages(
           limit: messageBatchSize,
           filter: state.viewFilter,
-        ),
-        operationName: 'ChatBloc.subscribeToMessages',
-      );
-      fireAndForget(
-        _initializeViewFilter,
-        operationName: 'ChatBloc.initializeViewFilter',
-      );
+        );
+      });
+      Timer.run(() async {
+        await _initializeViewFilter();
+      });
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
       (syncState) => add(_EmailSyncStateChanged(syncState)),
