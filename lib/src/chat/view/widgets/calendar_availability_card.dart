@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -298,8 +299,10 @@ Color _accentColorForMessage(
 }
 
 String _formatRange(DateTime start, DateTime end) {
-  final String startLabel = TimeFormatter.formatFriendlyDateTime(start);
-  final String endLabel = TimeFormatter.formatFriendlyDateTime(end);
+  final String startLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+  final String endLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
   if (startLabel == endLabel) {
     return startLabel;
   }

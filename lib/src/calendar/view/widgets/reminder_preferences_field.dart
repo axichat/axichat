@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_alarms_field.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -388,7 +389,7 @@ class _ReminderSection extends StatelessWidget {
     if (offset.inMinutes >= 1) {
       return '${offset.inMinutes}m';
     }
-    return TimeFormatter.formatDuration(offset);
+    return TimeFormatter.formatDuration(context.l10n, offset);
   }
 }
 

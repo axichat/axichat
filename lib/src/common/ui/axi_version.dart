@@ -10,10 +10,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class AxiVersion extends StatelessWidget {
   const AxiVersion({super.key});
 
-  static const versionTag = 'alpha';
-
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return FutureBuilder(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
@@ -23,7 +22,7 @@ class AxiVersion extends StatelessWidget {
             context: context,
             builder: (context) => ShadDialog(
               title: Text(
-                'Welcome to Axichat',
+                l10n.axiVersionWelcomeTitle,
                 style: context.modalHeaderTextStyle,
               ),
               child: Column(
@@ -56,7 +55,7 @@ class AxiVersion extends StatelessWidget {
           child: Row(
             children: [
               Text(
-                'v${snapshot.requireData.version}',
+                l10n.axiVersionLabel(snapshot.requireData.version),
                 style: context.textTheme.h4,
               ),
               Padding(
@@ -78,7 +77,7 @@ class AxiVersion extends StatelessWidget {
                     borderRadius: BorderRadius.circular(7.0),
                     side: const BorderSide(color: Colors.deepOrange),
                   ),
-                  child: const Text(versionTag),
+                  child: Text(l10n.axiVersionTagAlpha),
                 ),
               ),
             ],

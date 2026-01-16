@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 const int _availabilityPreviewLimit = 6;
 const double _availabilityPreviewDotSize = 8.0;
@@ -16,11 +17,6 @@ const double _availabilityPreviewDotSpacing = 6.0;
 const double _availabilityPreviewRowSpacing = 6.0;
 const double _availabilityPreviewSectionSpacing = 8.0;
 const int _availabilityPreviewMaxLines = 2;
-
-const String _availabilityPreviewEmptyLabel = 'No availability intervals.';
-const String _availabilityPreviewMorePrefix = 'and ';
-const String _availabilityPreviewMoreSuffix = ' more';
-const String _availabilityPreviewRangeSeparator = ' - ';
 
 class CalendarAvailabilityPreview extends StatelessWidget {
   const CalendarAvailabilityPreview({
@@ -47,7 +43,10 @@ class CalendarAvailabilityPreview extends StatelessWidget {
     );
 
     if (preview.intervals.isEmpty) {
-      return Text(_availabilityPreviewEmptyLabel, style: labelStyle);
+      return Text(
+        context.l10n.calendarAvailabilityPreviewEmpty,
+        style: labelStyle,
+      );
     }
 
     return Column(
@@ -68,8 +67,9 @@ class CalendarAvailabilityPreview extends StatelessWidget {
         ),
         if (hasMore)
           Text(
-            '$_availabilityPreviewMorePrefix${preview.remainingCount}'
-            '$_availabilityPreviewMoreSuffix',
+            context.l10n.calendarAvailabilityPreviewMore(
+              preview.remainingCount,
+            ),
             style: labelStyle,
           ),
       ],
@@ -103,7 +103,7 @@ class _AvailabilityIntervalRow extends StatelessWidget {
         Expanded(
           child: Text(
             '${interval.type.label}: '
-            '${_formatRange(interval.start, interval.end)}',
+            _formatRange(context, interval.start, interval.end),
             style: textStyle,
             maxLines: _availabilityPreviewMaxLines,
             overflow: TextOverflow.ellipsis,
@@ -190,11 +190,13 @@ List<_AvailabilityPreviewInterval> _intervalPreviewFor(
   return merged;
 }
 
-String _formatRange(DateTime start, DateTime end) {
-  final String startLabel = TimeFormatter.formatFriendlyDateTime(start);
-  final String endLabel = TimeFormatter.formatFriendlyDateTime(end);
+String _formatRange(BuildContext context, DateTime start, DateTime end) {
+  final String startLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+  final String endLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
   if (startLabel == endLabel) {
     return startLabel;
   }
-  return '$startLabel$_availabilityPreviewRangeSeparator$endLabel';
+  return context.l10n.commonRangeLabel(startLabel, endLabel);
 }

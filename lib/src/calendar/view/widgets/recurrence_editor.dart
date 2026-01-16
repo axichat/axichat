@@ -1386,7 +1386,7 @@ int? _deriveCountForUntil({
 String _formatDerivedDate(DateTime value, DateTime? referenceStart) {
   final bool showTime = referenceStart != null && !_isMidnight(referenceStart);
   return showTime
-      ? TimeFormatter.formatFriendlyDateTime(value)
+      ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
       : TimeFormatter.formatFriendlyDate(value);
 }
 
@@ -1420,7 +1420,7 @@ String _formatRecurrenceDateLabel(CalendarDateTime entry) {
   final DateTime value = entry.value;
   final bool showTime = !entry.isAllDay && !_isMidnight(value);
   return showTime
-      ? TimeFormatter.formatFriendlyDateTime(value)
+      ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
       : TimeFormatter.formatFriendlyDate(value);
 }
 

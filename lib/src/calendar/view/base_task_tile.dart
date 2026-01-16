@@ -82,7 +82,9 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                 ? TimeFormatter.formatDateTime(scheduledTime)
                 : null;
             final String? durationLabel =
-                task.duration != null ? _formatDuration(task.duration!) : null;
+                task.duration != null
+                    ? _formatDuration(context, task.duration!)
+                    : null;
             final Color timeColor = _getTimeColor(context);
             final FontWeight? timeFontWeight =
                 _isOverdue() ? FontWeight.bold : null;
@@ -207,8 +209,8 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
         );
   }
 
-  String _formatDuration(Duration duration) {
-    return TimeFormatter.formatDurationShort(duration);
+  String _formatDuration(BuildContext context, Duration duration) {
+    return TimeFormatter.formatDurationShort(context.l10n, duration);
   }
 
   Color _getTimeColor(BuildContext context) {

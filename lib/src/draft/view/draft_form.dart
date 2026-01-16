@@ -1464,10 +1464,12 @@ class _DraftTaskDragGhost extends StatelessWidget {
     final DateTime? deadline = task.deadline;
     final l10n = context.l10n;
     if (start != null) {
-      return TimeFormatter.formatFriendlyDateTime(start);
+      return TimeFormatter.formatFriendlyDateTime(context.l10n, start);
     }
     if (deadline != null) {
-      return l10n.draftTaskDue(TimeFormatter.formatFriendlyDateTime(deadline));
+      return l10n.draftTaskDue(
+        TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
+      );
     }
     return l10n.draftTaskNoSchedule;
   }

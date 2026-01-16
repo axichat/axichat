@@ -619,7 +619,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final DateTime? value = widget.value;
     final String? displayDate = value != null
         ? (widget.showTimeSelectors
-            ? TimeFormatter.formatFriendlyDateTime(value)
+            ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
             : TimeFormatter.formatFriendlyDate(value))
         : null;
     final String? statusLabel = value != null ? _deadlineLabel(value) : null;

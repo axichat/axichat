@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -744,5 +745,5 @@ Color _deadlineBackgroundColor(DateTime deadline) {
 }
 
 String _deadlineLabel(DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(deadline);
+  return TimeFormatter.formatFriendlyDateTime(context.l10n, deadline);
 }

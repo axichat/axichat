@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/view/widgets/deadline_picker_field.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 const String _alarmsSectionTitle = 'Alarms';
 const String _alarmsSectionHelper = 'Reminders are exported as display alarms.';
@@ -1315,7 +1316,8 @@ class _AlarmAcknowledgedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String formatted = TimeFormatter.formatFriendlyDateTime(value);
+    final String formatted =
+        TimeFormatter.formatFriendlyDateTime(context.l10n, value);
     return Row(
       children: [
         const _AlarmFieldLabel(text: _alarmAcknowledgedLabel),

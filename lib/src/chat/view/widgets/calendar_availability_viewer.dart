@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_free_busy_editor.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -575,8 +576,10 @@ String _formatChatCalendarLabel(String? chatLabel) {
 }
 
 String _formatRange(DateTime start, DateTime end) {
-  final String startLabel = TimeFormatter.formatFriendlyDateTime(start);
-  final String endLabel = TimeFormatter.formatFriendlyDateTime(end);
+  final String startLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+  final String endLabel =
+      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
   if (startLabel == endLabel) {
     return startLabel;
   }

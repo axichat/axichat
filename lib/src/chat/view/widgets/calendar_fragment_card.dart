@@ -13,6 +13,7 @@ import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 
 const double _fragmentCardRadius = 18.0;
@@ -244,10 +245,14 @@ class _TaskFragmentBody extends StatelessWidget {
     if (scheduledTime != null) {
       final endTime = _taskEndTime(task);
       final scheduleValue = endTime == null
-          ? TimeFormatter.formatFriendlyDateTime(scheduledTime)
-          : '${TimeFormatter.formatFriendlyDateTime(scheduledTime)}'
-              '$_fragmentRangeSeparator'
-              '${TimeFormatter.formatFriendlyDateTime(endTime)}';
+          ? TimeFormatter.formatFriendlyDateTime(context.l10n, scheduledTime)
+          : context.l10n.commonRangeLabel(
+              TimeFormatter.formatFriendlyDateTime(
+                context.l10n,
+                scheduledTime,
+              ),
+              TimeFormatter.formatFriendlyDateTime(context.l10n, endTime),
+            );
       info.add(
         _FragmentInfo(label: _fragmentScheduleLabel, value: scheduleValue),
       );
@@ -257,7 +262,7 @@ class _TaskFragmentBody extends StatelessWidget {
       info.add(
         _FragmentInfo(
           label: _fragmentDueLabel,
-          value: TimeFormatter.formatFriendlyDateTime(deadline),
+          value: TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
         ),
       );
     }
@@ -614,8 +619,9 @@ class _FreeBusyFragmentBody extends StatelessWidget {
   }
 
   String _dateTimeRange(DateTime start, DateTime end) {
-    final startLabel = TimeFormatter.formatFriendlyDateTime(start);
-    final endLabel = TimeFormatter.formatFriendlyDateTime(end);
+    final startLabel =
+        TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+    final endLabel = TimeFormatter.formatFriendlyDateTime(context.l10n, end);
     if (startLabel == endLabel) {
       return startLabel;
     }
@@ -660,8 +666,9 @@ class _AvailabilityFragmentBody extends StatelessWidget {
   }
 
   String _dateTimeRange(DateTime start, DateTime end) {
-    final startLabel = TimeFormatter.formatFriendlyDateTime(start);
-    final endLabel = TimeFormatter.formatFriendlyDateTime(end);
+    final startLabel =
+        TimeFormatter.formatFriendlyDateTime(context.l10n, start);
+    final endLabel = TimeFormatter.formatFriendlyDateTime(context.l10n, end);
     if (startLabel == endLabel) {
       return startLabel;
     }
