@@ -133,7 +133,6 @@ const _bubbleRadius = 18.0;
 const double _senderLabelBottomSpacing = 6.0;
 const double _senderLabelSecondarySpacing = 2.0;
 const double _senderLabelNoInset = 0.0;
-const String _senderLabelAddressPrefix = 'JID: ';
 const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
 const List<BlocklistEntry> _emptyBlocklistEntries = <BlocklistEntry>[];
@@ -196,32 +195,18 @@ const _messageActionIconSize = 16.0;
 const _pinnedListLoadingIndicatorSize = 28.0;
 const int _pinnedBadgeHiddenCount = 0;
 const int _pinnedBadgeMaxDisplayCount = 99;
-const String _pinnedBadgeOverflowLabel = '99+';
 const double _pinnedBadgeIconScale = 0.6;
 const double _pinnedBadgeFallbackIconSize =
     AxiIconButton.kDefaultSize * _pinnedBadgeIconScale;
 const double _pinnedBadgeSizeScale = 0.55;
 const double _pinnedBadgeInsetScale = 0.08;
 const double _pinnedBadgeBorderWidth = 1.0;
-const String _calendarFragmentShareDeniedMessage =
-    'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
 const String _calendarTaskIcsPropertyKey = 'calendarTaskIcs';
 const String _calendarTaskIcsReadOnlyPropertyKey = 'calendarTaskIcsReadOnly';
 const String _calendarAvailabilityPropertyKey = 'calendarAvailability';
 const bool _calendarTaskIcsReadOnlyFallback =
     CalendarTaskIcsMessage.defaultReadOnly;
-const String _availabilityRequestAccountMissingMessage =
-    'Availability requests are unavailable right now.';
-const String _availabilityRequestEmailUnsupportedMessage =
-    'Availability is unavailable for email chats.';
-const String _availabilityRequestInvalidRangeMessage =
-    'Availability request time is invalid.';
-const String _availabilityRequestCalendarUnavailableMessage =
-    'Calendar is unavailable.';
-const String _availabilityRequestChatCalendarUnavailableMessage =
-    'Chat calendar is unavailable.';
-const String _availabilityRequestTaskTitleFallback = 'Requested time';
 const Uuid _availabilityResponseIdGenerator = Uuid();
 const String _composerShareSeparator = '\n\n';
 const String _emptyText = '';
@@ -334,8 +319,6 @@ const _reactionQuickChoices = ['👍', '❤️', '😂', '😮', '😢', '🙏',
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
-const _recipientVisibilityCcLabel = 'CC';
-const _recipientVisibilityBccLabel = 'BCC';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _composerNoticeHorizontalInset = 4.0;
@@ -1257,7 +1240,7 @@ class _ChatState extends State<Chat> {
     final bool canShareIcs = decision.canWrite ||
         context.read<ChatBloc>().state.chat!.defaultTransport.isEmail;
     if (!canShareIcs) {
-      _showSnackbar(_calendarFragmentShareDeniedMessage);
+      _showSnackbar(context.l10n.chatCalendarFragmentShareDeniedMessage);
       return _CalendarTaskShare(task: null, text: shareText);
     }
     return _CalendarTaskShare(task: task, text: shareText);
@@ -1294,12 +1277,13 @@ class _ChatState extends State<Chat> {
     DateTime? preferredEnd,
   }) async {
     if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
-      _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
+      _showSnackbar(
+          context.l10n.chatAvailabilityRequestEmailUnsupportedMessage);
       return;
     }
     final trimmedJid = requesterJid?.trim();
     if (trimmedJid == null || trimmedJid.isEmpty) {
-      _showSnackbar(_availabilityRequestAccountMissingMessage);
+      _showSnackbar(context.l10n.chatAvailabilityRequestAccountMissingMessage);
       return;
     }
     final request = await showCalendarAvailabilityRequestSheet(
@@ -1354,11 +1338,14 @@ class _ChatState extends State<Chat> {
     required bool canAddToChatCalendar,
   }) async {
     if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
-      _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
+      _showSnackbar(
+          context.l10n.chatAvailabilityRequestEmailUnsupportedMessage);
       return;
     }
     if (!canAddToPersonalCalendar && !canAddToChatCalendar) {
-      _showSnackbar(_availabilityRequestCalendarUnavailableMessage);
+      _showSnackbar(
+        context.l10n.chatAvailabilityRequestCalendarUnavailableMessage,
+      );
       return;
     }
     final decision = await showCalendarAvailabilityDecisionSheet(
@@ -1372,7 +1359,7 @@ class _ChatState extends State<Chat> {
     }
     final draft = _availabilityTaskDraft(request);
     if (draft == null) {
-      _showSnackbar(_availabilityRequestInvalidRangeMessage);
+      _showSnackbar(context.l10n.chatAvailabilityRequestInvalidRangeMessage);
       return;
     }
     if (decision.addToPersonal) {
@@ -1399,7 +1386,8 @@ class _ChatState extends State<Chat> {
 
   void _handleAvailabilityDecline(CalendarAvailabilityRequest request) {
     if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
-      _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
+      _showSnackbar(
+          context.l10n.chatAvailabilityRequestEmailUnsupportedMessage);
       return;
     }
     final response = CalendarAvailabilityResponse(
@@ -1418,7 +1406,9 @@ class _ChatState extends State<Chat> {
   void _addAvailabilityTaskToPersonalCalendar(_AvailabilityTaskDraft draft) {
     final storageManager = context.read<CalendarStorageManager>();
     if (!storageManager.isAuthStorageReady) {
-      _showSnackbar(_availabilityRequestCalendarUnavailableMessage);
+      _showSnackbar(
+        context.l10n.chatAvailabilityRequestCalendarUnavailableMessage,
+      );
       return;
     }
     context.read<CalendarBloc>().add(
@@ -1434,14 +1424,19 @@ class _ChatState extends State<Chat> {
   Future<void> _addAvailabilityTaskToChatCalendar(
     _AvailabilityTaskDraft draft,
   ) async {
+    final l10n = context.l10n;
     if (context.read<ChatBloc>().state.chat == null ||
         !context.read<ChatBloc>().state.chat!.supportsChatCalendar) {
-      _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
+      _showSnackbar(
+        l10n.chatAvailabilityRequestChatCalendarUnavailableMessage,
+      );
       return;
     }
     final coordinator = _maybeReadChatCalendarCoordinator(context);
     if (coordinator == null) {
-      _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
+      _showSnackbar(
+        l10n.chatAvailabilityRequestChatCalendarUnavailableMessage,
+      );
       return;
     }
     final CalendarTask task = CalendarTask.create(
@@ -1457,7 +1452,10 @@ class _ChatState extends State<Chat> {
         task: task,
       );
     } on Exception {
-      _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
+      if (!mounted) return;
+      _showSnackbar(
+        l10n.chatAvailabilityRequestChatCalendarUnavailableMessage,
+      );
     }
   }
 
@@ -1473,7 +1471,7 @@ class _ChatState extends State<Chat> {
     final String? rawTitle = request.title?.trim();
     final String? rawDescription = request.description?.trim();
     final String title = rawTitle == null || rawTitle.isEmpty
-        ? _availabilityRequestTaskTitleFallback
+        ? context.l10n.chatAvailabilityRequestTaskTitleFallback
         : rawTitle;
     final String? description = rawDescription == null || rawDescription.isEmpty
         ? null
@@ -4473,21 +4471,23 @@ class _ChatState extends State<Chat> {
                                             e.pseudoMessageType ==
                                                 PseudoMessageType
                                                     .mucInviteRevocation;
-                                        const unknownRoomFallbackLabel =
-                                            'group chat';
+                                        final unknownRoomFallbackLabel = context
+                                            .l10n.chatInviteRoomFallbackLabel;
                                         final resolvedInviteRoomName =
                                             inviteRoomName?.isNotEmpty == true
                                                 ? inviteRoomName!
                                                 : unknownRoomFallbackLabel;
-                                        const inviteBodyLabel =
-                                            'You have been invited to a group chat';
-                                        const inviteRevokedBodyLabel =
-                                            'Invite revoked';
+                                        final inviteBodyLabel =
+                                            context.l10n.chatInviteBodyLabel;
+                                        final inviteRevokedBodyLabel =
+                                            context.l10n.chatInviteRevokedLabel;
                                         final inviteLabel = isInvite
                                             ? inviteBodyLabel
                                             : inviteRevokedBodyLabel;
                                         final inviteActionLabel =
-                                            "Join '$resolvedInviteRoomName'";
+                                            context.l10n.chatInviteActionLabel(
+                                          resolvedInviteRoomName,
+                                        );
                                         final inviteRevoked =
                                             inviteToken != null &&
                                                 revokedInviteTokens.contains(
@@ -4555,11 +4555,18 @@ class _ChatState extends State<Chat> {
 
                                         final shouldReplaceInviteBody =
                                             isInvite || isInviteRevocation;
-                                        final renderedText = shouldReplaceInviteBody
-                                            ? inviteLabel
-                                            : e.error.isNotNone
-                                                ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
-                                                : displayedBody;
+                                        final renderedText =
+                                            shouldReplaceInviteBody
+                                                ? inviteLabel
+                                                : e.error.isNotNone
+                                                    ? bodyText.isNotEmpty
+                                                        ? context.l10n
+                                                            .chatMessageErrorWithBody(
+                                                            errorLabel,
+                                                            bodyTextTrimmed,
+                                                          )
+                                                        : errorLabel
+                                                    : displayedBody;
                                         final attachmentIds =
                                             attachmentsForMessage(e);
                                         final hasAttachment =
@@ -5680,9 +5687,10 @@ class _ChatState extends State<Chat> {
                                                             ]);
                                                           } else if (isInviteMessage ||
                                                               isInviteRevocationMessage) {
-                                                            const String
+                                                            final String
                                                                 inviteActionFallbackLabel =
-                                                                'Join';
+                                                                context.l10n
+                                                                    .chatInviteActionFallbackLabel;
                                                             final String
                                                                 inviteLabel =
                                                                 (message.customProperties?[
@@ -6264,10 +6272,9 @@ class _ChatState extends State<Chat> {
                                                                     context,
                                                                     snapshot,
                                                                   ) {
-                                                                    const captionPrefix =
-                                                                        '📎 ';
-                                                                    const fallbackFilename =
-                                                                        'Attachment';
+                                                                    final l10n =
+                                                                        context
+                                                                            .l10n;
                                                                     final metadata =
                                                                         snapshot
                                                                             .data;
@@ -6277,7 +6284,8 @@ class _ChatState extends State<Chat> {
                                                                     final resolvedFilename = filename
                                                                             .isNotEmpty
                                                                         ? filename
-                                                                        : fallbackFilename;
+                                                                        : l10n
+                                                                            .chatAttachmentFallbackLabel;
                                                                     final sizeBytes =
                                                                         metadata
                                                                             ?.sizeBytes;
@@ -6291,7 +6299,10 @@ class _ChatState extends State<Chat> {
                                                                         : l10n
                                                                             .chatAttachmentUnknownSize;
                                                                     final caption =
-                                                                        '$captionPrefix$resolvedFilename ($sizeLabel)';
+                                                                        l10n.chatAttachmentCaption(
+                                                                      resolvedFilename,
+                                                                      sizeLabel,
+                                                                    );
                                                                     return DynamicInlineText(
                                                                       key:
                                                                           ValueKey(
@@ -8097,13 +8108,8 @@ class _ChatState extends State<Chat> {
                         value: chatCalendarBloc,
                         child: scaffold,
                       );
-                return Container(
-                  decoration: BoxDecoration(
-                    color: context.colorScheme.background,
-                    border: Border(
-                      left: BorderSide(color: context.colorScheme.border),
-                    ),
-                  ),
+                return ColoredBox(
+                  color: context.colorScheme.background,
                   child: content,
                 );
               },
@@ -8255,17 +8261,14 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatInviteWrongAccount);
       return;
     }
-    const unknownRoomFallbackLabel = 'group chat';
+    final unknownRoomFallbackLabel = l10n.chatInviteRoomFallbackLabel;
     final resolvedRoomName =
         roomName?.isNotEmpty == true ? roomName! : unknownRoomFallbackLabel;
-    const inviteConfirmTitle = 'Accept invite?';
-    final inviteConfirmMessage = "Join '$resolvedRoomName'?";
-    const inviteConfirmLabel = 'Accept';
     final accepted = await confirm(
       context,
-      title: inviteConfirmTitle,
-      message: inviteConfirmMessage,
-      confirmLabel: inviteConfirmLabel,
+      title: l10n.chatInviteConfirmTitle,
+      message: l10n.chatInviteConfirmMessage(resolvedRoomName),
+      confirmLabel: l10n.chatInviteConfirmLabel,
       destructiveConfirm: false,
     );
     if (!mounted || accepted != true) return;
@@ -8416,9 +8419,10 @@ class _ChatState extends State<Chat> {
       chat: chat,
       recipients: included,
     );
+    final l10n = context.l10n;
     return shouldFanOut
-        ? _recipientVisibilityBccLabel
-        : _recipientVisibilityCcLabel;
+        ? l10n.chatRecipientVisibilityBccLabel
+        : l10n.chatRecipientVisibilityCcLabel;
   }
 
   bool _shouldFanOutRecipients({
@@ -8807,6 +8811,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final double iconSize =
         context.iconTheme.size ?? _pinnedBadgeFallbackIconSize;
@@ -8819,7 +8824,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
     }
 
     final String label = count > _pinnedBadgeMaxDisplayCount
-        ? _pinnedBadgeOverflowLabel
+        ? l10n.commonBadgeOverflowLabel
         : count.toString();
     final Widget badge = DecoratedBox(
       decoration: BoxDecoration(
@@ -10073,12 +10078,13 @@ class _ReactionOverflowGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     return SizedBox(
       width: _reactionOverflowGlyphWidth,
       height: 18,
       child: Center(
         child: Text(
-          '…',
+          l10n.commonEllipsis,
           style: context.textTheme.small
               .copyWith(
                 fontWeight: FontWeight.w600,
@@ -10236,12 +10242,13 @@ class _RecipientOverflowAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     return SizedBox(
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
       child: Center(
         child: Text(
-          '…',
+          l10n.commonEllipsis,
           style: context.textTheme.small
               .copyWith(
                 fontWeight: FontWeight.w700,
@@ -11955,7 +11962,7 @@ class _CalendarTextSelectionDialogState
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Select a portion of the message to send to the calendar or edit it first.',
+                        l10n.chatChooseTextToAddHint,
                         style: textTheme.muted.copyWith(
                           color: colors.mutedForeground,
                         ),
@@ -12313,14 +12320,13 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const label = 'Automatically download attachments in this chat';
-    const hintOn = 'Attachments in this chat will download automatically.';
-    const hintOff = 'Attachments are blocked until you approve them.';
-
+    final l10n = context.l10n;
     final enabled = chat.attachmentAutoDownload.isAllowed;
-    final hint = enabled ? hintOn : hintOff;
+    final hint = enabled
+        ? l10n.chatAttachmentAutoDownloadHintOn
+        : l10n.chatAttachmentAutoDownloadHintOff;
     return _ChatSettingsSwitchRow(
-      title: label,
+      title: l10n.chatAttachmentAutoDownloadLabel,
       subtitle: hint,
       value: enabled,
       onChanged: (value) => context.read<ChatBloc>().add(
@@ -12630,6 +12636,9 @@ class GuestChat extends StatefulWidget {
   State<GuestChat> createState() => _GuestChatState();
 }
 
+const String _guestChatAppIconAssetPath =
+    'assets/icons/generated/app_icon_ios.png';
+
 class _GuestScriptEntry {
   const _GuestScriptEntry({
     required this.text,
@@ -12846,10 +12855,7 @@ class _GuestChatState extends State<GuestChat> {
         : _chatHorizontalPadding;
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: context.colorScheme.background,
-        border: Border(left: BorderSide(color: context.colorScheme.border)),
-      ),
+      color: context.colorScheme.background,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -12941,41 +12947,64 @@ class _GuestChatHeader extends StatelessWidget {
     final colors = context.colorScheme;
     final title =
         contact.firstName?.isNotEmpty == true ? contact.firstName! : contact.id;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: 14,
-      ),
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
-      child: Row(
-        children: [
-          AxiAvatar(jid: contact.id),
-          SizedBox(width: spacing),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: context.textTheme.h4.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+    return SizedBox(
+      height: kToolbarHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.background,
+          border: Border(bottom: BorderSide(color: colors.border)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: Row(
+            children: [
+              const _GuestChatAppIconAvatar(size: _chatAppBarAvatarSize),
+              SizedBox(width: spacing),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: context.textTheme.large.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.l10n.chatGuestSubtitle,
+                      style: context.textTheme.small.copyWith(
+                        color: colors.mutedForeground,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  context.l10n.chatGuestSubtitle,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestChatAppIconAvatar extends StatelessWidget {
+  const _GuestChatAppIconAvatar({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: ClipOval(
+        child: Image.asset(
+          _guestChatAppIconAssetPath,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
       ),
     );
   }
@@ -13142,8 +13171,9 @@ class _MessageSenderLabel extends StatelessWidget {
     final String normalizedAddress = safeAddress.toLowerCase();
     final bool showSecondary =
         safeAddress.isNotEmpty && normalizedPrimary != normalizedAddress;
-    final String? secondaryLabel =
-        showSecondary ? '$_senderLabelAddressPrefix$safeAddress' : null;
+    final String? secondaryLabel = showSecondary
+        ? '${context.l10n.chatSenderAddressPrefix}$safeAddress'
+        : null;
     return _SenderLabelBlock(
       primaryLabel: primaryLabel,
       secondaryLabel: secondaryLabel,

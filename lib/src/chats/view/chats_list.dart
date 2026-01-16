@@ -477,7 +477,6 @@ class _ChatListTileState extends State<ChatListTile> {
                 _unreadBadgeCutoutDepthAdjustment,
           )
         : 0.0;
-    final l10n = context.l10n;
     final subtitleText = _subtitlePreview(item.lastMessage);
     final timestampLabel = item.lastMessage == null
         ? null

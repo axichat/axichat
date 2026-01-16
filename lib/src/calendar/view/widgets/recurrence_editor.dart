@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -1192,6 +1193,7 @@ class _RecurrenceEndControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final _RecurrenceEndMode mode = _endModeForValue(value);
+    final l10n = context.l10n;
     final TextStyle labelStyle = TextStyle(
       fontSize: _recurrenceSmallFontSize,
       fontWeight: FontWeight.w600,
@@ -1260,7 +1262,7 @@ class _RecurrenceEndControls extends StatelessWidget {
             enabled: enabled,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              hintText: context.l10n.calendarRepeatTimes,
+              hintText: l10n.calendarRepeatTimes,
               hintStyle: TextStyle(
                 color: calendarSubtitleColor.withValues(alpha: 0.55),
                 fontSize: _recurrenceInputHintFontSize,
@@ -1293,7 +1295,7 @@ class _RecurrenceEndControls extends StatelessWidget {
             Text(
               '$_recurrenceEndModeDerivedUntilLabel'
               '$_recurrenceLabelSpacer'
-              '${_formatDerivedDate(derivedUntil, referenceStart)}',
+              '${_formatDerivedDate(l10n, derivedUntil, referenceStart)}',
               style: helperStyle,
             ),
           ],
@@ -1383,10 +1385,14 @@ int? _deriveCountForUntil({
   return _RecurrenceLimitSolver(start, value).countThrough(value.until!);
 }
 
-String _formatDerivedDate(DateTime value, DateTime? referenceStart) {
+String _formatDerivedDate(
+  AppLocalizations l10n,
+  DateTime value,
+  DateTime? referenceStart,
+) {
   final bool showTime = referenceStart != null && !_isMidnight(referenceStart);
   return showTime
-      ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
+      ? TimeFormatter.formatFriendlyDateTime(l10n, value)
       : TimeFormatter.formatFriendlyDate(value);
 }
 
@@ -1416,11 +1422,14 @@ String _formatByDayEntry(RecurrenceWeekday entry) {
       '${entry.weekday.shortLabel}';
 }
 
-String _formatRecurrenceDateLabel(CalendarDateTime entry) {
+String _formatRecurrenceDateLabel(
+  AppLocalizations l10n,
+  CalendarDateTime entry,
+) {
   final DateTime value = entry.value;
   final bool showTime = !entry.isAllDay && !_isMidnight(value);
   return showTime
-      ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
+      ? TimeFormatter.formatFriendlyDateTime(l10n, value)
       : TimeFormatter.formatFriendlyDate(value);
 }
 
@@ -2187,11 +2196,12 @@ class _RecurrenceDateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final TextStyle labelStyle = context.textTheme.small.copyWith(
       color: calendarTitleColor,
       fontWeight: FontWeight.w600,
     );
-    final String label = _formatRecurrenceDateLabel(entry);
+    final String label = _formatRecurrenceDateLabel(l10n, entry);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterSm,

@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_free_busy_editor.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -141,6 +142,7 @@ class _CalendarAvailabilityShareViewerScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final share = widget.share;
     final DateTime rangeStart = share.overlay.rangeStart.value;
@@ -150,7 +152,7 @@ class _CalendarAvailabilityShareViewerScreenState
       fallbackLabel: share.overlay.owner,
     );
     final String title = _formatOwnerTitle(ownerLabel);
-    final String rangeLabel = _formatRange(rangeStart, rangeEnd);
+    final String rangeLabel = _formatRange(l10n, rangeStart, rangeEnd);
     final String? rangeHint = _formatRangeDurationHint(rangeStart, rangeEnd);
     final bool canUseChat = widget.enableChatCalendar;
     final bool showRequestHint = widget.onRequest != null;
@@ -575,15 +577,13 @@ String _formatChatCalendarLabel(String? chatLabel) {
   return '$_availabilityViewerChatLabel: $trimmed';
 }
 
-String _formatRange(DateTime start, DateTime end) {
-  final String startLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-  final String endLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+String _formatRange(AppLocalizations l10n, DateTime start, DateTime end) {
+  final String startLabel = TimeFormatter.formatFriendlyDateTime(l10n, start);
+  final String endLabel = TimeFormatter.formatFriendlyDateTime(l10n, end);
   if (startLabel == endLabel) {
     return startLabel;
   }
-  return '$startLabel$_availabilityViewerRangeSeparator$endLabel';
+  return l10n.commonRangeLabel(startLabel, endLabel);
 }
 
 String? _formatRangeDurationHint(DateTime start, DateTime end) {

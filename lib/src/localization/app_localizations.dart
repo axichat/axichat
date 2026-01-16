@@ -8639,11 +8639,713 @@ abstract class AppLocalizations {
   /// **'axichat_tasks'**
   String get calendarExportTasksFilePrefix;
 
+  /// No description provided for @chatTaskViewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Task details'**
+  String get chatTaskViewTitle;
+
+  /// No description provided for @chatTaskViewSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only task.'**
+  String get chatTaskViewSubtitle;
+
+  /// No description provided for @chatTaskViewPreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get chatTaskViewPreviewLabel;
+
+  /// No description provided for @chatTaskViewActionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Task actions'**
+  String get chatTaskViewActionsLabel;
+
+  /// No description provided for @chatTaskViewCopyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy to calendar'**
+  String get chatTaskViewCopyLabel;
+
+  /// No description provided for @chatTaskCopyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy task'**
+  String get chatTaskCopyTitle;
+
+  /// No description provided for @chatTaskCopySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose which calendars should receive it.'**
+  String get chatTaskCopySubtitle;
+
+  /// No description provided for @chatTaskCopyPreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get chatTaskCopyPreviewLabel;
+
+  /// No description provided for @chatTaskCopyCalendarsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendars'**
+  String get chatTaskCopyCalendarsLabel;
+
+  /// No description provided for @chatTaskCopyPersonalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to personal calendar'**
+  String get chatTaskCopyPersonalLabel;
+
+  /// No description provided for @chatTaskCopyChatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to chat calendar'**
+  String get chatTaskCopyChatLabel;
+
+  /// No description provided for @chatTaskCopyConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get chatTaskCopyConfirmLabel;
+
+  /// No description provided for @chatTaskCopyMissingSelectionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one calendar.'**
+  String get chatTaskCopyMissingSelectionMessage;
+
+  /// No description provided for @chatCriticalPathCopyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy critical path'**
+  String get chatCriticalPathCopyTitle;
+
+  /// No description provided for @chatCriticalPathCopySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose which calendars should receive it.'**
+  String get chatCriticalPathCopySubtitle;
+
+  /// No description provided for @chatCriticalPathCopyPreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get chatCriticalPathCopyPreviewLabel;
+
+  /// No description provided for @chatCriticalPathCopyCalendarsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendars'**
+  String get chatCriticalPathCopyCalendarsLabel;
+
+  /// No description provided for @chatCriticalPathCopyPersonalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to personal calendar'**
+  String get chatCriticalPathCopyPersonalLabel;
+
+  /// No description provided for @chatCriticalPathCopyChatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to chat calendar'**
+  String get chatCriticalPathCopyChatLabel;
+
+  /// No description provided for @chatCriticalPathCopyConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get chatCriticalPathCopyConfirmLabel;
+
+  /// No description provided for @chatCriticalPathCopyMissingSelectionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one calendar.'**
+  String get chatCriticalPathCopyMissingSelectionMessage;
+
+  /// No description provided for @chatCriticalPathCopyUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar is unavailable.'**
+  String get chatCriticalPathCopyUnavailableMessage;
+
+  /// No description provided for @chatCriticalPathCopySuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical path copied.'**
+  String get chatCriticalPathCopySuccessMessage;
+
   /// No description provided for @commonBulletLabel.
   ///
   /// In en, this message translates to:
   /// **'• {text}'**
   String commonBulletLabel(String text);
+
+  /// No description provided for @chatFilterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages shown'**
+  String get chatFilterTitle;
+
+  /// No description provided for @chatFilterDirectOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct only'**
+  String get chatFilterDirectOnlyLabel;
+
+  /// No description provided for @chatFilterAllLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get chatFilterAllLabel;
+
+  /// No description provided for @calendarFragmentTaskLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Task'**
+  String get calendarFragmentTaskLabel;
+
+  /// No description provided for @calendarFragmentDayEventLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Day event'**
+  String get calendarFragmentDayEventLabel;
+
+  /// No description provided for @calendarFragmentFreeBusyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Free/busy'**
+  String get calendarFragmentFreeBusyLabel;
+
+  /// No description provided for @calendarFragmentAvailabilityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get calendarFragmentAvailabilityLabel;
+
+  /// No description provided for @calendarFragmentScheduledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled'**
+  String get calendarFragmentScheduledLabel;
+
+  /// No description provided for @calendarFragmentDueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Due'**
+  String get calendarFragmentDueLabel;
+
+  /// No description provided for @calendarFragmentUntitledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled'**
+  String get calendarFragmentUntitledLabel;
+
+  /// No description provided for @calendarFragmentChecklistBullet.
+  ///
+  /// In en, this message translates to:
+  /// **'- '**
+  String get calendarFragmentChecklistBullet;
+
+  /// No description provided for @commonAndMoreLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {and 1 more} other {and {count} more}}'**
+  String commonAndMoreLabel(int count);
+
+  /// No description provided for @commonBulletSymbol.
+  ///
+  /// In en, this message translates to:
+  /// **'• '**
+  String get commonBulletSymbol;
+
+  /// No description provided for @commonLabelSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **': '**
+  String get commonLabelSeparator;
+
+  /// No description provided for @commonUnknownLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get commonUnknownLabel;
+
+  /// No description provided for @commonBadgeOverflowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'99+'**
+  String get commonBadgeOverflowLabel;
+
+  /// No description provided for @commonEllipsis.
+  ///
+  /// In en, this message translates to:
+  /// **'…'**
+  String get commonEllipsis;
+
+  /// No description provided for @chatMessageDetailsSenderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender address'**
+  String get chatMessageDetailsSenderLabel;
+
+  /// No description provided for @chatMessageDetailsMetadataLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Message metadata'**
+  String get chatMessageDetailsMetadataLabel;
+
+  /// No description provided for @chatMessageDetailsHeadersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw headers'**
+  String get chatMessageDetailsHeadersLabel;
+
+  /// No description provided for @chatMessageDetailsHeadersActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'View headers'**
+  String get chatMessageDetailsHeadersActionLabel;
+
+  /// No description provided for @chatMessageDetailsHeadersNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Headers are loaded from the original RFC822 message.'**
+  String get chatMessageDetailsHeadersNote;
+
+  /// No description provided for @chatMessageDetailsHeadersLoadingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading headers...'**
+  String get chatMessageDetailsHeadersLoadingLabel;
+
+  /// No description provided for @chatMessageDetailsHeadersUnavailableLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Headers unavailable.'**
+  String get chatMessageDetailsHeadersUnavailableLabel;
+
+  /// No description provided for @chatMessageDetailsStanzaIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stanza ID'**
+  String get chatMessageDetailsStanzaIdLabel;
+
+  /// No description provided for @chatMessageDetailsOriginIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Origin ID'**
+  String get chatMessageDetailsOriginIdLabel;
+
+  /// No description provided for @chatMessageDetailsOccupantIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupant ID'**
+  String get chatMessageDetailsOccupantIdLabel;
+
+  /// No description provided for @chatMessageDetailsDeltaIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delta message ID'**
+  String get chatMessageDetailsDeltaIdLabel;
+
+  /// No description provided for @chatMessageDetailsLocalIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Local message ID'**
+  String get chatMessageDetailsLocalIdLabel;
+
+  /// No description provided for @chatCalendarFragmentShareDeniedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar cards are disabled for your role in this room.'**
+  String get chatCalendarFragmentShareDeniedMessage;
+
+  /// No description provided for @chatAvailabilityRequestAccountMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability requests are unavailable right now.'**
+  String get chatAvailabilityRequestAccountMissingMessage;
+
+  /// No description provided for @chatAvailabilityRequestEmailUnsupportedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability is unavailable for email chats.'**
+  String get chatAvailabilityRequestEmailUnsupportedMessage;
+
+  /// No description provided for @chatAvailabilityRequestInvalidRangeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability request time is invalid.'**
+  String get chatAvailabilityRequestInvalidRangeMessage;
+
+  /// No description provided for @chatAvailabilityRequestCalendarUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar is unavailable.'**
+  String get chatAvailabilityRequestCalendarUnavailableMessage;
+
+  /// No description provided for @chatAvailabilityRequestChatCalendarUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat calendar is unavailable.'**
+  String get chatAvailabilityRequestChatCalendarUnavailableMessage;
+
+  /// No description provided for @chatAvailabilityRequestTaskTitleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested time'**
+  String get chatAvailabilityRequestTaskTitleFallback;
+
+  /// No description provided for @chatSenderAddressPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'JID: '**
+  String get chatSenderAddressPrefix;
+
+  /// No description provided for @chatRecipientVisibilityCcLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'CC'**
+  String get chatRecipientVisibilityCcLabel;
+
+  /// No description provided for @chatRecipientVisibilityBccLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'BCC'**
+  String get chatRecipientVisibilityBccLabel;
+
+  /// No description provided for @chatInviteRoomFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'group chat'**
+  String get chatInviteRoomFallbackLabel;
+
+  /// No description provided for @chatInviteBodyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'You have been invited to a group chat'**
+  String get chatInviteBodyLabel;
+
+  /// No description provided for @chatInviteRevokedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite revoked'**
+  String get chatInviteRevokedLabel;
+
+  /// No description provided for @chatInviteActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Join \'{roomName}\''**
+  String chatInviteActionLabel(String roomName);
+
+  /// No description provided for @chatInviteActionFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get chatInviteActionFallbackLabel;
+
+  /// No description provided for @chatInviteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept invite?'**
+  String get chatInviteConfirmTitle;
+
+  /// No description provided for @chatInviteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Join \'{roomName}\'?'**
+  String chatInviteConfirmMessage(String roomName);
+
+  /// No description provided for @chatInviteConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get chatInviteConfirmLabel;
+
+  /// No description provided for @chatChooseTextToAddHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a portion of the message to send to the calendar or edit it first.'**
+  String get chatChooseTextToAddHint;
+
+  /// No description provided for @chatAttachmentAutoDownloadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically download attachments in this chat'**
+  String get chatAttachmentAutoDownloadLabel;
+
+  /// No description provided for @chatAttachmentAutoDownloadHintOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments in this chat will download automatically.'**
+  String get chatAttachmentAutoDownloadHintOn;
+
+  /// No description provided for @chatAttachmentAutoDownloadHintOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments are blocked until you approve them.'**
+  String get chatAttachmentAutoDownloadHintOff;
+
+  /// No description provided for @chatAttachmentCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'📎 {filename} ({size})'**
+  String chatAttachmentCaption(String filename, String size);
+
+  /// No description provided for @chatAttachmentFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment'**
+  String get chatAttachmentFallbackLabel;
+
+  /// No description provided for @commonFileSizeUnitBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'B'**
+  String get commonFileSizeUnitBytes;
+
+  /// No description provided for @commonFileSizeUnitKilobytes.
+  ///
+  /// In en, this message translates to:
+  /// **'KB'**
+  String get commonFileSizeUnitKilobytes;
+
+  /// No description provided for @commonFileSizeUnitMegabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'MB'**
+  String get commonFileSizeUnitMegabytes;
+
+  /// No description provided for @commonFileSizeUnitGigabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'GB'**
+  String get commonFileSizeUnitGigabytes;
+
+  /// No description provided for @commonFileSizeUnitTerabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'TB'**
+  String get commonFileSizeUnitTerabytes;
+
+  /// No description provided for @chatAttachmentTooLargeMessageDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment exceeds the server limit.'**
+  String get chatAttachmentTooLargeMessageDefault;
+
+  /// No description provided for @chatAttachmentTooLargeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment exceeds the server limit ({limit}).'**
+  String chatAttachmentTooLargeMessage(String limit);
+
+  /// No description provided for @chatMessageErrorWithBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: \"{body}\"'**
+  String chatMessageErrorWithBody(String label, String body);
+
+  /// No description provided for @messageErrorServiceUnavailableTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'The service reported a temporary issue.'**
+  String get messageErrorServiceUnavailableTooltip;
+
+  /// No description provided for @messageErrorServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Service unavailable'**
+  String get messageErrorServiceUnavailable;
+
+  /// No description provided for @messageErrorServerNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Server not found'**
+  String get messageErrorServerNotFound;
+
+  /// No description provided for @messageErrorServerTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Server timed out'**
+  String get messageErrorServerTimeout;
+
+  /// No description provided for @messageErrorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error'**
+  String get messageErrorUnknown;
+
+  /// No description provided for @messageErrorNotEncryptedForDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Not encrypted for this device'**
+  String get messageErrorNotEncryptedForDevice;
+
+  /// No description provided for @messageErrorMalformedKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Malformed encryption key'**
+  String get messageErrorMalformedKey;
+
+  /// No description provided for @messageErrorUnknownSignedPrekey.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown signed prekey'**
+  String get messageErrorUnknownSignedPrekey;
+
+  /// No description provided for @messageErrorNoDeviceSession.
+  ///
+  /// In en, this message translates to:
+  /// **'No device session'**
+  String get messageErrorNoDeviceSession;
+
+  /// No description provided for @messageErrorSkippingTooManyKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many keys skipped'**
+  String get messageErrorSkippingTooManyKeys;
+
+  /// No description provided for @messageErrorInvalidHmac.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid HMAC'**
+  String get messageErrorInvalidHmac;
+
+  /// No description provided for @messageErrorMalformedCiphertext.
+  ///
+  /// In en, this message translates to:
+  /// **'Malformed ciphertext'**
+  String get messageErrorMalformedCiphertext;
+
+  /// No description provided for @messageErrorNoKeyMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing key material'**
+  String get messageErrorNoKeyMaterial;
+
+  /// No description provided for @messageErrorNoDecryptionKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing decryption key'**
+  String get messageErrorNoDecryptionKey;
+
+  /// No description provided for @messageErrorInvalidKex.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid key exchange'**
+  String get messageErrorInvalidKex;
+
+  /// No description provided for @messageErrorUnknownOmemo.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown OMEMO error'**
+  String get messageErrorUnknownOmemo;
+
+  /// No description provided for @messageErrorInvalidAffixElements.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid affix elements'**
+  String get messageErrorInvalidAffixElements;
+
+  /// No description provided for @messageErrorEmptyDeviceList.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty device list'**
+  String get messageErrorEmptyDeviceList;
+
+  /// No description provided for @messageErrorOmemoUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'OMEMO not supported'**
+  String get messageErrorOmemoUnsupported;
+
+  /// No description provided for @messageErrorEncryptionFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Encryption failed'**
+  String get messageErrorEncryptionFailure;
+
+  /// No description provided for @messageErrorInvalidEnvelope.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid envelope'**
+  String get messageErrorInvalidEnvelope;
+
+  /// No description provided for @messageErrorFileDownloadFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'File download failed'**
+  String get messageErrorFileDownloadFailure;
+
+  /// No description provided for @messageErrorFileUploadFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'File upload failed'**
+  String get messageErrorFileUploadFailure;
+
+  /// No description provided for @messageErrorFileDecryptionFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'File decryption failed'**
+  String get messageErrorFileDecryptionFailure;
+
+  /// No description provided for @messageErrorFileEncryptionFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'File encryption failed'**
+  String get messageErrorFileEncryptionFailure;
+
+  /// No description provided for @messageErrorPlaintextFileInOmemo.
+  ///
+  /// In en, this message translates to:
+  /// **'Plaintext file in OMEMO message'**
+  String get messageErrorPlaintextFileInOmemo;
+
+  /// No description provided for @messageErrorEmailSendFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Email send failed'**
+  String get messageErrorEmailSendFailure;
+
+  /// No description provided for @messageErrorEmailAttachmentTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Email attachment too large'**
+  String get messageErrorEmailAttachmentTooLarge;
+
+  /// No description provided for @messageErrorEmailRecipientRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Email recipient rejected'**
+  String get messageErrorEmailRecipientRejected;
+
+  /// No description provided for @messageErrorEmailAuthenticationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email authentication failed'**
+  String get messageErrorEmailAuthenticationFailed;
+
+  /// No description provided for @messageErrorEmailBounced.
+  ///
+  /// In en, this message translates to:
+  /// **'Email bounced'**
+  String get messageErrorEmailBounced;
+
+  /// No description provided for @messageErrorEmailThrottled.
+  ///
+  /// In en, this message translates to:
+  /// **'Email throttled'**
+  String get messageErrorEmailThrottled;
+
+  /// No description provided for @chatEmailResendFailedDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to resend the email.'**
+  String get chatEmailResendFailedDetails;
 }
 
 class _AppLocalizationsDelegate

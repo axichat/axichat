@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/storage/models/message_models.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 
 class FilterToggle extends StatelessWidget {
@@ -20,9 +21,10 @@ class FilterToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final labels = [
-      (MessageTimelineFilter.directOnly, 'Direct only'),
-      (MessageTimelineFilter.allWithContact, 'All'),
+      (MessageTimelineFilter.directOnly, l10n.chatFilterDirectOnlyLabel),
+      (MessageTimelineFilter.allWithContact, l10n.chatFilterAllLabel),
     ];
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -32,7 +34,7 @@ class FilterToggle extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Messages shown',
+            l10n.chatFilterTitle,
             style: textTheme.labelMedium?.copyWith(
               color: colors.onSurfaceVariant,
               fontWeight: FontWeight.w600,

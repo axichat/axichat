@@ -503,10 +503,7 @@ class _LoginScreenState extends State<LoginScreen>
                 child: Container(
                   margin: containerMargin,
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: colors.background,
-                    border: Border(top: BorderSide(color: colors.border)),
-                  ),
+                  color: colors.background,
                   child: AxiAdaptiveLayout(
                     primaryFlex: 4,
                     secondaryFlex: 6,

@@ -8,11 +8,11 @@ import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
-import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -43,34 +43,6 @@ const EdgeInsets _fragmentChecklistMorePadding = EdgeInsets.only(
 const EdgeInsets _fragmentCriticalPathMorePadding = EdgeInsets.only(
   left: _fragmentCriticalPathIndent,
 );
-
-const String _fragmentLabelTask = 'Task';
-const String _fragmentLabelChecklist = 'Checklist';
-const String _fragmentLabelReminder = 'Reminder';
-const String _fragmentLabelDayEvent = 'Day event';
-const String _fragmentLabelCriticalPath = 'Critical path';
-const String _fragmentLabelFreeBusy = 'Free/busy';
-const String _fragmentLabelAvailability = 'Availability';
-
-const String _fragmentFallbackTitle = 'Untitled';
-const String _fragmentChecklistBullet = '- ';
-const String _fragmentCriticalPathBullet = '• ';
-const String _fragmentChecklistMorePrefix = 'and ';
-const String _fragmentChecklistMoreSuffix = ' more';
-const String _fragmentCriticalPathMorePrefix = 'and ';
-const String _fragmentCriticalPathMoreSuffix = ' more';
-const String _fragmentReminderEmptyLabel = 'No reminders';
-const String _fragmentScheduleLabel = 'Scheduled';
-const String _fragmentDueLabel = 'Due';
-const String _fragmentCriticalPathProgressLabel = 'Progress';
-const String _fragmentCriticalPathEmptyLabel = 'No tasks yet';
-const String _fragmentCriticalPathProgressSeparator = ' / ';
-const String _fragmentRangeSeparator = ' - ';
-const String _fragmentReminderSeparator = ', ';
-const String _fragmentReminderStartLabel = 'Start';
-const String _fragmentReminderDeadlineLabel = 'Deadline';
-const String _fragmentInfoSeparator = ': ';
-const String _emptyText = '';
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
@@ -192,14 +164,23 @@ class _TaskFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _sanitizeTitle(task.title);
+    final l10n = context.l10n;
+    final title = _sanitizeTitle(
+      task.title,
+      l10n.calendarFragmentUntitledLabel,
+    );
     final description = task.description?.trim();
-    final info = _taskInfo(task);
+    final info = _taskInfo(
+      l10n,
+      task,
+      scheduleLabel: l10n.calendarFragmentScheduledLabel,
+      dueLabel: l10n.calendarFragmentDueLabel,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelTask),
+        _FragmentLabel(text: l10n.calendarFragmentTaskLabel),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           spacing: _fragmentLabelSpacing,
@@ -234,35 +215,40 @@ class _TaskFragmentBody extends StatelessWidget {
     );
   }
 
-  String _sanitizeTitle(String value) {
+  String _sanitizeTitle(String value, String fallback) {
     final trimmed = value.trim();
-    return trimmed.isNotEmpty ? trimmed : _fragmentFallbackTitle;
+    return trimmed.isNotEmpty ? trimmed : fallback;
   }
 
-  List<_FragmentInfo> _taskInfo(CalendarTask task) {
+  List<_FragmentInfo> _taskInfo(
+    AppLocalizations l10n,
+    CalendarTask task, {
+    required String scheduleLabel,
+    required String dueLabel,
+  }) {
     final info = <_FragmentInfo>[];
     final scheduledTime = task.scheduledTime;
     if (scheduledTime != null) {
       final endTime = _taskEndTime(task);
       final scheduleValue = endTime == null
-          ? TimeFormatter.formatFriendlyDateTime(context.l10n, scheduledTime)
-          : context.l10n.commonRangeLabel(
+          ? TimeFormatter.formatFriendlyDateTime(l10n, scheduledTime)
+          : l10n.commonRangeLabel(
               TimeFormatter.formatFriendlyDateTime(
-                context.l10n,
+                l10n,
                 scheduledTime,
               ),
-              TimeFormatter.formatFriendlyDateTime(context.l10n, endTime),
+              TimeFormatter.formatFriendlyDateTime(l10n, endTime),
             );
       info.add(
-        _FragmentInfo(label: _fragmentScheduleLabel, value: scheduleValue),
+        _FragmentInfo(label: scheduleLabel, value: scheduleValue),
       );
     }
     final deadline = task.deadline;
     if (deadline != null) {
       info.add(
         _FragmentInfo(
-          label: _fragmentDueLabel,
-          value: TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
+          label: dueLabel,
+          value: TimeFormatter.formatFriendlyDateTime(l10n, deadline),
         ),
       );
     }
@@ -290,6 +276,7 @@ class _ChecklistFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final visibleItems = checklist.length <= _fragmentChecklistPreviewLimit
         ? checklist
         : checklist.sublist(0, _fragmentChecklistPreviewLimit);
@@ -301,9 +288,9 @@ class _ChecklistFragmentBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelChecklist),
+        _FragmentLabel(text: l10n.calendarFragmentChecklistLabel),
         if (visibleItems.isEmpty)
-          Text(_fragmentFallbackTitle, style: textStyle)
+          Text(l10n.calendarFragmentUntitledLabel, style: textStyle)
         else
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,13 +300,13 @@ class _ChecklistFragmentBody extends StatelessWidget {
                 _ChecklistItemRow(
                   label: item.label,
                   completed: item.isCompleted,
+                  bullet: l10n.calendarFragmentChecklistBullet,
                 ),
               if (remaining > 0)
                 Padding(
                   padding: _fragmentChecklistMorePadding,
                   child: Text(
-                    '$_fragmentChecklistMorePrefix$remaining'
-                    '$_fragmentChecklistMoreSuffix',
+                    l10n.commonAndMoreLabel(remaining),
                     style: context.textTheme.small.copyWith(
                       color: context.colorScheme.mutedForeground,
                     ),
@@ -333,10 +320,15 @@ class _ChecklistFragmentBody extends StatelessWidget {
 }
 
 class _ChecklistItemRow extends StatelessWidget {
-  const _ChecklistItemRow({required this.label, required this.completed});
+  const _ChecklistItemRow({
+    required this.label,
+    required this.completed,
+    required this.bullet,
+  });
 
   final String label;
   final bool completed;
+  final String bullet;
 
   @override
   Widget build(BuildContext context) {
@@ -345,13 +337,15 @@ class _ChecklistItemRow extends StatelessWidget {
       color: completed ? colors.mutedForeground : colors.foreground,
       decoration: completed ? TextDecoration.lineThrough : null,
     );
-    final resolvedLabel = label.trim().isEmpty ? _fragmentFallbackTitle : label;
+    final resolvedLabel = label.trim().isEmpty
+        ? context.l10n.calendarFragmentUntitledLabel
+        : label;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: _fragmentChecklistBulletPadding,
-          child: Text(_fragmentChecklistBullet, style: textStyle),
+          child: Text(bullet, style: textStyle),
         ),
         Expanded(
           child: Text(
@@ -374,8 +368,10 @@ class _CriticalPathFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String title =
-        path.name.trim().isNotEmpty ? path.name.trim() : _fragmentFallbackTitle;
+    final l10n = context.l10n;
+    final String title = path.name.trim().isNotEmpty
+        ? path.name.trim()
+        : l10n.calendarFragmentUntitledLabel;
     final List<CalendarTask> orderedTasks = _orderedTasks();
     final int total = orderedTasks.length;
     final int completed = orderedTasks.where((task) => task.isCompleted).length;
@@ -386,18 +382,21 @@ class _CriticalPathFragmentBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelCriticalPath),
+        _FragmentLabel(text: l10n.calendarFragmentCriticalPathLabel),
         Text(
           title,
           style: context.textTheme.large.copyWith(fontWeight: FontWeight.w600),
         ),
         if (total > 0)
           _FragmentInfoLine(
-            label: _fragmentCriticalPathProgressLabel,
-            value: '$completed$_fragmentCriticalPathProgressSeparator$total',
+            label: l10n.calendarCriticalPathProgressLabel,
+            value: l10n.calendarFragmentCriticalPathProgress(
+              completed,
+              total,
+            ),
           )
         else
-          Text(_fragmentCriticalPathEmptyLabel, style: emptyStyle),
+          Text(l10n.calendarCriticalPathEmptyTasks, style: emptyStyle),
         if (total > 0) _CriticalPathTaskList(tasks: orderedTasks),
       ],
     );
@@ -432,6 +431,7 @@ class _CriticalPathTaskList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final List<CalendarTask> visible =
         tasks.length <= _fragmentCriticalPathPreviewLimit
             ? tasks
@@ -443,13 +443,16 @@ class _CriticalPathTaskList extends StatelessWidget {
       spacing: _fragmentChecklistSpacing,
       children: [
         for (final task in visible)
-          _CriticalPathTaskRow(title: task.title, completed: task.isCompleted),
+          _CriticalPathTaskRow(
+            title: task.title,
+            completed: task.isCompleted,
+            bullet: l10n.commonBulletSymbol,
+          ),
         if (remaining > 0)
           Padding(
             padding: _fragmentCriticalPathMorePadding,
             child: Text(
-              '$_fragmentCriticalPathMorePrefix$remaining'
-              '$_fragmentCriticalPathMoreSuffix',
+              l10n.commonAndMoreLabel(remaining),
               style: textTheme.small.copyWith(
                 color: context.colorScheme.mutedForeground,
               ),
@@ -461,10 +464,15 @@ class _CriticalPathTaskList extends StatelessWidget {
 }
 
 class _CriticalPathTaskRow extends StatelessWidget {
-  const _CriticalPathTaskRow({required this.title, required this.completed});
+  const _CriticalPathTaskRow({
+    required this.title,
+    required this.completed,
+    required this.bullet,
+  });
 
   final String title;
   final bool completed;
+  final String bullet;
 
   @override
   Widget build(BuildContext context) {
@@ -473,14 +481,15 @@ class _CriticalPathTaskRow extends StatelessWidget {
       color: completed ? colors.mutedForeground : colors.foreground,
       decoration: completed ? TextDecoration.lineThrough : null,
     );
-    final String resolvedTitle =
-        title.trim().isEmpty ? _fragmentFallbackTitle : title;
+    final String resolvedTitle = title.trim().isNotEmpty
+        ? title
+        : context.l10n.calendarFragmentUntitledLabel;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: _fragmentChecklistBulletPadding,
-          child: Text(_fragmentCriticalPathBullet, style: textStyle),
+          child: Text(bullet, style: textStyle),
         ),
         Expanded(
           child: Text(
@@ -502,12 +511,13 @@ class _ReminderFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reminderText = _reminderSummary(reminders);
+    final l10n = context.l10n;
+    final reminderText = _reminderSummary(l10n, reminders);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelReminder),
+        _FragmentLabel(text: l10n.calendarFragmentRemindersLabel),
         Text(
           reminderText,
           style: context.textTheme.small.copyWith(
@@ -518,34 +528,32 @@ class _ReminderFragmentBody extends StatelessWidget {
     );
   }
 
-  String _reminderSummary(ReminderPreferences reminders) {
+  String _reminderSummary(
+      AppLocalizations l10n, ReminderPreferences reminders) {
     if (!reminders.isEnabled) {
-      return _fragmentReminderEmptyLabel;
+      return l10n.calendarRemindersEmptyLabel;
     }
-    final startLabel = _offsetSummary(reminders.startOffsets);
-    final deadlineLabel = _offsetSummary(reminders.deadlineOffsets);
+    final startLabel = _offsetSummary(l10n, reminders.startOffsets);
+    final deadlineLabel = _offsetSummary(l10n, reminders.deadlineOffsets);
     final parts = <String>[];
     if (startLabel.isNotEmpty) {
-      parts.add(
-        '$_fragmentReminderStartLabel$_fragmentInfoSeparator$startLabel',
-      );
+      parts.add(l10n.calendarFragmentReminderStartSummary(startLabel));
     }
     if (deadlineLabel.isNotEmpty) {
-      parts.add(
-        '$_fragmentReminderDeadlineLabel$_fragmentInfoSeparator$deadlineLabel',
-      );
+      parts.add(l10n.calendarFragmentReminderDeadlineSummary(deadlineLabel));
     }
     if (parts.isEmpty) {
-      return _fragmentReminderEmptyLabel;
+      return l10n.calendarRemindersEmptyLabel;
     }
-    return parts.join(_fragmentReminderSeparator);
+    return parts.join(l10n.calendarFragmentReminderSeparator);
   }
 
-  String _offsetSummary(List<Duration> offsets) {
-    if (offsets.isEmpty) return _emptyText;
-    final labels =
-        offsets.map(TimeFormatter.formatDuration).toList(growable: false);
-    return labels.join(_fragmentReminderSeparator);
+  String _offsetSummary(AppLocalizations l10n, List<Duration> offsets) {
+    if (offsets.isEmpty) return '';
+    final labels = offsets
+        .map((duration) => TimeFormatter.formatDuration(l10n, duration))
+        .toList(growable: false);
+    return labels.join(l10n.calendarFragmentReminderSeparator);
   }
 }
 
@@ -556,16 +564,17 @@ class _DayEventFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final title = event.title.trim().isNotEmpty
         ? event.title.trim()
-        : _fragmentFallbackTitle;
+        : l10n.calendarFragmentEventTitleFallback;
     final description = event.description?.trim();
-    final dateLabel = _dateRange(event.startDate, event.endDate);
+    final dateLabel = _dateRange(l10n, event.startDate, event.endDate);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelDayEvent),
+        _FragmentLabel(text: l10n.calendarFragmentDayEventLabel),
         Text(
           title,
           style: context.textTheme.large.copyWith(fontWeight: FontWeight.w600),
@@ -579,18 +588,21 @@ class _DayEventFragmentBody extends StatelessWidget {
             maxLines: _fragmentDescriptionMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
-        _FragmentInfoLine(label: _fragmentScheduleLabel, value: dateLabel),
+        _FragmentInfoLine(
+          label: l10n.calendarFragmentScheduledLabel,
+          value: dateLabel,
+        ),
       ],
     );
   }
 
-  String _dateRange(DateTime start, DateTime? end) {
+  String _dateRange(AppLocalizations l10n, DateTime start, DateTime? end) {
     final startLabel = TimeFormatter.formatFriendlyDate(start);
     final endLabel = end == null ? null : TimeFormatter.formatFriendlyDate(end);
     if (endLabel == null || endLabel == startLabel) {
       return startLabel;
     }
-    return '$startLabel$_fragmentRangeSeparator$endLabel';
+    return l10n.commonRangeLabel(startLabel, endLabel);
   }
 }
 
@@ -601,31 +613,35 @@ class _FreeBusyFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rangeLabel = _dateTimeRange(interval.start.value, interval.end.value);
+    final l10n = context.l10n;
+    final rangeLabel =
+        _dateTimeRange(l10n, interval.start.value, interval.end.value);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelFreeBusy),
+        _FragmentLabel(text: l10n.calendarFragmentFreeBusyLabel),
         Text(
-          interval.type.label(context.l10n),
+          interval.type.label(l10n),
           style: context.textTheme.small.copyWith(
             color: context.colorScheme.foreground,
           ),
         ),
-        _FragmentInfoLine(label: _fragmentScheduleLabel, value: rangeLabel),
+        _FragmentInfoLine(
+          label: l10n.calendarFragmentScheduledLabel,
+          value: rangeLabel,
+        ),
       ],
     );
   }
 
-  String _dateTimeRange(DateTime start, DateTime end) {
-    final startLabel =
-        TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-    final endLabel = TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+  String _dateTimeRange(AppLocalizations l10n, DateTime start, DateTime end) {
+    final startLabel = TimeFormatter.formatFriendlyDateTime(l10n, start);
+    final endLabel = TimeFormatter.formatFriendlyDateTime(l10n, end);
     if (startLabel == endLabel) {
       return startLabel;
     }
-    return '$startLabel$_fragmentRangeSeparator$endLabel';
+    return l10n.commonRangeLabel(startLabel, endLabel);
   }
 }
 
@@ -636,14 +652,16 @@ class _AvailabilityFragmentBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final summary = window.summary?.trim();
     final description = window.description?.trim();
-    final rangeLabel = _dateTimeRange(window.start.value, window.end.value);
+    final rangeLabel =
+        _dateTimeRange(l10n, window.start.value, window.end.value);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
       children: [
-        const _FragmentLabel(text: _fragmentLabelAvailability),
+        _FragmentLabel(text: l10n.calendarFragmentAvailabilityLabel),
         if (summary != null && summary.isNotEmpty)
           Text(
             summary,
@@ -660,19 +678,21 @@ class _AvailabilityFragmentBody extends StatelessWidget {
             maxLines: _fragmentDescriptionMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
-        _FragmentInfoLine(label: _fragmentScheduleLabel, value: rangeLabel),
+        _FragmentInfoLine(
+          label: l10n.calendarFragmentScheduledLabel,
+          value: rangeLabel,
+        ),
       ],
     );
   }
 
-  String _dateTimeRange(DateTime start, DateTime end) {
-    final startLabel =
-        TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-    final endLabel = TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+  String _dateTimeRange(AppLocalizations l10n, DateTime start, DateTime end) {
+    final startLabel = TimeFormatter.formatFriendlyDateTime(l10n, start);
+    final endLabel = TimeFormatter.formatFriendlyDateTime(l10n, end);
     if (startLabel == endLabel) {
       return startLabel;
     }
-    return '$startLabel$_fragmentRangeSeparator$endLabel';
+    return l10n.commonRangeLabel(startLabel, endLabel);
   }
 }
 
@@ -704,6 +724,7 @@ class _FragmentInfoLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final labelStyle = context.textTheme.small.copyWith(
       color: colors.mutedForeground,
       fontWeight: FontWeight.w600,
@@ -713,7 +734,7 @@ class _FragmentInfoLine extends StatelessWidget {
     );
     return Text.rich(
       TextSpan(
-        text: '$label$_fragmentInfoSeparator',
+        text: '$label${l10n.commonLabelSeparator}',
         style: labelStyle,
         children: [TextSpan(text: value, style: valueStyle)],
       ),

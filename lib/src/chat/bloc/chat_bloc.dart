@@ -36,6 +36,7 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -1984,6 +1985,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(typing: false));
     final chat = state.chat;
     if (chat == null) return;
+    final sendStartedAt = DateTime.now();
     final trimmedText = event.text.trim();
     final CalendarTask? requestedTask = event.calendarTaskIcs;
     final bool taskReadOnly = event.calendarTaskIcsReadOnly;
@@ -2348,6 +2350,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachments: queuedAttachments,
         emit: emit,
       );
+      _rehydrateComposerAfterSendFailure(
+        sendStartedAt: sendStartedAt,
+        text: trimmedText,
+        emit: emit,
+      );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(_sendMessageFailedLogMessage, error, stackTrace);
       await _saveXmppDraft(
@@ -2355,6 +2362,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipients: xmppRecipients,
         body: trimmedText,
         attachments: queuedAttachments,
+        emit: emit,
+      );
+      _rehydrateComposerAfterSendFailure(
+        sendStartedAt: sendStartedAt,
+        text: trimmedText,
         emit: emit,
       );
     } finally {
@@ -2377,6 +2389,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _clearEmailSubject(emit);
       }
     }
+  }
+
+  void _rehydrateComposerAfterSendFailure({
+    required DateTime sendStartedAt,
+    required String text,
+    required Emitter<ChatState> emit,
+  }) {
+    if (text.isEmpty) {
+      return;
+    }
+    const rehydrateWindow = Duration(seconds: 1);
+    if (DateTime.now().difference(sendStartedAt) >= rehydrateWindow) {
+      return;
+    }
+    final nextHydrationId = ++_composerHydrationSeed;
+    emit(
+      state.copyWith(
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: text,
+      ),
+    );
   }
 
   Future<void> _onChatAvailabilityMessageSent(

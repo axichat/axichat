@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -662,6 +663,7 @@ class _TaskDeadlineBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final Color color = _deadlineColor(deadline);
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -678,7 +680,7 @@ class _TaskDeadlineBadge extends StatelessWidget {
           Icon(Icons.calendar_today_outlined, size: 12, color: color),
           const SizedBox(width: calendarInsetMd),
           Text(
-            _deadlineLabel(deadline),
+            _deadlineLabel(l10n, deadline),
             style: TextStyle(
               fontSize: 11,
               color: color,
@@ -735,6 +737,6 @@ Color _deadlineBackgroundColor(DateTime deadline) {
   return calendarPrimaryColor.withValues(alpha: 0.08);
 }
 
-String _deadlineLabel(DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(context.l10n, deadline);
+String _deadlineLabel(AppLocalizations l10n, DateTime deadline) {
+  return TimeFormatter.formatFriendlyDateTime(l10n, deadline);
 }

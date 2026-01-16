@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/axi_tab_bar.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -301,10 +302,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   key: const ValueKey('calendar.drag.cancel-bucket'),
                   button: true,
                   enabled: _activeCancelPayload != null,
-                  label: l10n.calendarCancelDragLabel,
-                  hint: _activeCancelPayload != null
-                      ? l10n.calendarCancelDragHintActive
-                      : l10n.calendarCancelDragHintIdle,
+                  label: l10n.commonCancel,
+                  hint: l10n.commonCancel,
                   onTap: _activeCancelPayload == null
                       ? null
                       : _triggerCancelBucketAction,

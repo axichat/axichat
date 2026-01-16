@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_alarms_field.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -318,6 +319,7 @@ class _ReminderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
     final TextStyle labelStyle = context.textTheme.small.copyWith(
       fontSize: 10,
@@ -358,7 +360,7 @@ class _ReminderSection extends StatelessWidget {
           children: options
               .map(
                 (Duration option) => _ReminderChip(
-                  label: _labelFor(option),
+                  label: _labelFor(l10n, option),
                   selected: selected.contains(option),
                   padding: chipPadding ??
                       const EdgeInsets.symmetric(
@@ -374,7 +376,7 @@ class _ReminderSection extends StatelessWidget {
     );
   }
 
-  String _labelFor(Duration offset) {
+  String _labelFor(AppLocalizations l10n, Duration offset) {
     if (offset == Duration.zero) {
       return zeroLabel;
     }
@@ -389,7 +391,7 @@ class _ReminderSection extends StatelessWidget {
     if (offset.inMinutes >= 1) {
       return '${offset.inMinutes}m';
     }
-    return TimeFormatter.formatDuration(context.l10n, offset);
+    return TimeFormatter.formatDuration(l10n, offset);
   }
 }
 

@@ -5077,7 +5077,405 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarExportTasksFilePrefix => 'axichat_taches';
 
   @override
+  String get chatTaskViewTitle => 'Details de la tache';
+
+  @override
+  String get chatTaskViewSubtitle => 'Tache en lecture seule.';
+
+  @override
+  String get chatTaskViewPreviewLabel => 'Apercu';
+
+  @override
+  String get chatTaskViewActionsLabel => 'Actions de la tache';
+
+  @override
+  String get chatTaskViewCopyLabel => 'Copier dans le calendrier';
+
+  @override
+  String get chatTaskCopyTitle => 'Copier la tache';
+
+  @override
+  String get chatTaskCopySubtitle =>
+      'Choisissez les calendriers qui doivent la recevoir.';
+
+  @override
+  String get chatTaskCopyPreviewLabel => 'Apercu';
+
+  @override
+  String get chatTaskCopyCalendarsLabel => 'Calendriers';
+
+  @override
+  String get chatTaskCopyPersonalLabel => 'Ajouter au calendrier personnel';
+
+  @override
+  String get chatTaskCopyChatLabel => 'Ajouter au calendrier du chat';
+
+  @override
+  String get chatTaskCopyConfirmLabel => 'Copier';
+
+  @override
+  String get chatTaskCopyMissingSelectionMessage =>
+      'Selectionnez au moins un calendrier.';
+
+  @override
+  String get chatCriticalPathCopyTitle => 'Copier le chemin critique';
+
+  @override
+  String get chatCriticalPathCopySubtitle =>
+      'Choisissez les calendriers qui doivent la recevoir.';
+
+  @override
+  String get chatCriticalPathCopyPreviewLabel => 'Apercu';
+
+  @override
+  String get chatCriticalPathCopyCalendarsLabel => 'Calendriers';
+
+  @override
+  String get chatCriticalPathCopyPersonalLabel =>
+      'Ajouter au calendrier personnel';
+
+  @override
+  String get chatCriticalPathCopyChatLabel => 'Ajouter au calendrier du chat';
+
+  @override
+  String get chatCriticalPathCopyConfirmLabel => 'Copier';
+
+  @override
+  String get chatCriticalPathCopyMissingSelectionMessage =>
+      'Selectionnez au moins un calendrier.';
+
+  @override
+  String get chatCriticalPathCopyUnavailableMessage =>
+      'Le calendrier est indisponible.';
+
+  @override
+  String get chatCriticalPathCopySuccessMessage => 'Chemin critique copie.';
+
+  @override
   String commonBulletLabel(String text) {
     return '• $text';
   }
+
+  @override
+  String get chatFilterTitle => 'Messages affiches';
+
+  @override
+  String get chatFilterDirectOnlyLabel => 'Direct seulement';
+
+  @override
+  String get chatFilterAllLabel => 'Tous';
+
+  @override
+  String get calendarFragmentTaskLabel => 'Tache';
+
+  @override
+  String get calendarFragmentDayEventLabel => 'Evenement de jour';
+
+  @override
+  String get calendarFragmentFreeBusyLabel => 'Libre/occupe';
+
+  @override
+  String get calendarFragmentAvailabilityLabel => 'Disponibilite';
+
+  @override
+  String get calendarFragmentScheduledLabel => 'Planifie';
+
+  @override
+  String get calendarFragmentDueLabel => 'A rendre';
+
+  @override
+  String get calendarFragmentUntitledLabel => 'Sans titre';
+
+  @override
+  String get calendarFragmentChecklistBullet => '- ';
+
+  @override
+  String commonAndMoreLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'et $count de plus',
+      one: 'et 1 de plus',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get commonBulletSymbol => '• ';
+
+  @override
+  String get commonLabelSeparator => ': ';
+
+  @override
+  String get commonUnknownLabel => 'Inconnu';
+
+  @override
+  String get commonBadgeOverflowLabel => '99+';
+
+  @override
+  String get commonEllipsis => '…';
+
+  @override
+  String get chatMessageDetailsSenderLabel => 'Adresse de l expediteur';
+
+  @override
+  String get chatMessageDetailsMetadataLabel => 'Metadonnees du message';
+
+  @override
+  String get chatMessageDetailsHeadersLabel => 'En-tetes bruts';
+
+  @override
+  String get chatMessageDetailsHeadersActionLabel => 'Voir les en-tetes';
+
+  @override
+  String get chatMessageDetailsHeadersNote =>
+      'Les en-tetes sont charges depuis le message RFC822 original.';
+
+  @override
+  String get chatMessageDetailsHeadersLoadingLabel =>
+      'Chargement des en-tetes...';
+
+  @override
+  String get chatMessageDetailsHeadersUnavailableLabel =>
+      'En-tetes indisponibles.';
+
+  @override
+  String get chatMessageDetailsStanzaIdLabel => 'ID de stanza';
+
+  @override
+  String get chatMessageDetailsOriginIdLabel => 'ID d origine';
+
+  @override
+  String get chatMessageDetailsOccupantIdLabel => 'ID d occupant';
+
+  @override
+  String get chatMessageDetailsDeltaIdLabel => 'ID de message Delta';
+
+  @override
+  String get chatMessageDetailsLocalIdLabel => 'ID de message local';
+
+  @override
+  String get chatCalendarFragmentShareDeniedMessage =>
+      'Les cartes de calendrier sont desactivees pour votre role dans ce salon.';
+
+  @override
+  String get chatAvailabilityRequestAccountMissingMessage =>
+      'Les demandes de disponibilite ne sont pas disponibles pour le moment.';
+
+  @override
+  String get chatAvailabilityRequestEmailUnsupportedMessage =>
+      'La disponibilite n est pas disponible pour les chats email.';
+
+  @override
+  String get chatAvailabilityRequestInvalidRangeMessage =>
+      'L heure demandee pour la disponibilite est invalide.';
+
+  @override
+  String get chatAvailabilityRequestCalendarUnavailableMessage =>
+      'Calendrier indisponible.';
+
+  @override
+  String get chatAvailabilityRequestChatCalendarUnavailableMessage =>
+      'Le calendrier du chat est indisponible.';
+
+  @override
+  String get chatAvailabilityRequestTaskTitleFallback => 'Heure demandee';
+
+  @override
+  String get chatSenderAddressPrefix => 'JID: ';
+
+  @override
+  String get chatRecipientVisibilityCcLabel => 'CC';
+
+  @override
+  String get chatRecipientVisibilityBccLabel => 'BCC';
+
+  @override
+  String get chatInviteRoomFallbackLabel => 'chat de groupe';
+
+  @override
+  String get chatInviteBodyLabel => 'Vous avez ete invite a un chat de groupe';
+
+  @override
+  String get chatInviteRevokedLabel => 'Invitation revoquee';
+
+  @override
+  String chatInviteActionLabel(String roomName) {
+    return 'Rejoindre \'$roomName\'';
+  }
+
+  @override
+  String get chatInviteActionFallbackLabel => 'Rejoindre';
+
+  @override
+  String get chatInviteConfirmTitle => 'Accepter l invitation ?';
+
+  @override
+  String chatInviteConfirmMessage(String roomName) {
+    return 'Rejoindre \'$roomName\' ?';
+  }
+
+  @override
+  String get chatInviteConfirmLabel => 'Accepter';
+
+  @override
+  String get chatChooseTextToAddHint =>
+      'Selectionnez une partie du message a envoyer au calendrier ou modifiez-la d abord.';
+
+  @override
+  String get chatAttachmentAutoDownloadLabel =>
+      'Telecharger automatiquement les pieces jointes dans ce chat';
+
+  @override
+  String get chatAttachmentAutoDownloadHintOn =>
+      'Les pieces jointes de ce chat se telechargeront automatiquement.';
+
+  @override
+  String get chatAttachmentAutoDownloadHintOff =>
+      'Les pieces jointes sont bloquees jusqu a votre approbation.';
+
+  @override
+  String chatAttachmentCaption(String filename, String size) {
+    return '📎 $filename ($size)';
+  }
+
+  @override
+  String get chatAttachmentFallbackLabel => 'Piece jointe';
+
+  @override
+  String get commonFileSizeUnitBytes => 'B';
+
+  @override
+  String get commonFileSizeUnitKilobytes => 'KB';
+
+  @override
+  String get commonFileSizeUnitMegabytes => 'MB';
+
+  @override
+  String get commonFileSizeUnitGigabytes => 'GB';
+
+  @override
+  String get commonFileSizeUnitTerabytes => 'TB';
+
+  @override
+  String get chatAttachmentTooLargeMessageDefault =>
+      'La piece jointe depasse la limite du serveur.';
+
+  @override
+  String chatAttachmentTooLargeMessage(String limit) {
+    return 'La piece jointe depasse la limite du serveur ($limit).';
+  }
+
+  @override
+  String chatMessageErrorWithBody(String label, String body) {
+    return '$label : \"$body\"';
+  }
+
+  @override
+  String get messageErrorServiceUnavailableTooltip =>
+      'Le service a signale un probleme temporaire.';
+
+  @override
+  String get messageErrorServiceUnavailable => 'Service indisponible';
+
+  @override
+  String get messageErrorServerNotFound => 'Serveur introuvable';
+
+  @override
+  String get messageErrorServerTimeout => 'Delai d attente du serveur';
+
+  @override
+  String get messageErrorUnknown => 'Erreur inconnue';
+
+  @override
+  String get messageErrorNotEncryptedForDevice =>
+      'Non chiffre pour cet appareil';
+
+  @override
+  String get messageErrorMalformedKey => 'Cle de chiffrement mal formee';
+
+  @override
+  String get messageErrorUnknownSignedPrekey => 'Prekey signee inconnue';
+
+  @override
+  String get messageErrorNoDeviceSession => 'Aucune session d appareil';
+
+  @override
+  String get messageErrorSkippingTooManyKeys => 'Trop de cles ignorees';
+
+  @override
+  String get messageErrorInvalidHmac => 'HMAC invalide';
+
+  @override
+  String get messageErrorMalformedCiphertext => 'Chiffre mal forme';
+
+  @override
+  String get messageErrorNoKeyMaterial => 'Materiel de cle manquant';
+
+  @override
+  String get messageErrorNoDecryptionKey => 'Cle de dechiffrement manquante';
+
+  @override
+  String get messageErrorInvalidKex => 'Echange de cles invalide';
+
+  @override
+  String get messageErrorUnknownOmemo => 'Erreur OMEMO inconnue';
+
+  @override
+  String get messageErrorInvalidAffixElements => 'Elements d affixe invalides';
+
+  @override
+  String get messageErrorEmptyDeviceList => 'Liste d appareils vide';
+
+  @override
+  String get messageErrorOmemoUnsupported => 'OMEMO non pris en charge';
+
+  @override
+  String get messageErrorEncryptionFailure => 'Echec du chiffrement';
+
+  @override
+  String get messageErrorInvalidEnvelope => 'Enveloppe invalide';
+
+  @override
+  String get messageErrorFileDownloadFailure =>
+      'Echec du telechargement du fichier';
+
+  @override
+  String get messageErrorFileUploadFailure =>
+      'Echec du televersement du fichier';
+
+  @override
+  String get messageErrorFileDecryptionFailure =>
+      'Echec du dechiffrement du fichier';
+
+  @override
+  String get messageErrorFileEncryptionFailure =>
+      'Echec du chiffrement du fichier';
+
+  @override
+  String get messageErrorPlaintextFileInOmemo =>
+      'Fichier en clair dans un message OMEMO';
+
+  @override
+  String get messageErrorEmailSendFailure => 'Echec de l envoi de l email';
+
+  @override
+  String get messageErrorEmailAttachmentTooLarge =>
+      'Piece jointe email trop volumineuse';
+
+  @override
+  String get messageErrorEmailRecipientRejected => 'Destinataire email refuse';
+
+  @override
+  String get messageErrorEmailAuthenticationFailed =>
+      'Echec de l authentification email';
+
+  @override
+  String get messageErrorEmailBounced => 'Email rebondi';
+
+  @override
+  String get messageErrorEmailThrottled => 'Email limite';
+
+  @override
+  String get chatEmailResendFailedDetails => 'Impossible de renvoyer l email.';
 }

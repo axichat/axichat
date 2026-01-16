@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -29,7 +30,6 @@ const String _availabilityShareSubtitle = 'Tap to view free/busy.';
 const String _availabilityRequestLabel = 'Availability request';
 const String _availabilityAcceptedLabel = 'Availability accepted';
 const String _availabilityDeclinedLabel = 'Availability declined';
-const String _availabilityRangeSeparator = ' - ';
 const String _availabilityAcceptButtonLabel = 'Accept';
 const String _availabilityDeclineButtonLabel = 'Decline';
 const String _availabilityRequestTitleFallback = 'Requested time';
@@ -136,8 +136,10 @@ class _AvailabilityShareBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final overlay = share.overlay;
     final String rangeLabel = _formatRange(
+      l10n,
       overlay.rangeStart.value,
       overlay.rangeEnd.value,
     );
@@ -190,6 +192,7 @@ class _AvailabilityRequestBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final textTheme = context.textTheme;
     final title = request.title?.trim();
     final description = request.description?.trim();
@@ -212,7 +215,7 @@ class _AvailabilityRequestBody extends StatelessWidget {
           ),
         ),
         Text(
-          _formatRange(request.start.value, request.end.value),
+          _formatRange(l10n, request.start.value, request.end.value),
           style: textTheme.small.copyWith(
             color: context.colorScheme.mutedForeground,
           ),
@@ -298,13 +301,11 @@ Color _accentColorForMessage(
   );
 }
 
-String _formatRange(DateTime start, DateTime end) {
-  final String startLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-  final String endLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+String _formatRange(AppLocalizations l10n, DateTime start, DateTime end) {
+  final String startLabel = TimeFormatter.formatFriendlyDateTime(l10n, start);
+  final String endLabel = TimeFormatter.formatFriendlyDateTime(l10n, end);
   if (startLabel == endLabel) {
     return startLabel;
   }
-  return '$startLabel$_availabilityRangeSeparator$endLabel';
+  return l10n.commonRangeLabel(startLabel, endLabel);
 }

@@ -4832,9 +4832,379 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarExportTasksFilePrefix => 'axichat_renwu';
 
   @override
+  String get chatTaskViewTitle => '任务详情';
+
+  @override
+  String get chatTaskViewSubtitle => '只读任务。';
+
+  @override
+  String get chatTaskViewPreviewLabel => '预览';
+
+  @override
+  String get chatTaskViewActionsLabel => '任务操作';
+
+  @override
+  String get chatTaskViewCopyLabel => '复制到日历';
+
+  @override
+  String get chatTaskCopyTitle => '复制任务';
+
+  @override
+  String get chatTaskCopySubtitle => '选择要接收的日历。';
+
+  @override
+  String get chatTaskCopyPreviewLabel => '预览';
+
+  @override
+  String get chatTaskCopyCalendarsLabel => '日历';
+
+  @override
+  String get chatTaskCopyPersonalLabel => '添加到个人日历';
+
+  @override
+  String get chatTaskCopyChatLabel => '添加到聊天日历';
+
+  @override
+  String get chatTaskCopyConfirmLabel => '复制';
+
+  @override
+  String get chatTaskCopyMissingSelectionMessage => '至少选择一个日历。';
+
+  @override
+  String get chatCriticalPathCopyTitle => '复制关键路径';
+
+  @override
+  String get chatCriticalPathCopySubtitle => '选择要接收的日历。';
+
+  @override
+  String get chatCriticalPathCopyPreviewLabel => '预览';
+
+  @override
+  String get chatCriticalPathCopyCalendarsLabel => '日历';
+
+  @override
+  String get chatCriticalPathCopyPersonalLabel => '添加到个人日历';
+
+  @override
+  String get chatCriticalPathCopyChatLabel => '添加到聊天日历';
+
+  @override
+  String get chatCriticalPathCopyConfirmLabel => '复制';
+
+  @override
+  String get chatCriticalPathCopyMissingSelectionMessage => '至少选择一个日历。';
+
+  @override
+  String get chatCriticalPathCopyUnavailableMessage => '日历不可用。';
+
+  @override
+  String get chatCriticalPathCopySuccessMessage => '关键路径已复制。';
+
+  @override
   String commonBulletLabel(String text) {
     return '• $text';
   }
+
+  @override
+  String get chatFilterTitle => '显示的消息';
+
+  @override
+  String get chatFilterDirectOnlyLabel => '仅直接';
+
+  @override
+  String get chatFilterAllLabel => '全部';
+
+  @override
+  String get calendarFragmentTaskLabel => '任务';
+
+  @override
+  String get calendarFragmentDayEventLabel => '全天事件';
+
+  @override
+  String get calendarFragmentFreeBusyLabel => '空闲/忙碌';
+
+  @override
+  String get calendarFragmentAvailabilityLabel => '可用性';
+
+  @override
+  String get calendarFragmentScheduledLabel => '已安排';
+
+  @override
+  String get calendarFragmentDueLabel => '截止';
+
+  @override
+  String get calendarFragmentUntitledLabel => '未命名';
+
+  @override
+  String get calendarFragmentChecklistBullet => '- ';
+
+  @override
+  String commonAndMoreLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '还有$count项',
+      one: '还有1项',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get commonBulletSymbol => '• ';
+
+  @override
+  String get commonLabelSeparator => '：';
+
+  @override
+  String get commonUnknownLabel => '未知';
+
+  @override
+  String get commonBadgeOverflowLabel => '99+';
+
+  @override
+  String get commonEllipsis => '…';
+
+  @override
+  String get chatMessageDetailsSenderLabel => '发送者地址';
+
+  @override
+  String get chatMessageDetailsMetadataLabel => '消息元数据';
+
+  @override
+  String get chatMessageDetailsHeadersLabel => '原始头信息';
+
+  @override
+  String get chatMessageDetailsHeadersActionLabel => '查看头信息';
+
+  @override
+  String get chatMessageDetailsHeadersNote => '头信息来自原始 RFC822 消息。';
+
+  @override
+  String get chatMessageDetailsHeadersLoadingLabel => '正在加载头信息...';
+
+  @override
+  String get chatMessageDetailsHeadersUnavailableLabel => '头信息不可用。';
+
+  @override
+  String get chatMessageDetailsStanzaIdLabel => 'Stanza ID';
+
+  @override
+  String get chatMessageDetailsOriginIdLabel => 'Origin ID';
+
+  @override
+  String get chatMessageDetailsOccupantIdLabel => 'Occupant ID';
+
+  @override
+  String get chatMessageDetailsDeltaIdLabel => 'Delta 消息 ID';
+
+  @override
+  String get chatMessageDetailsLocalIdLabel => '本地消息 ID';
+
+  @override
+  String get chatCalendarFragmentShareDeniedMessage => '你的角色无法使用此房间的日历卡片。';
+
+  @override
+  String get chatAvailabilityRequestAccountMissingMessage => '当前无法使用可用性请求。';
+
+  @override
+  String get chatAvailabilityRequestEmailUnsupportedMessage => '邮件聊天不支持可用性。';
+
+  @override
+  String get chatAvailabilityRequestInvalidRangeMessage => '可用性请求时间无效。';
+
+  @override
+  String get chatAvailabilityRequestCalendarUnavailableMessage => '日历不可用。';
+
+  @override
+  String get chatAvailabilityRequestChatCalendarUnavailableMessage =>
+      '聊天日历不可用。';
+
+  @override
+  String get chatAvailabilityRequestTaskTitleFallback => '请求的时间';
+
+  @override
+  String get chatSenderAddressPrefix => 'JID: ';
+
+  @override
+  String get chatRecipientVisibilityCcLabel => '抄送';
+
+  @override
+  String get chatRecipientVisibilityBccLabel => '密送';
+
+  @override
+  String get chatInviteRoomFallbackLabel => '群聊';
+
+  @override
+  String get chatInviteBodyLabel => '你已被邀请加入群聊';
+
+  @override
+  String get chatInviteRevokedLabel => '邀请已撤销';
+
+  @override
+  String chatInviteActionLabel(String roomName) {
+    return '加入“$roomName”';
+  }
+
+  @override
+  String get chatInviteActionFallbackLabel => '加入';
+
+  @override
+  String get chatInviteConfirmTitle => '接受邀请？';
+
+  @override
+  String chatInviteConfirmMessage(String roomName) {
+    return '加入“$roomName”？';
+  }
+
+  @override
+  String get chatInviteConfirmLabel => '接受';
+
+  @override
+  String get chatChooseTextToAddHint => '选择要发送到日历的消息内容，或先编辑它。';
+
+  @override
+  String get chatAttachmentAutoDownloadLabel => '自动下载此聊天中的附件';
+
+  @override
+  String get chatAttachmentAutoDownloadHintOn => '此聊天中的附件将自动下载。';
+
+  @override
+  String get chatAttachmentAutoDownloadHintOff => '附件会被阻止，直到你批准为止。';
+
+  @override
+  String chatAttachmentCaption(String filename, String size) {
+    return '📎 $filename（$size）';
+  }
+
+  @override
+  String get chatAttachmentFallbackLabel => '附件';
+
+  @override
+  String get commonFileSizeUnitBytes => 'B';
+
+  @override
+  String get commonFileSizeUnitKilobytes => 'KB';
+
+  @override
+  String get commonFileSizeUnitMegabytes => 'MB';
+
+  @override
+  String get commonFileSizeUnitGigabytes => 'GB';
+
+  @override
+  String get commonFileSizeUnitTerabytes => 'TB';
+
+  @override
+  String get chatAttachmentTooLargeMessageDefault => '附件超过服务器限制。';
+
+  @override
+  String chatAttachmentTooLargeMessage(String limit) {
+    return '附件超过服务器限制（$limit）。';
+  }
+
+  @override
+  String chatMessageErrorWithBody(String label, String body) {
+    return '$label：\"$body\"';
+  }
+
+  @override
+  String get messageErrorServiceUnavailableTooltip => '服务出现暂时性问题。';
+
+  @override
+  String get messageErrorServiceUnavailable => '服务不可用';
+
+  @override
+  String get messageErrorServerNotFound => '未找到服务器';
+
+  @override
+  String get messageErrorServerTimeout => '服务器超时';
+
+  @override
+  String get messageErrorUnknown => '未知错误';
+
+  @override
+  String get messageErrorNotEncryptedForDevice => '未为此设备加密';
+
+  @override
+  String get messageErrorMalformedKey => '加密密钥格式错误';
+
+  @override
+  String get messageErrorUnknownSignedPrekey => '未知的已签名预密钥';
+
+  @override
+  String get messageErrorNoDeviceSession => '没有设备会话';
+
+  @override
+  String get messageErrorSkippingTooManyKeys => '跳过的密钥过多';
+
+  @override
+  String get messageErrorInvalidHmac => '无效的 HMAC';
+
+  @override
+  String get messageErrorMalformedCiphertext => '密文格式错误';
+
+  @override
+  String get messageErrorNoKeyMaterial => '缺少密钥材料';
+
+  @override
+  String get messageErrorNoDecryptionKey => '缺少解密密钥';
+
+  @override
+  String get messageErrorInvalidKex => '无效的密钥交换';
+
+  @override
+  String get messageErrorUnknownOmemo => '未知的 OMEMO 错误';
+
+  @override
+  String get messageErrorInvalidAffixElements => '无效的附加元素';
+
+  @override
+  String get messageErrorEmptyDeviceList => '设备列表为空';
+
+  @override
+  String get messageErrorOmemoUnsupported => '不支持 OMEMO';
+
+  @override
+  String get messageErrorEncryptionFailure => '加密失败';
+
+  @override
+  String get messageErrorInvalidEnvelope => '无效的信封';
+
+  @override
+  String get messageErrorFileDownloadFailure => '文件下载失败';
+
+  @override
+  String get messageErrorFileUploadFailure => '文件上传失败';
+
+  @override
+  String get messageErrorFileDecryptionFailure => '文件解密失败';
+
+  @override
+  String get messageErrorFileEncryptionFailure => '文件加密失败';
+
+  @override
+  String get messageErrorPlaintextFileInOmemo => 'OMEMO 消息包含明文文件';
+
+  @override
+  String get messageErrorEmailSendFailure => '邮件发送失败';
+
+  @override
+  String get messageErrorEmailAttachmentTooLarge => '邮件附件过大';
+
+  @override
+  String get messageErrorEmailRecipientRejected => '邮件收件人被拒绝';
+
+  @override
+  String get messageErrorEmailAuthenticationFailed => '邮件认证失败';
+
+  @override
+  String get messageErrorEmailBounced => '邮件被退回';
+
+  @override
+  String get messageErrorEmailThrottled => '邮件发送受限';
+
+  @override
+  String get chatEmailResendFailedDetails => '无法重新发送邮件。';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -9665,7 +10035,377 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarExportTasksFilePrefix => 'axichat_renwu';
 
   @override
+  String get chatTaskViewTitle => '任務詳情';
+
+  @override
+  String get chatTaskViewSubtitle => '唯讀任務。';
+
+  @override
+  String get chatTaskViewPreviewLabel => '預覽';
+
+  @override
+  String get chatTaskViewActionsLabel => '任務操作';
+
+  @override
+  String get chatTaskViewCopyLabel => '複製到日曆';
+
+  @override
+  String get chatTaskCopyTitle => '複製任務';
+
+  @override
+  String get chatTaskCopySubtitle => '選擇要接收的日曆。';
+
+  @override
+  String get chatTaskCopyPreviewLabel => '預覽';
+
+  @override
+  String get chatTaskCopyCalendarsLabel => '日曆';
+
+  @override
+  String get chatTaskCopyPersonalLabel => '加入到個人日曆';
+
+  @override
+  String get chatTaskCopyChatLabel => '加入到聊天日曆';
+
+  @override
+  String get chatTaskCopyConfirmLabel => '複製';
+
+  @override
+  String get chatTaskCopyMissingSelectionMessage => '至少選擇一個日曆。';
+
+  @override
+  String get chatCriticalPathCopyTitle => '複製關鍵路徑';
+
+  @override
+  String get chatCriticalPathCopySubtitle => '選擇要接收的日曆。';
+
+  @override
+  String get chatCriticalPathCopyPreviewLabel => '預覽';
+
+  @override
+  String get chatCriticalPathCopyCalendarsLabel => '日曆';
+
+  @override
+  String get chatCriticalPathCopyPersonalLabel => '加入到個人日曆';
+
+  @override
+  String get chatCriticalPathCopyChatLabel => '加入到聊天日曆';
+
+  @override
+  String get chatCriticalPathCopyConfirmLabel => '複製';
+
+  @override
+  String get chatCriticalPathCopyMissingSelectionMessage => '至少選擇一個日曆。';
+
+  @override
+  String get chatCriticalPathCopyUnavailableMessage => '日曆無法使用。';
+
+  @override
+  String get chatCriticalPathCopySuccessMessage => '關鍵路徑已複製。';
+
+  @override
   String commonBulletLabel(String text) {
     return '• $text';
   }
+
+  @override
+  String get chatFilterTitle => '顯示的訊息';
+
+  @override
+  String get chatFilterDirectOnlyLabel => '僅限直接';
+
+  @override
+  String get chatFilterAllLabel => '全部';
+
+  @override
+  String get calendarFragmentTaskLabel => '任務';
+
+  @override
+  String get calendarFragmentDayEventLabel => '全天事件';
+
+  @override
+  String get calendarFragmentFreeBusyLabel => '空閒/忙碌';
+
+  @override
+  String get calendarFragmentAvailabilityLabel => '可用性';
+
+  @override
+  String get calendarFragmentScheduledLabel => '已排程';
+
+  @override
+  String get calendarFragmentDueLabel => '到期';
+
+  @override
+  String get calendarFragmentUntitledLabel => '未命名';
+
+  @override
+  String get calendarFragmentChecklistBullet => '- ';
+
+  @override
+  String commonAndMoreLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '還有$count項',
+      one: '還有1項',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get commonBulletSymbol => '• ';
+
+  @override
+  String get commonLabelSeparator => '：';
+
+  @override
+  String get commonUnknownLabel => '未知';
+
+  @override
+  String get commonBadgeOverflowLabel => '99+';
+
+  @override
+  String get commonEllipsis => '…';
+
+  @override
+  String get chatMessageDetailsSenderLabel => '發送者地址';
+
+  @override
+  String get chatMessageDetailsMetadataLabel => '訊息中繼資料';
+
+  @override
+  String get chatMessageDetailsHeadersLabel => '原始標頭';
+
+  @override
+  String get chatMessageDetailsHeadersActionLabel => '查看標頭';
+
+  @override
+  String get chatMessageDetailsHeadersNote => '標頭來自原始 RFC822 訊息。';
+
+  @override
+  String get chatMessageDetailsHeadersLoadingLabel => '正在載入標頭...';
+
+  @override
+  String get chatMessageDetailsHeadersUnavailableLabel => '標頭不可用。';
+
+  @override
+  String get chatMessageDetailsStanzaIdLabel => 'Stanza ID';
+
+  @override
+  String get chatMessageDetailsOriginIdLabel => 'Origin ID';
+
+  @override
+  String get chatMessageDetailsOccupantIdLabel => 'Occupant ID';
+
+  @override
+  String get chatMessageDetailsDeltaIdLabel => 'Delta 訊息 ID';
+
+  @override
+  String get chatMessageDetailsLocalIdLabel => '本機訊息 ID';
+
+  @override
+  String get chatCalendarFragmentShareDeniedMessage => '你的角色無法使用此房間的日曆卡片。';
+
+  @override
+  String get chatAvailabilityRequestAccountMissingMessage => '目前無法使用可用性請求。';
+
+  @override
+  String get chatAvailabilityRequestEmailUnsupportedMessage => '電郵聊天不支援可用性。';
+
+  @override
+  String get chatAvailabilityRequestInvalidRangeMessage => '可用性請求時間無效。';
+
+  @override
+  String get chatAvailabilityRequestCalendarUnavailableMessage => '日曆不可用。';
+
+  @override
+  String get chatAvailabilityRequestChatCalendarUnavailableMessage =>
+      '聊天日曆不可用。';
+
+  @override
+  String get chatAvailabilityRequestTaskTitleFallback => '請求的時間';
+
+  @override
+  String get chatSenderAddressPrefix => 'JID: ';
+
+  @override
+  String get chatRecipientVisibilityCcLabel => '副本';
+
+  @override
+  String get chatRecipientVisibilityBccLabel => '密件副本';
+
+  @override
+  String get chatInviteRoomFallbackLabel => '群聊';
+
+  @override
+  String get chatInviteBodyLabel => '你已被邀請加入群聊';
+
+  @override
+  String get chatInviteRevokedLabel => '邀請已撤銷';
+
+  @override
+  String chatInviteActionLabel(String roomName) {
+    return '加入「$roomName」';
+  }
+
+  @override
+  String get chatInviteActionFallbackLabel => '加入';
+
+  @override
+  String get chatInviteConfirmTitle => '接受邀請？';
+
+  @override
+  String chatInviteConfirmMessage(String roomName) {
+    return '加入「$roomName」？';
+  }
+
+  @override
+  String get chatInviteConfirmLabel => '接受';
+
+  @override
+  String get chatChooseTextToAddHint => '選擇要傳送到日曆的訊息內容，或先編輯它。';
+
+  @override
+  String get chatAttachmentAutoDownloadLabel => '自動下載此聊天中的附件';
+
+  @override
+  String get chatAttachmentAutoDownloadHintOn => '此聊天中的附件將自動下載。';
+
+  @override
+  String get chatAttachmentAutoDownloadHintOff => '附件會被阻止，直到你批准為止。';
+
+  @override
+  String chatAttachmentCaption(String filename, String size) {
+    return '📎 $filename（$size）';
+  }
+
+  @override
+  String get chatAttachmentFallbackLabel => '附件';
+
+  @override
+  String get commonFileSizeUnitBytes => 'B';
+
+  @override
+  String get commonFileSizeUnitKilobytes => 'KB';
+
+  @override
+  String get commonFileSizeUnitMegabytes => 'MB';
+
+  @override
+  String get commonFileSizeUnitGigabytes => 'GB';
+
+  @override
+  String get commonFileSizeUnitTerabytes => 'TB';
+
+  @override
+  String get chatAttachmentTooLargeMessageDefault => '附件超過伺服器限制。';
+
+  @override
+  String chatAttachmentTooLargeMessage(String limit) {
+    return '附件超過伺服器限制（$limit）。';
+  }
+
+  @override
+  String chatMessageErrorWithBody(String label, String body) {
+    return '$label：\"$body\"';
+  }
+
+  @override
+  String get messageErrorServiceUnavailableTooltip => '服務出現暫時性問題。';
+
+  @override
+  String get messageErrorServiceUnavailable => '服務不可用';
+
+  @override
+  String get messageErrorServerNotFound => '找不到伺服器';
+
+  @override
+  String get messageErrorServerTimeout => '伺服器逾時';
+
+  @override
+  String get messageErrorUnknown => '未知錯誤';
+
+  @override
+  String get messageErrorNotEncryptedForDevice => '未為此裝置加密';
+
+  @override
+  String get messageErrorMalformedKey => '加密金鑰格式錯誤';
+
+  @override
+  String get messageErrorUnknownSignedPrekey => '未知的已簽署預金鑰';
+
+  @override
+  String get messageErrorNoDeviceSession => '沒有裝置工作階段';
+
+  @override
+  String get messageErrorSkippingTooManyKeys => '跳過的金鑰過多';
+
+  @override
+  String get messageErrorInvalidHmac => '無效的 HMAC';
+
+  @override
+  String get messageErrorMalformedCiphertext => '密文格式錯誤';
+
+  @override
+  String get messageErrorNoKeyMaterial => '缺少金鑰材料';
+
+  @override
+  String get messageErrorNoDecryptionKey => '缺少解密金鑰';
+
+  @override
+  String get messageErrorInvalidKex => '無效的金鑰交換';
+
+  @override
+  String get messageErrorUnknownOmemo => '未知的 OMEMO 錯誤';
+
+  @override
+  String get messageErrorInvalidAffixElements => '無效的附加元素';
+
+  @override
+  String get messageErrorEmptyDeviceList => '裝置清單為空';
+
+  @override
+  String get messageErrorOmemoUnsupported => '不支援 OMEMO';
+
+  @override
+  String get messageErrorEncryptionFailure => '加密失敗';
+
+  @override
+  String get messageErrorInvalidEnvelope => '無效的信封';
+
+  @override
+  String get messageErrorFileDownloadFailure => '檔案下載失敗';
+
+  @override
+  String get messageErrorFileUploadFailure => '檔案上傳失敗';
+
+  @override
+  String get messageErrorFileDecryptionFailure => '檔案解密失敗';
+
+  @override
+  String get messageErrorFileEncryptionFailure => '檔案加密失敗';
+
+  @override
+  String get messageErrorPlaintextFileInOmemo => 'OMEMO 訊息包含明文檔案';
+
+  @override
+  String get messageErrorEmailSendFailure => '電郵傳送失敗';
+
+  @override
+  String get messageErrorEmailAttachmentTooLarge => '電郵附件過大';
+
+  @override
+  String get messageErrorEmailRecipientRejected => '電郵收件人被拒絕';
+
+  @override
+  String get messageErrorEmailAuthenticationFailed => '電郵驗證失敗';
+
+  @override
+  String get messageErrorEmailBounced => '電郵被退回';
+
+  @override
+  String get messageErrorEmailThrottled => '電郵傳送受限';
+
+  @override
+  String get chatEmailResendFailedDetails => '無法重新傳送電郵。';
 }

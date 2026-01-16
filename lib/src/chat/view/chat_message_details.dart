@@ -41,19 +41,6 @@ const double _messageDetailsSectionSpacing = 8.0;
 const double _messageDetailsMetadataSpacing = 12.0;
 const double _messageDetailsHeadersDialogMaxHeight = 320.0;
 const double _messageDetailsHeadersCardPadding = 12.0;
-const String _messageDetailsSenderLabel = 'Sender address';
-const String _messageDetailsMetadataLabel = 'Message metadata';
-const String _messageDetailsHeadersLabel = 'Raw headers';
-const String _messageDetailsHeadersActionLabel = 'View headers';
-const String _messageDetailsHeadersNote =
-    'Headers are loaded from the original RFC822 message.';
-const String _messageDetailsHeadersLoadingLabel = 'Loading headers...';
-const String _messageDetailsHeadersUnavailableLabel = 'Headers unavailable.';
-const String _messageDetailsStanzaIdLabel = 'Stanza ID';
-const String _messageDetailsOriginIdLabel = 'Origin ID';
-const String _messageDetailsOccupantIdLabel = 'Occupant ID';
-const String _messageDetailsDeltaIdLabel = 'Delta message ID';
-const String _messageDetailsLocalIdLabel = 'Local message ID';
 
 class ChatMessageDetails extends StatelessWidget {
   const ChatMessageDetails({super.key});
@@ -108,7 +95,7 @@ class ChatMessageDetails extends StatelessWidget {
             );
             final timestamp = message.timestamp?.toLocal();
             final timestampLabel = timestamp == null
-                ? 'Unknown'
+                ? l10n.commonUnknownLabel
                 : intl.DateFormat.yMMMMEEEEd().add_jms().format(timestamp);
             final showEmailRecipients = isFromSelf &&
                 (transport?.isEmail ?? false) &&
@@ -131,7 +118,7 @@ class ChatMessageDetails extends StatelessWidget {
             if (stanzaId.isNotEmpty) {
               metadataItems.add(
                 _MessageDetailsInfo(
-                  label: _messageDetailsStanzaIdLabel,
+                  label: l10n.chatMessageDetailsStanzaIdLabel,
                   value: stanzaId,
                   copyValue: stanzaId,
                   copyLabel: copyLabel,
@@ -142,7 +129,7 @@ class ChatMessageDetails extends StatelessWidget {
             if (originId?.isNotEmpty == true) {
               metadataItems.add(
                 _MessageDetailsInfo(
-                  label: _messageDetailsOriginIdLabel,
+                  label: l10n.chatMessageDetailsOriginIdLabel,
                   value: originId!,
                   copyValue: originId,
                   copyLabel: copyLabel,
@@ -153,7 +140,7 @@ class ChatMessageDetails extends StatelessWidget {
             if (occupantId?.isNotEmpty == true) {
               metadataItems.add(
                 _MessageDetailsInfo(
-                  label: _messageDetailsOccupantIdLabel,
+                  label: l10n.chatMessageDetailsOccupantIdLabel,
                   value: occupantId!,
                   copyValue: occupantId,
                   copyLabel: copyLabel,
@@ -164,7 +151,7 @@ class ChatMessageDetails extends StatelessWidget {
               final deltaLabel = deltaMessageId.toString();
               metadataItems.add(
                 _MessageDetailsInfo(
-                  label: _messageDetailsDeltaIdLabel,
+                  label: l10n.chatMessageDetailsDeltaIdLabel,
                   value: deltaLabel,
                   copyValue: deltaLabel,
                   copyLabel: copyLabel,
@@ -175,7 +162,7 @@ class ChatMessageDetails extends StatelessWidget {
             if (localId?.isNotEmpty == true) {
               metadataItems.add(
                 _MessageDetailsInfo(
-                  label: _messageDetailsLocalIdLabel,
+                  label: l10n.chatMessageDetailsLocalIdLabel,
                   value: localId!,
                   copyValue: localId,
                   copyLabel: copyLabel,
@@ -399,7 +386,7 @@ class ChatMessageDetails extends StatelessWidget {
                     ),
                     if (senderAddress.isNotEmpty)
                       _MessageDetailsInfo(
-                        label: _messageDetailsSenderLabel,
+                        label: l10n.chatMessageDetailsSenderLabel,
                         value: senderAddress,
                         copyValue: senderAddress,
                         copyLabel: copyLabel,
@@ -410,7 +397,7 @@ class ChatMessageDetails extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
-                            _messageDetailsMetadataLabel,
+                            l10n.chatMessageDetailsMetadataLabel,
                             style: context.textTheme.muted,
                           ),
                           Wrap(
@@ -424,12 +411,13 @@ class ChatMessageDetails extends StatelessWidget {
                     if (isEmailMessage)
                       _MessageHeadersSection(
                         headers: rawHeaders,
-                        title: _messageDetailsHeadersLabel,
-                        buttonLabel: _messageDetailsHeadersActionLabel,
-                        note: _messageDetailsHeadersNote,
-                        loadingLabel: _messageDetailsHeadersLoadingLabel,
+                        title: l10n.chatMessageDetailsHeadersLabel,
+                        buttonLabel: l10n.chatMessageDetailsHeadersActionLabel,
+                        note: l10n.chatMessageDetailsHeadersNote,
+                        loadingLabel:
+                            l10n.chatMessageDetailsHeadersLoadingLabel,
                         unavailableLabel:
-                            _messageDetailsHeadersUnavailableLabel,
+                            l10n.chatMessageDetailsHeadersUnavailableLabel,
                         isLoading: isHeadersLoading,
                         isUnavailable: isHeadersUnavailable,
                       ),
@@ -878,7 +866,7 @@ class _RecipientsRow extends StatelessWidget {
       children: [
         if (sender != null)
           Text(
-            context.l10n.chatMessageFromLabel(sender),
+            context.l10n.chatMessageFromLabel(sender!),
             style: context.textTheme.muted,
           ),
         Wrap(
