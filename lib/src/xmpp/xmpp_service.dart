@@ -774,32 +774,21 @@ class XmppService extends XmppBase
         }
         _streamResumptionAttempted = false;
         if (!event.resumed) {
-          fireAndForget(
-            () async {
-              try {
-                await _connection
-                    .getManager<XmppPresenceManager>()
-                    ?.sendInitialPresence();
-              } catch (error, stackTrace) {
-                _xmppLogger.warning(
-                  'Failed to send initial presence.',
-                  error,
-                  stackTrace,
-                );
-              }
-            },
-            operationName: 'XmppService.sendInitialPresence',
-          );
+          try {
+            final presenceManager =
+                _connection.getManager<XmppPresenceManager>();
+            await presenceManager?.sendInitialPresence();
+          } catch (error, stackTrace) {
+            _xmppLogger.warning(
+              'Failed to send initial presence.',
+              error,
+              stackTrace,
+            );
+          }
         }
         if (event.resumed) return;
-        fireAndForget(
-          _refreshHttpUploadSupport,
-          operationName: 'XmppService.refreshHttpUploadSupport',
-        );
-        fireAndForget(
-          _refreshPubSubSupport,
-          operationName: 'XmppService.refreshPubSubSupport',
-        );
+        await _refreshHttpUploadSupport();
+        await _refreshPubSubSupport();
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -987,11 +976,22 @@ class XmppService extends XmppBase
     }
 
     if (withForeground) {
-      fireAndForget(
-        () => _connection.updateConnectivityNotification(state),
-        operationName: 'XmppService.updateConnectivityNotification',
-      );
+      _scheduleConnectivityNotificationUpdate(state);
     }
+  }
+
+  void _scheduleConnectivityNotificationUpdate(ConnectionState state) {
+    Future<void>(() async {
+      try {
+        await _connection.updateConnectivityNotification(state);
+      } catch (error, stackTrace) {
+        _xmppLogger.fine(
+          _connectivityNotificationFailedLog,
+          error,
+          stackTrace,
+        );
+      }
+    });
   }
 
   void _recordStreamReady(bool resumed) {
@@ -1093,15 +1093,20 @@ class XmppService extends XmppBase
           );
 
           if (!_foregroundServiceNotificationSent) {
-            fireAndForget(
-              () => _notificationService.sendNotification(
+            try {
+              await _notificationService.sendNotification(
                 title: 'Background connection disabled',
                 body:
                     'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.',
                 allowForeground: true,
-              ),
-              operationName: 'XmppService.notifyForegroundDisabled',
-            );
+              );
+            } catch (error, stackTrace) {
+              _xmppLogger.warning(
+                _foregroundNotificationFailedLog,
+                error,
+                stackTrace,
+              );
+            }
             _foregroundServiceNotificationSent = true;
           }
 
@@ -1125,6 +1130,12 @@ class XmppService extends XmppBase
   static const _foregroundSocketMigrationCooldown = Duration(seconds: 30);
   static const _foregroundSocketWarmupClientId =
       '${foregroundClientXmpp}_warmup';
+  static const String _foregroundNotificationFailedLog =
+      'Failed to send foreground migration notification.';
+  static const String _foregroundMigrationFailedLog =
+      'Foreground socket migration failed.';
+  static const String _connectivityNotificationFailedLog =
+      'Failed to update connectivity notification.';
   void _scheduleForegroundSocketMigration() {
     if (!withForeground) {
       return;
@@ -1136,13 +1147,18 @@ class XmppService extends XmppBase
     _foregroundSocketMigrationTimer = Timer(
       _foregroundSocketMigrationDelay,
       () {
-        _foregroundSocketMigrationTimer = null;
-        fireAndForget(
-          ensureForegroundSocketIfActive,
-          operationName: 'XmppService.ensureForegroundSocketIfActive',
-        );
+        _runForegroundSocketMigration();
       },
     );
+  }
+
+  Future<void> _runForegroundSocketMigration() async {
+    _foregroundSocketMigrationTimer = null;
+    try {
+      await ensureForegroundSocketIfActive();
+    } catch (error, stackTrace) {
+      _xmppLogger.fine(_foregroundMigrationFailedLog, error, stackTrace);
+    }
   }
 
   @override
@@ -1302,10 +1318,7 @@ class XmppService extends XmppBase
     );
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
-    fireAndForget(
-      refreshSelfAvatarIfNeeded,
-      operationName: 'XmppService.refreshSelfAvatarIfNeeded',
-    );
+    await refreshSelfAvatarIfNeeded();
     if (messageStorageMode.isServerOnly) {
       await purgeMessageHistory();
     }
@@ -2237,10 +2250,7 @@ class XmppService extends XmppBase
             'Failed to enable reconnection after foreground migration failure: ${error.runtimeType}.',
           );
         }
-        fireAndForget(
-          () => requestReconnect(ReconnectTrigger.foregroundMigration),
-          operationName: 'XmppService.requestReconnectForegroundMigration',
-        );
+        await requestReconnect(ReconnectTrigger.foregroundMigration);
       }
     } finally {
       if (warmupAcquired) {
@@ -2940,6 +2950,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       'Incoming stanza exceeds nesting depth limit.';
   static const String _stanzaMalformedError =
       'Incoming stanza rejected due to parse error.';
+  static const String _socketCancelFailedLog =
+      'Failed to cancel socket subscription.';
 
   final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();
@@ -2966,7 +2978,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   bool whitespacePingAllowed() => true;
 
   void destroy() {
-    _socketSubscription?.cancel();
+    _cancelSocketSubscription(_socketSubscription);
   }
 
   bool onBadCertificate(dynamic certificate, String domain) => false;
@@ -3036,10 +3048,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
     final StreamSubscription<dynamic>? priorSubscription = _socketSubscription;
     if (priorSubscription != null) {
-      fireAndForget(
-        priorSubscription.cancel,
-        operationName: 'XmppSocketWrapper.cancelPriorSubscription',
-      );
+      _cancelSocketSubscription(priorSubscription);
     }
 
     _socketSubscription = socket.listen(
@@ -3231,16 +3240,24 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     final subscription = _socketSubscription;
     _socketSubscription = null;
     if (subscription != null) {
-      fireAndForget(
-        subscription.cancel,
-        operationName: 'XmppSocketWrapper.cancelSocketSubscription',
-      );
+      _cancelSocketSubscription(subscription);
     }
     try {
       socket.destroy();
     } catch (error) {
       _log.warning('Closing socket threw exception: $error');
     }
+  }
+
+  void _cancelSocketSubscription(StreamSubscription<dynamic>? subscription) {
+    if (subscription == null) return;
+    Future<void>(() async {
+      try {
+        await subscription.cancel();
+      } catch (error, stackTrace) {
+        _log.fine(_socketCancelFailedLog, error, stackTrace);
+      }
+    });
   }
 
   void _markSocketClosed(Socket socket) {
