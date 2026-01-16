@@ -153,10 +153,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _authRecoveryFuture = _recoverAuthTransaction();
     _endpointConfigRecoveryFuture = _restoreEndpointConfig();
-    fireAndForget(
-      () => _endpointConfigRecoveryFuture,
-      operationName: 'AuthenticationCubit.endpointConfigRecovery',
-    );
     _lifecycleListener = AppLifecycleListener(
       onResume: _loginIfStoredCredentials,
       onShow: _loginIfStoredCredentials,
@@ -222,25 +218,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _handleEmailAuthFailure,
       );
     }
-    fireAndForget(
-      _flushPendingAccountDeletions,
-      operationName: 'AuthenticationCubit.flushPendingAccountDeletions',
-    );
-    fireAndForget(
-      _purgeLegacySignupDraft,
-      operationName: 'AuthenticationCubit.purgeLegacySignupDraft',
-    );
+    Timer.run(() async {
+      await _flushPendingAccountDeletions();
+    });
+    Timer.run(() async {
+      await _purgeLegacySignupDraft();
+    });
     if (kEnableDemoChats) {
-      fireAndForget(
-        _loginToDemoMode,
-        operationName: 'AuthenticationCubit.loginToDemoMode',
-      );
+      Timer.run(() async {
+        await _loginToDemoMode();
+      });
     }
     if (autoLoginOnStart && state is AuthenticationNone) {
-      fireAndForget(
-        login,
-        operationName: 'AuthenticationCubit.autoLogin',
-      );
+      Timer.run(() async {
+        await login();
+      });
     }
   }
 
@@ -1390,22 +1382,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             databasePassphrase: ensuredDatabasePassphrase,
           );
           authenticationCommitted = true;
-          fireAndForget(
-            () => _provisionEmailWithRetry(
-              displayName: displayName,
-              databasePrefix: ensuredDatabasePrefix,
-              databasePassphrase: ensuredDatabasePassphrase,
-              jid: resolvedJid,
-              enforceProvisioning: enforceEmailProvisioning,
-              emailPassword: emailPassword,
-              emailCredentials: emailCredentials,
-              persistCredentials: rememberMe,
-              allowOfflineOnRecoverable: allowOfflineEmail,
-              allowRetries: !hasStoredDatabaseSecrets,
-              mode: emailProvisioningMode,
-            ),
-            operationName: 'AuthenticationCubit.provisionEmailDeferred',
-          );
+          Timer.run(() async {
+            try {
+              await _provisionEmailWithRetry(
+                displayName: displayName,
+                databasePrefix: ensuredDatabasePrefix,
+                databasePassphrase: ensuredDatabasePassphrase,
+                jid: resolvedJid,
+                enforceProvisioning: enforceEmailProvisioning,
+                emailPassword: emailPassword,
+                emailCredentials: emailCredentials,
+                persistCredentials: rememberMe,
+                allowOfflineOnRecoverable: allowOfflineEmail,
+                allowRetries: !hasStoredDatabaseSecrets,
+                mode: emailProvisioningMode,
+              );
+            } on Exception catch (error, stackTrace) {
+              _log.warning(
+                'Deferred email provisioning failed',
+                error,
+                stackTrace,
+              );
+            }
+          });
           return;
         }
 
@@ -1523,17 +1522,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool clearCredentials,
   }) async {
     if (provisioningFuture != null) {
-      fireAndForget(
-        () => provisioningFuture
-            .catchError((Object error, StackTrace stackTrace) {
-          _log.fine(
-            'Cancelled email provisioning after login failed',
-            error,
-            stackTrace,
-          );
-        }),
-        operationName: 'AuthenticationCubit.cancelPendingEmailProvisioning',
-      );
+      provisioningFuture.catchError((Object error, StackTrace stackTrace) {
+        _log.fine(
+          'Cancelled email provisioning after login failed',
+          error,
+          stackTrace,
+        );
+      });
     }
     final emailService = _emailService;
     if (emailService == null) {
