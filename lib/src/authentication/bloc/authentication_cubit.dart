@@ -2275,14 +2275,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         : null;
     try {
       if (!shouldChangeXmppPassword) {
-      if (!shouldChangeEmailPassword || resolvedEmail == null) {
-        _emit(
-          const AuthenticationPasswordChangeFailure(
-            passwordChangeDisabledMessage,
-          ),
-        );
-        return;
-      }
+        if (!shouldChangeEmailPassword || resolvedEmail == null) {
+          _emit(
+            const AuthenticationPasswordChangeFailure(
+              passwordChangeDisabledMessage,
+            ),
+          );
+          return;
+        }
         final emailError = await _changeProvisionedEmailPassword(
           email: resolvedEmail,
           oldPassword: oldPassword,
@@ -3195,7 +3195,8 @@ class _PendingAccountDeletion {
     );
     return _PendingAccountDeletion(
       username: username,
-      host: hconst      password: password,
+      host: host,
+      password: password,
       email: email,
       createdAt: now.toIso8601String(),
       expiresAt: expiry.toIso8601String(),
