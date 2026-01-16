@@ -9,6 +9,7 @@ import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const conversationIndexNode = 'urn:axi:conversations';
@@ -26,6 +27,19 @@ const String _conversationIndexBootstrapOperationName =
     'ConversationIndexManager.bootstrapOnNegotiations';
 const String _conversationIndexRefreshOperationName =
     'ConversationIndexManager.refreshFromServer';
+final XmppOperationEvent _conversationEnsureStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubConversations,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _conversationEnsureSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubConversations,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _conversationEnsureFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubConversations,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 
 final class ConvItem {
   const ConvItem({
@@ -404,6 +418,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (!_shouldAttemptEnsureNode()) return;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
+    var success = false;
+    getAttributes().sendEvent(_conversationEnsureStartEvent);
     try {
       final config = _nodeConfig();
 
@@ -415,6 +431,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       );
       if (configuredError == null) {
         _nodeReady = true;
+        success = true;
         return;
       }
       final shouldCreateNode = configuredError.indicatesMissingNode;
@@ -439,6 +456,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         );
         if (appliedError == null) {
           _nodeReady = true;
+          success = true;
           return;
         }
       } on Exception {
@@ -455,12 +473,18 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         );
         if (appliedError == null) {
           _nodeReady = true;
+          success = true;
         }
       } on Exception {
         return;
       }
     } finally {
       _ensureNodeInFlight = false;
+      getAttributes().sendEvent(
+        success
+            ? _conversationEnsureSuccessEvent
+            : _conversationEnsureFailureEvent,
+      );
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {

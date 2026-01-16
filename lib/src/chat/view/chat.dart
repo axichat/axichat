@@ -12945,6 +12945,11 @@ class _GuestChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final baseTitleStyle =
+        Theme.of(context).appBarTheme.titleTextStyle ?? context.textTheme.h4;
+    final titleStyle = baseTitleStyle.copyWith(
+      fontSize: context.textTheme.large.fontSize,
+    );
     final title =
         contact.firstName?.isNotEmpty == true ? contact.firstName! : contact.id;
     return SizedBox(
@@ -12968,13 +12973,14 @@ class _GuestChatHeader extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: context.textTheme.large.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       context.l10n.chatGuestSubtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: context.textTheme.small.copyWith(
                         color: colors.mutedForeground,
                       ),

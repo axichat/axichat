@@ -8,6 +8,7 @@ import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const _bookmarksNode = 'urn:xmpp:bookmarks:1';
@@ -31,6 +32,19 @@ const _presenceBasedDeliveryDisabled = false;
 const Duration _ensureNodeBackoff = Duration(minutes: 5);
 const String _bookmarksBootstrapOperationName =
     'BookmarksManager.bootstrapOnNegotiations';
+final XmppOperationEvent _bookmarksEnsureStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubBookmarks,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _bookmarksEnsureSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubBookmarks,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _bookmarksEnsureFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.pubSubBookmarks,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 
 final class MucBookmark {
   const MucBookmark({
@@ -350,6 +364,8 @@ final class BookmarksManager extends mox.XmppManagerBase {
     if (!_shouldAttemptEnsureNode()) return;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
+    var success = false;
+    getAttributes().sendEvent(_bookmarksEnsureStartEvent);
     try {
       final config = _nodeConfig();
       final configuredError = await _configureNodeWithFallback(
@@ -360,6 +376,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       );
       if (configuredError == null) {
         _nodeReady = true;
+        success = true;
         return;
       }
       final shouldCreateNode = configuredError.indicatesMissingNode;
@@ -382,6 +399,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
         );
         if (appliedError == null) {
           _nodeReady = true;
+          success = true;
           return;
         }
       } on Exception {
@@ -398,12 +416,16 @@ final class BookmarksManager extends mox.XmppManagerBase {
         );
         if (appliedError == null) {
           _nodeReady = true;
+          success = true;
         }
       } on Exception {
         return;
       }
     } finally {
       _ensureNodeInFlight = false;
+      getAttributes().sendEvent(
+        success ? _bookmarksEnsureSuccessEvent : _bookmarksEnsureFailureEvent,
+      );
       final shouldRetry = _ensureNodePending && !_nodeReady;
       _ensureNodePending = false;
       if (shouldRetry) {
