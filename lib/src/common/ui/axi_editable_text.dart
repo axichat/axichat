@@ -2355,6 +2355,7 @@ class EditableTextState extends State<EditableText>
   ScrollController get _scrollController =>
       widget.scrollController ??
       (_internalScrollController ??= ScrollController());
+  ScrollController? _typingCaretScrollController;
 
   final LayerLink _toolbarLayerLink = LayerLink();
   final LayerLink _startHandleLayerLink = LayerLink();
@@ -3061,6 +3062,7 @@ class EditableTextState extends State<EditableText>
     _spellCheckConfiguration = _inferSpellCheckConfiguration(
       widget.spellCheckConfiguration,
     );
+    _attachTypingCaretScrollListener();
     _appLifecycleListener = AppLifecycleListener(
       onResume: () => _justResumed = true,
     );
@@ -3229,6 +3231,9 @@ class EditableTextState extends State<EditableText>
       widget.focusNode.addListener(_handleFocusChanged);
       updateKeepAlive();
     }
+    if (widget.scrollController != oldWidget.scrollController) {
+      _attachTypingCaretScrollListener();
+    }
 
     if (!_shouldCreateInputConnection) {
       _closeInputConnectionIfNeeded();
@@ -3299,6 +3304,7 @@ class EditableTextState extends State<EditableText>
   @protected
   @override
   void dispose() {
+    _typingCaretScrollController?.removeListener(_handleTypingCaretScroll);
     _internalScrollController?.dispose();
     _currentAutofillScope?.unregister(autofillId);
     widget.controller.removeListener(_didChangeTextEditingValue);
@@ -4789,6 +4795,20 @@ class EditableTextState extends State<EditableText>
       return;
     }
     _scheduleTypingLayoutCallback();
+  }
+
+  void _attachTypingCaretScrollListener() {
+    final ScrollController controller = _scrollController;
+    if (identical(_typingCaretScrollController, controller)) {
+      return;
+    }
+    _typingCaretScrollController?.removeListener(_handleTypingCaretScroll);
+    _typingCaretScrollController = controller
+      ..addListener(_handleTypingCaretScroll);
+  }
+
+  void _handleTypingCaretScroll() {
+    _syncTypingCaretToSelection();
   }
 
   void _scheduleTypingLayoutCallback() {
