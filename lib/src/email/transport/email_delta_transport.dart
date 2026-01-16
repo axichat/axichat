@@ -160,14 +160,13 @@ class EmailDeltaTransport implements ChatTransport {
     _primaryAccountId ??= resolvedAccountId;
   }
 
-  void _scheduleAccountAddressHydration({
+  Future<void> _scheduleAccountAddressHydration({
     required DeltaContextHandle context,
     required int accountId,
-  }) {
-    fireAndForget(
-      () => _hydrateAccountAddressFromCore(
-          context: context, accountId: accountId),
-      operationName: 'EmailDeltaTransport.hydrateAccountAddressFromCore',
+  }) async {
+    await _hydrateAccountAddressFromCore(
+      context: context,
+      accountId: accountId,
     );
   }
 
@@ -785,7 +784,7 @@ class EmailDeltaTransport implements ChatTransport {
       if (context == null) {
         return null;
       }
-      return _registerSession(
+      return await _registerSession(
         accountId: resolvedId,
         context: context,
         scheduleHydration: _contextOpened,
@@ -794,11 +793,11 @@ class EmailDeltaTransport implements ChatTransport {
     return _ensureAccountSession(resolvedId);
   }
 
-  _DeltaAccountSession _registerSession({
+  Future<_DeltaAccountSession> _registerSession({
     required int accountId,
     required DeltaContextHandle context,
     bool scheduleHydration = _defaultScheduleAccountHydration,
-  }) {
+  }) async {
     final existing = _accountSessions[accountId];
     if (existing != null) {
       return existing;
@@ -817,7 +816,10 @@ class EmailDeltaTransport implements ChatTransport {
     );
     _accountSessions[accountId] = session;
     if (scheduleHydration) {
-      _scheduleAccountAddressHydration(context: context, accountId: accountId);
+      await _scheduleAccountAddressHydration(
+        context: context,
+        accountId: accountId,
+      );
     }
     if (_ioRunning) {
       _attachEventSubscription(session);
@@ -851,7 +853,10 @@ class EmailDeltaTransport implements ChatTransport {
       }
       final context = accounts.contextFor(accountId);
       await context.open(passphrase: passphrase);
-      final session = _registerSession(accountId: accountId, context: context);
+      final session = await _registerSession(
+        accountId: accountId,
+        context: context,
+      );
       _context ??= context;
       completer.complete();
       return session;
@@ -1062,7 +1067,7 @@ class EmailDeltaTransport implements ChatTransport {
       }
       _primaryAccountId ??= accountId;
       if (_context != null) {
-        _registerSession(accountId: accountId, context: _context!);
+        await _registerSession(accountId: accountId, context: _context!);
       }
       return true;
     }
@@ -1081,7 +1086,7 @@ class EmailDeltaTransport implements ChatTransport {
         );
         _contextOpened = false;
         _primaryAccountId ??= deltaAccountIdLegacy;
-        _registerSession(
+        await _registerSession(
           accountId: deltaAccountIdLegacy,
           context: _context!,
           scheduleHydration: _contextOpened,
@@ -1093,7 +1098,7 @@ class EmailDeltaTransport implements ChatTransport {
       try {
         await _context!.open(passphrase: passphrase);
         _contextOpened = true;
-        _scheduleAccountAddressHydration(
+        await _scheduleAccountAddressHydration(
           context: _context!,
           accountId: deltaAccountIdLegacy,
         );
@@ -1191,7 +1196,7 @@ class EmailDeltaTransport implements ChatTransport {
       chatId: chatId,
       shareId: shareId,
     );
-    _scheduleOriginIdHydration(
+    await _scheduleOriginIdHydration(
       context: context,
       msgId: msgId,
       accountId: resolvedAccountId,
@@ -1270,12 +1275,12 @@ class EmailDeltaTransport implements ChatTransport {
       shareId: shareId,
       metadata: metadata,
     );
-    _scheduleOriginIdHydration(
+    await _scheduleOriginIdHydration(
       context: context,
       msgId: msgId,
       accountId: resolvedAccountId,
     );
-    _scheduleAttachmentMetadataHydration(
+    await _scheduleAttachmentMetadataHydration(
       context: context,
       msgId: msgId,
       metadata: metadata,
@@ -1618,30 +1623,27 @@ class EmailDeltaTransport implements ChatTransport {
     );
   }
 
-  void _scheduleOriginIdHydration({
+  Future<void> _scheduleOriginIdHydration({
     required DeltaContextHandle context,
     required int msgId,
     required int accountId,
-  }) {
-    fireAndForget(
-      () => _hydrateOriginId(
-          context: context, msgId: msgId, accountId: accountId),
-      operationName: 'EmailDeltaTransport.hydrateOriginId',
+  }) async {
+    await _hydrateOriginId(
+      context: context,
+      msgId: msgId,
+      accountId: accountId,
     );
   }
 
-  void _scheduleAttachmentMetadataHydration({
+  Future<void> _scheduleAttachmentMetadataHydration({
     required DeltaContextHandle context,
     required int msgId,
     required FileMetadataData metadata,
-  }) {
-    fireAndForget(
-      () => _hydrateAttachmentMetadata(
-        context: context,
-        msgId: msgId,
-        metadata: metadata,
-      ),
-      operationName: 'EmailDeltaTransport.hydrateAttachmentMetadata',
+  }) async {
+    await _hydrateAttachmentMetadata(
+      context: context,
+      msgId: msgId,
+      metadata: metadata,
     );
   }
 
@@ -2117,7 +2119,7 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: resolvedAccountId,
       chatId: chatId,
     );
-    _scheduleOriginIdHydration(
+    await _scheduleOriginIdHydration(
       context: context,
       msgId: msgId,
       accountId: resolvedAccountId,
