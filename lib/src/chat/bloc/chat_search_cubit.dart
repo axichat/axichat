@@ -3,8 +3,7 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/common/search/search_models.dart';
+mport 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';

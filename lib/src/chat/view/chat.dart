@@ -62,7 +62,6 @@ import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
-import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/unicode_safety.dart';

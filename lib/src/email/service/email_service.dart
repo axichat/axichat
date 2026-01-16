@@ -799,10 +799,7 @@ class EmailService {
       deltaAccountId: deltaAccountId,
     );
     await start();
-    fireAndForget(
-      () => _refreshImapCapabilities(force: true),
-      operationName: 'EmailService.refreshImapCapabilities',
-    );
+    await _refreshImapCapabilities(force: true);
     await _applyPendingPushToken();
 
     final account = EmailAccount(
@@ -882,10 +879,7 @@ class EmailService {
       value: _credentialTrueValue,
     );
     _resetImapCapabilities();
-    fireAndForget(
-      () => _refreshImapCapabilities(force: true),
-      operationName: 'EmailService.refreshImapCapabilities',
-    );
+    await _refreshImapCapabilities(force: true);
     await _hydrateAccountAddress(
       address: address,
       deltaAccountId: deltaAccountId,
@@ -2013,7 +2007,7 @@ class EmailService {
         _scheduleContactsSyncFromCore();
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
-        _handleBackgroundFetchDone();
+        await _handleBackgroundFetchDone();
         await _bootstrapActiveAccountIfNeeded();
         await refreshChatlistFromCore();
         break;
@@ -2402,17 +2396,14 @@ class EmailService {
     if (_connectivityDowngradeTimer != null) {
       return;
     }
-    _connectivityDowngradeTimer = Timer(_connectivityDowngradeGrace, () {
+    _connectivityDowngradeTimer = Timer(_connectivityDowngradeGrace, () async {
       _connectivityDowngradeTimer = null;
       final pending = _pendingConnectivityLevel;
       _pendingConnectivityLevel = null;
       if (pending == null) {
         return;
       }
-      fireAndForget(
-        () => _confirmConnectivityDowngrade(pending),
-        operationName: 'EmailService.confirmConnectivityDowngrade',
-      );
+      await _confirmConnectivityDowngrade(pending);
     });
   }
 
@@ -2508,15 +2499,12 @@ class EmailService {
     );
   }
 
-  void _handleBackgroundFetchDone() {
+  Future<void> _handleBackgroundFetchDone() async {
     if (_syncState.status == EmailSyncStatus.ready) {
       return;
     }
-    fireAndForget(
-      () => _refreshConnectivityState(
-        source: _EmailSyncSource.backgroundFetchDone,
-      ),
-      operationName: 'EmailService.refreshConnectivityState',
+    await _refreshConnectivityState(
+      source: _EmailSyncSource.backgroundFetchDone,
     );
   }
 
@@ -2623,14 +2611,11 @@ class EmailService {
       bootstrapKey: bootstrapKey,
     );
     _bootstrapFuture = future;
-    fireAndForget(
-      () => future.whenComplete(() {
-        if (identical(_bootstrapFuture, future)) {
-          _bootstrapFuture = null;
-        }
-      }),
-      operationName: 'EmailService.bootstrapFromCoreCleanup',
-    );
+    future.whenComplete(() {
+      if (identical(_bootstrapFuture, future)) {
+        _bootstrapFuture = null;
+      }
+    });
   }
 
   Future<void> _runBootstrapFromCore({
@@ -2722,7 +2707,7 @@ class EmailService {
     }
   }
 
-  void _handleForegroundTaskMessage(String data) {
+  Future<void> _handleForegroundTaskMessage(String data) async {
     if (!data.startsWith('$emailKeepaliveTickPrefix$join')) {
       return;
     }
@@ -2730,10 +2715,7 @@ class EmailService {
       return;
     }
     _foregroundKeepaliveTickScheduled = true;
-    fireAndForget(
-      _runForegroundKeepaliveTick,
-      operationName: 'EmailService.runForegroundKeepaliveTick',
-    );
+    await _runForegroundKeepaliveTick();
   }
 
   Future<void> _runForegroundKeepaliveTick() async {
@@ -2777,11 +2759,8 @@ class EmailService {
     }
     final interval = _imapSyncInterval();
     _imapSyncTimer?.cancel();
-    _imapSyncTimer = Timer(interval, () {
-      fireAndForget(
-        _runImapSyncTick,
-        operationName: 'EmailService.runImapSyncTick',
-      );
+    _imapSyncTimer = Timer(interval, () async {
+      await _runImapSyncTick();
     });
   }
 
@@ -2940,11 +2919,8 @@ class EmailService {
       _log.warning('Email transport restart failed', error, stackTrace);
     } finally {
       _reconnectRestartInFlight = false;
-      fireAndForget(
-        () => _refreshConnectivityState(
-          source: _EmailSyncSource.reconnectRestart,
-        ),
-        operationName: 'EmailService.refreshConnectivityState',
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.reconnectRestart,
       );
     }
   }
