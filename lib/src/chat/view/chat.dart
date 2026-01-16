@@ -12,7 +12,6 @@ import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -2851,10 +2850,7 @@ class _ChatState extends State<Chat> {
 
   void _clearMessageSelection() {
     if (_selectedMessageId == null) return;
-    fireAndForget(
-      _reboundSelectionScroll,
-      operationName: 'ChatView.reboundSelectionScroll',
-    );
+    final accumulated = _selectionAutoscrollAccumulated;
     setState(() {
       _selectedMessageId = null;
       _activeSelectionExtrasKey = null;
@@ -2868,6 +2864,11 @@ class _ChatState extends State<Chat> {
       _selectionAutoscrollInProgress = false;
       _selectionAutoscrollAccumulated = 0.0;
     });
+    if (accumulated.abs() > 0.0) {
+      Timer.run(() async {
+        await _reboundSelectionScroll(accumulated);
+      });
+    }
   }
 
   void _startMultiSelect(Message message) {
@@ -3192,10 +3193,8 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  Future<void> _reboundSelectionScroll() async {
+  Future<void> _reboundSelectionScroll(double accumulated) async {
     if (!_scrollController.hasClients) return;
-    final accumulated = _selectionAutoscrollAccumulated;
-    _selectionAutoscrollAccumulated = 0.0;
     if (accumulated.abs() < 0.5) return;
     final position = _scrollController.position;
     final target = (position.pixels - accumulated).clamp(
@@ -9744,17 +9743,8 @@ final class _FileMetadataStreamEntry {
   }
 
   void dispose() {
-    final subscription = _subscription;
-    if (subscription != null) {
-      fireAndForget(
-        subscription.cancel,
-        operationName: 'ChatView.cancelLatestFileMetadataSubscription',
-      );
-    }
-    fireAndForget(
-      _controller.close,
-      operationName: 'ChatView.closeLatestFileMetadataController',
-    );
+    _subscription?.cancel();
+    _controller.close();
   }
 }
 
