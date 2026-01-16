@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -56,10 +55,9 @@ class ProfileCubit extends Cubit<ProfileState> {
         );
       },
     );
-    fireAndForget(
-      _loadAvatar,
-      operationName: 'ProfileCubit.loadAvatar',
-    );
+    Timer.run(() async {
+      await _loadAvatar();
+    });
     if (_omemoService != null) {
       loadFingerprints();
     }
