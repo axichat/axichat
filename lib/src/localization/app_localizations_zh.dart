@@ -1291,7 +1291,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarDayEventsTitle => '当天事件';
 
   @override
-  String get calendarDayEventsEmpty => '此日期没有日程事件';
+  String get calendarDayEventsEmpty => '此日期没有当天事件';
 
   @override
   String get calendarDayEventsAdd => '添加日程事件';
@@ -4800,6 +4800,41 @@ class AppLocalizationsZh extends AppLocalizations {
   String taskShareOverrideSegment(String dateTime, String actions) {
     return '在$dateTime：$actions';
   }
+
+  @override
+  String get calendarTaskCopiedToClipboard => '任务已复制到剪贴板';
+
+  @override
+  String get calendarTaskSplitRequiresSchedule => '任务必须已安排才能拆分。';
+
+  @override
+  String get calendarTaskSplitTooShort => '任务太短，无法拆分。';
+
+  @override
+  String get calendarTaskSplitUnable => '无法在该时间拆分任务。';
+
+  @override
+  String get calendarDayEventsLabel => '当天事件';
+
+  @override
+  String get calendarShareAsIcsAction => '以 .ics 分享';
+
+  @override
+  String get calendarCompletedLabel => '已完成';
+
+  @override
+  String get calendarDeadlineDueToday => '今天到期';
+
+  @override
+  String get calendarDeadlineDueTomorrow => '明天到期';
+
+  @override
+  String get calendarExportTasksFilePrefix => 'axichat_renwu';
+
+  @override
+  String commonBulletLabel(String text) {
+    return '• $text';
+  }
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -6089,7 +6124,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarDayEventsTitle => '當日事件';
 
   @override
-  String get calendarDayEventsEmpty => '此日期沒有日程事件';
+  String get calendarDayEventsEmpty => '此日期沒有當天事件';
 
   @override
   String get calendarDayEventsAdd => '新增日程事件';
@@ -9597,5 +9632,40 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String taskShareOverrideSegment(String dateTime, String actions) {
     return '在$dateTime：$actions';
+  }
+
+  @override
+  String get calendarTaskCopiedToClipboard => '任務已複製到剪貼簿';
+
+  @override
+  String get calendarTaskSplitRequiresSchedule => '任務必須已排程才能分拆。';
+
+  @override
+  String get calendarTaskSplitTooShort => '任務太短，無法分拆。';
+
+  @override
+  String get calendarTaskSplitUnable => '無法在該時間分拆任務。';
+
+  @override
+  String get calendarDayEventsLabel => '當天事件';
+
+  @override
+  String get calendarShareAsIcsAction => '以 .ics 分享';
+
+  @override
+  String get calendarCompletedLabel => '已完成';
+
+  @override
+  String get calendarDeadlineDueToday => '今天到期';
+
+  @override
+  String get calendarDeadlineDueTomorrow => '明天到期';
+
+  @override
+  String get calendarExportTasksFilePrefix => 'axichat_renwu';
+
+  @override
+  String commonBulletLabel(String text) {
+    return '• $text';
   }
 }

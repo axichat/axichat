@@ -8578,6 +8578,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'On {dateTime}: {actions}'**
   String taskShareOverrideSegment(String dateTime, String actions);
+
+  /// No description provided for @calendarTaskCopiedToClipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Task copied to clipboard'**
+  String get calendarTaskCopiedToClipboard;
+
+  /// No description provided for @calendarTaskSplitRequiresSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Task must be scheduled to use split.'**
+  String get calendarTaskSplitRequiresSchedule;
+
+  /// No description provided for @calendarTaskSplitTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Task is too short to split.'**
+  String get calendarTaskSplitTooShort;
+
+  /// No description provided for @calendarTaskSplitUnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to split task at that time.'**
+  String get calendarTaskSplitUnable;
+
+  /// No description provided for @calendarDayEventsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Day events'**
+  String get calendarDayEventsLabel;
+
+  /// No description provided for @calendarShareAsIcsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share as .ics'**
+  String get calendarShareAsIcsAction;
+
+  /// No description provided for @calendarCompletedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get calendarCompletedLabel;
+
+  /// No description provided for @calendarDeadlineDueToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get calendarDeadlineDueToday;
+
+  /// No description provided for @calendarDeadlineDueTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Due tomorrow'**
+  String get calendarDeadlineDueTomorrow;
+
+  /// No description provided for @calendarExportTasksFilePrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'axichat_tasks'**
+  String get calendarExportTasksFilePrefix;
+
+  /// No description provided for @commonBulletLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'• {text}'**
+  String commonBulletLabel(String text);
 }
 
 class _AppLocalizationsDelegate

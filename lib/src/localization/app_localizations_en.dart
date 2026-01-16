@@ -4980,4 +4980,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String taskShareOverrideSegment(String dateTime, String actions) {
     return 'On $dateTime: $actions';
   }
+
+  @override
+  String get calendarTaskCopiedToClipboard => 'Task copied to clipboard';
+
+  @override
+  String get calendarTaskSplitRequiresSchedule =>
+      'Task must be scheduled to use split.';
+
+  @override
+  String get calendarTaskSplitTooShort => 'Task is too short to split.';
+
+  @override
+  String get calendarTaskSplitUnable => 'Unable to split task at that time.';
+
+  @override
+  String get calendarDayEventsLabel => 'Day events';
+
+  @override
+  String get calendarShareAsIcsAction => 'Share as .ics';
+
+  @override
+  String get calendarCompletedLabel => 'Completed';
+
+  @override
+  String get calendarDeadlineDueToday => 'Due today';
+
+  @override
+  String get calendarDeadlineDueTomorrow => 'Due tomorrow';
+
+  @override
+  String get calendarExportTasksFilePrefix => 'axichat_tasks';
+
+  @override
+  String commonBulletLabel(String text) {
+    return '• $text';
+  }
 }

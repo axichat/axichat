@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -13,12 +14,6 @@ const double _taskViewSheetSpacing = 16.0;
 const double _taskViewSheetGap = 8.0;
 const double _taskViewLabelLetterSpacing = 0.4;
 const double _taskViewActionIconSize = 18.0;
-
-const String _taskViewTitle = 'Task details';
-const String _taskViewSubtitle = 'Read-only task.';
-const String _taskViewPreviewLabel = 'Preview';
-const String _taskViewActionsLabel = 'Task actions';
-const String _taskViewCopyLabel = 'Copy to calendar';
 
 const IconData _taskViewCopyIcon = LucideIcons.copy;
 
@@ -34,21 +29,22 @@ class CalendarTaskViewSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final header = AxiSheetHeader(
-      title: const Text(_taskViewTitle),
-      subtitle: const Text(_taskViewSubtitle),
+      title: Text(l10n.chatTaskViewTitle),
+      subtitle: Text(l10n.chatTaskViewSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     return AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _TaskViewSectionLabel(text: _taskViewPreviewLabel),
+        _TaskViewSectionLabel(text: l10n.chatTaskViewPreviewLabel),
         CalendarFragmentCard(fragment: CalendarFragment.task(task: task)),
         const SizedBox(height: _taskViewSheetSpacing),
-        const _TaskViewSectionLabel(text: _taskViewActionsLabel),
+        _TaskViewSectionLabel(text: l10n.chatTaskViewActionsLabel),
         _TaskViewActionTile(
           icon: _taskViewCopyIcon,
-          label: _taskViewCopyLabel,
+          label: l10n.chatTaskViewCopyLabel,
           onTap: onCopyPressed,
         ),
       ],

@@ -1351,13 +1351,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarNothingHere => 'Rien ici pour l\'instant';
 
   @override
-  String get calendarTaskNotFound => 'Tâche introuvable';
+  String get calendarTaskNotFound => 'Tache introuvable';
 
   @override
   String get calendarDayEventsTitle => 'Événements du jour';
 
   @override
-  String get calendarDayEventsEmpty => 'Aucun événement à cette date';
+  String get calendarDayEventsEmpty =>
+      'Aucun evenement de jour pour cette date';
 
   @override
   String get calendarDayEventsAdd => 'Ajouter un événement du jour';
@@ -5039,5 +5040,44 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String taskShareOverrideSegment(String dateTime, String actions) {
     return 'Le $dateTime : $actions';
+  }
+
+  @override
+  String get calendarTaskCopiedToClipboard =>
+      'Tache copiee dans le presse-papiers';
+
+  @override
+  String get calendarTaskSplitRequiresSchedule =>
+      'La tache doit etre planifiee pour etre divisee.';
+
+  @override
+  String get calendarTaskSplitTooShort =>
+      'La tache est trop courte pour etre divisee.';
+
+  @override
+  String get calendarTaskSplitUnable =>
+      'Impossible de diviser la tache a ce moment-la.';
+
+  @override
+  String get calendarDayEventsLabel => 'Evenements du jour';
+
+  @override
+  String get calendarShareAsIcsAction => 'Partager en .ics';
+
+  @override
+  String get calendarCompletedLabel => 'Termine';
+
+  @override
+  String get calendarDeadlineDueToday => 'A rendre aujourd\'hui';
+
+  @override
+  String get calendarDeadlineDueTomorrow => 'A rendre demain';
+
+  @override
+  String get calendarExportTasksFilePrefix => 'axichat_taches';
+
+  @override
+  String commonBulletLabel(String text) {
+    return '• $text';
   }
 }

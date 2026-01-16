@@ -48,6 +48,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_critical_path_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'calendar_task_search.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/calendar_drag_exclude.dart';
@@ -77,8 +78,6 @@ import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
-
-const String _taskShareIcsActionLabel = 'Share as .ics';
 
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
@@ -1078,7 +1077,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       final File file = await _transferService.exportTasks(
         tasks: tasks,
         format: format,
-        fileNamePrefix: 'axichat_tasks',
+        fileNamePrefix: l10n.calendarExportTasksFilePrefix,
       );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
@@ -2036,7 +2035,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       ),
       TaskContextAction(
         icon: Icons.send,
-        label: _taskShareIcsActionLabel,
+        label: context.l10n.calendarShareAsIcsAction,
         onSelected: () => _shareTaskIcs(task),
       ),
       TaskContextAction(
@@ -2323,7 +2322,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       ShadContextMenuItem(
         leading: const Icon(Icons.send),
         onPressed: () => _shareTaskIcs(task),
-        child: const Text(_taskShareIcsActionLabel),
+        child: Text(context.l10n.calendarShareAsIcsAction),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.share_outlined),
@@ -3932,7 +3931,7 @@ class _SidebarTaskTileBody extends StatelessWidget {
                     ),
                     const SizedBox(width: calendarInsetMd),
                     Text(
-                      _sidebarDeadlineLabel(task.deadline!),
+                      _sidebarDeadlineLabel(context.l10n, task.deadline!),
                       style: TextStyle(
                         fontSize: 11,
                         color: _sidebarDeadlineColor(task.deadline!),
@@ -3988,8 +3987,8 @@ Color _sidebarDeadlineBackgroundColor(DateTime deadline) {
   return calendarPrimaryColor.withValues(alpha: 0.08);
 }
 
-String _sidebarDeadlineLabel(DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(context.l10n, deadline);
+String _sidebarDeadlineLabel(AppLocalizations l10n, DateTime deadline) {
+  return TimeFormatter.formatFriendlyDateTime(l10n, deadline);
 }
 
 final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
@@ -4778,7 +4777,7 @@ class _HideCompletedToggle extends StatelessWidget {
             ),
             const SizedBox(width: calendarInsetMd),
             Text(
-              'Completed',
+              context.l10n.calendarCompletedLabel,
               style: context.textTheme.small.copyWith(
                 color: foreground,
                 fontWeight: FontWeight.w700,
@@ -4813,7 +4812,7 @@ class _CollapsedTaskPreview extends StatelessWidget {
             (task) => Padding(
               padding: const EdgeInsets.only(bottom: calendarInsetSm),
               child: Text(
-                '• ${task.title}',
+                context.l10n.commonBulletLabel(task.title),
                 style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -2489,5 +2489,25 @@
         "type": "String"
       }
     }
+  },
+  "calendarTaskCopiedToClipboard": "任務已複製到剪貼簿",
+  "calendarTaskSplitRequiresSchedule": "任務必須已排程才能分拆。",
+  "calendarTaskSplitTooShort": "任務太短，無法分拆。",
+  "calendarTaskSplitUnable": "無法在該時間分拆任務。",
+  "calendarTaskNotFound": "找不到任務",
+  "calendarDayEventsLabel": "當天事件",
+  "calendarDayEventsEmpty": "此日期沒有當天事件",
+  "calendarShareAsIcsAction": "以 .ics 分享",
+  "calendarCompletedLabel": "已完成",
+  "calendarDeadlineDueToday": "今天到期",
+  "calendarDeadlineDueTomorrow": "明天到期",
+  "calendarExportTasksFilePrefix": "axichat_renwu",
+  "commonBulletLabel": "• {text}",
+  "@commonBulletLabel": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
   }
 }

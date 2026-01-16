@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -16,17 +17,6 @@ const double _criticalPathCopySheetGap = 8.0;
 const double _criticalPathCopySectionGap = 12.0;
 const double _criticalPathCopyHeaderIconSize = 18.0;
 const double _criticalPathCopyLabelLetterSpacing = 0.4;
-
-const String _criticalPathCopyTitle = 'Copy critical path';
-const String _criticalPathCopySubtitle =
-    'Choose which calendars should receive it.';
-const String _criticalPathCopyPreviewLabel = 'Preview';
-const String _criticalPathCopyCalendarsLabel = 'Calendars';
-const String _criticalPathCopyPersonalLabel = 'Add to personal calendar';
-const String _criticalPathCopyChatLabel = 'Add to chat calendar';
-const String _criticalPathCopyConfirmLabel = 'Copy';
-const String _criticalPathCopyMissingSelectionMessage =
-    'Select at least one calendar.';
 
 const IconData _criticalPathCopyConfirmIcon = LucideIcons.copy;
 
@@ -92,16 +82,17 @@ class _CalendarCriticalPathCopyDecisionSheetState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final header = AxiSheetHeader(
-      title: const Text(_criticalPathCopyTitle),
-      subtitle: const Text(_criticalPathCopySubtitle),
+      title: Text(l10n.chatCriticalPathCopyTitle),
+      subtitle: Text(l10n.chatCriticalPathCopySubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     return AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _CriticalPathCopySectionLabel(
-          text: _criticalPathCopyPreviewLabel,
+        _CriticalPathCopySectionLabel(
+          text: l10n.chatCriticalPathCopyPreviewLabel,
         ),
         CalendarFragmentCard(
           fragment: CalendarFragment.criticalPath(
@@ -110,12 +101,12 @@ class _CalendarCriticalPathCopyDecisionSheetState
           ),
         ),
         const SizedBox(height: _criticalPathCopySheetSpacing),
-        const _CriticalPathCopySectionLabel(
-          text: _criticalPathCopyCalendarsLabel,
+        _CriticalPathCopySectionLabel(
+          text: l10n.chatCriticalPathCopyCalendarsLabel,
         ),
         if (widget.canAddToPersonal)
           _CriticalPathCopyToggle(
-            label: _criticalPathCopyPersonalLabel,
+            label: l10n.chatCriticalPathCopyPersonalLabel,
             value: _addToPersonal,
             onChanged: (value) => setState(() {
               _addToPersonal = value;
@@ -124,7 +115,7 @@ class _CalendarCriticalPathCopyDecisionSheetState
         if (widget.canAddToChat) ...[
           const SizedBox(height: _criticalPathCopySectionGap),
           _CriticalPathCopyToggle(
-            label: _criticalPathCopyChatLabel,
+            label: l10n.chatCriticalPathCopyChatLabel,
             value: _addToChat,
             onChanged: (value) => setState(() {
               _addToChat = value;
@@ -134,7 +125,7 @@ class _CalendarCriticalPathCopyDecisionSheetState
         const SizedBox(height: _criticalPathCopySheetSpacing),
         _CriticalPathCopyActionRow(
           onPressed: _handleConfirmPressed,
-          label: _criticalPathCopyConfirmLabel,
+          label: l10n.chatCriticalPathCopyConfirmLabel,
           iconData: _criticalPathCopyConfirmIcon,
         ),
       ],
@@ -145,7 +136,7 @@ class _CalendarCriticalPathCopyDecisionSheetState
     if (!_addToPersonal && !_addToChat) {
       FeedbackSystem.showError(
         context,
-        _criticalPathCopyMissingSelectionMessage,
+        context.l10n.chatCriticalPathCopyMissingSelectionMessage,
       );
       return;
     }

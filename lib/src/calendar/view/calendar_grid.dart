@@ -65,7 +65,6 @@ import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
 const double _headerNavButtonExtent = 44.0;
-const String _taskShareIcsActionLabel = 'Share as .ics';
 const String _taskPopoverCloseReasonMissingTask = 'missing-task';
 const String _taskPopoverCloseReasonSwitchTarget = 'switch-target';
 const String _taskPopoverCloseReasonTaskDeleted = 'task-deleted';
@@ -828,7 +827,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!mounted) {
       return;
     }
-    FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
+    FeedbackSystem.showSuccess(
+      context,
+      context.l10n.calendarTaskCopiedToClipboard,
+    );
   }
 
   Future<void> _shareTaskIcs(CalendarTask task) async {
@@ -1045,25 +1047,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Future<void> _promptSplitTask(CalendarTask task) async {
+    final l10n = context.l10n;
     final DateTime? start = task.scheduledTime;
     DateTime? end = task.effectiveEndDate ??
         (start != null && task.duration != null
             ? start.add(task.duration!)
             : null);
     if (start == null || end == null || !end.isAfter(start)) {
-      _showSplitError('Task must be scheduled to use split.');
+      _showSplitError(l10n.calendarTaskSplitRequiresSchedule);
       return;
     }
     final int totalMinutes = end.difference(start).inMinutes;
     final int minimumStep = math.max(_minutesPerStep, 15);
     if (totalMinutes < minimumStep * 2) {
-      _showSplitError('Task is too short to split.');
+      _showSplitError(l10n.calendarTaskSplitTooShort);
       return;
     }
     final DateTime minSelectable = start.add(Duration(minutes: minimumStep));
     final DateTime maxSelectable = end.subtract(Duration(minutes: minimumStep));
     if (!maxSelectable.isAfter(minSelectable)) {
-      _showSplitError('Task is too short to split.');
+      _showSplitError(l10n.calendarTaskSplitTooShort);
       return;
     }
     final DateTime midpoint = start.add(Duration(minutes: totalMinutes ~/ 2));
@@ -1098,7 +1101,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (splitTime == null ||
         !splitTime.isAfter(start) ||
         !splitTime.isBefore(end)) {
-      _showSplitError('Unable to split task at that time.');
+      _showSplitError(l10n.calendarTaskSplitUnable);
       return;
     }
     _splitTask(task, splitTime);
@@ -2468,7 +2471,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarTask? resolved =
         _resolveTaskForId(task.id, widget.state) ?? _visibleTasks[task.id];
     if (resolved == null) {
-      FeedbackSystem.showError(context, 'Task not found');
+      FeedbackSystem.showError(context, context.l10n.calendarTaskNotFound);
       _handleTaskDragEnded(task);
       return;
     }
@@ -2603,7 +2606,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
       TaskContextAction(
         icon: Icons.send,
-        label: _taskShareIcsActionLabel,
+        label: l10n.calendarShareAsIcsAction,
         onSelected: () => _shareTaskIcs(task),
       ),
       TaskContextAction(
@@ -3070,17 +3073,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     context.read<T>().add(CalendarEvent.dayEventUpdated(event: updated));
   }
 
-  String _getDayOfWeekShort(DateTime date) {
-    const dayNames = [
-      'SUNDAY',
-      'MONDAY',
-      'TUESDAY',
-      'WEDNESDAY',
-      'THURSDAY',
-      'FRIDAY',
-      'SATURDAY',
-    ];
-    return dayNames[date.weekday % 7];
+  String _getDayOfWeekShort(BuildContext context, DateTime date) {
+    return DateFormat('EEE', context.l10n.localeName).format(date);
   }
 
   void _selectDateAndSwitchToDay(DateTime date) {
@@ -3424,7 +3418,7 @@ class DayEventsStrip extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Day events',
+                context.l10n.calendarDayEventsLabel,
                 style: textTheme.small.copyWith(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -3449,7 +3443,7 @@ class DayEventsStrip extends StatelessWidget {
           const SizedBox(height: calendarInsetSm),
           if (!hasEvents)
             Text(
-              'No day-level events for this date',
+              context.l10n.calendarDayEventsEmpty,
               style: textTheme.small.copyWith(
                 color: colors.mutedForeground,
                 fontSize: 11,
@@ -4001,7 +3995,10 @@ class _CalendarDayHeader extends StatelessWidget {
                   : calendarBackgroundColor,
               child: Center(
                 child: Text(
-                  '${gridState._getDayOfWeekShort(date).substring(0, 3)} ${date.day}',
+                  context.l10n.commonWeekdayDayLabel(
+                    gridState._getDayOfWeekShort(context, date),
+                    date.day,
+                  ),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

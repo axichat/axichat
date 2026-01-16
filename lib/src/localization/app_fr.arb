@@ -2489,5 +2489,25 @@
         "type": "String"
       }
     }
+  },
+  "calendarTaskCopiedToClipboard": "Tache copiee dans le presse-papiers",
+  "calendarTaskSplitRequiresSchedule": "La tache doit etre planifiee pour etre divisee.",
+  "calendarTaskSplitTooShort": "La tache est trop courte pour etre divisee.",
+  "calendarTaskSplitUnable": "Impossible de diviser la tache a ce moment-la.",
+  "calendarTaskNotFound": "Tache introuvable",
+  "calendarDayEventsLabel": "Evenements du jour",
+  "calendarDayEventsEmpty": "Aucun evenement de jour pour cette date",
+  "calendarShareAsIcsAction": "Partager en .ics",
+  "calendarCompletedLabel": "Termine",
+  "calendarDeadlineDueToday": "A rendre aujourd'hui",
+  "calendarDeadlineDueTomorrow": "A rendre demain",
+  "calendarExportTasksFilePrefix": "axichat_taches",
+  "commonBulletLabel": "• {text}",
+  "@commonBulletLabel": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
   }
 }
