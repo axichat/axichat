@@ -21,7 +21,11 @@ class EndpointConfig extends Equatable {
     this.smtpPort = defaultSmtpPort,
     this.apiPort = defaultApiPort,
     this.apiUseTls = true,
+    this.emailProvisioningBaseUrl,
+    this.emailProvisioningPublicToken,
   });
+
+  static const Object _unset = Object();
 
   static const String defaultDomain = 'axi.im';
   static const int defaultXmppPort = 5222;
@@ -43,6 +47,8 @@ class EndpointConfig extends Equatable {
   final int smtpPort;
   final int apiPort;
   final bool apiUseTls;
+  final String? emailProvisioningBaseUrl;
+  final String? emailProvisioningPublicToken;
 
   EndpointConfig copyWith({
     String? domain,
@@ -51,14 +57,16 @@ class EndpointConfig extends Equatable {
     bool? useDns,
     bool? useSrv,
     bool? requireDnssec,
-    String? xmppHost,
+    Object? xmppHost = _unset,
     int? xmppPort,
-    String? imapHost,
+    Object? imapHost = _unset,
     int? imapPort,
-    String? smtpHost,
+    Object? smtpHost = _unset,
     int? smtpPort,
     int? apiPort,
     bool? apiUseTls,
+    Object? emailProvisioningBaseUrl = _unset,
+    Object? emailProvisioningPublicToken = _unset,
   }) {
     return EndpointConfig(
       domain: domain ?? this.domain,
@@ -67,14 +75,20 @@ class EndpointConfig extends Equatable {
       useDns: useDns ?? this.useDns,
       useSrv: useSrv ?? this.useSrv,
       requireDnssec: requireDnssec ?? this.requireDnssec,
-      xmppHost: xmppHost ?? this.xmppHost,
+      xmppHost: xmppHost == _unset ? this.xmppHost : xmppHost as String?,
       xmppPort: xmppPort ?? this.xmppPort,
-      imapHost: imapHost ?? this.imapHost,
+      imapHost: imapHost == _unset ? this.imapHost : imapHost as String?,
       imapPort: imapPort ?? this.imapPort,
-      smtpHost: smtpHost ?? this.smtpHost,
+      smtpHost: smtpHost == _unset ? this.smtpHost : smtpHost as String?,
       smtpPort: smtpPort ?? this.smtpPort,
       apiPort: apiPort ?? this.apiPort,
       apiUseTls: apiUseTls ?? this.apiUseTls,
+      emailProvisioningBaseUrl: emailProvisioningBaseUrl == _unset
+          ? this.emailProvisioningBaseUrl
+          : emailProvisioningBaseUrl as String?,
+      emailProvisioningPublicToken: emailProvisioningPublicToken == _unset
+          ? this.emailProvisioningPublicToken
+          : emailProvisioningPublicToken as String?,
     );
   }
 
@@ -93,6 +107,8 @@ class EndpointConfig extends Equatable {
         'smtpPort': smtpPort,
         'apiPort': apiPort,
         'apiUseTls': apiUseTls,
+        'emailProvisioningBaseUrl': emailProvisioningBaseUrl,
+        'emailProvisioningPublicToken': emailProvisioningPublicToken,
       };
 
   factory EndpointConfig.fromJson(Map<String, dynamic> json) {
@@ -100,6 +116,12 @@ class EndpointConfig extends Equatable {
       if (value is int) return value;
       if (value is String) return int.tryParse(value) ?? fallback;
       return fallback;
+    }
+
+    String? readOptionalString(dynamic value) {
+      if (value is! String) return null;
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
     }
 
     return EndpointConfig(
@@ -117,6 +139,10 @@ class EndpointConfig extends Equatable {
       smtpPort: readPort(json['smtpPort'], defaultSmtpPort),
       apiPort: readPort(json['apiPort'], defaultApiPort),
       apiUseTls: json['apiUseTls'] as bool? ?? true,
+      emailProvisioningBaseUrl:
+          readOptionalString(json['emailProvisioningBaseUrl']),
+      emailProvisioningPublicToken:
+          readOptionalString(json['emailProvisioningPublicToken']),
     );
   }
 
@@ -142,6 +168,8 @@ class EndpointConfig extends Equatable {
         smtpPort,
         apiPort,
         apiUseTls,
+        emailProvisioningBaseUrl,
+        emailProvisioningPublicToken,
       ];
 }
 

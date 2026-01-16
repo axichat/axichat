@@ -44,12 +44,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   late TextEditingController _imapPortController;
   late TextEditingController _smtpPortController;
   late TextEditingController _apiPortController;
+  late TextEditingController _emailProvisioningBaseUrlController;
+  late TextEditingController _emailProvisioningPublicTokenController;
 
   late bool _enableXmpp;
   late bool _enableSmtp;
   late bool _useDns;
   late bool _useSrv;
   late bool _requireDnssec;
+  var _emailProvisioningTokenObscure = true;
   bool _dependenciesInitialized = false;
 
   @override
@@ -63,6 +66,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     _imapPortController = TextEditingController();
     _smtpPortController = TextEditingController();
     _apiPortController = TextEditingController();
+    _emailProvisioningBaseUrlController = TextEditingController();
+    _emailProvisioningPublicTokenController = TextEditingController();
   }
 
   @override
@@ -83,6 +88,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     _imapPortController.text = config.imapPort.toString();
     _smtpPortController.text = config.smtpPort.toString();
     _apiPortController.text = config.apiPort.toString();
+    _emailProvisioningBaseUrlController.text =
+        config.emailProvisioningBaseUrl ?? '';
+    _emailProvisioningPublicTokenController.text =
+        config.emailProvisioningPublicToken ?? '';
     _dependenciesInitialized = true;
   }
 
@@ -96,6 +105,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     _imapPortController.dispose();
     _smtpPortController.dispose();
     _apiPortController.dispose();
+    _emailProvisioningBaseUrlController.dispose();
+    _emailProvisioningPublicTokenController.dispose();
     super.dispose();
   }
 
@@ -125,6 +136,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       _apiPortController.text,
       EndpointConfig.defaultApiPort,
     );
+    final emailProvisioningBaseUrl =
+        _emailProvisioningBaseUrlController.text.trim();
+    final emailProvisioningPublicToken =
+        _emailProvisioningPublicTokenController.text.trim();
 
     return current.copyWith(
       domain: domain,
@@ -140,6 +155,11 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       imapPort: imapPort,
       smtpPort: smtpPort,
       apiPort: apiPort,
+      emailProvisioningBaseUrl:
+          emailProvisioningBaseUrl.isEmpty ? null : emailProvisioningBaseUrl,
+      emailProvisioningPublicToken: emailProvisioningPublicToken.isEmpty
+          ? null
+          : emailProvisioningPublicToken,
     );
   }
 
@@ -368,6 +388,51 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             controller: _apiPortController,
             style: inputStyle,
           ),
+        ),
+        const SizedBox(height: 12),
+        AxiTextFormField(
+          autocorrect: false,
+          keyboardType: TextInputType.url,
+          placeholder: Text(
+            'Email provisioning URL (optional)',
+            style: placeholderStyle,
+          ),
+          placeholderStyle: placeholderStyle,
+          controller: _emailProvisioningBaseUrlController,
+          style: inputStyle,
+        ),
+        const SizedBox(height: 12),
+        AxiTextFormField(
+          autocorrect: false,
+          keyboardType: TextInputType.visiblePassword,
+          obscureText: _emailProvisioningTokenObscure,
+          placeholder: Text(
+            'Email public token (optional)',
+            style: placeholderStyle,
+          ),
+          placeholderStyle: placeholderStyle,
+          controller: _emailProvisioningPublicTokenController,
+          style: inputStyle,
+          trailing: ShadIconButton(
+            backgroundColor: colors.muted,
+            foregroundColor: colors.mutedForeground,
+            width: 24,
+            height: 24,
+            padding: EdgeInsets.zero,
+            decoration: const ShadDecoration(
+              secondaryBorder: ShadBorder.none,
+              secondaryFocusedBorder: ShadBorder.none,
+            ),
+            icon: Icon(
+              _emailProvisioningTokenObscure
+                  ? LucideIcons.eyeOff
+                  : LucideIcons.eye,
+              size: 16,
+            ),
+            onPressed: () => setState(() {
+              _emailProvisioningTokenObscure = !_emailProvisioningTokenObscure;
+            }),
+          ).withTapBounce(),
         ),
         const SizedBox(height: 16),
         Row(
