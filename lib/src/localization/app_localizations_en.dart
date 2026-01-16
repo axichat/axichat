@@ -1892,6 +1892,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authCustomServerApiPortPlaceholder => 'API port';
 
   @override
+  String get authCustomServerEmailProvisioningUrlPlaceholder =>
+      'Email provisioning URL (optional)';
+
+  @override
+  String get authCustomServerEmailPublicTokenPlaceholder =>
+      'Email public token (optional)';
+
+  @override
   String get authCustomServerReset => 'Reset to axi.im';
 
   @override

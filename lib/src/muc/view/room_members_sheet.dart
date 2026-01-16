@@ -138,7 +138,7 @@ class RoomMembersSheet extends StatelessWidget {
           )
         : content;
 
-    return SafeArea(child: wrappedContent);
+    return wrappedContent;
   }
 
   Future<List<String>?> _promptInvite(BuildContext context) async {
@@ -679,17 +679,9 @@ class _InviteChipsSheet extends StatefulWidget {
 }
 
 class _InviteChipsSheetState extends State<_InviteChipsSheet> {
-  static const double _inviteSheetHorizontalPadding = 16.0;
   static const double _inviteSheetSectionSpacing = 12.0;
-  static const EdgeInsets _inviteSheetHeaderPadding = EdgeInsets.fromLTRB(
-    _inviteSheetHorizontalPadding,
-    _inviteSheetHorizontalPadding,
-    _inviteSheetHorizontalPadding,
-    _inviteSheetSectionSpacing,
-  );
-  static const EdgeInsets _inviteSheetActionsPadding = EdgeInsets.symmetric(
-    horizontal: _inviteSheetHorizontalPadding,
-  );
+  static const EdgeInsets _inviteSheetContentPadding =
+      EdgeInsets.fromLTRB(16, 0, 16, 16);
 
   late List<ComposerRecipient> _recipients;
 
@@ -701,9 +693,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final Widget actions = Row(
       children: [
         ShadButton.outline(
@@ -730,63 +720,30 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         ).withTapBounce(),
       ],
     );
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return AxiSheetScaffold(
+      header: AxiSheetHeader(
+        title: Text(l10n.mucInviteUsers),
+        onClose: widget.onClose,
+      ),
+      body: Scrollbar(
+        thumbVisibility: true,
+        child: ListView(
+          padding: _inviteSheetContentPadding,
           children: [
-            Flexible(
-              fit: FlexFit.loose,
-              child: SingleChildScrollView(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: _inviteSheetHeaderPadding,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(l10n.mucInviteUsers, style: titleStyle),
-                          ),
-                          AxiIconButton(
-                            iconData: LucideIcons.x,
-                            tooltip: l10n.commonClose,
-                            onPressed: widget.onClose,
-                          ),
-                        ],
-                      ),
-                    ),
-                    RecipientChipsBar(
-                      recipients: _recipients,
-                      availableChats: const <chat_models.Chat>[],
-                      latestStatuses: const {},
-                      onRecipientAdded: _addRecipient,
-                      onRecipientRemoved: _removeRecipient,
-                      onRecipientToggled: _toggleRecipient,
-                      collapsedByDefault: false,
-                    ),
-                    const SizedBox(height: _inviteSheetSectionSpacing),
-                  ],
-                ),
-              ),
+            RecipientChipsBar(
+              recipients: _recipients,
+              availableChats: const <chat_models.Chat>[],
+              latestStatuses: const {},
+              onRecipientAdded: _addRecipient,
+              onRecipientRemoved: _removeRecipient,
+              onRecipientToggled: _toggleRecipient,
+              collapsedByDefault: false,
             ),
-            SafeArea(
-              top: false,
-              bottom: true,
-              child: Padding(
-                padding: _inviteSheetActionsPadding.copyWith(
-                  bottom: _inviteSheetActionsPadding.bottom +
-                      _inviteSheetHorizontalPadding,
-                ),
-                child: actions,
-              ),
-            ),
+            const SizedBox(height: _inviteSheetSectionSpacing),
           ],
         ),
       ),
+      footer: Padding(padding: _inviteSheetContentPadding, child: actions),
     );
   }
 
@@ -850,9 +807,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final Widget actions = Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -867,50 +822,23 @@ class _NicknameSheetState extends State<_NicknameSheet> {
         ).withTapBounce(),
       ],
     );
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Flexible(
-              fit: FlexFit.loose,
-              child: SingleChildScrollView(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.mucChangeNicknameTitle,
-                            style: titleStyle,
-                          ),
-                        ),
-                        AxiIconButton(
-                          iconData: LucideIcons.x,
-                          tooltip: l10n.commonClose,
-                          onPressed: widget.onCancel,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    AxiTextFormField(
-                      controller: widget.controller,
-                      focusNode: widget.focusNode,
-                      placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-                      onSubmitted: widget.onSubmit,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SafeArea(top: false, bottom: true, child: actions),
-          ],
+    return AxiSheetScaffold(
+      header: AxiSheetHeader(
+        title: Text(l10n.mucChangeNicknameTitle),
+        onClose: widget.onCancel,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: AxiTextFormField(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+          onSubmitted: widget.onSubmit,
         ),
+      ),
+      footer: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: actions,
       ),
     );
   }

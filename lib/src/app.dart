@@ -315,12 +315,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         final lightTheme = AppTheme.build(
           shadColor: state.shadColor,
           brightness: Brightness.light,
-          neutrals: chatNeutrals,
         );
         final darkTheme = AppTheme.build(
           shadColor: state.shadColor,
           brightness: Brightness.dark,
-          neutrals: chatNeutrals,
         );
         final app = ShadApp.router(
           locale: localeOverride,

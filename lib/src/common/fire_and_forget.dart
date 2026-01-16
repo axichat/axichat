@@ -16,11 +16,8 @@ Future<void> fireAndForget<T>(
   String? loggerName,
 }) async {
   try {
-    final result = operation();
-    if (result is Future<T>) {
-      await result;
-    }
-  } catch (error, stackTrace) {
+    await Future<T?>.sync(operation);
+  } on Exception catch (error, stackTrace) {
     SafeLogging.debugLog(
       'Unhandled async error during '
       '${operationName ?? _defaultFireAndForgetOperationName}: '

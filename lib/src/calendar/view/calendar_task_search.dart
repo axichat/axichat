@@ -317,96 +317,92 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
             final double maxHeight = constraints.hasBoundedHeight
                 ? constraints.maxHeight
                 : mediaQuery.size.height;
-            return SafeArea(
-              top: true,
-              bottom: true,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: CustomScrollView(
-                  shrinkWrap: true,
-                  slivers: [
+            return ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: CustomScrollView(
+                shrinkWrap: true,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        CalendarSheetHeader(
+                          title: title,
+                          subtitle: subtitle,
+                          onClose: () => Navigator.of(context).maybePop(),
+                        ),
+                        const SizedBox(height: calendarGutterSm),
+                        TaskTextField(
+                          controller: _queryController,
+                          focusNode: _queryFocusNode,
+                          hintText: l10n.calendarTaskSearchHint,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: _handleSubmitted,
+                          onChanged: (_) => setState(() {}),
+                          prefix: Icon(
+                            Icons.search,
+                            color: calendarSubtitleColor,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: calendarGutterMd,
+                            vertical: 10,
+                          ),
+                        ),
+                        const SizedBox(height: calendarInsetSm),
+                        _FilterRow(
+                          filters: _filters,
+                          onFilterToggled: _toggleFilter,
+                        ),
+                        const SizedBox(height: calendarInsetSm),
+                      ],
+                    ),
+                  ),
+                  if (results.isEmpty)
                     SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          CalendarSheetHeader(
-                            title: title,
-                            subtitle: subtitle,
-                            onClose: () => Navigator.of(context).maybePop(),
-                          ),
-                          const SizedBox(height: calendarGutterSm),
-                          TaskTextField(
-                            controller: _queryController,
-                            focusNode: _queryFocusNode,
-                            hintText: l10n.calendarTaskSearchHint,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: _handleSubmitted,
-                            onChanged: (_) => setState(() {}),
-                            prefix: Icon(
-                              Icons.search,
-                              color: calendarSubtitleColor,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: calendarGutterMd,
-                              vertical: 10,
-                            ),
-                          ),
-                          const SizedBox(height: calendarInsetSm),
-                          _FilterRow(
-                            filters: _filters,
-                            onFilterToggled: _toggleFilter,
-                          ),
-                          const SizedBox(height: calendarInsetSm),
-                        ],
+                      child: _EmptySearchState(
+                        key: const ValueKey('empty-search'),
+                        showHint: query.isEmpty,
+                        isCompact: isCompact,
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.only(
+                        top: calendarInsetSm,
+                        bottom: calendarInsetMd + keyboardInset,
+                      ),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate((
+                          context,
+                          index,
+                        ) {
+                          if (index.isOdd) {
+                            return const SizedBox(height: calendarInsetSm);
+                          }
+                          final CalendarTask task = results[index ~/ 2];
+                          final Widget trailing = _ResultMetadata(task);
+                          final bool useCustomTile =
+                              widget.taskTileBuilder != null;
+                          final Widget tile = useCustomTile
+                              ? widget.taskTileBuilder!.call(
+                                  task,
+                                  trailing: trailing,
+                                  requiresLongPress:
+                                      widget.requiresLongPressForDrag,
+                                  onTap: () => _handleTaskSelected(task),
+                                  onDragStart: () =>
+                                      Navigator.of(context).maybePop(),
+                                  allowContextMenu: false,
+                                )
+                              : _SearchResultTile(
+                                  task: task,
+                                  onTap: () => _handleTaskSelected(task),
+                                );
+                          return tile;
+                        }, childCount: (results.length * 2) - 1),
                       ),
                     ),
-                    if (results.isEmpty)
-                      SliverToBoxAdapter(
-                        child: _EmptySearchState(
-                          key: const ValueKey('empty-search'),
-                          showHint: query.isEmpty,
-                          isCompact: isCompact,
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: EdgeInsets.only(
-                          top: calendarInsetSm,
-                          bottom: calendarInsetMd + keyboardInset,
-                        ),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate((
-                            context,
-                            index,
-                          ) {
-                            if (index.isOdd) {
-                              return const SizedBox(height: calendarInsetSm);
-                            }
-                            final CalendarTask task = results[index ~/ 2];
-                            final Widget trailing = _ResultMetadata(task);
-                            final bool useCustomTile =
-                                widget.taskTileBuilder != null;
-                            final Widget tile = useCustomTile
-                                ? widget.taskTileBuilder!.call(
-                                    task,
-                                    trailing: trailing,
-                                    requiresLongPress:
-                                        widget.requiresLongPressForDrag,
-                                    onTap: () => _handleTaskSelected(task),
-                                    onDragStart: () =>
-                                        Navigator.of(context).maybePop(),
-                                    allowContextMenu: false,
-                                  )
-                                : _SearchResultTile(
-                                    task: task,
-                                    onTap: () => _handleTaskSelected(task),
-                                  );
-                            return tile;
-                          }, childCount: (results.length * 2) - 1),
-                        ),
-                      ),
-                  ],
-                ),
+                ],
               ),
             );
           },

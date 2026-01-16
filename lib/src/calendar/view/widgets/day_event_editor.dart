@@ -222,7 +222,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     );
 
     return SafeArea(
-      top: true,
+      top: false,
       bottom: false,
       child: Form(
         key: _formKey,

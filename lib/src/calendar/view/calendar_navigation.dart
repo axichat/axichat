@@ -1000,8 +1000,8 @@ class _DateLabelState extends State<_DateLabel> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return SafeArea(
-              top: true,
-              bottom: true,
+              top: false,
+              bottom: false,
               child: _CalendarDropdown(
                 useSurface: false,
                 margin: EdgeInsets.zero,
