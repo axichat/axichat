@@ -4,7 +4,8 @@
 import 'dart:async';
 import 'dart:io';
 
-ath_provider/path_provider.dart';
+import 'package:intl/intl.dart' as intl;
+import 'package:path_provider/path_provider.dart';
 
 import 'package:axichat/src/storage/models.dart';
 
@@ -76,11 +77,16 @@ class ChatHistoryExporter {
     );
   }
 
-  static Future<void> scheduleCleanup(File file) async {
+  static void scheduleCleanup(File file) {
     if (file.path.trim().isEmpty) {
       return;
     }
-    await _cleanupExportFile(file);
+    Timer(
+      _exportCleanupDelay,
+      () async {
+        await _cleanupExportFile(file);
+      },
+    );
   }
 
   static String sanitizeLabel(String input) {

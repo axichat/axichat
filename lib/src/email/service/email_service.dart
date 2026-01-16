@@ -1844,10 +1844,9 @@ class EmailService {
     }
 
     _foregroundKeepaliveEnabled = true;
-    fireAndForget(
-      _foregroundKeepaliveTick,
-      operationName: 'EmailService.foregroundKeepaliveTick',
-    );
+    Timer.run(() async {
+      await _foregroundKeepaliveTick();
+    });
   }
 
   Stream<List<Message>> messageStreamForChat(
