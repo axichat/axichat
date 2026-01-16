@@ -1352,7 +1352,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get calendarDayEventsTitle => 'Eventos del día';
 
   @override
-  String get calendarDayEventsEmpty => 'Sin eventos diarios para esta fecha';
+  String get calendarDayEventsEmpty => 'No hay eventos de dia para esta fecha';
 
   @override
   String get calendarDayEventsAdd => 'Agregar evento del día';
@@ -5024,5 +5024,43 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String taskShareOverrideSegment(String dateTime, String actions) {
     return 'El $dateTime: $actions';
+  }
+
+  @override
+  String get calendarTaskCopiedToClipboard => 'Tarea copiada al portapapeles';
+
+  @override
+  String get calendarTaskSplitRequiresSchedule =>
+      'La tarea debe estar programada para dividirla.';
+
+  @override
+  String get calendarTaskSplitTooShort =>
+      'La tarea es demasiado corta para dividirla.';
+
+  @override
+  String get calendarTaskSplitUnable =>
+      'No se puede dividir la tarea en ese momento.';
+
+  @override
+  String get calendarDayEventsLabel => 'Eventos del dia';
+
+  @override
+  String get calendarShareAsIcsAction => 'Compartir como .ics';
+
+  @override
+  String get calendarCompletedLabel => 'Completado';
+
+  @override
+  String get calendarDeadlineDueToday => 'Vence hoy';
+
+  @override
+  String get calendarDeadlineDueTomorrow => 'Vence manana';
+
+  @override
+  String get calendarExportTasksFilePrefix => 'axichat_tareas';
+
+  @override
+  String commonBulletLabel(String text) {
+    return '• $text';
   }
 }

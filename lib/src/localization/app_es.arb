@@ -2489,5 +2489,48 @@
         "type": "String"
       }
     }
+  },
+  "calendarTaskCopiedToClipboard": "Tarea copiada al portapapeles",
+  "calendarTaskSplitRequiresSchedule": "La tarea debe estar programada para dividirla.",
+  "calendarTaskSplitTooShort": "La tarea es demasiado corta para dividirla.",
+  "calendarTaskSplitUnable": "No se puede dividir la tarea en ese momento.",
+  "calendarTaskNotFound": "Tarea no encontrada",
+  "calendarDayEventsLabel": "Eventos del dia",
+  "calendarDayEventsEmpty": "No hay eventos de dia para esta fecha",
+  "calendarShareAsIcsAction": "Compartir como .ics",
+  "calendarCompletedLabel": "Completado",
+  "calendarDeadlineDueToday": "Vence hoy",
+  "calendarDeadlineDueTomorrow": "Vence manana",
+  "calendarExportTasksFilePrefix": "axichat_tareas",
+  "chatTaskViewTitle": "Detalles de la tarea",
+  "chatTaskViewSubtitle": "Tarea de solo lectura.",
+  "chatTaskViewPreviewLabel": "Vista previa",
+  "chatTaskViewActionsLabel": "Acciones de la tarea",
+  "chatTaskViewCopyLabel": "Copiar al calendario",
+  "chatTaskCopyTitle": "Copiar tarea",
+  "chatTaskCopySubtitle": "Elige a que calendarios se debe enviar.",
+  "chatTaskCopyPreviewLabel": "Vista previa",
+  "chatTaskCopyCalendarsLabel": "Calendarios",
+  "chatTaskCopyPersonalLabel": "Agregar al calendario personal",
+  "chatTaskCopyChatLabel": "Agregar al calendario del chat",
+  "chatTaskCopyConfirmLabel": "Copiar",
+  "chatTaskCopyMissingSelectionMessage": "Selecciona al menos un calendario.",
+  "chatCriticalPathCopyTitle": "Copiar ruta critica",
+  "chatCriticalPathCopySubtitle": "Elige a que calendarios se debe enviar.",
+  "chatCriticalPathCopyPreviewLabel": "Vista previa",
+  "chatCriticalPathCopyCalendarsLabel": "Calendarios",
+  "chatCriticalPathCopyPersonalLabel": "Agregar al calendario personal",
+  "chatCriticalPathCopyChatLabel": "Agregar al calendario del chat",
+  "chatCriticalPathCopyConfirmLabel": "Copiar",
+  "chatCriticalPathCopyMissingSelectionMessage": "Selecciona al menos un calendario.",
+  "chatCriticalPathCopyUnavailableMessage": "El calendario no esta disponible.",
+  "chatCriticalPathCopySuccessMessage": "Ruta critica copiada.",
+  "commonBulletLabel": "• {text}",
+  "@commonBulletLabel": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
   }
 }

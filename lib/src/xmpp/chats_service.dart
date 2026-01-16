@@ -19,6 +19,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   final Logger _chatLog = Logger('ChatsService');
+  static const String _chatMessageType = 'chat';
+  static const String _groupChatMessageType = 'groupchat';
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
   static const int _conversationIndexSnapshotStart = 0;
@@ -122,12 +124,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   String _chatStateMessageType(String jid) {
-    if (!_isMucChatJid(jid)) return 'chat';
+    if (!_isMucChatJid(jid)) return _chatMessageType;
     try {
       final parsed = mox.JID.fromString(jid);
-      return parsed.resource.isEmpty ? 'groupchat' : 'chat';
+      return parsed.resource.isEmpty ? _groupChatMessageType : _chatMessageType;
     } on Exception {
-      return 'chat';
+      return _chatMessageType;
     }
   }
 
@@ -444,29 +446,25 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     required mox.ChatState state,
     required String messageType,
   }) async {
-    if (_connection.getManager<mox.MessageManager>() case final mm?) {
-      late final mox.JID to;
-      try {
-        to = mox.JID.fromString(roomJid).toBare();
-      } on Exception {
-        return;
-      }
-      await mm.sendMessage(
-        to,
-        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-          state,
-          const mox.MessageBodyData(_mucChatStatePlaceholderBody),
-          const mox.MessageProcessingHintData(_mucChatStateProcessingHints),
-        ]),
-        type: messageType,
-      );
+    final messageManager = _connection.getManager<mox.MessageManager>();
+    if (messageManager == null) {
       return;
     }
 
-    await _connection.sendChatState(
-      state: state,
-      jid: roomJid,
-      messageType: messageType,
+    late final mox.JID to;
+    try {
+      to = mox.JID.fromString(roomJid).toBare();
+    } on Exception {
+      return;
+    }
+    await messageManager.sendMessage(
+      to,
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+        state,
+        const mox.MessageBodyData(_mucChatStatePlaceholderBody),
+        const mox.MessageProcessingHintData(_mucChatStateProcessingHints),
+      ]),
+      type: messageType,
     );
   }
 
@@ -497,7 +495,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         return;
       }
     }
-    if (isMuc && messageType == 'groupchat' && mucRoomJid != null) {
+    if (isMuc && messageType == _groupChatMessageType && mucRoomJid != null) {
       await _sendMucChatStateWithNoStore(
         roomJid: mucRoomJid,
         state: state,

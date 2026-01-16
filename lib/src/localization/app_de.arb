@@ -2489,5 +2489,48 @@
         "type": "String"
       }
     }
+  },
+  "calendarTaskCopiedToClipboard": "Aufgabe in die Zwischenablage kopiert",
+  "calendarTaskSplitRequiresSchedule": "Aufgabe muss geplant sein, um geteilt zu werden.",
+  "calendarTaskSplitTooShort": "Aufgabe ist zu kurz zum Teilen.",
+  "calendarTaskSplitUnable": "Aufgabe kann zu diesem Zeitpunkt nicht geteilt werden.",
+  "calendarTaskNotFound": "Aufgabe nicht gefunden",
+  "calendarDayEventsLabel": "Tagesereignisse",
+  "calendarDayEventsEmpty": "Keine Tagesereignisse fur dieses Datum",
+  "calendarShareAsIcsAction": "Als .ics teilen",
+  "calendarCompletedLabel": "Abgeschlossen",
+  "calendarDeadlineDueToday": "Fallig heute",
+  "calendarDeadlineDueTomorrow": "Fallig morgen",
+  "calendarExportTasksFilePrefix": "axichat_aufgaben",
+  "chatTaskViewTitle": "Aufgabendetails",
+  "chatTaskViewSubtitle": "Schreibgeschutzte Aufgabe.",
+  "chatTaskViewPreviewLabel": "Vorschau",
+  "chatTaskViewActionsLabel": "Aufgabenaktionen",
+  "chatTaskViewCopyLabel": "In den Kalender kopieren",
+  "chatTaskCopyTitle": "Aufgabe kopieren",
+  "chatTaskCopySubtitle": "Wahle aus, welche Kalender sie erhalten sollen.",
+  "chatTaskCopyPreviewLabel": "Vorschau",
+  "chatTaskCopyCalendarsLabel": "Kalender",
+  "chatTaskCopyPersonalLabel": "Zum personlichen Kalender hinzufugen",
+  "chatTaskCopyChatLabel": "Zum Chat-Kalender hinzufugen",
+  "chatTaskCopyConfirmLabel": "Kopieren",
+  "chatTaskCopyMissingSelectionMessage": "Wahle mindestens einen Kalender aus.",
+  "chatCriticalPathCopyTitle": "Kritischen Pfad kopieren",
+  "chatCriticalPathCopySubtitle": "Wahle aus, welche Kalender ihn erhalten sollen.",
+  "chatCriticalPathCopyPreviewLabel": "Vorschau",
+  "chatCriticalPathCopyCalendarsLabel": "Kalender",
+  "chatCriticalPathCopyPersonalLabel": "Zum personlichen Kalender hinzufugen",
+  "chatCriticalPathCopyChatLabel": "Zum Chat-Kalender hinzufugen",
+  "chatCriticalPathCopyConfirmLabel": "Kopieren",
+  "chatCriticalPathCopyMissingSelectionMessage": "Wahle mindestens einen Kalender aus.",
+  "chatCriticalPathCopyUnavailableMessage": "Kalender ist nicht verfugbar.",
+  "chatCriticalPathCopySuccessMessage": "Kritischer Pfad kopiert.",
+  "commonBulletLabel": "• {text}",
+  "@commonBulletLabel": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
   }
 }

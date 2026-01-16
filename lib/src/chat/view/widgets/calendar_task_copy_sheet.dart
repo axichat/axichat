@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -15,15 +16,6 @@ const double _taskCopySheetGap = 8.0;
 const double _taskCopySectionGap = 12.0;
 const double _taskCopyHeaderIconSize = 18.0;
 const double _taskCopyLabelLetterSpacing = 0.4;
-
-const String _taskCopyTitle = 'Copy task';
-const String _taskCopySubtitle = 'Choose which calendars should receive it.';
-const String _taskCopyPreviewLabel = 'Preview';
-const String _taskCopyCalendarsLabel = 'Calendars';
-const String _taskCopyPersonalLabel = 'Add to personal calendar';
-const String _taskCopyChatLabel = 'Add to chat calendar';
-const String _taskCopyConfirmLabel = 'Copy';
-const String _taskCopyMissingSelectionMessage = 'Select at least one calendar.';
 
 const IconData _taskCopyConfirmIcon = LucideIcons.copy;
 
@@ -85,23 +77,24 @@ class _CalendarTaskCopyDecisionSheetState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final header = AxiSheetHeader(
-      title: const Text(_taskCopyTitle),
-      subtitle: const Text(_taskCopySubtitle),
+      title: Text(l10n.chatTaskCopyTitle),
+      subtitle: Text(l10n.chatTaskCopySubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     final body = AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _TaskCopySectionLabel(text: _taskCopyPreviewLabel),
+        _TaskCopySectionLabel(text: l10n.chatTaskCopyPreviewLabel),
         CalendarFragmentCard(
           fragment: CalendarFragment.task(task: widget.task),
         ),
         const SizedBox(height: _taskCopySheetSpacing),
-        const _TaskCopySectionLabel(text: _taskCopyCalendarsLabel),
+        _TaskCopySectionLabel(text: l10n.chatTaskCopyCalendarsLabel),
         if (widget.canAddToPersonal)
           _TaskCopyToggle(
-            label: _taskCopyPersonalLabel,
+            label: l10n.chatTaskCopyPersonalLabel,
             value: _addToPersonal,
             onChanged: (value) => setState(() {
               _addToPersonal = value;
@@ -110,7 +103,7 @@ class _CalendarTaskCopyDecisionSheetState
         if (widget.canAddToChat) ...[
           const SizedBox(height: _taskCopySectionGap),
           _TaskCopyToggle(
-            label: _taskCopyChatLabel,
+            label: l10n.chatTaskCopyChatLabel,
             value: _addToChat,
             onChanged: (value) => setState(() {
               _addToChat = value;
@@ -120,7 +113,7 @@ class _CalendarTaskCopyDecisionSheetState
         const SizedBox(height: _taskCopySheetSpacing),
         _TaskCopyActionRow(
           onPressed: _handleConfirmPressed,
-          label: _taskCopyConfirmLabel,
+          label: l10n.chatTaskCopyConfirmLabel,
           iconData: _taskCopyConfirmIcon,
         ),
       ],
@@ -130,7 +123,10 @@ class _CalendarTaskCopyDecisionSheetState
 
   void _handleConfirmPressed() {
     if (!_addToPersonal && !_addToChat) {
-      FeedbackSystem.showError(context, _taskCopyMissingSelectionMessage);
+      FeedbackSystem.showError(
+        context,
+        context.l10n.chatTaskCopyMissingSelectionMessage,
+      );
       return;
     }
     Navigator.of(context).pop(

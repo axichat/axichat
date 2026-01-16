@@ -2566,5 +2566,48 @@
         "type": "String"
       }
     }
+  },
+  "calendarTaskCopiedToClipboard": "Task copied to clipboard",
+  "calendarTaskSplitRequiresSchedule": "Task must be scheduled to use split.",
+  "calendarTaskSplitTooShort": "Task is too short to split.",
+  "calendarTaskSplitUnable": "Unable to split task at that time.",
+  "calendarTaskNotFound": "Task not found",
+  "calendarDayEventsLabel": "Day events",
+  "calendarDayEventsEmpty": "No day-level events for this date",
+  "calendarShareAsIcsAction": "Share as .ics",
+  "calendarCompletedLabel": "Completed",
+  "calendarDeadlineDueToday": "Due today",
+  "calendarDeadlineDueTomorrow": "Due tomorrow",
+  "calendarExportTasksFilePrefix": "axichat_tasks",
+  "chatTaskViewTitle": "Task details",
+  "chatTaskViewSubtitle": "Read-only task.",
+  "chatTaskViewPreviewLabel": "Preview",
+  "chatTaskViewActionsLabel": "Task actions",
+  "chatTaskViewCopyLabel": "Copy to calendar",
+  "chatTaskCopyTitle": "Copy task",
+  "chatTaskCopySubtitle": "Choose which calendars should receive it.",
+  "chatTaskCopyPreviewLabel": "Preview",
+  "chatTaskCopyCalendarsLabel": "Calendars",
+  "chatTaskCopyPersonalLabel": "Add to personal calendar",
+  "chatTaskCopyChatLabel": "Add to chat calendar",
+  "chatTaskCopyConfirmLabel": "Copy",
+  "chatTaskCopyMissingSelectionMessage": "Select at least one calendar.",
+  "chatCriticalPathCopyTitle": "Copy critical path",
+  "chatCriticalPathCopySubtitle": "Choose which calendars should receive it.",
+  "chatCriticalPathCopyPreviewLabel": "Preview",
+  "chatCriticalPathCopyCalendarsLabel": "Calendars",
+  "chatCriticalPathCopyPersonalLabel": "Add to personal calendar",
+  "chatCriticalPathCopyChatLabel": "Add to chat calendar",
+  "chatCriticalPathCopyConfirmLabel": "Copy",
+  "chatCriticalPathCopyMissingSelectionMessage": "Select at least one calendar.",
+  "chatCriticalPathCopyUnavailableMessage": "Calendar is unavailable.",
+  "chatCriticalPathCopySuccessMessage": "Critical path copied.",
+  "commonBulletLabel": "• {text}",
+  "@commonBulletLabel": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
   }
 }

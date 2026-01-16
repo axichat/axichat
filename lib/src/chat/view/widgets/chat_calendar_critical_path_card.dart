@@ -14,13 +14,11 @@ import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_critical_path_copy_sheet.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
-const String _criticalPathCopyUnavailableMessage = 'Calendar is unavailable.';
-const String _criticalPathCopySuccessMessage = 'Critical path copied.';
-
 class ChatCalendarCriticalPathCard extends StatelessWidget {
   const ChatCalendarCriticalPathCard({
     super.key,
@@ -50,7 +48,10 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final bool canAddToChat = _maybeReadChatCalendarBloc(context) != null;
 
     if (!canAddToPersonal && !canAddToChat) {
-      FeedbackSystem.showInfo(context, _criticalPathCopyUnavailableMessage);
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCriticalPathCopyUnavailableMessage,
+      );
       return;
     }
 
@@ -99,7 +100,10 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
       return;
     }
     if (didCopy) {
-      FeedbackSystem.showSuccess(context, _criticalPathCopySuccessMessage);
+      FeedbackSystem.showSuccess(
+        context,
+        context.l10n.chatCriticalPathCopySuccessMessage,
+      );
     }
   }
 
