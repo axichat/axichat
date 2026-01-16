@@ -70,6 +70,8 @@ const _mucJoinIsNickChangeLabel = 'is_nick_change=';
 const _mucJoinStatusCountLabel = 'status_count=';
 const _mucJoinHasSelfStatusLabel = 'has_self_status=';
 const _mucJoinErrorLabel = 'error=';
+const _mucJoinManagerJoinTimeoutLog =
+    'Timed out waiting for moxxmpp MUC join call.';
 const _roomAvatarFieldMissingLog =
     'Room configuration form missing avatar field.';
 const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
@@ -79,6 +81,11 @@ const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
 const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
 const _mucBootstrapOperationName = 'MucService.bootstrapOnLogin';
+const _mucCreateRoomOperationName = 'MucService.createRoom';
+const _mucUpsertBookmarkOperationName = 'MucService.upsertBookmarkForRoom';
+const _mucJoinRoomOperationName = 'MucService.joinRoom';
+const _mucCreateRoomBookmarkTimeoutLog =
+    'Timed out updating bookmarks for newly created room.';
 const bool _mucAvatarSupportEnabled = false;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
@@ -191,6 +198,8 @@ final class _RoomAvatarPayload {
 mixin MucService on XmppBase, BaseStreamService {
   final _mucLog = Logger('MucService');
   static const Duration _mucJoinTimeout = Duration(seconds: 10);
+  static const Duration _mucJoinManagerTimeout = Duration(seconds: 3);
+  static const Duration _mucCreateRoomBookmarkTimeout = Duration(seconds: 5);
   static const int _mucJoinSelfPresencePollIntervalMs = 200;
   static const Duration _mucJoinSelfPresencePollInterval = Duration(
     milliseconds: _mucJoinSelfPresencePollIntervalMs,
@@ -548,17 +557,12 @@ mixin MucService on XmppBase, BaseStreamService {
     final roomState = roomStateFor(normalizedRoom);
     if (roomState == null) return false;
     if (_roomNeedsJoin(normalizedRoom)) return false;
-    final managerState = await _mucManagerRoomState(normalizedRoom);
-    if (managerState == null || managerState.joined != true) return false;
-    final managerNick = managerState.nick?.trim();
-    if (managerNick == null || managerNick.isEmpty) return false;
-    if (roomState.hasSelfPresence != true) return false;
     if (!roomState.selfPresenceStatusCodes.contains(mucStatusSelfPresence)) {
       return false;
     }
-    final expectedOccupantId = '$normalizedRoom/$managerNick';
-    if (roomState.myOccupantId != expectedOccupantId) return false;
-    final occupant = roomState.occupants[expectedOccupantId];
+    final myOccupantId = roomState.myOccupantId;
+    if (myOccupantId == null || myOccupantId.isEmpty) return false;
+    final occupant = roomState.occupants[myOccupantId];
     if (occupant?.isPresent != true) return false;
     return true;
   }
@@ -871,35 +875,54 @@ mixin MucService on XmppBase, BaseStreamService {
     final nick = _nickForRoom(nickname);
     _roomNicknames[_roomKey(roomJid)] = nick;
 
+    final title = name.trim().isEmpty ? slug : name.trim();
+    _mucLog.fine('MUC create start. room=$roomJid');
     await joinRoom(
       roomJid: roomJid,
       nickname: nick,
       maxHistoryStanzas: maxHistoryStanzas,
       clearExplicitLeave: true,
     );
+    _mucLog.fine('MUC create joined. room=$roomJid');
     await _dbOp<XmppDatabase>(
       (db) => db.createChat(
         Chat(
           jid: roomJid,
-          title: name.trim().isEmpty ? slug : name.trim(),
+          title: title,
           type: ChatType.groupChat,
           myNickname: nick,
           lastChangeTimestamp: DateTime.timestamp(),
           contactJid: roomJid,
         ),
       ),
+      awaitDatabase: true,
     );
-    await _upsertBookmarkForRoom(
-      roomJid: roomJid,
-      title: name.trim().isEmpty ? slug : name.trim(),
-      nickname: nick,
-      autojoin: true,
+    _mucLog.fine('MUC create persisted. room=$roomJid');
+    fireAndForget(
+      () async {
+        await _upsertBookmarkForRoom(
+          roomJid: roomJid,
+          title: title,
+          nickname: nick,
+          autojoin: true,
+        ).timeout(
+          _mucCreateRoomBookmarkTimeout,
+          onTimeout: () => _mucLog.warning(_mucCreateRoomBookmarkTimeoutLog),
+        );
+      },
+      operationName: _mucUpsertBookmarkOperationName,
     );
     if (avatar != null) {
-      final updated = await updateRoomAvatar(roomJid: roomJid, avatar: avatar);
-      if (!updated) {
-        _mucLog.fine(_roomAvatarUpdateFailedLog);
-      }
+      fireAndForget(
+        () async {
+          final updated =
+              await updateRoomAvatar(roomJid: roomJid, avatar: avatar);
+          if (!updated) {
+            _mucLog.fine(_roomAvatarUpdateFailedLog);
+          }
+        },
+        operationName: _mucCreateRoomOperationName,
+      );
     }
     return roomJid;
   }
@@ -942,19 +965,42 @@ mixin MucService on XmppBase, BaseStreamService {
     try {
       final resolvedHistoryStanzas =
           maxHistoryStanzas ?? _defaultMucJoinHistoryStanzas;
-      final result = await manager.joinRoom(
-        mox.JID.fromString(normalizedRoom).toBare(),
-        nickname,
-        maxHistoryStanzas: resolvedHistoryStanzas,
+      final roomBare = mox.JID.fromString(normalizedRoom).toBare();
+      fireAndForget(
+        () async {
+          try {
+            final result = await manager
+                .joinRoom(
+              roomBare,
+              nickname,
+              maxHistoryStanzas: resolvedHistoryStanzas,
+            )
+                .timeout(
+              _mucJoinManagerTimeout,
+              onTimeout: () {
+                _logJoinEvent(
+                  message: _mucJoinManagerJoinTimeoutLog,
+                  attemptId: joinAttemptId,
+                );
+                return const moxlib.Result<bool, mox.MUCError>(true);
+              },
+            );
+            if (result.isType<mox.MUCError>()) {
+              _completeJoinAttempt(
+                normalizedRoom,
+                error: XmppMessageException(),
+              );
+            }
+          } on Exception catch (error, stackTrace) {
+            _completeJoinAttempt(
+              normalizedRoom,
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
+        },
+        operationName: _mucJoinRoomOperationName,
       );
-      if (result.isType<mox.MUCError>()) {
-        _completeJoinAttempt(
-          normalizedRoom,
-          error: XmppMessageException(),
-        );
-        await pollFuture;
-        return;
-      }
       await joinCompleter.future.timeout(_mucJoinTimeout);
       await pollFuture;
       await _refreshRoomAvatar(normalizedRoom);
@@ -2204,10 +2250,14 @@ mixin MucService on XmppBase, BaseStreamService {
     String? password,
   }) async {
     final manager = _connection.getManager<BookmarksManager>();
-    if (manager == null) return;
+    if (manager == null) {
+      _mucLog.fine('Bookmark manager unavailable; skipping bookmark upsert.');
+      return;
+    }
     try {
       final roomBare = mox.JID.fromString(roomJid).toBare();
       final normalizedPassword = _normalizePassword(password);
+      _mucLog.fine('Bookmark upsert start. room=$roomBare');
       await manager.upsertBookmark(
         MucBookmark(
           roomBare: roomBare,
@@ -2217,6 +2267,7 @@ mixin MucService on XmppBase, BaseStreamService {
           password: normalizedPassword,
         ),
       );
+      _mucLog.fine('Bookmark upsert completed. room=$roomBare');
     } on XmppAbortedException {
       return;
     } on Exception {
@@ -2297,6 +2348,12 @@ mixin MucService on XmppBase, BaseStreamService {
     _clearRoomNeedsJoin(roomJid);
     _roomNicknames[roomJid] = nextNick;
     _rememberRoomNickname(roomJid: roomJid, nickname: nextNick);
+
+    final managerState = await _mucManagerRoomState(roomJid);
+    if (managerState != null) {
+      managerState.joined = true;
+      managerState.nick = nextNick;
+    }
 
     final occupantJid = event.isNickChange && event.newNick?.isNotEmpty == true
         ? '$roomJid/$nextNick'

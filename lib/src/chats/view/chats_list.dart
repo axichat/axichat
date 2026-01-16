@@ -49,6 +49,8 @@ class ChatsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
+    final bool isDesktopPlatform =
+        EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
     const creationSuccessMessage = 'Group chat created.';
     const creationFailureMessage = 'Could not create group chat.';
     const refreshFailureMessage = 'Sync failed.';
@@ -111,8 +113,9 @@ class ChatsList extends StatelessWidget {
                             .map((item) => item.jid)
                             .toSet()
                         : const <String>{};
-                    final includeCalendarShortcut =
-                        showCalendarShortcut && calendarAvailable;
+                    final includeCalendarShortcut = showCalendarShortcut &&
+                        calendarAvailable &&
+                        !isDesktopPlatform;
 
                     var visibleItems = items
                         .where(
@@ -143,24 +146,25 @@ class ChatsList extends StatelessWidget {
                     if (visibleItems.isEmpty) {
                       body = Column(
                         children: [
-                          ListItemPadding(
-                            child: BlocBuilder<CalendarBloc, CalendarState>(
-                              builder: (context, state) {
-                                final currentTask = state.currentTaskAt(
-                                  DateTime.now(),
-                                );
-                                return CalendarTile(
-                                  onTap: () => context
-                                      .read<ChatsCubit>()
-                                      .toggleCalendar(),
-                                  currentTask: currentTask,
-                                  nextTask: state.nextTask,
-                                  dueReminderCount:
-                                      state.dueReminders?.length ?? 0,
-                                );
-                              },
+                          if (includeCalendarShortcut)
+                            ListItemPadding(
+                              child: BlocBuilder<CalendarBloc, CalendarState>(
+                                builder: (context, state) {
+                                  final currentTask = state.currentTaskAt(
+                                    DateTime.now(),
+                                  );
+                                  return CalendarTile(
+                                    onTap: () => context
+                                        .read<ChatsCubit>()
+                                        .toggleCalendar(),
+                                    currentTask: currentTask,
+                                    nextTask: state.nextTask,
+                                    dueReminderCount:
+                                        state.dueReminders?.length ?? 0,
+                                  );
+                                },
+                              ),
                             ),
-                          ),
                           Center(
                             child: Text(
                               l10n.chatsEmptyList,

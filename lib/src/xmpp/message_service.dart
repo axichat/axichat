@@ -111,7 +111,7 @@ const String _pinPublishModelPublishers = 'publishers';
 const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
 const mox.PubSubAffiliation _pinAffiliationPublisher =
     mox.PubSubAffiliation.publisher;
-const String _pinSendLastOnSubscribe = 'on_sub';
+const String _pinSendLastOnSubscribe = 'on_subscribe';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
 const bool _pinNotifyEnabled = true;
