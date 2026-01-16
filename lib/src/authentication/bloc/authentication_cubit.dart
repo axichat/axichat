@@ -231,19 +231,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _handleEmailAuthFailure,
       );
     }
-    Timer.run(() async {
+    Future<void>(() async {
       await _flushPendingAccountDeletions();
     });
-    Timer.run(() async {
+    Future<void>(() async {
       await _purgeLegacySignupDraft();
     });
     if (kEnableDemoChats) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _loginToDemoMode();
       });
     }
     if (autoLoginOnStart && state is AuthenticationNone) {
-      Timer.run(() async {
+      Future<void>(() async {
         await login();
       });
     }
@@ -1336,7 +1336,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             databasePassphrase: ensuredDatabasePassphrase,
           );
           authenticationCommitted = true;
-          Timer.run(() async {
+          Future<void>(() async {
             try {
               await _provisionEmailWithRetry(
                 displayName: displayName,

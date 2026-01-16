@@ -99,7 +99,7 @@ class _AxichatState extends State<Axichat> {
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
-    Timer.run(() async {
+    Future<void>(() async {
       await _reminderController.clearAll();
     });
     super.dispose();

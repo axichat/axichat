@@ -73,7 +73,7 @@ class CalendarBloc extends BaseCalendarBloc {
     if (!modelChanged || coordinator == null) {
       return;
     }
-    Timer.run(() async {
+    Future<void>(() async {
       await coordinator.handleModelChanged(
         source: availabilityShareSource,
         model: model,

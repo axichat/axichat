@@ -504,7 +504,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Sending to task: type=$type parts=${strings.length} '
       'payloadLen=$payloadLength',
     );
-    Timer.run(() async {
+    Future<void>(() async {
       await _bridge.send(strings);
     });
   }

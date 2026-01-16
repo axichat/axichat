@@ -2866,7 +2866,7 @@ class _ChatState extends State<Chat> {
       _selectionAutoscrollAccumulated = 0.0;
     });
     if (accumulated.abs() > 0.0) {
-      Timer.run(() async {
+      Future<void>(() async {
         await _reboundSelectionScroll(accumulated);
       });
     }

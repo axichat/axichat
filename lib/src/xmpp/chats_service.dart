@@ -50,7 +50,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
-        Timer.run(() async {
+        Future<void>(() async {
           await syncConversationIndexOnLogin();
         });
       })
@@ -443,7 +443,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       if (roomJid == null) return;
       final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
       if (!hasPresence) {
-        Timer.run(() async {
+        Future<void>(() async {
           await ensureJoined(roomJid: roomJid, allowRejoin: true);
         });
         return;
@@ -472,7 +472,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
-    Timer.run(() async {
+    Future<void>(() async {
       await _publishConversationIndexForOpenChat(jid);
     });
   }

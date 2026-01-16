@@ -262,13 +262,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _chatSubscription = _chatsService
           .chatStream(chatLookupJid)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
-      Timer.run(() async {
+      Future<void>(() async {
         await _subscribeToMessages(
           limit: messageBatchSize,
           filter: state.viewFilter,
         );
       });
-      Timer.run(() async {
+      Future<void>(() async {
         await _initializeViewFilter();
       });
     }
