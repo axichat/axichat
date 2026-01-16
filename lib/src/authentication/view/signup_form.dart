@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -13,9 +12,7 @@ import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -257,24 +254,19 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<String> _loadCaptchaSrc() async {
-    XmlDocument? document;
     try {
-      final registrationUrl =
-          context.read<AuthenticationCubit>().registrationUrl;
-      _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
+      const okStatus = 200;
+      final authCubit = context.read<AuthenticationCubit>();
+      final registrationUrl = authCubit.registrationUrl;
+      _lastCaptchaServer = authCubit.state.server;
       final response = await http.get(registrationUrl);
-      if (response.statusCode != _httpOkStatus) return '';
-      final bodyBytes = response.bodyBytes;
-      if (bodyBytes.length > _captchaXmlMaxBytes) return '';
-      document = tryParseXml(response.body, _captchaXmlParseLimits);
-      if (document == null) return '';
-    } on http.ClientException catch (_) {
-      return '';
+      if (response.statusCode != okStatus) return '';
+      final document = XmlDocument.parse(response.body);
+      return document.findAllElements('img').firstOrNull?.getAttribute('src') ??
+          '';
     } on Exception catch (_) {
       return '';
     }
-    return document.findAllElements('img').firstOrNull?.getAttribute('src') ??
-        '';
   }
 
   void _reloadCaptcha({bool resetFirstLoad = false}) {
@@ -321,9 +313,6 @@ class _SignupFormState extends State<SignupForm>
       _captchaHasLoadedOnce = true;
     });
   }
-
-  static const captchaSize = Size(180, 70);
-  static const _progressSegmentCount = 3;
 
   String get _currentStepLabel {
     final l10n = context.l10n;
@@ -423,7 +412,7 @@ class _SignupFormState extends State<SignupForm>
         _captchaComplete,
       ].where((complete) => complete).length;
 
-  double get _progressValue => _completedStepCount / _progressSegmentCount;
+  double get _progressValue => _completedStepCount / _formKeys.length;
 
   Future<void> _handleContinuePressed(BuildContext context) async {
     if (context.read<SignupAvatarCubit>().state.processing) return;
@@ -440,9 +429,10 @@ class _SignupFormState extends State<SignupForm>
 
   Future<void> _advanceFromPasswordStep(BuildContext context) async {
     final password = _passwordTextController.text;
-    final isWeak = _passwordStrengthLevel == _PasswordStrengthLevel.weak;
     final bool allowInsecureOverride = allowInsecurePassword && !kReleaseMode;
-    if ((isWeak || _passwordBreached) && !allowInsecureOverride) {
+    if ((_passwordStrengthLevel == _PasswordStrengthLevel.weak ||
+            _passwordBreached) &&
+        !allowInsecureOverride) {
       if (!mounted) return;
       setState(() {
         _showAllowInsecureError = true;
@@ -511,15 +501,10 @@ class _SignupFormState extends State<SignupForm>
       },
       builder: (context, state) {
         final l10n = context.l10n;
-        const bool allowInsecureOverrideEnabled =
-            _allowInsecurePasswordOverrideEnabled;
-        final bool allowInsecureOverride =
-            allowInsecurePassword && allowInsecureOverrideEnabled;
+        final bool allowInsecureOverrideEnabled = !kReleaseMode;
         return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
           builder: (context, avatarState) {
             final avatarErrorText = _avatarErrorText(avatarState, l10n);
-            final showUseAction = avatarState.hasCarouselPreview;
-            final useActionEnabled = avatarState.canUseCarouselAvatar;
             if (_lastCaptchaServer != state.server) {
               _lastCaptchaServer = state.server;
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -527,15 +512,12 @@ class _SignupFormState extends State<SignupForm>
                 _reloadCaptcha(resetFirstLoad: true);
               });
             }
-            final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
-            final bool signupFlowActive =
-                state is AuthenticationSignUpInProgress &&
+            final loading = (state is AuthenticationSignUpInProgress &&
                     state.fromSubmission &&
-                    onSubmitStep;
-            final bool latchActive = (_lastReportedLoading ?? false) &&
-                (state is AuthenticationLogInInProgress ||
-                    state is AuthenticationComplete);
-            final loading = signupFlowActive || latchActive;
+                    _currentIndex == _formKeys.length - 1) ||
+                ((_lastReportedLoading ?? false) &&
+                    (state is AuthenticationLogInInProgress ||
+                        state is AuthenticationComplete));
             _notifyLoadingChanged(loading);
             final cleanupBlocked =
                 state is AuthenticationSignupFailure && state.isCleanupBlocked;
@@ -543,6 +525,12 @@ class _SignupFormState extends State<SignupForm>
             const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
             const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
             const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
+            const captchaSize = Size(180, 70);
+            const signupSpinnerDimension = 16.0;
+            const signupSpinnerPadding = 1.0;
+            const signupSpinnerSlotSize =
+                signupSpinnerDimension + (signupSpinnerPadding * 2);
+            const signupSpinnerGap = 8.0;
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
             final usernameDescriptionHeight = _measureTextHeight(
@@ -550,8 +538,7 @@ class _SignupFormState extends State<SignupForm>
               text: l10n.authUsernameCaseInsensitive,
               style: context.textTheme.small,
             );
-            final showGlobalError =
-                !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
+            final errorText = _errorText?.trim();
             return Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -581,13 +568,14 @@ class _SignupFormState extends State<SignupForm>
                       padding: globalErrorPadding,
                       child: AnimatedSwitcher(
                         duration: animationDuration,
-                        child: showGlobalError
+                        child: !_showBreachedError &&
+                                (errorText?.isNotEmpty ?? false)
                             ? Semantics(
                                 liveRegion: true,
                                 container: true,
-                                label: l10n.signupErrorPrefix(_errorText!),
+                                label: l10n.signupErrorPrefix(errorText!),
                                 child: Text(
-                                  _errorText!,
+                                  errorText!,
                                   key: const ValueKey(
                                     'signup-global-error-text',
                                   ),
@@ -747,9 +735,10 @@ class _SignupFormState extends State<SignupForm>
                                                   onUseCurrent: () => context
                                                       .read<SignupAvatarCubit>()
                                                       .materializeCurrentCarouselAvatar(),
-                                                  showUseAction: showUseAction,
-                                                  useActionEnabled:
-                                                      useActionEnabled,
+                                                  showUseAction: avatarState
+                                                      .hasCarouselPreview,
+                                                  useActionEnabled: avatarState
+                                                      .canUseCarouselAvatar,
                                                   canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,
@@ -828,7 +817,8 @@ class _SignupFormState extends State<SignupForm>
                                     child: _SignupInsecurePasswordNotice(
                                       reason: _visibleInsecurePasswordReason,
                                       allowInsecurePassword:
-                                          allowInsecureOverride,
+                                          allowInsecurePassword &&
+                                              allowInsecureOverrideEnabled,
                                       overrideEnabled:
                                           allowInsecureOverrideEnabled,
                                       loading: loading,
@@ -895,6 +885,7 @@ class _SignupFormState extends State<SignupForm>
                                                       .signupCaptchaInstructions,
                                                   image: true,
                                                   child: _CaptchaFrame(
+                                                    size: captchaSize,
                                                     child: captchaSurface,
                                                   )),
                                               const SizedBox(width: 12),
@@ -1024,16 +1015,14 @@ class _SignupFormState extends State<SignupForm>
                                         ButtonSpinnerSlot(
                                           isVisible: isCheckingPwned,
                                           spinner: AxiProgressIndicator(
-                                            dimension:
-                                                _signupButtonSpinnerDimension,
+                                            dimension: signupSpinnerDimension,
                                             color: context
                                                 .colorScheme.primaryForeground,
                                             semanticsLabel:
                                                 l10n.authPasswordPending,
                                           ),
-                                          slotSize:
-                                              _signupButtonSpinnerSlotSize,
-                                          gap: _signupButtonSpinnerGap,
+                                          slotSize: signupSpinnerSlotSize,
+                                          gap: signupSpinnerGap,
                                           duration: animationDuration,
                                         ),
                                         Text(l10n.signupContinue),
@@ -1059,15 +1048,14 @@ class _SignupFormState extends State<SignupForm>
                                       ButtonSpinnerSlot(
                                         isVisible: loading,
                                         spinner: AxiProgressIndicator(
-                                          dimension:
-                                              _signupButtonSpinnerDimension,
+                                          dimension: signupSpinnerDimension,
                                           color: context
                                               .colorScheme.primaryForeground,
                                           semanticsLabel:
                                               l10n.authSignupPending,
                                         ),
-                                        slotSize: _signupButtonSpinnerSlotSize,
-                                        gap: _signupButtonSpinnerGap,
+                                        slotSize: signupSpinnerSlotSize,
+                                        gap: signupSpinnerGap,
                                         duration: animationDuration,
                                       ),
                                       Text(l10n.authSignUp),
@@ -1775,9 +1763,9 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
       case _PasswordStrengthLevel.empty:
         return colors.destructive;
       case _PasswordStrengthLevel.medium:
-        return _strengthMediumColor;
+        return axiWarning;
       case _PasswordStrengthLevel.stronger:
-        return _strengthStrongColor;
+        return axiGreen;
     }
   }
 }
@@ -1858,17 +1846,18 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
 }
 
 class _CaptchaFrame extends StatelessWidget {
-  const _CaptchaFrame({required this.child});
+  const _CaptchaFrame({required this.child, required this.size});
 
   final Widget child;
+  final Size size;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final radius = BorderRadius.circular(14);
     return Container(
-      width: _SignupFormState.captchaSize.width,
-      height: _SignupFormState.captchaSize.height,
+      width: size.width,
+      height: size.height,
       decoration: BoxDecoration(
         borderRadius: radius,
         border: Border.all(color: colors.border),
@@ -1902,7 +1891,6 @@ class _CaptchaImage extends StatefulWidget {
 class _CaptchaImageState extends State<_CaptchaImage> {
   bool _isReady = false;
   bool _readyNotified = false;
-  bool _unsafeUrlNotified = false;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
@@ -1910,7 +1898,6 @@ class _CaptchaImageState extends State<_CaptchaImage> {
     if (oldWidget.url != widget.url) {
       _isReady = false;
       _readyNotified = false;
-      _unsafeUrlNotified = false;
     }
   }
 
@@ -1926,35 +1913,8 @@ class _CaptchaImageState extends State<_CaptchaImage> {
     });
   }
 
-  bool _isSafeCaptchaUrl(String url) {
-    final uri = Uri.tryParse(url.trim());
-    if (uri == null) return false;
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme != _captchaAllowedScheme) return false;
-    final host = uri.host.trim();
-    if (host.isEmpty || isProbablyLocalHostname(host)) return false;
-    final direct = InternetAddress.tryParse(host);
-    if (direct != null) {
-      return isSafeInternetAddress(direct);
-    }
-    return true;
-  }
-
-  void _notifyUnsafeUrl() {
-    if (_unsafeUrlNotified) return;
-    _unsafeUrlNotified = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      widget.onInitialError();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_isSafeCaptchaUrl(widget.url)) {
-      _notifyUnsafeUrl();
-      return const _CaptchaErrorMessage();
-    }
     Widget image = Image.network(
       widget.url,
       fit: BoxFit.cover,

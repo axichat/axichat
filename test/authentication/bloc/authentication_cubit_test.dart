@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -20,7 +21,7 @@ import 'package:mocktail/mocktail.dart';
 import '../../mocks.dart';
 
 const validUsername = 'validUsername';
-const validJid = '$validUsername@${AuthenticationCubit.domain}';
+const validJid = '$validUsername@${EndpointConfig.defaultDomain}';
 const validPassword = 'validPassword';
 const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
@@ -828,7 +829,7 @@ void main() {
         verify(
           () => mockProvisioningClient.deleteAccount(
             email:
-                '${validUsername.toLowerCase()}@${AuthenticationCubit.domain}',
+                '${validUsername.toLowerCase()}@${EndpointConfig.defaultDomain}',
             password: validPassword,
           ),
         ).called(1);
@@ -936,7 +937,7 @@ void main() {
         credentialStorage['pending_signup_rollbacks'] = jsonEncode([
           {
             'username': validUsername,
-            'host': AuthenticationCubit.domain,
+            'host': EndpointConfig.defaultDomain,
             'password': 'stale',
             'createdAt': '2024-01-01T00:00:00.000Z',
           },
@@ -963,13 +964,17 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
       ),
-      expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationSignupFailure(
-          AuthenticationCubit.signupCleanupInProgressMessage,
-          isCleanupBlocked: true,
-        ),
-      ],
+      expect: () {
+        const signupCleanupMessage =
+            'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
+        return [
+          const AuthenticationSignUpInProgress(),
+          AuthenticationSignupFailure(
+            signupCleanupMessage,
+            isCleanupBlocked: true,
+          ),
+        ];
+      },
       verify: (bloc) {
         verifyNever(
           () => mockHttpClient.post(
@@ -986,7 +991,7 @@ void main() {
         credentialStorage['pending_signup_rollbacks'] = jsonEncode([
           {
             'username': validUsername,
-            'host': AuthenticationCubit.domain,
+            'host': EndpointConfig.defaultDomain,
             'password': 'stale',
             'createdAt': '2024-01-01T00:00:00.000Z',
           },
@@ -1065,7 +1070,7 @@ void main() {
       ),
       act: (bloc) => bloc.unregister(
         username: validUsername,
-        host: AuthenticationCubit.domain,
+        host: EndpointConfig.defaultDomain,
         password: validPassword,
       ),
       expect: () => const [
