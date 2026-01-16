@@ -288,19 +288,21 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SettingsCubit, SettingsState>(
-      builder: (context, state) {
+    return BlocConsumer<SettingsCubit, SettingsState>(
+      listener: (context, state) async {
         context.read<NotificationService>()
           ..mute = state.mute
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
         final xmppService = context.read<XmppService>();
-        xmppService.updateMessageStorageMode(state.messageStorageMode);
+        await xmppService.updateMessageStorageMode(state.messageStorageMode);
         context.read<EmailService>().updateMessageStorageMode(
               xmppService.messageStorageMode,
             );
         xmppService.toggleAllChatsMarkerResponsive(
           responsive: state.chatReadReceipts,
         );
+      },
+      builder: (context, state) {
         final localeOverride = state.language.locale;
         const chatNeutrals = ChatNeutrals();
         final lightTheme = AppTheme.build(

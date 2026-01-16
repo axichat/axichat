@@ -1065,6 +1065,9 @@ class _DraftFormState extends State<DraftForm> {
     if (shouldCleanupSeedAttachments) {
       await _cleanupSeedAttachmentMetadata();
     }
+    if (!mounted) {
+      return;
+    }
     final onClosed = widget.onClosed;
     if (onClosed != null) {
       onClosed();

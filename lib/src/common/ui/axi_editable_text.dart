@@ -521,7 +521,7 @@ class _DiscreteKeyFrameSimulation extends Simulation {
 /// ### Customizing User Input Accessibility Announcements
 ///
 /// To customize user input accessibility announcements triggered by text
-/// changes, use [SemanticsService.announce] to make the desired
+/// changes, use [SemanticsService.sendAnnouncement] to make the desired
 /// accessibility announcement.
 ///
 /// On iOS, the on-screen keyboard may announce the most recent input
@@ -534,7 +534,7 @@ class _DiscreteKeyFrameSimulation extends Simulation {
 /// ```dart
 /// onChanged: (String newText) {
 ///   if (newText.isNotEmpty) {
-///     SemanticsService.announce('\$$newText', Directionality.of(context));
+///     SemanticsService.sendAnnouncement('\$$newText', Directionality.of(context));
 ///   }
 /// }
 /// ```
@@ -638,11 +638,6 @@ class EditableText extends StatefulWidget {
     this.clipBehavior = Clip.hardEdge,
     this.restorationId,
     this.scrollBehavior,
-    @Deprecated(
-      'Use `stylusHandwritingEnabled` instead. '
-      'This feature was deprecated after v3.27.0-0.2.pre.',
-    )
-    this.scribbleEnabled = true,
     this.stylusHandwritingEnabled = defaultStylusHandwritingEnabled,
     this.enableIMEPersonalizedLearning = true,
     this.contentInsertionConfiguration,
@@ -1518,19 +1513,6 @@ class EditableText extends StatefulWidget {
   /// [scrollPhysics].
   final ScrollPhysics? scrollPhysics;
 
-  /// {@template flutter.widgets.editableText.scribbleEnabled}
-  /// Whether iOS 14 Scribble features are enabled for this widget.
-  ///
-  /// Only available on iPads.
-  ///
-  /// Defaults to true.
-  /// {@endtemplate}
-  @Deprecated(
-    'Use `stylusHandwritingEnabled` instead. '
-    'This feature was deprecated after v3.27.0-0.2.pre.',
-  )
-  final bool scribbleEnabled;
-
   /// {@template flutter.widgets.editableText.stylusHandwritingEnabled}
   /// Whether this input supports stylus handwriting, where the user can write
   /// directly on top of a field.
@@ -2263,13 +2245,6 @@ class EditableText extends StatefulWidget {
     );
     properties.add(
       DiagnosticsProperty<bool>(
-        'scribbleEnabled',
-        scribbleEnabled,
-        defaultValue: true,
-      ),
-    );
-    properties.add(
-      DiagnosticsProperty<bool>(
         'stylusHandwritingEnabled',
         stylusHandwritingEnabled,
         defaultValue: defaultStylusHandwritingEnabled,
@@ -2493,14 +2468,7 @@ class EditableTextState extends State<EditableText>
 
   Orientation? _lastOrientation;
 
-  bool get _stylusHandwritingEnabled {
-    // During the deprecation period, respect scribbleEnabled being explicitly
-    // set.
-    if (!widget.scribbleEnabled) {
-      return widget.scribbleEnabled;
-    }
-    return widget.stylusHandwritingEnabled;
-  }
+  bool get _stylusHandwritingEnabled => widget.stylusHandwritingEnabled;
 
   late final AppLifecycleListener _appLifecycleListener;
   bool _justResumed = false;
@@ -2509,20 +2477,22 @@ class EditableTextState extends State<EditableText>
   bool get wantKeepAlive => widget.focusNode.hasFocus;
 
   Color get _cursorColor {
+    final double cursorAlpha = widget.cursorColor.a;
     final double effectiveOpacity = math.min(
-      widget.cursorColor.alpha / 255.0,
+      cursorAlpha,
       _cursorBlinkOpacityController.value,
     );
-    return widget.cursorColor.withOpacity(effectiveOpacity);
+    return widget.cursorColor.withValues(alpha: effectiveOpacity);
   }
 
   Color get _typingCaretColor {
     final Color baseColor = widget.typingCaretColor ?? widget.cursorColor;
+    final double baseAlpha = baseColor.a;
     final double effectiveOpacity = math.min(
-      baseColor.alpha / 255.0,
+      baseAlpha,
       _cursorBlinkOpacityController.value,
     );
-    return baseColor.withOpacity(effectiveOpacity);
+    return baseColor.withValues(alpha: effectiveOpacity);
   }
 
   @override

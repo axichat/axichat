@@ -72,7 +72,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         return MediaQuery(
           data: windowMediaQuery,
           child: SafeArea(
-            top: true,
+            top: false,
             bottom: true,
             left: false,
             right: false,
@@ -216,6 +216,7 @@ class AxiModalSurface extends StatelessWidget {
       borderRadius: borderRadius,
       side: BorderSide(color: borderColor ?? scheme.border),
     );
+    final Widget paddedChild = Padding(padding: padding, child: child);
     return ClipPath(
       clipper: ShapeBorderClipper(shape: shape),
       child: DecoratedBox(
@@ -231,7 +232,12 @@ class AxiModalSurface extends StatelessWidget {
                 ),
               ],
         ),
-        child: Padding(padding: padding, child: child),
+        child: Material(
+          type: MaterialType.transparency,
+          shape: shape,
+          clipBehavior: Clip.antiAlias,
+          child: paddedChild,
+        ),
       ),
     );
   }

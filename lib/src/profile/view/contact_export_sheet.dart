@@ -8,7 +8,7 @@ import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _contactExportSheetPadding = 8.0;
+const double _contactExportSheetPadding = 16.0;
 const double _contactExportOptionSpacing = 8.0;
 const double _contactExportIconPadding = 10.0;
 const double _contactExportIconSize = 18.0;

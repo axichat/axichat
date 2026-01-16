@@ -49,6 +49,10 @@ const String _incorrectPasswordMessage =
     'Incorrect password. Please try again.';
 const String _passwordChangeRejectedMessage =
     'Current password is incorrect, or the new password does not meet server requirements.';
+const String _passwordChangeDisabledMessage =
+    'Password changes are disabled for this account.';
+const String _accountDeletionDisabledMessage =
+    'Account deletion is disabled for this account.';
 const int _loginBackoffBaseSeconds = 2;
 const int _loginBackoffMaxMinutes = 2;
 const int _loginBackoffMinSeconds = 1;
@@ -2248,10 +2252,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
-    final uri = _buildChangePasswordUrl();
     final resolvedJid = '$normalizedUsername@$resolvedHost';
-    final shouldChangeEmailPassword =
-        _emailService != null && _endpointConfig.enableSmtp;
+    final shouldChangeXmppPassword = _endpointConfig.enableXmpp;
+    final shouldChangeEmailPassword = _endpointConfig.enableSmtp;
     final resolvedEmail = shouldChangeEmailPassword
         ? await _resolveEmailAddress(
             username: normalizedUsername,
@@ -2259,8 +2262,42 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           )
         : null;
     try {
+      if (!shouldChangeXmppPassword) {
+        if (!shouldChangeEmailPassword || resolvedEmail == null) {
+          _emit(
+            const AuthenticationPasswordChangeFailure(
+              _passwordChangeDisabledMessage,
+            ),
+          );
+          return;
+        }
+        final emailError = await _changeProvisionedEmailPassword(
+          email: resolvedEmail,
+          oldPassword: oldPassword,
+          newPassword: password,
+        );
+        if (emailError != null) {
+          _emit(AuthenticationPasswordChangeFailure(emailError));
+          return;
+        }
+        const bool passwordIsPreHashed = false;
+        final rememberMe = await loadRememberMeChoice();
+        await _updateStoredPasswords(
+          jid: resolvedJid,
+          newPassword: password,
+          rememberMe: rememberMe,
+          passwordPreHashed: passwordIsPreHashed,
+        );
+        _emit(
+          const AuthenticationPasswordChangeSuccess(
+            'Password changed successfully.',
+          ),
+        );
+        return;
+      }
+
       final response = await _postRegisterForm(
-        primary: uri,
+        primary: _buildChangePasswordUrl(),
         fallback: _buildChangePasswordLegacyUrl(),
         body: {
           _registerBodyKeyUsername: normalizedUsername,
@@ -2436,20 +2473,36 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     const fallback = 'Unable to delete account. Please try again later.';
+    final shouldDeleteEmailAccount = _endpointConfig.enableSmtp;
+    final shouldDeleteXmppAccount = _endpointConfig.enableXmpp;
+    if (!shouldDeleteEmailAccount && !shouldDeleteXmppAccount) {
+      _emit(const AuthenticationUnregisterFailure(
+          _accountDeletionDisabledMessage));
+      return;
+    }
     try {
-      final email = await _resolveEmailAddress(
-        username: normalizedUsername,
-        host: resolvedHost,
-      );
-      final emailDeletionError = await _deleteProvisionedEmailAccount(
-        email: email ?? '$normalizedUsername@$resolvedHost',
-        password: password,
-        logContext: 'during unregister',
-      );
-      if (emailDeletionError != null) {
-        _emit(AuthenticationUnregisterFailure(emailDeletionError));
+      if (shouldDeleteEmailAccount) {
+        final email = await _resolveEmailAddress(
+          username: normalizedUsername,
+          host: resolvedHost,
+        );
+        final emailDeletionError = await _deleteProvisionedEmailAccount(
+          email: email ?? '$normalizedUsername@$resolvedHost',
+          password: password,
+          logContext: 'during unregister',
+        );
+        if (emailDeletionError != null) {
+          _emit(AuthenticationUnregisterFailure(emailDeletionError));
+          return;
+        }
+      }
+
+      if (!shouldDeleteXmppAccount) {
+        await logout(severity: LogoutSeverity.burn);
+        await _removeCompletedAccountRecord(normalizedUsername, resolvedHost);
         return;
       }
+
       final response = await _requestAccountDeletion(
         username: normalizedUsername,
         host: resolvedHost,
@@ -2631,10 +2684,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<bool> _deleteProvisionedEmailAccountIfAvailable(
     _PendingAccountDeletion deletion,
   ) async {
-    final fallbackEmail =
-        deletion.email ?? '${deletion.username}@${deletion.host}'.trim();
+    final email = deletion.email?.trim();
+    if (email == null || email.isEmpty) {
+      return true;
+    }
     final deletionError = await _deleteProvisionedEmailAccount(
-      email: fallbackEmail,
+      email: email,
       password: deletion.password,
       logContext: 'during rollback',
     );

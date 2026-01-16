@@ -4,9 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:axichat/src/common/fire_and_forget.dart';
-import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/email/email_metadata.dart';
+ort 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
