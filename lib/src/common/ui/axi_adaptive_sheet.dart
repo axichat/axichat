@@ -52,6 +52,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
         const BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
           top: Radius.circular(18),
         );
+        const double zeroInset = 0;
+        final double topInset =
+            useSafeArea ? windowMediaQuery.viewPadding.top : zeroInset;
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,
           showCloseButton: showCloseButton,
@@ -71,17 +74,19 @@ Future<T?> showAdaptiveBottomSheet<T>({
         );
         return MediaQuery(
           data: windowMediaQuery,
-          child: SafeArea(
-            top: false,
-            bottom: useSafeArea,
-            left: false,
-            right: false,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: windowMediaQuery.size.height -
-                    (useSafeArea ? windowMediaQuery.padding.top : 0),
+          child: Padding(
+            padding: EdgeInsets.only(top: topInset),
+            child: SafeArea(
+              top: false,
+              bottom: useSafeArea,
+              left: false,
+              right: false,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: windowMediaQuery.size.height - topInset,
+                ),
+                child: surface,
               ),
-              child: surface,
             ),
           ),
         );

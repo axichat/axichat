@@ -99,7 +99,6 @@ class AxiSheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget? fixedBody = body;
     final List<Widget>? scrollChildren = _scrollChildren;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     if (fixedBody != null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -107,19 +106,10 @@ class AxiSheetScaffold extends StatelessWidget {
         children: [
           header,
           Flexible(fit: FlexFit.loose, child: fixedBody),
-          if (footer != null)
-            Padding(
-              padding: EdgeInsets.only(bottom: keyboardInset),
-              child: footer!,
-            ),
+          if (footer != null) footer!,
         ],
       );
     }
-
-    final double bottomInset = keyboardInset;
-    final EdgeInsets padding = (bodyPadding ?? EdgeInsets.zero).copyWith(
-      bottom: (bodyPadding?.bottom ?? 0) + bottomInset,
-    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -128,21 +118,86 @@ class AxiSheetScaffold extends StatelessWidget {
         header,
         Flexible(
           fit: FlexFit.loose,
-          child: Scrollbar(
-            thumbVisibility: true,
-            child: ListView(
-              padding: padding,
-              shrinkWrap: true,
-              physics: scrollPhysics,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-              children: [
-                ...?scrollChildren,
-                if (footer != null) ...[const SizedBox(height: 12), footer!],
-              ],
-            ),
+          child: _AxiSheetScrollableBody(
+            bodyPadding: bodyPadding,
+            scrollPhysics: scrollPhysics,
+            footer: footer,
+            children: scrollChildren ?? const <Widget>[],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AxiSheetScrollableBody extends StatefulWidget {
+  const _AxiSheetScrollableBody({
+    required this.children,
+    required this.bodyPadding,
+    required this.scrollPhysics,
+    required this.footer,
+  });
+
+  final List<Widget> children;
+  final EdgeInsets? bodyPadding;
+  final ScrollPhysics? scrollPhysics;
+  final Widget? footer;
+
+  @override
+  State<_AxiSheetScrollableBody> createState() =>
+      _AxiSheetScrollableBodyState();
+}
+
+class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
+  final ScrollController _scrollController = ScrollController();
+  double _bottomInset = 0;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleInsetSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+      final double scrollExtent = _scrollController.position.maxScrollExtent;
+      const double scrollExtentThreshold = 0;
+      const double zeroInset = 0;
+      final double nextInset =
+          scrollExtent > scrollExtentThreshold ? keyboardInset : zeroInset;
+      if (nextInset == _bottomInset) return;
+      setState(() => _bottomInset = nextInset);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _scheduleInsetSync();
+    final EdgeInsets resolvedPadding = widget.bodyPadding ?? EdgeInsets.zero;
+    final double bottomPadding = resolvedPadding.bottom + _bottomInset;
+    final EdgeInsets padding = resolvedPadding.copyWith(
+      bottom: bottomPadding,
+    );
+    const double footerSpacing = 12;
+
+    return Scrollbar(
+      thumbVisibility: true,
+      child: ListView(
+        controller: _scrollController,
+        padding: padding,
+        shrinkWrap: true,
+        physics: widget.scrollPhysics,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+        children: [
+          ...widget.children,
+          if (widget.footer != null) ...[
+            const SizedBox(height: footerSpacing),
+            widget.footer!,
+          ],
+        ],
+      ),
     );
   }
 }
