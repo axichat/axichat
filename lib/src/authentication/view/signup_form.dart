@@ -229,11 +229,10 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _onPressed(BuildContext context) async {
-    if (context.read<SignupAvatarCubit>().state.processing) return;
-    if (context.read<SignupAvatarCubit>().state.avatar == null) {
-      context.read<SignupAvatarCubit>().materializeCurrentCarouselAvatar();
-    }
-    if (context.read<SignupAvatarCubit>().state.processing) return;
+    final avatarCubit = context.read<SignupAvatarCubit>();
+    if (avatarCubit.state.processing) return;
+    avatarCubit.pauseCarousel();
+    final avatarPayload = avatarCubit.selectedAvatarPayload();
     FocusManager.instance.primaryFocus?.unfocus();
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -247,7 +246,7 @@ class _SignupFormState extends State<SignupForm>
           captchaID: splitSrc[splitSrc.indexOf('captcha') + 1],
           captcha: _captchaTextController.value.text,
           rememberMe: rememberMe,
-          avatar: context.read<SignupAvatarCubit>().state.avatar,
+          avatar: avatarPayload,
         );
   }
 
@@ -732,8 +731,7 @@ class _SignupFormState extends State<SignupForm>
                                                       .pickAvatarFromFiles,
                                                   onUseCurrent: () => context
                                                       .read<SignupAvatarCubit>()
-                                                      .materializeCurrentCarouselAvatar(),
-                                                  showUseAction: true,
+                                                      .pauseCarousel(),
                                                   useActionEnabled: avatarState
                                                       .canUseCarouselAvatar,
                                                   canShuffleBackground: avatarState

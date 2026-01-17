@@ -824,8 +824,10 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
   }
 
   void _handleSave() {
-    if (context.read<AvatarEditorCubit>().state.isBusy) return;
-    final payload = context.read<AvatarEditorCubit>().state.draft;
+    final cubit = context.read<AvatarEditorCubit>();
+    if (cubit.state.isBusy) return;
+    cubit.pauseCarousel();
+    final payload = cubit.selectedAvatarPayload();
     if (payload == null) return;
     widget.onSave(payload);
   }
@@ -838,7 +840,8 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
         final errorText = avatarState.localizedErrorText(l10n);
-        final saveEnabled = !avatarState.isBusy && avatarState.draft != null;
+        final saveEnabled = !avatarState.isBusy &&
+            context.read<AvatarEditorCubit>().selectedAvatarPayload() != null;
         final useActionEnabled = avatarState.canUseCarouselAvatar;
         final Widget actions = Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -913,8 +916,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                     .pickImage(),
                                 onUseCurrent: () => context
                                     .read<AvatarEditorCubit>()
-                                    .materializeCurrentCarouselAvatar(),
-                                showUseAction: true,
+                                    .pauseCarousel(),
                                 useActionEnabled: useActionEnabled,
                                 canShuffleBackground:
                                     avatarState.hasCarouselPreview &&

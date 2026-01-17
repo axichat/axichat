@@ -53,7 +53,12 @@ class AxiAdaptiveLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool allowSplitView = constraints.maxWidth >= smallScreen;
+        final mediaQuery = MediaQuery.maybeOf(context);
+        final shortestSide = mediaQuery?.size.shortestSide;
+        final bool isCompactDevice =
+            shortestSide != null && shortestSide < compactDeviceBreakpoint;
+        final bool allowSplitView =
+            !isCompactDevice && constraints.maxWidth >= smallScreen;
 
         if (!showPrimary && !showSecondary) {
           return const SizedBox.shrink();
