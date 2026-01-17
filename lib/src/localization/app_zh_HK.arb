@@ -342,6 +342,7 @@
   "draftCompose": "撰寫",
   "draftNewMessage": "新訊息",
   "draftRestore": "還原",
+  "draftRestoreAction": "從草稿還原",
   "draftMinimize": "最小化",
   "draftExpand": "展開",
   "draftExitFullscreen": "退出全螢幕",

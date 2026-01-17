@@ -968,6 +968,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get draftRestore => 'Restaurar';
 
   @override
+  String get draftRestoreAction => 'Restaurar desde borrador';
+
+  @override
   String get draftMinimize => 'Minimizar';
 
   @override

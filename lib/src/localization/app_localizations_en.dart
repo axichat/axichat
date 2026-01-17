@@ -951,6 +951,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftRestore => 'Restore';
 
   @override
+  String get draftRestoreAction => 'Restore from draft';
+
+  @override
   String get draftMinimize => 'Minimize';
 
   @override

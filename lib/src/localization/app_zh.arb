@@ -342,6 +342,7 @@
   "draftCompose": "撰写",
   "draftNewMessage": "新消息",
   "draftRestore": "还原",
+  "draftRestoreAction": "从草稿还原",
   "draftMinimize": "最小化",
   "draftExpand": "展开",
   "draftExitFullscreen": "退出全屏",

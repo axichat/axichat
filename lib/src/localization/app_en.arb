@@ -419,6 +419,7 @@
   "draftCompose": "Compose",
   "draftNewMessage": "New message",
   "draftRestore": "Restore",
+  "draftRestoreAction": "Restore from draft",
   "draftMinimize": "Minimize",
   "draftExpand": "Expand",
   "draftExitFullscreen": "Exit fullscreen",

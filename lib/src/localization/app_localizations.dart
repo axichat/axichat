@@ -1780,6 +1780,12 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get draftRestore;
 
+  /// No description provided for @draftRestoreAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from draft'**
+  String get draftRestoreAction;
+
   /// No description provided for @draftMinimize.
   ///
   /// In en, this message translates to:
@@ -5162,8 +5168,7 @@ abstract class AppLocalizations {
   /// **'{count, plural, one {Unable to add task to a critical path.} other {Unable to add tasks to a critical path.}}'**
   String calendarCriticalPathAddFailed(int count);
 
-  /// Error message shown when a task is already a member of the selected
-  /// critical path.
+  /// Error message shown when a task is already a member of the selected critical path.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one {Task already in this critical path.} other {Tasks already in this critical path.}}'**

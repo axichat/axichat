@@ -342,6 +342,7 @@
   "draftCompose": "Verfassen",
   "draftNewMessage": "Neue Nachricht",
   "draftRestore": "Wiederherstellen",
+  "draftRestoreAction": "Aus Entwurf wiederherstellen",
   "draftMinimize": "Minimieren",
   "draftExpand": "Erweitern",
   "draftExitFullscreen": "Vollbild verlassen",
