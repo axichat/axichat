@@ -114,19 +114,33 @@ class SignupAvatarState extends Equatable {
     Rect? cropRect,
     bool clearError = false,
     bool clearCrop = false,
+    bool clearAvatar = false,
+    bool clearAvatarPreviewBytes = false,
+    bool clearCarouselPreviewBytes = false,
+    bool clearActiveTemplate = false,
+    bool clearActiveCategory = false,
+    bool clearBackgroundLock = false,
   }) {
     return SignupAvatarState(
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      avatar: avatar ?? this.avatar,
-      avatarPreviewBytes: avatarPreviewBytes ?? this.avatarPreviewBytes,
-      carouselPreviewBytes: carouselPreviewBytes ?? this.carouselPreviewBytes,
+      avatar: clearAvatar ? null : avatar ?? this.avatar,
+      avatarPreviewBytes: clearAvatarPreviewBytes
+          ? null
+          : avatarPreviewBytes ?? this.avatarPreviewBytes,
+      carouselPreviewBytes: clearCarouselPreviewBytes
+          ? null
+          : carouselPreviewBytes ?? this.carouselPreviewBytes,
       processing: processing ?? this.processing,
       error: clearError ? null : error ?? this.error,
-      backgroundLocked: backgroundLocked ?? this.backgroundLocked,
-      lockedBackgroundColor:
-          lockedBackgroundColor ?? this.lockedBackgroundColor,
-      activeTemplate: activeTemplate ?? this.activeTemplate,
-      activeCategory: activeCategory ?? this.activeCategory,
+      backgroundLocked:
+          clearBackgroundLock ? false : backgroundLocked ?? this.backgroundLocked,
+      lockedBackgroundColor: clearBackgroundLock
+          ? null
+          : lockedBackgroundColor ?? this.lockedBackgroundColor,
+      activeTemplate:
+          clearActiveTemplate ? null : activeTemplate ?? this.activeTemplate,
+      activeCategory:
+          clearActiveCategory ? null : activeCategory ?? this.activeCategory,
       sourceBytes: clearCrop ? null : sourceBytes ?? this.sourceBytes,
       imageWidth: clearCrop ? null : imageWidth ?? this.imageWidth,
       imageHeight: clearCrop ? null : imageHeight ?? this.imageHeight,
@@ -273,8 +287,27 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> shuffleCarousel(ShadColorScheme colors) async {
     _colors = colors;
-    if (state.processing || state.hasUserSelectedAvatar || !_carouselEnabled) {
-      return;
+    if (!_carouselEnabled || state.processing) return;
+    if (state.hasUserSelectedAvatar ||
+        state.sourceBytes != null ||
+        state.activeTemplate != null ||
+        state.activeCategory != null) {
+      _carouselBuffer.clear();
+      _currentCarouselAvatar = null;
+      _stopAvatarCarousel();
+      emit(
+        state.copyWith(
+          processing: false,
+          clearAvatar: true,
+          clearAvatarPreviewBytes: true,
+          clearCarouselPreviewBytes: true,
+          clearActiveTemplate: true,
+          clearActiveCategory: true,
+          clearBackgroundLock: true,
+          clearCrop: true,
+          clearError: true,
+        ),
+      );
     }
     if (_carouselBuffer.isEmpty) {
       await _prefillCarousel(

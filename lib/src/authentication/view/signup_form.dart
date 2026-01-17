@@ -733,8 +733,7 @@ class _SignupFormState extends State<SignupForm>
                                                   onUseCurrent: () => context
                                                       .read<SignupAvatarCubit>()
                                                       .materializeCurrentCarouselAvatar(),
-                                                  showUseAction: avatarState
-                                                      .hasCarouselPreview,
+                                                  showUseAction: true,
                                                   useActionEnabled: avatarState
                                                       .canUseCarouselAvatar,
                                                   canShuffleBackground: avatarState

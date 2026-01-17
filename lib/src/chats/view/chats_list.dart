@@ -492,6 +492,8 @@ class _ChatListTileState extends State<ChatListTile> {
     final selectedJids = chatsState()?.selectedJids ?? const <String>{};
     final selectionActive = selectedJids.isNotEmpty;
     final isSelected = selectedJids.contains(item.jid);
+    final openJid = chatsState()?.openJid;
+    final isOpen = openJid != null && openJid == item.jid;
     if (selectionActive && _showActions) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -505,7 +507,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final selectionOverlay = colors.primary.withValues(
       alpha: brightness == Brightness.dark ? 0.12 : 0.06,
     );
-    final tileBackgroundColor = item.open
+    final tileBackgroundColor = isOpen
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
     late final VoidCallback tileOnTap;
@@ -546,7 +548,7 @@ class _ChatListTileState extends State<ChatListTile> {
         maxWidth: scaled(72),
         maxHeight: scaled(80),
       ),
-      selected: item.open || isSelected,
+      selected: isOpen || isSelected,
       paintSurface: false,
       contentPadding: tilePadding,
       tapBounce: false,

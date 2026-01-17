@@ -4428,6 +4428,12 @@ class _ChatState extends State<Chat> {
                                             normalizedSenderBare != null &&
                                                 normalizedSenderBare
                                                     .isDeltaPlaceholderJid;
+                                        final senderNick =
+                                            _nickFromSender(e.senderJid);
+                                        final selfNick =
+                                            (myOccupant?.nick ??
+                                                    chatEntity?.myNickname)
+                                                ?.trim();
                                         final isMucSelf = isGroupChat &&
                                             (_isSameOccupantId(
                                                   e.senderJid,
@@ -4436,7 +4442,12 @@ class _ChatState extends State<Chat> {
                                                 _isSameOccupantId(
                                                   e.occupantID,
                                                   myOccupantId,
-                                                ));
+                                                ) ||
+                                                (selfNick != null &&
+                                                    selfNick.isNotEmpty &&
+                                                    senderNick != null &&
+                                                    senderNick.isNotEmpty &&
+                                                    senderNick == selfNick));
                                         final isSelf = isSelfXmpp ||
                                             isSelfEmail ||
                                             isMucSelf ||
@@ -4451,19 +4462,21 @@ class _ChatState extends State<Chat> {
                                         final isEmailMessage =
                                             e.deltaMsgId != null;
                                         final fallbackNick =
-                                            _nickFromSender(e.senderJid) ??
+                                            senderNick ??
                                                 state.chat?.title ??
                                                 '';
+                                        final authorLabel =
+                                            (isSelf
+                                                ? user.firstName
+                                                : (occupant?.nick ??
+                                                    fallbackNick)) ??
+                                                '';
+                                        final authorId = isGroupChat
+                                            ? (isSelf ? user.id : authorLabel)
+                                            : (isSelf ? user.id : e.senderJid);
                                         final author = ChatUser(
-                                          id: isGroupChat
-                                              ? occupantId!
-                                              : (isSelf
-                                                  ? user.id
-                                                  : e.senderJid),
-                                          firstName: isSelf
-                                              ? user.firstName
-                                              : (occupant?.nick ??
-                                                  fallbackNick),
+                                          id: authorId,
+                                          firstName: authorLabel,
                                         );
                                         final quotedMessage = e.quoting == null
                                             ? null
@@ -7561,16 +7574,23 @@ class _ChatState extends State<Chat> {
                                                                             _QuotedMessagePreview(
                                                                           message:
                                                                               quotedModel,
-                                                                          isSelf:
-                                                                              _isQuotedMessageFromSelf(
-                                                                            quotedMessage:
+                                                                          senderLabel:
+                                                                              _resolveSenderLabel(
+                                                                            context:
+                                                                                context,
+                                                                            message:
                                                                                 quotedModel,
-                                                                            isGroupChat:
-                                                                                isGroupChat,
-                                                                            myOccupantId:
-                                                                                myOccupantId,
-                                                                            currentUserId:
-                                                                                currentUserId,
+                                                                            isSelf:
+                                                                                _isQuotedMessageFromSelf(
+                                                                              quotedMessage:
+                                                                                  quotedModel,
+                                                                              isGroupChat:
+                                                                                  isGroupChat,
+                                                                              myOccupantId:
+                                                                                  myOccupantId,
+                                                                              currentUserId:
+                                                                                  currentUserId,
+                                                                            ),
                                                                           ),
                                                                         ),
                                                                       ),
@@ -12547,10 +12567,13 @@ class _ReactionAddButton extends StatelessWidget {
 }
 
 class _QuotedMessagePreview extends StatelessWidget {
-  const _QuotedMessagePreview({required this.message, required this.isSelf});
+  const _QuotedMessagePreview({
+    required this.message,
+    required this.senderLabel,
+  });
 
   final Message message;
-  final bool isSelf;
+  final String senderLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -12558,7 +12581,7 @@ class _QuotedMessagePreview extends StatelessWidget {
     final mutedStyle = context.textTheme.small.copyWith(
       color: colors.mutedForeground,
     );
-    final senderLabel = isSelf ? context.l10n.chatSenderYou : message.senderJid;
+    final resolvedSenderLabel = senderLabel.trim();
     return Builder(
       builder: (context) {
         final split = ChatSubjectCodec.splitXmppBody(message.body);
@@ -12570,7 +12593,7 @@ class _QuotedMessagePreview extends StatelessWidget {
           spacing: calendarInsetSm,
           children: [
             Text(
-              '${context.l10n.chatReplyingTo} $senderLabel',
+              '${context.l10n.chatReplyingTo} $resolvedSenderLabel',
               style: mutedStyle,
             ),
             Text(

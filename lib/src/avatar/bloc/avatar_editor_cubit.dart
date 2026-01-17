@@ -295,6 +295,29 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   Future<void> shuffleCarousel(ShadColorScheme colors) async {
     _carouselColors = colors;
+    if (state.draft != null ||
+        state.sourceBytes != null ||
+        state.previewBytes != null ||
+        state.template != null ||
+        state.source == AvatarSource.upload) {
+      _carouselBuffer.clear();
+      _currentCarouselAvatar = null;
+      _stopAvatarCarousel();
+      _emitIfOpen(
+        state.copyWith(
+          source: AvatarSource.template,
+          clearDraft: true,
+          clearPreviewBytes: true,
+          clearSourceBytes: true,
+          clearTemplate: true,
+          clearCarouselPreviewBytes: true,
+          clearCarouselTemplate: true,
+          clearCarouselBackgroundColor: true,
+          clearError: true,
+        ),
+      );
+    }
+    _carouselEnabled = true;
     if (_isCarouselBlocked()) return;
     if (_carouselBuffer.isEmpty) {
       await _prefillCarousel(targetSize: 1);
