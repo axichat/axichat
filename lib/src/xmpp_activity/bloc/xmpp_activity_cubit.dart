@@ -83,7 +83,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   final XmppBase _xmppBase;
   final Duration _completedRetention;
   final Duration _failedRetention;
-  final Map<_XmppOperationKey, List<String>> _activeOperations = {};
+  final Map<_XmppOperationKey, _XmppOperationBatch> _activeOperations = {};
   final Map<String, Timer> _retentionTimers = {};
   late final StreamSubscription<XmppOperationEvent> _subscription;
 
@@ -92,30 +92,48 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   void _handleEvent(XmppOperationEvent event) {
     final key = _XmppOperationKey(kind: event.kind);
     if (event.stage.isStart) {
-      final operationId = _startOperation(event.kind);
-      _activeOperations.putIfAbsent(key, () => <String>[]).add(operationId);
+      final _XmppOperationBatch? batch = _activeOperations[key];
+      if (batch == null) {
+        final String operationId = _startOperation(event.kind);
+        _activeOperations[key] = _XmppOperationBatch(
+          operationId: operationId,
+          pendingCount: 1,
+        );
+        return;
+      }
+      batch.pendingCount += 1;
       return;
     }
 
-    final ids = _activeOperations[key];
-    if (ids == null || ids.isEmpty) {
+    final _XmppOperationBatch? batch = _activeOperations[key];
+    if (batch == null) {
       _logger.fine(
         'Received XMPP activity end without recorded start: ${event.kind}.',
       );
       return;
     }
 
-    final operationId = ids.removeLast();
-    if (ids.isEmpty) {
-      _activeOperations.remove(key);
-    }
-
-    if (!event.isSuccess) {
-      _failOperation(operationId);
+    if (batch.pendingCount <= 0) {
+      _logger.fine(
+        'Received XMPP activity end without active count: ${event.kind}.',
+      );
       return;
     }
 
-    _completeOperation(operationId);
+    batch
+      ..pendingCount -= 1
+      ..lastSuccess = event.isSuccess;
+
+    if (batch.pendingCount > 0) {
+      return;
+    }
+
+    _activeOperations.remove(key);
+    if (batch.lastSuccess) {
+      _completeOperation(batch.operationId);
+      return;
+    }
+    _failOperation(batch.operationId);
   }
 
   String _startOperation(XmppOperationKind kind) {
@@ -290,4 +308,13 @@ class _XmppOperationKey {
 
   @override
   int get hashCode => kind.hashCode;
+}
+
+class _XmppOperationBatch {
+  _XmppOperationBatch({required this.operationId, required this.pendingCount})
+      : lastSuccess = true;
+
+  final String operationId;
+  int pendingCount;
+  bool lastSuccess;
 }
