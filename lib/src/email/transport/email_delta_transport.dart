@@ -141,6 +141,7 @@ class EmailDeltaTransport implements ChatTransport {
   final Map<int, StreamSubscription<DeltaCoreEvent>> _eventSubscriptions = {};
   final Map<int, Future<void>> _accountOpening = {};
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
+  StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
 
   String? _databasePrefix;
   String? _databasePassphrase;
@@ -482,6 +483,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   @override
   Future<void> stop() async {
+    await _cancelAccountsEventSubscription();
     for (final subscription in _eventSubscriptions.values) {
       await subscription.cancel();
     }
@@ -620,6 +622,8 @@ class EmailDeltaTransport implements ChatTransport {
   bool get accountsActive => _accounts != null;
 
   int get activeAccountId => _defaultAccountId ?? deltaAccountIdLegacy;
+
+  bool get isIoRunning => _ioRunning;
 
   void setPrimaryAccountId(int? accountId) {
     _primaryAccountId = accountId;
@@ -879,6 +883,10 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   void _attachEventSubscription(_DeltaAccountSession session) {
+    if (_accounts != null) {
+      _ensureAccountsEventSubscription();
+      return;
+    }
     if (_eventSubscriptions.containsKey(session.accountId)) {
       return;
     }
@@ -886,6 +894,59 @@ class EmailDeltaTransport implements ChatTransport {
       await _handleEvent(event: event, consumer: session.consumer);
     });
     _eventSubscriptions[session.accountId] = subscription;
+  }
+
+  void _ensureAccountsEventSubscription() {
+    if (_accountsEventSubscription != null) {
+      return;
+    }
+    final accounts = _accounts;
+    if (accounts == null) {
+      return;
+    }
+    _accountsEventSubscription = accounts.events().listen((event) async {
+      await _handleAccountsEvent(event);
+    });
+  }
+
+  Future<void> _cancelAccountsEventSubscription() async {
+    final subscription = _accountsEventSubscription;
+    if (subscription == null) {
+      return;
+    }
+    _accountsEventSubscription = null;
+    await subscription.cancel();
+  }
+
+  int? _eventAccountId(DeltaCoreEvent event) {
+    final accountId = event.accountId;
+    if (accountId != null && accountId != deltaAccountIdLegacy) {
+      return accountId;
+    }
+    final primary = _primaryAccountId;
+    if (primary != null) {
+      return primary;
+    }
+    const int singleSessionCount = 1;
+    if (_accountSessions.length == singleSessionCount) {
+      return _accountSessions.keys.first;
+    }
+    return null;
+  }
+
+  Future<void> _handleAccountsEvent(DeltaCoreEvent event) async {
+    final accountId = _eventAccountId(event);
+    if (accountId == null) {
+      _log.fine('Delta event missing account id; skipping.');
+      return;
+    }
+    final session = await _ensureSession(accountId: accountId);
+    final consumer = session?.consumer;
+    if (consumer == null) {
+      _log.warning('Delta event for account $accountId without session.');
+      return;
+    }
+    await _handleEvent(event: event, consumer: consumer);
   }
 
   Future<void> _handleEvent({
@@ -923,6 +984,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   Future<void> _clearSessions() async {
+    await _cancelAccountsEventSubscription();
     for (final subscription in _eventSubscriptions.values) {
       await subscription.cancel();
     }
