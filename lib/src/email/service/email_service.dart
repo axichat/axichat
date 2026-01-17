@@ -515,6 +515,9 @@ class EmailService {
   bool get hasActiveSession =>
       _databasePrefix != null && _databasePassphrase != null;
 
+  bool get hasInMemoryReconnectContext =>
+      hasActiveSession && _activeCredentialScope != null;
+
   Stream<DeltaCoreEvent> get events => _transport.events;
 
   EmailSyncState get syncState => _syncState;

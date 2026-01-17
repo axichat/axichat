@@ -99,6 +99,7 @@ class AxiSheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget? fixedBody = body;
     final List<Widget>? scrollChildren = _scrollChildren;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     if (fixedBody != null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -106,7 +107,11 @@ class AxiSheetScaffold extends StatelessWidget {
         children: [
           header,
           Flexible(fit: FlexFit.loose, child: fixedBody),
-          if (footer != null) footer!,
+          if (footer != null)
+            Padding(
+              padding: EdgeInsets.only(bottom: keyboardInset),
+              child: footer!,
+            ),
         ],
       );
     }
@@ -150,7 +155,7 @@ class _AxiSheetScrollableBody extends StatefulWidget {
 
 class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
   final ScrollController _scrollController = ScrollController();
-  double _bottomInset = 0;
+  double _scrollExtent = 0;
 
   @override
   void dispose() {
@@ -158,46 +163,74 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
     super.dispose();
   }
 
-  void _scheduleInsetSync() {
+  void _scheduleExtentSync() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
       final double scrollExtent = _scrollController.position.maxScrollExtent;
-      const double scrollExtentThreshold = 0;
-      const double zeroInset = 0;
-      final double nextInset =
-          scrollExtent > scrollExtentThreshold ? keyboardInset : zeroInset;
-      if (nextInset == _bottomInset) return;
-      setState(() => _bottomInset = nextInset);
+      if (scrollExtent == _scrollExtent) return;
+      setState(() => _scrollExtent = scrollExtent);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    _scheduleInsetSync();
+    _scheduleExtentSync();
     final EdgeInsets resolvedPadding = widget.bodyPadding ?? EdgeInsets.zero;
-    final double bottomPadding = resolvedPadding.bottom + _bottomInset;
-    final EdgeInsets padding = resolvedPadding.copyWith(
-      bottom: bottomPadding,
-    );
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double scrollExtent = _scrollExtent;
+    const double scrollExtentThreshold = 0;
     const double footerSpacing = 12;
 
-    return Scrollbar(
+    if (scrollExtent > scrollExtentThreshold) {
+      final double bottomPadding = resolvedPadding.bottom + keyboardInset;
+      final EdgeInsets padding = resolvedPadding.copyWith(
+        bottom: bottomPadding,
+      );
+      return Scrollbar(
+        thumbVisibility: true,
+        child: ListView(
+          controller: _scrollController,
+          padding: padding,
+          shrinkWrap: true,
+          physics: widget.scrollPhysics,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+          children: [
+            ...widget.children,
+            if (widget.footer != null) ...[
+              const SizedBox(height: footerSpacing),
+              widget.footer!,
+            ],
+          ],
+        ),
+      );
+    }
+
+    final Widget list = Scrollbar(
       thumbVisibility: true,
       child: ListView(
         controller: _scrollController,
-        padding: padding,
+        padding: resolvedPadding,
         shrinkWrap: true,
         physics: widget.scrollPhysics,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-        children: [
-          ...widget.children,
-          if (widget.footer != null) ...[
-            const SizedBox(height: footerSpacing),
-            widget.footer!,
-          ],
-        ],
+        children: widget.children,
       ),
+    );
+    final Widget? footer = widget.footer;
+    if (footer == null) {
+      return list;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        list,
+        const SizedBox(height: footerSpacing),
+        Padding(
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: footer,
+        ),
+      ],
     );
   }
 }
