@@ -35,8 +35,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const Duration _mutedForeverDuration = Duration(days: 3650);
   static const String _conversationIndexLoginSyncOperationName =
       'ChatsService.syncConversationIndexOnLogin';
-  static const String _ensureJoinedForChatStateOperationName =
-      'ChatsService.ensureJoinedForChatState';
   static const String _mucChatStatePlaceholderBody = '';
   static const List<mox.MessageProcessingHint> _mucChatStateProcessingHints = [
     mox.MessageProcessingHint.noStore,
@@ -486,12 +484,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       mucRoomJid = roomJid;
       final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
       if (!hasPresence) {
-        fireAndForget(
-          () async {
-            await ensureJoined(roomJid: roomJid, allowRejoin: true);
-          },
-          operationName: _ensureJoinedForChatStateOperationName,
-        );
         return;
       }
     }

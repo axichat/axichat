@@ -1006,7 +1006,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
           onLeaveRoom: onLeaveRoom,
           currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
           onClose: onClose,
-          useSurface: false,
+          useSurface: true,
         );
       },
     );
@@ -1872,13 +1872,11 @@ class _ChatState extends State<Chat> {
       barrierColor: Colors.black.withValues(alpha: 0.45),
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
-        return Align(
-          alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: drawerWidth,
-            child: Material(
-              color: context.colorScheme.background,
-              elevation: 12,
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: drawerWidth,
               child: MultiBlocProvider(
                 providers: [
                   BlocProvider.value(value: locate<ChatBloc>()),
@@ -4461,7 +4459,9 @@ class _ChatState extends State<Chat> {
                                             isMucSelf ||
                                             isDeltaPlaceholderSender;
                                         final occupantId = isGroupChat
-                                            ? (isSelf ? user.id : e.senderJid)
+                                            ? (isSelf
+                                                ? (myOccupantId ?? user.id)
+                                                : e.senderJid)
                                             : null;
                                         final occupant = !isGroupChat
                                             ? null
@@ -4478,9 +4478,8 @@ class _ChatState extends State<Chat> {
                                                 : (occupant?.nick ??
                                                     fallbackNick)) ??
                                             '';
-                                        final authorId = isGroupChat
-                                            ? (isSelf ? user.id : authorLabel)
-                                            : (isSelf ? user.id : e.senderJid);
+                                        final authorId =
+                                            isSelf ? user.id : e.senderJid;
                                         final author = ChatUser(
                                           id: authorId,
                                           firstName: authorLabel,
