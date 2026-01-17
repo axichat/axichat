@@ -4460,7 +4460,7 @@ class _ChatState extends State<Chat> {
                                             isDeltaPlaceholderSender;
                                         final occupantId = isGroupChat
                                             ? (isSelf
-                                                ? (myOccupantId ?? user.id)
+                                                ? myOccupantId
                                                 : e.senderJid)
                                             : null;
                                         final occupant = !isGroupChat
