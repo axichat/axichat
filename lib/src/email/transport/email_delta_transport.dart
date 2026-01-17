@@ -1047,7 +1047,6 @@ class EmailDeltaTransport implements ChatTransport {
       return false;
     }
 
-    var resetAttempted = false;
     while (true) {
       try {
         _accounts ??= await _createAccounts(prefix);
@@ -1076,26 +1075,27 @@ class EmailDeltaTransport implements ChatTransport {
       } on DeltaSafeException catch (error, stackTrace) {
         if (!shouldRetry(error)) {
           _log.warning(
-            'Delta accounts ensureAccount failed; disabling accounts support',
+            'Delta accounts ensureAccount failed',
             error,
             stackTrace,
           );
-          _accountsSupported = false;
           await _accounts?.dispose();
           _accounts = null;
           _context = null;
           _contextOpened = false;
           await _clearSessions();
-          return false;
+          rethrow;
         }
         _log.warning(
-          'Delta accounts ensureAccount failed, resetting storage',
+          'Delta accounts ensureAccount failed; retrying',
           error,
           stackTrace,
         );
-        await _resetAccountsStorage(prefix);
         await _accounts?.dispose();
         _accounts = null;
+        _context = null;
+        _contextOpened = false;
+        await _clearSessions();
         continue;
       }
       _context ??= _accounts!.contextFor(accountId);
@@ -1104,29 +1104,24 @@ class EmailDeltaTransport implements ChatTransport {
           await _context!.open(passphrase: passphrase);
           _contextOpened = true;
         } on DeltaSafeException catch (error, stackTrace) {
-          final retry = shouldRetry(error) ||
-              (resetAttempted == false && !_accountsSupported);
-          if (!retry) {
+          if (!shouldRetry(error)) {
             _log.warning(
-              'Failed to open Delta account at ${databaseFile.path}; disabling accounts support',
+              'Failed to open Delta account at ${databaseFile.path}',
               error,
               stackTrace,
             );
-            _accountsSupported = false;
             await _accounts?.dispose();
             _accounts = null;
             _context = null;
             _contextOpened = false;
             await _clearSessions();
-            return false;
+            rethrow;
           }
-          resetAttempted = true;
           _log.warning(
-            'Failed to open Delta account at ${databaseFile.path}, resetting storage',
+            'Failed to open Delta account at ${databaseFile.path}; retrying',
             error,
             stackTrace,
           );
-          await _resetAccountsStorage(prefix);
           await _accounts?.dispose();
           _accounts = null;
           _context = null;
@@ -1146,7 +1141,6 @@ class EmailDeltaTransport implements ChatTransport {
   Future<void> _openSingleContext(String prefix, String passphrase) async {
     final file = await _deltaDatabaseFile(prefix);
     await file.parent.create(recursive: true);
-    var resetAttempted = false;
     while (true) {
       if (_context == null) {
         _log.fine('Opening Delta context at ${file.path}');
@@ -1173,12 +1167,8 @@ class EmailDeltaTransport implements ChatTransport {
           accountId: deltaAccountIdLegacy,
         );
       } on DeltaSafeException catch (error, stackTrace) {
-        if (resetAttempted) {
-          rethrow;
-        }
-        resetAttempted = true;
         _log.warning(
-          'Delta context open failed, resetting mailbox database at ${file.path}',
+          'Delta context open failed at ${file.path}',
           error,
           stackTrace,
         );
@@ -1186,8 +1176,7 @@ class EmailDeltaTransport implements ChatTransport {
         _context = null;
         _contextOpened = false;
         await _clearSessions();
-        await _deleteDatabaseArtifacts(file);
-        continue;
+        rethrow;
       }
     }
   }
@@ -1914,15 +1903,11 @@ class EmailDeltaTransport implements ChatTransport {
     } on DeltaSafeException catch (error, stackTrace) {
       await logAccountsDirState('initial create');
       _log.warning(
-        'Failed to open Delta accounts at ${directory.path}, resetting storage',
+        'Failed to open Delta accounts at ${directory.path}',
         error,
         stackTrace,
       );
-      await _resetAccountsStorage(prefix);
-      if (parent.path != directory.path) {
-        await parent.create(recursive: true);
-      }
-      return _deltaSafe.createAccounts(directory: directory.path);
+      rethrow;
     }
   }
 
