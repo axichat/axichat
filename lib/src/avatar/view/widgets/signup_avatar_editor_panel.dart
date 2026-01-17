@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:animations/animations.dart';
@@ -27,7 +26,6 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     required this.onUpload,
     required this.canShuffleBackground,
     this.onUseCurrent,
-    this.showUseAction = false,
     this.useActionEnabled = false,
     this.onShuffleBackground,
     this.cropBytes,
@@ -46,7 +44,6 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final bool canShuffleBackground;
   final Future<void> Function()? onShuffleBackground;
   final VoidCallback? onUseCurrent;
-  final bool showUseAction;
   final bool useActionEnabled;
   final Uint8List? cropBytes;
   final Rect? cropRect;
@@ -66,21 +63,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
 
   bool _shuffling = false;
   bool _shufflingBackground = false;
-  bool _pinUseAction = false;
-  Timer? _pinUseActionTimer;
   int _previewVersion = 0;
   Uint8List? _lastPreviewBytes;
   Rect? _localCropRect;
   Rect? _pendingCropRect;
   bool _cropChangeScheduled = false;
   bool _fallbackAvatarPrecached = false;
-
-  @override
-  void dispose() {
-    _pinUseActionTimer?.cancel();
-    _pinUseActionTimer = null;
-    super.dispose();
-  }
 
   @override
   void didUpdateWidget(covariant SignupAvatarEditorPanel oldWidget) {
@@ -156,16 +144,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     });
   }
 
-  void _handleUseCurrent() {
-    _pinUseActionTimer?.cancel();
-    setState(() => _pinUseAction = true);
-    _pinUseActionTimer = Timer(baseAnimationDuration, () {
-      if (!mounted) return;
-      setState(() => _pinUseAction = false);
-    });
-    widget.onUseCurrent?.call();
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -174,7 +152,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     const avatarActionIconSize = 20.0;
     final showCrop = widget.mode == AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
-    final showUseAction = widget.showUseAction;
     final cropBytes = showCrop ? widget.cropBytes ?? _lastPreviewBytes : null;
     final imageWidth = showCrop ? widget.imageWidth : null;
     final imageHeight = showCrop ? widget.imageHeight : null;
@@ -241,11 +218,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final allowBackgroundShuffle =
         widget.canShuffleBackground && widget.onShuffleBackground != null;
     final showBackgroundShuffle = allowBackgroundShuffle;
-    final showPinnedUseAction = showUseAction || _pinUseAction;
-    final allowUseAction = showPinnedUseAction &&
-        widget.useActionEnabled &&
-        !busy &&
-        widget.onUseCurrent != null;
+    final allowUseAction =
+        widget.useActionEnabled && !busy && widget.onUseCurrent != null;
 
     final previewKey = ValueKey(_previewVersion);
     final resolvedPreviewBytes = widget.avatarBytes?.isNotEmpty == true
@@ -306,27 +280,17 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           spacing: avatarActionSpacing,
           runSpacing: avatarActionSpacing,
           children: [
-            if (showPinnedUseAction)
-              IgnorePointer(
-                ignoring: _pinUseAction && !allowUseAction,
-                child: AxiTapBounce(
-                  enabled: _pinUseAction || allowUseAction,
-                  child: ShadButton(
-                    onPressed: allowUseAction ? _handleUseCurrent : null,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: avatarActionSpacing,
-                      children: [
-                        const Icon(
-                          LucideIcons.check,
-                          size: avatarActionIconSize,
-                        ),
-                        Text(l10n.avatarUseThis),
-                      ],
-                    ),
-                  ),
-                ),
+            ShadButton(
+              onPressed: allowUseAction ? widget.onUseCurrent : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: avatarActionSpacing,
+                children: [
+                  const Icon(LucideIcons.check, size: avatarActionIconSize),
+                  Text(l10n.avatarUseThis),
+                ],
               ),
+            ).withTapBounce(enabled: allowUseAction),
             ShadButton(
               onPressed: busy ? null : _handleShuffle,
               child: Row(

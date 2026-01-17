@@ -132,8 +132,9 @@ class SignupAvatarState extends Equatable {
           : carouselPreviewBytes ?? this.carouselPreviewBytes,
       processing: processing ?? this.processing,
       error: clearError ? null : error ?? this.error,
-      backgroundLocked:
-          clearBackgroundLock ? false : backgroundLocked ?? this.backgroundLocked,
+      backgroundLocked: clearBackgroundLock
+          ? false
+          : backgroundLocked ?? this.backgroundLocked,
       lockedBackgroundColor: clearBackgroundLock
           ? null
           : lockedBackgroundColor ?? this.lockedBackgroundColor,
@@ -330,8 +331,24 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> shuffleCarouselBackground(ShadColorScheme colors) async {
     _colors = colors;
-    if (state.processing || state.hasUserSelectedAvatar || !_carouselEnabled) {
-      return;
+    if (!_carouselEnabled || state.processing) return;
+    if (state.hasUserSelectedAvatar) {
+      _carouselBuffer.clear();
+      _currentCarouselAvatar = null;
+      _stopAvatarCarousel();
+      emit(
+        state.copyWith(
+          processing: false,
+          clearAvatar: true,
+          clearAvatarPreviewBytes: true,
+          clearCarouselPreviewBytes: true,
+          clearActiveTemplate: true,
+          clearActiveCategory: true,
+          clearBackgroundLock: true,
+          clearCrop: true,
+          clearError: true,
+        ),
+      );
     }
     final current = _currentCarouselAvatar;
     final template = current?.template;

@@ -1579,6 +1579,78 @@ class _ChatState extends State<Chat> {
     return nick.isEmpty ? null : nick;
   }
 
+  Occupant? _resolveOccupantForMessage(
+    Message message,
+    RoomState? roomState,
+  ) {
+    final resolvedRoomState = roomState;
+    if (resolvedRoomState == null) {
+      return null;
+    }
+    final occupantId = message.occupantID?.trim();
+    if (occupantId != null && occupantId.isNotEmpty) {
+      final occupant = resolvedRoomState.occupants[occupantId];
+      if (occupant != null) {
+        return occupant;
+      }
+    }
+    final direct = resolvedRoomState.occupants[message.senderJid];
+    if (direct != null) {
+      return direct;
+    }
+    final nick = _nickFromSender(message.senderJid);
+    if (nick == null) {
+      return null;
+    }
+    for (final occupant in resolvedRoomState.occupants.values) {
+      if (occupant.nick == nick) {
+        return occupant;
+      }
+    }
+    return null;
+  }
+
+  String _resolveSenderLabel({
+    required BuildContext context,
+    required Message message,
+    required bool isSelf,
+    required chat_models.Chat? chat,
+    required RoomState? roomState,
+  }) {
+    final l10n = context.l10n;
+    final trimmedSelfLabel = l10n.chatSenderYou.trim();
+    if (isSelf) {
+      final displayName = chat?.displayName ?? '';
+      return trimmedSelfLabel.isNotEmpty ? trimmedSelfLabel : displayName;
+    }
+    if (chat == null) {
+      final fallback = message.senderJid.trim();
+      return fallback.isNotEmpty ? fallback : '';
+    }
+    final isGroupChat = chat.type == ChatType.groupChat;
+    String? label;
+    if (isGroupChat) {
+      final occupant = _resolveOccupantForMessage(message, roomState);
+      final occupantNick = occupant?.nick;
+      final trimmedNick = occupantNick?.trim();
+      final nick = trimmedNick != null && trimmedNick.isNotEmpty
+          ? trimmedNick
+          : _nickFromSender(message.senderJid);
+      label = nick;
+    } else {
+      final displayName = chat.displayName.trim();
+      label = displayName.isNotEmpty ? displayName : null;
+    }
+    final senderFallback = message.senderJid.trim();
+    final fallback =
+        senderFallback.isNotEmpty ? senderFallback : chat.displayName;
+    final hasLabel = label != null && label.isNotEmpty;
+    final candidate = hasLabel ? label : fallback;
+    final sanitized = sanitizeUnicodeControls(candidate);
+    final safeLabel = sanitized.value.trim();
+    return safeLabel.isNotEmpty ? safeLabel : fallback;
+  }
+
   String? _bareJid(String? jid) {
     if (jid == null || jid.isEmpty) return null;
     try {
@@ -4430,10 +4502,9 @@ class _ChatState extends State<Chat> {
                                                     .isDeltaPlaceholderJid;
                                         final senderNick =
                                             _nickFromSender(e.senderJid);
-                                        final selfNick =
-                                            (myOccupant?.nick ??
-                                                    chatEntity?.myNickname)
-                                                ?.trim();
+                                        final selfNick = (myOccupant?.nick ??
+                                                chatEntity?.myNickname)
+                                            ?.trim();
                                         final isMucSelf = isGroupChat &&
                                             (_isSameOccupantId(
                                                   e.senderJid,
@@ -4461,16 +4532,14 @@ class _ChatState extends State<Chat> {
                                                 ?.occupants[occupantId];
                                         final isEmailMessage =
                                             e.deltaMsgId != null;
-                                        final fallbackNick =
-                                            senderNick ??
-                                                state.chat?.title ??
-                                                '';
-                                        final authorLabel =
-                                            (isSelf
+                                        final fallbackNick = senderNick ??
+                                            state.chat?.title ??
+                                            '';
+                                        final authorLabel = (isSelf
                                                 ? user.firstName
                                                 : (occupant?.nick ??
                                                     fallbackNick)) ??
-                                                '';
+                                            '';
                                         final authorId = isGroupChat
                                             ? (isSelf ? user.id : authorLabel)
                                             : (isSelf ? user.id : e.senderJid);
@@ -7582,15 +7651,15 @@ class _ChatState extends State<Chat> {
                                                                                 quotedModel,
                                                                             isSelf:
                                                                                 _isQuotedMessageFromSelf(
-                                                                              quotedMessage:
-                                                                                  quotedModel,
-                                                                              isGroupChat:
-                                                                                  isGroupChat,
-                                                                              myOccupantId:
-                                                                                  myOccupantId,
-                                                                              currentUserId:
-                                                                                  currentUserId,
+                                                                              quotedMessage: quotedModel,
+                                                                              isGroupChat: isGroupChat,
+                                                                              myOccupantId: myOccupantId,
+                                                                              currentUserId: currentUserId,
                                                                             ),
+                                                                            chat:
+                                                                                chatEntity,
+                                                                            roomState:
+                                                                                state.roomState,
                                                                           ),
                                                                         ),
                                                                       ),

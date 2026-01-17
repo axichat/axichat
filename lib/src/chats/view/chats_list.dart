@@ -507,9 +507,8 @@ class _ChatListTileState extends State<ChatListTile> {
     final selectionOverlay = colors.primary.withValues(
       alpha: brightness == Brightness.dark ? 0.12 : 0.06,
     );
-    final tileBackgroundColor = isOpen
-        ? Color.alphaBlend(selectionOverlay, colors.card)
-        : colors.card;
+    final tileBackgroundColor =
+        isOpen ? Color.alphaBlend(selectionOverlay, colors.card) : colors.card;
     late final VoidCallback tileOnTap;
     if (chatsState() == null) {
       tileOnTap = () async {
