@@ -23,7 +23,7 @@ const double _guideItemSpacing = 8.0;
 const double _guideLinkSpacing = 12.0;
 const double _guideLinkRunSpacing = 8.0;
 const double _guideAddressPadding = 12.0;
-const bool _forceShowEmailForwardingWelcome = false;
+const bool _forceShowEmailForwardingWelcome = true;
 const String _emptyForwardingAddress = '';
 
 const String _gmailForwardingUrl =
