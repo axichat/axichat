@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/common/ui/in_bounds_fade_scale.dart';
+import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -24,6 +25,15 @@ const double _progressIndicatorSize = 18.0;
 const double _progressIndicatorStrokeWidth = 2.2;
 const double _statusIconSize = 20.0;
 const double _surfaceBackgroundAlpha = 0.12;
+const Duration _entryFallbackDuration = Duration(milliseconds: 300);
+const double _entryOpacityStart = 0.0;
+const double _entryOpacityEnd = 1.0;
+const double _entrySizeStart = 0.0;
+const double _entrySizeEnd = 1.0;
+const double _entrySlideXOffset = 0.0;
+const double _entrySlideYOffset = 0.2;
+const double _entrySizeAlignment = 1.0;
+const Curve _entryAnimationCurve = Curves.easeOutCubic;
 
 const EdgeInsets _toastPadding = EdgeInsets.symmetric(
   horizontal: _toastHorizontalPadding,
@@ -45,6 +55,12 @@ class XmppOperationOverlay extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+        final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
+        final Duration entryDuration = settingsCubit == null
+            ? _entryFallbackDuration
+            : context.select<SettingsCubit, Duration>(
+                (cubit) => cubit.animationDuration,
+              );
         return IgnorePointer(
           ignoring: true,
           child: Align(
@@ -70,17 +86,10 @@ class XmppOperationOverlay extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final reverseIndex = operations.length - 1 - index;
                     final operation = operations[reverseIndex];
-                    return Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: _overlayItemSpacing,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: InBoundsFadeScale(
-                          key: ValueKey(operation.id),
-                          child: _XmppOperationToast(operation: operation),
-                        ),
-                      ),
+                    return XmppOperationToastEntry(
+                      key: ValueKey(operation.id),
+                      operation: operation,
+                      entryDuration: entryDuration,
                     );
                   },
                 ),
@@ -90,6 +99,115 @@ class XmppOperationOverlay extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class XmppOperationToastEntry extends StatelessWidget {
+  const XmppOperationToastEntry({
+    super.key,
+    required this.operation,
+    required this.entryDuration,
+  });
+
+  final XmppOperation operation;
+  final Duration entryDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _overlayItemSpacing),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: XmppOperationEntryTransition(
+          duration: entryDuration,
+          child: _XmppOperationToast(operation: operation),
+        ),
+      ),
+    );
+  }
+}
+
+class XmppOperationEntryTransition extends StatefulWidget {
+  const XmppOperationEntryTransition({
+    super.key,
+    required this.duration,
+    required this.child,
+  });
+
+  final Duration duration;
+  final Widget child;
+
+  @override
+  State<XmppOperationEntryTransition> createState() =>
+      _XmppOperationEntryTransitionState();
+}
+
+class _XmppOperationEntryTransitionState
+    extends State<XmppOperationEntryTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<double> _sizeAnimation;
+  late final Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: widget.duration, vsync: this);
+    final CurvedAnimation curve = CurvedAnimation(
+      parent: _controller,
+      curve: _entryAnimationCurve,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: _entryOpacityStart,
+      end: _entryOpacityEnd,
+    ).animate(curve);
+    _sizeAnimation = Tween<double>(
+      begin: _entrySizeStart,
+      end: _entrySizeEnd,
+    ).animate(curve);
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(_entrySlideXOffset, _entrySlideYOffset),
+      end: Offset.zero,
+    ).animate(curve);
+    _startAnimation();
+  }
+
+  void _startAnimation() {
+    if (widget.duration == Duration.zero) {
+      _controller.value = _entryOpacityEnd;
+      return;
+    }
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant XmppOperationEntryTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: _sizeAnimation,
+      axisAlignment: _entrySizeAlignment,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: _slideAnimation,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }
 
