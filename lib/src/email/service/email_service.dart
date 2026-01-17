@@ -2727,9 +2727,10 @@ class EmailService {
       return;
     }
     try {
-      await handleNetworkAvailable();
-      await performBackgroundFetch(timeout: _foregroundFetchTimeout);
-      await refreshChatlistFromCore();
+      await _transport.notifyNetworkAvailable();
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.connectivityConfirm,
+      );
     } on Exception catch (error, stackTrace) {
       _log.finer('Foreground keepalive tick failed', error, stackTrace);
     }
@@ -2737,6 +2738,9 @@ class EmailService {
 
   void _startImapSyncLoop() {
     if (!hasActiveSession) {
+      return;
+    }
+    if (_transport.isIoRunning) {
       return;
     }
     if (_imapSyncLoopActive) {
@@ -2773,6 +2777,10 @@ class EmailService {
       _stopImapSyncLoop();
       return;
     }
+    if (_transport.isIoRunning) {
+      _stopImapSyncLoop();
+      return;
+    }
     if (_imapSyncInFlight) {
       _scheduleNextImapSync();
       return;
@@ -2780,7 +2788,7 @@ class EmailService {
     _imapSyncInFlight = true;
     try {
       await _refreshImapCapabilities();
-      await performBackgroundFetch(timeout: _imapSyncFetchTimeout);
+      await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
       await refreshChatlistFromCore();
     } finally {
       _imapSyncInFlight = false;
