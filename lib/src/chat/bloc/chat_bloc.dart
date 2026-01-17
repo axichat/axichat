@@ -1010,9 +1010,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _roomSubscription?.cancel();
     _roomSubscription = null;
     if (event.chat.type == ChatType.groupChat) {
-      _roomSubscription = _mucService
-          .roomStateStream(event.chat.jid)
-          .listen((room) => add(_RoomStateUpdated(room)));
+      _roomSubscription =
+          _mucService.roomStateStream(event.chat.jid).listen((room) {
+        if (isClosed) {
+          return;
+        }
+        add(_RoomStateUpdated(room));
+      });
       if (resetContext || state.roomState == null) {
         await _primeRoomState(event.chat);
       }

@@ -18,7 +18,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _guideSectionSpacing = 12.0;
 const double _guideItemSpacing = 8.0;
 const double _guideLinkSpacing = 12.0;
 const double _guideLinkRunSpacing = 8.0;
@@ -119,51 +118,81 @@ class EmailForwardingGuideDialog extends StatelessWidget {
 }
 
 class EmailForwardingWelcomeScreen extends StatelessWidget {
-  const EmailForwardingWelcomeScreen({
-    super.key,
-    required this.title,
-    required this.forwardingAddress,
-    required this.notificationService,
-    required this.capability,
-  });
-
-  final String title;
-  final String forwardingAddress;
-  final NotificationService notificationService;
-  final Capability capability;
+  const EmailForwardingWelcomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final forwardingAddress = _resolveForwardingAddress(context);
+    final notificationService = context.read<NotificationService>();
+    final capability = context.read<Capability>();
     const EdgeInsets headerPadding = EdgeInsets.fromLTRB(24, 24, 24, 12);
     const EdgeInsets contentPadding = EdgeInsets.fromLTRB(24, 0, 24, 24);
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: headerPadding,
-              child: Text(title, style: context.modalHeaderTextStyle),
+        child: EmailForwardingWelcomeLayout(
+          header: Padding(
+            padding: headerPadding,
+            child: Text(
+              l10n.emailForwardingWelcomeTitle,
+              style: context.modalHeaderTextStyle,
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: contentPadding,
-                child: EmailForwardingGuideContent(
-                  forwardingAddress: forwardingAddress,
-                  notificationService: notificationService,
-                  capability: capability,
-                ),
-              ),
+          ),
+          content: SingleChildScrollView(
+            padding: contentPadding,
+            child: EmailForwardingGuideContent(
+              forwardingAddress: forwardingAddress,
+              notificationService: notificationService,
+              capability: capability,
             ),
-            EmailForwardingWelcomeFooter(
-              hint: l10n.emailForwardingGuideSettingsHint,
-              actionLabel: l10n.emailForwardingGuideSkipLabel,
-              onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          footer: EmailForwardingWelcomeFooter(
+            hint: l10n.emailForwardingGuideSettingsHint,
+            actionLabel: l10n.emailForwardingGuideSkipLabel,
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class EmailForwardingWelcomeLayout extends StatelessWidget {
+  const EmailForwardingWelcomeLayout({
+    super.key,
+    required this.header,
+    required this.content,
+    required this.footer,
+  });
+
+  final Widget header;
+  final Widget content;
+  final Widget footer;
+
+  @override
+  Widget build(BuildContext context) {
+    const double maxWidth = 500;
+    return LayoutBuilder(
+      builder: (context, constraints) => Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: maxWidth,
+            minHeight: constraints.maxHeight,
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                header,
+                Expanded(child: content),
+                footer,
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -217,31 +246,49 @@ class EmailForwardingGuideContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final bodyStyle = context.textTheme.p;
     final smallStyle = context.textTheme.small;
+    final subheaderStyle =
+        context.textTheme.large.copyWith(fontWeight: FontWeight.w600);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.emailForwardingGuideLinkExistingEmailTitle,
-            style: smallStyle),
+        Text(
+          l10n.emailForwardingGuideLinkExistingEmailTitle,
+          style: subheaderStyle,
+        ),
         const SizedBox(height: _guideItemSpacing),
-        Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
+        Text(l10n.emailForwardingGuideAddressHint, style: bodyStyle),
         const SizedBox(height: _guideItemSpacing),
         EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
-        const SizedBox(height: _guideSectionSpacing),
+        const EmailForwardingSectionDivider(),
         Text(l10n.emailForwardingGuideLinksTitle, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
         const EmailForwardingLinkRow(),
-        if (capability.canForegroundService) ...[
-          const SizedBox(height: _guideSectionSpacing),
-          Text(l10n.emailForwardingGuideNotificationsTitle, style: smallStyle),
-          const SizedBox(height: _guideItemSpacing),
-          NotificationRequest(
-            notificationService: notificationService,
-            capability: capability,
-          ),
-        ],
+        const EmailForwardingSectionDivider(),
+        Text(l10n.emailForwardingGuideNotificationsTitle,
+            style: subheaderStyle),
+        const SizedBox(height: _guideItemSpacing),
+        NotificationRequest(
+          notificationService: notificationService,
+          capability: capability,
+          displayMode: NotificationRequestDisplayMode.always,
+        ),
       ],
+    );
+  }
+}
+
+class EmailForwardingSectionDivider extends StatelessWidget {
+  const EmailForwardingSectionDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    const EdgeInsets padding = EdgeInsets.symmetric(vertical: 20);
+    return const Padding(
+      padding: padding,
+      child: AxiListDivider(),
     );
   }
 }
@@ -366,17 +413,11 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     _dialogShown = true;
-    final forwardingAddress = _resolveForwardingAddress(context);
     await Navigator.of(context).push<void>(
       AxiFadePageRoute(
         duration: baseAnimationDuration,
         fullscreenDialog: true,
-        builder: (routeContext) => EmailForwardingWelcomeScreen(
-          title: routeContext.l10n.emailForwardingWelcomeTitle,
-          forwardingAddress: forwardingAddress,
-          notificationService: routeContext.read<NotificationService>(),
-          capability: routeContext.read<Capability>(),
-        ),
+        builder: (routeContext) => const EmailForwardingWelcomeScreen(),
       ),
     );
     if (!mounted) {
