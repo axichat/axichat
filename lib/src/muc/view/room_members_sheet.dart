@@ -908,7 +908,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                     .resetCrop(),
                                 onShuffle: () => context
                                     .read<AvatarEditorCubit>()
-                                    .shuffleTemplate(context.colorScheme),
+                                    .shuffleCarousel(context.colorScheme),
                                 onUpload: () => context
                                     .read<AvatarEditorCubit>()
                                     .pickImage(),
@@ -918,12 +918,14 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                 showUseAction: showUseAction,
                                 useActionEnabled: useActionEnabled,
                                 canShuffleBackground:
-                                    avatarState.canShuffleBackground,
+                                    avatarState.hasCarouselPreview &&
+                                        avatarState.canShuffleBackground,
                                 onShuffleBackground:
-                                    avatarState.canShuffleBackground
+                                    avatarState.hasCarouselPreview &&
+                                            avatarState.canShuffleBackground
                                         ? () => context
                                             .read<AvatarEditorCubit>()
-                                            .shuffleBackground(
+                                            .shuffleCarouselBackground(
                                               context.colorScheme,
                                             )
                                         : null,

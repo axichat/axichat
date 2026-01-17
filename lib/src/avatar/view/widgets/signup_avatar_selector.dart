@@ -35,13 +35,18 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
   static const _size = 56.0;
   bool _hovered = false;
   int _previewVersion = 0;
+  Uint8List? _lastBytes;
   bool _fallbackAvatarPrecached = false;
 
   @override
   void didUpdateWidget(covariant SignupAvatarSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.bytes, widget.bytes)) {
+    final nextBytes = widget.bytes;
+    if (nextBytes != null &&
+        nextBytes.isNotEmpty &&
+        !identical(nextBytes, _lastBytes)) {
       _previewVersion++;
+      _lastBytes = nextBytes;
     }
   }
 
@@ -60,8 +65,10 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
         ? 'avatar@axichat'
         : '${widget.username}@preview';
     final overlayVisible = _hovered || widget.processing;
-    final bytes = widget.bytes;
-    final hasBytes = bytes != null && bytes.isNotEmpty;
+    final resolvedBytes = widget.bytes?.isNotEmpty == true
+        ? widget.bytes
+        : (_lastBytes?.isNotEmpty == true ? _lastBytes : null);
+    final hasBytes = resolvedBytes != null;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -95,7 +102,7 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                           size: _size,
                           subscription: Subscription.none,
                           presence: null,
-                          avatarBytes: bytes,
+                          avatarBytes: resolvedBytes,
                         )
                       : SizedBox.square(
                           key: ValueKey(_previewVersion),

@@ -85,9 +85,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   @override
   void didUpdateWidget(covariant SignupAvatarEditorPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.avatarBytes, widget.avatarBytes)) {
+    final nextBytes = widget.avatarBytes;
+    if (nextBytes != null &&
+        nextBytes.isNotEmpty &&
+        !identical(nextBytes, _lastPreviewBytes)) {
       _previewVersion++;
-      _lastPreviewBytes = widget.avatarBytes;
+      _lastPreviewBytes = nextBytes;
     }
     if (oldWidget.imageWidth != widget.imageWidth ||
         oldWidget.imageHeight != widget.imageHeight) {
@@ -245,8 +248,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         widget.onUseCurrent != null;
 
     final previewKey = ValueKey(_previewVersion);
-    final previewBytes = widget.avatarBytes;
-    final hasPreviewBytes = previewBytes != null && previewBytes.isNotEmpty;
+    final resolvedPreviewBytes = widget.avatarBytes?.isNotEmpty == true
+        ? widget.avatarBytes
+        : (_lastPreviewBytes?.isNotEmpty == true ? _lastPreviewBytes : null);
+    final hasPreviewBytes = resolvedPreviewBytes != null;
     Widget preview = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -269,7 +274,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                   size: 96,
                   subscription: Subscription.none,
                   presence: null,
-                  avatarBytes: previewBytes,
+                  avatarBytes: resolvedPreviewBytes,
                 )
               : SizedBox.square(
                   key: previewKey,

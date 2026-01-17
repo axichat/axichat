@@ -242,7 +242,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                             .resetCrop(),
                                         onShuffle: () => context
                                             .read<AvatarEditorCubit>()
-                                            .shuffleTemplate(
+                                            .shuffleCarousel(
                                               context.colorScheme,
                                             ),
                                         onUpload: () => context
@@ -253,16 +253,18 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                             .materializeCurrentCarouselAvatar(),
                                         showUseAction: showUseAction,
                                         useActionEnabled: useActionEnabled,
-                                        canShuffleBackground:
+                                        canShuffleBackground: avatarState
+                                                .hasCarouselPreview &&
                                             avatarState.canShuffleBackground,
-                                        onShuffleBackground:
-                                            avatarState.canShuffleBackground
-                                                ? () => context
-                                                    .read<AvatarEditorCubit>()
-                                                    .shuffleBackground(
-                                                      context.colorScheme,
-                                                    )
-                                                : null,
+                                        onShuffleBackground: avatarState
+                                                    .hasCarouselPreview &&
+                                                avatarState.canShuffleBackground
+                                            ? () => context
+                                                .read<AvatarEditorCubit>()
+                                                .shuffleCarouselBackground(
+                                                  context.colorScheme,
+                                                )
+                                            : null,
                                         descriptionText:
                                             l10n.mucAvatarMenuDescription,
                                       ),

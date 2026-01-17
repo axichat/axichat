@@ -271,6 +271,81 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
   }
 
+  Future<void> shuffleCarousel(ShadColorScheme colors) async {
+    _colors = colors;
+    if (state.processing || state.hasUserSelectedAvatar || !_carouselEnabled) {
+      return;
+    }
+    if (_carouselBuffer.isEmpty) {
+      await _prefillCarousel(
+          targetSize: 1, preferAbstract: !_nonAbstractAvatarsReady);
+    }
+    if (isClosed ||
+        state.processing ||
+        state.hasUserSelectedAvatar ||
+        !_carouselEnabled) {
+      return;
+    }
+    if (!_showNextCarouselAvatar(colors, allowFallback: false)) {
+      _showNextCarouselAvatar(colors, allowFallback: true);
+    }
+    await _prefillCarousel(
+      targetSize: _avatarCarouselSustainBuffer,
+      preferAbstract: !_nonAbstractAvatarsReady,
+    );
+  }
+
+  Future<void> shuffleCarouselBackground(ShadColorScheme colors) async {
+    _colors = colors;
+    if (state.processing || state.hasUserSelectedAvatar || !_carouselEnabled) {
+      return;
+    }
+    final current = _currentCarouselAvatar;
+    final template = current?.template;
+    if (current == null || template == null) return;
+    if (template.category == AvatarTemplateCategory.abstract) return;
+    if (!template.hasAlphaBackground) return;
+    final background = _randomAvatarBackgroundColor(colors);
+    emit(state.copyWith(processing: true, clearError: true));
+    try {
+      final payload = await _buildAvatarPayloadFromTemplate(
+        template: template,
+        background: background,
+        colors: colors,
+      );
+      if (isClosed || state.hasUserSelectedAvatar || !_carouselEnabled) {
+        return;
+      }
+      final updated = _CarouselAvatar(
+        payload: payload,
+        template: template,
+        category: template.category,
+        background: background,
+      );
+      _currentCarouselAvatar = updated;
+      emit(
+        state.copyWith(
+          processing: false,
+          carouselPreviewBytes: payload.bytes,
+          activeTemplate: template,
+          activeCategory: template.category,
+          backgroundColor: background,
+          clearError: true,
+        ),
+      );
+    } catch (_) {
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          processing: false,
+          error:
+              const SignupAvatarError(SignupAvatarErrorType.processingFailed),
+        ),
+      );
+      _resumeAvatarCarouselIfNeeded();
+    }
+  }
+
   Future<void> seedAvatarFromBytes(Uint8List bytes) async {
     if (bytes.isEmpty) return;
     _stopAvatarCarousel();

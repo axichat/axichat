@@ -128,8 +128,9 @@ class AvatarEditorState extends Equatable {
       carouselPreviewBytes: clearCarouselPreviewBytes
           ? null
           : carouselPreviewBytes ?? this.carouselPreviewBytes,
-      carouselTemplate:
-          clearCarouselTemplate ? null : carouselTemplate ?? this.carouselTemplate,
+      carouselTemplate: clearCarouselTemplate
+          ? null
+          : carouselTemplate ?? this.carouselTemplate,
       carouselBackgroundColor: clearCarouselBackgroundColor
           ? null
           : carouselBackgroundColor ?? this.carouselBackgroundColor,
@@ -611,7 +612,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           return added > 0;
         }
         _carouselBuffer.add(
-          _CarouselAvatar(payload: payload, template: template, background: background),
+          _CarouselAvatar(
+              payload: payload, template: template, background: background),
         );
         added++;
       }

@@ -724,7 +724,7 @@ class _SignupFormState extends State<SignupForm>
                                                       .resetCrop,
                                                   onShuffle: () => context
                                                       .read<SignupAvatarCubit>()
-                                                      .shuffleTemplate(
+                                                      .shuffleCarousel(
                                                         context.colorScheme,
                                                       ),
                                                   onUpload: context
@@ -737,15 +737,18 @@ class _SignupFormState extends State<SignupForm>
                                                       .hasCarouselPreview,
                                                   useActionEnabled: avatarState
                                                       .canUseCarouselAvatar,
-                                                  canShuffleBackground:
+                                                  canShuffleBackground: avatarState
+                                                          .hasCarouselPreview &&
                                                       avatarState
                                                           .canShuffleBackground,
                                                   onShuffleBackground: avatarState
-                                                          .canShuffleBackground
+                                                              .hasCarouselPreview &&
+                                                          avatarState
+                                                              .canShuffleBackground
                                                       ? () => context
                                                           .read<
                                                               SignupAvatarCubit>()
-                                                          .shuffleBackground(
+                                                          .shuffleCarouselBackground(
                                                             context.colorScheme,
                                                           )
                                                       : null,
