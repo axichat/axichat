@@ -316,14 +316,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       },
       builder: (context, state) {
         final localeOverride = state.language.locale;
-        final locale = localeOverride ??
-            _resolveSupportedLocale(
-              Localizations.maybeLocaleOf(context) ??
-                  WidgetsBinding.instance.platformDispatcher.locale,
-            );
-        context.read<NotificationService>().updateLocalizations(
-              lookupAppLocalizations(locale),
-            );
         const chatNeutrals = ChatNeutrals();
         final lightTheme = AppTheme.build(
           shadColor: state.shadColor,
@@ -501,6 +493,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           },
           routerConfig: _router,
           builder: (context, child) {
+            context.read<NotificationService>().updateLocalizations(
+                  AppLocalizations.of(context)!,
+                );
             final shadTheme = ShadTheme.of(context);
             final brightness = Theme.of(context).brightness;
             CalendarPalette.update(
@@ -629,21 +624,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         return ScaffoldMessenger(child: app);
       },
     );
-  }
-
-  Locale _resolveSupportedLocale(Locale locale) {
-    for (final supported in AppLocalizations.supportedLocales) {
-      if (supported.languageCode == locale.languageCode &&
-          supported.countryCode == locale.countryCode) {
-        return supported;
-      }
-    }
-    for (final supported in AppLocalizations.supportedLocales) {
-      if (supported.languageCode == locale.languageCode) {
-        return supported;
-      }
-    }
-    return AppLocalizations.supportedLocales.first;
   }
 
   Future<void> _handleShareIntent(BuildContext context) async {
