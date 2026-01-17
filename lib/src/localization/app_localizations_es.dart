@@ -3637,6 +3637,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Keep your existing inbox and forward mail into Axichat.';
 
   @override
+  String get emailForwardingGuideLinkExistingEmailTitle =>
+      'Link existing email';
+
+  @override
   String get emailForwardingGuideAddressHint =>
       'Enter this address in your provider\'s forwarding settings.';
 
@@ -3645,15 +3649,22 @@ class AppLocalizationsEs extends AppLocalizations {
       'Your Axichat address will appear here.';
 
   @override
-  String get emailForwardingGuideLinksTitle => 'Quick links';
+  String get emailForwardingGuideLinksTitle =>
+      'This must be done in your existing email client. Your provider should have instructions. If you use Gmail or Outlook, here are their guides:';
 
   @override
   String get emailForwardingGuideLinksSubtitle =>
       'Search your provider\'s help docs, or start here:';
 
   @override
+  String get emailForwardingGuideNotificationsTitle => 'Message notifications';
+
+  @override
   String get emailForwardingGuideSettingsHint =>
-      'You can do this later in Settings.';
+      'This can be done later in settings.';
+
+  @override
+  String get emailForwardingGuideSkipLabel => 'Skip for now';
 
   @override
   String get emailForwardingProviderGmail => 'Gmail';
