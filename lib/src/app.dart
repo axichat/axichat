@@ -316,7 +316,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       },
       builder: (context, state) {
         final localeOverride = state.language.locale;
-        final locale = localeOverride ?? Localizations.localeOf(context);
+        final locale = localeOverride ??
+            _resolveSupportedLocale(
+              Localizations.maybeLocaleOf(context) ??
+                  WidgetsBinding.instance.platformDispatcher.locale,
+            );
         context.read<NotificationService>().updateLocalizations(
               lookupAppLocalizations(locale),
             );
@@ -625,6 +629,21 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         return ScaffoldMessenger(child: app);
       },
     );
+  }
+
+  Locale _resolveSupportedLocale(Locale locale) {
+    for (final supported in AppLocalizations.supportedLocales) {
+      if (supported.languageCode == locale.languageCode &&
+          supported.countryCode == locale.countryCode) {
+        return supported;
+      }
+    }
+    for (final supported in AppLocalizations.supportedLocales) {
+      if (supported.languageCode == locale.languageCode) {
+        return supported;
+      }
+    }
+    return AppLocalizations.supportedLocales.first;
   }
 
   Future<void> _handleShareIntent(BuildContext context) async {

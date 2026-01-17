@@ -55,6 +55,8 @@ class AvatarEditorState extends Equatable {
     this.sourceBytes,
     this.previewBytes,
     this.carouselPreviewBytes,
+    this.carouselTemplate,
+    this.carouselBackgroundColor,
     this.template,
     this.draft,
     this.shuffling = false,
@@ -70,6 +72,8 @@ class AvatarEditorState extends Equatable {
   final Uint8List? sourceBytes;
   final Uint8List? previewBytes;
   final Uint8List? carouselPreviewBytes;
+  final AvatarTemplate? carouselTemplate;
+  final Color? carouselBackgroundColor;
   final AvatarTemplate? template;
   final AvatarUploadPayload? draft;
   final bool shuffling;
@@ -89,6 +93,8 @@ class AvatarEditorState extends Equatable {
     Uint8List? sourceBytes,
     Uint8List? previewBytes,
     Uint8List? carouselPreviewBytes,
+    AvatarTemplate? carouselTemplate,
+    Color? carouselBackgroundColor,
     AvatarTemplate? template,
     AvatarUploadPayload? draft,
     bool? shuffling,
@@ -106,6 +112,8 @@ class AvatarEditorState extends Equatable {
     bool clearSourceBytes = false,
     bool clearPreviewBytes = false,
     bool clearCarouselPreviewBytes = false,
+    bool clearCarouselTemplate = false,
+    bool clearCarouselBackgroundColor = false,
     bool clearTemplate = false,
     bool clearDraft = false,
     bool clearEstimatedBytes = false,
@@ -120,6 +128,11 @@ class AvatarEditorState extends Equatable {
       carouselPreviewBytes: clearCarouselPreviewBytes
           ? null
           : carouselPreviewBytes ?? this.carouselPreviewBytes,
+      carouselTemplate:
+          clearCarouselTemplate ? null : carouselTemplate ?? this.carouselTemplate,
+      carouselBackgroundColor: clearCarouselBackgroundColor
+          ? null
+          : carouselBackgroundColor ?? this.carouselBackgroundColor,
       template: clearTemplate ? null : template ?? this.template,
       draft: clearDraft ? null : draft ?? this.draft,
       shuffling: shuffling ?? this.shuffling,
@@ -145,6 +158,8 @@ class AvatarEditorState extends Equatable {
         sourceBytes,
         previewBytes,
         carouselPreviewBytes,
+        carouselTemplate,
+        carouselBackgroundColor,
         template,
         draft?.hash,
         shuffling,
@@ -268,8 +283,52 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         previewBytes: current.payload.bytes,
         estimatedBytes: current.payload.bytes.length,
         clearCarouselPreviewBytes: true,
+        clearCarouselTemplate: true,
+        clearCarouselBackgroundColor: true,
         clearSourceBytes: true,
         clearTemplate: true,
+        clearError: true,
+      ),
+    );
+  }
+
+  Future<void> shuffleCarousel(ShadColorScheme colors) async {
+    _carouselColors = colors;
+    if (_isCarouselBlocked()) return;
+    if (_carouselBuffer.isEmpty) {
+      await _prefillCarousel(targetSize: 1);
+    }
+    if (_isCarouselBlocked()) return;
+    _showNextCarouselAvatar();
+    await _prefillCarousel(targetSize: _avatarCarouselSustainBuffer);
+  }
+
+  Future<void> shuffleCarouselBackground(ShadColorScheme colors) async {
+    _carouselColors = colors;
+    if (_isCarouselBlocked()) return;
+    final current = _currentCarouselAvatar;
+    if (current == null) return;
+    final template = current.template;
+    if (template.category == AvatarTemplateCategory.abstract) return;
+    if (!template.hasAlphaBackground) return;
+    final background = _randomAvatarBackgroundColor(colors);
+    final payload = await _buildCarouselPayloadFromTemplate(
+      template: template,
+      background: background,
+      colors: colors,
+    );
+    if (_isCarouselBlocked()) return;
+    final updated = _CarouselAvatar(
+      payload: payload,
+      template: template,
+      background: background,
+    );
+    _currentCarouselAvatar = updated;
+    _emitIfOpen(
+      state.copyWith(
+        carouselPreviewBytes: payload.bytes,
+        carouselTemplate: template,
+        carouselBackgroundColor: background,
         clearError: true,
       ),
     );
@@ -358,6 +417,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         clearDraft: true,
         clearPreviewBytes: true,
         clearCarouselPreviewBytes: true,
+        clearCarouselTemplate: true,
+        clearCarouselBackgroundColor: true,
         clearEstimatedBytes: true,
         clearLastSavedPath: true,
         clearError: true,
@@ -495,6 +556,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _emitIfOpen(
       state.copyWith(
         carouselPreviewBytes: entry.payload.bytes,
+        carouselTemplate: entry.template,
+        carouselBackgroundColor: entry.background,
         clearError: true,
       ),
     );
@@ -547,7 +610,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         if (isClosed || _isCarouselBlocked()) {
           return added > 0;
         }
-        _carouselBuffer.add(_CarouselAvatar(payload: payload));
+        _carouselBuffer.add(
+          _CarouselAvatar(payload: payload, template: template, background: background),
+        );
         added++;
       }
     } catch (_) {
@@ -755,6 +820,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
               previewBytes: draft.bytes,
               estimatedBytes: draft.bytes.length,
               clearCarouselPreviewBytes: true,
+              clearCarouselTemplate: true,
+              clearCarouselBackgroundColor: true,
               clearError: true,
             ),
           );
@@ -1019,6 +1086,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         processing: true,
         clearError: true,
         clearCarouselPreviewBytes: true,
+        clearCarouselTemplate: true,
+        clearCarouselBackgroundColor: true,
       ),
     );
     try {
@@ -1044,6 +1113,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           ),
           previewBytes: buildDraft ? null : prepared.bytes,
           clearCarouselPreviewBytes: true,
+          clearCarouselTemplate: true,
+          clearCarouselBackgroundColor: true,
           clearTemplate: true,
           clearDraft: true,
           clearPreviewBytes: buildDraft,
@@ -1071,7 +1142,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 }
 
 class _CarouselAvatar {
-  const _CarouselAvatar({required this.payload});
+  const _CarouselAvatar({
+    required this.payload,
+    required this.template,
+    required this.background,
+  });
 
   final AvatarUploadPayload payload;
+  final AvatarTemplate template;
+  final Color background;
 }

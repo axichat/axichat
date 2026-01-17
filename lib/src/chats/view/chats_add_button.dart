@@ -74,8 +74,6 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
   }
 
   void _openAvatarEditor() {
-    final colors = context.colorScheme;
-    context.read<AvatarEditorCubit>().setCarouselEnabled(false, colors);
     setState(() {
       _showAvatarEditor = true;
     });

@@ -9,15 +9,31 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+enum NotificationRequestDisplayMode {
+  platformOnly,
+  always;
+
+  bool shouldShowFor(Capability capability) {
+    switch (this) {
+      case NotificationRequestDisplayMode.platformOnly:
+        return capability.canForegroundService;
+      case NotificationRequestDisplayMode.always:
+        return true;
+    }
+  }
+}
+
 class NotificationRequest extends StatefulWidget {
   const NotificationRequest({
     super.key,
     required this.notificationService,
     required this.capability,
+    this.displayMode = NotificationRequestDisplayMode.platformOnly,
   });
 
   final NotificationService notificationService;
   final Capability capability;
+  final NotificationRequestDisplayMode displayMode;
 
   @override
   State<NotificationRequest> createState() => _NotificationRequestState();
@@ -38,7 +54,7 @@ class _NotificationRequestState extends State<NotificationRequest> {
           builder: (context, serviceActive, _) {
             if (!snapshot.hasData ||
                 serviceActive ||
-                !widget.capability.canForegroundService) {
+                !widget.displayMode.shouldShowFor(widget.capability)) {
               return const SizedBox.shrink();
             }
 
