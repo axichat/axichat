@@ -15,6 +15,7 @@ class AxiMore extends StatefulWidget {
     this.enabled = true,
     this.ghost = false,
     this.usePrimary = false,
+    this.tapBounce = true,
   });
 
   final List<AxiMenuAction> actions;
@@ -22,6 +23,7 @@ class AxiMore extends StatefulWidget {
   final bool enabled;
   final bool ghost;
   final bool usePrimary;
+  final bool tapBounce;
 
   @override
   State<AxiMore> createState() => _AxiMoreState();
@@ -130,11 +132,13 @@ class _AxiMoreState extends State<AxiMore> {
               tooltip: tooltip,
               onPressed: sheetAction,
               usePrimary: widget.usePrimary,
+              tapBounce: widget.tapBounce,
             )
           : AxiIconButton(
               iconData: LucideIcons.ellipsisVertical,
               tooltip: tooltip,
               onPressed: sheetAction,
+              tapBounce: widget.tapBounce,
             );
     }
     return AxiPopover(
@@ -150,11 +154,13 @@ class _AxiMoreState extends State<AxiMore> {
               tooltip: tooltip,
               onPressed: popoverAction,
               usePrimary: widget.usePrimary,
+              tapBounce: widget.tapBounce,
             )
           : AxiIconButton(
               iconData: LucideIcons.ellipsisVertical,
               tooltip: tooltip,
               onPressed: popoverAction,
+              tapBounce: widget.tapBounce,
             ),
     );
   }

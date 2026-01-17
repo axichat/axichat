@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
@@ -13,6 +15,7 @@ const double _overlayMaxWidth = 320.0;
 const double _overlayMaxHeight = 320.0;
 const double _overlayVerticalPadding = 4.0;
 const double _overlayItemSpacing = 8.0;
+const double _toastShadowPadding = 6.0;
 const double _toastBorderRadius = 12.0;
 const double _toastShadowBlur = 12.0;
 const double _toastShadowOffsetY = 8.0;
@@ -30,10 +33,11 @@ const double _entryOpacityStart = 0.0;
 const double _entryOpacityEnd = 1.0;
 const double _entrySizeStart = 0.0;
 const double _entrySizeEnd = 1.0;
-const double _entrySlideXOffset = 0.0;
-const double _entrySlideYOffset = 0.2;
-const double _entrySizeAlignment = 1.0;
+const double _entrySlideXOffset = 0.22;
+const double _entrySlideYOffset = 0.0;
 const Curve _entryAnimationCurve = Curves.easeOutCubic;
+const Duration _entryStaggerBaseDelay = Duration(milliseconds: 60);
+const int _entryStaggerMaxIndex = 3;
 
 const EdgeInsets _toastPadding = EdgeInsets.symmetric(
   horizontal: _toastHorizontalPadding,
@@ -86,10 +90,18 @@ class XmppOperationOverlay extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final reverseIndex = operations.length - 1 - index;
                     final operation = operations[reverseIndex];
+                    final staggerIndex = index > _entryStaggerMaxIndex
+                        ? _entryStaggerMaxIndex
+                        : index;
+                    final entryDelay = Duration(
+                      milliseconds:
+                          _entryStaggerBaseDelay.inMilliseconds * staggerIndex,
+                    );
                     return XmppOperationToastEntry(
                       key: ValueKey(operation.id),
                       operation: operation,
                       entryDuration: entryDuration,
+                      entryDelay: entryDelay,
                     );
                   },
                 ),
@@ -107,19 +119,24 @@ class XmppOperationToastEntry extends StatelessWidget {
     super.key,
     required this.operation,
     required this.entryDuration,
+    required this.entryDelay,
   });
 
   final XmppOperation operation;
   final Duration entryDuration;
+  final Duration entryDelay;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: _overlayItemSpacing),
+      padding: const EdgeInsets.only(
+        bottom: _overlayItemSpacing + _toastShadowPadding,
+      ),
       child: Align(
         alignment: Alignment.centerLeft,
         child: XmppOperationEntryTransition(
           duration: entryDuration,
+          delay: entryDelay,
           child: _XmppOperationToast(operation: operation),
         ),
       ),
@@ -131,10 +148,12 @@ class XmppOperationEntryTransition extends StatefulWidget {
   const XmppOperationEntryTransition({
     super.key,
     required this.duration,
+    required this.delay,
     required this.child,
   });
 
   final Duration duration;
+  final Duration delay;
   final Widget child;
 
   @override
@@ -149,6 +168,7 @@ class _XmppOperationEntryTransitionState
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _sizeAnimation;
   late final Animation<Offset> _slideAnimation;
+  Timer? _delayTimer;
 
   @override
   void initState() {
@@ -178,7 +198,14 @@ class _XmppOperationEntryTransitionState
       _controller.value = _entryOpacityEnd;
       return;
     }
-    _controller.forward();
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+      return;
+    }
+    _delayTimer = Timer(widget.delay, () {
+      if (!mounted) return;
+      _controller.forward();
+    });
   }
 
   @override
@@ -187,25 +214,36 @@ class _XmppOperationEntryTransitionState
     if (oldWidget.duration != widget.duration) {
       _controller.duration = widget.duration;
     }
+    if (oldWidget.delay != widget.delay && _controller.isDismissed) {
+      _delayTimer?.cancel();
+      _startAnimation();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizeTransition(
-      sizeFactor: _sizeAnimation,
-      axisAlignment: _entrySizeAlignment,
-      child: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child: widget.child,
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        return Align(
+          alignment: Alignment.bottomLeft,
+          heightFactor: _sizeAnimation.value,
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: child,
+            ),
+          ),
+        );
+      },
     );
   }
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

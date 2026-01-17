@@ -11,35 +11,41 @@ import 'package:logging/logging.dart';
 
 const Duration _defaultCompletedRetention = Duration(seconds: 2);
 const Duration _defaultFailedRetention = Duration(seconds: 6);
+const Duration _minimumInProgressDuration = Duration(milliseconds: 350);
 const int _operationIdLength = 10;
 const String _operationIdSeparator = '-';
 
-const String _pubSubBookmarksStartMessage = 'Preparing bookmarks...';
-const String _pubSubBookmarksSuccessMessage = 'Bookmarks ready';
-const String _pubSubBookmarksFailureMessage = 'Bookmarks sync failed';
+const String _pubSubBookmarksStartMessage = 'Syncing bookmarks (PubSub)...';
+const String _pubSubBookmarksSuccessMessage = 'Bookmarks synced';
+const String _pubSubBookmarksFailureMessage = 'Bookmarks PubSub sync failed';
 
-const String _pubSubConversationsStartMessage = 'Syncing conversations...';
-const String _pubSubConversationsSuccessMessage = 'Conversations synced';
-const String _pubSubConversationsFailureMessage = 'Conversations sync failed';
+const String _pubSubConversationsStartMessage =
+    'Syncing conversation index (PubSub)...';
+const String _pubSubConversationsSuccessMessage = 'Conversation index synced';
+const String _pubSubConversationsFailureMessage =
+    'Conversation index PubSub sync failed';
 
-const String _pubSubDraftsStartMessage = 'Syncing drafts...';
+const String _pubSubDraftsStartMessage = 'Syncing drafts (PubSub)...';
 const String _pubSubDraftsSuccessMessage = 'Drafts synced';
-const String _pubSubDraftsFailureMessage = 'Drafts sync failed';
+const String _pubSubDraftsFailureMessage = 'Drafts PubSub sync failed';
 
-const String _pubSubSpamStartMessage = 'Syncing spam list...';
+const String _pubSubSpamStartMessage = 'Syncing spam list (PubSub)...';
 const String _pubSubSpamSuccessMessage = 'Spam list synced';
-const String _pubSubSpamFailureMessage = 'Spam list sync failed';
+const String _pubSubSpamFailureMessage = 'Spam list PubSub sync failed';
 
-const String _pubSubEmailBlocklistStartMessage = 'Syncing email blocklist...';
+const String _pubSubEmailBlocklistStartMessage =
+    'Syncing email blocklist (PubSub)...';
 const String _pubSubEmailBlocklistSuccessMessage = 'Email blocklist synced';
 const String _pubSubEmailBlocklistFailureMessage =
-    'Email blocklist sync failed';
-const String _pubSubAvatarMetadataStartMessage = 'Syncing avatar...';
-const String _pubSubAvatarMetadataSuccessMessage = 'Avatar synced';
-const String _pubSubAvatarMetadataFailureMessage = 'Avatar sync failed';
-const String _pubSubFetchStartMessage = 'Syncing PubSub data...';
-const String _pubSubFetchSuccessMessage = 'PubSub data synced';
-const String _pubSubFetchFailureMessage = 'PubSub sync failed';
+    'Email blocklist PubSub sync failed';
+const String _pubSubAvatarMetadataStartMessage =
+    'Syncing avatar metadata (PubSub)...';
+const String _pubSubAvatarMetadataSuccessMessage = 'Avatar metadata synced';
+const String _pubSubAvatarMetadataFailureMessage =
+    'Avatar metadata PubSub sync failed';
+const String _pubSubFetchStartMessage = 'Syncing PubSub service data...';
+const String _pubSubFetchSuccessMessage = 'PubSub service data synced';
+const String _pubSubFetchFailureMessage = 'PubSub service sync failed';
 
 const String _mamLoginStartMessage = 'Syncing messages...';
 const String _mamLoginSuccessMessage = 'Messages synced';
@@ -85,6 +91,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   final Duration _failedRetention;
   final Map<_XmppOperationKey, _XmppOperationBatch> _activeOperations = {};
   final Map<String, Timer> _retentionTimers = {};
+  final Map<String, Timer> _completionTimers = {};
   late final StreamSubscription<XmppOperationEvent> _subscription;
 
   static final _logger = Logger('XmppActivityCubit');
@@ -98,6 +105,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
         _activeOperations[key] = _XmppOperationBatch(
           operationId: operationId,
           pendingCount: 1,
+          startedAt: DateTime.now(),
         );
         return;
       }
@@ -122,18 +130,18 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
 
     batch
       ..pendingCount -= 1
-      ..lastSuccess = event.isSuccess;
+      ..hadFailure = batch.hadFailure || !event.isSuccess;
 
     if (batch.pendingCount > 0) {
       return;
     }
 
     _activeOperations.remove(key);
-    if (batch.lastSuccess) {
-      _completeOperation(batch.operationId);
-      return;
-    }
-    _failOperation(batch.operationId);
+    _scheduleCompletion(
+      id: batch.operationId,
+      startedAt: batch.startedAt,
+      isSuccess: !batch.hadFailure,
+    );
   }
 
   String _startOperation(XmppOperationKind kind) {
@@ -157,10 +165,37 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     _updateOperation(id, status: XmppOperationStatus.failure);
   }
 
+  void _scheduleCompletion({
+    required String id,
+    required DateTime startedAt,
+    required bool isSuccess,
+  }) {
+    final elapsed = DateTime.now().difference(startedAt);
+    final remaining = _minimumInProgressDuration - elapsed;
+    if (remaining <= Duration.zero) {
+      _applyCompletion(id: id, isSuccess: isSuccess);
+      return;
+    }
+    _cancelCompletion(id);
+    _completionTimers[id] = Timer(remaining, () {
+      _completionTimers.remove(id);
+      _applyCompletion(id: id, isSuccess: isSuccess);
+    });
+  }
+
+  void _applyCompletion({required String id, required bool isSuccess}) {
+    if (isSuccess) {
+      _completeOperation(id);
+      return;
+    }
+    _failOperation(id);
+  }
+
   void _updateOperation(String id, {XmppOperationStatus? status}) {
     final operations = List<XmppOperation>.of(state.operations);
     final index = operations.indexWhere((item) => item.id == id);
     if (index == -1) return;
+    _cancelCompletion(id);
     final updated = operations[index].copyWith(
       status: status,
     );
@@ -191,8 +226,17 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     timer?.cancel();
   }
 
+  void _cancelCompletion(String id) {
+    final timer = _completionTimers.remove(id);
+    timer?.cancel();
+  }
+
   @override
   Future<void> close() async {
+    for (final timer in _completionTimers.values) {
+      timer.cancel();
+    }
+    _completionTimers.clear();
     for (final timer in _retentionTimers.values) {
       timer.cancel();
     }
@@ -311,10 +355,14 @@ class _XmppOperationKey {
 }
 
 class _XmppOperationBatch {
-  _XmppOperationBatch({required this.operationId, required this.pendingCount})
-      : lastSuccess = true;
+  _XmppOperationBatch({
+    required this.operationId,
+    required this.pendingCount,
+    required this.startedAt,
+  }) : hadFailure = false;
 
   final String operationId;
   int pendingCount;
-  bool lastSuccess;
+  bool hadFailure;
+  final DateTime startedAt;
 }
