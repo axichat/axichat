@@ -3484,48 +3484,41 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get emailForwardingGuideTitle => 'Connect existing email';
+  String get emailForwardingGuideTitle => '连接现有邮箱';
 
   @override
-  String get emailForwardingGuideSubtitle =>
-      'Forward mail from Gmail, Outlook, or any provider.';
+  String get emailForwardingGuideSubtitle => '从 Gmail、Outlook 或任何服务商转发邮件。';
 
   @override
-  String get emailForwardingWelcomeTitle => 'Welcome to Axichat';
+  String get emailForwardingWelcomeTitle => '欢迎使用 Axichat';
 
   @override
-  String get emailForwardingGuideIntro =>
-      'Keep your existing inbox and forward mail into Axichat.';
+  String get emailForwardingGuideIntro => '保留你现有的收件箱，并将邮件转发到 Axichat。';
 
   @override
-  String get emailForwardingGuideLinkExistingEmailTitle =>
-      'Link existing email';
+  String get emailForwardingGuideLinkExistingEmailTitle => '关联现有邮箱';
 
   @override
-  String get emailForwardingGuideAddressHint =>
-      'Enter this address in your provider\'s forwarding settings.';
+  String get emailForwardingGuideAddressHint => '在你的服务商转发设置中填写此地址。';
 
   @override
-  String get emailForwardingGuideAddressFallback =>
-      'Your Axichat address will appear here.';
+  String get emailForwardingGuideAddressFallback => '你的 Axichat 地址会显示在这里。';
 
   @override
   String get emailForwardingGuideLinksTitle =>
-      'This must be done in your existing email client. Your provider should have instructions. If you use Gmail or Outlook, here are their guides:';
+      '此操作需要在你现有的邮箱客户端中完成。你的服务商应提供说明。如果你使用 Gmail 或 Outlook，以下是它们的指南：';
 
   @override
-  String get emailForwardingGuideLinksSubtitle =>
-      'Search your provider\'s help docs, or start here:';
+  String get emailForwardingGuideLinksSubtitle => '请在你的服务商帮助文档中查找，或从这里开始：';
 
   @override
-  String get emailForwardingGuideNotificationsTitle => 'Message notifications';
+  String get emailForwardingGuideNotificationsTitle => '消息通知';
 
   @override
-  String get emailForwardingGuideSettingsHint =>
-      'This can be done later in settings.';
+  String get emailForwardingGuideSettingsHint => '稍后可在设置中完成。';
 
   @override
-  String get emailForwardingGuideSkipLabel => 'Skip for now';
+  String get emailForwardingGuideSkipLabel => '暂时跳过';
 
   @override
   String get emailForwardingProviderGmail => 'Gmail';
@@ -8712,48 +8705,41 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
-  String get emailForwardingGuideTitle => 'Connect existing email';
+  String get emailForwardingGuideTitle => '連結現有電郵';
 
   @override
-  String get emailForwardingGuideSubtitle =>
-      'Forward mail from Gmail, Outlook, or any provider.';
+  String get emailForwardingGuideSubtitle => '從 Gmail、Outlook 或任何服務供應商轉寄郵件。';
 
   @override
-  String get emailForwardingWelcomeTitle => 'Welcome to Axichat';
+  String get emailForwardingWelcomeTitle => '歡迎使用 Axichat';
 
   @override
-  String get emailForwardingGuideIntro =>
-      'Keep your existing inbox and forward mail into Axichat.';
+  String get emailForwardingGuideIntro => '保留你現有的收件匣，並將郵件轉寄到 Axichat。';
 
   @override
-  String get emailForwardingGuideLinkExistingEmailTitle =>
-      'Link existing email';
+  String get emailForwardingGuideLinkExistingEmailTitle => '連結現有電郵';
 
   @override
-  String get emailForwardingGuideAddressHint =>
-      'Enter this address in your provider\'s forwarding settings.';
+  String get emailForwardingGuideAddressHint => '在你的服務供應商轉寄設定中輸入此地址。';
 
   @override
-  String get emailForwardingGuideAddressFallback =>
-      'Your Axichat address will appear here.';
+  String get emailForwardingGuideAddressFallback => '你的 Axichat 地址會顯示在這裡。';
 
   @override
   String get emailForwardingGuideLinksTitle =>
-      'This must be done in your existing email client. Your provider should have instructions. If you use Gmail or Outlook, here are their guides:';
+      '此操作需要在你現有的電郵用戶端中完成。你的服務供應商應提供指引。如果你使用 Gmail 或 Outlook，以下是它們的指南：';
 
   @override
-  String get emailForwardingGuideLinksSubtitle =>
-      'Search your provider\'s help docs, or start here:';
+  String get emailForwardingGuideLinksSubtitle => '請在你的服務供應商說明文件中查找，或從這裡開始：';
 
   @override
-  String get emailForwardingGuideNotificationsTitle => 'Message notifications';
+  String get emailForwardingGuideNotificationsTitle => '訊息通知';
 
   @override
-  String get emailForwardingGuideSettingsHint =>
-      'This can be done later in settings.';
+  String get emailForwardingGuideSettingsHint => '稍後可在設定中完成。';
 
   @override
-  String get emailForwardingGuideSkipLabel => 'Skip for now';
+  String get emailForwardingGuideSkipLabel => '暫時略過';
 
   @override
   String get emailForwardingProviderGmail => 'Gmail';

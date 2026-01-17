@@ -3623,48 +3623,49 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get emailForwardingGuideTitle => 'Connect existing email';
+  String get emailForwardingGuideTitle => 'Conectar correo existente';
 
   @override
   String get emailForwardingGuideSubtitle =>
-      'Forward mail from Gmail, Outlook, or any provider.';
+      'Reenvía correo desde Gmail, Outlook o cualquier proveedor.';
 
   @override
-  String get emailForwardingWelcomeTitle => 'Welcome to Axichat';
+  String get emailForwardingWelcomeTitle => 'Bienvenido a Axichat';
 
   @override
   String get emailForwardingGuideIntro =>
-      'Keep your existing inbox and forward mail into Axichat.';
+      'Conserva tu bandeja de entrada y reenvía el correo a Axichat.';
 
   @override
   String get emailForwardingGuideLinkExistingEmailTitle =>
-      'Link existing email';
+      'Vincular correo existente';
 
   @override
   String get emailForwardingGuideAddressHint =>
-      'Enter this address in your provider\'s forwarding settings.';
+      'Introduce esta dirección en la configuración de reenvío de tu proveedor.';
 
   @override
   String get emailForwardingGuideAddressFallback =>
-      'Your Axichat address will appear here.';
+      'Aquí aparecerá tu dirección de Axichat.';
 
   @override
   String get emailForwardingGuideLinksTitle =>
-      'This must be done in your existing email client. Your provider should have instructions. If you use Gmail or Outlook, here are their guides:';
+      'Esto debe hacerse en tu cliente de correo existente. Tu proveedor debería tener instrucciones. Si usas Gmail u Outlook, aquí están sus guías:';
 
   @override
   String get emailForwardingGuideLinksSubtitle =>
-      'Search your provider\'s help docs, or start here:';
+      'Busca en la ayuda de tu proveedor o empieza aquí:';
 
   @override
-  String get emailForwardingGuideNotificationsTitle => 'Message notifications';
+  String get emailForwardingGuideNotificationsTitle =>
+      'Notificaciones de mensajes';
 
   @override
   String get emailForwardingGuideSettingsHint =>
-      'This can be done later in settings.';
+      'Esto se puede hacer más tarde en los ajustes.';
 
   @override
-  String get emailForwardingGuideSkipLabel => 'Skip for now';
+  String get emailForwardingGuideSkipLabel => 'Omitir por ahora';
 
   @override
   String get emailForwardingProviderGmail => 'Gmail';
