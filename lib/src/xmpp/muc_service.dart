@@ -571,6 +571,10 @@ mixin MucService on XmppBase, BaseStreamService {
     } on Exception {
       return false;
     }
+    final managerState = await _mucManagerRoomState(normalizedRoom);
+    if (managerState == null || managerState.joined != true) {
+      return false;
+    }
     final roomState = roomStateFor(normalizedRoom);
     if (roomState == null) return false;
     if (_roomNeedsJoin(normalizedRoom)) return false;
@@ -957,6 +961,14 @@ mixin MucService on XmppBase, BaseStreamService {
       awaitDatabase: true,
     );
     _mucLog.fine('MUC create persisted. room=$roomJid');
+    if (avatar != null) {
+      final resolvedHash = _resolveRoomAvatarHash(avatar);
+      await _storeRoomAvatarLocally(
+        roomJid: roomJid,
+        bytes: avatar.bytes,
+        hash: resolvedHash,
+      );
+    }
     fireAndForget(
       () async {
         final slowTimer = Timer(

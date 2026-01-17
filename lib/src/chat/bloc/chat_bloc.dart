@@ -775,8 +775,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null || chat.type != ChatType.groupChat) return;
     await _ensureMucMembership(chat);
     _seedLocalRoomOccupant(chat, state.roomState);
-    final roomState = state.roomState;
-    if (roomState == null) return;
+    final roomState = state.roomState ??
+        _mucService.roomStateFor(chat.jid) ??
+        RoomState(roomJid: chat.jid);
+    if (state.roomState == null) {
+      emit(state.copyWith(roomState: roomState));
+    }
     await _refreshRoomAffiliationsIfNeeded(chat: chat, roomState: roomState);
   }
 
