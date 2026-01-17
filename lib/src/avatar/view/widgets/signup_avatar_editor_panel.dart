@@ -302,17 +302,26 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           runSpacing: avatarActionSpacing,
           children: [
             if (showPinnedUseAction)
-              ShadButton(
-                onPressed: allowUseAction ? _handleUseCurrent : null,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: avatarActionSpacing,
-                  children: [
-                    const Icon(LucideIcons.check, size: avatarActionIconSize),
-                    Text(l10n.avatarUseThis),
-                  ],
+              IgnorePointer(
+                ignoring: _pinUseAction && !allowUseAction,
+                child: AxiTapBounce(
+                  enabled: _pinUseAction || allowUseAction,
+                  child: ShadButton(
+                    onPressed: allowUseAction ? _handleUseCurrent : null,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: avatarActionSpacing,
+                      children: [
+                        const Icon(
+                          LucideIcons.check,
+                          size: avatarActionIconSize,
+                        ),
+                        Text(l10n.avatarUseThis),
+                      ],
+                    ),
+                  ),
                 ),
-              ).withTapBounce(enabled: allowUseAction),
+              ),
             ShadButton(
               onPressed: busy ? null : _handleShuffle,
               child: Row(

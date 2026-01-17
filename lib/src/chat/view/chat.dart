@@ -12665,9 +12665,6 @@ class GuestChat extends StatefulWidget {
   State<GuestChat> createState() => _GuestChatState();
 }
 
-const String _guestChatAppIconAssetPath =
-    'assets/icons/generated/app_icon_ios.png';
-
 class _GuestScriptEntry {
   const _GuestScriptEntry({
     required this.text,
@@ -13032,11 +13029,12 @@ class _GuestChatAppIconAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const String guestChatAppIconAssetPath = 'assets/icons/app_icon_source.png';
     return SizedBox.square(
       dimension: size,
       child: ClipOval(
         child: Image.asset(
-          _guestChatAppIconAssetPath,
+          guestChatAppIconAssetPath,
           fit: BoxFit.cover,
           filterQuality: FilterQuality.high,
         ),
