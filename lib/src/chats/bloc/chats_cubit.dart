@@ -258,7 +258,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         nickname: nickname,
         avatar: avatar,
       );
-      await _chatsService.openChat(roomJid);
+      await openChat(jid: roomJid);
       emit(state.copyWith(creationStatus: RequestStatus.success));
     } on Exception {
       emit(state.copyWith(creationStatus: RequestStatus.failure));
