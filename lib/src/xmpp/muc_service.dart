@@ -2122,6 +2122,16 @@ mixin MucService on XmppBase, BaseStreamService {
     try {
       final payload = await _fetchRoomAvatarPayload(normalizedRoom);
       if (payload.data == null || payload.data!.isEmpty) {
+        final vcardBytes = await _fetchRoomVCardAvatarBytes(normalizedRoom);
+        if (vcardBytes == null || vcardBytes.isEmpty) {
+          return;
+        }
+        final vcardHash = sha1.convert(vcardBytes).toString();
+        await (this as AvatarService).storeAvatarBytesForJid(
+          jid: normalizedRoom,
+          bytes: vcardBytes,
+          hash: vcardHash,
+        );
         return;
       }
       final decoded = _decodeRoomAvatarData(payload.data!);

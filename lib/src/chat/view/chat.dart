@@ -1001,6 +1001,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
               roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
+          roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
           currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
