@@ -115,9 +115,10 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
     setState(() {
       _validationError = null;
     });
+    context.read<AvatarEditorCubit>().pauseCarousel();
     context.read<ChatsCubit>().createChatRoom(
           title: trimmed,
-          avatar: context.read<AvatarEditorCubit>().state.draft,
+          avatar: context.read<AvatarEditorCubit>().selectedAvatarPayload(),
         );
   }
 
@@ -249,8 +250,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                             .pickImage(),
                                         onUseCurrent: () => context
                                             .read<AvatarEditorCubit>()
-                                            .materializeCurrentCarouselAvatar(),
-                                        showUseAction: true,
+                                            .pauseCarousel(),
                                         useActionEnabled: useActionEnabled,
                                         canShuffleBackground: avatarState
                                                 .hasCarouselPreview &&

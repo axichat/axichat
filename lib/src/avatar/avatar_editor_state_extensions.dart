@@ -28,19 +28,9 @@ extension AvatarEditorStateView on AvatarEditorState {
 
   bool get canShuffleBackground {
     final templateValue = template;
-    if (templateValue != null) {
-      if (templateValue.category == AvatarTemplateCategory.abstract) {
-        return false;
-      }
-      return templateValue.hasAlphaBackground;
-    }
-    if (!hasCarouselPreview) return false;
-    final carouselTemplateValue = carouselTemplate;
-    if (carouselTemplateValue == null) return false;
-    if (carouselTemplateValue.category == AvatarTemplateCategory.abstract) {
-      return false;
-    }
-    return carouselTemplateValue.hasAlphaBackground;
+    if (templateValue == null) return false;
+    if (templateValue.category == AvatarTemplateCategory.abstract) return false;
+    return templateValue.hasAlphaBackground;
   }
 
   bool get isBusy => processing || shuffling || publishing;

@@ -55,8 +55,6 @@ class AvatarEditorState extends Equatable {
     this.sourceBytes,
     this.previewBytes,
     this.carouselPreviewBytes,
-    this.carouselTemplate,
-    this.carouselBackgroundColor,
     this.template,
     this.draft,
     this.shuffling = false,
@@ -72,8 +70,6 @@ class AvatarEditorState extends Equatable {
   final Uint8List? sourceBytes;
   final Uint8List? previewBytes;
   final Uint8List? carouselPreviewBytes;
-  final AvatarTemplate? carouselTemplate;
-  final Color? carouselBackgroundColor;
   final AvatarTemplate? template;
   final AvatarUploadPayload? draft;
   final bool shuffling;
@@ -93,8 +89,6 @@ class AvatarEditorState extends Equatable {
     Uint8List? sourceBytes,
     Uint8List? previewBytes,
     Uint8List? carouselPreviewBytes,
-    AvatarTemplate? carouselTemplate,
-    Color? carouselBackgroundColor,
     AvatarTemplate? template,
     AvatarUploadPayload? draft,
     bool? shuffling,
@@ -112,8 +106,6 @@ class AvatarEditorState extends Equatable {
     bool clearSourceBytes = false,
     bool clearPreviewBytes = false,
     bool clearCarouselPreviewBytes = false,
-    bool clearCarouselTemplate = false,
-    bool clearCarouselBackgroundColor = false,
     bool clearTemplate = false,
     bool clearDraft = false,
     bool clearEstimatedBytes = false,
@@ -128,12 +120,6 @@ class AvatarEditorState extends Equatable {
       carouselPreviewBytes: clearCarouselPreviewBytes
           ? null
           : carouselPreviewBytes ?? this.carouselPreviewBytes,
-      carouselTemplate: clearCarouselTemplate
-          ? null
-          : carouselTemplate ?? this.carouselTemplate,
-      carouselBackgroundColor: clearCarouselBackgroundColor
-          ? null
-          : carouselBackgroundColor ?? this.carouselBackgroundColor,
       template: clearTemplate ? null : template ?? this.template,
       draft: clearDraft ? null : draft ?? this.draft,
       shuffling: shuffling ?? this.shuffling,
@@ -159,8 +145,6 @@ class AvatarEditorState extends Equatable {
         sourceBytes,
         previewBytes,
         carouselPreviewBytes,
-        carouselTemplate,
-        carouselBackgroundColor,
         template,
         draft?.hash,
         shuffling,
@@ -267,56 +251,16 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     await _resumeAvatarCarouselIfNeeded();
   }
 
-  void materializeCurrentCarouselAvatar() {
-    if (state.draft != null ||
-        state.processing ||
-        state.shuffling ||
-        state.publishing) {
-      return;
-    }
-    final current = _currentCarouselAvatar;
-    if (current == null) return;
+  void pauseCarousel() {
+    _carouselEnabled = false;
     _stopAvatarCarousel();
-    _emitIfOpen(
-      state.copyWith(
-        source: AvatarSource.template,
-        draft: current.payload,
-        previewBytes: current.payload.bytes,
-        estimatedBytes: current.payload.bytes.length,
-        clearCarouselPreviewBytes: true,
-        clearCarouselTemplate: true,
-        clearCarouselBackgroundColor: true,
-        clearSourceBytes: true,
-        clearTemplate: true,
-        clearError: true,
-      ),
-    );
   }
+
+  AvatarUploadPayload? selectedAvatarPayload() =>
+      state.draft ?? _currentCarouselAvatar?.payload;
 
   Future<void> shuffleCarousel(ShadColorScheme colors) async {
     _carouselColors = colors;
-    if (state.draft != null ||
-        state.sourceBytes != null ||
-        state.previewBytes != null ||
-        state.template != null ||
-        state.source == AvatarSource.upload) {
-      _carouselBuffer.clear();
-      _currentCarouselAvatar = null;
-      _stopAvatarCarousel();
-      _emitIfOpen(
-        state.copyWith(
-          source: AvatarSource.template,
-          clearDraft: true,
-          clearPreviewBytes: true,
-          clearSourceBytes: true,
-          clearTemplate: true,
-          clearCarouselPreviewBytes: true,
-          clearCarouselTemplate: true,
-          clearCarouselBackgroundColor: true,
-          clearError: true,
-        ),
-      );
-    }
     _carouselEnabled = true;
     if (_isCarouselBlocked()) return;
     if (_carouselBuffer.isEmpty) {
@@ -351,8 +295,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _emitIfOpen(
       state.copyWith(
         carouselPreviewBytes: payload.bytes,
-        carouselTemplate: template,
-        carouselBackgroundColor: background,
+        template: template,
+        backgroundColor: background,
         clearError: true,
       ),
     );
@@ -441,8 +385,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         clearDraft: true,
         clearPreviewBytes: true,
         clearCarouselPreviewBytes: true,
-        clearCarouselTemplate: true,
-        clearCarouselBackgroundColor: true,
         clearEstimatedBytes: true,
         clearLastSavedPath: true,
         clearError: true,
@@ -580,8 +522,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _emitIfOpen(
       state.copyWith(
         carouselPreviewBytes: entry.payload.bytes,
-        carouselTemplate: entry.template,
-        carouselBackgroundColor: entry.background,
+        template: entry.template,
+        backgroundColor: entry.background,
         clearError: true,
       ),
     );
@@ -845,8 +787,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
               previewBytes: draft.bytes,
               estimatedBytes: draft.bytes.length,
               clearCarouselPreviewBytes: true,
-              clearCarouselTemplate: true,
-              clearCarouselBackgroundColor: true,
               clearError: true,
             ),
           );
@@ -1111,8 +1051,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         processing: true,
         clearError: true,
         clearCarouselPreviewBytes: true,
-        clearCarouselTemplate: true,
-        clearCarouselBackgroundColor: true,
       ),
     );
     try {
@@ -1138,8 +1076,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           ),
           previewBytes: buildDraft ? null : prepared.bytes,
           clearCarouselPreviewBytes: true,
-          clearCarouselTemplate: true,
-          clearCarouselBackgroundColor: true,
           clearTemplate: true,
           clearDraft: true,
           clearPreviewBytes: buildDraft,
