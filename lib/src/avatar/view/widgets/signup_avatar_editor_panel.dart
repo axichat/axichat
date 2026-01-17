@@ -66,12 +66,21 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
 
   bool _shuffling = false;
   bool _shufflingBackground = false;
+  bool _pinUseAction = false;
+  Timer? _pinUseActionTimer;
   int _previewVersion = 0;
   Uint8List? _lastPreviewBytes;
   Rect? _localCropRect;
   Rect? _pendingCropRect;
   bool _cropChangeScheduled = false;
   bool _fallbackAvatarPrecached = false;
+
+  @override
+  void dispose() {
+    _pinUseActionTimer?.cancel();
+    _pinUseActionTimer = null;
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant SignupAvatarEditorPanel oldWidget) {
@@ -144,6 +153,16 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     });
   }
 
+  void _handleUseCurrent() {
+    _pinUseActionTimer?.cancel();
+    setState(() => _pinUseAction = true);
+    _pinUseActionTimer = Timer(baseAnimationDuration, () {
+      if (!mounted) return;
+      setState(() => _pinUseAction = false);
+    });
+    widget.onUseCurrent?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -153,10 +172,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final showCrop = widget.mode == AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
     final showUseAction = widget.showUseAction;
-    final useActionEnabled = showUseAction &&
-        widget.useActionEnabled &&
-        !busy &&
-        widget.onUseCurrent != null;
     final cropBytes = showCrop ? widget.cropBytes ?? _lastPreviewBytes : null;
     final imageWidth = showCrop ? widget.imageWidth : null;
     final imageHeight = showCrop ? widget.imageHeight : null;
@@ -222,6 +237,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
 
     final allowBackgroundShuffle =
         widget.canShuffleBackground && widget.onShuffleBackground != null;
+    final showBackgroundShuffle = allowBackgroundShuffle;
+    final showPinnedUseAction = showUseAction || _pinUseAction;
+    final allowUseAction = showPinnedUseAction &&
+        widget.useActionEnabled &&
+        !busy &&
+        widget.onUseCurrent != null;
 
     final previewKey = ValueKey(_previewVersion);
     final previewBytes = widget.avatarBytes;
@@ -280,9 +301,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           spacing: avatarActionSpacing,
           runSpacing: avatarActionSpacing,
           children: [
-            if (showUseAction)
+            if (showPinnedUseAction)
               ShadButton(
-                onPressed: useActionEnabled ? widget.onUseCurrent : null,
+                onPressed: allowUseAction ? _handleUseCurrent : null,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   spacing: avatarActionSpacing,
@@ -291,7 +312,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                     Text(l10n.avatarUseThis),
                   ],
                 ),
-              ).withTapBounce(enabled: useActionEnabled),
+              ).withTapBounce(enabled: allowUseAction),
             ShadButton(
               onPressed: busy ? null : _handleShuffle,
               child: Row(
@@ -326,41 +347,46 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                 ],
               ),
             ).withTapBounce(),
-            ShadButton.secondary(
-              onPressed: busy || !allowBackgroundShuffle
-                  ? null
-                  : () async {
-                      await _handleShuffleBackground();
-                    },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ButtonSpinnerSlot(
-                    isVisible: _shufflingBackground,
-                    spinner: SizedBox.square(
-                      dimension: avatarActionIconSize,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colors.secondaryForeground,
-                        ),
-                        backgroundColor: colors.secondaryForeground.withValues(
-                          alpha: 0.2,
+            if (showBackgroundShuffle)
+              ShadButton.secondary(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        await _handleShuffleBackground();
+                      },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ButtonSpinnerSlot(
+                      isVisible: _shufflingBackground,
+                      spinner: SizedBox.square(
+                        dimension: avatarActionIconSize,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            colors.secondaryForeground,
+                          ),
+                          backgroundColor:
+                              colors.secondaryForeground.withValues(
+                            alpha: 0.2,
+                          ),
                         ),
                       ),
+                      slotSize: avatarActionIconSize,
+                      gap: avatarActionSpacing,
+                      duration: baseAnimationDuration,
                     ),
-                    slotSize: avatarActionIconSize,
-                    gap: avatarActionSpacing,
-                    duration: baseAnimationDuration,
-                  ),
-                  if (!_shufflingBackground) ...[
-                    const Icon(LucideIcons.palette, size: avatarActionIconSize),
-                    const SizedBox(width: avatarActionSpacing),
+                    if (!_shufflingBackground) ...[
+                      const Icon(
+                        LucideIcons.palette,
+                        size: avatarActionIconSize,
+                      ),
+                      const SizedBox(width: avatarActionSpacing),
+                    ],
+                    Text(l10n.signupAvatarBackgroundColor),
                   ],
-                  Text(l10n.signupAvatarBackgroundColor),
-                ],
-              ),
-            ).withTapBounce(),
+                ),
+              ).withTapBounce(),
             ShadButton.outline(
               onPressed: busy
                   ? null

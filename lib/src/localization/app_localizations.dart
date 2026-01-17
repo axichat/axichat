@@ -6453,6 +6453,12 @@ abstract class AppLocalizations {
   /// **'Keep your existing inbox and forward mail into Axichat.'**
   String get emailForwardingGuideIntro;
 
+  /// No description provided for @emailForwardingGuideLinkExistingEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Link existing email'**
+  String get emailForwardingGuideLinkExistingEmailTitle;
+
   /// No description provided for @emailForwardingGuideAddressHint.
   ///
   /// In en, this message translates to:
@@ -6468,7 +6474,7 @@ abstract class AppLocalizations {
   /// No description provided for @emailForwardingGuideLinksTitle.
   ///
   /// In en, this message translates to:
-  /// **'Quick links'**
+  /// **'This must be done in your existing email client. Your provider should have instructions. If you use Gmail or Outlook, here are their guides:'**
   String get emailForwardingGuideLinksTitle;
 
   /// No description provided for @emailForwardingGuideLinksSubtitle.
@@ -6477,11 +6483,23 @@ abstract class AppLocalizations {
   /// **'Search your provider\'s help docs, or start here:'**
   String get emailForwardingGuideLinksSubtitle;
 
+  /// No description provided for @emailForwardingGuideNotificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Message notifications'**
+  String get emailForwardingGuideNotificationsTitle;
+
   /// No description provided for @emailForwardingGuideSettingsHint.
   ///
   /// In en, this message translates to:
-  /// **'You can do this later in Settings.'**
+  /// **'This can be done later in settings.'**
   String get emailForwardingGuideSettingsHint;
+
+  /// No description provided for @emailForwardingGuideSkipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip for now'**
+  String get emailForwardingGuideSkipLabel;
 
   /// No description provided for @emailForwardingProviderGmail.
   ///

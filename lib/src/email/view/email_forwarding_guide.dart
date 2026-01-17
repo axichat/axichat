@@ -66,7 +66,6 @@ class EmailForwardingGuideTile extends StatelessWidget {
         forwardingAddress: forwardingAddress,
         notificationService: context.read<NotificationService>(),
         capability: context.read<Capability>(),
-        showSettingsHint: false,
       ),
     );
     if (!context.mounted) {
@@ -96,14 +95,12 @@ class EmailForwardingGuideDialog extends StatelessWidget {
     required this.forwardingAddress,
     required this.notificationService,
     required this.capability,
-    required this.showSettingsHint,
   });
 
   final String title;
   final String forwardingAddress;
   final NotificationService notificationService;
   final Capability capability;
-  final bool showSettingsHint;
 
   @override
   Widget build(BuildContext context) {
@@ -114,10 +111,93 @@ class EmailForwardingGuideDialog extends StatelessWidget {
         forwardingAddress: forwardingAddress,
         notificationService: notificationService,
         capability: capability,
-        showSettingsHint: showSettingsHint,
       ),
       callbackText: l10n.commonDone,
       callback: () => context.pop(),
+    );
+  }
+}
+
+class EmailForwardingWelcomeScreen extends StatelessWidget {
+  const EmailForwardingWelcomeScreen({
+    super.key,
+    required this.title,
+    required this.forwardingAddress,
+    required this.notificationService,
+    required this.capability,
+  });
+
+  final String title;
+  final String forwardingAddress;
+  final NotificationService notificationService;
+  final Capability capability;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    const EdgeInsets headerPadding = EdgeInsets.fromLTRB(24, 24, 24, 12);
+    const EdgeInsets contentPadding = EdgeInsets.fromLTRB(24, 0, 24, 24);
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: headerPadding,
+              child: Text(title, style: context.modalHeaderTextStyle),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: contentPadding,
+                child: EmailForwardingGuideContent(
+                  forwardingAddress: forwardingAddress,
+                  notificationService: notificationService,
+                  capability: capability,
+                ),
+              ),
+            ),
+            EmailForwardingWelcomeFooter(
+              hint: l10n.emailForwardingGuideSettingsHint,
+              actionLabel: l10n.emailForwardingGuideSkipLabel,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class EmailForwardingWelcomeFooter extends StatelessWidget {
+  const EmailForwardingWelcomeFooter({
+    super.key,
+    required this.hint,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  final String hint;
+  final String actionLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    const EdgeInsets padding = EdgeInsets.fromLTRB(24, 12, 24, 24);
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(hint, style: context.textTheme.muted),
+          ),
+          ShadButton.outline(
+            onPressed: onPressed,
+            child: Text(actionLabel),
+          ).withTapBounce(),
+        ],
+      ),
     );
   }
 }
@@ -128,44 +208,38 @@ class EmailForwardingGuideContent extends StatelessWidget {
     required this.forwardingAddress,
     required this.notificationService,
     required this.capability,
-    required this.showSettingsHint,
   });
 
   final String forwardingAddress;
   final NotificationService notificationService;
   final Capability capability;
-  final bool showSettingsHint;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final mutedStyle = context.textTheme.muted;
     final smallStyle = context.textTheme.small;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.emailForwardingGuideIntro, style: mutedStyle),
-        const SizedBox(height: _guideSectionSpacing),
+        Text(l10n.emailForwardingGuideLinkExistingEmailTitle,
+            style: smallStyle),
+        const SizedBox(height: _guideItemSpacing),
         Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
         EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
         const SizedBox(height: _guideSectionSpacing),
         Text(l10n.emailForwardingGuideLinksTitle, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
-        Text(l10n.emailForwardingGuideLinksSubtitle, style: mutedStyle),
-        const SizedBox(height: _guideItemSpacing),
         const EmailForwardingLinkRow(),
         if (capability.canForegroundService) ...[
           const SizedBox(height: _guideSectionSpacing),
+          Text(l10n.emailForwardingGuideNotificationsTitle, style: smallStyle),
+          const SizedBox(height: _guideItemSpacing),
           NotificationRequest(
             notificationService: notificationService,
             capability: capability,
           ),
-        ],
-        if (showSettingsHint) ...[
-          const SizedBox(height: _guideSectionSpacing),
-          Text(l10n.emailForwardingGuideSettingsHint, style: mutedStyle),
         ],
       ],
     );
@@ -293,14 +367,16 @@ class _EmailForwardingWelcomeGateState
     }
     _dialogShown = true;
     final forwardingAddress = _resolveForwardingAddress(context);
-    await showFadeScaleDialog<void>(
-      context: context,
-      builder: (dialogContext) => EmailForwardingGuideDialog(
-        title: dialogContext.l10n.emailForwardingWelcomeTitle,
-        forwardingAddress: forwardingAddress,
-        notificationService: context.read<NotificationService>(),
-        capability: context.read<Capability>(),
-        showSettingsHint: true,
+    await Navigator.of(context).push<void>(
+      AxiFadePageRoute(
+        duration: baseAnimationDuration,
+        fullscreenDialog: true,
+        builder: (routeContext) => EmailForwardingWelcomeScreen(
+          title: routeContext.l10n.emailForwardingWelcomeTitle,
+          forwardingAddress: forwardingAddress,
+          notificationService: routeContext.read<NotificationService>(),
+          capability: routeContext.read<Capability>(),
+        ),
       ),
     );
     if (!mounted) {
