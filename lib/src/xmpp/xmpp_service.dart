@@ -812,6 +812,13 @@ class XmppService extends XmppBase
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
 
+  bool get hasInMemoryReconnectContext =>
+      _sessionReconnectEnabled &&
+      !_reconnectBlocked &&
+      _synchronousConnection.isCompleted &&
+      hasConnectionSettings &&
+      databasesInitialized;
+
   BookmarksManager? get bookmarksManager =>
       _connection.getManager<BookmarksManager>();
 

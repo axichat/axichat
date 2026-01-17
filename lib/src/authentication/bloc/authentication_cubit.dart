@@ -190,7 +190,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   static const String _registerBodyKeyPassword2 = 'password2';
   static const String _registerBodyKeyPasswordOld = 'passwordold';
   static const String _registerBodyKeyPasswordOldLegacy = 'oldpassword';
-  static const Duration _stickyReconnectWaitTimeout = Duration(seconds: 10);
 
   Uri get registrationUrl => _buildRegistrationUrl();
 
@@ -629,12 +628,32 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     if (_stickyAuthActive) {
-      await _reconnectXmppForStickySession();
-      await _triggerEmailReconnect();
+      await _resumeStickySession();
       return;
     }
 
     await _loginWithStoredCredentials();
+  }
+
+  Future<void> _resumeStickySession() async {
+    if (!_canReconnectWithInMemoryCredentials()) {
+      final didLogin = await _loginWithStoredCredentials();
+      if (!didLogin) {
+        await logout();
+      }
+      return;
+    }
+
+    await _reconnectXmppForStickySession();
+    await _triggerEmailReconnect();
+  }
+
+  bool _canReconnectWithInMemoryCredentials() {
+    final bool xmppReady =
+        !endpointConfig.enableXmpp || _xmppService.hasInMemoryReconnectContext;
+    final bool emailReady = !endpointConfig.enableSmtp ||
+        (_emailService?.hasInMemoryReconnectContext ?? false);
+    return xmppReady && emailReady;
   }
 
   Future<void> _reconnectXmppForStickySession() async {
@@ -645,73 +664,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       try {
         await _xmppService.ensureForegroundSocketIfActive();
       } on Exception {
-        // Ignore: fallback reconnect logic below handles ensuring online state.
+        // Ignore: reconnection remains best-effort for sticky sessions.
       }
     }
     if (_xmppService.connected) {
-      return;
-    }
-
-    final bool hasReconnectContext =
-        _xmppService.hasConnectionSettings && _xmppService.databasesInitialized;
-    if (!hasReconnectContext) {
-      await _loginWithStoredCredentials();
       return;
     }
 
     try {
       await _xmppService.requestReconnect(ReconnectTrigger.resume);
     } on Exception {
-      // Fall back to a full login attempt below (covers cold starts and
-      // foreground-socket unavailability).
-    }
-    if (_xmppService.connected) {
-      return;
-    }
-
-    final bool didReconnect = await _awaitStickyReconnectResult();
-    if (didReconnect) {
-      return;
-    }
-
-    await _loginWithStoredCredentials();
-  }
-
-  Future<bool> _awaitStickyReconnectResult() async {
-    if (_xmppService.connected) {
-      return true;
-    }
-
-    final ConnectionState initialState = _xmppService.connectionState;
-    if (initialState == ConnectionState.error ||
-        initialState == ConnectionState.notConnected) {
-      return false;
-    }
-
-    final Completer<bool> resultCompleter = Completer<bool>();
-    late final StreamSubscription<ConnectionState> subscription;
-    subscription = _xmppService.connectivityStream.listen((state) {
-      if (state == ConnectionState.connected) {
-        if (!resultCompleter.isCompleted) {
-          resultCompleter.complete(true);
-        }
-        return;
-      }
-      if (state == ConnectionState.error ||
-          state == ConnectionState.notConnected) {
-        if (!resultCompleter.isCompleted) {
-          resultCompleter.complete(false);
-        }
-      }
-    });
-
-    try {
-      return await resultCompleter.future.timeout(
-        _stickyReconnectWaitTimeout,
-        onTimeout: () => false,
-      );
-    } finally {
-      await subscription.cancel();
+      // Ignore: network failures are non-fatal for sticky sessions.
     }
   }
 
