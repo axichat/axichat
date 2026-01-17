@@ -2980,12 +2980,13 @@ mixin MessageService
     final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
         : accountJid;
-    final metadataId = upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
+    final metadataId =
+        upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
     final resolvedAttachment = attachment.metadataId == metadataId
         ? attachment
         : attachment.copyWith(metadataId: metadataId);
-    final metadata = upload?.metadata ??
-        await _seedAttachmentMetadata(resolvedAttachment);
+    final metadata =
+        upload?.metadata ?? await _seedAttachmentMetadata(resolvedAttachment);
     if (upload != null) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     }

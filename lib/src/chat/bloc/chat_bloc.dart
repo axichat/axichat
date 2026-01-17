@@ -2855,15 +2855,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationId: nextHydrationId,
         composerHydrationText: body,
         composerError: null,
-        emailSubject: shouldHydrateSubject
-            ? resolvedSubject
-            : state.emailSubject,
+        emailSubject:
+            shouldHydrateSubject ? resolvedSubject : state.emailSubject,
         emailSubjectHydrationId: shouldHydrateSubject
             ? state.emailSubjectHydrationId + 1
             : state.emailSubjectHydrationId,
-        emailSubjectHydrationText: shouldHydrateSubject
-            ? resolvedSubject
-            : state.emailSubject,
+        emailSubjectHydrationText:
+            shouldHydrateSubject ? resolvedSubject : state.emailSubject,
         emailSubjectAutofillEligible: false,
         emailSubjectAutofilled: false,
       ),
