@@ -31,7 +31,6 @@ class AxiIconButton extends StatelessWidget {
     this.borderWidth,
     this.usePrimary = false,
     this.ghost = false,
-    this.tapBounce = true,
   });
 
   const AxiIconButton.ghost({
@@ -48,7 +47,6 @@ class AxiIconButton extends StatelessWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.usePrimary = false,
-    this.tapBounce = true,
   })  : backgroundColor = null,
         borderColor = null,
         borderWidth = null,
@@ -70,7 +68,6 @@ class AxiIconButton extends StatelessWidget {
   final double? borderWidth;
   final bool usePrimary;
   final bool ghost;
-  final bool tapBounce;
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +141,7 @@ class AxiIconButton extends StatelessWidget {
           ),
         ),
       ),
-    ).withTapBounce(enabled: enabled && tapBounce);
+    ).withTapBounce(enabled: enabled);
 
     if (tooltip != null) {
       tappable = AxiTooltip(

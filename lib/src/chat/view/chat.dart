@@ -3963,7 +3963,6 @@ class _ChatState extends State<Chat> {
                                     spacing: _chatAppBarLeadingSpacing,
                                     overflowBreakpoint: 0,
                                     availableWidth: leadingWidth,
-                                    tapBounce: false,
                                   ),
                                 ),
                               ),
@@ -4212,7 +4211,6 @@ class _ChatState extends State<Chat> {
                                   availableWidth: appBarWidth,
                                   forceCollapsed:
                                       collapseAppBarActions ? true : null,
-                                  tapBounce: false,
                                 );
                               },
                             )
