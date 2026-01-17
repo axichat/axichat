@@ -967,6 +967,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get draftRestore => 'Wiederherstellen';
 
   @override
+  String get draftRestoreAction => 'Aus Entwurf wiederherstellen';
+
+  @override
   String get draftMinimize => 'Minimieren';
 
   @override

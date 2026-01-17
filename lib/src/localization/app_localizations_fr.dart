@@ -970,6 +970,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftRestore => 'Restaurer';
 
   @override
+  String get draftRestoreAction => 'Restaurer depuis le brouillon';
+
+  @override
   String get draftMinimize => 'Réduire';
 
   @override

@@ -925,6 +925,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftRestore => '还原';
 
   @override
+  String get draftRestoreAction => '从草稿还原';
+
+  @override
   String get draftMinimize => '最小化';
 
   @override
@@ -6137,6 +6140,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get draftRestore => '還原';
+
+  @override
+  String get draftRestoreAction => '從草稿還原';
 
   @override
   String get draftMinimize => '最小化';

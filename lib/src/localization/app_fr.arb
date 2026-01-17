@@ -342,6 +342,7 @@
   "draftCompose": "Composer",
   "draftNewMessage": "Nouveau message",
   "draftRestore": "Restaurer",
+  "draftRestoreAction": "Restaurer depuis le brouillon",
   "draftMinimize": "Réduire",
   "draftExpand": "Agrandir",
   "draftExitFullscreen": "Quitter le plein écran",

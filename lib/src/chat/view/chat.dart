@@ -2018,6 +2018,9 @@ class _ChatState extends State<Chat> {
       return;
     }
     _lastSubjectValue = text;
+    if (mounted) {
+      setState(() {});
+    }
     context.read<ChatBloc>().add(ChatSubjectChanged(text));
   }
 
