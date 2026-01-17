@@ -131,27 +131,30 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
     const EdgeInsets contentPadding = EdgeInsets.fromLTRB(24, 0, 24, 24);
     return Scaffold(
       backgroundColor: colors.background,
-      body: SafeArea(
-        child: EmailForwardingWelcomeLayout(
-          header: Padding(
-            padding: headerPadding,
-            child: Text(
-              l10n.emailForwardingWelcomeTitle,
-              style: context.modalHeaderTextStyle,
+      body: ColoredBox(
+        color: colors.background,
+        child: SafeArea(
+          child: EmailForwardingWelcomeLayout(
+            header: Padding(
+              padding: headerPadding,
+              child: Text(
+                l10n.emailForwardingWelcomeTitle,
+                style: context.modalHeaderTextStyle,
+              ),
             ),
-          ),
-          content: SingleChildScrollView(
-            padding: contentPadding,
-            child: EmailForwardingGuideContent(
-              forwardingAddress: forwardingAddress,
-              notificationService: notificationService,
-              capability: capability,
+            content: SingleChildScrollView(
+              padding: contentPadding,
+              child: EmailForwardingGuideContent(
+                forwardingAddress: forwardingAddress,
+                notificationService: notificationService,
+                capability: capability,
+              ),
             ),
-          ),
-          footer: EmailForwardingWelcomeFooter(
-            hint: l10n.emailForwardingGuideSettingsHint,
-            actionLabel: l10n.emailForwardingGuideSkipLabel,
-            onPressed: () => Navigator.of(context).maybePop(),
+            footer: EmailForwardingWelcomeFooter(
+              hint: l10n.emailForwardingGuideSettingsHint,
+              actionLabel: l10n.emailForwardingGuideSkipLabel,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
           ),
         ),
       ),
@@ -246,10 +249,9 @@ class EmailForwardingGuideContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final bodyStyle = context.textTheme.p;
     final smallStyle = context.textTheme.small;
     final subheaderStyle =
-        context.textTheme.large.copyWith(fontWeight: FontWeight.w600);
+        context.textTheme.lead.copyWith(fontWeight: FontWeight.w600);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,7 +261,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
           style: subheaderStyle,
         ),
         const SizedBox(height: _guideItemSpacing),
-        Text(l10n.emailForwardingGuideAddressHint, style: bodyStyle),
+        Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
         EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
         const EmailForwardingSectionDivider(),
@@ -285,7 +287,7 @@ class EmailForwardingSectionDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const EdgeInsets padding = EdgeInsets.symmetric(vertical: 20);
+    const EdgeInsets padding = EdgeInsets.symmetric(vertical: 24);
     return const Padding(
       padding: padding,
       child: AxiListDivider(),

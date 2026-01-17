@@ -10,7 +10,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const Curve _paneResizeCurve = Curves.easeInOutCubic;
 const Curve _compactSlideCurve = Curves.easeIn;
-const Curve _compactDividerFadeCurve = Curves.easeOut;
 const Offset _compactSlideBeginOffset = Offset(1.0, 0);
 
 class AxiAdaptiveLayout extends StatelessWidget {
@@ -95,10 +94,8 @@ class AxiAdaptiveLayout extends StatelessWidget {
                     animation: primaryAnimation,
                     builder: (context, _) {
                       final colors = ShadTheme.of(context).colorScheme;
-                      final dividerOpacity = (1 -
-                              _compactDividerFadeCurve
-                                  .transform(primaryAnimation.value))
-                          .clamp(0.0, 1.0);
+                      final dividerOpacity =
+                          primaryAnimation.isCompleted ? 0.0 : 1.0;
                       return DecoratedBox(
                         decoration: BoxDecoration(
                           border: Border(
