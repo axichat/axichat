@@ -8176,9 +8176,48 @@ class _ChatState extends State<Chat> {
                         value: chatCalendarBloc,
                         child: scaffold,
                       );
-                return ColoredBox(
-                  color: context.colorScheme.background,
-                  child: content,
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final mediaQuery = MediaQuery.maybeOf(context);
+                    final shortestSide = mediaQuery?.size.shortestSide;
+                    final bool isCompactDevice = shortestSide != null &&
+                        shortestSide < compactDeviceBreakpoint;
+                    final bool allowSplitView =
+                        !isCompactDevice && constraints.maxWidth >= smallScreen;
+                    final colors = context.colorScheme;
+                    final animationDuration =
+                        context.watch<SettingsCubit>().animationDuration;
+                    const double borderFadeStart = 0.9;
+                    final Curve borderFadeCurve = allowSplitView
+                        ? Curves.linear
+                        : const Interval(
+                            borderFadeStart,
+                            1.0,
+                            curve: Curves.easeOut,
+                          );
+                    return TweenAnimationBuilder<double>(
+                      tween: Tween<double>(
+                        begin: 1.0,
+                        end: allowSplitView ? 1.0 : 0.0,
+                      ),
+                      duration: animationDuration,
+                      curve: borderFadeCurve,
+                      child: content,
+                      builder: (context, value, child) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: colors.background,
+                            border: Border(
+                              left: BorderSide(
+                                color: colors.border.withValues(alpha: value),
+                              ),
+                            ),
+                          ),
+                          child: child,
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),

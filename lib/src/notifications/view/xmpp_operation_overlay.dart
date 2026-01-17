@@ -82,17 +82,17 @@ class XmppOperationOverlay extends StatelessWidget {
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
-                  reverse: true,
                   physics: const NeverScrollableScrollPhysics(),
                   padding: _overlayListPadding,
                   clipBehavior: Clip.none,
                   itemCount: operations.length,
                   itemBuilder: (context, index) {
-                    final reverseIndex = operations.length - 1 - index;
-                    final operation = operations[reverseIndex];
-                    final staggerIndex = index > _entryStaggerMaxIndex
-                        ? _entryStaggerMaxIndex
-                        : index;
+                    final operation = operations[index];
+                    final distanceFromBottom = operations.length - 1 - index;
+                    final staggerIndex =
+                        distanceFromBottom > _entryStaggerMaxIndex
+                            ? _entryStaggerMaxIndex
+                            : distanceFromBottom;
                     final entryDelay = Duration(
                       milliseconds:
                           _entryStaggerBaseDelay.inMilliseconds * staggerIndex,

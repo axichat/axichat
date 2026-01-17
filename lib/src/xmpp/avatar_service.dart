@@ -81,7 +81,6 @@ mixin AvatarService on XmppBase, MucService {
     seconds: 5,
   );
   static const Duration _selfAvatarRepairCooldown = Duration(minutes: 2);
-  static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
   static const bool _allowAvatarPublisherFallback = true;
   static const bool _avatarSkipDefault = true;
   static const String _avatarClearReasonMetadataEmpty = 'metadata_empty';
@@ -106,7 +105,6 @@ mixin AvatarService on XmppBase, MucService {
   final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
   final LinkedHashMap<String, Uint8List> _safeAvatarBytesCache =
       LinkedHashMap();
-  Timer? _selfAvatarRefreshTimer;
   DateTime? _selfAvatarRepairLastAttempt;
 
   Uint8List? cachedAvatarBytes(String path) {
@@ -298,7 +296,6 @@ mixin AvatarService on XmppBase, MucService {
         _avatarLog.fine(
           'Stream negotiations done. resumed=${event.resumed}.',
         );
-        _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
           fireAndForget(
             () async {
@@ -346,22 +343,7 @@ mixin AvatarService on XmppBase, MucService {
     _safeAvatarBytesCache.clear();
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
-    _selfAvatarRefreshTimer?.cancel();
-    _selfAvatarRefreshTimer = null;
     await super._reset();
-  }
-
-  void _startSelfAvatarRefreshTimer() {
-    _selfAvatarRefreshTimer?.cancel();
-    _selfAvatarRefreshTimer = Timer.periodic(_selfAvatarRefreshInterval, (_) {
-      _handleSelfAvatarRefreshTick();
-    });
-  }
-
-  Future<void> _handleSelfAvatarRefreshTick() async {
-    if (connectionState != ConnectionState.connected) return;
-    if (avatarEncryptionKey == null) return;
-    await refreshSelfAvatarIfNeeded();
   }
 
   Future<void> scheduleAvatarRefresh(
