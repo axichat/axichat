@@ -102,7 +102,7 @@ const _mucInstantRoomConfigOperationName =
     'MucService.ensureInstantRoomConfiguration';
 const _mucCreateRoomBookmarkTimeoutLog =
     'Bookmark upsert still running for newly created room.';
-const bool _mucAvatarSupportEnabled = false;
+const bool _mucAvatarSupportEnabled = true;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
 const Set<String> _selfPresenceFallbackStatusCodes = {mucStatusSelfPresence};
