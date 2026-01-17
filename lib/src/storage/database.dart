@@ -64,7 +64,7 @@ const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 const int _messageStatusSyncEnvelopeVersion = 1;
 const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeIdKey = 'id';
-const int _pinnedMessagesSchemaVersion = 26;
+const int _pinnedMessagesSchemaVersion = 27;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
@@ -289,6 +289,7 @@ abstract interface class XmppDatabase implements Database {
     required String draftSourceId,
     required List<DraftRecipientData> draftRecipients,
     String? subject,
+    String? quotingStanzaId,
     List<String> attachmentMetadataIds = const [],
   });
 
@@ -307,6 +308,7 @@ abstract interface class XmppDatabase implements Database {
     required List<DraftRecipientData> draftRecipients,
     String? body,
     String? subject,
+    String? quotingStanzaId,
     List<String> attachmentMetadataIds = const [],
   });
 
@@ -1507,6 +1509,9 @@ WHERE delta_chat_id IS NOT NULL
 ''',
             [deltaAccountIdLegacy],
           );
+        }
+        if (from < 27) {
+          await m.addColumn(drafts, drafts.quotingStanzaId);
         }
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
@@ -2900,6 +2905,7 @@ WHERE email_from_address IN ($placeholderClause)
     required String draftSourceId,
     required List<DraftRecipientData> draftRecipients,
     String? subject,
+    String? quotingStanzaId,
     List<String> attachmentMetadataIds = const [],
   }) =>
       draftsAccessor.insertOrUpdateOne(
@@ -2912,6 +2918,7 @@ WHERE email_from_address IN ($placeholderClause)
           draftSourceId: Value(draftSourceId),
           draftRecipients: Value(draftRecipients),
           subject: Value.absentIfNull(subject),
+          quotingStanzaId: Value.absentIfNull(quotingStanzaId),
           attachmentMetadataIds: Value(attachmentMetadataIds),
         ),
       );
@@ -2942,6 +2949,7 @@ WHERE email_from_address IN ($placeholderClause)
     required List<DraftRecipientData> draftRecipients,
     String? body,
     String? subject,
+    String? quotingStanzaId,
     List<String> attachmentMetadataIds = const [],
   }) async {
     final normalized = draftSyncId.trim();
@@ -2957,6 +2965,7 @@ WHERE email_from_address IN ($placeholderClause)
           draftRecipients: Value(draftRecipients),
           body: Value(body),
           subject: Value(subject),
+          quotingStanzaId: Value.absentIfNull(quotingStanzaId),
           attachmentMetadataIds: Value(attachmentMetadataIds),
         ),
       );
@@ -2971,6 +2980,7 @@ WHERE email_from_address IN ($placeholderClause)
         draftRecipients: Value(draftRecipients),
         body: Value(body),
         subject: Value(subject),
+        quotingStanzaId: Value.absentIfNull(quotingStanzaId),
         attachmentMetadataIds: Value(attachmentMetadataIds),
       ),
     );

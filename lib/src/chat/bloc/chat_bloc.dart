@@ -158,19 +158,25 @@ class FanOutDraft extends Equatable {
 
 enum ChatToastVariant { info, warning, destructive }
 
+enum ChatToastAction { restoreDraft }
+
 class ChatToast extends Equatable {
   const ChatToast({
     required this.message,
     this.variant = ChatToastVariant.info,
+    this.action,
+    this.actionDraftId,
   });
 
   final String message;
   final ChatToastVariant variant;
+  final ChatToastAction? action;
+  final int? actionDraftId;
 
   bool get isDestructive => variant == ChatToastVariant.destructive;
 
   @override
-  List<Object?> get props => [message, variant];
+  List<Object?> get props => [message, variant, action, actionDraftId];
 }
 
 enum MamPageDirection { before, after }
@@ -233,6 +239,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
+    on<ChatDraftRestoreRequested>(_onChatDraftRestoreRequested);
     on<ChatInviteRequested>(_onChatInviteRequested);
     on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
@@ -960,6 +967,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationText:
             resetContext ? null : state.composerHydrationText,
         composerHydrationId: resetContext ? 0 : state.composerHydrationId,
+        composerClearId: resetContext ? 0 : state.composerClearId,
         emailSubject: resetContext ? null : state.emailSubject,
         emailSubjectHydrationText:
             resetContext ? null : state.emailSubjectHydrationText,
@@ -1985,7 +1993,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(typing: false));
     final chat = state.chat;
     if (chat == null) return;
-    final sendStartedAt = DateTime.now();
+    final storedStanzaIds = <String>{};
     final trimmedText = event.text.trim();
     final CalendarTask? requestedTask = event.calendarTaskIcs;
     final bool taskReadOnly = event.calendarTaskIcsReadOnly;
@@ -2114,39 +2122,46 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(composerError: message));
       return;
     }
+    final invalidEmailRecipients = requiresEmail
+        ? emailRecipients.where((recipient) {
+            final targetChat = recipient.target.chat;
+            if (targetChat != null) {
+              return !_isEmailCapableChat(targetChat);
+            }
+            return recipient.target.address?.isNotEmpty != true;
+          })
+        : const <ComposerRecipient>[];
+    if (requiresEmail && emailRecipients.isEmpty) {
+      emit(state.copyWith(composerError: 'Select at least one recipient.'));
+      return;
+    }
+    if (requiresEmail && invalidEmailRecipients.isNotEmpty) {
+      emit(
+        state.copyWith(
+          composerError: 'Email is unavailable for one or more recipients.',
+        ),
+      );
+      return;
+    }
+    if (requiresEmail && state.emailSyncState.requiresAttention) {
+      await _handleBrokenEmailSend(
+        chat: chat,
+        recipients: emailRecipients,
+        rawText: trimmedText,
+        quotedDraft: quotedDraft,
+        emit: emit,
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        composerClearId: state.composerClearId + 1,
+      ),
+    );
     var emailSendSucceeded = emailAlreadySent;
     var xmppSendSucceeded = xmppAlreadySent;
     try {
       if (requiresEmail) {
-        if (emailRecipients.isEmpty) {
-          emit(state.copyWith(composerError: 'Select at least one recipient.'));
-          return;
-        }
-        final invalidEmailRecipients = emailRecipients.where((recipient) {
-          final targetChat = recipient.target.chat;
-          if (targetChat != null) {
-            return !_isEmailCapableChat(targetChat);
-          }
-          return recipient.target.address?.isNotEmpty != true;
-        });
-        if (invalidEmailRecipients.isNotEmpty) {
-          emit(
-            state.copyWith(
-              composerError: 'Email is unavailable for one or more recipients.',
-            ),
-          );
-          return;
-        }
-        if (state.emailSyncState.requiresAttention) {
-          await _handleBrokenEmailSend(
-            chat: chat,
-            recipients: emailRecipients,
-            rawText: trimmedText,
-            quotedDraft: quotedDraft,
-            emit: emit,
-          );
-          return;
-        }
         final EmailService emailService = service!;
         var emailTextSent = false;
         var emailAttachmentsSent = !attachmentsViaEmail;
@@ -2293,6 +2308,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emit: emit,
           quotedDraft: quotedDraft,
           caption: hasXmppBody ? xmppBody : null,
+          onLocalMessageStored: storedStanzaIds.add,
         );
         if (!sent) {
           return;
@@ -2306,6 +2322,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           calendarTaskIcs: fanOutTask,
           calendarTaskIcsReadOnly: taskReadOnly,
           quotedDraft: quotedDraft,
+          onLocalMessageStored: storedStanzaIds.add,
         );
         xmppBodySent = true;
       } else if (!requiresEmail && shouldAttemptXmppBody) {
@@ -2321,6 +2338,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           calendarTaskIcs: taskForXmpp,
           calendarTaskIcsReadOnly: taskReadOnly,
           chatType: chat.type,
+          onLocalMessageStored: storedStanzaIds.add,
         );
         xmppBodySent = true;
       }
@@ -2332,43 +2350,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.safeWarning(_sendEmailMessageFailedLogMessage, error, stackTrace);
       if (requiresEmail) {
         final mappedError = DeltaErrorMapper.resolve(error.message);
-        final nextHydrationId = ++_composerHydrationSeed;
         emit(
           state.copyWith(
             composerError: mappedError.label(_l10n),
-            composerHydrationId: nextHydrationId,
-            composerHydrationText: trimmedText,
           ),
         );
       }
     } on XmppMessageException catch (error, stackTrace) {
       _log.safeWarning(_sendMessageFailedLogMessage, error, stackTrace);
-      await _saveXmppDraft(
-        chat: chat,
-        recipients: xmppRecipients,
-        body: trimmedText,
-        attachments: queuedAttachments,
-        emit: emit,
-      );
-      _rehydrateComposerAfterSendFailure(
-        sendStartedAt: sendStartedAt,
-        text: trimmedText,
-        emit: emit,
-      );
+      if (storedStanzaIds.isEmpty) {
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: xmppRecipients,
+          body: trimmedText,
+          attachments: queuedAttachments,
+          emit: emit,
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(_sendMessageFailedLogMessage, error, stackTrace);
-      await _saveXmppDraft(
-        chat: chat,
-        recipients: xmppRecipients,
-        body: trimmedText,
-        attachments: queuedAttachments,
-        emit: emit,
-      );
-      _rehydrateComposerAfterSendFailure(
-        sendStartedAt: sendStartedAt,
-        text: trimmedText,
-        emit: emit,
-      );
+      if (storedStanzaIds.isEmpty) {
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: xmppRecipients,
+          body: trimmedText,
+          attachments: queuedAttachments,
+          emit: emit,
+        );
+      }
     } finally {
       final shouldClearComposer = (!requiresEmail || emailSendSucceeded) &&
           (!requiresXmpp || xmppSendSucceeded);
@@ -2389,27 +2398,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _clearEmailSubject(emit);
       }
     }
-  }
-
-  void _rehydrateComposerAfterSendFailure({
-    required DateTime sendStartedAt,
-    required String text,
-    required Emitter<ChatState> emit,
-  }) {
-    if (text.isEmpty) {
-      return;
-    }
-    const rehydrateWindow = Duration(seconds: 1);
-    if (DateTime.now().difference(sendStartedAt) >= rehydrateWindow) {
-      return;
-    }
-    final nextHydrationId = ++_composerHydrationSeed;
-    emit(
-      state.copyWith(
-        composerHydrationId: nextHydrationId,
-        composerHydrationText: text,
-      ),
-    );
   }
 
   Future<void> _onChatAvailabilityMessageSent(
@@ -2824,6 +2812,62 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       await _rehydrateXmppDraft(message, emit);
     }
+  }
+
+  Future<void> _onChatDraftRestoreRequested(
+    ChatDraftRestoreRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    final db = await _messageService.database;
+    final draft = await db.getDraft(event.draftId);
+    if (draft == null) {
+      return;
+    }
+    final recipients = await _recipientsFromDraft(draft: draft, chat: chat);
+    final attachments =
+        await _attachmentsFromMetadataIds(draft.attachmentMetadataIds);
+    final pendingAttachments = attachments
+        .map(
+          (attachment) => PendingAttachment(
+            id: _nextPendingAttachmentId(),
+            attachment: attachment,
+          ),
+        )
+        .toList();
+    Message? quoted;
+    final quotedStanzaId = draft.quotingStanzaId?.trim();
+    if (quotedStanzaId != null && quotedStanzaId.isNotEmpty) {
+      quoted = await db.getMessageByStanzaID(quotedStanzaId);
+    }
+    final body = draft.body ?? '';
+    final resolvedSubject = draft.subject?.trim();
+    final shouldHydrateSubject = resolvedSubject != null &&
+        resolvedSubject.isNotEmpty &&
+        resolvedSubject != state.emailSubject;
+    final nextHydrationId = ++_composerHydrationSeed;
+    emit(
+      state.copyWith(
+        recipients: recipients,
+        pendingAttachments: pendingAttachments,
+        quoting: quoted,
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: body,
+        composerError: null,
+        emailSubject: shouldHydrateSubject
+            ? resolvedSubject
+            : state.emailSubject,
+        emailSubjectHydrationId: shouldHydrateSubject
+            ? state.emailSubjectHydrationId + 1
+            : state.emailSubjectHydrationId,
+        emailSubjectHydrationText: shouldHydrateSubject
+            ? resolvedSubject
+            : state.emailSubject,
+        emailSubjectAutofillEligible: false,
+        emailSubjectAutofilled: false,
+      ),
+    );
   }
 
   Future<void> _onChatAttachmentPicked(
@@ -3492,6 +3536,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Message? quotedDraft,
     String? caption,
     String? htmlCaption,
+    void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     if (!state.supportsHttpFileUpload) {
       const message = 'File upload is not available on this server.';
@@ -3522,6 +3567,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     for (var index = 0; index < orderedAttachments.length; index += 1) {
       var current = orderedAttachments[index];
+      String? storedStanzaId;
       final shouldApplyCaption = caption?.isNotEmpty == true && index == 0;
       final updatedAttachment = shouldApplyCaption
           ? current.attachment.copyWith(caption: caption)
@@ -3551,6 +3597,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             transportGroupId: groupId,
             attachmentOrder: index,
             upload: upload,
+            onLocalMessageStored: (stanzaId) {
+              storedStanzaId = stanzaId;
+              onLocalMessageStored?.call(stanzaId);
+            },
           );
         }
         _removePendingAttachment(current.id, emit);
@@ -3558,63 +3608,73 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final message = _attachmentTooLargeMessage(error.maxBytes);
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
-        await _saveXmppDraft(
-          chat: chat,
-          recipients: recipients,
-          body: '',
-          attachments: [current],
-          emit: emit,
-        );
+        if (storedStanzaId == null) {
+          await _saveXmppDraft(
+            chat: chat,
+            recipients: recipients,
+            body: '',
+            attachments: [current],
+            emit: emit,
+          );
+        }
         return false;
       } on XmppUploadUnavailableException catch (_) {
         const message =
             'File uploads are unavailable right now. Saved to drafts.';
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
-        await _saveXmppDraft(
-          chat: chat,
-          recipients: recipients,
-          body: '',
-          attachments: [current],
-          emit: emit,
-        );
+        if (storedStanzaId == null) {
+          await _saveXmppDraft(
+            chat: chat,
+            recipients: recipients,
+            body: '',
+            attachments: [current],
+            emit: emit,
+          );
+        }
         return false;
       } on XmppUploadNotSupportedException catch (_) {
         const message = 'File upload is not available on this server.';
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
-        await _saveXmppDraft(
-          chat: chat,
-          recipients: recipients,
-          body: '',
-          attachments: [current],
-          emit: emit,
-        );
+        if (storedStanzaId == null) {
+          await _saveXmppDraft(
+            chat: chat,
+            recipients: recipients,
+            body: '',
+            attachments: [current],
+            emit: emit,
+          );
+        }
         return false;
       } on XmppUploadMisconfiguredException catch (_) {
         const message =
             'File upload failed because the server’s upload component is misconfigured or temporarily unavailable.';
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
-        await _saveXmppDraft(
-          chat: chat,
-          recipients: recipients,
-          body: '',
-          attachments: [current],
-          emit: emit,
-        );
+        if (storedStanzaId == null) {
+          await _saveXmppDraft(
+            chat: chat,
+            recipients: recipients,
+            body: '',
+            attachments: [current],
+            emit: emit,
+          );
+        }
         return false;
       } on XmppMessageException catch (_) {
         const message = _attachmentSendFailureMessage;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
-        await _saveXmppDraft(
-          chat: chat,
-          recipients: recipients,
-          body: '',
-          attachments: [current],
-          emit: emit,
-        );
+        if (storedStanzaId == null) {
+          await _saveXmppDraft(
+            chat: chat,
+            recipients: recipients,
+            body: '',
+            attachments: [current],
+            emit: emit,
+          );
+        }
         return false;
       } on Exception catch (error, stackTrace) {
         _log.safeWarning(
@@ -3625,13 +3685,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         const message = _attachmentSendFailureMessage;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
-        await _saveXmppDraft(
-          chat: chat,
-          recipients: recipients,
-          body: '',
-          attachments: [current],
-          emit: emit,
-        );
+        if (storedStanzaId == null) {
+          await _saveXmppDraft(
+            chat: chat,
+            recipients: recipients,
+            body: '',
+            attachments: [current],
+            emit: emit,
+          );
+        }
         return false;
       }
     }
@@ -3686,11 +3748,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     try {
-      await _messageService.saveDraft(
+      final result = await _messageService.saveDraft(
         id: null,
         jids: resolvedRecipients,
         body: body,
         subject: state.emailSubject,
+        quotingStanzaId: quotedDraft?.stanzaID,
         attachments: attachments,
       );
       final emailService = _emailService;
@@ -3710,9 +3773,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(
+          ChatToast(
             message:
                 'Saved to Drafts because email is offline. Reopen it once sync recovers.',
+            action: ChatToastAction.restoreDraft,
+            actionDraftId: result.draftId,
           ),
         ),
       );
@@ -4259,6 +4324,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     CalendarTask? calendarTaskIcs,
     bool calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
     required Message? quotedDraft,
+    void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     final processed = <String>{};
     for (final recipient in recipients) {
@@ -4279,6 +4345,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         calendarTaskIcs: calendarTaskIcs,
         calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
         chatType: targetChat.type,
+        onLocalMessageStored: onLocalMessageStored,
       );
     }
   }
@@ -4466,6 +4533,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return updated;
+  }
+
+  Future<List<ComposerRecipient>> _recipientsFromDraft({
+    required Draft draft,
+    required Chat chat,
+  }) async {
+    final db = await _messageService.database;
+    final recipients = <ComposerRecipient>[];
+    final seen = <String>{};
+    final pinned = _pinnedRecipientForChat(chat);
+    recipients.add(pinned);
+    seen.add(pinned.key);
+    for (final jid in draft.jids) {
+      final trimmed = jid.trim();
+      if (trimmed.isEmpty || !seen.add(trimmed)) {
+        continue;
+      }
+      final existing = await db.getChat(trimmed);
+      final target = existing == null
+          ? FanOutTarget.address(address: trimmed)
+          : FanOutTarget.chat(existing);
+      recipients.add(ComposerRecipient(target: target, included: true));
+    }
+    return recipients;
   }
 
   ComposerRecipient? _recipientForChat(String jid) {
@@ -4715,6 +4806,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         jids: resolvedRecipients,
         body: trimmedBody,
         subject: state.emailSubject,
+        quotingStanzaId: state.quoting?.stanzaID,
         attachments: attachmentPayload,
       );
       emit(

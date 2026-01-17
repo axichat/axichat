@@ -2690,6 +2690,7 @@ mixin MessageService
     bool noStore = false,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
     ChatType chatType = ChatType.chat,
+    void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     final accountJid = myJid;
     if (accountJid == null) {
@@ -2713,9 +2714,6 @@ mixin MessageService
           operationName: 'MessageService.prefetchOutboundPeerAvatar',
         );
       }
-    }
-    if (isGroupChat && !offlineDemo) {
-      await _ensureMucJoinForSend(roomJid: jid);
     }
     final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
@@ -2796,11 +2794,27 @@ mixin MessageService
     _rememberReadOnlyTaskShare(message);
     if (shouldStore) {
       await _storeMessage(message, chatType: chatType);
+      onLocalMessageStored?.call(message.stanzaID);
     }
 
     if (offlineDemo) {
       await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
       return;
+    }
+    if (isGroupChat) {
+      try {
+        await _ensureMucJoinForSend(roomJid: jid);
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Failed to join room before sending ${message.stanzaID}',
+          error,
+          stackTrace,
+        );
+        if (shouldStore) {
+          await _handleMessageSendFailure(message.stanzaID);
+        }
+        throw XmppMessageException();
+      }
     }
 
     try {
@@ -2951,6 +2965,7 @@ mixin MessageService
     Message? quotedMessage,
     ChatType chatType = ChatType.chat,
     XmppAttachmentUpload? upload,
+    void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     final accountJid = myJid;
     if (accountJid == null) {
@@ -2962,20 +2977,22 @@ mixin MessageService
       throw XmppForeignDomainException();
     }
     final isGroupChat = chatType == ChatType.groupChat;
-    if (isGroupChat) {
-      await _ensureMucJoinForSend(roomJid: jid);
-    }
     final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
         : accountJid;
-    final resolvedUpload = upload ?? await _uploadAttachment(attachment);
-    final metadata = resolvedUpload.metadata;
-    final getUrl = resolvedUpload.getUrl;
+    final metadataId = upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
+    final resolvedAttachment = attachment.metadataId == metadataId
+        ? attachment
+        : attachment.copyWith(metadataId: metadataId);
+    final metadata = upload?.metadata ??
+        await _seedAttachmentMetadata(resolvedAttachment);
+    if (upload != null) {
+      await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+    }
     final size = metadata.sizeBytes ?? _attachmentSizeFallbackBytes;
     final filename = metadata.filename;
-    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
-    final captionText = attachment.caption?.trim() ?? '';
+    final captionText = resolvedAttachment.caption?.trim() ?? '';
     final resolvedCaption = captionText.isNotEmpty
         ? captionText
         : (normalizedHtmlCaption == null
@@ -2998,6 +3015,7 @@ mixin MessageService
     );
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);
+    onLocalMessageStored?.call(message.stanzaID);
     if (transportGroupId != null || attachmentOrder != null) {
       await _dbOp<XmppDatabase>((db) async {
         final persisted = await db.getMessageByStanzaID(message.stanzaID);
@@ -3013,17 +3031,62 @@ mixin MessageService
         );
       });
     }
+    if (isGroupChat) {
+      try {
+        await _ensureMucJoinForSend(roomJid: jid);
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Failed to join room before sending attachment ${message.stanzaID}',
+          error,
+          stackTrace,
+        );
+        if (shouldStore) {
+          await _handleMessageSendFailure(message.stanzaID);
+        }
+        throw XmppMessageException();
+      }
+    }
+    late final XmppAttachmentUpload resolvedUpload;
+    try {
+      resolvedUpload = upload ?? await _uploadAttachment(resolvedAttachment);
+    } on XmppException {
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: message.stanzaID,
+            error: MessageError.fileUploadFailure,
+          ),
+        );
+      }
+      rethrow;
+    } on Exception {
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: message.stanzaID,
+            error: MessageError.fileUploadFailure,
+          ),
+        );
+      }
+      throw XmppMessageException();
+    }
+    final updatedMetadata = resolvedUpload.metadata;
+    final getUrl = resolvedUpload.getUrl;
+    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(updatedMetadata));
     if (upload == null) {
       await _uploadAttachmentFile(
         upload: resolvedUpload,
-        metadata: metadata,
+        metadata: updatedMetadata,
         stanzaId: message.stanzaID,
         shouldStore: shouldStore,
       );
     }
 
     try {
-      final sfsData = _sfsDataForAttachment(metadata: metadata, url: getUrl);
+      final sfsData = _sfsDataForAttachment(
+        metadata: updatedMetadata,
+        url: getUrl,
+      );
       final extraExtensions = <mox.StanzaHandlerExtension>[
         const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
         sfsData,
@@ -3891,6 +3954,7 @@ mixin MessageService
     required List<String> jids,
     required String body,
     String? subject,
+    String? quotingStanzaId,
     List<EmailAttachment> attachments = const [],
   }) async {
     final Draft? existingDraft = id == null
@@ -3923,6 +3987,7 @@ mixin MessageService
         draftSourceId: resolvedSourceId,
         draftRecipients: draftRecipients,
         subject: subject,
+        quotingStanzaId: quotingStanzaId,
         attachmentMetadataIds: metadataIds,
       ),
     );
@@ -4044,6 +4109,42 @@ mixin MessageService
       (db) =>
           db.saveMessageError(error: MessageError.unknown, stanzaID: stanzaID),
     );
+  }
+
+  Future<FileMetadataData> _seedAttachmentMetadata(
+    EmailAttachment attachment,
+  ) async {
+    final resolvedId = attachment.metadataId ?? uuid.v4();
+    final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+      (db) => db.getFileMetadata(resolvedId),
+    );
+    final resolvedFilename = attachment.fileName.isNotEmpty
+        ? attachment.fileName
+        : existing?.filename ?? p.basename(attachment.path);
+    final resolvedSizeBytes =
+        attachment.sizeBytes > 0 ? attachment.sizeBytes : existing?.sizeBytes;
+    final resolvedMimeType = attachment.mimeType?.trim().isNotEmpty == true
+        ? attachment.mimeType
+        : existing?.mimeType;
+    final metadata = FileMetadataData(
+      id: resolvedId,
+      filename: resolvedFilename,
+      path: attachment.path,
+      sourceUrls: existing?.sourceUrls,
+      mimeType: resolvedMimeType,
+      sizeBytes: resolvedSizeBytes,
+      width: attachment.width ?? existing?.width,
+      height: attachment.height ?? existing?.height,
+      encryptionKey: existing?.encryptionKey,
+      encryptionIV: existing?.encryptionIV,
+      encryptionScheme: existing?.encryptionScheme,
+      cipherTextHashes: existing?.cipherTextHashes,
+      plainTextHashes: existing?.plainTextHashes,
+      thumbnailType: existing?.thumbnailType,
+      thumbnailData: existing?.thumbnailData,
+    );
+    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+    return metadata;
   }
 
   Future<String> _persistDraftAttachmentMetadata(
