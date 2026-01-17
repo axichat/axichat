@@ -37,6 +37,7 @@ class ChatState with _$ChatState {
     String? composerError,
     @Default(0) int composerHydrationId,
     String? composerHydrationText,
+    @Default(0) int composerClearId,
     String? emailSubject,
     @Default(0) int emailSubjectHydrationId,
     String? emailSubjectHydrationText,

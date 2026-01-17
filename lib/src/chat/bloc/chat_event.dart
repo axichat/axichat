@@ -306,6 +306,15 @@ final class ChatMessageEditRequested extends ChatEvent {
   List<Object?> get props => const [];
 }
 
+final class ChatDraftRestoreRequested extends ChatEvent {
+  const ChatDraftRestoreRequested(this.draftId);
+
+  final int draftId;
+
+  @override
+  List<Object?> get props => [draftId];
+}
+
 final class ChatAttachmentPicked extends ChatEvent {
   const ChatAttachmentPicked(this.attachment);
 

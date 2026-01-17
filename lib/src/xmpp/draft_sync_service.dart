@@ -382,6 +382,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         jids: payload.recipientJids,
         body: payload.body,
         subject: payload.subject,
+        quotingStanzaId: null,
         attachmentMetadataIds: payload.attachmentMetadataIds,
         draftUpdatedAt: payload.updatedAt.toUtc(),
         draftSourceId: payload.sourceId,

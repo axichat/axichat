@@ -2323,17 +2323,6 @@ class _ChatState extends State<Chat> {
             calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
           ),
         );
-    if (resolvedText.isNotEmpty) {
-      _textController.clear();
-    }
-    if (_pendingCalendarTaskIcs != null || _pendingCalendarSeedText != null) {
-      if (!mounted) return;
-      setState(() {
-        _pendingCalendarTaskIcs = null;
-        _pendingCalendarSeedText = null;
-      });
-    }
-    _focusNode.requestFocus();
   }
 
   Future<bool> _confirmMediaMetadataIfNeeded(
@@ -3446,21 +3435,57 @@ class _ChatState extends State<Chat> {
                   final show = showToast;
                   if (toast == null || show == null) return;
                   final l10n = context.l10n;
+                  final actionDraftId = toast.actionDraftId;
+                  final actionLabel =
+                      toast.action == ChatToastAction.restoreDraft &&
+                              actionDraftId != null
+                          ? l10n.draftRestoreAction
+                          : null;
+                  final VoidCallback? onAction =
+                      toast.action == ChatToastAction.restoreDraft &&
+                              actionDraftId != null
+                          ? () => context
+                              .read<ChatBloc>()
+                              .add(ChatDraftRestoreRequested(actionDraftId))
+                          : null;
                   final toastWidget = switch (toast.variant) {
                     ChatToastVariant.destructive => FeedbackToast.error(
                         title: l10n.toastWhoopsTitle,
                         message: toast.message,
+                        actionLabel: actionLabel,
+                        onAction: onAction,
                       ),
                     ChatToastVariant.warning => FeedbackToast.warning(
                         title: l10n.toastHeadsUpTitle,
                         message: toast.message,
+                        actionLabel: actionLabel,
+                        onAction: onAction,
                       ),
                     ChatToastVariant.info => FeedbackToast.success(
                         title: l10n.toastAllSetTitle,
                         message: toast.message,
+                        actionLabel: actionLabel,
+                        onAction: onAction,
                       ),
                   };
                   show(toastWidget);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    current.composerClearId != 0 &&
+                    previous.composerClearId != current.composerClearId,
+                listener: (_, __) {
+                  _textController.clear();
+                  _composerHasText = false;
+                  if (_pendingCalendarTaskIcs != null ||
+                      _pendingCalendarSeedText != null) {
+                    setState(() {
+                      _pendingCalendarTaskIcs = null;
+                      _pendingCalendarSeedText = null;
+                    });
+                  }
+                  _focusNode.requestFocus();
                 },
               ),
               BlocListener<ChatBloc, ChatState>(
