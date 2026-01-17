@@ -90,25 +90,14 @@ class AxiAdaptiveLayout extends StatelessWidget {
                     child: child,
                   );
                   if (!showCompactDivider) return transition;
-                  return AnimatedBuilder(
-                    animation: primaryAnimation,
-                    builder: (context, _) {
-                      final colors = ShadTheme.of(context).colorScheme;
-                      final dividerOpacity =
-                          primaryAnimation.isCompleted ? 0.0 : 1.0;
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            left: BorderSide(
-                              color: colors.border.withValues(
-                                alpha: dividerOpacity,
-                              ),
-                            ),
-                          ),
-                        ),
-                        child: transition,
-                      );
-                    },
+                  final colors = ShadTheme.of(context).colorScheme;
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: colors.border),
+                      ),
+                    ),
+                    child: transition,
                   );
                 },
                 child: compactChild,

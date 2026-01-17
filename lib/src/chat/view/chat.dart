@@ -1579,78 +1579,6 @@ class _ChatState extends State<Chat> {
     return nick.isEmpty ? null : nick;
   }
 
-  Occupant? _resolveOccupantForMessage(
-    Message message,
-    RoomState? roomState,
-  ) {
-    final resolvedRoomState = roomState;
-    if (resolvedRoomState == null) {
-      return null;
-    }
-    final occupantId = message.occupantID?.trim();
-    if (occupantId != null && occupantId.isNotEmpty) {
-      final occupant = resolvedRoomState.occupants[occupantId];
-      if (occupant != null) {
-        return occupant;
-      }
-    }
-    final direct = resolvedRoomState.occupants[message.senderJid];
-    if (direct != null) {
-      return direct;
-    }
-    final nick = _nickFromSender(message.senderJid);
-    if (nick == null) {
-      return null;
-    }
-    for (final occupant in resolvedRoomState.occupants.values) {
-      if (occupant.nick == nick) {
-        return occupant;
-      }
-    }
-    return null;
-  }
-
-  String _resolveSenderLabel({
-    required BuildContext context,
-    required Message message,
-    required bool isSelf,
-    required chat_models.Chat? chat,
-    required RoomState? roomState,
-  }) {
-    final l10n = context.l10n;
-    final trimmedSelfLabel = l10n.chatSenderYou.trim();
-    if (isSelf) {
-      final displayName = chat?.displayName ?? '';
-      return trimmedSelfLabel.isNotEmpty ? trimmedSelfLabel : displayName;
-    }
-    if (chat == null) {
-      final fallback = message.senderJid.trim();
-      return fallback.isNotEmpty ? fallback : '';
-    }
-    final isGroupChat = chat.type == ChatType.groupChat;
-    String? label;
-    if (isGroupChat) {
-      final occupant = _resolveOccupantForMessage(message, roomState);
-      final occupantNick = occupant?.nick;
-      final trimmedNick = occupantNick?.trim();
-      final nick = trimmedNick != null && trimmedNick.isNotEmpty
-          ? trimmedNick
-          : _nickFromSender(message.senderJid);
-      label = nick;
-    } else {
-      final displayName = chat.displayName.trim();
-      label = displayName.isNotEmpty ? displayName : null;
-    }
-    final senderFallback = message.senderJid.trim();
-    final fallback =
-        senderFallback.isNotEmpty ? senderFallback : chat.displayName;
-    final hasLabel = label != null && label.isNotEmpty;
-    final candidate = hasLabel ? label : fallback;
-    final sanitized = sanitizeUnicodeControls(candidate);
-    final safeLabel = sanitized.value.trim();
-    return safeLabel.isNotEmpty ? safeLabel : fallback;
-  }
-
   String? _bareJid(String? jid) {
     if (jid == null || jid.isEmpty) return null;
     try {
@@ -1858,29 +1786,48 @@ class _ChatState extends State<Chat> {
     return isValid ? raw : null;
   }
 
-  bool _isSameOccupantId(String? first, String? second) {
-    final normalizedFirst = _normalizeOccupantId(first);
-    final normalizedSecond = _normalizeOccupantId(second);
-    if (normalizedFirst == null || normalizedSecond == null) {
+  bool _isMucSelfMessage({
+    required String senderJid,
+    required String? occupantId,
+    required String? myOccupantId,
+    required String? selfNick,
+  }) {
+    final normalizedSelf = _normalizeOccupantId(myOccupantId);
+    if (normalizedSelf != null) {
+      final normalizedSender = _normalizeOccupantId(senderJid);
+      if (normalizedSender != null && normalizedSender == normalizedSelf) {
+        return true;
+      }
+      final normalizedOccupant = _normalizeOccupantId(occupantId);
+      if (normalizedOccupant != null && normalizedOccupant == normalizedSelf) {
+        return true;
+      }
+    }
+    final trimmedSelfNick = selfNick?.trim();
+    if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
       return false;
     }
-    return normalizedFirst == normalizedSecond;
+    final senderNick = _nickFromSender(senderJid);
+    if (senderNick == null || senderNick.isEmpty) {
+      return false;
+    }
+    return senderNick == trimmedSelfNick;
   }
 
   bool _isQuotedMessageFromSelf({
     required Message quotedMessage,
     required bool isGroupChat,
     required String? myOccupantId,
+    required String? selfNick,
     required String? currentUserId,
   }) {
-    if (isGroupChat && myOccupantId != null) {
-      if (_isSameOccupantId(quotedMessage.senderJid, myOccupantId)) {
-        return true;
-      }
-      final quotedOccupantId = quotedMessage.occupantID;
-      if (quotedOccupantId != null && quotedOccupantId.isNotEmpty) {
-        return _isSameOccupantId(quotedOccupantId, myOccupantId);
-      }
+    if (isGroupChat) {
+      return _isMucSelfMessage(
+        senderJid: quotedMessage.senderJid,
+        occupantId: quotedMessage.occupantID,
+        myOccupantId: myOccupantId,
+        selfNick: selfNick,
+      );
     }
     return _bareJid(quotedMessage.senderJid) == _bareJid(currentUserId);
   }
@@ -3684,6 +3631,8 @@ class _ChatState extends State<Chat> {
                 final myOccupant = myOccupantId == null
                     ? null
                     : state.roomState?.occupants[myOccupantId];
+                final selfNick =
+                    (myOccupant?.nick ?? chatEntity?.myNickname)?.trim();
                 final String? availabilityActorId = _availabilityActorId(
                   chat: chatEntity,
                   currentUserId: currentUserId,
@@ -4014,6 +3963,7 @@ class _ChatState extends State<Chat> {
                                     spacing: _chatAppBarLeadingSpacing,
                                     overflowBreakpoint: 0,
                                     availableWidth: leadingWidth,
+                                    tapBounce: false,
                                   ),
                                 ),
                               ),
@@ -4262,6 +4212,7 @@ class _ChatState extends State<Chat> {
                                   availableWidth: appBarWidth,
                                   forceCollapsed:
                                       collapseAppBarActions ? true : null,
+                                  tapBounce: false,
                                 );
                               },
                             )
@@ -4500,25 +4451,13 @@ class _ChatState extends State<Chat> {
                                             normalizedSenderBare != null &&
                                                 normalizedSenderBare
                                                     .isDeltaPlaceholderJid;
-                                        final senderNick =
-                                            _nickFromSender(e.senderJid);
-                                        final selfNick = (myOccupant?.nick ??
-                                                chatEntity?.myNickname)
-                                            ?.trim();
                                         final isMucSelf = isGroupChat &&
-                                            (_isSameOccupantId(
-                                                  e.senderJid,
-                                                  myOccupantId,
-                                                ) ||
-                                                _isSameOccupantId(
-                                                  e.occupantID,
-                                                  myOccupantId,
-                                                ) ||
-                                                (selfNick != null &&
-                                                    selfNick.isNotEmpty &&
-                                                    senderNick != null &&
-                                                    senderNick.isNotEmpty &&
-                                                    senderNick == selfNick));
+                                            _isMucSelfMessage(
+                                              senderJid: e.senderJid,
+                                              occupantId: e.occupantID,
+                                              myOccupantId: myOccupantId,
+                                              selfNick: selfNick,
+                                            );
                                         final isSelf = isSelfXmpp ||
                                             isSelfEmail ||
                                             isMucSelf ||
@@ -4532,9 +4471,10 @@ class _ChatState extends State<Chat> {
                                                 ?.occupants[occupantId];
                                         final isEmailMessage =
                                             e.deltaMsgId != null;
-                                        final fallbackNick = senderNick ??
-                                            state.chat?.title ??
-                                            '';
+                                        final fallbackNick =
+                                            _nickFromSender(e.senderJid) ??
+                                                state.chat?.title ??
+                                                '';
                                         final authorLabel = (isSelf
                                                 ? user.firstName
                                                 : (occupant?.nick ??
@@ -4855,6 +4795,7 @@ class _ChatState extends State<Chat> {
                                               quotedMessage: quoting,
                                               isGroupChat: isGroupChat,
                                               myOccupantId: myOccupantId,
+                                              selfNick: selfNick,
                                               currentUserId: currentUserId,
                                             ),
                                             onClear: () => context
@@ -7632,38 +7573,49 @@ class _ChatState extends State<Chat> {
                                                               quotedModel ==
                                                                       null
                                                                   ? null
-                                                                  : Align(
-                                                                      alignment:
-                                                                          messageRowAlignment,
-                                                                      child:
-                                                                          ConstrainedBox(
-                                                                        constraints:
-                                                                            bubbleConstraints,
+                                                                  : () {
+                                                                      final quotedIsSelf =
+                                                                          _isQuotedMessageFromSelf(
+                                                                        quotedMessage:
+                                                                            quotedModel,
+                                                                        isGroupChat:
+                                                                            isGroupChat,
+                                                                        myOccupantId:
+                                                                            myOccupantId,
+                                                                        selfNick:
+                                                                            selfNick,
+                                                                        currentUserId:
+                                                                            currentUserId,
+                                                                      );
+                                                                      final quotedSenderLabel = quotedIsSelf
+                                                                          ? l10n.chatSenderYou
+                                                                          : () {
+                                                                              if (!isGroupChat) {
+                                                                                return quotedModel.senderJid;
+                                                                              }
+                                                                              final occupantId = quotedModel.occupantID?.trim() ?? '';
+                                                                              final occupant = occupantId.isNotEmpty ? state.roomState?.occupants[occupantId] : state.roomState?.occupants[quotedModel.senderJid];
+                                                                              final nick = occupant?.nick.trim() ?? _nickFromSender(quotedModel.senderJid);
+                                                                              final resolved = nick?.trim() ?? '';
+                                                                              return resolved.isNotEmpty ? resolved : quotedModel.senderJid;
+                                                                            }();
+                                                                      return Align(
+                                                                        alignment:
+                                                                            messageRowAlignment,
                                                                         child:
-                                                                            _QuotedMessagePreview(
-                                                                          message:
-                                                                              quotedModel,
-                                                                          senderLabel:
-                                                                              _resolveSenderLabel(
-                                                                            context:
-                                                                                context,
+                                                                            ConstrainedBox(
+                                                                          constraints:
+                                                                              bubbleConstraints,
+                                                                          child:
+                                                                              _QuotedMessagePreview(
                                                                             message:
                                                                                 quotedModel,
-                                                                            isSelf:
-                                                                                _isQuotedMessageFromSelf(
-                                                                              quotedMessage: quotedModel,
-                                                                              isGroupChat: isGroupChat,
-                                                                              myOccupantId: myOccupantId,
-                                                                              currentUserId: currentUserId,
-                                                                            ),
-                                                                            chat:
-                                                                                chatEntity,
-                                                                            roomState:
-                                                                                state.roomState,
+                                                                            senderLabel:
+                                                                                quotedSenderLabel,
                                                                           ),
                                                                         ),
-                                                                      ),
-                                                                    );
+                                                                      );
+                                                                    }();
                                                           final attachmentsAligned =
                                                               attachments;
                                                           final extraShadows =
@@ -9242,11 +9194,31 @@ class _PinnedMessageTile extends StatelessWidget {
   bool _isSelfMessage({required Message message, required String? accountJid}) {
     if (chat.type == ChatType.groupChat) {
       final myOccupantId = roomState?.myOccupantId;
-      final occupantId = message.occupantID;
-      if (myOccupantId == null || occupantId == null) {
+      final selfNick = (myOccupantId == null
+              ? null
+              : roomState?.occupants[myOccupantId]?.nick) ??
+          chat.myNickname;
+      final normalizedSelf = _normalizeOccupantId(myOccupantId);
+      if (normalizedSelf != null) {
+        final normalizedSender = _normalizeOccupantId(message.senderJid);
+        if (normalizedSender != null && normalizedSender == normalizedSelf) {
+          return true;
+        }
+        final normalizedOccupant = _normalizeOccupantId(message.occupantID);
+        if (normalizedOccupant != null &&
+            normalizedOccupant == normalizedSelf) {
+          return true;
+        }
+      }
+      final trimmedSelfNick = selfNick?.trim();
+      if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
         return false;
       }
-      return myOccupantId == occupantId;
+      final senderNick = _nickFromSender(message.senderJid);
+      if (senderNick == null || senderNick.isEmpty) {
+        return false;
+      }
+      return senderNick == trimmedSelfNick;
     }
     final resolvedAccountJid = accountJid?.trim();
     if (resolvedAccountJid == null || resolvedAccountJid.isEmpty) {
@@ -9266,6 +9238,24 @@ class _PinnedMessageTile extends StatelessWidget {
     }
     final nick = senderJid.substring(slashIndex + 1).trim();
     return nick.isEmpty ? null : nick;
+  }
+
+  String? _normalizeOccupantId(String? jid) {
+    final trimmed = jid?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    try {
+      final parsed = mox.JID.fromString(trimmed);
+      final bare = parsed.toBare().toString().toLowerCase();
+      final resource = parsed.resource.trim();
+      if (resource.isEmpty) {
+        return bare;
+      }
+      return '$bare$_jidResourceSeparator${resource.toLowerCase()}';
+    } on Exception {
+      return trimmed.toLowerCase();
+    }
   }
 
   Occupant? _resolveOccupantForMessage(Message message) {

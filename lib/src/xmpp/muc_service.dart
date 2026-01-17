@@ -660,6 +660,27 @@ mixin MucService on XmppBase, BaseStreamService {
     _leftRooms.remove(_roomKey(roomJid));
   }
 
+  void _seedRoomSelfOccupantId({
+    required String roomJid,
+    required String nickname,
+  }) {
+    final normalizedRoom = _roomKey(roomJid);
+    final trimmedNickname = nickname.trim();
+    if (trimmedNickname.isEmpty) {
+      return;
+    }
+    const resourceSeparator = '/';
+    final occupantId = '$normalizedRoom$resourceSeparator$trimmedNickname';
+    final existing = _roomStates[normalizedRoom] ??
+        RoomState(roomJid: normalizedRoom, occupants: const {});
+    if (existing.myOccupantId == occupantId) {
+      return;
+    }
+    final updated = existing.copyWith(myOccupantId: occupantId);
+    _roomStates[normalizedRoom] = updated;
+    _roomStreams[normalizedRoom]?.add(updated);
+  }
+
   void _markRoomNeedsJoin(String roomJid) {
     _roomsNeedingJoin.add(_roomKey(roomJid));
   }
@@ -1008,6 +1029,7 @@ mixin MucService on XmppBase, BaseStreamService {
       _markRoomJoined(normalizedRoom);
       _roomNicknames[normalizedRoom] = nickname;
       _rememberRoomNickname(roomJid: normalizedRoom, nickname: nickname);
+      _seedRoomSelfOccupantId(roomJid: normalizedRoom, nickname: nickname);
       _rememberRoomPassword(roomJid: normalizedRoom, password: password);
       final manager = _connection.getManager<MUCManager>();
       if (manager == null) throw XmppMessageException();

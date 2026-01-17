@@ -55,6 +55,7 @@ class AppBarActions extends StatelessWidget {
     this.moreTooltip,
     this.forceCollapsed,
     this.availableWidth,
+    this.tapBounce = true,
   });
 
   final List<AppBarActionItem> actions;
@@ -63,6 +64,7 @@ class AppBarActions extends StatelessWidget {
   final String? moreTooltip;
   final bool? forceCollapsed;
   final double? availableWidth;
+  final bool tapBounce;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +105,7 @@ class AppBarActions extends StatelessWidget {
               enabled: hasEnabledAction,
               ghost: true,
               usePrimary: true,
+              tapBounce: tapBounce,
             );
           }
           return AxiMore(
@@ -111,6 +114,7 @@ class AppBarActions extends StatelessWidget {
             enabled: hasEnabledAction,
             ghost: true,
             usePrimary: true,
+            tapBounce: tapBounce,
           );
         }
 
@@ -130,6 +134,7 @@ class AppBarActions extends StatelessWidget {
                           ? actions[index].onPressed
                           : null,
                       usePrimary: actions[index].usePrimary,
+                      tapBounce: tapBounce,
                     ),
               ),
               if (index < actions.length - 1) SizedBox(width: spacing),

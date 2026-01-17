@@ -22,7 +22,7 @@ const double _guideItemSpacing = 8.0;
 const double _guideLinkSpacing = 12.0;
 const double _guideLinkRunSpacing = 8.0;
 const double _guideAddressPadding = 12.0;
-const bool _forceShowEmailForwardingWelcome = true;
+const bool _forceShowEmailForwardingWelcome = false;
 const String _emptyForwardingAddress = '';
 
 const String _gmailForwardingUrl =
@@ -191,6 +191,7 @@ class EmailForwardingWelcomeLayout extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 header,
+                const EmailForwardingSectionDivider(),
                 Expanded(child: content),
                 footer,
               ],
@@ -251,7 +252,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
     final l10n = context.l10n;
     final smallStyle = context.textTheme.small;
     final subheaderStyle =
-        context.textTheme.lead.copyWith(fontWeight: FontWeight.w600);
+        context.textTheme.large.copyWith(fontWeight: FontWeight.w600);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,7 +265,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
         Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
         EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
-        const EmailForwardingSectionDivider(),
+        const SizedBox(height: _guideItemSpacing),
         Text(l10n.emailForwardingGuideLinksTitle, style: smallStyle),
         const SizedBox(height: _guideItemSpacing),
         const EmailForwardingLinkRow(),
