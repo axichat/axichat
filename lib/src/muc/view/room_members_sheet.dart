@@ -839,7 +839,6 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
       builder: (context, avatarState) {
         final errorText = avatarState.localizedErrorText(l10n);
         final saveEnabled = !avatarState.isBusy && avatarState.draft != null;
-        final showUseAction = avatarState.hasCarouselPreview;
         final useActionEnabled = avatarState.canUseCarouselAvatar;
         final Widget actions = Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -915,7 +914,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                 onUseCurrent: () => context
                                     .read<AvatarEditorCubit>()
                                     .materializeCurrentCarouselAvatar(),
-                                showUseAction: showUseAction,
+                                showUseAction: true,
                                 useActionEnabled: useActionEnabled,
                                 canShuffleBackground:
                                     avatarState.hasCarouselPreview &&
