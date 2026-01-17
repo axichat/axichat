@@ -1543,6 +1543,15 @@ class EmailService {
     return _transport.performBackgroundFetch(timeout);
   }
 
+  Future<bool> _performBackgroundFetchIfIdle({
+    Duration timeout = _imapSyncFetchTimeout,
+  }) async {
+    if (_transport.isIoRunning) {
+      return false;
+    }
+    return performBackgroundFetch(timeout: timeout);
+  }
+
   Future<void> syncContactsFromCore() async {
     if (_contactsSyncInFlight) {
       _contactsSyncPending = true;
@@ -1599,7 +1608,7 @@ class EmailService {
   }
 
   Future<void> syncInboxAndSent() async {
-    await performBackgroundFetch(timeout: _imapSyncFetchTimeout);
+    await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
     await refreshChatlistFromCore();
   }
 
@@ -1760,7 +1769,7 @@ class EmailService {
     if (localCount >= desiredWindow) {
       return;
     }
-    await performBackgroundFetch(timeout: _foregroundFetchTimeout);
+    await _performBackgroundFetchIfIdle(timeout: _foregroundFetchTimeout);
     await _transport.backfillChatHistory(
       chatId: chatId,
       chatJid: chat.jid,
@@ -2901,7 +2910,7 @@ class EmailService {
       if (!_running) {
         return;
       }
-      await performBackgroundFetch(timeout: _imapSyncFetchTimeout);
+      await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
       if (!_running) {
         return;
       }
