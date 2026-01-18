@@ -145,15 +145,30 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   }
 
   String _startOperation(XmppOperationKind kind) {
-    final operationId = generateRandomString(length: _operationIdLength);
-    final id = '${kind.name}$_operationIdSeparator$operationId';
-    final operation = XmppOperation(
+    final List<XmppOperation> operations =
+        List<XmppOperation>.of(state.operations);
+    final int index = operations.lastIndexWhere((item) => item.kind == kind);
+    if (index != -1) {
+      final XmppOperation existing = operations[index];
+      _cancelRetention(existing.id);
+      _cancelCompletion(existing.id);
+      operations[index] = existing.copyWith(
+        status: XmppOperationStatus.inProgress,
+        startedAt: DateTime.now(),
+      );
+      emit(state.copyWith(operations: List.unmodifiable(operations)));
+      return existing.id;
+    }
+
+    final String operationId = generateRandomString(length: _operationIdLength);
+    final String id = '${kind.name}$_operationIdSeparator$operationId';
+    final XmppOperation operation = XmppOperation(
       id: id,
       kind: kind,
       startedAt: DateTime.now(),
     );
-    final updated = List<XmppOperation>.of(state.operations)..add(operation);
-    emit(state.copyWith(operations: List.unmodifiable(updated)));
+    operations..add(operation);
+    emit(state.copyWith(operations: List.unmodifiable(operations)));
     return id;
   }
 
