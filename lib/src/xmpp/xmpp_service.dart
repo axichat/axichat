@@ -2928,8 +2928,7 @@ final class _XmppStanzaSizeGuard {
 /// Stream management negotiator that tolerates missing managers and avoids null
 /// dereferences during feature matching.
 class XmppSocketWrapper implements mox.BaseSocketWrapper {
-  XmppSocketWrapper({bool logTraffic = kDebugMode})
-      : _logIncomingOutgoing = logTraffic;
+  XmppSocketWrapper();
 
   static final _log = Logger('XmppSocketWrapper');
   static const _socketClosedWithErrorLog = 'Socket closed with error.';
@@ -2956,7 +2955,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   static const String _cancelSocketSubscriptionOperationName =
       'XmppService.cancelSocketSubscription';
 
-  final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
       StreamController.broadcast();
@@ -3117,9 +3115,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
           _dropSocket(expectClosure: false);
           return;
         }
-        if (_logIncomingOutgoing) {
-          _log.finest('<== $data');
-        }
         _dataStream.add(data);
       },
       onError: (Object error) {
@@ -3221,10 +3216,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     if (socket == null) {
       _log.severe('Failed to write to socket as _socket is null');
       return;
-    }
-
-    if (_logIncomingOutgoing) {
-      _log.finest('==> $data');
     }
 
     try {
