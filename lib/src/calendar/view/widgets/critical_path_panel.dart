@@ -921,6 +921,105 @@ class CriticalPathPickerResult {
   final bool createNew;
 }
 
+class _CriticalPathPickerList extends StatefulWidget {
+  const _CriticalPathPickerList({
+    required this.paths,
+    required this.isBusy,
+    required this.onPathPressed,
+  });
+
+  final List<CalendarCriticalPath> paths;
+  final bool isBusy;
+  final Future<void> Function(CalendarCriticalPath path) onPathPressed;
+
+  @override
+  State<_CriticalPathPickerList> createState() =>
+      _CriticalPathPickerListState();
+}
+
+class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    final BorderRadius itemRadius = BorderRadius.circular(
+      calendarBorderRadius.toDouble(),
+    );
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: true,
+      child: ListView.separated(
+        controller: _scrollController,
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        itemCount: widget.paths.length,
+        separatorBuilder: (_, __) => const SizedBox(height: calendarInsetSm),
+        itemBuilder: (context, index) {
+          final path = widget.paths[index];
+          return InkWell(
+            borderRadius: itemRadius,
+            mouseCursor: SystemMouseCursors.click,
+            onTap: widget.isBusy
+                ? null
+                : () async {
+                    await widget.onPathPressed(path);
+                  },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterMd,
+                vertical: calendarInsetMd,
+              ),
+              decoration: BoxDecoration(
+                color: colors.card,
+                borderRadius: itemRadius,
+                border: Border.all(color: colors.border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: colors.muted.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.route,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: calendarGutterSm),
+                  Expanded(
+                    child: Text(
+                      path.name,
+                      style: textTheme.small.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: colors.mutedForeground,
+                  ),
+                ],
+              ),
+            ),
+          ).withTapBounce(enabled: !widget.isBusy);
+        },
+      ),
+    );
+  }
+}
+
 Future<CriticalPathPickerResult?> showCriticalPathPicker({
   required BuildContext context,
   required List<CalendarCriticalPath> paths,
@@ -976,94 +1075,28 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                     child: ValueListenableBuilder<bool>(
                       valueListenable: busyNotifier,
                       builder: (context, isBusy, _) {
-                        return Scrollbar(
-                          thumbVisibility: true,
-                          child: ListView.separated(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            itemCount: paths.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: calendarInsetSm),
-                            itemBuilder: (_, index) {
-                              final path = paths[index];
-                              return InkWell(
-                                borderRadius: BorderRadius.circular(
-                                  calendarBorderRadius.toDouble(),
-                                ),
-                                mouseCursor: SystemMouseCursors.click,
-                                onTap: isBusy
-                                    ? null
-                                    : () async {
-                                        if (stayOpen &&
-                                            onPathSelected != null) {
-                                          busyNotifier.value = true;
-                                          final String? status =
-                                              await onPathSelected(path);
-                                          if (!sheetContext.mounted) {
-                                            return;
-                                          }
-                                          busyNotifier.value = false;
-                                          if (status != null) {
-                                            statusNotifier.value = status;
-                                          }
-                                          return;
-                                        }
-                                        Navigator.of(sheetContext).pop(
-                                          CriticalPathPickerResult.path(
-                                            path.id,
-                                          ),
-                                        );
-                                      },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: calendarGutterMd,
-                                    vertical: calendarInsetMd,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: colors.card,
-                                    borderRadius: BorderRadius.circular(
-                                      calendarBorderRadius.toDouble(),
-                                    ),
-                                    border: Border.all(color: colors.border),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          color: colors.muted.withValues(
-                                            alpha: 0.12,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.route,
-                                          size: 16,
-                                        ),
-                                      ),
-                                      const SizedBox(width: calendarGutterSm),
-                                      Expanded(
-                                        child: Text(
-                                          path.name,
-                                          style: textTheme.small.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.chevron_right,
-                                        size: 18,
-                                        color: colors.mutedForeground,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ).withTapBounce(enabled: !isBusy);
-                            },
-                          ),
+                        return _CriticalPathPickerList(
+                          paths: paths,
+                          isBusy: isBusy,
+                          onPathPressed: (path) async {
+                            if (stayOpen && onPathSelected != null) {
+                              busyNotifier.value = true;
+                              final String? status = await onPathSelected(path);
+                              if (!sheetContext.mounted) {
+                                return;
+                              }
+                              busyNotifier.value = false;
+                              if (status != null) {
+                                statusNotifier.value = status;
+                              }
+                              return;
+                            }
+                            Navigator.of(sheetContext).pop(
+                              CriticalPathPickerResult.path(
+                                path.id,
+                              ),
+                            );
+                          },
                         );
                       },
                     ),

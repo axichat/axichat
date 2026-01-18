@@ -58,7 +58,13 @@ class XmppOperationOverlay extends StatelessWidget {
         if (operations.isEmpty) {
           return const SizedBox.shrink();
         }
-        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+        final mediaQuery = MediaQuery.of(context);
+        final viewPadding = mediaQuery.viewPadding;
+        final bottomInset = mediaQuery.viewInsets.bottom;
+        final safeBottomInset =
+            bottomInset > viewPadding.bottom ? bottomInset : viewPadding.bottom;
+        final leftPadding = _overlayHorizontalPadding + viewPadding.left;
+        final rightPadding = _overlayHorizontalPadding + viewPadding.right;
         final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
         final Duration entryDuration = settingsCubit == null
             ? _entryFallbackDuration
@@ -71,9 +77,9 @@ class XmppOperationOverlay extends StatelessWidget {
             alignment: Alignment.bottomLeft,
             child: Padding(
               padding: EdgeInsets.only(
-                left: _overlayHorizontalPadding,
-                right: _overlayHorizontalPadding,
-                bottom: _overlayBottomPadding + bottomInset,
+                left: leftPadding,
+                right: rightPadding,
+                bottom: _overlayBottomPadding + safeBottomInset,
               ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(

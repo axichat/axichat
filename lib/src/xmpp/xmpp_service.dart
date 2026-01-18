@@ -396,6 +396,8 @@ abstract interface class XmppBase {
 
   void emitXmppOperation(XmppOperationEvent event) {}
 
+  Stream<XmppStaleConnectionEvent> get staleConnectionStream;
+
   Stream<mox.OmemoActivityEvent> get omemoActivityStream;
 
   void emitOmemoActivity(mox.OmemoActivityEvent event) {}
@@ -410,6 +412,12 @@ class XmppStreamReady {
   final DateTime timestamp;
 
   bool get isResumed => resumed;
+}
+
+class XmppStaleConnectionEvent {
+  const XmppStaleConnectionEvent({required this.consecutiveTimeouts});
+
+  final int consecutiveTimeouts;
 }
 
 class XmppService extends XmppBase
@@ -497,6 +505,8 @@ class XmppService extends XmppBase
   );
   var _pubSubSupportResolved = false;
   final _streamReadyController = StreamController<XmppStreamReady>.broadcast();
+  final _staleConnectionController =
+      StreamController<XmppStaleConnectionEvent>.broadcast();
   XmppStreamReady? _lastStreamReady;
 
   bool get mamSupported => _mamSupported;
@@ -520,6 +530,10 @@ class XmppService extends XmppBase
 
   Stream<XmppStreamReady> get streamReadyStream =>
       _streamReadyController.stream;
+
+  @override
+  Stream<XmppStaleConnectionEvent> get staleConnectionStream =>
+      _staleConnectionController.stream;
 
   XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
@@ -974,6 +988,9 @@ class XmppService extends XmppBase
   var _foregroundServiceNotificationSent = false;
   var _streamResumptionAttempted = false;
   var _connectionPasswordPreHashed = false;
+  final Set<int> _timeoutErrorCodes = {60, 110, 10060};
+  final int _staleConnectionTimeoutThreshold = 3;
+  var _consecutiveConnectTimeouts = 0;
   DateTime? _lastForegroundSocketMigrationAttempt;
   Timer? _foregroundSocketMigrationTimer;
   var _demoSeedAttempted = false;
@@ -1114,6 +1131,7 @@ class XmppService extends XmppBase
       _synchronousConnection.complete();
     }
     _connection = await _connectionFactory();
+    _configureSocketCallbacks();
     _myJid = targetJid;
     if (!_stateStore.isCompleted) {
       _stateStore.complete(
@@ -1155,6 +1173,7 @@ class XmppService extends XmppBase
 
     _connectionPasswordPreHashed = preHashed;
     _connection = connectionOverride ?? await _connectionFactory();
+    _configureSocketCallbacks();
     _omemoActivitySubscription?.cancel();
     _omemoActivitySubscription = _connection.omemoActivityStream.listen(
       _omemoActivityController.add,
@@ -1923,6 +1942,51 @@ class XmppService extends XmppBase
     );
   }
 
+  void _configureSocketCallbacks() {
+    _connection.socketWrapper.registerConnectionCallbacks(
+      onConnectSuccess: _resetConnectTimeoutTracking,
+      onConnectError: _handleSocketConnectError,
+    );
+  }
+
+  void _resetConnectTimeoutTracking() {
+    _consecutiveConnectTimeouts = 0;
+  }
+
+  void _handleSocketConnectError(SocketException error) {
+    if (!_isTimeoutSocketError(error)) {
+      _consecutiveConnectTimeouts = 0;
+      return;
+    }
+    _consecutiveConnectTimeouts += 1;
+    if (_consecutiveConnectTimeouts < _staleConnectionTimeoutThreshold) {
+      return;
+    }
+    final timeoutCount = _consecutiveConnectTimeouts;
+    _consecutiveConnectTimeouts = 0;
+    _xmppLogger.warning(
+      'Stale connection detected after $timeoutCount consecutive timeouts.',
+    );
+    _emitStaleConnectionEvent(timeoutCount);
+  }
+
+  bool _isTimeoutSocketError(SocketException error) {
+    final code = error.osError?.errorCode;
+    if (code != null && _timeoutErrorCodes.contains(code)) {
+      return true;
+    }
+    return error.message.toLowerCase().contains('timed out');
+  }
+
+  void _emitStaleConnectionEvent(int timeoutCount) {
+    if (_staleConnectionController.isClosed) {
+      return;
+    }
+    _staleConnectionController.add(
+      XmppStaleConnectionEvent(consecutiveTimeouts: timeoutCount),
+    );
+  }
+
   Future<void> setClientState([bool active = true]) async {
     if (!connected) return;
 
@@ -2081,6 +2145,7 @@ class XmppService extends XmppBase
       }
 
       _connection = nextConnection;
+      _configureSocketCallbacks();
       _omemoActivitySubscription = _connection.omemoActivityStream.listen(
         _omemoActivityController.add,
       );
@@ -2129,6 +2194,7 @@ class XmppService extends XmppBase
       try {
         final XmppConnection fallbackConnection = XmppConnection();
         _connection = fallbackConnection;
+        _configureSocketCallbacks();
         _omemoActivitySubscription = _connection.omemoActivityStream.listen(
           _omemoActivityController.add,
         );
@@ -2206,6 +2272,7 @@ class XmppService extends XmppBase
     _setConnectionState(ConnectionState.notConnected);
     await _clearSelfPresenceOnDisconnect();
     _connectInFlight = false;
+    _consecutiveConnectTimeouts = 0;
 
     // Only disable session reconnect for fatal errors (auth/database).
     // Network errors should allow reconnection attempts.
@@ -2266,6 +2333,7 @@ class XmppService extends XmppBase
       await _connection.reset();
     }
     _connection = await _connectionFactory();
+    _configureSocketCallbacks();
 
     if (!_stateStore.isCompleted) {
       _xmppLogger.warning('Cancelling state store initialization...');
@@ -2332,6 +2400,9 @@ class XmppService extends XmppBase
     }
     if (!_streamReadyController.isClosed) {
       await _streamReadyController.close();
+    }
+    if (!_staleConnectionController.isClosed) {
+      await _staleConnectionController.close();
     }
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();
@@ -2894,6 +2965,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     maxStanzaDepth: maxXmppStanzaDepth,
   );
 
+  void Function()? _onConnectSuccess;
+  void Function(SocketException error)? _onConnectError;
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
   final Set<Socket> _expectedClosures = {};
@@ -2909,6 +2982,14 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   @override
   bool whitespacePingAllowed() => true;
 
+  void registerConnectionCallbacks({
+    void Function()? onConnectSuccess,
+    void Function(SocketException error)? onConnectError,
+  }) {
+    _onConnectSuccess = onConnectSuccess;
+    _onConnectError = onConnectError;
+  }
+
   void destroy() {
     _cancelSocketSubscription(_socketSubscription);
   }
@@ -2923,8 +3004,13 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
         port,
         timeout: const Duration(seconds: 5),
       );
+      _onConnectSuccess?.call();
       _log.finest('Success!');
       return true;
+    } on SocketException catch (error) {
+      _onConnectError?.call(error);
+      _log.finest('Socket connection failed: $error');
+      return false;
     } on Exception catch (error) {
       _log.finest('Socket connection failed: $error');
       return false;
