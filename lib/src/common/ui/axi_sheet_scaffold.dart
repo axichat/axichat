@@ -187,6 +187,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
         bottom: bottomPadding,
       );
       return Scrollbar(
+        controller: _scrollController,
         thumbVisibility: true,
         child: ListView(
           controller: _scrollController,
@@ -206,6 +207,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
     }
 
     final Widget list = Scrollbar(
+      controller: _scrollController,
       thumbVisibility: true,
       child: ListView(
         controller: _scrollController,

@@ -155,6 +155,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _emailService?.handleNetworkLost();
       }
     });
+    _staleConnectionSubscription =
+        xmppService.staleConnectionStream.listen(_handleXmppStaleConnection);
     _foregroundListener = _handleForegroundServiceActiveChanged;
     foregroundServiceActive.addListener(_foregroundListener!);
     if (_emailService != null) {
@@ -231,6 +233,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   DateTime? _lastEmailProvisioningRetryAt;
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
+  StreamSubscription<XmppStaleConnectionEvent>? _staleConnectionSubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
   StreamSubscription<EndpointConfig>? _endpointConfigSubscription;
   VoidCallback? _foregroundListener;
@@ -960,6 +963,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> close() async {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
+    await _staleConnectionSubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
     await _endpointConfigSubscription?.cancel();
     _signupAvatarPublishRetryTimer?.cancel();
@@ -1964,6 +1968,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return _looksLikeStorageLock(error.wrapped!);
     }
     return false;
+  }
+
+  Future<void> _handleXmppStaleConnection(
+    XmppStaleConnectionEvent event,
+  ) async {
+    if (state is! AuthenticationComplete) {
+      return;
+    }
+    await logout(severity: LogoutSeverity.auto);
+    await _loginIfStoredCredentials();
   }
 
   Future<void> _handleEmailAuthFailure(DeltaChatException exception) async {

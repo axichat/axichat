@@ -560,12 +560,16 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   static const _offlineErrnos = <int>{
     50, // ENETDOWN (macOS)
     51, // ENETUNREACH (macOS)
+    60, // ETIMEDOUT (macOS)
     64, // EHOSTDOWN (macOS)
     65, // EHOSTUNREACH (macOS)
+    103, // ECONNABORTED (Linux)
     101, // ENETUNREACH (Linux)
+    110, // ETIMEDOUT (Linux)
     113, // EHOSTUNREACH (Linux)
     10050, // WSAENETDOWN (Windows)
     10051, // WSAENETUNREACH (Windows)
+    10060, // WSAETIMEDOUT (Windows)
     10065, // WSAEHOSTUNREACH (Windows)
   };
 
@@ -622,7 +626,9 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     final message = error.message.toLowerCase();
     return message.contains('network is unreachable') ||
         message.contains('no route to host') ||
-        message.contains('not connected');
+        message.contains('not connected') ||
+        message.contains('timed out') ||
+        message.contains('connection abort');
   }
 
   Future<bool> _pingEndpoints(List<IOEndpoint> endpoints) async {

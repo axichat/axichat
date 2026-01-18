@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
@@ -453,6 +454,8 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
       StreamController.broadcast();
+  void Function()? _onConnectSuccess;
+  void Function(SocketException error)? _onConnectError;
 
   var _connect = Completer<bool>();
   var _secure = Completer<bool>();
@@ -489,6 +492,13 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   void _completeConnect(bool connected) {
     if (_connect.isCompleted) return;
     _connect.complete(connected);
+    if (connected) {
+      _onConnectSuccess?.call();
+      return;
+    }
+    _onConnectError?.call(
+      SocketException('Foreground socket connection failed.'),
+    );
   }
 
   void _completeSecure(bool secure) {
@@ -516,6 +526,15 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   @override
   bool isSecure() => _secureResult;
+
+  @override
+  void registerConnectionCallbacks({
+    void Function()? onConnectSuccess,
+    void Function(SocketException error)? onConnectError,
+  }) {
+    _onConnectSuccess = onConnectSuccess;
+    _onConnectError = onConnectError;
+  }
 
   @override
   bool managesKeepalives() => false;
