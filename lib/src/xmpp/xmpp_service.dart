@@ -68,7 +68,6 @@ import 'package:axichat/src/xmpp/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -396,8 +395,6 @@ abstract interface class XmppBase {
 
   void emitXmppOperation(XmppOperationEvent event) {}
 
-  Stream<XmppStaleConnectionEvent> get staleConnectionStream;
-
   Stream<mox.OmemoActivityEvent> get omemoActivityStream;
 
   void emitOmemoActivity(mox.OmemoActivityEvent event) {}
@@ -412,12 +409,6 @@ class XmppStreamReady {
   final DateTime timestamp;
 
   bool get isResumed => resumed;
-}
-
-class XmppStaleConnectionEvent {
-  const XmppStaleConnectionEvent({required this.consecutiveTimeouts});
-
-  final int consecutiveTimeouts;
 }
 
 class XmppService extends XmppBase
@@ -505,8 +496,6 @@ class XmppService extends XmppBase
   );
   var _pubSubSupportResolved = false;
   final _streamReadyController = StreamController<XmppStreamReady>.broadcast();
-  final _staleConnectionController =
-      StreamController<XmppStaleConnectionEvent>.broadcast();
   XmppStreamReady? _lastStreamReady;
 
   bool get mamSupported => _mamSupported;
@@ -530,10 +519,6 @@ class XmppService extends XmppBase
 
   Stream<XmppStreamReady> get streamReadyStream =>
       _streamReadyController.stream;
-
-  @override
-  Stream<XmppStaleConnectionEvent> get staleConnectionStream =>
-      _staleConnectionController.stream;
 
   XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
@@ -1954,6 +1939,9 @@ class XmppService extends XmppBase
   }
 
   void _handleSocketConnectError(SocketException error) {
+    if (!_sessionReconnectEnabled) {
+      return;
+    }
     if (!_isTimeoutSocketError(error)) {
       _consecutiveConnectTimeouts = 0;
       return;
@@ -1967,7 +1955,23 @@ class XmppService extends XmppBase
     _xmppLogger.warning(
       'Stale connection detected after $timeoutCount consecutive timeouts.',
     );
-    _emitStaleConnectionEvent(timeoutCount);
+    _sessionReconnectEnabled = false;
+    _reconnectBlocked = true;
+    fireAndForget(
+      () async {
+        try {
+          await _connection.setShouldReconnect(false);
+        } catch (error, stackTrace) {
+          _xmppLogger.fine(
+            'Failed to disable reconnection after stale connection.',
+            error,
+            stackTrace,
+          );
+        }
+      },
+      operationName: 'XmppService.disableReconnectAfterStale',
+    );
+    _setConnectionState(ConnectionState.error);
   }
 
   bool _isTimeoutSocketError(SocketException error) {
@@ -1976,15 +1980,6 @@ class XmppService extends XmppBase
       return true;
     }
     return error.message.toLowerCase().contains('timed out');
-  }
-
-  void _emitStaleConnectionEvent(int timeoutCount) {
-    if (_staleConnectionController.isClosed) {
-      return;
-    }
-    _staleConnectionController.add(
-      XmppStaleConnectionEvent(consecutiveTimeouts: timeoutCount),
-    );
   }
 
   Future<void> setClientState([bool active = true]) async {
@@ -2400,9 +2395,6 @@ class XmppService extends XmppBase
     }
     if (!_streamReadyController.isClosed) {
       await _streamReadyController.close();
-    }
-    if (!_staleConnectionController.isClosed) {
-      await _staleConnectionController.close();
     }
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();

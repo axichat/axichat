@@ -497,7 +497,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       return;
     }
     _onConnectError?.call(
-      SocketException('Foreground socket connection failed.'),
+      const SocketException('Foreground socket connection failed.'),
     );
   }
 
