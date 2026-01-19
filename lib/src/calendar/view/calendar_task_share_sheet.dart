@@ -105,8 +105,13 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final String readOnlyHint = isReadOnly
         ? l10n.calendarTaskShareReadOnlyHint
         : l10n.calendarTaskShareEditableHint;
-    const int messageMinLines = 3;
-    const int messageMaxLines = 6;
+    const int messageMinLines = 2;
+    const int messageMaxLines = 4;
+    const EdgeInsets messageContentPadding = EdgeInsets.symmetric(
+      horizontal: calendarGutterLg,
+      vertical: calendarGutterMd,
+    );
+    final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
     final header = AxiSheetHeader(
       title: Text(l10n.calendarTaskShareTitle),
       subtitle: Text(l10n.calendarTaskShareSubtitle),
@@ -114,7 +119,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
     return AxiSheetScaffold.scroll(
       header: header,
-      bodyPadding: EdgeInsets.zero,
+      bodyPadding: EdgeInsets.only(bottom: viewInsets.bottom),
       children: [
         if (widget.availableChats.isEmpty)
           Padding(
@@ -141,10 +146,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             padding: _taskShareContentPadding,
             child: TaskDescriptionField(
               controller: _bodyController,
-              labelText: l10n.calendarTaskShareMessageLabel,
-              hintText: l10n.calendarTaskShareMessageHint,
+              hintText: l10n.calendarDescriptionHint,
               minLines: messageMinLines,
               maxLines: messageMaxLines,
+              contentPadding: messageContentPadding,
             ),
           ),
           const SizedBox(height: _taskShareSectionSpacing),
