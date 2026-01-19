@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
@@ -35,7 +36,9 @@ class CredentialStore
     required Capability capability,
     required Policy policy,
   }) =>
-      _instance ??= CredentialStore._(capability, policy);
+      _instance ??= kEnableDemoChats
+          ? _DemoCredentialStore(capability, policy)
+          : CredentialStore._(capability, policy);
 
   final Capability capability;
   final Policy policy;
@@ -159,5 +162,60 @@ class CredentialStore
   @override
   Future<void> close() async {
     _instance = null;
+  }
+}
+
+class _DemoCredentialStore extends CredentialStore {
+  _DemoCredentialStore(super.capability, super.policy) : super._();
+
+  final Map<String, String?> _values = {};
+
+  @override
+  Future<String?> read({required RegisteredCredentialKey key}) async =>
+      _values[key.value];
+
+  @override
+  Future<bool> write({
+    required RegisteredCredentialKey key,
+    required String? value,
+  }) async {
+    if (value == null) {
+      _values.remove(key.value);
+      return true;
+    }
+    _values[key.value] = value;
+    return true;
+  }
+
+  @override
+  Future<bool> delete({required RegisteredCredentialKey key}) async {
+    _values.remove(key.value);
+    return true;
+  }
+
+  @override
+  Future<Map<String, String?>> readAll() async =>
+      Map<String, String?>.from(_values);
+
+  @override
+  Future<bool> writeAll({
+    required Map<RegisteredCredentialKey, String?> data,
+  }) async {
+    for (final entry in data.entries) {
+      _values[entry.key.value] = entry.value;
+    }
+    return true;
+  }
+
+  @override
+  Future<bool> deleteAll({bool burn = false}) async {
+    _values.clear();
+    return true;
+  }
+
+  @override
+  Future<void> close() async {
+    _values.clear();
+    CredentialStore._instance = null;
   }
 }

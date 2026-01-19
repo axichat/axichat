@@ -1666,7 +1666,7 @@ final class _AutocompleteOverlayLimits {
   final double maxWidth;
 }
 
-class _AutocompleteOptionsList extends StatelessWidget {
+class _AutocompleteOptionsList extends StatefulWidget {
   const _AutocompleteOptionsList({
     required this.options,
     required this.avatarPathsByJid,
@@ -1694,17 +1694,35 @@ class _AutocompleteOptionsList extends StatelessWidget {
   final double maxHeight;
 
   @override
+  State<_AutocompleteOptionsList> createState() =>
+      _AutocompleteOptionsListState();
+}
+
+class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final options = widget.options;
     if (options.isEmpty) {
       return const SizedBox.shrink();
     }
-    final height = math.min(options.length * _suggestionTileHeight, maxHeight);
+    final height =
+        math.min(options.length * _suggestionTileHeight, widget.maxHeight);
     final scrollable = options.length * _suggestionTileHeight > height;
     return SizedBox(
       height: height,
       child: Scrollbar(
+        controller: _scrollController,
         thumbVisibility: scrollable,
         child: ListView.builder(
+          controller: _scrollController,
           padding: EdgeInsets.zero,
           physics: scrollable
               ? const ClampingScrollPhysics()
@@ -1726,15 +1744,15 @@ class _AutocompleteOptionsList extends StatelessWidget {
                 : subtitleSource;
             final border = index == options.length - 1
                 ? BorderSide.none
-                : BorderSide(color: dividerColor, width: 0.7);
-            final highlighted =
-                highlightedIndex != null && highlightedIndex == index;
+                : BorderSide(color: widget.dividerColor, width: 0.7);
+            final highlighted = widget.highlightedIndex != null &&
+                widget.highlightedIndex == index;
             return InkWell(
-              onTap: () => onSelected(option),
-              hoverColor: hoverColor,
+              onTap: () => widget.onSelected(option),
+              hoverColor: widget.hoverColor,
               child: Container(
                 decoration: BoxDecoration(
-                  color: highlighted ? highlightColor : null,
+                  color: highlighted ? widget.highlightColor : null,
                   border: Border(bottom: border),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -1745,7 +1763,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
                   children: [
                     _SuggestionAvatar(
                       option: option,
-                      avatarPathsByJid: avatarPathsByJid,
+                      avatarPathsByJid: widget.avatarPathsByJid,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1755,14 +1773,14 @@ class _AutocompleteOptionsList extends StatelessWidget {
                         children: [
                           Text(
                             title,
-                            style: titleStyle,
+                            style: widget.titleStyle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           if (subtitle != null)
                             Text(
                               subtitle,
-                              style: subtitleStyle,
+                              style: widget.subtitleStyle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1770,7 +1788,11 @@ class _AutocompleteOptionsList extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Icon(Icons.north_east, size: 16, color: trailingIconColor),
+                    Icon(
+                      Icons.north_east,
+                      size: 16,
+                      color: widget.trailingIconColor,
+                    ),
                   ],
                 ),
               ),

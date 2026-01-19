@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
@@ -750,6 +751,8 @@ class Nexus extends StatefulWidget {
 class _NexusState extends State<Nexus> {
   TabController? _tabController;
   _HomeDemoPhase _demoPhase = _HomeDemoPhase.idle;
+  XmppService? _demoResetService;
+  StreamSubscription<void>? _demoResetSubscription;
 
   void _triggerDemoInteractivePhase() {
     if (_demoPhase != _HomeDemoPhase.idle) return;
@@ -764,13 +767,28 @@ class _NexusState extends State<Nexus> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final controller = DefaultTabController.of(context);
-    if (controller == _tabController) return;
-    _tabController?.removeListener(_handleTabChanged);
-    _tabController = controller;
-    _tabController?.addListener(_handleTabChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (controller != _tabController) {
+      _tabController?.removeListener(_handleTabChanged);
+      _tabController = controller;
+      _tabController?.addListener(_handleTabChanged);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _notifyTabIndex(controller.index);
+      });
+    }
+    if (!kEnableDemoChats) {
+      _teardownDemoResetSubscription();
+      return;
+    }
+    final xmppService = context.read<XmppService?>();
+    if (xmppService == null || xmppService == _demoResetService) {
+      return;
+    }
+    _teardownDemoResetSubscription();
+    _demoResetService = xmppService;
+    _demoResetSubscription = xmppService.demoResetStream.listen((_) {
       if (!mounted) return;
-      _notifyTabIndex(controller.index);
+      setState(() => _demoPhase = _HomeDemoPhase.idle);
     });
   }
 
@@ -788,7 +806,14 @@ class _NexusState extends State<Nexus> {
   @override
   void dispose() {
     _tabController?.removeListener(_handleTabChanged);
+    _teardownDemoResetSubscription();
     super.dispose();
+  }
+
+  void _teardownDemoResetSubscription() {
+    _demoResetSubscription?.cancel();
+    _demoResetSubscription = null;
+    _demoResetService = null;
   }
 
   @override
