@@ -1611,21 +1611,21 @@ class _FileAttachmentState extends State<_FileAttachment> {
               child: _AttachmentSpinner(size: 18, color: colors.primary),
             ),
           )
-        : Wrap(
-            alignment: WrapAlignment.end,
-            spacing: _attachmentActionSpacing,
-            runSpacing: _attachmentActionSpacing,
+        : Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               AxiIconButton(
                 iconData: LucideIcons.save,
                 tooltip: downloadAndSaveTooltip,
                 onPressed: hasLocalFile || canDownload ? _saveAttachment : null,
               ),
+              const SizedBox(width: _attachmentActionSpacing),
               AxiIconButton(
                 iconData: LucideIcons.share2,
                 tooltip: downloadAndShareTooltip,
                 onPressed: shareEnabled ? _shareAttachment : null,
               ),
+              const SizedBox(width: _attachmentActionSpacing),
               AxiIconButton(
                 iconData: openIconData,
                 tooltip: openTooltip,
@@ -1664,8 +1664,10 @@ class _FileAttachmentState extends State<_FileAttachment> {
               const SizedBox(width: _attachmentFileRowSpacing),
               Expanded(child: attachmentDetails),
               const SizedBox(width: _attachmentFileRowSpacing),
-              Flexible(
-                fit: FlexFit.loose,
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: _attachmentActionRowMinWidth,
+                ),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: attachmentActions,

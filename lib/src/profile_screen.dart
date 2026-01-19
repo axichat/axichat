@@ -66,9 +66,6 @@ const double _profileWideLayoutMinWidth = _profileColumnMaxWidth +
 const double _profileLegalSeparatorSpacing = 6.0;
 const double _profileLegalFontSizeDelta = 2.0;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
-const String _profileMadeByPrefix = 'Made by ';
-const String _profileMadeBySuffix = ' LLC';
-const String _profileBrandLabel = 'Axichat';
 const String _profileAgplLabel = 'AGPLv3';
 const String _profileLegalSeparatorText = '•';
 const double _profileSettingsCompactTileHeight = 52.0;
@@ -76,7 +73,7 @@ const EdgeInsets _profileSettingsCompactTilePadding = EdgeInsets.symmetric(
   horizontal: 16,
   vertical: 6,
 );
-const String _aboutLegalese = 'Copyright (C) 2025 Axichat LLC (Eliot Lew)\n\n'
+const String _aboutLegalese = 'Copyright (C) 2025 Axichat LLC\n\n'
     'This program is free software: you can redistribute it and/or modify '
     'it under the terms of the GNU Affero General Public License as '
     'published by the Free Software Foundation, either version 3 of the '
@@ -839,20 +836,6 @@ class _ProfileLegalLinks extends StatelessWidget {
       ),
       child: Text(_profileLegalSeparatorText, style: textStyle),
     );
-    final Widget madeBy = Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      runSpacing: _profileHeaderWrapSpacing,
-      children: [
-        Text(_profileMadeByPrefix, style: textStyle),
-        _ProfileMutedLink(
-          link: axichatHomeUrl,
-          text: _profileBrandLabel,
-          textStyle: textStyle,
-        ),
-        Text(_profileMadeBySuffix, style: textStyle),
-      ],
-    );
     return Align(
       alignment: Alignment.center,
       child: Column(
@@ -871,7 +854,6 @@ class _ProfileLegalLinks extends StatelessWidget {
               agplLink,
             ],
           ),
-          madeBy,
         ],
       ),
     );
