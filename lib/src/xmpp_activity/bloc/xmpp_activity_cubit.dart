@@ -167,8 +167,8 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       kind: kind,
       startedAt: DateTime.now(),
     );
-    operations..add(operation);
-    emit(state.copyWith(operations: List.unmodifiable(operations)));
+    final List<XmppOperation> updated = operations..add(operation);
+    emit(state.copyWith(operations: List.unmodifiable(updated)));
     return id;
   }
 
@@ -283,10 +283,14 @@ class XmppOperation {
   final DateTime startedAt;
   final XmppOperationStatus status;
 
-  XmppOperation copyWith({XmppOperationStatus? status}) => XmppOperation(
+  XmppOperation copyWith({
+    XmppOperationStatus? status,
+    DateTime? startedAt,
+  }) =>
+      XmppOperation(
         id: id,
         kind: kind,
-        startedAt: startedAt,
+        startedAt: startedAt ?? this.startedAt,
         status: status ?? this.status,
       );
 
