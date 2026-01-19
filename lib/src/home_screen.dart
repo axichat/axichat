@@ -300,6 +300,11 @@ class _HomeScreenState extends State<HomeScreen> {
               navigator.pop();
               return;
             }
+            final rootNavigator = Navigator.of(context, rootNavigator: true);
+            if (rootNavigator.canPop()) {
+              rootNavigator.pop();
+              return;
+            }
             final chatsCubit = context.read<ChatsCubit?>();
             final chatsState = chatsCubit?.state;
             if (chatsState == null) return;

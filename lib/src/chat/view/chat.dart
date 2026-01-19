@@ -30,6 +30,7 @@ import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/chat_calendar_widget.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -7268,7 +7269,6 @@ class _ChatState extends State<Chat> {
                                                                 );
                                                             _focusNode
                                                                 .requestFocus();
-                                                            _clearAllSelections();
                                                           }
 
                                                           VoidCallback?
@@ -8429,7 +8429,6 @@ class _ChatState extends State<Chat> {
             l10n.chatShareFallbackSubject,
       ),
     );
-    _clearAllSelections();
   }
 
   Future<void> _copyMessage({
@@ -8442,7 +8441,6 @@ class _ChatState extends State<Chat> {
     );
     if (copiedText.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: copiedText));
-    _clearAllSelections();
   }
 
   Future<void> _handleAddToCalendar({
@@ -8450,7 +8448,36 @@ class _ChatState extends State<Chat> {
     required Message model,
   }) async {
     final l10n = context.l10n;
-    _clearAllSelections();
+    const bool demoEmailQuickAdd = kEnableDemoChats;
+    if (demoEmailQuickAdd) {
+      final CalendarBloc? calendarBloc = context.read<CalendarBloc?>();
+      if (calendarBloc == null) {
+        _showSnackbar(l10n.chatCalendarUnavailable);
+        return;
+      }
+      final DateTime baseDate = demoNow();
+      final DateTime scheduledTime = DateTime(
+        baseDate.year,
+        baseDate.month,
+        baseDate.day + 1,
+        13,
+      );
+      const Duration duration = Duration(hours: 1);
+      const String title = 'hang out';
+      calendarBloc.add(
+        CalendarEvent.taskAdded(
+          title: title,
+          scheduledTime: scheduledTime,
+          duration: duration,
+          priority: TaskPriority.none,
+        ),
+      );
+      FeedbackSystem.showSuccess(
+        context,
+        l10n.chatCalendarTaskCopySuccessMessage,
+      );
+      return;
+    }
     final seededText = _plainTextForMessage(
       dashMessage: dashMessage,
       model: model,
@@ -9478,6 +9505,9 @@ class _PinnedMessageTile extends StatelessWidget {
                 task: calendarTask,
                 readOnly: taskReadOnly,
                 requireImportConfirmation: !isSelf,
+                demoQuickAdd: kEnableDemoChats &&
+                    chat.defaultTransport.isEmail &&
+                    !isSelf,
                 footerDetails: _emptyInlineSpans,
               )
             : CalendarFragmentCard(

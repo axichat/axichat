@@ -154,14 +154,23 @@ mixin DemoScriptService on XmppBase, MessageService {
         });
       case _DemoInteractivePhase.waitingForFinalReply:
         _demoInteractivePhase = _DemoInteractivePhase.completed;
-        _scheduleDemoTimer(responseDelay, () async {
-          await _sendDemoContact1Message(body: 'Copied, see you then');
-        });
+        return;
       case _DemoInteractivePhase.idle:
       case _DemoInteractivePhase.overlaysRunning:
       case _DemoInteractivePhase.completed:
         return;
     }
+  }
+
+  void handleDemoOutboundAttachmentMessage({
+    required String chatJid,
+  }) {
+    if (!kEnableDemoChats || !demoOfflineMode) return;
+    if (chatJid != DemoChats.contact1Jid) return;
+    const responseDelay = Duration(milliseconds: 1500);
+    _scheduleDemoTimer(responseDelay, () async {
+      await _sendDemoContact1Message(body: 'Copied');
+    });
   }
 
   void _runDemoOperationSequence() {

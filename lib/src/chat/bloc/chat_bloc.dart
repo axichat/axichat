@@ -2271,6 +2271,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               chatJid: chat.jid,
               body: trimmedText,
             );
+            if (kEnableDemoChats && trimmedText.isNotEmpty) {
+              await _messageService.storeDemoOutboundMessageSummary(
+                chatJid: chat.jid,
+                body: trimmedText,
+                chatType: chat.type,
+              );
+            }
           }
           emailTextSent = true;
         }
@@ -2327,6 +2334,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             calendarTaskSent = true;
           }
           emailAttachmentsSent = queuedAttachmentsSent && calendarTaskSent;
+          if (emailAttachmentsSent &&
+              (hasQueuedEmailAttachments || shouldSendCalendarTaskAttachment)) {
+            _messageService.notifyDemoOutboundAttachmentMessage(
+              chatJid: chat.jid,
+            );
+            if (kEnableDemoChats) {
+              final String? caption =
+                  calendarTaskCaption?.trim().isNotEmpty == true
+                      ? calendarTaskCaption
+                      : captionForAttachments;
+              final String preview = caption?.trim().isNotEmpty == true
+                  ? caption!.trim()
+                  : _l10n.chatAttachmentFallbackLabel;
+              await _messageService.storeDemoOutboundMessageSummary(
+                chatJid: chat.jid,
+                body: preview,
+                chatType: chat.type,
+              );
+            }
+          }
         }
         emailSendSucceeded =
             (!shouldSendEmailText || emailTextSent) && emailAttachmentsSent;
@@ -2350,6 +2377,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
         xmppAttachmentsSent = true;
+        _messageService.notifyDemoOutboundAttachmentMessage(
+          chatJid: chat.jid,
+        );
       }
       if (xmppRecipients.isNotEmpty && shouldAttemptXmppBody) {
         await _sendXmppFanOut(

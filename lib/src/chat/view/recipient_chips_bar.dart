@@ -1208,6 +1208,17 @@ final class _RecipientAutocompleteOverlayState
 
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
+  void _handleTapOutside() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final primaryFocus = FocusManager.instance.primaryFocus;
+      if (primaryFocus != widget.focusNode) {
+        return;
+      }
+      widget.focusNode.unfocus();
+    });
+  }
+
   void _recomputeOptions() {
     final query = widget.controller.text.trim();
     final next = query.isEmpty && !widget.showSuggestionsWhenEmpty
@@ -1557,7 +1568,7 @@ final class _RecipientAutocompleteOverlayState
         },
         child: TapRegion(
           groupId: widget.tapRegionGroup,
-          onTapOutside: (_) => widget.focusNode.unfocus(),
+          onTapOutside: (_) => _handleTapOutside(),
           child: Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: (_) => widget.focusNode.requestFocus(),
