@@ -64,7 +64,6 @@ class _LoginScreenState extends State<LoginScreen>
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
   bool _initialAuthModeResolved = false;
-  bool _autologinRequested = false;
   bool _loginSuccessHandled = false;
   Timer? _authTimeoutTimer;
 
@@ -82,11 +81,9 @@ class _LoginScreenState extends State<LoginScreen>
       _initialAuthModeResolved = true;
       _login = bootstrap.hasStoredLoginCredentials;
     }
-    if (!_autologinRequested &&
-        bootstrap.hasStoredLoginCredentials &&
+    if (bootstrap.hasStoredLoginCredentials &&
         context.read<AuthenticationCubit>().state is AuthenticationNone) {
-      _autologinRequested = true;
-      unawaited(context.read<AuthenticationCubit>().login());
+      context.read<AuthenticationCubit>().login();
     }
     if (_handledInitialAuthState) return;
     _handledInitialAuthState = true;

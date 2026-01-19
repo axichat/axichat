@@ -2,8 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/ui/axi_tooltip.dart';
 import 'package:axichat/src/common/ui/fade_scale_dialog.dart';
+import 'package:axichat/src/common/ui/modal_close_button.dart';
 import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -163,8 +163,6 @@ class _AxiSheetChrome extends StatelessWidget {
     right: 4,
     bottom: 8,
   );
-  static const EdgeInsets _closeButtonTapPadding = EdgeInsets.all(12);
-  static const double _closeButtonIconSize = 16;
 
   final Widget child;
   final VoidCallback onClose;
@@ -178,18 +176,11 @@ class _AxiSheetChrome extends StatelessWidget {
     }
 
     final colors = ShadTheme.of(context).colorScheme;
-    final tooltip = MaterialLocalizations.of(context).closeButtonTooltip;
-    final closeButton = AxiTooltip(
-      builder: (_) => Text(tooltip),
-      child: ShadIconButton.ghost(
-        icon: Icon(
-          LucideIcons.x,
-          size: _closeButtonIconSize,
-          color: colors.mutedForeground,
-        ),
-        padding: _closeButtonTapPadding,
-        onPressed: onClose,
-      ),
+    final Widget closeButton = ModalCloseButton(
+      onPressed: onClose,
+      color: colors.mutedForeground,
+      backgroundColor: Colors.transparent,
+      borderColor: Colors.transparent,
     );
     final dragHandle = Center(
       child: Container(

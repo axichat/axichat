@@ -1119,7 +1119,7 @@ class _CalendarDropdown extends StatelessWidget {
               CalendarSheetCloseButton(
                 tooltip: context.l10n.commonClose,
                 color: calendarSubtitleColor,
-                onPressed: onClose,
+                onClose: onClose,
               ),
             ],
           ),

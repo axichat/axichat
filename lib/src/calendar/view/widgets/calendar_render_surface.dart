@@ -10,6 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
@@ -1622,7 +1623,7 @@ class RenderCalendarSurface extends RenderBox
     Offset offset,
     CalendarLayoutMetrics metrics,
   ) {
-    final DateTime today = DateTime.now();
+    final DateTime today = demoNow();
     final double slotHeight = metrics.slotHeight;
     final int totalSlots = layoutTheme.visibleHourRows * metrics.slotsPerHour;
     final double maxHeight = size.height;
@@ -1896,7 +1897,7 @@ class RenderCalendarSurface extends RenderBox
     Offset offset,
     CalendarLayoutMetrics metrics,
   ) {
-    final DateTime now = DateTime.now();
+    final DateTime now = demoNow();
     final _DayColumnGeometry? geometry = _geometryForDate(now);
     if (geometry == null) {
       return;

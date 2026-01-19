@@ -7,7 +7,7 @@ const bool kEnableDemoChats =
 DateTime demoNow() {
   final now = DateTime.now();
   if (!kEnableDemoChats) return now;
-  final int targetWeekday = DateTime.friday;
+  const int targetWeekday = DateTime.friday;
   final int deltaDays = targetWeekday - now.weekday;
   return now.add(Duration(days: deltaDays));
 }

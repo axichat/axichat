@@ -1232,6 +1232,8 @@ Future<String?> promptCriticalPathName({
                         AxiTextFormField(
                           controller: controller,
                           focusNode: focusNode,
+                          keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.done,
                           placeholder: Text(
                             context.l10n.calendarCriticalPathNamePlaceholder,
                           ),
@@ -1254,27 +1256,30 @@ Future<String?> promptCriticalPathName({
                   ),
                 ),
                 const SizedBox(height: calendarGutterMd),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ShadButton.outline(
-                      onPressed: () => Navigator.of(dialogContext).maybePop(),
-                      child: Text(context.l10n.commonCancel),
-                    ).withTapBounce(),
-                    const SizedBox(width: calendarInsetSm),
-                    ShadButton(
-                      onPressed: () {
-                        if (!(formKey.currentState?.validate() ?? false)) {
-                          focusNode.requestFocus();
-                          return;
-                        }
-                        Navigator.of(
-                          dialogContext,
-                        ).pop(controller.text.trim());
-                      },
-                      child: Text(context.l10n.commonSave),
-                    ).withTapBounce(),
-                  ],
+                Padding(
+                  padding: EdgeInsets.only(bottom: keyboardInset),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ShadButton.outline(
+                        onPressed: () => Navigator.of(dialogContext).maybePop(),
+                        child: Text(context.l10n.commonCancel),
+                      ).withTapBounce(),
+                      const SizedBox(width: calendarInsetSm),
+                      ShadButton(
+                        onPressed: () {
+                          if (!(formKey.currentState?.validate() ?? false)) {
+                            focusNode.requestFocus();
+                            return;
+                          }
+                          Navigator.of(
+                            dialogContext,
+                          ).pop(controller.text.trim());
+                        },
+                        child: Text(context.l10n.commonSave),
+                      ).withTapBounce(),
+                    ],
+                  ),
                 ),
               ],
             ),

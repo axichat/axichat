@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiSheetHeader extends StatelessWidget {
   const AxiSheetHeader({
@@ -51,13 +50,9 @@ class AxiSheetHeader extends StatelessWidget {
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 10)],
           Expanded(child: titleBlock),
-          AxiIconButton(
-            iconData: LucideIcons.x,
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          ModalCloseButton(
             onPressed: onClose,
-            iconSize: 16,
-            buttonSize: 34,
-            tapTargetSize: 40,
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             backgroundColor: Colors.transparent,
             borderColor: Colors.transparent,
             color: colors.mutedForeground,

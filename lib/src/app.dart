@@ -17,7 +17,6 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
-import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -196,8 +195,6 @@ class _AxichatState extends State<Axichat> {
               emailService: context.read<EmailService>(),
               homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
               notificationService: context.read<NotificationService>(),
-              autoLoginOnStart:
-                  context.read<AuthBootstrap>().hasStoredLoginCredentials,
             ),
           ),
           BlocProvider(
