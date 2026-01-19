@@ -3976,7 +3976,7 @@ class _SidebarTaskTileBody extends StatelessWidget {
               const SizedBox(height: calendarInsetMd),
               Row(
                 children: [
-                  const Icon(Icons.location_on, size: 12),
+                  const Text('📍', style: TextStyle(fontSize: 12, height: 1)),
                   Expanded(
                     child: Text(
                       task.location!,

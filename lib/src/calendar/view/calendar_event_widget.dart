@@ -659,7 +659,7 @@ class _CalendarEventContent extends StatelessWidget {
             const SizedBox(height: calendarInsetSm),
             Row(
               children: [
-                Icon(Icons.location_on, size: 8, color: mutedColor),
+                const Text('📍', style: TextStyle(fontSize: 8, height: 1)),
                 const SizedBox(width: calendarInsetSm),
                 Expanded(
                   child: Text(

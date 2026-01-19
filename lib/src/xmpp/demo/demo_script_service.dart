@@ -28,7 +28,7 @@ mixin DemoScriptService on XmppBase, MessageService {
     if (_demoInteractivePhase != _DemoInteractivePhase.idle) return;
     _demoInteractivePhase = _DemoInteractivePhase.overlaysRunning;
     const startDelay = Duration(seconds: 3);
-    const overlayWindow = Duration(seconds: 5);
+    const overlayWindow = Duration(seconds: 3);
     _scheduleDemoTimer(startDelay, () {
       _demoOverlayGateOpen = true;
       _runDemoOperationSequence();
@@ -57,6 +57,9 @@ mixin DemoScriptService on XmppBase, MessageService {
 
   bool _shouldAllowOperationEvent(XmppOperationEvent event) {
     if (!kEnableDemoChats || !demoOfflineMode) return true;
+    if (event.stage.isEnd) {
+      return true;
+    }
     return _demoOverlayGateOpen;
   }
 
@@ -109,9 +112,27 @@ mixin DemoScriptService on XmppBase, MessageService {
   }) {
     if (!kEnableDemoChats || !demoOfflineMode) return;
     if (pseudoMessageType != null) return;
-    if (message.chatJid != DemoChats.contact1Jid) return;
-    if ((message.body ?? '').trim().isEmpty) return;
-    const responseDelay = Duration(seconds: 1);
+    _handleDemoOutboundTextMessageValues(
+      chatJid: message.chatJid,
+      body: message.body ?? '',
+    );
+  }
+
+  void handleDemoOutboundTextMessage({
+    required String chatJid,
+    required String body,
+  }) {
+    if (!kEnableDemoChats || !demoOfflineMode) return;
+    _handleDemoOutboundTextMessageValues(chatJid: chatJid, body: body);
+  }
+
+  void _handleDemoOutboundTextMessageValues({
+    required String chatJid,
+    required String body,
+  }) {
+    if (chatJid != DemoChats.contact1Jid) return;
+    if (body.trim().isEmpty) return;
+    const responseDelay = Duration(milliseconds: 500);
     switch (_demoInteractivePhase) {
       case _DemoInteractivePhase.waitingForFirstReply:
         _demoInteractivePhase = _DemoInteractivePhase.waitingForSecondReply;

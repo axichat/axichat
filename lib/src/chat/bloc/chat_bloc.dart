@@ -2267,6 +2267,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 htmlBody: emailHtmlBody,
               );
             }
+            _messageService.notifyDemoOutboundTextMessage(
+              chatJid: chat.jid,
+              body: trimmedText,
+            );
           }
           emailTextSent = true;
         }

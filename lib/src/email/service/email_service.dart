@@ -11,9 +11,11 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -1007,6 +1009,14 @@ class EmailService {
     String? subject,
     String? htmlBody,
   }) async {
+    if (kEnableDemoChats) {
+      return _sendDemoEmailMessage(
+        chat: chat,
+        body: body,
+        subject: subject,
+        htmlBody: htmlBody,
+      );
+    }
     final context = await _ensureEmailChatContext(chat);
     final chatId = context.deltaChatId;
     await _ensureReady();
@@ -1088,6 +1098,14 @@ class EmailService {
     String? subject,
     String? htmlCaption,
   }) async {
+    if (kEnableDemoChats) {
+      return _sendDemoEmailAttachment(
+        chat: chat,
+        attachment: attachment,
+        subject: subject,
+        htmlCaption: htmlCaption,
+      );
+    }
     final context = await _ensureEmailChatContext(chat);
     final chatId = context.deltaChatId;
     await _ensureReady();
@@ -2948,12 +2966,114 @@ class EmailService {
   }
 
   Future<void> _ensureReady() async {
+    if (kEnableDemoChats) {
+      return;
+    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       throw StateError('Call ensureProvisioned before using EmailService.');
     }
     if (!_running) {
       await start();
     }
+  }
+
+  Future<int> _sendDemoEmailMessage({
+    required Chat chat,
+    required String body,
+    String? subject,
+    String? htmlBody,
+  }) async {
+    final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
+    final trimmedBody = body.trim();
+    final resolvedBody = trimmedBody.isNotEmpty
+        ? trimmedBody
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
+    final now = demoNow();
+    const generator = Uuid();
+    final stanzaId = 'demo-email-${generator.v4()}';
+    final message = Message(
+      stanzaID: stanzaId,
+      originID: stanzaId,
+      senderJid: kDemoSelfJid,
+      chatJid: chat.jid,
+      body: resolvedBody,
+      htmlBody: normalizedHtml,
+      subject: normalizedSubject,
+      timestamp: now,
+      encryptionProtocol: EncryptionProtocol.none,
+      acked: false,
+      received: false,
+      displayed: false,
+    );
+    final db = await _databaseBuilder();
+    await db.saveMessage(message);
+    unawaited(
+      Future<void>.delayed(
+        const Duration(milliseconds: 500),
+        () => db.markMessageAcked(stanzaId),
+      ),
+    );
+    return now.millisecondsSinceEpoch;
+  }
+
+  Future<int> _sendDemoEmailAttachment({
+    required Chat chat,
+    required EmailAttachment attachment,
+    String? subject,
+    String? htmlCaption,
+  }) async {
+    final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
+    var captionText = attachment.caption?.trim() ?? '';
+    if (captionText.isEmpty && normalizedHtml != null) {
+      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
+    }
+    final captionBody = _composeSubjectEnvelope(
+      subject: normalizedSubject,
+      body: captionText,
+    );
+    final now = demoNow();
+    const generator = Uuid();
+    final metadataId = attachment.metadataId ?? generator.v4();
+    final stanzaId = 'demo-email-${generator.v4()}';
+    final metadata = FileMetadataData(
+      id: metadataId,
+      filename: attachment.fileName,
+      path: attachment.path,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+      sourceUrls: [Uri.file(attachment.path).toString()],
+    );
+    final message = Message(
+      stanzaID: stanzaId,
+      originID: stanzaId,
+      senderJid: kDemoSelfJid,
+      chatJid: chat.jid,
+      body: captionBody,
+      htmlBody: normalizedHtml,
+      subject: normalizedSubject,
+      timestamp: now,
+      encryptionProtocol: EncryptionProtocol.none,
+      acked: false,
+      received: false,
+      displayed: false,
+      fileMetadataID: metadataId,
+    );
+    final db = await _databaseBuilder();
+    await db.saveFileMetadata(metadata);
+    await db.saveMessage(message);
+    unawaited(
+      Future<void>.delayed(
+        const Duration(milliseconds: 500),
+        () => db.markMessageAcked(stanzaId),
+      ),
+    );
+    return now.millisecondsSinceEpoch;
   }
 
   Future<void> _applyDownloadLimit() async {
@@ -3890,6 +4010,14 @@ class EmailService {
     String? subject,
     String? htmlBody,
   }) async {
+    if (kEnableDemoChats) {
+      return _sendDemoEmailMessage(
+        chat: chat,
+        body: body,
+        subject: subject,
+        htmlBody: htmlBody,
+      );
+    }
     final quotedMsgId = quotedMessage.deltaMsgId;
     final context = await _ensureEmailChatContext(chat);
     final chatId = context.deltaChatId;
