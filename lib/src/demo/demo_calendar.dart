@@ -437,7 +437,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
       _scheduledTask(
         title: 'Weekly mail dispatch (seal & log)',
         scheduledTime: _atWeekdayTime(weekStart, 4, hour: 13, minute: 0),
-        duration: const Duration(minutes: 60),
+        duration: const Duration(minutes: 90),
         location: postOffice,
         priority: TaskPriority.critical,
         checklist: const <TaskChecklistItem>[
@@ -465,10 +465,10 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
         scheduledTime: _atWeekdayTime(
           weekStart,
           saturdayOffset,
-          hour: 8,
-          minute: 10,
+          hour: 7,
+          minute: 25,
         ),
-        duration: const Duration(minutes: 75),
+        duration: const Duration(minutes: 135),
         location: 'Outdoors',
       ),
     )
@@ -479,10 +479,11 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
           weekStart,
           saturdayOffset,
           hour: 10,
-          minute: 15,
+          minute: 45,
         ),
-        duration: const Duration(minutes: 95),
+        duration: const Duration(minutes: 135),
         location: 'Market',
+        priority: TaskPriority.urgent,
       ),
     )
     ..add(
@@ -491,11 +492,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
         scheduledTime: _atWeekdayTime(
           weekStart,
           saturdayOffset,
-          hour: 15,
-          minute: 40,
+          hour: 16,
+          minute: 0,
         ),
-        duration: const Duration(minutes: 50),
+        duration: const Duration(minutes: 80),
         location: 'Home',
+        priority: TaskPriority.critical,
       ),
     )
     ..add(
