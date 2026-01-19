@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -21,14 +22,14 @@ class DisplayTimeSince extends StatefulWidget {
 class _DisplayTimeSinceState extends State<DisplayTimeSince> {
   late final Timer _timer;
 
-  var _now = DateTime.now();
+  var _now = demoNow();
 
   @override
   void initState() {
     super.initState();
     _timer = Timer.periodic(
       const Duration(minutes: 1),
-      (_) => setState(() => _now = DateTime.now()),
+      (_) => setState(() => _now = demoNow()),
     );
   }
 

@@ -2771,6 +2771,7 @@ mixin MessageService
                 : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData =
         availabilityData ?? taskData ?? fragmentData;
+    final timestamp = offlineDemo ? demoNow() : DateTime.timestamp();
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -2781,10 +2782,10 @@ mixin MessageService
       encryptionProtocol: encryptionProtocol,
       noStore: noStore,
       quoting: quotedMessage?.stanzaID,
-      timestamp: DateTime.timestamp(),
-      acked: offlineDemo,
-      received: offlineDemo,
-      displayed: offlineDemo,
+      timestamp: timestamp,
+      acked: false,
+      received: false,
+      displayed: false,
       pseudoMessageType: resolvedPseudoType,
       pseudoMessageData: pseudoMessageData,
     );
@@ -2798,6 +2799,14 @@ mixin MessageService
     }
 
     if (offlineDemo) {
+      if (this is DemoScriptService) {
+        (this as DemoScriptService)
+          .._scheduleDemoAck(message.stanzaID)
+          .._handleDemoOutboundTextMessage(
+            message: message,
+            pseudoMessageType: resolvedPseudoType,
+          );
+      }
       await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
       return;
     }
@@ -3002,6 +3011,7 @@ mixin MessageService
     final body = resolvedCaption.isNotEmpty
         ? resolvedCaption
         : _attachmentLabel(filename, size);
+    final timestamp = demoOfflineMode ? demoNow() : DateTime.timestamp();
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -3010,7 +3020,7 @@ mixin MessageService
       body: body,
       htmlBody: normalizedHtmlCaption,
       encryptionProtocol: encryptionProtocol,
-      timestamp: DateTime.timestamp(),
+      timestamp: timestamp,
       fileMetadataID: metadata.id,
       quoting: quotedMessage?.stanzaID,
     );

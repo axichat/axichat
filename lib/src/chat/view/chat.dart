@@ -13318,16 +13318,9 @@ class _MessageSenderLabel extends StatelessWidget {
     }
     final String primaryLabel =
         safeDisplayName.isNotEmpty ? safeDisplayName : safeAddress;
-    final String normalizedPrimary = primaryLabel.toLowerCase();
-    final String normalizedAddress = safeAddress.toLowerCase();
-    final bool showSecondary =
-        safeAddress.isNotEmpty && normalizedPrimary != normalizedAddress;
-    final String? secondaryLabel = showSecondary
-        ? '${context.l10n.chatSenderAddressPrefix}$safeAddress'
-        : null;
     return _SenderLabelBlock(
       primaryLabel: primaryLabel,
-      secondaryLabel: secondaryLabel,
+      secondaryLabel: null,
       isSelf: isSelf,
       leftInset: leftInset,
     );

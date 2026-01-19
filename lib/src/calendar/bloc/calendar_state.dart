@@ -4,6 +4,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
@@ -50,8 +51,10 @@ class CalendarState with _$CalendarState {
     String? focusedCriticalPathId,
   }) = _CalendarState;
 
-  factory CalendarState.initial() =>
-      CalendarState(model: CalendarModel.empty(), selectedDate: DateTime.now());
+  factory CalendarState.initial() => CalendarState(
+        model: CalendarModel.empty(),
+        selectedDate: demoNow(),
+      );
 }
 
 extension CalendarStateExtensions on CalendarState {

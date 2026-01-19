@@ -157,7 +157,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             state is AuthenticationComplete &&
             !_xmppService.hasInMemoryReconnectContext) {
           await logout(severity: LogoutSeverity.auto);
-          await _loginIfStoredCredentials();
         }
       }
     });

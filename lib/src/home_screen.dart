@@ -92,6 +92,8 @@ const EdgeInsets _railFooterItemPadding = EdgeInsets.symmetric(
 );
 const String _homeSyncTooltip = 'Sync';
 
+enum _HomeDemoPhase { idle, triggered }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -105,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
+  _HomeDemoPhase _demoPhase = _HomeDemoPhase.idle;
 
   @override
   void initState() {
@@ -121,6 +124,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _shortcutFocusNode.dispose();
     super.dispose();
+  }
+
+  void _triggerDemoInteractivePhase() {
+    if (_demoPhase != _HomeDemoPhase.idle) return;
+    setState(() => _demoPhase = _HomeDemoPhase.triggered);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<XmppService?>()?.startDemoInteractivePhase();
+    });
   }
 
   @override
@@ -571,7 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (seedDemoCalendar) {
                     bloc.add(
                       CalendarEvent.remoteModelApplied(
-                        model: DemoCalendar.franklin(anchor: DateTime.now()),
+                        model: DemoCalendar.franklin(anchor: demoNow()),
                       ),
                     );
                   }
@@ -815,6 +827,12 @@ class _NexusState extends State<Nexus> {
     final showDesktopRefresh =
         env.isDesktopPlatform && context.read<ChatsCubit?>() != null;
     final List<AppBarActionItem> headerActions = <AppBarActionItem>[
+      if (kEnableDemoChats && _demoPhase == _HomeDemoPhase.idle)
+        AppBarActionItem(
+          label: context.l10n.commonStart,
+          iconData: LucideIcons.play,
+          onPressed: _triggerDemoInteractivePhase,
+        ),
       if (showFindActionInHeader &&
           context.watch<AccessibilityActionBloc?>() != null)
         AppBarActionItem(

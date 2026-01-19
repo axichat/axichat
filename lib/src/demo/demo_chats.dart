@@ -51,6 +51,7 @@ class DemoChats {
   static const String _madisonJid = 'madison@$_demoDomain';
   static const String _hamiltonJid = 'hamilton@$_demoDomain';
   static const String _groupJid = 'founders@$_demoConferenceDomain';
+  static const String contact1Jid = 'contact1@outlook.com';
 
   static const Map<String, DemoContactAvatar> _avatars =
       <String, DemoContactAvatar>{
@@ -162,7 +163,7 @@ class DemoChats {
   }
 
   static List<DemoChatScript> _buildScripts() {
-    final now = DateTime.now();
+    final now = demoNow();
     const washingtonJid = _washingtonJid;
     const jeffersonJid = _jeffersonJid;
     const adamsJid = _adamsJid;
@@ -170,6 +171,7 @@ class DemoChats {
     const hamiltonJid = _hamiltonJid;
     const groupJid = _groupJid;
     const gmailJid = 'eliot@gmail.com';
+    const contact1Jid = DemoChats.contact1Jid;
 
     Chat directChat(String jid, String title, List<Message> messages) => Chat(
           jid: jid,
@@ -495,6 +497,26 @@ class DemoChats {
       lastChangeTimestamp: groupMessages.first.timestamp!,
       lastMessage: groupMessages.first.body,
     );
+    final contact1FirstTimestamp =
+        now.subtract(const Duration(days: 2, hours: 3));
+    final contact1SecondTimestamp =
+        contact1FirstTimestamp.add(const Duration(minutes: 49));
+    final contact1Messages = [
+      message(
+        stanzaId: 'demo-contact1-2',
+        senderJid: kDemoSelfJid,
+        chatJid: contact1Jid,
+        body: "Yes, it was nice to meet you. What's up?",
+        timestamp: contact1SecondTimestamp,
+      ),
+      message(
+        stanzaId: 'demo-contact1-1',
+        senderJid: contact1Jid,
+        chatJid: contact1Jid,
+        body: 'Hi, is this Ben? We met at the Flutter Conference. -contact1',
+        timestamp: contact1FirstTimestamp,
+      ),
+    ];
 
     return [
       DemoChatScript(
@@ -553,6 +575,20 @@ class DemoChats {
             occupantId: gmailJid,
           ).copyWith(fileMetadataID: gmailDocAttachment.id),
         ],
+        attachments: const [gmailDocAttachment, gmailDocAttachment2],
+      ),
+      DemoChatScript(
+        chat: Chat(
+          jid: contact1Jid,
+          title: contact1Jid,
+          type: ChatType.chat,
+          contactJid: contact1Jid,
+          contactDisplayName: contact1Jid,
+          emailAddress: contact1Jid,
+          lastChangeTimestamp: contact1Messages.first.timestamp!,
+          lastMessage: contact1Messages.first.body,
+        ),
+        messages: contact1Messages,
         attachments: const [gmailDocAttachment, gmailDocAttachment2],
       ),
       DemoChatScript(
