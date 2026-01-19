@@ -51,7 +51,7 @@ class DemoChats {
   static const String _madisonJid = 'madison@$_demoDomain';
   static const String _hamiltonJid = 'hamilton@$_demoDomain';
   static const String _groupJid = 'founders@$_demoConferenceDomain';
-  static const String contact1Jid = 'contact1@outlook.com';
+  static const String contact1Jid = 'noah@outlook.com';
 
   static const Map<String, DemoContactAvatar> _avatars =
       <String, DemoContactAvatar>{
@@ -513,7 +513,7 @@ class DemoChats {
         stanzaId: 'demo-contact1-1',
         senderJid: contact1Jid,
         chatJid: contact1Jid,
-        body: 'Hi, is this Ben? We met at the Flutter Conference. -contact1',
+        body: 'Hi, is this Ben? We met at the Flutter Conference',
         timestamp: contact1FirstTimestamp,
       ),
     ];
