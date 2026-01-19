@@ -473,14 +473,18 @@ class DemoChats {
       ),
     ];
 
+    final latestGroupMessage = groupMessages.firstWhere(
+      (message) => (message.body ?? '').trim().isNotEmpty,
+      orElse: () => groupMessages.first,
+    );
     final groupChat = Chat(
       jid: groupJid,
       title: 'Founders',
       type: ChatType.groupChat,
       myNickname: kDemoSelfDisplayName,
       contactJid: groupJid,
-      lastChangeTimestamp: groupMessages.last.timestamp!,
-      lastMessage: groupMessages.last.body,
+      lastChangeTimestamp: latestGroupMessage.timestamp!,
+      lastMessage: latestGroupMessage.body,
     );
     final contact1FirstTimestamp =
         now.subtract(const Duration(days: 2, hours: 3));
