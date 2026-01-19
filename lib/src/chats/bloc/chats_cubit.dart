@@ -16,6 +16,29 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
 
+enum ChatRouteIndex {
+  main,
+  search,
+  details,
+  settings,
+  gallery,
+  calendar;
+
+  bool get isMain => this == ChatRouteIndex.main;
+
+  bool get isSearch => this == ChatRouteIndex.search;
+
+  bool get isDetails => this == ChatRouteIndex.details;
+
+  bool get isSettings => this == ChatRouteIndex.settings;
+
+  bool get isGallery => this == ChatRouteIndex.gallery;
+
+  bool get isCalendar => this == ChatRouteIndex.calendar;
+
+  bool get allowsChatInteraction => isMain || isSearch;
+}
+
 class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({
     required XmppService xmppService,
@@ -31,6 +54,7 @@ class ChatsCubit extends Cubit<ChatsState> {
             forwardStack: const <String>[],
             openCalendar: false,
             openChatCalendar: false,
+            openChatRoute: ChatRouteIndex.main,
             items: xmppService.cachedChatList,
             creationStatus: RequestStatus.none,
           ),
@@ -72,6 +96,13 @@ class ChatsCubit extends Cubit<ChatsState> {
           ];
     final shouldKeepChatCalendar =
         state.openChatCalendar && seededStack.isNotEmpty;
+    final nextChatRoute = seededStack.isEmpty
+        ? ChatRouteIndex.main
+        : shouldKeepChatCalendar
+            ? ChatRouteIndex.calendar
+            : state.openChatRoute.isCalendar
+                ? ChatRouteIndex.main
+                : state.openChatRoute;
     emit(
       state.copyWith(
         openStack: seededStack,
@@ -80,6 +111,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         items: items,
         selectedJids: retainedSelection,
         openChatCalendar: shouldKeepChatCalendar,
+        openChatRoute: nextChatRoute,
       ),
     );
   }
@@ -98,6 +130,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         forwardStack: const <String>[],
         openJid: jid,
         openChatCalendar: false,
+        openChatRoute: ChatRouteIndex.main,
       ),
     );
     await _chatsService.openChat(jid);
@@ -130,6 +163,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         forwardStack: const <String>[],
         openJid: jid,
         openChatCalendar: false,
+        openChatRoute: ChatRouteIndex.main,
       ),
     );
     await _chatsService.openChat(jid);
@@ -147,6 +181,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         forwardStack: nextForward,
         openJid: nextOpen,
         openChatCalendar: false,
+        openChatRoute: ChatRouteIndex.main,
       ),
     );
     if (nextOpen == null) {
@@ -169,6 +204,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         openStack: filteredStack,
         openJid: restored,
         openChatCalendar: false,
+        openChatRoute: ChatRouteIndex.main,
       ),
     );
     await _chatsService.openChat(restored);
@@ -182,6 +218,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         forwardStack: const <String>[],
         openJid: null,
         openChatCalendar: false,
+        openChatRoute: ChatRouteIndex.main,
       ),
     );
     await _chatsService.closeChat();
@@ -195,6 +232,19 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
   }
 
+  void setOpenChatRoute({required ChatRouteIndex route}) {
+    if (state.openChatRoute == route) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        openChatRoute: route,
+        openChatCalendar: route.isCalendar,
+        openCalendar: route.isCalendar ? false : state.openCalendar,
+      ),
+    );
+  }
+
   void setChatCalendarOpen({required bool open}) {
     if (state.openChatCalendar == open) {
       return;
@@ -203,6 +253,11 @@ class ChatsCubit extends Cubit<ChatsState> {
       state.copyWith(
         openChatCalendar: open,
         openCalendar: open ? false : state.openCalendar,
+        openChatRoute: open
+            ? ChatRouteIndex.calendar
+            : state.openChatRoute.isCalendar
+                ? ChatRouteIndex.main
+                : state.openChatRoute,
       ),
     );
   }

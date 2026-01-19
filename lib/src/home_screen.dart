@@ -308,6 +308,10 @@ class _HomeScreenState extends State<HomeScreen> {
             final chatsCubit = context.read<ChatsCubit?>();
             final chatsState = chatsCubit?.state;
             if (chatsState == null) return;
+            if (!chatsState.openChatRoute.isMain) {
+              chatsCubit?.setOpenChatRoute(route: ChatRouteIndex.main);
+              return;
+            }
             if (chatsState.openChatCalendar) {
               chatsCubit?.setChatCalendarOpen(open: false);
               return;
