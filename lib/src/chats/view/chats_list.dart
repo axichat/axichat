@@ -181,38 +181,33 @@ class ChatsList extends StatelessWidget {
                       );
                       body = ColoredBox(
                         color: context.colorScheme.background,
-                        child: ListView.builder(
-                          physics: scrollPhysics,
-                          itemCount: visibleItems.length +
-                              (includeCalendarShortcut ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (includeCalendarShortcut && index == 0) {
-                              return ListItemPadding(
-                                child: BlocBuilder<CalendarBloc, CalendarState>(
-                                  builder: (context, state) {
-                                    final currentTask = state.currentTaskAt(
-                                      DateTime.now(),
-                                    );
-                                    return CalendarTile(
-                                      onTap: () => context
-                                          .read<ChatsCubit>()
-                                          .toggleCalendar(),
-                                      currentTask: currentTask,
-                                      nextTask: state.nextTask,
-                                      dueReminderCount:
-                                          state.dueReminders?.length ?? 0,
-                                    );
-                                  },
-                                ),
-                              );
-                            }
-
-                            final offset = includeCalendarShortcut ? 1 : 0;
-                            final item = visibleItems[index - offset];
-                            return ListItemPadding(
-                              child: ChatListTile(item: item),
-                            );
-                          },
+                        child: AnimatedChatsListView(
+                          items: visibleItems,
+                          includeCalendarShortcut: includeCalendarShortcut,
+                          animationDuration:
+                              context.watch<SettingsCubit>().animationDuration,
+                          scrollPhysics: scrollPhysics,
+                          calendarShortcut: includeCalendarShortcut
+                              ? ListItemPadding(
+                                  child:
+                                      BlocBuilder<CalendarBloc, CalendarState>(
+                                    builder: (context, state) {
+                                      final currentTask = state.currentTaskAt(
+                                        DateTime.now(),
+                                      );
+                                      return CalendarTile(
+                                        onTap: () => context
+                                            .read<ChatsCubit>()
+                                            .toggleCalendar(),
+                                        currentTask: currentTask,
+                                        nextTask: state.nextTask,
+                                        dueReminderCount:
+                                            state.dueReminders?.length ?? 0,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : null,
                         ),
                       );
                     }
@@ -411,6 +406,219 @@ class ChatListTile extends StatefulWidget {
 
   @override
   State<ChatListTile> createState() => _ChatListTileState();
+}
+
+enum ChatListMotion {
+  none,
+  insertFromTop,
+  insertFromBottom,
+  moveUp,
+  moveDown;
+
+  bool get shouldAnimate => this != none;
+
+  Offset get beginOffset {
+    const double insertFromTopOffset = 0.18;
+    const double insertFromBottomOffset = 0.12;
+    const double moveUpOffset = 0.14;
+    const double moveDownOffset = 0.14;
+    switch (this) {
+      case ChatListMotion.none:
+        return Offset.zero;
+      case ChatListMotion.insertFromTop:
+        return const Offset(0, -insertFromTopOffset);
+      case ChatListMotion.insertFromBottom:
+        return const Offset(0, insertFromBottomOffset);
+      case ChatListMotion.moveUp:
+        return const Offset(0, moveUpOffset);
+      case ChatListMotion.moveDown:
+        return const Offset(0, -moveDownOffset);
+    }
+  }
+}
+
+class AnimatedChatsListView extends StatefulWidget {
+  const AnimatedChatsListView({
+    super.key,
+    required this.items,
+    required this.animationDuration,
+    required this.scrollPhysics,
+    this.includeCalendarShortcut = false,
+    this.calendarShortcut,
+  });
+
+  final List<Chat> items;
+  final Duration animationDuration;
+  final ScrollPhysics scrollPhysics;
+  final bool includeCalendarShortcut;
+  final Widget? calendarShortcut;
+
+  @override
+  State<AnimatedChatsListView> createState() => _AnimatedChatsListViewState();
+}
+
+class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
+  Map<String, int> _previousIndices = const <String, int>{};
+  Map<String, int> _currentIndices = const <String, int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndices = _indexItems(widget.items);
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedChatsListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _previousIndices = _currentIndices;
+    _currentIndices = _indexItems(widget.items);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const int noOffset = 0;
+    const int calendarSlotCount = 1;
+    final int itemCount = widget.items.length +
+        (widget.includeCalendarShortcut ? calendarSlotCount : noOffset);
+    return ListView.builder(
+      physics: widget.scrollPhysics,
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        const int firstIndex = 0;
+        if (widget.includeCalendarShortcut && index == firstIndex) {
+          return widget.calendarShortcut ?? const SizedBox.shrink();
+        }
+
+        final int offset =
+            widget.includeCalendarShortcut ? calendarSlotCount : noOffset;
+        final int chatIndex = index - offset;
+        final item = widget.items[chatIndex];
+        final previousIndex = _previousIndices[item.jid];
+        final motion = _resolveMotion(
+          previousIndex,
+          chatIndex,
+          widget.items.length,
+        );
+
+        return AnimatedChatListEntry(
+          key: ValueKey(item.jid),
+          motion: motion,
+          duration: widget.animationDuration,
+          child: ListItemPadding(
+            child: ChatListTile(item: item),
+          ),
+        );
+      },
+    );
+  }
+
+  Map<String, int> _indexItems(List<Chat> items) {
+    final indexed = <String, int>{};
+    for (var i = 0; i < items.length; i++) {
+      indexed[items[i].jid] = i;
+    }
+    return indexed;
+  }
+
+  ChatListMotion _resolveMotion(
+    int? previousIndex,
+    int currentIndex,
+    int totalCount,
+  ) {
+    const int topIndex = 0;
+    const int minimumCountForSlideFromTop = 2;
+    if (previousIndex == null) {
+      if (currentIndex == topIndex &&
+          totalCount >= minimumCountForSlideFromTop) {
+        return ChatListMotion.insertFromTop;
+      }
+      return ChatListMotion.insertFromBottom;
+    }
+    if (previousIndex == currentIndex) {
+      return ChatListMotion.none;
+    }
+    if (previousIndex > currentIndex) {
+      return ChatListMotion.moveUp;
+    }
+    return ChatListMotion.moveDown;
+  }
+}
+
+class AnimatedChatListEntry extends StatefulWidget {
+  const AnimatedChatListEntry({
+    super.key,
+    required this.motion,
+    required this.duration,
+    required this.child,
+  });
+
+  final ChatListMotion motion;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  State<AnimatedChatListEntry> createState() => _AnimatedChatListEntryState();
+}
+
+class _AnimatedChatListEntryState extends State<AnimatedChatListEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    const double animationStartValue = 0.0;
+    const double animationEndValue = 1.0;
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    )..value =
+        widget.motion.shouldAnimate ? animationStartValue : animationEndValue;
+    if (widget.motion.shouldAnimate) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedChatListEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    const double animationStartValue = 0.0;
+    const double animationEndValue = 1.0;
+    _controller.duration = widget.duration;
+    if (widget.motion.shouldAnimate) {
+      _controller
+        ..value = animationStartValue
+        ..forward();
+    } else {
+      _controller.value = animationEndValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const curve = Curves.easeOutCubic;
+    final animation = CurvedAnimation(
+      parent: _controller,
+      curve: curve,
+    );
+    final offsetTween = Tween<Offset>(
+      begin: widget.motion.beginOffset,
+      end: Offset.zero,
+    );
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: offsetTween.animate(animation),
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 class _ChatListTileState extends State<ChatListTile> {
