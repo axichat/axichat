@@ -79,17 +79,14 @@ class DemoChats {
       assetPath: 'assets/images/avatars/music/microphone.png',
       hash: 'demo-avatar-hamilton',
     ),
+    _groupJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/misc/founders_star.png',
+      hash: 'demo-avatar-founders',
+    ),
   };
 
   static Map<String, DemoContactAvatar> avatarAssets() =>
       Map<String, DemoContactAvatar>.unmodifiable(_avatars);
-
-  static const DemoAttachmentAsset groupAttachment = DemoAttachmentAsset(
-    id: 'demo-abstract18',
-    assetPath: 'assets/images/avatars/abstract/abstract18.png',
-    fileName: 'abstract18.png',
-    mimeType: 'image/png',
-  );
 
   static const DemoAttachmentAsset composerAttachment = DemoAttachmentAsset(
     id: 'demo-abstract14',
@@ -415,18 +412,6 @@ class DemoChats {
     };
 
     final groupMessages = [
-      Message(
-        stanzaID: 'demo-group-7',
-        senderJid: '$groupJid/Franklin',
-        chatJid: groupJid,
-        body: '',
-        timestamp: now.subtract(const Duration(minutes: 2)),
-        occupantID: '$groupJid/Franklin',
-        acked: true,
-        received: true,
-        displayed: true,
-        fileMetadataID: groupAttachment.id,
-      ),
       message(
         stanzaId: 'demo-group-6',
         senderJid: '$groupJid/Hamilton',
@@ -494,8 +479,8 @@ class DemoChats {
       type: ChatType.groupChat,
       myNickname: kDemoSelfDisplayName,
       contactJid: groupJid,
-      lastChangeTimestamp: groupMessages.first.timestamp!,
-      lastMessage: groupMessages.first.body,
+      lastChangeTimestamp: groupMessages.last.timestamp!,
+      lastMessage: groupMessages.last.body,
     );
     final contact1FirstTimestamp =
         now.subtract(const Duration(days: 2, hours: 3));
@@ -594,7 +579,6 @@ class DemoChats {
       DemoChatScript(
         chat: groupChat,
         messages: groupMessages,
-        attachments: const [groupAttachment],
         roomState: RoomState(
           roomJid: groupJid,
           occupants: roomOccupants,

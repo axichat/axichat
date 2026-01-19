@@ -118,8 +118,8 @@ class FeedbackToast extends ShadToast {
     if (kEnableDemoChats) {
       return FeedbackToast.success(
         key: key,
-        title: title,
-        message: message,
+        title: null,
+        message: null,
         duration: duration,
         onTap: onTap,
         actionLabel: actionLabel,

@@ -138,7 +138,7 @@ dev_dependencies:
 
 
 flutter:
-  #  default-flavor: production
+  default-flavor: production
   uses-material-design: true
 
   # Enable generation of localized Strings from arb files.

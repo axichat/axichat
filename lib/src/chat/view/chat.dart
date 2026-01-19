@@ -12975,9 +12975,13 @@ class _GuestChatState extends State<GuestChat> {
     final guestHorizontalPadding = isDesktopWidth
         ? _guestDesktopHorizontalPadding
         : _chatHorizontalPadding;
+    final colors = context.colorScheme;
     return Container(
       width: double.infinity,
-      color: context.colorScheme.background,
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(left: BorderSide(color: colors.border)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -13125,7 +13129,8 @@ class _GuestChatAppIconAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const String guestChatAppIconAssetPath = 'assets/icons/app_icon_source.png';
+    const String guestChatAppIconAssetPath =
+        'assets/icons/generated/app_icon_ios.png';
     return SizedBox.square(
       dimension: size,
       child: ClipOval(
@@ -13133,6 +13138,7 @@ class _GuestChatAppIconAvatar extends StatelessWidget {
           guestChatAppIconAssetPath,
           fit: BoxFit.cover,
           filterQuality: FilterQuality.high,
+          isAntiAlias: true,
         ),
       ),
     );

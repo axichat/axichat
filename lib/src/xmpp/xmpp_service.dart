@@ -1347,7 +1347,11 @@ class XmppService extends XmppBase
   @override
   Future<XmppDatabase> _buildDatabase(String prefix, String passphrase) async {
     if (kEnableDemoChats) {
-      return XmppDrift.inMemory();
+      final useSqlCipher = Platform.isAndroid;
+      if (!useSqlCipher) {
+        return XmppDrift.inMemory();
+      }
+      return _databaseFactory(prefix, passphrase);
     }
     final effectiveMode = messageStorageMode;
     if (effectiveMode.isServerOnly) {

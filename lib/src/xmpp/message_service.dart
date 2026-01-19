@@ -876,6 +876,16 @@ mixin MessageService
     ).map(filteredMessagesForChat);
   }
 
+  void notifyDemoOutboundTextMessage({
+    required String chatJid,
+    required String body,
+  }) {
+    if (!kEnableDemoChats) return;
+    if (this case final DemoScriptService demo) {
+      demo.handleDemoOutboundTextMessage(chatJid: chatJid, body: body);
+    }
+  }
+
   bool _isInternalSyncEnvelope(String? body) {
     final trimmed = body?.trim();
     if (trimmed == null || trimmed.isEmpty) return false;
@@ -3041,6 +3051,29 @@ mixin MessageService
           sortOrder: attachmentOrder,
         );
       });
+    }
+    if (demoOfflineMode) {
+      await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+      if (this is DemoScriptService) {
+        (this as DemoScriptService)._scheduleDemoAck(message.stanzaID);
+      }
+      await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+      final demoFile = File(attachment.path);
+      final demoContentType = metadata.mimeType ?? 'application/octet-stream';
+      final demoSize = metadata.sizeBytes ?? attachment.sizeBytes;
+      final demoSourceUrls = metadata.sourceUrls;
+      final demoGetUrl = demoSourceUrls != null && demoSourceUrls.isNotEmpty
+          ? demoSourceUrls.first
+          : Uri.file(attachment.path).toString();
+      return XmppAttachmentUpload._(
+        metadata: metadata,
+        getUrl: demoGetUrl,
+        putUrl: demoGetUrl,
+        headers: const [],
+        contentType: demoContentType,
+        sizeBytes: demoSize,
+        file: demoFile,
+      );
     }
     if (isGroupChat) {
       try {
