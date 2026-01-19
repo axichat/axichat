@@ -111,24 +111,6 @@ extension on MessageStatus {
       };
 }
 
-enum _ChatRoute { main, search, details, settings, gallery, calendar }
-
-extension on _ChatRoute {
-  bool get isMain => this == _ChatRoute.main;
-
-  bool get isSearch => this == _ChatRoute.search;
-
-  bool get isDetails => this == _ChatRoute.details;
-
-  bool get isSettings => this == _ChatRoute.settings;
-
-  bool get isGallery => this == _ChatRoute.gallery;
-
-  bool get isCalendar => this == _ChatRoute.calendar;
-
-  bool get allowsChatInteraction => isMain || isSearch;
-}
-
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 const _bubbleRadius = 18.0;
 const double _senderLabelBottomSpacing = 6.0;
@@ -1040,8 +1022,8 @@ class _ChatState extends State<Chat> {
   static final Map<String, double> _scrollOffsetCache = {};
   String? _lastScrollStorageKey;
 
-  var _chatRoute = _ChatRoute.main;
-  var _previousChatRoute = _ChatRoute.main;
+  var _chatRoute = ChatRouteIndex.main;
+  var _previousChatRoute = ChatRouteIndex.main;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
@@ -1836,10 +1818,10 @@ class _ChatState extends State<Chat> {
   void _toggleSettingsPanel() {
     if (!mounted) return;
     if (_chatRoute.isSettings) {
-      _setChatRoute(_ChatRoute.main);
+      _setChatRoute(ChatRouteIndex.main);
       return;
     }
-    _setChatRoute(_ChatRoute.settings);
+    _setChatRoute(ChatRouteIndex.settings);
   }
 
   void _setViewFilter(MessageTimelineFilter filter) {
@@ -3372,7 +3354,7 @@ class _ChatState extends State<Chat> {
     if (_lastScrollStorageKey == null) {
       _lastScrollStorageKey = currentKey;
       _restoreScrollOffsetForCurrentChat();
-      _syncChatCalendarRoute();
+      _syncChatRoute();
       return;
     }
     if (_lastScrollStorageKey != currentKey) {
@@ -3380,7 +3362,7 @@ class _ChatState extends State<Chat> {
       _lastScrollStorageKey = currentKey;
       _restoreScrollOffsetForCurrentChat();
     }
-    _syncChatCalendarRoute();
+    _syncChatRoute();
   }
 
   @override
@@ -3434,18 +3416,12 @@ class _ChatState extends State<Chat> {
               ),
               BlocListener<ChatsCubit, ChatsState>(
                 listenWhen: (previous, current) =>
-                    previous.openChatCalendar != current.openChatCalendar,
+                    previous.openChatRoute != current.openChatRoute,
                 listener: (_, chatsState) {
                   if (!mounted) return;
-                  if (chatsState.openChatCalendar) {
-                    if (!_chatRoute.isCalendar) {
-                      _showChatCalendarRoute();
-                    }
-                    return;
-                  }
-                  if (_chatRoute.isCalendar) {
-                    _returnToMainRoute();
-                  }
+                  final nextRoute = chatsState.openChatRoute;
+                  if (_chatRoute == nextRoute) return;
+                  _setChatRoute(nextRoute);
                 },
               ),
               BlocListener<ChatBloc, ChatState>(
@@ -8067,12 +8043,12 @@ class _ChatState extends State<Chat> {
                             calendarBloc: chatCalendarBloc,
                           );
                           final Widget overlayChild = switch (_chatRoute) {
-                            _ChatRoute.main => const SizedBox.expand(),
-                            _ChatRoute.search => const _ChatSearchOverlay(
+                            ChatRouteIndex.main => const SizedBox.expand(),
+                            ChatRouteIndex.search => const _ChatSearchOverlay(
                                 panel: _ChatSearchPanel(),
                               ),
-                            _ChatRoute.details => const _ChatDetailsOverlay(),
-                            _ChatRoute.settings => _ChatSettingsOverlay(
+                            ChatRouteIndex.details => const _ChatDetailsOverlay(),
+                            ChatRouteIndex.settings => _ChatSettingsOverlay(
                                 state: state,
                                 onViewFilterChanged: _setViewFilter,
                                 onToggleNotifications: _toggleNotifications,
@@ -8082,10 +8058,10 @@ class _ChatState extends State<Chat> {
                                 blocklistEntry: chatBlocklistEntry,
                                 blockAddress: blockAddress,
                               ),
-                            _ChatRoute.gallery => _ChatGalleryOverlay(
+                            ChatRouteIndex.gallery => _ChatGalleryOverlay(
                                 chat: chatEntity,
                               ),
-                            _ChatRoute.calendar => const SizedBox.expand(),
+                            ChatRouteIndex.calendar => const SizedBox.expand(),
                           };
 
                           final bool isDesktopPlatform =
@@ -8714,22 +8690,18 @@ class _ChatState extends State<Chat> {
     final detailId = message.customProperties?['id'];
     if (detailId == null) return;
     context.read<ChatBloc>().add(ChatMessageFocused(detailId));
-    _setChatRoute(_ChatRoute.details);
+    _setChatRoute(ChatRouteIndex.details);
   }
 
-  void _syncChatCalendarRoute() {
-    final bool openChatCalendar =
-        context.read<ChatsCubit?>()?.state.openChatCalendar ?? false;
-    if (openChatCalendar && !_chatRoute.isCalendar) {
-      _showChatCalendarRoute();
+  void _syncChatRoute() {
+    final nextRoute = context.read<ChatsCubit?>()?.state.openChatRoute;
+    if (nextRoute == null || nextRoute == _chatRoute) {
       return;
     }
-    if (!openChatCalendar && _chatRoute.isCalendar) {
-      _returnToMainRoute();
-    }
+    _setChatRoute(nextRoute);
   }
 
-  void _setChatRoute(_ChatRoute nextRoute) {
+  void _setChatRoute(ChatRouteIndex nextRoute) {
     if (!mounted) return;
     final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
     setState(() {
@@ -8756,11 +8728,11 @@ class _ChatState extends State<Chat> {
     if (!nextRoute.isSearch) {
       context.read<ChatSearchCubit?>()?.setActive(false);
     }
-    context.read<ChatsCubit>().setChatCalendarOpen(open: nextRoute.isCalendar);
+    context.read<ChatsCubit>().setOpenChatRoute(route: nextRoute);
   }
 
   void _returnToMainRoute() {
-    _setChatRoute(_ChatRoute.main);
+    _setChatRoute(ChatRouteIndex.main);
   }
 
   void _openChatSearch() {
@@ -8768,15 +8740,15 @@ class _ChatState extends State<Chat> {
     if (_chatRoute.isSearch) {
       return;
     }
-    _setChatRoute(_ChatRoute.search);
+    _setChatRoute(ChatRouteIndex.search);
   }
 
   void _showChatCalendarRoute() {
-    _setChatRoute(_ChatRoute.calendar);
+    _setChatRoute(ChatRouteIndex.calendar);
   }
 
   void _openChatCalendar() {
-    _setChatRoute(_ChatRoute.calendar);
+    _setChatRoute(ChatRouteIndex.calendar);
   }
 
   void _openChatAttachments() {
@@ -8784,10 +8756,10 @@ class _ChatState extends State<Chat> {
     final chat = context.read<ChatBloc>().state.chat;
     if (chat == null) return;
     if (_chatRoute.isGallery) {
-      _setChatRoute(_ChatRoute.main);
+      _setChatRoute(ChatRouteIndex.main);
       return;
     }
-    _setChatRoute(_ChatRoute.gallery);
+    _setChatRoute(ChatRouteIndex.gallery);
   }
 
   void _togglePinnedMessages() {
