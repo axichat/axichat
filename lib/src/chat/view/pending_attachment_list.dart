@@ -162,8 +162,6 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
           }
           return _PendingFileAttachment(
             pending: pending,
-            onRetry: widget.onRetry,
-            onRemove: widget.onRemove,
             typeReport: resolvedReport,
           );
         },
@@ -320,14 +318,10 @@ class _PendingImageAttachment extends StatelessWidget {
 class _PendingFileAttachment extends StatelessWidget {
   const _PendingFileAttachment({
     required this.pending,
-    required this.onRetry,
-    required this.onRemove,
     this.typeReport,
   });
 
   final PendingAttachment pending;
-  final VoidCallback onRetry;
-  final VoidCallback onRemove;
   final FileTypeReport? typeReport;
 
   @override
@@ -339,22 +333,21 @@ class _PendingFileAttachment extends StatelessWidget {
     final foreground =
         isFailed ? colors.destructiveForeground : colors.foreground;
     final sizeLabel = formatBytes(pending.attachment.sizeBytes);
-    return Container(
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: borderRadius,
-        border: Border.all(
-          color: colors.border.withValues(alpha: isFailed ? 0.5 : 1),
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+    return IntrinsicWidth(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 300),
+        child: Container(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: colors.border.withValues(alpha: isFailed ? 0.5 : 1),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 40,
@@ -369,7 +362,8 @@ class _PendingFileAttachment extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
+              Flexible(
+                fit: FlexFit.loose,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -385,6 +379,7 @@ class _PendingFileAttachment extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           sizeLabel,
@@ -403,13 +398,7 @@ class _PendingFileAttachment extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _PendingAttachmentActionBar(
-            pending: pending,
-            onRetry: onRetry,
-            onRemove: onRemove,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -593,66 +582,6 @@ class _ShimmerSurfaceState extends State<_ShimmerSurface>
   }
 }
 
-class _PendingAttachmentActionBar extends StatelessWidget {
-  const _PendingAttachmentActionBar({
-    required this.pending,
-    required this.onRetry,
-    required this.onRemove,
-  });
-
-  final PendingAttachment pending;
-  final VoidCallback onRetry;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final isFailed = pending.status == PendingAttachmentStatus.failed;
-    if (!isFailed) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: AxiIconButton(
-          iconData: LucideIcons.x,
-          tooltip: l10n.chatAttachmentRemoveAttachment,
-          onPressed: onRemove,
-          backgroundColor: context.colorScheme.card,
-          borderColor: context.colorScheme.border,
-        ),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          pending.errorMessage ?? l10n.chatAttachmentSendFailed,
-          style: context.textTheme.small.copyWith(
-            color: context.colorScheme.destructiveForeground,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.end,
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            _PendingAttachmentActionButton(
-              icon: LucideIcons.refreshCcw,
-              label: l10n.commonRetry,
-              onPressed: onRetry,
-            ),
-            _PendingAttachmentActionButton(
-              icon: LucideIcons.x,
-              label: l10n.commonRemove,
-              onPressed: onRemove,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class _PendingAttachmentErrorOverlay extends StatelessWidget {
   const _PendingAttachmentErrorOverlay({
     required this.borderRadius,
@@ -767,31 +696,6 @@ class _PendingAttachmentOverlayAction extends StatelessWidget {
       cornerRadius: 10,
       borderWidth: 1,
     );
-  }
-}
-
-class _PendingAttachmentActionButton extends StatelessWidget {
-  const _PendingAttachmentActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return ShadButton.secondary(
-      size: ShadButtonSize.sm,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 14), const SizedBox(width: 6), Text(label)],
-      ),
-    ).withTapBounce();
   }
 }
 

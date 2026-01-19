@@ -408,35 +408,6 @@ class ChatListTile extends StatefulWidget {
   State<ChatListTile> createState() => _ChatListTileState();
 }
 
-enum ChatListMotion {
-  none,
-  insertFromTop,
-  insertFromBottom,
-  moveUp,
-  moveDown;
-
-  bool get shouldAnimate => this != none;
-
-  Offset get beginOffset {
-    const double insertFromTopOffset = 0.18;
-    const double insertFromBottomOffset = 0.12;
-    const double moveUpOffset = 0.14;
-    const double moveDownOffset = 0.14;
-    switch (this) {
-      case ChatListMotion.none:
-        return Offset.zero;
-      case ChatListMotion.insertFromTop:
-        return const Offset(0, -insertFromTopOffset);
-      case ChatListMotion.insertFromBottom:
-        return const Offset(0, insertFromBottomOffset);
-      case ChatListMotion.moveUp:
-        return const Offset(0, moveUpOffset);
-      case ChatListMotion.moveDown:
-        return const Offset(0, -moveDownOffset);
-    }
-  }
-}
-
 class AnimatedChatsListView extends StatefulWidget {
   const AnimatedChatsListView({
     super.key,
@@ -458,165 +429,177 @@ class AnimatedChatsListView extends StatefulWidget {
 }
 
 class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
-  Map<String, int> _previousIndices = const <String, int>{};
-  Map<String, int> _currentIndices = const <String, int>{};
+  final GlobalKey<SliverAnimatedListState> _listKey =
+      GlobalKey<SliverAnimatedListState>();
+  late List<Chat> _displayedItems;
+  bool _diffScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    _currentIndices = _indexItems(widget.items);
+    _displayedItems = List<Chat>.from(widget.items);
   }
 
   @override
   void didUpdateWidget(covariant AnimatedChatsListView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _previousIndices = _currentIndices;
-    _currentIndices = _indexItems(widget.items);
+    _scheduleDiff();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    const int noOffset = 0;
-    const int calendarSlotCount = 1;
-    final int itemCount = widget.items.length +
-        (widget.includeCalendarShortcut ? calendarSlotCount : noOffset);
-    return ListView.builder(
-      physics: widget.scrollPhysics,
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        const int firstIndex = 0;
-        if (widget.includeCalendarShortcut && index == firstIndex) {
-          return widget.calendarShortcut ?? const SizedBox.shrink();
-        }
-
-        final int offset =
-            widget.includeCalendarShortcut ? calendarSlotCount : noOffset;
-        final int chatIndex = index - offset;
-        final item = widget.items[chatIndex];
-        final previousIndex = _previousIndices[item.jid];
-        final motion = _resolveMotion(
-          previousIndex,
-          chatIndex,
-          widget.items.length,
-        );
-
-        return AnimatedChatListEntry(
-          key: ValueKey(item.jid),
-          motion: motion,
-          duration: widget.animationDuration,
-          child: ListItemPadding(
-            child: ChatListTile(item: item),
-          ),
-        );
-      },
-    );
+  void _scheduleDiff() {
+    if (_diffScheduled) return;
+    _diffScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _diffScheduled = false;
+      if (!mounted) return;
+      _updateDisplayedItems(widget.items);
+    });
   }
 
-  Map<String, int> _indexItems(List<Chat> items) {
-    final indexed = <String, int>{};
-    for (var i = 0; i < items.length; i++) {
-      indexed[items[i].jid] = i;
+  void _updateDisplayedItems(List<Chat> newItems) {
+    final listState = _listKey.currentState;
+    if (listState == null) {
+      _displayedItems = List<Chat>.from(newItems);
+      return;
     }
-    return indexed;
-  }
-
-  ChatListMotion _resolveMotion(
-    int? previousIndex,
-    int currentIndex,
-    int totalCount,
-  ) {
-    const int topIndex = 0;
-    const int minimumCountForSlideFromTop = 2;
-    if (previousIndex == null) {
-      if (currentIndex == topIndex &&
-          totalCount >= minimumCountForSlideFromTop) {
-        return ChatListMotion.insertFromTop;
+    if (_hasSameJidOrder(newItems)) {
+      for (var i = 0; i < newItems.length; i++) {
+        _displayedItems[i] = newItems[i];
       }
-      return ChatListMotion.insertFromBottom;
+      return;
     }
-    if (previousIndex == currentIndex) {
-      return ChatListMotion.none;
+
+    final newJids = newItems.map((chat) => chat.jid).toSet();
+    for (int i = _displayedItems.length - 1; i >= 0; i--) {
+      final chat = _displayedItems[i];
+      if (!newJids.contains(chat.jid)) {
+        final removedChat = _displayedItems.removeAt(i);
+        listState.removeItem(
+          i,
+          (context, animation) => _buildAnimatedTile(
+            removedChat,
+            animation,
+            entering: false,
+            fromTop: i == 0,
+          ),
+          duration: widget.animationDuration,
+        );
+      }
     }
-    if (previousIndex > currentIndex) {
-      return ChatListMotion.moveUp;
+
+    for (int targetIndex = 0; targetIndex < newItems.length; targetIndex++) {
+      final chat = newItems[targetIndex];
+      final currentIndex =
+          _displayedItems.indexWhere((existing) => existing.jid == chat.jid);
+      if (currentIndex == -1) {
+        _displayedItems.insert(targetIndex, chat);
+        listState.insertItem(
+          targetIndex,
+          duration: widget.animationDuration,
+        );
+        continue;
+      }
+      if (currentIndex != targetIndex) {
+        final movingChat = _displayedItems.removeAt(currentIndex);
+        listState.removeItem(
+          currentIndex,
+          (context, animation) => _buildAnimatedTile(
+            movingChat,
+            animation,
+            entering: false,
+            fromTop: currentIndex > targetIndex,
+          ),
+          duration: widget.animationDuration,
+        );
+        final provisionalIndex =
+            currentIndex > targetIndex ? targetIndex : targetIndex - 1;
+        final normalizedIndex = provisionalIndex.clamp(
+          0,
+          _displayedItems.length,
+        );
+        _displayedItems.insert(normalizedIndex, movingChat);
+        listState.insertItem(
+          normalizedIndex,
+          duration: widget.animationDuration,
+        );
+      }
     }
-    return ChatListMotion.moveDown;
+
+    for (var i = 0; i < _displayedItems.length; i++) {
+      final replacement = newItems[i];
+      if (_displayedItems[i].jid == replacement.jid) {
+        _displayedItems[i] = replacement;
+      }
+    }
   }
-}
 
-class AnimatedChatListEntry extends StatefulWidget {
-  const AnimatedChatListEntry({
-    super.key,
-    required this.motion,
-    required this.duration,
-    required this.child,
-  });
-
-  final ChatListMotion motion;
-  final Duration duration;
-  final Widget child;
-
-  @override
-  State<AnimatedChatListEntry> createState() => _AnimatedChatListEntryState();
-}
-
-class _AnimatedChatListEntryState extends State<AnimatedChatListEntry>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    const double animationStartValue = 0.0;
-    const double animationEndValue = 1.0;
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    )..value =
-        widget.motion.shouldAnimate ? animationStartValue : animationEndValue;
-    if (widget.motion.shouldAnimate) {
-      _controller.forward();
+  bool _hasSameJidOrder(List<Chat> newItems) {
+    if (_displayedItems.length != newItems.length) return false;
+    for (var i = 0; i < newItems.length; i++) {
+      if (_displayedItems[i].jid != newItems[i].jid) {
+        return false;
+      }
     }
+    return true;
   }
 
-  @override
-  void didUpdateWidget(covariant AnimatedChatListEntry oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    const double animationStartValue = 0.0;
-    const double animationEndValue = 1.0;
-    _controller.duration = widget.duration;
-    if (widget.motion.shouldAnimate) {
-      _controller
-        ..value = animationStartValue
-        ..forward();
-    } else {
-      _controller.value = animationEndValue;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildAnimatedTile(
+    Chat chat,
+    Animation<double> animation, {
+    required bool entering,
+    required bool fromTop,
+  }) {
+    const double distance = 0.16;
+    const offsetFromTop = Offset(0, -distance);
+    const offsetFromBottom = Offset(0, distance);
+    final offset = fromTop ? offsetFromTop : offsetFromBottom;
     const curve = Curves.easeOutCubic;
-    final animation = CurvedAnimation(
-      parent: _controller,
+    final slideAnimation = CurvedAnimation(
+      parent: entering ? animation : ReverseAnimation(animation),
       curve: curve,
     );
-    final offsetTween = Tween<Offset>(
-      begin: widget.motion.beginOffset,
-      end: Offset.zero,
-    );
+    final tween = entering
+        ? Tween<Offset>(begin: offset, end: Offset.zero)
+        : Tween<Offset>(begin: Offset.zero, end: offset);
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: offsetTween.animate(animation),
-        child: widget.child,
+        position: tween.animate(slideAnimation),
+        child: _buildChatTile(chat),
       ),
+    );
+  }
+
+  Widget _buildChatTile(Chat chat) => ListItemPadding(
+        child: ChatListTile(item: chat),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final slivers = <Widget>[
+      SliverAnimatedList(
+        key: _listKey,
+        initialItemCount: _displayedItems.length,
+        itemBuilder: (context, index, animation) {
+          final chat = _displayedItems[index];
+          return _buildAnimatedTile(
+            chat,
+            animation,
+            entering: true,
+            fromTop: index == 0,
+          );
+        },
+      ),
+    ];
+    if (widget.includeCalendarShortcut && widget.calendarShortcut != null) {
+      slivers.insert(
+        0,
+        SliverToBoxAdapter(child: widget.calendarShortcut),
+      );
+    }
+    return CustomScrollView(
+      physics: widget.scrollPhysics,
+      slivers: slivers,
     );
   }
 }

@@ -1102,6 +1102,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chatJid = _bareJid(chat.jid);
     if (chatJid == null || chatJid != DemoChats.groupJid) return;
     if (_seededDemoPendingAttachmentJids.contains(chatJid)) return;
+    _seededDemoPendingAttachmentJids.add(chatJid);
     final service = _messageService;
     if (service is! XmppService) {
       return;
@@ -1110,7 +1111,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .map((pending) => pending.attachment.fileName)
         .toSet();
     final pendingToAdd = <PendingAttachment>[];
-    for (final asset in DemoChats.composerAttachments) {
+    final demoAssets = <DemoAttachmentAsset>[
+      ...DemoChats.composerAttachments,
+      DemoChats.gmailDocAttachment,
+      DemoChats.gmailDocAttachment2,
+    ];
+    for (final asset in demoAssets) {
       if (existingFileNames.contains(asset.fileName)) {
         continue;
       }
@@ -1142,7 +1148,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pendingAttachments: [...state.pendingAttachments, ...pendingToAdd],
       ),
     );
-    _seededDemoPendingAttachmentJids.add(chatJid);
   }
 
   Future<void> _onChatMessagesUpdated(
