@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:flutter/foundation.dart';
-
-const bool kEnableDemoChats = !kReleaseMode &&
+const bool kEnableDemoChats =
     bool.fromEnvironment('ENABLE_DEMO_CHATS', defaultValue: false);
+
+DateTime demoNow() {
+  final now = DateTime.now();
+  if (!kEnableDemoChats) return now;
+  final int targetWeekday = DateTime.friday;
+  final int deltaDays = targetWeekday - now.weekday;
+  return now.add(Duration(days: deltaDays));
+}
 
 const String kDemoSelfJid = 'franklin@axi.im';
 const String kDemoSelfDisplayName = 'Franklin';

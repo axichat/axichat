@@ -107,6 +107,8 @@ part 'muc_join_bootstrap_manager.dart';
 
 part 'message_service.dart';
 
+part 'demo/demo_script_service.dart';
+
 part 'draft_sync_service.dart';
 
 part 'message_sanitizer.dart';
@@ -420,6 +422,7 @@ class XmppService extends XmppBase
         DraftSyncService,
         BlockingService,
         MessageService,
+        DemoScriptService,
         AvatarService,
         // OmemoService,
         RosterService,
@@ -610,6 +613,7 @@ class XmppService extends XmppBase
   @override
   void emitXmppOperation(XmppOperationEvent event) {
     if (_xmppOperationController.isClosed) return;
+    _handleDemoXmppOperationEvent(event);
     _xmppOperationController.add(event);
   }
 
@@ -2286,6 +2290,7 @@ class XmppService extends XmppBase
     _foregroundSocketMigrationTimer = null;
     _demoSeedAttempted = false;
     _demoOfflineMode = false;
+    _resetDemoScript();
     _resetStableKeyCache();
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
     _updateMamSupport(false);
