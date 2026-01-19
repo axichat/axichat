@@ -10,8 +10,8 @@ import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart'
 import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
-import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -85,10 +85,17 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
   bool _isReadOnly = _taskShareReadOnlyDefault;
+  final TextEditingController _bodyController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _bodyController.dispose();
+    super.dispose();
   }
 
   @override
@@ -98,6 +105,8 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final String readOnlyHint = isReadOnly
         ? l10n.calendarTaskShareReadOnlyHint
         : l10n.calendarTaskShareEditableHint;
+    const int messageMinLines = 3;
+    const int messageMaxLines = 6;
     final header = AxiSheetHeader(
       title: Text(l10n.calendarTaskShareTitle),
       subtitle: Text(l10n.calendarTaskShareSubtitle),
@@ -120,12 +129,23 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             availableChats: widget.availableChats,
             latestStatuses: const {},
             collapsedByDefault: false,
-            allowAddressTargets: false,
+            allowAddressTargets: true,
             showSuggestionsWhenEmpty: true,
             horizontalPadding: 0,
             onRecipientAdded: _handleRecipientAdded,
             onRecipientRemoved: _handleRecipientRemoved,
             onRecipientToggled: _handleRecipientToggled,
+          ),
+          const SizedBox(height: _taskShareSectionSpacing),
+          Padding(
+            padding: _taskShareContentPadding,
+            child: TaskDescriptionField(
+              controller: _bodyController,
+              labelText: l10n.calendarTaskShareMessageLabel,
+              hintText: l10n.calendarTaskShareMessageHint,
+              minLines: messageMinLines,
+              maxLines: messageMaxLines,
+            ),
           ),
           const SizedBox(height: _taskShareSectionSpacing),
           Padding(
@@ -151,30 +171,15 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
   }
 
-  Chat? get _selectedChat {
-    for (final recipient in _recipients) {
-      final chat = recipient.target.chat;
-      if (recipient.included && chat != null) {
-        return chat;
-      }
-    }
-    return null;
-  }
-
   void _handleRecipientAdded(FanOutTarget target) {
-    final Chat? chat = target.chat;
-    if (chat == null) {
-      FeedbackSystem.showInfo(
-        context,
-        context.l10n.calendarTaskShareMissingRecipient,
-      );
+    if (_recipients.any((recipient) => recipient.key == target.key)) {
       return;
     }
     if (!mounted) return;
     setState(() {
-      _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
+      _recipients = List<ComposerRecipient>.from(_recipients)
+        ..add(ComposerRecipient(target: target));
     });
-    _handleSharePressed();
   }
 
   void _handleRecipientRemoved(String key) {
@@ -207,8 +212,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   }
 
   Future<void> _handleSharePressed() async {
-    final Chat? selected = _selectedChat;
-    if (selected == null) {
+    final List<ComposerRecipient> includedRecipients = _recipients
+        .where((recipient) => recipient.included)
+        .toList(growable: false);
+    if (includedRecipients.isEmpty) {
       FeedbackSystem.showInfo(
         context,
         context.l10n.calendarTaskShareMissingRecipient,
@@ -219,24 +226,59 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       return;
     }
     setState(() => _isSending = true);
-    final String shareText = widget.task.toShareText(context.l10n);
+    final String shareText = _bodyController.text.trim();
     final bool readOnly = _isReadOnly;
     final XmppService? xmppService = _maybeReadXmppService(context);
     final EmailService? emailService = RepositoryProvider.of<EmailService?>(
       context,
     );
     try {
-      if (selected.defaultTransport.isEmail) {
-        if (emailService == null) {
-          FeedbackSystem.showInfo(
-            context,
-            context.l10n.calendarTaskShareServiceUnavailable,
-          );
-          return;
-        }
-        final EmailAttachment? attachment = await _buildCalendarTaskAttachment(
-          widget.task,
+      final List<FanOutTarget> emailTargets = includedRecipients
+          .map((recipient) => recipient.target)
+          .where(
+            (target) =>
+                target.chat == null ||
+                target.chat?.defaultTransport.isEmail == true,
+          )
+          .toList(growable: false);
+      final List<Chat> xmppChats = includedRecipients
+          .map((recipient) => recipient.target.chat)
+          .whereType<Chat>()
+          .where((chat) => !chat.defaultTransport.isEmail)
+          .toList(growable: false);
+      if (emailTargets.isNotEmpty && emailService == null) {
+        FeedbackSystem.showInfo(
+          context,
+          context.l10n.calendarTaskShareServiceUnavailable,
         );
+        return;
+      }
+      if (xmppChats.isNotEmpty && xmppService == null) {
+        FeedbackSystem.showInfo(
+          context,
+          context.l10n.calendarTaskShareServiceUnavailable,
+        );
+        return;
+      }
+      if (xmppChats.isNotEmpty) {
+        for (final chat in xmppChats) {
+          final CalendarFragmentShareDecision decision =
+              const CalendarFragmentPolicy().decisionForChat(
+            chat: chat,
+            roomState: xmppService!.roomStateFor(chat.jid),
+          );
+          if (!decision.canWrite) {
+            FeedbackSystem.showInfo(
+              context,
+              context.l10n.calendarTaskShareDenied,
+            );
+            return;
+          }
+        }
+      }
+      if (emailTargets.isNotEmpty) {
+        final EmailAttachment? attachment =
+            await _buildCalendarTaskAttachment(widget.task);
         if (!mounted) {
           return;
         }
@@ -250,40 +292,24 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         final EmailAttachment resolvedAttachment = attachment.copyWith(
           caption: shareText,
         );
-        await emailService.sendAttachment(
-          chat: selected,
+        await emailService!.fanOutSend(
+          targets: emailTargets,
           attachment: resolvedAttachment,
         );
-      } else {
-        if (xmppService == null) {
-          FeedbackSystem.showInfo(
-            context,
-            context.l10n.calendarTaskShareServiceUnavailable,
+      }
+      if (xmppChats.isNotEmpty) {
+        for (final chat in xmppChats) {
+          await xmppService!.sendMessage(
+            jid: chat.jid,
+            text: shareText,
+            encryptionProtocol: chat.encryptionProtocol,
+            calendarTaskIcs: widget.task,
+            calendarTaskIcsReadOnly: readOnly,
+            chatType: chat.type,
           );
-          return;
-        }
-        final CalendarFragmentShareDecision decision =
-            const CalendarFragmentPolicy().decisionForChat(
-          chat: selected,
-          roomState: xmppService.roomStateFor(selected.jid),
-        );
-        if (!decision.canWrite) {
-          FeedbackSystem.showInfo(
-            context,
-            context.l10n.calendarTaskShareDenied,
-          );
-          return;
-        }
-        await xmppService.sendMessage(
-          jid: selected.jid,
-          text: shareText,
-          encryptionProtocol: selected.encryptionProtocol,
-          calendarTaskIcs: widget.task,
-          calendarTaskIcsReadOnly: readOnly,
-          chatType: selected.type,
-        );
-        if (!readOnly) {
-          await _linkSharedTask(selected);
+          if (!readOnly) {
+            await _linkSharedTask(chat);
+          }
         }
       }
       if (!mounted) {

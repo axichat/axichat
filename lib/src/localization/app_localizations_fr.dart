@@ -4259,6 +4259,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarTaskShareTarget => 'Partager avec';
 
   @override
+  String get calendarTaskShareMessageLabel => 'Message';
+
+  @override
+  String get calendarTaskShareMessageHint =>
+      'Ajoutez un message à envoyer avec le fichier .ics.';
+
+  @override
   String get calendarTaskShareEditAccess => 'Accès en modification';
 
   @override

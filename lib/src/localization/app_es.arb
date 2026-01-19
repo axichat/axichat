@@ -1808,6 +1808,8 @@
   "calendarTaskShareTitle": "Compartir tarea",
   "calendarTaskShareSubtitle": "Envía una tarea a un chat como .ics.",
   "calendarTaskShareTarget": "Compartir con",
+  "calendarTaskShareMessageLabel": "Mensaje",
+  "calendarTaskShareMessageHint": "Agrega un mensaje para enviar con el archivo .ics.",
   "calendarTaskShareEditAccess": "Acceso de edición",
   "calendarTaskShareReadOnlyLabel": "Solo lectura",
   "calendarTaskShareReadOnlyHint": "Los destinatarios pueden ver esta tarea, pero solo tú puedes editarla.",

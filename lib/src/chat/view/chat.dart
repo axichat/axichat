@@ -6265,6 +6265,9 @@ class _ChatState extends State<Chat> {
                                                                             !self,
                                                                         allowChatCopy:
                                                                             !demoEmailCalendarEnabled,
+                                                                        demoQuickAdd:
+                                                                            demoEmailCalendarEnabled &&
+                                                                                !self,
                                                                         footerDetails:
                                                                             taskFooterDetails,
                                                                       ),

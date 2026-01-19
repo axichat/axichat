@@ -1885,6 +1885,8 @@
   "calendarTaskShareTitle": "Share task",
   "calendarTaskShareSubtitle": "Send a task to a chat as .ics.",
   "calendarTaskShareTarget": "Share with",
+  "calendarTaskShareMessageLabel": "Message",
+  "calendarTaskShareMessageHint": "Add a message to send with the .ics file.",
   "calendarTaskShareEditAccess": "Edit access",
   "calendarTaskShareReadOnlyLabel": "Read only",
   "calendarTaskShareReadOnlyHint": "Recipients can view this task, but only you can edit it.",
