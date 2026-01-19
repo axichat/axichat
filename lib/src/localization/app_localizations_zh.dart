@@ -4069,6 +4069,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarTaskShareTarget => '分享给';
 
   @override
+  String get calendarTaskShareMessageLabel => '消息';
+
+  @override
+  String get calendarTaskShareMessageHint => '添加一条随 .ics 文件发送的消息。';
+
+  @override
   String get calendarTaskShareEditAccess => '编辑权限';
 
   @override
@@ -9288,6 +9294,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarTaskShareTarget => '分享給';
+
+  @override
+  String get calendarTaskShareMessageLabel => '訊息';
+
+  @override
+  String get calendarTaskShareMessageHint => '新增一則隨 .ics 檔案傳送的訊息。';
 
   @override
   String get calendarTaskShareEditAccess => '編輯權限';

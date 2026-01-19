@@ -8,6 +8,7 @@ enum _DemoInteractivePhase {
   overlaysRunning,
   waitingForFirstReply,
   waitingForSecondReply,
+  waitingForThirdReply,
   waitingForFinalReply,
   completed,
 }
@@ -132,7 +133,7 @@ mixin DemoScriptService on XmppBase, MessageService {
   }) {
     if (chatJid != DemoChats.contact1Jid) return;
     if (body.trim().isEmpty) return;
-    const responseDelay = Duration(milliseconds: 500);
+    const responseDelay = Duration(milliseconds: 1500);
     switch (_demoInteractivePhase) {
       case _DemoInteractivePhase.waitingForFirstReply:
         _demoInteractivePhase = _DemoInteractivePhase.waitingForSecondReply;
@@ -142,6 +143,11 @@ mixin DemoScriptService on XmppBase, MessageService {
           );
         });
       case _DemoInteractivePhase.waitingForSecondReply:
+        _demoInteractivePhase = _DemoInteractivePhase.waitingForThirdReply;
+        _scheduleDemoTimer(responseDelay, () async {
+          await _sendDemoContact1Message(body: 'How about Sunday?');
+        });
+      case _DemoInteractivePhase.waitingForThirdReply:
         _demoInteractivePhase = _DemoInteractivePhase.waitingForFinalReply;
         _scheduleDemoTimer(responseDelay, () async {
           await _sendDemoContact1Message(body: 'Sounds good');

@@ -23,6 +23,7 @@ import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_task_copy_sheet.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -37,6 +38,7 @@ class ChatCalendarTaskCard extends StatefulWidget {
     required this.readOnly,
     this.requireImportConfirmation = false,
     this.allowChatCopy = true,
+    this.demoQuickAdd = false,
     this.footerDetails = _emptyInlineSpans,
   });
 
@@ -44,6 +46,7 @@ class ChatCalendarTaskCard extends StatefulWidget {
   final bool readOnly;
   final bool requireImportConfirmation;
   final bool allowChatCopy;
+  final bool demoQuickAdd;
   final List<InlineSpan> footerDetails;
 
   @override
@@ -219,6 +222,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     required bool taskInCalendar,
     required TaskEditMode editMode,
   }) async {
+    if (widget.demoQuickAdd) {
+      await _handleDemoQuickAdd();
+      return;
+    }
     if (!taskInCalendar && widget.requireImportConfirmation) {
       final l10n = context.l10n;
       final approved = await confirm(
@@ -236,6 +243,40 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       _ensureTaskImported(task);
     }
     await _showTaskEditSheet(context, task, editMode: editMode);
+  }
+
+  Future<void> _handleDemoQuickAdd() async {
+    if (!kEnableDemoChats) return;
+    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc();
+    if (personalBloc == null) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCalendarTaskCopyUnavailableMessage,
+      );
+      return;
+    }
+    final base = demoNow();
+    final scheduled = DateTime(
+      base.year,
+      base.month,
+      base.day + 1,
+      13,
+    );
+    final task = CalendarTask.create(
+      title: 'hang out',
+      scheduledTime: scheduled,
+      duration: const Duration(hours: 1),
+    );
+    personalBloc.add(CalendarEvent.tasksImported(tasks: <CalendarTask>[task]));
+    await waitForTasksInCalendar(
+      bloc: personalBloc,
+      taskIds: <String>{task.id},
+    );
+    if (!mounted) return;
+    FeedbackSystem.showSuccess(
+      context,
+      context.l10n.chatCalendarTaskCopySuccessMessage,
+    );
   }
 
   List<TaskContextAction> _inlineActionsForTask(
