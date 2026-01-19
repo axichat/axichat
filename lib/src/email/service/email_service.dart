@@ -11,6 +11,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
@@ -1401,6 +1402,7 @@ class EmailService {
             subject: subject,
             htmlCaption: htmlCaption,
           );
+          _scheduleDemoCopiedReply(chat);
         } else {
           final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
           final resolvedBody = body ??
@@ -1436,6 +1438,32 @@ class EmailService {
       shareId: resolvedShareId,
       statuses: statuses,
       subject: subject,
+    );
+  }
+
+  void _scheduleDemoCopiedReply(Chat chat) {
+    if (chat.jid != DemoChats.contact1Jid) return;
+    const delay = Duration(milliseconds: 1500);
+    unawaited(
+      Future<void>.delayed(delay, () async {
+        final now = demoNow();
+        const generator = Uuid();
+        final stanzaId = 'demo-email-${generator.v4()}';
+        final message = Message(
+          stanzaID: stanzaId,
+          originID: stanzaId,
+          senderJid: DemoChats.contact1Jid,
+          chatJid: chat.jid,
+          body: 'Copied',
+          timestamp: now,
+          encryptionProtocol: EncryptionProtocol.none,
+          acked: true,
+          received: true,
+          displayed: true,
+        );
+        final db = await _databaseBuilder();
+        await db.saveMessage(message);
+      }),
     );
   }
 

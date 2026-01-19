@@ -886,6 +886,36 @@ mixin MessageService
     }
   }
 
+  void notifyDemoOutboundAttachmentMessage({required String chatJid}) {
+    if (!kEnableDemoChats) return;
+    if (this case final DemoScriptService demo) {
+      demo.handleDemoOutboundAttachmentMessage(chatJid: chatJid);
+    }
+  }
+
+  Future<void> storeDemoOutboundMessageSummary({
+    required String chatJid,
+    required String body,
+    ChatType chatType = ChatType.chat,
+  }) async {
+    if (!kEnableDemoChats) return;
+    final senderJid = myJid ?? kDemoSelfJid;
+    final timestamp = demoNow();
+    final message = Message(
+      stanzaID: uuid.v4(),
+      originID: uuid.v4(),
+      senderJid: senderJid,
+      chatJid: chatJid,
+      body: body,
+      timestamp: timestamp,
+      encryptionProtocol: EncryptionProtocol.none,
+      acked: true,
+      received: false,
+      displayed: true,
+    );
+    await _storeMessage(message, chatType: chatType);
+  }
+
   bool _isInternalSyncEnvelope(String? body) {
     final trimmed = body?.trim();
     if (trimmed == null || trimmed.isEmpty) return false;
