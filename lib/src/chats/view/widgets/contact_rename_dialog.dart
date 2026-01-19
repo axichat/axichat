@@ -87,6 +87,8 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
             controller: _controller,
             focusNode: _focusNode,
             autofocus: true,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.done,
             placeholder: Text(l10n.chatContactRenamePlaceholder),
             onSubmitted: (_) => _submit(),
           ),

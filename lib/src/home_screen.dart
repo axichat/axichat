@@ -107,7 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
-  _HomeDemoPhase _demoPhase = _HomeDemoPhase.idle;
 
   @override
   void initState() {
@@ -124,15 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _shortcutFocusNode.dispose();
     super.dispose();
-  }
-
-  void _triggerDemoInteractivePhase() {
-    if (_demoPhase != _HomeDemoPhase.idle) return;
-    setState(() => _demoPhase = _HomeDemoPhase.triggered);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<XmppService?>()?.startDemoInteractivePhase();
-    });
   }
 
   @override
@@ -759,6 +749,16 @@ class Nexus extends StatefulWidget {
 
 class _NexusState extends State<Nexus> {
   TabController? _tabController;
+  _HomeDemoPhase _demoPhase = _HomeDemoPhase.idle;
+
+  void _triggerDemoInteractivePhase() {
+    if (_demoPhase != _HomeDemoPhase.idle) return;
+    setState(() => _demoPhase = _HomeDemoPhase.triggered);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<XmppService?>()?.startDemoInteractivePhase();
+    });
+  }
 
   @override
   void didChangeDependencies() {

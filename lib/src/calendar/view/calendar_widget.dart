@@ -324,6 +324,12 @@ class _CalendarWidgetState
   }
 
   void _handleCalendarBackPressed() {
+    final NavigatorState? calendarNavigator =
+        _calendarNavigatorKey.currentState;
+    if (calendarNavigator != null && calendarNavigator.canPop()) {
+      calendarNavigator.pop();
+      return;
+    }
     if (context.read<ChatsCubit?>()?.state.openCalendar == true) {
       context.read<ChatsCubit?>()?.toggleCalendar();
       return;

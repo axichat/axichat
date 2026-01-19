@@ -16,6 +16,7 @@ import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -2493,7 +2494,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     _autoScrollPending = false;
 
-    final now = DateTime.now();
+    final now = demoNow();
     final bool isDayView = widget.state.viewMode == CalendarView.day;
     final List<DateTime> weekDates = _getWeekDates(widget.state.selectedDate);
     final bool compact = ResponsiveHelper.isCompact(context);
@@ -3012,7 +3013,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   bool _isToday(DateTime date) {
-    final now = DateTime.now();
+    final now = demoNow();
     return _isSameDay(date, now);
   }
 

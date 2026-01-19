@@ -6,38 +6,32 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _calendarSheetHeaderCloseIconSize = 16;
-const double _calendarSheetHeaderCloseButtonSize = 34;
-const double _calendarSheetHeaderCloseTapTargetSize = 40;
 const double _calendarSheetHeaderTitleFontSize = 16;
 const FontWeight _calendarSheetHeaderTitleFontWeight = FontWeight.w700;
 
 class CalendarSheetCloseButton extends StatelessWidget {
   const CalendarSheetCloseButton({
     super.key,
-    required this.onPressed,
+    required this.onClose,
     this.tooltip,
-    this.iconData = LucideIcons.x,
     this.color,
+    this.iconData = LucideIcons.x,
   });
 
-  final VoidCallback onPressed;
+  final VoidCallback onClose;
   final String? tooltip;
-  final IconData iconData;
   final Color? color;
+  final IconData iconData;
 
   @override
   Widget build(BuildContext context) {
-    return AxiIconButton(
-      iconData: iconData,
+    return ModalCloseButton(
+      onPressed: onClose,
       tooltip: tooltip ?? MaterialLocalizations.of(context).closeButtonTooltip,
-      iconSize: _calendarSheetHeaderCloseIconSize,
-      buttonSize: _calendarSheetHeaderCloseButtonSize,
-      tapTargetSize: _calendarSheetHeaderCloseTapTargetSize,
+      iconData: iconData,
       backgroundColor: Colors.transparent,
       borderColor: Colors.transparent,
       color: color ?? context.colorScheme.mutedForeground,
-      onPressed: onPressed,
     );
   }
 }
@@ -94,7 +88,7 @@ class CalendarSheetHeader extends StatelessWidget {
                   iconData: closeIcon,
                   tooltip: closeTooltip,
                   color: closeButtonColor,
-                  onPressed: onClose!,
+                  onClose: onClose!,
                 ),
               ],
             ],
