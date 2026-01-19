@@ -4244,13 +4244,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get calendarTaskShareTarget => 'Teilen mit';
 
   @override
-  String get calendarTaskShareMessageLabel => 'Nachricht';
-
-  @override
-  String get calendarTaskShareMessageHint =>
-      'Füge eine Nachricht hinzu, die mit der .ics-Datei gesendet wird.';
-
-  @override
   String get calendarTaskShareEditAccess => 'Bearbeitungszugriff';
 
   @override

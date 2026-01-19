@@ -1178,6 +1178,17 @@ class EmailService {
     String? shareId,
     String? subject,
   }) async {
+    if (kEnableDemoChats) {
+      return _fanOutSendDemo(
+        targets: targets,
+        body: body,
+        htmlBody: htmlBody,
+        attachment: attachment,
+        htmlCaption: htmlCaption,
+        shareId: shareId,
+        subject: subject,
+      );
+    }
     await _ensureReady();
     if (targets.isEmpty) {
       throw const FanOutValidationException('Select at least one recipient.');
@@ -1362,6 +1373,88 @@ class EmailService {
       subject: resolvedSubject,
       statuses: statuses,
       attachmentWarning: attachmentWarning,
+    );
+  }
+
+  Future<FanOutSendReport> _fanOutSendDemo({
+    required List<FanOutTarget> targets,
+    String? body,
+    String? htmlBody,
+    EmailAttachment? attachment,
+    String? htmlCaption,
+    String? shareId,
+    String? subject,
+  }) async {
+    if (targets.isEmpty) {
+      throw const FanOutValidationException('Select at least one recipient.');
+    }
+    final resolvedShareId = shareId ?? ShareTokenCodec.generateShareId();
+    final statuses = <FanOutRecipientStatus>[];
+    for (final target in targets) {
+      try {
+        final chat = _demoChatForTarget(target);
+        if (attachment != null) {
+          final resolved = attachment.copyWith(caption: htmlCaption ?? body);
+          await _sendDemoEmailAttachment(
+            chat: chat,
+            attachment: resolved,
+            subject: subject,
+            htmlCaption: htmlCaption,
+          );
+        } else {
+          final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
+          final resolvedBody = body ??
+              (normalizedHtml == null
+                  ? ''
+                  : HtmlContentCodec.toPlainText(normalizedHtml));
+          await _sendDemoEmailMessage(
+            chat: chat,
+            body: resolvedBody,
+            subject: subject,
+            htmlBody: htmlBody,
+          );
+        }
+        statuses.add(
+          FanOutRecipientStatus(
+            chat: chat,
+            state: FanOutRecipientState.sent,
+            deltaMsgId: demoNow().millisecondsSinceEpoch,
+          ),
+        );
+      } catch (error) {
+        final chat = _demoChatForTarget(target);
+        statuses.add(
+          FanOutRecipientStatus(
+            chat: chat,
+            state: FanOutRecipientState.failed,
+            error: error,
+          ),
+        );
+      }
+    }
+    return FanOutSendReport(
+      shareId: resolvedShareId,
+      statuses: statuses,
+      subject: subject,
+    );
+  }
+
+  Chat _demoChatForTarget(FanOutTarget target) {
+    final address = target.address?.trim();
+    if (target.chat != null) {
+      return target.chat!;
+    }
+    final String resolvedAddress =
+        address?.isNotEmpty == true ? address! : kDemoSelfJid;
+    final displayName = target.displayName?.trim();
+    final String resolvedTitle =
+        displayName?.isNotEmpty == true ? displayName! : resolvedAddress;
+    final String resolvedDisplayName = resolvedTitle;
+    return Chat.fromJid(resolvedAddress).copyWith(
+      title: resolvedTitle,
+      contactDisplayName: resolvedDisplayName,
+      emailAddress: resolvedAddress,
+      lastChangeTimestamp: demoNow(),
     );
   }
 
