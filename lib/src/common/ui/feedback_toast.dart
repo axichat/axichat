@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -103,7 +104,7 @@ class FeedbackToast extends ShadToast {
           showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
         );
 
-  FeedbackToast.error({
+  factory FeedbackToast.error({
     Key? key,
     String? title,
     String? message,
@@ -113,18 +114,33 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onAction,
     Alignment alignment = Alignment.topRight,
     bool showCloseIconOnlyWhenHovered = false,
-  }) : this(
-          key: key,
-          tone: FeedbackTone.error,
-          title: title,
-          message: message,
-          duration: duration,
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-          alignment: alignment,
-          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
-        );
+  }) {
+    if (kEnableDemoChats) {
+      return FeedbackToast.success(
+        key: key,
+        title: title,
+        message: message,
+        duration: duration,
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+        alignment: alignment,
+        showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
+      );
+    }
+    return FeedbackToast(
+      key: key,
+      tone: FeedbackTone.error,
+      title: title,
+      message: message,
+      duration: duration,
+      onTap: onTap,
+      actionLabel: actionLabel,
+      onAction: onAction,
+      alignment: alignment,
+      showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
+    );
+  }
 
   static Text? _textOrNull(String? value) {
     if (value == null) {

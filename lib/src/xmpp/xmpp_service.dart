@@ -613,6 +613,11 @@ class XmppService extends XmppBase
   @override
   void emitXmppOperation(XmppOperationEvent event) {
     if (_xmppOperationController.isClosed) return;
+    if (kEnableDemoChats &&
+        demoOfflineMode &&
+        !_shouldAllowOperationEvent(event)) {
+      return;
+    }
     _handleDemoXmppOperationEvent(event);
     _xmppOperationController.add(event);
   }
@@ -1341,6 +1346,9 @@ class XmppService extends XmppBase
 
   @override
   Future<XmppDatabase> _buildDatabase(String prefix, String passphrase) async {
+    if (kEnableDemoChats) {
+      return XmppDrift.inMemory();
+    }
     final effectiveMode = messageStorageMode;
     if (effectiveMode.isServerOnly) {
       return XmppDrift.inMemory();
@@ -1458,7 +1466,7 @@ class XmppService extends XmppBase
       }
     }
     try {
-      final scripts = DemoChats.scripts(openJid: DemoChats.defaultOpenJid);
+      final scripts = DemoChats.scripts();
       await _dbOp<XmppDatabase>((db) async {
         for (final script in scripts) {
           final existingChat = await db.getChat(script.chat.jid);
@@ -2408,6 +2416,7 @@ class XmppService extends XmppBase
     if (!_selfAvatarController.isClosed) {
       await _selfAvatarController.close();
     }
+    await _closeDemoScript();
     _instance = null;
   }
 

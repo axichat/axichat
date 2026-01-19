@@ -32,10 +32,9 @@ const double _taskShareSectionSpacing = 16.0;
 const double _taskShareSectionGap = 8.0;
 const double _taskShareHeaderIconSize = 18.0;
 const double _taskShareProgressStrokeWidth = 2.0;
-const double _taskShareLabelFontSize = 12.0;
-const double _taskShareLabelLetterSpacing = 1.1;
 const EdgeInsets _taskShareContentPadding =
     EdgeInsets.symmetric(horizontal: 16);
+const String _taskShareEditLabel = 'Let recipients edit';
 
 const String _taskShareIcsMimeType = 'text/calendar';
 const bool _taskShareReadOnlyDefault = true;
@@ -43,7 +42,6 @@ const bool _taskShareReadOnlyDefault = true;
 Future<void> showCalendarTaskShareSheet({
   required BuildContext context,
   required CalendarTask task,
-  Chat? initialChat,
 }) async {
   final l10n = context.l10n;
   final List<Chat> chats =
@@ -61,7 +59,6 @@ Future<void> showCalendarTaskShareSheet({
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,
       availableChats: available,
-      initialChat: initialChat,
     ),
   );
   if (result != true || !context.mounted) {
@@ -75,12 +72,10 @@ class CalendarTaskShareSheet extends StatefulWidget {
     super.key,
     required this.task,
     required this.availableChats,
-    this.initialChat,
   });
 
   final CalendarTask task;
   final List<Chat> availableChats;
-  final Chat? initialChat;
 
   @override
   State<CalendarTaskShareSheet> createState() => _CalendarTaskShareSheetState();
@@ -94,27 +89,15 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   @override
   void initState() {
     super.initState();
-    final Chat? initialChat = widget.initialChat ??
-        (widget.availableChats.isEmpty ? null : widget.availableChats.first);
-    if (initialChat != null) {
-      _recipients = <ComposerRecipient>[
-        ComposerRecipient(target: FanOutTarget.chat(initialChat)),
-      ];
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final Chat? selectedChat = _selectedChat;
-    final bool readOnlyEnabled =
-        selectedChat != null && selectedChat.supportsChatCalendar;
-    final bool isReadOnly = readOnlyEnabled ? _isReadOnly : true;
-    final String readOnlyHint = readOnlyEnabled
-        ? (isReadOnly
-            ? l10n.calendarTaskShareReadOnlyHint
-            : l10n.calendarTaskShareEditableHint)
-        : l10n.calendarTaskShareReadOnlyDisabledHint;
+    final bool isReadOnly = _isReadOnly;
+    final String readOnlyHint = isReadOnly
+        ? l10n.calendarTaskShareReadOnlyHint
+        : l10n.calendarTaskShareEditableHint;
     final header = AxiSheetHeader(
       title: Text(l10n.calendarTaskShareTitle),
       subtitle: Text(l10n.calendarTaskShareSubtitle),
@@ -124,10 +107,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       header: header,
       bodyPadding: EdgeInsets.zero,
       children: [
-        Padding(
-          padding: _taskShareContentPadding,
-          child: _TaskShareSectionLabel(text: l10n.calendarTaskShareTarget),
-        ),
         if (widget.availableChats.isEmpty)
           Padding(
             padding: _taskShareContentPadding,
@@ -135,7 +114,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
               message: l10n.calendarTaskShareMissingChats,
             ),
           )
-        else
+        else ...[
           RecipientChipsBar(
             recipients: _recipients,
             availableChats: widget.availableChats,
@@ -143,33 +122,31 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             collapsedByDefault: false,
             allowAddressTargets: false,
             showSuggestionsWhenEmpty: true,
+            horizontalPadding: 0,
             onRecipientAdded: _handleRecipientAdded,
             onRecipientRemoved: _handleRecipientRemoved,
             onRecipientToggled: _handleRecipientToggled,
           ),
-        const SizedBox(height: _taskShareSectionSpacing),
-        Padding(
-          padding: _taskShareContentPadding,
-          child: _TaskShareSectionLabel(text: l10n.calendarTaskShareEditAccess),
-        ),
-        Padding(
-          padding: _taskShareContentPadding,
-          child: _TaskShareEditAccessToggle(
-            value: isReadOnly,
-            isEnabled: readOnlyEnabled,
-            hint: readOnlyHint,
-            onChanged: _handleReadOnlyChanged,
+          const SizedBox(height: _taskShareSectionSpacing),
+          Padding(
+            padding: _taskShareContentPadding,
+            child: _TaskShareEditAccessToggle(
+              value: isReadOnly,
+              hint: readOnlyHint,
+              onChanged: _handleReadOnlyChanged,
+            ),
           ),
-        ),
-        const SizedBox(height: _taskShareSectionSpacing),
-        Padding(
-          padding: _taskShareContentPadding,
-          child: _TaskShareActionRow(
-            isBusy: _isSending,
-            onPressed: _handleSharePressed,
-            label: l10n.commonSend,
+          const SizedBox(height: _taskShareSectionSpacing),
+          Padding(
+            padding: _taskShareContentPadding,
+            child: _TaskShareActionRow(
+              isBusy: _isSending,
+              onPressed: _handleSharePressed,
+              label: l10n.commonSend,
+            ),
           ),
-        ),
+          const SizedBox(height: _taskShareSectionSpacing),
+        ],
       ],
     );
   }
@@ -196,9 +173,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     if (!mounted) return;
     setState(() {
       _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
-      if (!chat.supportsChatCalendar) {
-        _isReadOnly = true;
-      }
     });
     _handleSharePressed();
   }
@@ -246,7 +220,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     }
     setState(() => _isSending = true);
     final String shareText = widget.task.toShareText(context.l10n);
-    final bool readOnly = _isReadOnly || !selected.supportsChatCalendar;
+    final bool readOnly = _isReadOnly;
     final XmppService? xmppService = _maybeReadXmppService(context);
     final EmailService? emailService = RepositoryProvider.of<EmailService?>(
       context,
@@ -354,31 +328,14 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   }
 }
 
-class _TaskShareSectionLabel extends StatelessWidget {
-  const _TaskShareSectionLabel({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final TextStyle style = context.textTheme.muted.copyWith(
-      fontSize: _taskShareLabelFontSize,
-      letterSpacing: _taskShareLabelLetterSpacing,
-    );
-    return Text(text.toUpperCase(), style: style);
-  }
-}
-
 class _TaskShareEditAccessToggle extends StatelessWidget {
   const _TaskShareEditAccessToggle({
     required this.value,
-    required this.isEnabled,
     required this.hint,
     required this.onChanged,
   });
 
   final bool value;
-  final bool isEnabled;
   final String hint;
   final ValueChanged<bool> onChanged;
 
@@ -388,12 +345,13 @@ class _TaskShareEditAccessToggle extends StatelessWidget {
       color: context.colorScheme.mutedForeground,
     );
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ShadSwitch(
-          label: Text(context.l10n.calendarTaskShareReadOnlyLabel),
+          label: Text(context.l10n.calendarTaskShareEditAccess),
+          sublabel: const Text(_taskShareEditLabel),
           value: value,
-          onChanged: isEnabled ? onChanged : null,
+          onChanged: onChanged,
         ),
         const SizedBox(height: _taskShareSectionGap),
         Text(hint, style: hintStyle),

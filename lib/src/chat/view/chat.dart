@@ -3941,6 +3941,7 @@ class _ChatState extends State<Chat> {
                         scrolledUnderElevation: 0,
                         forceMaterialTransparency: true,
                         automaticallyImplyLeading: false,
+                        centerTitle: false,
                         shape: Border(
                           bottom: BorderSide(color: context.colorScheme.border),
                         ),
@@ -8824,31 +8825,8 @@ class _ChatState extends State<Chat> {
       context: context,
       isScrollControlled: true,
       surfacePadding: EdgeInsets.zero,
-      builder: (sheetContext) => AxiSheetScaffold.scroll(
-        header: AxiSheetHeader(
-          title: Text(sheetContext.l10n.chatForwardDialogTitle),
-          onClose: () => Navigator.of(sheetContext).maybePop(),
-        ),
-        bodyPadding: EdgeInsets.zero,
-        children: [
-          RecipientChipsBar(
-            recipients: const <ComposerRecipient>[],
-            availableChats: options,
-            latestStatuses: const {},
-            collapsedByDefault: false,
-            allowAddressTargets: false,
-            showSuggestionsWhenEmpty: true,
-            onRecipientAdded: (target) {
-              final chat = target.chat;
-              if (chat == null) {
-                return;
-              }
-              Navigator.of(sheetContext).pop(chat);
-            },
-            onRecipientRemoved: (_) {},
-            onRecipientToggled: (_) {},
-          ),
-        ],
+      builder: (sheetContext) => _ForwardRecipientSheet(
+        availableChats: options,
       ),
     );
   }
@@ -13368,6 +13346,121 @@ class _SenderLabelBlock extends StatelessWidget {
             Text(secondaryLabel!, style: secondaryStyle, textAlign: textAlign),
         ],
       ),
+    );
+  }
+}
+
+const EdgeInsets _forwardSheetContentPadding =
+    EdgeInsets.symmetric(horizontal: 16);
+const double _forwardSheetSectionSpacing = 16.0;
+const double _forwardSheetActionIconSize = 18.0;
+
+class _ForwardRecipientSheet extends StatefulWidget {
+  const _ForwardRecipientSheet({
+    required this.availableChats,
+  });
+
+  final List<chat_models.Chat> availableChats;
+
+  @override
+  State<_ForwardRecipientSheet> createState() => _ForwardRecipientSheetState();
+}
+
+class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
+  List<ComposerRecipient> _recipients = const [];
+
+  chat_models.Chat? get _selectedChat {
+    for (final recipient in _recipients) {
+      final chat = recipient.target.chat;
+      if (recipient.included && chat != null) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  bool get _canSend => _selectedChat != null;
+
+  void _handleRecipientAdded(FanOutTarget target) {
+    final chat_models.Chat? chat = target.chat;
+    if (chat == null) return;
+    setState(() {
+      _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
+    });
+  }
+
+  void _handleRecipientRemoved(String key) {
+    if (!mounted) return;
+    setState(() {
+      _recipients = _recipients
+          .where((recipient) => recipient.key != key)
+          .toList(growable: false);
+    });
+  }
+
+  void _handleRecipientToggled(String key) {
+    if (!mounted) return;
+    setState(() {
+      _recipients = _recipients
+          .map(
+            (recipient) => recipient.key == key
+                ? recipient.copyWith(included: !recipient.included)
+                : recipient,
+          )
+          .toList(growable: false);
+    });
+  }
+
+  void _handleSend() {
+    final chat_models.Chat? selected = _selectedChat;
+    if (selected == null) return;
+    Navigator.of(context).pop(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final header = AxiSheetHeader(
+      title: Text(l10n.chatForwardDialogTitle),
+      onClose: () => Navigator.of(context).maybePop(),
+    );
+    return AxiSheetScaffold.scroll(
+      header: header,
+      bodyPadding: EdgeInsets.zero,
+      children: [
+        RecipientChipsBar(
+          recipients: _recipients,
+          availableChats: widget.availableChats,
+          latestStatuses: const {},
+          collapsedByDefault: false,
+          allowAddressTargets: false,
+          showSuggestionsWhenEmpty: true,
+          horizontalPadding: 0,
+          onRecipientAdded: _handleRecipientAdded,
+          onRecipientRemoved: _handleRecipientRemoved,
+          onRecipientToggled: _handleRecipientToggled,
+        ),
+        const SizedBox(height: _forwardSheetSectionSpacing),
+        Padding(
+          padding: _forwardSheetContentPadding,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ShadButton(
+              size: ShadButtonSize.sm,
+              onPressed: _canSend ? _handleSend : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.send, size: _forwardSheetActionIconSize),
+                  const SizedBox(width: 8),
+                  Text(l10n.commonSend),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: _forwardSheetSectionSpacing),
+      ],
     );
   }
 }

@@ -16,6 +16,7 @@ import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -183,6 +184,19 @@ class _ProfileBodyState extends State<_ProfileBody> {
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
+            actions: [
+              if (kEnableDemoChats && demoOffline)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: AxiIconButton.ghost(
+                    iconData: LucideIcons.refreshCcw,
+                    tooltip: l10n.commonRetry,
+                    onPressed: () async => await context
+                        .read<XmppService?>()
+                        ?.resetDemoInteractivePhase(),
+                  ),
+                ),
+            ],
             leadingWidth: AxiIconButton.kDefaultSize + 24,
             leading: Padding(
               padding: const EdgeInsets.only(left: 12),
