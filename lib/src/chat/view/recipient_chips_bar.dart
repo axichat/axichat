@@ -222,12 +222,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         widget.allowAddressTargets ? _knownDomains() : const <String>{};
     final Set<String> knownAddresses =
         widget.allowAddressTargets ? _knownAddresses() : const <String>{};
-    final headerPadding = EdgeInsets.symmetric(
-      horizontal: widget.horizontalPadding,
-      vertical: calendarInsetMd,
-    );
+    const headerPadding = chipsBarHeaderPadding;
     final bodyPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
+      vertical: 6,
     );
     final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
@@ -353,7 +351,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                 curve: Curves.easeInOutCubic,
                 alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: chipsBarContentPadding,
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1222,8 +1220,7 @@ final class _RecipientAutocompleteOverlayState
   }
 
   void _syncPortalVisibility() {
-    final shouldShow = widget.focusNode.hasFocus &&
-        (widget.controller.text.trim().isNotEmpty ||
+    final shouldShow = (widget.controller.text.trim().isNotEmpty ||
             widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
     if (shouldShow) {
@@ -1477,12 +1474,6 @@ final class _RecipientAutocompleteOverlayState
 
           return Stack(
             children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _dismissOverlay,
-                ),
-              ),
               CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
@@ -1583,7 +1574,10 @@ final class _RecipientAutocompleteOverlayState
                       borderRadius: BorderRadius.circular(chipsBarHeight / 2),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       child: Theme(
                         data: Theme.of(context).copyWith(
                           inputDecorationTheme: const InputDecorationTheme(

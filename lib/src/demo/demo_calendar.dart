@@ -238,8 +238,8 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
-          hour: 6,
-          minute: 20,
+          hour: 7,
+          minute: 0,
         ),
         duration: const Duration(minutes: 55),
         location: workshop,
@@ -264,10 +264,10 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
-          hour: 10,
-          minute: 0,
+          hour: 9,
+          minute: 30,
         ),
-        duration: const Duration(minutes: 60),
+        duration: const Duration(minutes: 90),
         location: 'State House',
         priority: TaskPriority.urgent,
       ),
@@ -295,6 +295,34 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
         ),
         duration: const Duration(minutes: 105),
         location: printingHouse,
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Apprentices: instruction & review',
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 14,
+          minute: 0,
+        ),
+        duration: const Duration(minutes: 70),
+        location: workshop,
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Library Company: acquire new volumes',
+        scheduledTime: _atWeekdayTime(
+          weekStart,
+          tuesdayOffset,
+          hour: 15,
+          minute: 10,
+        ),
+        duration: const Duration(minutes: 60),
+        location: 'Library Company Hall',
         priority: TaskPriority.important,
       ),
     )
@@ -371,7 +399,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ..add(
       _scheduledTask(
         title: 'Apprentices: instruction & review',
-        scheduledTime: _atWeekdayTime(weekStart, 3, hour: 10, minute: 20),
+        scheduledTime: _atWeekdayTime(weekStart, 3, hour: 9, minute: 30),
         duration: const Duration(minutes: 70),
         location: workshop,
         priority: TaskPriority.important,
@@ -592,7 +620,7 @@ List<CalendarTask> _reminderTasks(DateTime weekStart) {
       deadline: _atWeekdayTime(weekStart, 1, hour: 20, minute: 0),
       priority: TaskPriority.important,
       reminders: deadlineReminder,
-    ),
+    ).copyWith(isCompleted: true),
     _deadlineTask(
       title: 'Return borrowed book',
       deadline: _atWeekdayTime(weekStart, 3, hour: 16, minute: 0),
@@ -620,7 +648,7 @@ List<CalendarTask> _reminderTasks(DateTime weekStart) {
       location: postOffice,
       priority: TaskPriority.urgent,
       reminders: deadlineReminder,
-    ),
+    ).copyWith(isCompleted: true),
   ];
 }
 

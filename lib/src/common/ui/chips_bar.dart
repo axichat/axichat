@@ -7,6 +7,17 @@ const double chipsBarHeight = 36.0;
 const Duration chipsBarAnimationDuration = Duration(milliseconds: 360);
 const double chipsBarHeaderFontSize = 12.0;
 const double chipsBarHeaderLetterSpacing = 0.4;
+const double chipsBarHorizontalPadding = 16.0;
+const double chipsBarHeaderVerticalPadding = 4.0;
+const double chipsBarContentVerticalPadding = 6.0;
+const EdgeInsets chipsBarHeaderPadding = EdgeInsets.symmetric(
+  horizontal: chipsBarHorizontalPadding,
+  vertical: chipsBarHeaderVerticalPadding,
+);
+const EdgeInsets chipsBarContentPadding = EdgeInsets.symmetric(
+  horizontal: chipsBarHorizontalPadding,
+  vertical: chipsBarContentVerticalPadding,
+);
 const double chipsBarHeaderBadgeRadius = 8.0;
 const double chipsBarHeaderBadgeFontSize = 11.0;
 const double chipsBarHeaderBorderRadius = 12.0;
