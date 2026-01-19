@@ -7419,18 +7419,6 @@ abstract class AppLocalizations {
   /// **'Share with'**
   String get calendarTaskShareTarget;
 
-  /// No description provided for @calendarTaskShareMessageLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Message'**
-  String get calendarTaskShareMessageLabel;
-
-  /// No description provided for @calendarTaskShareMessageHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Add a message to send with the .ics file.'**
-  String get calendarTaskShareMessageHint;
-
   /// No description provided for @calendarTaskShareEditAccess.
   ///
   /// In en, this message translates to:

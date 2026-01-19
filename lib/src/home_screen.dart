@@ -295,6 +295,11 @@ class _HomeScreenState extends State<HomeScreen> {
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop();
+              return;
+            }
             final chatsCubit = context.read<ChatsCubit?>();
             final chatsState = chatsCubit?.state;
             if (chatsState == null) return;

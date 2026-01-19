@@ -1808,8 +1808,6 @@
   "calendarTaskShareTitle": "分享任务",
   "calendarTaskShareSubtitle": "将任务以 .ics 发送到聊天。",
   "calendarTaskShareTarget": "分享给",
-  "calendarTaskShareMessageLabel": "消息",
-  "calendarTaskShareMessageHint": "添加一条随 .ics 文件发送的消息。",
   "calendarTaskShareEditAccess": "编辑权限",
   "calendarTaskShareReadOnlyLabel": "只读",
   "calendarTaskShareReadOnlyHint": "收件人可以查看此任务，但只有你可以编辑。",
