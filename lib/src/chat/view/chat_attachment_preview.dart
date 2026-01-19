@@ -52,18 +52,25 @@ class _AttachmentSpinner extends StatelessWidget {
 }
 
 class _AttachmentFileNameText extends StatelessWidget {
-  const _AttachmentFileNameText({required this.filename, required this.style});
+  const _AttachmentFileNameText({
+    required this.filename,
+    required this.style,
+    this.maxLines = _attachmentFileNameMaxLines,
+    this.overflow = _attachmentFileNameOverflow,
+  });
 
   final String filename;
   final TextStyle style;
+  final int maxLines;
+  final TextOverflow overflow;
 
   @override
   Widget build(BuildContext context) {
     final UnicodeSanitizedText sanitized = sanitizeUnicodeControls(filename);
     return Text(
       sanitized.value,
-      maxLines: _attachmentFileNameMaxLines,
-      overflow: _attachmentFileNameOverflow,
+      maxLines: maxLines,
+      overflow: overflow,
       style: style,
     );
   }
@@ -96,9 +103,6 @@ const int _attachmentActionButtonCount = 3;
 const double _attachmentActionRowMinWidth =
     (AxiIconButton.kTapTargetSize * _attachmentActionButtonCount) +
         (_attachmentActionSpacing * (_attachmentActionButtonCount - 1));
-const double _attachmentInlineActionsMinWidth = _attachmentFileIconWidth +
-    (_attachmentFileRowSpacing * 2) +
-    _attachmentActionRowMinWidth;
 const double _attachmentUnknownMaxWidth = 420.0;
 const double _attachmentMaxWidthFraction = 0.9;
 const int _attachmentImagePreviewMaxBytes = 16 * 1024 * 1024;
@@ -1508,6 +1512,19 @@ class _AttachmentDownloadCancelledException implements Exception {
 class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
+  late final ShadPopoverController _actionsController;
+
+  @override
+  void initState() {
+    super.initState();
+    _actionsController = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    _actionsController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1586,23 +1603,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
       hasLocalFile: hasLocalFile,
       l10n: l10n,
     );
-    final Widget attachmentDetails = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 4,
-      children: [
-        _AttachmentFileNameText(
-          filename: metadata.filename,
-          style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
-        ),
-        Text(
-          sizeLabel,
-          style: context.textTheme.small.copyWith(
-            color: colors.mutedForeground,
-          ),
-        ),
-      ],
-    );
+    final fileNameStyle =
+        context.textTheme.small.copyWith(fontWeight: FontWeight.w600);
     final Widget attachmentActions = _downloading
         ? SizedBox(
             width: 48,
@@ -1637,24 +1639,100 @@ class _FileAttachmentState extends State<_FileAttachment> {
     return _AttachmentSurface(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final bool stackActions =
-              constraints.maxWidth < _attachmentInlineActionsMinWidth;
+          final availableWidth = constraints.maxWidth;
+          final detailsWidth = availableWidth -
+              _attachmentFileIconWidth -
+              (_attachmentFileRowSpacing * 2) -
+              _attachmentActionRowMinWidth;
+          final shouldMeasureText = availableWidth.isFinite && detailsWidth > 0;
+          final TextPainter painter = TextPainter(
+            text: TextSpan(text: metadata.filename, style: fileNameStyle),
+            maxLines: 1,
+            textDirection: Directionality.of(context),
+            ellipsis: '…',
+          );
+          final bool stackActions = !shouldMeasureText ||
+              detailsWidth <= 0 ||
+              (painter..layout(maxWidth: detailsWidth)).didExceedMaxLines;
+          final int filenameMaxLines = stackActions ? 2 : 1;
+          final Widget actionRow = stackActions
+              ? _downloading
+                  ? attachmentActions
+                  : AxiPopover(
+                      controller: _actionsController,
+                      closeOnTapOutside: true,
+                      padding: EdgeInsets.zero,
+                      popover: (context) {
+                        return AxiMenu(
+                          actions: [
+                            AxiMenuAction(
+                              icon: LucideIcons.save,
+                              label: downloadAndSaveTooltip,
+                              onPressed: () {
+                                _actionsController.hide();
+                                _saveAttachment();
+                              },
+                              enabled: hasLocalFile || canDownload,
+                            ),
+                            AxiMenuAction(
+                              icon: LucideIcons.share2,
+                              label: downloadAndShareTooltip,
+                              onPressed: () {
+                                _actionsController.hide();
+                                _shareAttachment();
+                              },
+                              enabled: shareEnabled,
+                            ),
+                            AxiMenuAction(
+                              icon: openIconData,
+                              label: openTooltip,
+                              onPressed: openAction == null
+                                  ? null
+                                  : () {
+                                      _actionsController.hide();
+                                      openAction();
+                                    },
+                              enabled: openAction != null,
+                            ),
+                          ],
+                        );
+                      },
+                      child: AxiTooltip(
+                        builder: (_) => Text(l10n.commonMoreOptions),
+                        child: AxiIconButton(
+                          iconData: Icons.more_horiz,
+                          onPressed: _actionsController.toggle,
+                        ),
+                      ),
+                    )
+              : attachmentActions;
+          final Widget attachmentDetails = Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 4,
+            children: [
+              _AttachmentFileNameText(
+                filename: metadata.filename,
+                style: fileNameStyle,
+                maxLines: filenameMaxLines,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                sizeLabel,
+                style: context.textTheme.small.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ],
+          );
           if (stackActions) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
+            return Row(
               children: [
-                Row(
-                  children: [
-                    attachmentIcon,
-                    const SizedBox(width: _attachmentFileRowSpacing),
-                    Expanded(child: attachmentDetails),
-                  ],
-                ),
-                const SizedBox(height: _attachmentActionSpacing),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: attachmentActions,
-                ),
+                attachmentIcon,
+                const SizedBox(width: _attachmentFileRowSpacing),
+                Expanded(child: attachmentDetails),
+                const SizedBox(width: _attachmentFileRowSpacing),
+                actionRow,
               ],
             );
           }
@@ -1670,7 +1748,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
                 ),
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: attachmentActions,
+                  child: actionRow,
                 ),
               ),
             ],

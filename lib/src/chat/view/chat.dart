@@ -3756,6 +3756,20 @@ class _ChatState extends State<Chat> {
                   storageManager: storageManager,
                   xmppService: xmppService,
                 );
+                final bool demoEmailCalendarEnabled = kEnableDemoChats &&
+                    (chatEntity?.defaultTransport.isEmail ?? false);
+                final storage = storageManager.authStorage;
+                final ChatCalendarSyncCoordinator? demoEmailCoordinator =
+                    demoEmailCalendarEnabled && storage != null
+                        ? ChatCalendarSyncCoordinator(
+                            storage: ChatCalendarStorage(storage: storage),
+                            sendMessage: ({
+                              required String jid,
+                              required CalendarSyncOutbound outbound,
+                              required ChatType chatType,
+                            }) async {},
+                          )
+                        : null;
                 final bool personalCalendarAvailable =
                     storageManager.isAuthStorageReady;
                 final bool supportsChatCalendar =
@@ -3763,13 +3777,18 @@ class _ChatState extends State<Chat> {
                 final bool chatCalendarReady =
                     storageManager.isAuthStorageReady &&
                         chatCalendarCoordinator != null;
+                final bool demoEmailCalendarReady =
+                    demoEmailCoordinator != null;
                 final bool chatCalendarEnabled =
-                    supportsChatCalendar && chatCalendarReady;
+                    (supportsChatCalendar && chatCalendarReady) ||
+                        demoEmailCalendarReady;
                 final ChatCalendarBloc? chatCalendarBloc =
                     _resolveChatCalendarBloc(
                   chat: chatEntity,
                   calendarAvailable: chatCalendarEnabled,
-                  coordinator: chatCalendarCoordinator,
+                  coordinator: supportsChatCalendar
+                      ? chatCalendarCoordinator
+                      : demoEmailCoordinator,
                 );
                 final bool chatCalendarAvailable =
                     chatCalendarEnabled && chatCalendarBloc != null;
@@ -6240,10 +6259,12 @@ class _ChatState extends State<Chat> {
                                                                         task:
                                                                             calendarTaskIcs,
                                                                         readOnly:
-                                                                            calendarTaskIcsReadOnly &&
-                                                                                !self,
+                                                                            (calendarTaskIcsReadOnly && !self) ||
+                                                                                demoEmailCalendarEnabled,
                                                                         requireImportConfirmation:
                                                                             !self,
+                                                                        allowChatCopy:
+                                                                            !demoEmailCalendarEnabled,
                                                                         footerDetails:
                                                                             taskFooterDetails,
                                                                       ),

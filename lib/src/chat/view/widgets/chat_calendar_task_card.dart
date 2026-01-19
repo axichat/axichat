@@ -36,12 +36,14 @@ class ChatCalendarTaskCard extends StatefulWidget {
     required this.task,
     required this.readOnly,
     this.requireImportConfirmation = false,
+    this.allowChatCopy = true,
     this.footerDetails = _emptyInlineSpans,
   });
 
   final CalendarTask task;
   final bool readOnly;
   final bool requireImportConfirmation;
+  final bool allowChatCopy;
   final List<InlineSpan> footerDetails;
 
   @override
@@ -261,7 +263,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         context.read<CalendarStorageManager>();
     final bool canAddToPersonal = storageManager.isAuthStorageReady &&
         _maybeReadPersonalCalendarBloc() != null;
-    final bool canAddToChat = _maybeReadChatCalendarBloc() != null;
+    final bool canAddToChat =
+        widget.allowChatCopy && _maybeReadChatCalendarBloc() != null;
 
     if (!canAddToPersonal && !canAddToChat) {
       FeedbackSystem.showInfo(
