@@ -385,7 +385,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               fontFamily: gabaritoFontFamily,
               fontFamilyFallback: gabaritoFontFallback,
               color: materialColors.foreground,
-              fontWeight: FontWeight.w700,
+              fontWeight: appBarTitleFontWeight,
             );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: 20),

@@ -96,6 +96,7 @@ const mediumScreen = 900.0;
 const largeScreen = 1200.0;
 const compactDeviceBreakpoint = 600.0;
 const appBarActionOverflowBreakpoint = compactDeviceBreakpoint;
+const FontWeight appBarTitleFontWeight = FontWeight.w500;
 
 const baseAnimationDuration = Duration(milliseconds: 300);
 const authCompletionAnimationDuration = Duration(milliseconds: 1000);
