@@ -912,6 +912,7 @@ class _NexusState extends State<Nexus> {
           trailing: AppBarActions(
             actions: headerActions,
             spacing: _homeHeaderActionSpacing,
+            overflowBreakpoint: 0,
           ),
         ),
         _HomeSearchPanel(tabs: widget.tabs),

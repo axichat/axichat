@@ -56,17 +56,6 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
         kind == PointerDeviceKind.trackpad;
   }
 
-  void _handleTapDown(TapDownDetails details) {
-    if (!_shouldHandleTapKind(details.kind)) {
-      return;
-    }
-    _setPressed(true);
-  }
-
-  void _handleTapUp(TapUpDetails details) => _setPressed(false);
-
-  void _handleTapCancel() => _setPressed(false);
-
   @override
   void didUpdateWidget(AxiTapBounce oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -81,12 +70,16 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     final targetScale = _pressed ? widget.scale : 1.0;
     final duration = _pressed ? widget.pressDuration : widget.releaseDuration;
     final curve = _pressed ? widget.pressCurve : widget.releaseCurve;
-    return GestureDetector(
-      excludeFromSemantics: true,
+    return Listener(
       behavior: HitTestBehavior.translucent,
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
+      onPointerDown: (event) {
+        if (!_shouldHandleTapKind(event.kind)) {
+          return;
+        }
+        _setPressed(true);
+      },
+      onPointerUp: (_) => _setPressed(false),
+      onPointerCancel: (_) => _setPressed(false),
       child: AnimatedScale(
         scale: targetScale,
         duration: duration,

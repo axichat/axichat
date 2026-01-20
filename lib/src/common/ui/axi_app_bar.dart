@@ -5,8 +5,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
-const FontWeight _appTitleFontWeight = FontWeight.w500;
-
 class AxiAppBar extends StatelessWidget {
   const AxiAppBar({
     super.key,
@@ -28,7 +26,7 @@ class AxiAppBar extends StatelessWidget {
     final titleStyle = baseTitleStyle.copyWith(
       fontFamily: gabaritoFontFamily,
       fontFamilyFallback: gabaritoFontFallback,
-      fontWeight: _appTitleFontWeight,
+      fontWeight: appBarTitleFontWeight,
     );
     return Container(
       height: 56.0,
