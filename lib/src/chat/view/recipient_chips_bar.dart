@@ -29,7 +29,7 @@ const double _chipAvatarSize = 20.0;
 const double _chipStatusBadgeSize = 12.0;
 const double _chipStatusBadgeBorderWidth = 1.5;
 const double _recipientAutocompleteFieldMinWidth = 90.0;
-const double _recipientAutocompleteMaxWidth = 320.0;
+const double _recipientAutocompleteMaxWidth = 120.0;
 const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
   4,
   0,
@@ -1175,24 +1175,26 @@ class _RecipientAutocompleteField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AutofillGroup(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: _recipientAutocompleteFieldMinWidth,
-          maxWidth: _recipientAutocompleteMaxWidth,
-        ),
-        child: _RecipientAutocompleteOverlay(
-          controller: controller,
-          focusNode: focusNode,
-          tapRegionGroup: tapRegionGroup,
-          backgroundColor: backgroundColor,
-          avatarPathsByJid: avatarPathsByJid,
-          showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
-          optionsBuilder: optionsBuilder,
-          highlightedIndexListenable: highlightedIndexListenable,
-          onManualEntry: onManualEntry,
-          onOptionsChanged: onOptionsChanged,
-          onSubmitted: onSubmitted,
-          onRecipientAdded: onRecipientAdded,
+      child: IntrinsicWidth(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: _recipientAutocompleteFieldMinWidth,
+            maxWidth: _recipientAutocompleteMaxWidth,
+          ),
+          child: _RecipientAutocompleteOverlay(
+            controller: controller,
+            focusNode: focusNode,
+            tapRegionGroup: tapRegionGroup,
+            backgroundColor: backgroundColor,
+            avatarPathsByJid: avatarPathsByJid,
+            showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
+            optionsBuilder: optionsBuilder,
+            highlightedIndexListenable: highlightedIndexListenable,
+            onManualEntry: onManualEntry,
+            onOptionsChanged: onOptionsChanged,
+            onSubmitted: onSubmitted,
+            onRecipientAdded: onRecipientAdded,
+          ),
         ),
       ),
     );

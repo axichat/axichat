@@ -1069,13 +1069,12 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     if (collapsed) {
-      return AxiIconButton.ghost(
+      return AxiIconButton.outline(
         iconData: LucideIcons.lifeBuoy,
         tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
         onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
               const AccessibilityMenuOpened(),
             ),
-        usePrimary: true,
       );
     }
     final colors = context.colorScheme;
@@ -1202,11 +1201,16 @@ class _FindActionIconButton extends StatelessWidget {
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
-    final colors = context.colorScheme;
-    final Widget content = Row(
+    final iconTheme = IconTheme.of(context);
+    final iconWidget = Icon(
+      LucideIcons.lifeBuoy,
+      size: iconTheme.size,
+      color: iconTheme.color ?? context.colorScheme.foreground,
+    );
+    final Widget iconContent = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(LucideIcons.lifeBuoy, size: 18, color: colors.primary),
+        iconWidget,
         if (showShortcutHint) ...[
           const SizedBox(width: 10),
           ShortcutHint(shortcut: shortcut, dense: true),
@@ -1216,12 +1220,13 @@ class _FindActionIconButton extends StatelessWidget {
     return AxiTooltip(
       builder: (_) =>
           Text(l10n.accessibilityActionsShortcutTooltip(shortcutText)),
-      child: ShadButton.ghost(
+      child: AxiIconButton.outline(
+        iconData: LucideIcons.lifeBuoy,
+        icon: iconContent,
+        tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
         onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
               const AccessibilityMenuOpened(),
             ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: content,
       ),
     );
   }
@@ -1236,11 +1241,10 @@ class _SearchToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return AxiIconButton.ghost(
+    return AxiIconButton.outline(
       iconData: LucideIcons.search,
       tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
       onPressed: onPressed,
-      usePrimary: true,
     );
   }
 }
