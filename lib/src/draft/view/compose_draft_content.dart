@@ -15,11 +15,13 @@ class ComposeDraftContent extends StatelessWidget {
     required this.seed,
     this.onClosed,
     this.onDiscarded,
+    this.onDraftSaved,
   });
 
   final ComposeDraftSeed seed;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
+  final ValueChanged<int>? onDraftSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +45,7 @@ class ComposeDraftContent extends StatelessWidget {
       suggestionDomains: suggestionDomains,
       onClosed: onClosed,
       onDiscarded: onDiscarded,
+      onDraftSaved: onDraftSaved,
     );
   }
 }

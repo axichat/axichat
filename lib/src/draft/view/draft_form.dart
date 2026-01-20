@@ -53,6 +53,7 @@ class DraftForm extends StatefulWidget {
     this.suggestionDomains = const <String>{},
     this.onClosed,
     this.onDiscarded,
+    this.onDraftSaved,
   });
 
   final int? id;
@@ -64,6 +65,7 @@ class DraftForm extends StatefulWidget {
   final Set<String> suggestionDomains;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
+  final ValueChanged<int>? onDraftSaved;
 
   @override
   State<DraftForm> createState() => _DraftFormState();
@@ -105,6 +107,15 @@ class _DraftFormState extends State<DraftForm> {
     _bodyFocusNode = FocusNode();
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
+  }
+
+  @override
+  void didUpdateWidget(covariant DraftForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newId = widget.id;
+    if (newId != null && newId != id) {
+      id = newId;
+    }
   }
 
   @override
@@ -754,6 +765,7 @@ class _DraftFormState extends State<DraftForm> {
       _lastSavedSignature = signature;
       _lastAutosaveAt = autoSave ? DateTime.now() : null;
     });
+    widget.onDraftSaved?.call(result.draftId);
     if (!autoSave &&
         wasNewDraft &&
         result.draftCount >= draftSyncWarningThreshold) {
