@@ -308,6 +308,11 @@ class _HomeScreenState extends State<HomeScreen> {
             final chatsCubit = context.read<ChatsCubit?>();
             final chatsState = chatsCubit?.state;
             if (chatsState == null) return;
+            final chatFocused = context.read<ChatBloc?>()?.state.focused;
+            if (chatFocused != null) {
+              chatsCubit?.setOpenChatRoute(route: ChatRouteIndex.main);
+              return;
+            }
             if (!chatsState.openChatRoute.isMain) {
               chatsCubit?.setOpenChatRoute(route: ChatRouteIndex.main);
               return;
@@ -1201,33 +1206,23 @@ class _FindActionIconButton extends StatelessWidget {
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
-    final iconTheme = IconTheme.of(context);
-    final iconWidget = Icon(
-      LucideIcons.lifeBuoy,
-      size: iconTheme.size,
-      color: iconTheme.color ?? context.colorScheme.foreground,
+    final button = AxiIconButton.outline(
+      iconData: LucideIcons.lifeBuoy,
+      tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
+      onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+            const AccessibilityMenuOpened(),
+          ),
     );
-    final Widget iconContent = Row(
+    if (!showShortcutHint) {
+      return button;
+    }
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        iconWidget,
-        if (showShortcutHint) ...[
-          const SizedBox(width: 10),
-          ShortcutHint(shortcut: shortcut, dense: true),
-        ],
+        button,
+        const SizedBox(width: 10),
+        ShortcutHint(shortcut: shortcut, dense: true),
       ],
-    );
-    return AxiTooltip(
-      builder: (_) =>
-          Text(l10n.accessibilityActionsShortcutTooltip(shortcutText)),
-      child: AxiIconButton.outline(
-        iconData: LucideIcons.lifeBuoy,
-        icon: iconContent,
-        tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-        onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
-              const AccessibilityMenuOpened(),
-            ),
-      ),
     );
   }
 }
