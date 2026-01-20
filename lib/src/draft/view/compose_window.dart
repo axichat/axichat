@@ -211,6 +211,8 @@ class _ComposeWindowBody extends StatelessWidget {
         seed: seed,
         onClosed: () => context.read<ComposeWindowCubit>().closeWindow(id),
         onDiscarded: () => context.read<ComposeWindowCubit>().closeWindow(id),
+        onDraftSaved: (draftId) =>
+            context.read<ComposeWindowCubit>().recordDraftId(id, draftId),
       ),
     );
   }

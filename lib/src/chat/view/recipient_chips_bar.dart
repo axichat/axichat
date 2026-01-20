@@ -99,6 +99,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   String? _pendingRemovalKey;
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
+  String? _ownNormalizedJid;
 
   @override
   void initState() {
@@ -130,9 +131,19 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       _recipientSuggestionSubscription =
           service.recipientAddressSuggestionsStream().listen((addresses) {
         if (!mounted) return;
+        if (listEquals(addresses, _databaseSuggestionAddresses)) return;
         setState(() => _databaseSuggestionAddresses = addresses);
       });
     }
+    _updateOwnJid(service.myJid);
+  }
+
+  void _updateOwnJid(String? jid) {
+    final normalized = _normalizeAddress(jid);
+    if (normalized == _ownNormalizedJid) return;
+    setState(() {
+      _ownNormalizedJid = normalized;
+    });
   }
 
   @override
@@ -420,6 +431,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (!_looksLikeEmail(value)) {
       return false;
     }
+    if (_isRoomNick(value)) {
+      return false;
+    }
+    if (_isOwnAddress(value)) {
+      return false;
+    }
     _handleRecipientAdded(FanOutTarget.address(address: value));
     return true;
   }
@@ -632,6 +649,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final domains = <String>{EndpointConfig.defaultDomain}
       ..addAll(widget.suggestionDomains);
     void addFrom(String? address) {
+      if (_isRoomNick(address)) return;
+      if (_isOwnAddress(address)) return;
       final domain = _extractDomain(address);
       if (domain != null) {
         domains.add(domain);
@@ -667,6 +686,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     void add(String? raw) {
       final value = raw?.trim();
       if (value == null || value.isEmpty) return;
+      if (_isRoomNick(value)) return;
+      if (_isOwnAddress(value)) return;
       addresses.add(value);
     }
 
@@ -685,26 +706,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return addresses;
   }
 
-  Iterable<String> _recentAddressSuggestions() {
-    final seen = <String>{};
-    final recent = <String>[];
-
-    void add(String? raw) {
-      final value = raw?.trim();
-      if (value == null || value.isEmpty) return;
-      final normalized = value.toLowerCase();
-      if (!seen.add(normalized)) return;
-      recent.add(value);
-    }
-
-    for (final suggestion in widget.suggestionAddresses) {
-      add(suggestion);
-    }
-    for (final suggestion in _databaseSuggestionAddresses) {
-      add(suggestion);
-    }
-
-    return recent;
+  bool _isRoomNick(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return false;
+    return value.contains('/');
   }
 
   FanOutRecipientState? _statusFor(ComposerRecipient recipient) {
@@ -741,6 +746,18 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return domain;
   }
 
+  String? _normalizeAddress(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value.toLowerCase();
+  }
+
+  bool _isOwnAddress(String? raw) {
+    final normalized = _normalizeAddress(raw);
+    final own = _ownNormalizedJid;
+    return normalized != null && own != null && normalized == own;
+  }
+
   Iterable<FanOutTarget> _autocompleteOptions(
     String raw,
     List<Chat> candidates,
@@ -761,19 +778,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
 
     if (query.isEmpty) {
-      for (final address in _recentAddressSuggestions()) {
-        if (addTarget(FanOutTarget.address(address: address))) {
-          return results;
-        }
-      }
       for (final chat in candidates) {
         if (addTarget(FanOutTarget.chat(chat))) {
           return results;
         }
       }
-      for (final address in knownAddresses) {
-        if (addTarget(FanOutTarget.address(address: address))) {
-          return results;
+      if (results.length < _maxAutocompleteSuggestions) {
+        for (final address in knownAddresses) {
+          if (addTarget(FanOutTarget.address(address: address))) {
+            return results;
+          }
         }
       }
       return results;
@@ -1257,6 +1271,13 @@ final class _RecipientAutocompleteOverlayState
     _syncPortalVisibility();
   }
 
+  void _handleFocusChanged() {
+    if (widget.focusNode.hasFocus) {
+      _recomputeOptions();
+    }
+    _syncPortalVisibility();
+  }
+
   void _syncPortalVisibility() {
     final shouldShow = (widget.controller.text.trim().isNotEmpty ||
             widget.showSuggestionsWhenEmpty) &&
@@ -1282,7 +1303,7 @@ final class _RecipientAutocompleteOverlayState
   void initState() {
     super.initState();
     widget.controller.addListener(_recomputeOptions);
-    widget.focusNode.addListener(_syncPortalVisibility);
+    widget.focusNode.addListener(_handleFocusChanged);
     _recomputeOptions();
   }
 
@@ -1294,8 +1315,8 @@ final class _RecipientAutocompleteOverlayState
       widget.controller.addListener(_recomputeOptions);
     }
     if (oldWidget.focusNode != widget.focusNode) {
-      oldWidget.focusNode.removeListener(_syncPortalVisibility);
-      widget.focusNode.addListener(_syncPortalVisibility);
+      oldWidget.focusNode.removeListener(_handleFocusChanged);
+      widget.focusNode.addListener(_handleFocusChanged);
     }
     _recomputeOptions();
   }
@@ -1303,7 +1324,7 @@ final class _RecipientAutocompleteOverlayState
   @override
   void dispose() {
     widget.controller.removeListener(_recomputeOptions);
-    widget.focusNode.removeListener(_syncPortalVisibility);
+    widget.focusNode.removeListener(_handleFocusChanged);
     if (_portalController.isShowing) {
       _portalController.hide();
     }

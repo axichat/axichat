@@ -35,6 +35,17 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
     emit(state.copyWith(windows: [...state.windows, entry]));
   }
 
+  void recordDraftId(int windowId, int draftId) {
+    final index = state.windows.indexWhere((entry) => entry.id == windowId);
+    if (index == -1) return;
+    final current = state.windows[index];
+    if (current.seed.id == draftId) return;
+    _updateWindow(
+      windowId,
+      (entry) => entry.copyWith(seed: entry.seed.copyWith(id: draftId)),
+    );
+  }
+
   void minimize(int id) => _updateWindow(
         id,
         (entry) => entry.copyWith(view: ComposeWindowView.minimized),

@@ -21,6 +21,23 @@ class ComposeDraftSeed extends Equatable {
   final String subject;
   final List<String> attachmentMetadataIds;
 
+  ComposeDraftSeed copyWith({
+    int? id,
+    List<String>? jids,
+    String? body,
+    String? subject,
+    List<String>? attachmentMetadataIds,
+  }) {
+    return ComposeDraftSeed(
+      id: id ?? this.id,
+      jids: jids ?? this.jids,
+      body: body ?? this.body,
+      subject: subject ?? this.subject,
+      attachmentMetadataIds:
+          attachmentMetadataIds ?? this.attachmentMetadataIds,
+    );
+  }
+
   @override
   List<Object?> get props => [id, jids, body, subject, attachmentMetadataIds];
 }
