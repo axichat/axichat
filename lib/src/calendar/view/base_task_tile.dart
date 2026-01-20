@@ -20,6 +20,7 @@ import 'feedback_system.dart';
 import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_checklist.dart';
+import 'widgets/calendar_task_list_tile.dart';
 
 const bool _calendarUseRootNavigator = false;
 
@@ -31,6 +32,8 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
     this.onTap,
     this.isReadOnly = false,
     this.compact = false,
+    this.marginOverride,
+    this.hideActionMenu = false,
   });
 
   final CalendarTask task;
@@ -38,6 +41,8 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   final VoidCallback? onTap;
   final bool isReadOnly;
   final bool compact;
+  final EdgeInsets? marginOverride;
+  final bool hideActionMenu;
 }
 
 abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
@@ -71,7 +76,8 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             final CalendarResponsiveSpec spec = widget.compact
                 ? ResponsiveHelper.specForSizeClass(CalendarSizeClass.compact)
                 : ResponsiveHelper.spec(context);
-            final EdgeInsets margin = _tileMargin(spec);
+            final EdgeInsets margin =
+                widget.marginOverride ?? _tileMargin(spec);
             final CalendarTask task = widget.task;
             final bool isReadOnly = widget.isReadOnly;
             final Color taskColor = _getTaskColor(task);
@@ -99,8 +105,11 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
               _toggleTaskCompletion(context, completed);
             }
 
-            final VoidCallback? editAction = isReadOnly ? null : handleEdit;
-            final VoidCallback? deleteAction = isReadOnly ? null : handleDelete;
+            final bool hideActions = widget.hideActionMenu;
+            final VoidCallback? editAction =
+                (isReadOnly || hideActions) ? null : handleEdit;
+            final VoidCallback? deleteAction =
+                (isReadOnly || hideActions) ? null : handleDelete;
             final ValueChanged<bool>? toggleAction =
                 isReadOnly ? null : handleToggleCompletion;
 
@@ -286,8 +295,12 @@ class _CompactTaskTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : taskColor;
-    final colors = context.colorScheme;
     final bool showActions = onEdit != null || onDelete != null;
+    final l10n = context.l10n;
+    final String? scheduleLabel = _compactTaskScheduleLabel(
+      l10n,
+      task,
+    );
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -315,53 +328,18 @@ class _CompactTaskTile extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  child: Padding(
-                    padding: calendarPaddingLg,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _TaskTitle(task: task, maxLines: 1, fontSize: 14),
-                              if (task.hasChecklist) ...[
-                                const SizedBox(height: calendarInsetMd),
-                                TaskChecklistProgressBar(
-                                  progress: task.checklistProgress,
-                                  activeColor: colors.primary,
-                                  backgroundColor:
-                                      colors.muted.withValues(alpha: 0.2),
-                                ),
-                              ],
-                              if (timeLabel != null) ...[
-                                const SizedBox(height: calendarInsetMd),
-                                _TaskTimeLabel(
-                                  text: timeLabel!,
-                                  fontSize: 12,
-                                  color: timeColor,
-                                  fontWeight: timeFontWeight,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (showActions) ...[
-                          _TaskActionMenu(
+                  child: CalendarTaskListTile(
+                    task: task,
+                    scheduleLabel: scheduleLabel,
+                    trailing: showActions
+                        ? _TaskActionMenu(
                             onEdit: onEdit,
                             onDelete: onDelete,
                             showIcons: false,
                             iconSize: 20,
-                          ),
-                          const SizedBox(width: calendarGutterMd),
-                        ],
-                        _TaskCompletionToggle(
-                          isUpdating: isUpdating,
-                          isCompleted: task.isCompleted,
-                          onToggle: onToggleCompletion,
-                        ),
-                      ],
-                    ),
+                          )
+                        : null,
+                    onToggleCompletion: onToggleCompletion,
                   ),
                 ),
               ],
@@ -371,6 +349,29 @@ class _CompactTaskTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _compactTaskScheduleLabel(
+  AppLocalizations l10n,
+  CalendarTask task,
+) {
+  final DateTime? start = task.scheduledTime;
+  if (start == null) {
+    return null;
+  }
+  final DateTime? end = task.effectiveEndDate;
+  if (end != null && end.isAfter(start)) {
+    if (DateUtils.isSameDay(start, end)) {
+      final String dateLabel = TimeFormatter.formatFriendlyDate(start);
+      final String startTime = TimeFormatter.formatTime(start);
+      final String endTime = TimeFormatter.formatTime(end);
+      return '$dateLabel · $startTime – $endTime';
+    }
+    final String startLabel = TimeFormatter.formatFriendlyDate(start);
+    final String endLabel = TimeFormatter.formatFriendlyDate(end);
+    return '$startLabel → $endLabel';
+  }
+  return TimeFormatter.formatFriendlyDateTime(l10n, start);
 }
 
 class _MediumTaskTile extends StatelessWidget {

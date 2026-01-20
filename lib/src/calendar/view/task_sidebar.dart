@@ -48,10 +48,8 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_critical_path_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'calendar_task_search.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
-import 'widgets/calendar_drag_exclude.dart';
 import 'calendar_transfer_sheet.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_checklist_controller.dart';
@@ -75,7 +73,7 @@ import 'widgets/task_checklist.dart';
 import 'widgets/task_text_field.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/calendar_sheet_header.dart';
-import 'widgets/calendar_completion_checkbox.dart';
+import 'widgets/calendar_task_list_tile.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
 
@@ -3823,7 +3821,7 @@ class _SelectionTaskTile extends StatelessWidget {
                     bottom: BorderSide(color: calendarBorderColor),
                   ),
                 ),
-                child: _SidebarTaskTileBody(
+                child: CalendarTaskListTile(
                   task: task,
                   scheduleLabel: scheduleLabel,
                   onToggleCompletion: (completed) =>
@@ -3847,177 +3845,6 @@ class _SelectionTaskTile extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SidebarTaskTileBody extends StatelessWidget {
-  const _SidebarTaskTileBody({
-    required this.task,
-    this.trailing,
-    this.scheduleLabel,
-    this.onToggleCompletion,
-  });
-
-  final CalendarTask task;
-  final Widget? trailing;
-  final String? scheduleLabel;
-  final ValueChanged<bool>? onToggleCompletion;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.title,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: task.isCompleted
-                              ? calendarPrimaryColor
-                              : calendarTitleColor,
-                          decoration: task.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
-                      if (scheduleLabel != null) ...[
-                        const SizedBox(height: calendarInsetSm),
-                        Text(
-                          scheduleLabel!,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: task.isCompleted
-                                ? calendarPrimaryColor
-                                : calendarSubtitleColor,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: calendarInsetMd),
-                if (trailing != null) ...[
-                  CalendarDragExclude(child: trailing!),
-                  const SizedBox(width: calendarInsetMd),
-                ],
-                CalendarDragExclude(
-                  child: CalendarCompletionCheckbox(
-                    value: task.isCompleted,
-                    onChanged: onToggleCompletion,
-                  ),
-                ),
-              ],
-            ),
-            if (task.description?.isNotEmpty == true) ...[
-              const SizedBox(height: calendarInsetMd),
-              Text(
-                task.description!.length > 50
-                    ? '${task.description!.substring(0, 50)}...'
-                    : task.description!,
-                style: const TextStyle(
-                  fontSize: 11,
-                ).copyWith(color: calendarSubtitleColor),
-              ),
-            ],
-            if (task.hasChecklist) ...[
-              const SizedBox(height: calendarInsetMd),
-              TaskChecklistProgressBar(
-                progress: task.checklistProgress,
-                activeColor: colors.primary,
-                backgroundColor: colors.muted.withValues(alpha: 0.2),
-              ),
-            ],
-            if (task.deadline != null) ...[
-              const SizedBox(height: calendarInsetLg),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterSm,
-                  vertical: calendarInsetMd,
-                ),
-                decoration: BoxDecoration(
-                  color: _sidebarDeadlineBackgroundColor(task.deadline!),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 12,
-                      color: _sidebarDeadlineColor(task.deadline!),
-                    ),
-                    const SizedBox(width: calendarInsetMd),
-                    Text(
-                      _sidebarDeadlineLabel(context.l10n, task.deadline!),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _sidebarDeadlineColor(task.deadline!),
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (task.location?.isNotEmpty == true) ...[
-              const SizedBox(height: calendarInsetMd),
-              Row(
-                children: [
-                  const Text('📍', style: TextStyle(fontSize: 12, height: 1)),
-                  Expanded(
-                    child: Text(
-                      task.location!,
-                      style: const TextStyle(
-                        fontSize: 11,
-                      ).copyWith(color: calendarSubtitleColor),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Color _sidebarDeadlineColor(DateTime deadline) {
-  final now = DateTime.now();
-  if (deadline.isBefore(now)) {
-    return calendarDangerColor;
-  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-    return calendarWarningColor;
-  }
-  return calendarPrimaryColor;
-}
-
-Color _sidebarDeadlineBackgroundColor(DateTime deadline) {
-  final now = DateTime.now();
-  if (deadline.isBefore(now)) {
-    return calendarDangerColor.withValues(alpha: 0.1);
-  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-    return calendarWarningColor.withValues(alpha: 0.1);
-  }
-  return calendarPrimaryColor.withValues(alpha: 0.08);
-}
-
-String _sidebarDeadlineLabel(AppLocalizations l10n, DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(l10n, deadline);
 }
 
 final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
@@ -5276,7 +5103,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                             hoverColor: calendarSidebarBackgroundColor
                                 .withValues(alpha: 0.5),
                             onTap: customTap,
-                            child: _SidebarTaskTileBody(
+                            child: CalendarTaskListTile(
                               task: task,
                               trailing: trailing,
                               onToggleCompletion: onToggleCompletion,
@@ -5296,7 +5123,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                                 .withValues(alpha: 0.5),
                             onTap: () =>
                                 host._showTaskEditSheet(tileContext, task),
-                            child: _SidebarTaskTileBody(
+                            child: CalendarTaskListTile(
                               task: task,
                               trailing: trailing,
                               onToggleCompletion: onToggleCompletion,
@@ -5614,7 +5441,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                               anchorToken: _anchorToken,
                               controller: controller,
                             ),
-                            child: _SidebarTaskTileBody(
+                            child: CalendarTaskListTile(
                               task: task,
                               trailing: trailing,
                               onToggleCompletion: onToggleCompletion,
@@ -5624,7 +5451,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                       );
                     },
                   )
-                : _SidebarTaskTileBody(
+                : CalendarTaskListTile(
                     task: task,
                     trailing: trailing,
                     onToggleCompletion: onToggleCompletion,

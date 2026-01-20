@@ -61,13 +61,18 @@ class CalendarFragmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final accentColor = colors.primary;
     final bool isTaskFragment =
         fragment.maybeMap(task: (_) => true, orElse: () => false);
-    final double cardRadius =
-        isTaskFragment ? calendarEventRadius : _fragmentCardRadius;
-    final double accentRadius =
-        isTaskFragment ? cardRadius : _fragmentAccentRadius;
+    if (isTaskFragment) {
+      return _TaskFragmentCard(
+        fragment: fragment,
+        accentColor: colors.primary,
+        footerDetails: footerDetails,
+        onTap: onTap,
+      );
+    }
+    const double cardRadius = _fragmentCardRadius;
+    const double accentRadius = _fragmentAccentRadius;
     final card = DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.card,
@@ -80,7 +85,7 @@ class CalendarFragmentCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CalendarFragmentAccent(
-            color: accentColor,
+            color: colors.primary,
             radius: accentRadius,
           ),
           Expanded(
@@ -112,6 +117,72 @@ class CalendarFragmentCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(cardRadius),
         child: card,
+      ),
+    );
+  }
+}
+
+class _TaskFragmentCard extends StatelessWidget {
+  const _TaskFragmentCard({
+    required this.fragment,
+    required this.accentColor,
+    required this.footerDetails,
+    this.onTap,
+  });
+
+  final CalendarFragment fragment;
+  final Color accentColor;
+  final List<InlineSpan> footerDetails;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const double accentWidth = _fragmentAccentWidth;
+    const double cardRadius = calendarEventRadius;
+    return Container(
+      decoration: BoxDecoration(
+        color: calendarContainerColor,
+        borderRadius: BorderRadius.circular(cardRadius),
+        boxShadow: calendarLightShadow,
+        border: Border.all(color: calendarBorderColor, width: 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(cardRadius),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: accentWidth,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(calendarEventRadius),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: calendarPaddingLg,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: _fragmentContentSpacing,
+                    children: [
+                      _CalendarFragmentBody(fragment: fragment),
+                      if (footerDetails.isNotEmpty)
+                        Padding(
+                          padding: _fragmentFooterPadding,
+                          child: ChatInlineDetails(details: footerDetails),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -28,6 +28,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/chat_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
@@ -1000,6 +1001,8 @@ class _ChatState extends State<Chat> {
   late final FocusNode _attachmentButtonFocusNode;
   late final ScrollController _scrollController;
   bool _composerHasText = false;
+  bool get _composerHasContent =>
+      _composerHasText || _pendingCalendarTaskIcs != null;
   String _lastSubjectValue = '';
   bool _subjectChangeSuppressed = false;
   ChatCalendarBloc? _chatCalendarBloc;
@@ -1211,9 +1214,6 @@ class _ChatState extends State<Chat> {
       roomState: context.read<ChatBloc>().state.roomState,
     );
     final String shareText = task.toShareText(context.l10n).trim();
-    if (shareText.isEmpty) {
-      return null;
-    }
     final bool canShareIcs = decision.canWrite ||
         context.read<ChatBloc>().state.chat!.defaultTransport.isEmail;
     if (!canShareIcs) {
@@ -1245,6 +1245,49 @@ class _ChatState extends State<Chat> {
       _pendingCalendarSeedText = share.text;
     });
     _appendTaskShareText(payload.snapshot, shareText: share.text);
+  }
+
+  List<InlineSpan> _calendarTaskShareMetadata(
+    CalendarTask task,
+    AppLocalizations l10n,
+    TextStyle detailStyle,
+  ) {
+    final List<InlineSpan> metadata = <InlineSpan>[];
+    final String description = task.description?.trim() ?? '';
+    if (description.isNotEmpty) {
+      metadata.add(TextSpan(text: description, style: detailStyle));
+    }
+    final String location = task.location?.trim() ?? '';
+    if (location.isNotEmpty) {
+      metadata.add(TextSpan(
+        text: l10n.calendarCopyLocation(location),
+        style: detailStyle,
+      ));
+    }
+    final String? scheduleText = _calendarTaskScheduleText(task, l10n);
+    if (scheduleText != null && scheduleText.isNotEmpty) {
+      metadata.add(TextSpan(text: scheduleText, style: detailStyle));
+    }
+    return metadata;
+  }
+
+  String? _calendarTaskScheduleText(CalendarTask task, AppLocalizations l10n) {
+    final DateTime? scheduled = task.scheduledTime;
+    if (scheduled == null) {
+      return null;
+    }
+    final DateTime? end = task.endDate ??
+        (task.duration == null ? null : scheduled.add(task.duration!));
+    final String startText =
+        TimeFormatter.formatFriendlyDateTime(l10n, scheduled);
+    if (end == null) {
+      return startText;
+    }
+    final String endText = TimeFormatter.formatFriendlyDateTime(l10n, end);
+    if (endText == startText) {
+      return startText;
+    }
+    return l10n.commonRangeLabel(startText, endText);
   }
 
   Future<void> _handleAvailabilityRequest(
@@ -2307,9 +2350,13 @@ class _ChatState extends State<Chat> {
         )
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
-    final hasSubject = _subjectController.text.trim().isNotEmpty;
+    final bool hasSubject = _subjectController.text.trim().isNotEmpty;
+    final bool hasCalendarTask = _pendingCalendarTaskIcs != null;
     final canSend = !hasPreparingAttachments &&
-        (resolvedText.isNotEmpty || hasQueuedAttachments || hasSubject);
+        (resolvedText.isNotEmpty ||
+            hasQueuedAttachments ||
+            hasSubject ||
+            hasCalendarTask);
     if (!canSend) return;
     final confirmed = await _confirmMediaMetadataIfNeeded(queuedAttachments);
     if (!confirmed || !mounted) return;
@@ -4953,7 +5000,7 @@ class _ChatState extends State<Chat> {
                                                     pendingAttachments:
                                                         pendingAttachments,
                                                     composerHasText:
-                                                        _composerHasText,
+                                                        _composerHasContent,
                                                     composerError:
                                                         state.composerError,
                                                     showAttachmentWarning:
@@ -6051,8 +6098,6 @@ class _ChatState extends State<Chat> {
                                                                   hideTaskText =
                                                                   taskShareText !=
                                                                           null &&
-                                                                      taskShareText
-                                                                          .isNotEmpty &&
                                                                       taskShareText ==
                                                                           trimmedRenderedText;
                                                               final List<
@@ -6071,6 +6116,19 @@ class _ChatState extends State<Chat> {
                                                               ];
                                                               final List<
                                                                       InlineSpan>
+                                                                  shareMetadataDetails =
+                                                                  hideTaskText &&
+                                                                          calendarTaskIcs !=
+                                                                              null
+                                                                      ? _calendarTaskShareMetadata(
+                                                                          calendarTaskIcs,
+                                                                          context
+                                                                              .l10n,
+                                                                          surfaceDetailStyle,
+                                                                        )
+                                                                      : _emptyInlineSpans;
+                                                              final List<
+                                                                      InlineSpan>
                                                                   fragmentFooterDetails =
                                                                   hideFragmentText
                                                                       ? surfaceDetails
@@ -6085,7 +6143,10 @@ class _ChatState extends State<Chat> {
                                                                       InlineSpan>
                                                                   taskFooterDetails =
                                                                   hideTaskText
-                                                                      ? surfaceDetails
+                                                                      ? <InlineSpan>[
+                                                                          ...surfaceDetails,
+                                                                          ...shareMetadataDetails,
+                                                                        ]
                                                                       : _emptyInlineSpans;
                                                               CalendarAvailabilityShare?
                                                                   availabilityShare;
@@ -6290,6 +6351,8 @@ class _ChatState extends State<Chat> {
                                                                               demoEmailCalendarEnabled && !self,
                                                                           footerDetails:
                                                                               taskFooterDetails,
+                                                                          isShareFragment:
+                                                                              true,
                                                                         ),
                                                                   shape:
                                                                       calendarTaskShape,
@@ -9447,6 +9510,7 @@ class _PinnedMessageTile extends StatelessWidget {
                     chat.defaultTransport.isEmail &&
                     !isSelf,
                 footerDetails: _emptyInlineSpans,
+                isShareFragment: true,
               )
             : CalendarFragmentCard(
                 fragment: CalendarFragment.task(task: calendarTask),
@@ -12793,6 +12857,7 @@ class _GuestChatState extends State<GuestChat> {
   late List<ChatMessage> _messages;
   Locale? _lastLocale;
   var _composerHasText = false;
+  bool get _composerHasContent => _composerHasText;
 
   @override
   void initState() {
@@ -13046,10 +13111,10 @@ class _GuestChatState extends State<GuestChat> {
                   hintText: context.l10n.chatComposerMessageHint,
                   onSend: _handleSend,
                   actions: _composerAccessories(
-                    canSend: _composerHasText,
+                    canSend: _composerHasContent,
                     attachmentsEnabled: false,
                   ),
-                  sendEnabled: _composerHasText,
+                  sendEnabled: _composerHasContent,
                 ),
               ),
             ),
