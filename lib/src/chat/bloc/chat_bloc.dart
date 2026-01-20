@@ -2277,10 +2277,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               body: trimmedText,
             );
             if (kEnableDemoChats && trimmedText.isNotEmpty) {
-              await _messageService.storeDemoOutboundMessageSummary(
+              await _messageService.updateDemoChatSummary(
                 chatJid: chat.jid,
-                body: trimmedText,
-                chatType: chat.type,
+                lastMessage: trimmedText,
               );
             }
           }
@@ -2352,10 +2351,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               final String preview = caption?.trim().isNotEmpty == true
                   ? caption!.trim()
                   : _l10n.chatAttachmentFallbackLabel;
-              await _messageService.storeDemoOutboundMessageSummary(
+              await _messageService.updateDemoChatSummary(
                 chatJid: chat.jid,
-                body: preview,
-                chatType: chat.type,
+                lastMessage: preview,
               );
             }
           }
