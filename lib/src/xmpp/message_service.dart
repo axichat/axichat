@@ -4072,8 +4072,11 @@ mixin MessageService
       await _deleteAttachmentMetadata(staleMetadataIds);
     }
     final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
-      (db) => db.getDraft(savedId),
+      (db) => savedId > 0
+          ? db.getDraft(savedId)
+          : db.getDraftBySyncId(resolvedSyncId),
     );
+    final int resolvedDraftId = savedDraft?.id ?? savedId;
     if (savedDraft != null) {
       try {
         await publishDraftSync(savedDraft);
@@ -4087,7 +4090,7 @@ mixin MessageService
       (db) => db.countDrafts(),
     );
     return DraftSaveResult(
-      draftId: savedId,
+      draftId: resolvedDraftId,
       attachmentMetadataIds: List.unmodifiable(metadataIds),
       draftCount: draftCount,
     );

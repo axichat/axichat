@@ -55,7 +55,7 @@ class RecipientChipsBar extends StatefulWidget {
     this.horizontalPadding = 16,
     this.visibilityLabel,
     this.allowAddressTargets = true,
-    this.showSuggestionsWhenEmpty = false,
+    this.showSuggestionsWhenEmpty = true,
   });
 
   final List<ComposerRecipient> recipients;
@@ -685,6 +685,28 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return addresses;
   }
 
+  Iterable<String> _recentAddressSuggestions() {
+    final seen = <String>{};
+    final recent = <String>[];
+
+    void add(String? raw) {
+      final value = raw?.trim();
+      if (value == null || value.isEmpty) return;
+      final normalized = value.toLowerCase();
+      if (!seen.add(normalized)) return;
+      recent.add(value);
+    }
+
+    for (final suggestion in widget.suggestionAddresses) {
+      add(suggestion);
+    }
+    for (final suggestion in _databaseSuggestionAddresses) {
+      add(suggestion);
+    }
+
+    return recent;
+  }
+
   FanOutRecipientState? _statusFor(ComposerRecipient recipient) {
     final targetChat = recipient.target.chat;
     if (targetChat != null) {
@@ -739,16 +761,19 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
 
     if (query.isEmpty) {
-      for (final chat in candidates) {
-        if (addTarget(FanOutTarget.chat(chat))) {
-          break;
+      for (final address in _recentAddressSuggestions()) {
+        if (addTarget(FanOutTarget.address(address: address))) {
+          return results;
         }
       }
-      if (results.length < _maxAutocompleteSuggestions) {
-        for (final address in knownAddresses) {
-          if (addTarget(FanOutTarget.address(address: address))) {
-            break;
-          }
+      for (final chat in candidates) {
+        if (addTarget(FanOutTarget.chat(chat))) {
+          return results;
+        }
+      }
+      for (final address in knownAddresses) {
+        if (addTarget(FanOutTarget.address(address: address))) {
+          return results;
         }
       }
       return results;
@@ -1221,9 +1246,11 @@ final class _RecipientAutocompleteOverlayState
 
   void _recomputeOptions() {
     final query = widget.controller.text.trim();
-    final next = query.isEmpty && !widget.showSuggestionsWhenEmpty
-        ? const <FanOutTarget>[]
-        : widget.optionsBuilder(query).toList(growable: false);
+    final shouldBuildOptions =
+        query.isNotEmpty || widget.showSuggestionsWhenEmpty;
+    final next = shouldBuildOptions
+        ? widget.optionsBuilder(query).toList(growable: false)
+        : const <FanOutTarget>[];
     if (listEquals(_options, next)) return;
     setState(() => _options = next);
     widget.onOptionsChanged(next);

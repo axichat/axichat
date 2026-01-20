@@ -8047,7 +8047,8 @@ class _ChatState extends State<Chat> {
                             ChatRouteIndex.search => const _ChatSearchOverlay(
                                 panel: _ChatSearchPanel(),
                               ),
-                            ChatRouteIndex.details => const _ChatDetailsOverlay(),
+                            ChatRouteIndex.details =>
+                              const _ChatDetailsOverlay(),
                             ChatRouteIndex.settings => _ChatSettingsOverlay(
                                 state: state,
                                 onViewFilterChanged: _setViewFilter,
@@ -8741,10 +8742,6 @@ class _ChatState extends State<Chat> {
       return;
     }
     _setChatRoute(ChatRouteIndex.search);
-  }
-
-  void _showChatCalendarRoute() {
-    _setChatRoute(ChatRouteIndex.calendar);
   }
 
   void _openChatCalendar() {
