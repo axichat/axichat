@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/base_task_tile.dart';
 import 'package:axichat/src/calendar/view/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
@@ -39,6 +40,7 @@ class ChatCalendarTaskCard extends StatefulWidget {
     this.requireImportConfirmation = false,
     this.allowChatCopy = true,
     this.demoQuickAdd = false,
+    this.isShareFragment = false,
     this.footerDetails = _emptyInlineSpans,
   });
 
@@ -47,6 +49,7 @@ class ChatCalendarTaskCard extends StatefulWidget {
   final bool requireImportConfirmation;
   final bool allowChatCopy;
   final bool demoQuickAdd;
+  final bool isShareFragment;
   final List<InlineSpan> footerDetails;
 
   @override
@@ -74,6 +77,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                   taskInCalendar: taskInCalendar,
                   editMode: editMode,
                 );
+        final bool shareFragment = widget.isShareFragment;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -81,6 +85,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
               task: resolvedTask,
               readOnly: tileReadOnly,
               onTap: tapAction,
+              marginOverride: shareFragment ? _shareMargin() : null,
+              hideActionMenu: shareFragment,
             ),
             if (widget.footerDetails.isNotEmpty)
               Padding(
@@ -423,6 +429,13 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
           CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
         );
   }
+
+  EdgeInsets _shareMargin() {
+    final CalendarResponsiveSpec spec =
+        ResponsiveHelper.specForSizeClass(CalendarSizeClass.compact);
+    final double vertical = spec.contentPadding.vertical / 2;
+    return EdgeInsets.only(top: vertical);
+  }
 }
 
 class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
@@ -431,7 +444,13 @@ class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
     required super.task,
     super.onTap,
     bool readOnly = false,
-  }) : super(isGuestMode: false, compact: true, isReadOnly: readOnly);
+    super.marginOverride,
+    super.hideActionMenu,
+  }) : super(
+          isGuestMode: false,
+          compact: true,
+          isReadOnly: readOnly,
+        );
 
   @override
   State<ChatCalendarTaskTile> createState() => _ChatCalendarTaskTileState();
