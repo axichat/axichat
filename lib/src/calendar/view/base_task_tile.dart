@@ -294,61 +294,75 @@ class _CompactTaskTile extends StatelessWidget {
         color: calendarContainerColor,
         borderRadius: BorderRadius.circular(calendarEventRadius),
         boxShadow: calendarLightShadow,
-        border: Border(
-          left: BorderSide(color: indicatorColor, width: 4),
-          top: BorderSide(color: calendarBorderColor, width: 1),
-          right: BorderSide(color: calendarBorderColor, width: 1),
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
-        ),
+        border: Border.all(color: calendarBorderColor, width: 1),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(calendarEventRadius),
-          child: Padding(
-            padding: calendarPaddingLg,
+          child: IntrinsicHeight(
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _TaskTitle(task: task, maxLines: 1, fontSize: 14),
-                      if (task.hasChecklist) ...[
-                        const SizedBox(height: calendarInsetMd),
-                        TaskChecklistProgressBar(
-                          progress: task.checklistProgress,
-                          activeColor: colors.primary,
-                          backgroundColor: colors.muted.withValues(alpha: 0.2),
-                        ),
-                      ],
-                      if (timeLabel != null) ...[
-                        const SizedBox(height: calendarInsetMd),
-                        _TaskTimeLabel(
-                          text: timeLabel!,
-                          fontSize: 12,
-                          color: timeColor,
-                          fontWeight: timeFontWeight,
-                        ),
-                      ],
-                    ],
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: indicatorColor,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(calendarEventRadius),
+                    ),
                   ),
                 ),
-                if (showActions) ...[
-                  _TaskActionMenu(
-                    onEdit: onEdit,
-                    onDelete: onDelete,
-                    showIcons: false,
-                    iconSize: 20,
+                Expanded(
+                  child: Padding(
+                    padding: calendarPaddingLg,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _TaskTitle(task: task, maxLines: 1, fontSize: 14),
+                              if (task.hasChecklist) ...[
+                                const SizedBox(height: calendarInsetMd),
+                                TaskChecklistProgressBar(
+                                  progress: task.checklistProgress,
+                                  activeColor: colors.primary,
+                                  backgroundColor:
+                                      colors.muted.withValues(alpha: 0.2),
+                                ),
+                              ],
+                              if (timeLabel != null) ...[
+                                const SizedBox(height: calendarInsetMd),
+                                _TaskTimeLabel(
+                                  text: timeLabel!,
+                                  fontSize: 12,
+                                  color: timeColor,
+                                  fontWeight: timeFontWeight,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (showActions) ...[
+                          _TaskActionMenu(
+                            onEdit: onEdit,
+                            onDelete: onDelete,
+                            showIcons: false,
+                            iconSize: 20,
+                          ),
+                          const SizedBox(width: calendarGutterMd),
+                        ],
+                        _TaskCompletionToggle(
+                          isUpdating: isUpdating,
+                          isCompleted: task.isCompleted,
+                          onToggle: onToggleCompletion,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: calendarGutterMd),
-                ],
-                _TaskCompletionToggle(
-                  isUpdating: isUpdating,
-                  isCompleted: task.isCompleted,
-                  onToggle: onToggleCompletion,
                 ),
               ],
             ),
