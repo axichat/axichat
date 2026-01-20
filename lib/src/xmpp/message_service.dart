@@ -893,27 +893,22 @@ mixin MessageService
     }
   }
 
-  Future<void> storeDemoOutboundMessageSummary({
+  Future<void> updateDemoChatSummary({
     required String chatJid,
-    required String body,
-    ChatType chatType = ChatType.chat,
+    required String lastMessage,
   }) async {
     if (!kEnableDemoChats) return;
-    final senderJid = myJid ?? kDemoSelfJid;
     final timestamp = demoNow();
-    final message = Message(
-      stanzaID: uuid.v4(),
-      originID: uuid.v4(),
-      senderJid: senderJid,
-      chatJid: chatJid,
-      body: body,
-      timestamp: timestamp,
-      encryptionProtocol: EncryptionProtocol.none,
-      acked: true,
-      received: false,
-      displayed: true,
-    );
-    await _storeMessage(message, chatType: chatType);
+    await _dbOp<XmppDatabase>((db) async {
+      final chat = await db.getChat(chatJid);
+      if (chat == null) return;
+      await db.updateChat(
+        chat.copyWith(
+          lastMessage: lastMessage,
+          lastChangeTimestamp: timestamp,
+        ),
+      );
+    });
   }
 
   bool _isInternalSyncEnvelope(String? body) {
