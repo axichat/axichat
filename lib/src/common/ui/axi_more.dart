@@ -124,18 +124,11 @@ class _AxiMoreState extends State<AxiMore> {
     final void Function()? popoverAction =
         widget.enabled ? popoverController.toggle : null;
     if (commandSurface == CommandSurface.sheet) {
-      return widget.ghost
-          ? AxiIconButton.ghost(
-              iconData: LucideIcons.ellipsisVertical,
-              tooltip: tooltip,
-              onPressed: sheetAction,
-              usePrimary: widget.usePrimary,
-            )
-          : AxiIconButton(
-              iconData: LucideIcons.ellipsisVertical,
-              tooltip: tooltip,
-              onPressed: sheetAction,
-            );
+      return AxiIconButton.outline(
+        iconData: LucideIcons.ellipsisVertical,
+        tooltip: tooltip,
+        onPressed: sheetAction,
+      );
     }
     return AxiPopover(
       controller: popoverController,
@@ -145,13 +138,12 @@ class _AxiMoreState extends State<AxiMore> {
         return AxiMenu(actions: actions);
       },
       child: widget.ghost
-          ? AxiIconButton.ghost(
+          ? AxiIconButton.outline(
               iconData: LucideIcons.ellipsisVertical,
               tooltip: tooltip,
               onPressed: popoverAction,
-              usePrimary: widget.usePrimary,
             )
-          : AxiIconButton(
+          : AxiIconButton.outline(
               iconData: LucideIcons.ellipsisVertical,
               tooltip: tooltip,
               onPressed: popoverAction,

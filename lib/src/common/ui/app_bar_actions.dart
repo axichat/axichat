@@ -19,7 +19,6 @@ class AppBarActionItem {
     this.onPressed,
     this.enabled = true,
     this.destructive = false,
-    this.usePrimary = true,
     this.tooltip,
   });
 
@@ -31,7 +30,6 @@ class AppBarActionItem {
   final VoidCallback? onPressed;
   final bool enabled;
   final bool destructive;
-  final bool usePrimary;
   final String? tooltip;
 
   AxiMenuAction toMenuAction() {
@@ -122,14 +120,13 @@ class AppBarActions extends StatelessWidget {
                 key: ValueKey<String>(
                     'app-bar-action-${actions[index].iconData}'),
                 child: actions[index].inline ??
-                    AxiIconButton.ghost(
+                    AxiIconButton.outline(
                       iconData: actions[index].iconData,
                       icon: actions[index].icon,
                       tooltip: actions[index].tooltip ?? actions[index].label,
                       onPressed: actions[index].enabled
                           ? actions[index].onPressed
                           : null,
-                      usePrimary: actions[index].usePrimary,
                     ),
               ),
               if (index < actions.length - 1) SizedBox(width: spacing),
