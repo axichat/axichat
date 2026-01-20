@@ -22,6 +22,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -615,11 +616,11 @@ class _ChatListTileState extends State<ChatListTile> {
   void initState() {
     super.initState();
     _focusNode = FocusNode(debugLabel: 'chat-tile-${widget.item.jid}');
-    _timestampNow = DateTime.now();
+    _timestampNow = kEnableDemoChats ? demoNow() : DateTime.now();
     _timestampTicker = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted) return;
       setState(() {
-        _timestampNow = DateTime.now();
+        _timestampNow = kEnableDemoChats ? demoNow() : DateTime.now();
       });
     });
   }
