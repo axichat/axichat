@@ -966,6 +966,33 @@ mixin MessageService
     });
   }
 
+  Future<DateTime> _resolveDemoTimestampForChat(
+    String jid,
+    DateTime candidate,
+  ) async {
+    return _dbOpReturning<XmppDatabase, DateTime>((db) async {
+      final messages = await db.getChatMessages(
+        jid,
+        start: 0,
+        end: 1,
+      );
+      final DateTime? lastTimestamp =
+          messages.isNotEmpty ? messages.first.timestamp : null;
+      if (lastTimestamp == null) {
+        return candidate;
+      }
+      if (candidate.isAfter(lastTimestamp)) {
+        return candidate;
+      }
+      const hourStep = Duration(hours: 1);
+      var next = candidate;
+      while (!next.isAfter(lastTimestamp)) {
+        next = next.add(hourStep);
+      }
+      return next;
+    });
+  }
+
   Future<int> countLocalMessages({
     required String jid,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
@@ -2806,7 +2833,9 @@ mixin MessageService
                 : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData =
         availabilityData ?? taskData ?? fragmentData;
-    final timestamp = offlineDemo ? demoNow() : DateTime.timestamp();
+    final DateTime timestamp = offlineDemo
+        ? await _resolveDemoTimestampForChat(jid, demoNow())
+        : DateTime.timestamp();
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -3046,7 +3075,9 @@ mixin MessageService
     final body = resolvedCaption.isNotEmpty
         ? resolvedCaption
         : _attachmentLabel(filename, size);
-    final timestamp = demoOfflineMode ? demoNow() : DateTime.timestamp();
+    final DateTime timestamp = demoOfflineMode
+        ? await _resolveDemoTimestampForChat(jid, demoNow())
+        : DateTime.timestamp();
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),

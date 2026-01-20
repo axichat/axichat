@@ -3393,7 +3393,12 @@ class _ChatState extends State<Chat> {
         final showToast = ShadToaster.maybeOf(context)?.show;
         return Listener(
           behavior: HitTestBehavior.translucent,
-          onPointerUp: (event) => _maybeDismissSelection(event.position),
+          onPointerUp: (event) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _maybeDismissSelection(event.position);
+            });
+          },
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             child: MultiBlocListener(
@@ -9567,11 +9572,22 @@ class _ChatCalendarPanel extends StatelessWidget {
 class _ChatDetailsOverlay extends StatelessWidget {
   const _ChatDetailsOverlay();
 
+  void _handleBack(BuildContext context) {
+    final chatsCubit = context.read<ChatsCubit>();
+    if (!chatsCubit.state.openChatRoute.isMain) {
+      chatsCubit.setOpenChatRoute(route: ChatRouteIndex.main);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: context.colorScheme.background,
-      child: const SafeArea(top: false, child: ChatMessageDetails()),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (_, __) => _handleBack(context),
+      child: ColoredBox(
+        color: context.colorScheme.background,
+        child: const SafeArea(top: false, child: ChatMessageDetails()),
+      ),
     );
   }
 }
