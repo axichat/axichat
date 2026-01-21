@@ -171,6 +171,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
         await showAdaptiveBottomSheet<void>(
           context: context,
           isScrollControlled: true,
+          useRootNavigator: true,
           backgroundColor: Colors.transparent,
           showCloseButton: false,
           builder: (sheetContext) {
@@ -247,6 +248,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
   await showAdaptiveBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useRootNavigator: true,
     dialogMaxWidth: 760,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     showCloseButton: false,

@@ -55,6 +55,7 @@ Future<void> showCalendarTaskShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
+    useRootNavigator: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,

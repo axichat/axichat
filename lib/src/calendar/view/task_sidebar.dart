@@ -2295,6 +2295,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   Future<bool> _confirmCriticalPathDeletion(CalendarCriticalPath path) async {
     final result = await showAdaptiveBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       dialogMaxWidth: 420,
       surfacePadding: const EdgeInsets.all(calendarGutterLg),
       showCloseButton: false,
@@ -2410,6 +2411,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       await showAdaptiveBottomSheet<void>(
         context: context,
         isScrollControlled: true,
+        useRootNavigator: true,
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {

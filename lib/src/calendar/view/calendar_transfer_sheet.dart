@@ -15,6 +15,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   return showAdaptiveBottomSheet<CalendarExportFormat>(
     context: context,
     useSafeArea: true,
+    useRootNavigator: true,
     showDragHandle: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) {
