@@ -9646,7 +9646,7 @@ class _ChatDetailsOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: true,
+      canPop: false,
       onPopInvokedWithResult: (_, __) => _handleBack(context),
       child: ColoredBox(
         color: context.colorScheme.background,
