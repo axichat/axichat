@@ -245,7 +245,10 @@ mixin DemoScriptService on XmppBase, MessageService {
     required String body,
     List<DemoAttachmentAsset> attachments = const <DemoAttachmentAsset>[],
   }) async {
-    final timestamp = demoNow();
+    final timestamp = await _resolveDemoTimestampForChat(
+      DemoChats.contact1Jid,
+      demoNow(),
+    );
     final fileMetadataId = attachments.isEmpty ? null : attachments.first.id;
     final message = Message(
       stanzaID: _connection.generateId(),

@@ -898,7 +898,7 @@ mixin MessageService
     required String lastMessage,
   }) async {
     if (!kEnableDemoChats) return;
-    final timestamp = demoNow();
+    final timestamp = await _resolveDemoTimestampForChat(chatJid, demoNow());
     await _dbOp<XmppDatabase>((db) async {
       final chat = await db.getChat(chatJid);
       if (chat == null) return;
