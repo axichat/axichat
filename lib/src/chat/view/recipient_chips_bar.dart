@@ -1246,6 +1246,12 @@ final class _RecipientAutocompleteOverlayState
   final GlobalKey _triggerKey = GlobalKey();
   final LayerLink _layerLink = LayerLink();
   final OverlayPortalController _portalController = OverlayPortalController();
+  late final _RecipientAutocompletePopEntry _popEntry =
+      _RecipientAutocompletePopEntry(onPopRequested: () {
+    if (!mounted) return;
+    _dismissOverlay();
+  });
+  ModalRoute<void>? _popEntryRoute;
 
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
@@ -1280,7 +1286,14 @@ final class _RecipientAutocompleteOverlayState
     _syncPortalVisibility();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensurePopEntryRegistered();
+  }
+
   void _syncPortalVisibility() {
+    _ensurePopEntryRegistered();
     final shouldShow = (widget.controller.text.trim().isNotEmpty ||
             widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
@@ -1288,6 +1301,8 @@ final class _RecipientAutocompleteOverlayState
       if (!_portalController.isShowing) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
+          _ensurePopEntryRegistered();
+          _popEntry.setCanPop(false);
           if (!_portalController.isShowing) {
             _portalController.show();
           }
@@ -1297,6 +1312,7 @@ final class _RecipientAutocompleteOverlayState
       if (_portalController.isShowing) {
         _portalController.hide();
       }
+      _popEntry.setCanPop(true);
       widget.onOptionsChanged(const <FanOutTarget>[]);
     }
   }
@@ -1330,6 +1346,8 @@ final class _RecipientAutocompleteOverlayState
     if (_portalController.isShowing) {
       _portalController.hide();
     }
+    _unregisterPopEntry();
+    _popEntry.dispose();
     super.dispose();
   }
 
@@ -1483,7 +1501,21 @@ final class _RecipientAutocompleteOverlayState
     if (_portalController.isShowing) {
       _portalController.hide();
     }
+    _popEntry.setCanPop(true);
     widget.onOptionsChanged(const <FanOutTarget>[]);
+  }
+
+  void _ensurePopEntryRegistered() {
+    final route = ModalRoute.of(context);
+    if (_popEntryRoute == route) return;
+    _popEntryRoute?.unregisterPopEntry(_popEntry);
+    _popEntryRoute = route;
+    _popEntryRoute?.registerPopEntry(_popEntry);
+  }
+
+  void _unregisterPopEntry() {
+    _popEntryRoute?.unregisterPopEntry(_popEntry);
+    _popEntryRoute = null;
   }
 
   @override
@@ -1700,6 +1732,32 @@ final class _RecipientAutocompleteOverlayState
         ),
       ),
     );
+  }
+}
+
+class _RecipientAutocompletePopEntry extends PopEntry<Object?> {
+  _RecipientAutocompletePopEntry({required VoidCallback onPopRequested})
+      : _onPopRequested = onPopRequested;
+
+  final VoidCallback _onPopRequested;
+  final ValueNotifier<bool> _canPopNotifier = ValueNotifier<bool>(true);
+
+  void setCanPop(bool value) {
+    if (_canPopNotifier.value == value) return;
+    _canPopNotifier.value = value;
+  }
+
+  @override
+  ValueListenable<bool> get canPopNotifier => _canPopNotifier;
+
+  @override
+  void onPopInvokedWithResult(bool didPop, Object? result) {
+    if (_canPopNotifier.value) return;
+    _onPopRequested();
+  }
+
+  void dispose() {
+    _canPopNotifier.dispose();
   }
 }
 

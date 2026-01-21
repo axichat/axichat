@@ -75,6 +75,7 @@ Future<DayEventEditorResult?> showDayEventEditor({
   return showAdaptiveBottomSheet<DayEventEditorResult>(
     context: context,
     isScrollControlled: true,
+    useRootNavigator: true,
     dialogMaxWidth: 720,
     surfacePadding: const EdgeInsets.symmetric(
       horizontal: calendarGutterSm,
