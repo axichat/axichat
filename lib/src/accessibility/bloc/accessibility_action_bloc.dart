@@ -22,23 +22,6 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 part 'accessibility_action_event.dart';
 part 'accessibility_action_state.dart';
 
-class _SectionWithInitial {
-  const _SectionWithInitial({required this.section, this.initialIndex});
-
-  final AccessibilityMenuSection section;
-  final int? initialIndex;
-}
-
-class _ConversationSectionsResult {
-  const _ConversationSectionsResult({
-    required this.sections,
-    this.initialMessageIndex,
-  });
-
-  final List<AccessibilityMenuSection> sections;
-  final int? initialMessageIndex;
-}
-
 class AccessibilityActionBloc
     extends Bloc<AccessibilityActionEvent, AccessibilityActionState> {
   AccessibilityActionBloc({
@@ -92,7 +75,6 @@ class AccessibilityActionBloc
   final EmailService? _emailService;
   final RosterService? _rosterService;
   final Logger _log;
-  static const int _messagePageSize = 50;
 
   late AppLocalizations _l10n;
 
@@ -309,11 +291,9 @@ class AccessibilityActionBloc
   ) async {
     final currentEntry = state.stack.last;
     final trimmedMessage = state.composerText.trim();
-    final isConversation =
-        currentEntry.kind == AccessibilityStepKind.composer ||
-            currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            currentEntry.kind == AccessibilityStepKind.conversation;
-    if (!isConversation ||
+    if ((currentEntry.kind != AccessibilityStepKind.composer &&
+            currentEntry.kind != AccessibilityStepKind.chatMessages &&
+            currentEntry.kind != AccessibilityStepKind.conversation) ||
         trimmedMessage.isEmpty ||
         currentEntry.recipients.isEmpty) {
       emit(state.copyWith(errorMessage: _l10n.chatDraftMissingContent));
@@ -483,7 +463,7 @@ class AccessibilityActionBloc
   ) async {
     final trimmed = state.newContactInput.trim();
     if (!trimmed.isValidJid) {
-      emit(state.copyWith(errorMessage: _textInvalidAddress));
+      emit(state.copyWith(errorMessage: _l10n.jidInputInvalid));
       return;
     }
     final contact = AccessibilityContact(
@@ -607,14 +587,13 @@ class AccessibilityActionBloc
     AccessibilityNavigateAction action,
     Emitter<AccessibilityActionState> emit,
   ) {
-    final isChatContext =
-        state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            state.currentEntry.kind == AccessibilityStepKind.conversation ||
-            state.currentEntry.kind == AccessibilityStepKind.composer;
-    final targetIsChat = action.step == AccessibilityStepKind.chatMessages ||
-        action.step == AccessibilityStepKind.conversation ||
-        action.step == AccessibilityStepKind.composer;
-    final leavingChat = isChatContext && !targetIsChat;
+    final leavingChat =
+        (state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
+                state.currentEntry.kind == AccessibilityStepKind.conversation ||
+                state.currentEntry.kind == AccessibilityStepKind.composer) &&
+            action.step != AccessibilityStepKind.chatMessages &&
+            action.step != AccessibilityStepKind.conversation &&
+            action.step != AccessibilityStepKind.composer;
     if (leavingChat) {
       _clearMessageStream();
     }
@@ -797,11 +776,10 @@ class AccessibilityActionBloc
         final recipients = _mergeRecipients(entry.recipients, contact);
         final nextStack = List<AccessibilityStepEntry>.of(state.stack);
         final previousIndex = nextStack.length - 2;
-        final cameFromComposer = previousIndex >= 0 &&
-            nextStack[previousIndex].kind == AccessibilityStepKind.composer;
         final activeJid = recipients.first.jid;
         _startMessageStream(activeJid);
-        if (cameFromComposer) {
+        if (previousIndex >= 0 &&
+            nextStack[previousIndex].kind == AccessibilityStepKind.composer) {
           nextStack[previousIndex] = nextStack[previousIndex].copyWith(
             recipients: recipients,
             addingRecipient: false,
@@ -910,13 +888,19 @@ class AccessibilityActionBloc
       emit(
         state.copyWith(
           busy: false,
-          statusMessage:
-              action.accept ? _textInviteAccepted : _textInviteDismissed,
+          statusMessage: action.accept
+              ? _l10n.accessibilityInviteAccepted
+              : _l10n.accessibilityInviteDismissed,
         ),
       );
     } on XmppException catch (error, stackTrace) {
       _log.warning('Invite decision failed', error, stackTrace);
-      emit(state.copyWith(busy: false, errorMessage: _textInviteUpdateFailed));
+      emit(
+        state.copyWith(
+          busy: false,
+          errorMessage: _l10n.accessibilityInviteUpdateFailed,
+        ),
+      );
     }
     _rebuildSections(emit, state);
   }
@@ -967,8 +951,9 @@ class AccessibilityActionBloc
 
   void _startMessageStream(String jid) {
     _clearMessageStream();
+    const messagePageSize = 50;
     _messageSubscription =
-        _messageService.messageStreamForChat(jid, end: _messagePageSize).listen(
+        _messageService.messageStreamForChat(jid, end: messagePageSize).listen(
       (messages) =>
           add(AccessibilityMessagesUpdated(jid: jid, messages: messages)),
       onError: (error, stackTrace) {
@@ -1096,7 +1081,6 @@ class AccessibilityActionBloc
     AccessibilityActionState baseState,
   ) {
     final entry = baseState.stack.last;
-    int? messageInitialIndex;
     final sections = switch (entry.kind) {
       AccessibilityStepKind.root => _buildRootSections(),
       AccessibilityStepKind.contactPicker => _buildContactSections(
@@ -1104,28 +1088,15 @@ class AccessibilityActionBloc
         ),
       AccessibilityStepKind.unread => _buildUnreadSections(),
       AccessibilityStepKind.invites => _buildInviteSections(),
-      AccessibilityStepKind.composer => () {
-          final result = _buildConversationSections(entry);
-          messageInitialIndex = result.initialMessageIndex;
-          return result.sections;
-        }(),
+      AccessibilityStepKind.composer => _buildConversationSections(entry),
       AccessibilityStepKind.newContact => _buildNewContactSections(),
-      AccessibilityStepKind.chatMessages => () {
-          final result = _buildConversationSections(entry);
-          messageInitialIndex = result.initialMessageIndex;
-          return result.sections;
-        }(),
-      AccessibilityStepKind.conversation => () {
-          final result = _buildConversationSections(entry);
-          messageInitialIndex = result.initialMessageIndex;
-          return result.sections;
-        }(),
+      AccessibilityStepKind.chatMessages => _buildConversationSections(entry),
+      AccessibilityStepKind.conversation => _buildConversationSections(entry),
     };
     emit(
       baseState.copyWith(
         sections: sections,
         recipients: entry.recipients,
-        messageInitialIndex: messageInitialIndex,
       ),
     );
   }
@@ -1141,12 +1112,12 @@ class AccessibilityActionBloc
     sections.add(
       AccessibilityMenuSection(
         id: 'actions',
-        title: _textRootActionsTitle,
+        title: _l10n.accessibilityActionsTitle,
         items: [
           AccessibilityMenuItem(
             id: 'action-start-chat',
-            label: _textStartNewChat,
-            description: _textStartNewChatDescription,
+            label: _l10n.accessibilityStartNewChat,
+            description: _l10n.accessibilityStartNewChatDescription,
             kind: AccessibilityMenuItemKind.navigate,
             action: const AccessibilityNavigateAction(
               step: AccessibilityStepKind.contactPicker,
@@ -1156,8 +1127,8 @@ class AccessibilityActionBloc
           ),
           AccessibilityMenuItem(
             id: 'action-unread',
-            label: _textReadNewMessages,
-            description: _textUnreadSummaryDescription,
+            label: _l10n.accessibilityReadNewMessages,
+            description: _l10n.accessibilityUnreadSummaryDescription,
             kind: AccessibilityMenuItemKind.navigate,
             action: const AccessibilityNavigateAction(
               step: AccessibilityStepKind.unread,
@@ -1298,8 +1269,8 @@ class AccessibilityActionBloc
       items.add(
         AccessibilityMenuItem(
           id: 'new-contact',
-          label: _textNewContactTitle,
-          description: _textNewContactDescription,
+          label: _l10n.accessibilityStartChat,
+          description: _l10n.accessibilityStartChatHint,
           kind: AccessibilityMenuItemKind.navigate,
           action: const AccessibilityNavigateAction(
             step: AccessibilityStepKind.newContact,
@@ -1354,7 +1325,7 @@ class AccessibilityActionBloc
     return [
       AccessibilityMenuSection(
         id: 'unread',
-        title: _textReadNewMessages,
+        title: _l10n.accessibilityReadNewMessages,
         items: items,
       ),
     ];
@@ -1366,7 +1337,7 @@ class AccessibilityActionBloc
       items.addAll([
         AccessibilityMenuItem(
           id: 'invite-accept-${invite.jid}',
-          label: _textAcceptInvite,
+          label: _l10n.accessibilityAcceptInvite,
           description: invite.jid,
           kind: AccessibilityMenuItemKind.inviteDecision,
           action: AccessibilityInviteDecisionAction(
@@ -1377,7 +1348,7 @@ class AccessibilityActionBloc
         ),
         AccessibilityMenuItem(
           id: 'invite-reject-${invite.jid}',
-          label: _textInviteDismissed,
+          label: _l10n.accessibilityInviteDismissed,
           description: invite.jid,
           kind: AccessibilityMenuItemKind.inviteDecision,
           action: AccessibilityInviteDecisionAction(
@@ -1407,32 +1378,31 @@ class AccessibilityActionBloc
     return [
       AccessibilityMenuSection(
         id: 'invites',
-        title: _textInvitesTitle,
+        title: _l10n.accessibilityInvitesTitle,
         items: items,
       ),
     ];
   }
 
-  _SectionWithInitial _buildChatMessageSections(AccessibilityStepEntry entry) {
+  AccessibilityMenuSection _buildChatMessageSections(
+    AccessibilityStepEntry entry,
+  ) {
     final targetJid = entry.recipients.isNotEmpty
         ? entry.recipients.first.jid
         : state.activeChatJid;
     if (targetJid == null) {
-      return _SectionWithInitial(
-        section: AccessibilityMenuSection(
-          id: 'chat-messages',
-          title: _l10n.accessibilityMessagesTitle,
-          items: [
-            AccessibilityMenuItem(
-              id: 'msg-none',
-              label: _l10n.accessibilityNoConversationSelected,
-              description: '',
-              kind: AccessibilityMenuItemKind.readOnly,
-              action: const AccessibilityNoopAction(),
-            ),
-          ],
-        ),
-        initialIndex: 0,
+      return AccessibilityMenuSection(
+        id: 'chat-messages',
+        title: _l10n.accessibilityMessagesTitle,
+        items: [
+          AccessibilityMenuItem(
+            id: 'msg-none',
+            label: _l10n.accessibilityNoConversationSelected,
+            description: '',
+            kind: AccessibilityMenuItemKind.readOnly,
+            action: const AccessibilityNoopAction(),
+          ),
+        ],
       );
     }
     final contact = _contactFor(targetJid);
@@ -1478,10 +1448,7 @@ class AccessibilityActionBloc
       );
       lastSender = senderLabel;
     }
-    var initialIndex = 0;
-    if (items.isNotEmpty) {
-      initialIndex = _initialMessageIndex(messages);
-    } else {
+    if (items.isEmpty) {
       items.add(
         AccessibilityMenuItem(
           id: 'msg-empty',
@@ -1495,36 +1462,30 @@ class AccessibilityActionBloc
     final title = contact.displayName.isEmpty
         ? _l10n.accessibilityMessagesTitle
         : _l10n.accessibilityMessagesWithContact(contact.displayName);
-    return _SectionWithInitial(
-      section: AccessibilityMenuSection(
-        id: 'chat-messages',
-        title: title,
-        items: items,
-      ),
-      initialIndex: initialIndex,
+    return AccessibilityMenuSection(
+      id: 'chat-messages',
+      title: title,
+      items: items,
     );
   }
 
-  _ConversationSectionsResult _buildConversationSections(
+  List<AccessibilityMenuSection> _buildConversationSections(
     AccessibilityStepEntry entry,
   ) {
     final messages = _buildChatMessageSections(entry);
-    return _ConversationSectionsResult(
-      sections: [messages.section],
-      initialMessageIndex: messages.initialIndex,
-    );
+    return [messages];
   }
 
   List<AccessibilityMenuSection> _buildNewContactSections() {
     return [
       AccessibilityMenuSection(
         id: 'new-contact',
-        title: _textSubmitNewContactTitle,
+        title: _l10n.accessibilityStartChat,
         items: [
           AccessibilityMenuItem(
             id: 'new-contact-confirm',
-            label: _textSubmitNewContactTitle,
-            description: _textSubmitNewContactDescription,
+            label: _l10n.accessibilityStartChat,
+            description: _l10n.accessibilityStartChatHint,
             kind: AccessibilityMenuItemKind.command,
             action: const AccessibilityCommandAction(
               command: AccessibilityCommand.confirmNewContact,
@@ -1535,38 +1496,6 @@ class AccessibilityActionBloc
         ],
       ),
     ];
-  }
-
-  int _initialMessageIndex(List<Message> messages) {
-    if (messages.isEmpty) return 0;
-    final latestUnread = _latestIndexFor(messages, onlyUnread: true);
-    if (latestUnread != null) {
-      return latestUnread;
-    }
-    return _latestIndexFor(messages) ?? 0;
-  }
-
-  int? _latestIndexFor(List<Message> messages, {bool onlyUnread = false}) {
-    if (messages.isEmpty) return null;
-    final myBareJid = _chatsService.myJid?.split('/').first;
-    int? latestIndex;
-    DateTime latestTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
-    for (var i = 0; i < messages.length; i++) {
-      final message = messages[i];
-      if (onlyUnread) {
-        final senderBare = message.senderJid.split('/').first;
-        final fromMe = myBareJid != null && senderBare == myBareJid;
-        final unread = !fromMe && !message.displayed;
-        if (!unread) continue;
-      }
-      final timestamp =
-          message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
-      if (latestIndex == null || timestamp.isAfter(latestTimestamp)) {
-        latestIndex = i;
-        latestTimestamp = timestamp;
-      }
-    }
-    return latestIndex;
   }
 
   String _unreadDescription(AccessibilityContact contact) =>
@@ -1587,9 +1516,9 @@ class AccessibilityActionBloc
         nextStack.add(entry);
       }
     }
-    final recipientsChanged =
-        state.recipients.length != 1 || state.recipients.first != contact;
-    if (stackChanged || recipientsChanged) {
+    if (stackChanged ||
+        state.recipients.length != 1 ||
+        state.recipients.first != contact) {
       emit(state.copyWith(stack: nextStack, recipients: [contact]));
     }
   }
@@ -1669,27 +1598,4 @@ class AccessibilityActionBloc
     final title = chat.title.trim();
     return title.isEmpty ? chat.jid : chat.title;
   }
-
-  // ignore: unused_element
-  String get _textNeedsAttention => _l10n.accessibilityNeedsAttention;
-  String get _textReadNewMessages => _l10n.accessibilityReadNewMessages;
-  String get _textUnreadSummaryDescription =>
-      _l10n.accessibilityUnreadSummaryDescription;
-  String get _textRootActionsTitle => _l10n.accessibilityActionsTitle;
-  String get _textStartNewChat => _l10n.accessibilityStartNewChat;
-  String get _textStartNewChatDescription =>
-      _l10n.accessibilityStartNewChatDescription;
-  String get _textInvitesTitle => _l10n.accessibilityInvitesTitle;
-  // ignore: unused_element
-  String get _textPendingInvites => _l10n.accessibilityPendingInvites;
-  String get _textAcceptInvite => _l10n.accessibilityAcceptInvite;
-  String get _textNewContactTitle => _l10n.accessibilityStartChat;
-  String get _textNewContactDescription => _l10n.accessibilityStartChatHint;
-  String get _textSubmitNewContactTitle => _l10n.accessibilityStartChat;
-  String get _textSubmitNewContactDescription =>
-      _l10n.accessibilityStartChatHint;
-  String get _textInvalidAddress => _l10n.jidInputInvalid;
-  String get _textInviteAccepted => _l10n.accessibilityInviteAccepted;
-  String get _textInviteDismissed => _l10n.accessibilityInviteDismissed;
-  String get _textInviteUpdateFailed => _l10n.accessibilityInviteUpdateFailed;
 }

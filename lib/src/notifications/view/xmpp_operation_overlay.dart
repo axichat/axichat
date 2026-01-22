@@ -29,6 +29,7 @@ const double _progressIndicatorStrokeWidth = 2.2;
 const double _statusIconSize = 20.0;
 const double _surfaceBackgroundAlpha = 0.12;
 const Duration _entryFallbackDuration = Duration(milliseconds: 300);
+const Duration _completionExitDelay = Duration(seconds: 1);
 const double _entryOpacityStart = 0.0;
 const double _entryOpacityEnd = 1.0;
 const double _entrySizeStart = 0.0;
@@ -36,8 +37,7 @@ const double _entrySizeEnd = 1.0;
 const double _entrySlideXOffset = 0.22;
 const double _entrySlideYOffset = 0.0;
 const Curve _entryAnimationCurve = Curves.easeOutCubic;
-const Duration _entryStaggerBaseDelay = Duration(milliseconds: 60);
-const int _entryStaggerMaxIndex = 3;
+const Curve _exitAnimationCurve = Curves.easeInCubic;
 
 const EdgeInsets _toastPadding = EdgeInsets.symmetric(
   horizontal: _toastHorizontalPadding,
@@ -47,211 +47,288 @@ const EdgeInsets _overlayListPadding = EdgeInsets.symmetric(
   vertical: _overlayVerticalPadding,
 );
 
-class XmppOperationOverlay extends StatelessWidget {
+class XmppOperationOverlay extends StatefulWidget {
   const XmppOperationOverlay({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<XmppActivityCubit, XmppActivityState>(
-      builder: (context, state) {
-        final operations = state.operations;
-        if (operations.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final mediaQuery = MediaQuery.of(context);
-        final viewPadding = mediaQuery.viewPadding;
-        final bottomInset = mediaQuery.viewInsets.bottom;
-        final safeBottomInset =
-            bottomInset > viewPadding.bottom ? bottomInset : viewPadding.bottom;
-        final leftPadding = _overlayHorizontalPadding + viewPadding.left;
-        final rightPadding = _overlayHorizontalPadding + viewPadding.right;
-        final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
-        final Duration entryDuration = settingsCubit == null
-            ? _entryFallbackDuration
-            : context.select<SettingsCubit, Duration>(
-                (cubit) => cubit.animationDuration,
-              );
-        return IgnorePointer(
-          ignoring: true,
-          child: Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: leftPadding,
-                right: rightPadding,
-                bottom: _overlayBottomPadding + safeBottomInset,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: _overlayMaxWidth,
-                  maxHeight: _overlayMaxHeight,
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: _overlayListPadding,
-                  clipBehavior: Clip.none,
-                  itemCount: operations.length,
-                  itemBuilder: (context, index) {
-                    final operation = operations[index];
-                    final distanceFromBottom = operations.length - 1 - index;
-                    final staggerIndex =
-                        distanceFromBottom > _entryStaggerMaxIndex
-                            ? _entryStaggerMaxIndex
-                            : distanceFromBottom;
-                    final entryDelay = Duration(
-                      milliseconds:
-                          _entryStaggerBaseDelay.inMilliseconds * staggerIndex,
-                    );
-                    return XmppOperationToastEntry(
-                      key: ValueKey(operation.id),
-                      operation: operation,
-                      entryDuration: entryDuration,
-                      entryDelay: entryDelay,
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  State<XmppOperationOverlay> createState() => _XmppOperationOverlayState();
 }
 
-class XmppOperationToastEntry extends StatelessWidget {
-  const XmppOperationToastEntry({
-    super.key,
-    required this.operation,
-    required this.entryDuration,
-    required this.entryDelay,
-  });
+class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  final List<_ToastEntry> _entries = <_ToastEntry>[];
+  final List<XmppOperation> _pendingInsertions = <XmppOperation>[];
+  final Map<String, Timer> _exitTimers = <String, Timer>{};
+  Timer? _insertTimer;
+  bool _isInsertAnimating = false;
 
-  final XmppOperation operation;
-  final Duration entryDuration;
-  final Duration entryDelay;
+  @override
+  void initState() {
+    super.initState();
+    final operations = context.read<XmppActivityCubit>().state.operations;
+    _syncOperations(operations);
+  }
+
+  @override
+  void dispose() {
+    _insertTimer?.cancel();
+    for (final timer in _exitTimers.values) {
+      timer.cancel();
+    }
+    _exitTimers.clear();
+    super.dispose();
+  }
+
+  Duration _entryDuration() {
+    final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
+    if (settingsCubit == null) {
+      return _entryFallbackDuration;
+    }
+    return settingsCubit.animationDuration;
+  }
+
+  void _syncOperations(List<XmppOperation> operations) {
+    final Map<String, XmppOperation> incoming = <String, XmppOperation>{
+      for (final operation in operations) operation.id: operation,
+    };
+    var shouldRebuild = false;
+
+    for (final entry in _entries) {
+      final XmppOperation? updated = incoming.remove(entry.operation.id);
+      if (updated == null) {
+        if (entry.operation.status != XmppOperationStatus.inProgress) {
+          _removeEntry(entry.operation.id);
+        }
+        continue;
+      }
+      if (updated.status != entry.operation.status ||
+          updated.startedAt != entry.operation.startedAt) {
+        entry.operation = updated;
+        shouldRebuild = true;
+        if (updated.status == XmppOperationStatus.inProgress) {
+          _cancelExitTimer(updated.id);
+        } else {
+          _scheduleExit(updated.id);
+        }
+      }
+    }
+
+    _syncPendingInsertions(operations);
+    for (final operation in operations) {
+      if (incoming.containsKey(operation.id)) {
+        _queueInsertion(operation);
+      }
+    }
+
+    if (shouldRebuild) {
+      setState(() {});
+    }
+  }
+
+  void _syncPendingInsertions(List<XmppOperation> operations) {
+    final Map<String, XmppOperation> incoming = <String, XmppOperation>{
+      for (final operation in operations) operation.id: operation,
+    };
+    _pendingInsertions.removeWhere((pending) {
+      final XmppOperation? updated = incoming[pending.id];
+      return updated == null ||
+          updated.status != XmppOperationStatus.inProgress;
+    });
+    for (var index = 0; index < _pendingInsertions.length; index += 1) {
+      final pending = _pendingInsertions[index];
+      final XmppOperation? updated = incoming[pending.id];
+      if (updated != null && updated != pending) {
+        _pendingInsertions[index] = updated;
+      }
+    }
+  }
+
+  void _queueInsertion(XmppOperation operation) {
+    if (operation.status != XmppOperationStatus.inProgress) {
+      return;
+    }
+    if (_entries.any((entry) => entry.operation.id == operation.id)) {
+      return;
+    }
+    final int pendingIndex =
+        _pendingInsertions.indexWhere((entry) => entry.id == operation.id);
+    if (pendingIndex != -1) {
+      _pendingInsertions[pendingIndex] = operation;
+      return;
+    }
+    _pendingInsertions.add(operation);
+    _processInsertQueue();
+  }
+
+  void _processInsertQueue() {
+    if (!mounted || _isInsertAnimating || _pendingInsertions.isEmpty) {
+      return;
+    }
+    if (_listKey.currentState == null) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _processInsertQueue());
+      return;
+    }
+    final XmppOperation operation = _pendingInsertions.removeAt(0);
+    final _ToastEntry entry = _ToastEntry(operation: operation);
+    _isInsertAnimating = true;
+    _entries.insert(0, entry);
+    _listKey.currentState?.insertItem(0, duration: _entryDuration());
+    setState(() {});
+    _startInsertCooldown();
+  }
+
+  void _startInsertCooldown() {
+    _insertTimer?.cancel();
+    final duration = _entryDuration();
+    if (duration == Duration.zero) {
+      _isInsertAnimating = false;
+      _processInsertQueue();
+      return;
+    }
+    _insertTimer = Timer(duration, () {
+      if (!mounted) return;
+      _isInsertAnimating = false;
+      _processInsertQueue();
+    });
+  }
+
+  void _scheduleExit(String id) {
+    _cancelExitTimer(id);
+    _exitTimers[id] = Timer(_completionExitDelay, () {
+      if (!mounted) return;
+      _removeEntry(id);
+    });
+  }
+
+  void _cancelExitTimer(String id) {
+    final Timer? timer = _exitTimers.remove(id);
+    timer?.cancel();
+  }
+
+  void _removeEntry(String id) {
+    _cancelExitTimer(id);
+    final int index = _entries.indexWhere((entry) => entry.operation.id == id);
+    if (index == -1) {
+      return;
+    }
+    final _ToastEntry entry = _entries.removeAt(index)..isRemoving = true;
+    _listKey.currentState?.removeItem(
+      index,
+      (context, animation) {
+        return XmppOperationAnimatedItem(
+          operation: entry.operation,
+          animation: animation,
+        );
+      },
+      duration: _entryDuration(),
+    );
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        bottom: _overlayItemSpacing + _toastShadowPadding,
-      ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: XmppOperationEntryTransition(
-          duration: entryDuration,
-          delay: entryDelay,
-          child: _XmppOperationToast(operation: operation),
+    return BlocListener<XmppActivityCubit, XmppActivityState>(
+      listener: (context, state) => _syncOperations(state.operations),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: _overlayHorizontalPadding +
+                  MediaQuery.of(context).viewPadding.left,
+              right: _overlayHorizontalPadding +
+                  MediaQuery.of(context).viewPadding.right,
+              bottom: _overlayBottomPadding +
+                  (MediaQuery.of(context).viewInsets.bottom >
+                          MediaQuery.of(context).viewPadding.bottom
+                      ? MediaQuery.of(context).viewInsets.bottom
+                      : MediaQuery.of(context).viewPadding.bottom),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: _overlayMaxWidth,
+                maxHeight: _overlayMaxHeight,
+              ),
+              child: AnimatedList(
+                key: _listKey,
+                reverse: true,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: _overlayListPadding,
+                clipBehavior: Clip.none,
+                initialItemCount: _entries.length,
+                itemBuilder: (context, index, animation) {
+                  final _ToastEntry entry = _entries[index];
+                  return XmppOperationAnimatedItem(
+                    operation: entry.operation,
+                    animation: animation,
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class XmppOperationEntryTransition extends StatefulWidget {
-  const XmppOperationEntryTransition({
+class XmppOperationAnimatedItem extends StatelessWidget {
+  const XmppOperationAnimatedItem({
     super.key,
-    required this.duration,
-    required this.delay,
-    required this.child,
+    required this.operation,
+    required this.animation,
   });
 
-  final Duration duration;
-  final Duration delay;
-  final Widget child;
-
-  @override
-  State<XmppOperationEntryTransition> createState() =>
-      _XmppOperationEntryTransitionState();
-}
-
-class _XmppOperationEntryTransitionState
-    extends State<XmppOperationEntryTransition>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<double> _sizeAnimation;
-  late final Animation<Offset> _slideAnimation;
-  Timer? _delayTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(duration: widget.duration, vsync: this);
-    final CurvedAnimation curve = CurvedAnimation(
-      parent: _controller,
-      curve: _entryAnimationCurve,
-    );
-    _fadeAnimation = Tween<double>(
-      begin: _entryOpacityStart,
-      end: _entryOpacityEnd,
-    ).animate(curve);
-    _sizeAnimation = Tween<double>(
-      begin: _entrySizeStart,
-      end: _entrySizeEnd,
-    ).animate(curve);
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(_entrySlideXOffset, _entrySlideYOffset),
-      end: Offset.zero,
-    ).animate(curve);
-    _startAnimation();
-  }
-
-  void _startAnimation() {
-    if (widget.duration == Duration.zero) {
-      _controller.value = _entryOpacityEnd;
-      return;
-    }
-    if (widget.delay == Duration.zero) {
-      _controller.forward();
-      return;
-    }
-    _delayTimer = Timer(widget.delay, () {
-      if (!mounted) return;
-      _controller.forward();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant XmppOperationEntryTransition oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.duration != widget.duration) {
-      _controller.duration = widget.duration;
-    }
-    if (oldWidget.delay != widget.delay && _controller.isDismissed) {
-      _delayTimer?.cancel();
-      _startAnimation();
-    }
-  }
+  final XmppOperation operation;
+  final Animation<double> animation;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      child: widget.child,
-      builder: (context, child) {
-        return Align(
-          alignment: Alignment.bottomLeft,
-          heightFactor: _sizeAnimation.value,
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: child,
-            ),
-          ),
-        );
-      },
+    final CurvedAnimation curve = CurvedAnimation(
+      parent: animation,
+      curve: _entryAnimationCurve,
+      reverseCurve: _exitAnimationCurve,
     );
-  }
-
-  @override
-  void dispose() {
-    _delayTimer?.cancel();
-    _controller.dispose();
-    super.dispose();
+    final Animation<double> fadeAnimation = Tween<double>(
+      begin: _entryOpacityStart,
+      end: _entryOpacityEnd,
+    ).animate(curve);
+    final Animation<double> sizeAnimation = Tween<double>(
+      begin: _entrySizeStart,
+      end: _entrySizeEnd,
+    ).animate(curve);
+    final Animation<Offset> slideAnimation = Tween<Offset>(
+      begin: const Offset(_entrySlideXOffset, _entrySlideYOffset),
+      end: Offset.zero,
+    ).animate(curve);
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: _overlayItemSpacing + _toastShadowPadding,
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: AnimatedBuilder(
+          animation: curve,
+          child: _XmppOperationToast(operation: operation),
+          builder: (context, child) {
+            return Align(
+              alignment: Alignment.bottomLeft,
+              heightFactor: sizeAnimation.value,
+              child: FadeTransition(
+                opacity: fadeAnimation,
+                child: SlideTransition(
+                  position: slideAnimation,
+                  child: child,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -344,4 +421,11 @@ class _OperationStatusIcon extends StatelessWidget {
         ),
     };
   }
+}
+
+class _ToastEntry {
+  _ToastEntry({required this.operation}) : isRemoving = false;
+
+  XmppOperation operation;
+  bool isRemoving;
 }

@@ -9,8 +9,8 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:logging/logging.dart';
 
-const Duration _defaultCompletedRetention = Duration(seconds: 2);
-const Duration _defaultFailedRetention = Duration(seconds: 6);
+const Duration _defaultCompletedRetention = Duration(seconds: 1);
+const Duration _defaultFailedRetention = Duration(seconds: 1);
 const Duration _minimumInProgressDuration = Duration(milliseconds: 350);
 const int _operationIdLength = 10;
 const String _operationIdSeparator = '-';
