@@ -542,7 +542,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     }
   }
 
-  AxiPubSubNodeConfig _nodeConfig(mox.AccessModel accessModel) =>
+  AxiPubSubNodeConfig _nodeConfig(
+    mox.AccessModel accessModel, {
+    String? sendLastPublishedItem,
+  }) =>
       AxiPubSubNodeConfig(
         accessModel: accessModel,
         publishModel: _publishModelPublishers,
@@ -555,11 +558,17 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: null,
+        sendLastPublishedItem: sendLastPublishedItem,
       );
 
-  mox.NodeConfig _createNodeConfig(mox.AccessModel accessModel) =>
-      _nodeConfig(accessModel).withoutSendLastPublishedItem().toNodeConfig();
+  mox.NodeConfig _createNodeConfig(
+    mox.AccessModel accessModel, {
+    String? sendLastPublishedItem,
+  }) =>
+      _nodeConfig(
+        accessModel,
+        sendLastPublishedItem: sendLastPublishedItem,
+      ).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -626,6 +635,15 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
 
+  Future<String?> _resolveSendLastPublishedItem(
+    SafePubSubManager pubsub,
+    mox.JID host,
+  ) =>
+      pubsub.resolveSendLastPublishedItemForNode(
+        host: host,
+        node: draftsPubSubNode,
+      );
+
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
     if (normalized.isEmpty) return null;
@@ -672,7 +690,12 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_draftsEnsureStartEvent);
     try {
-      final primaryConfig = _nodeConfig(mox.AccessModel.whitelist);
+      final sendLastPublishedItem =
+          await _resolveSendLastPublishedItem(pubsub, host);
+      final primaryConfig = _nodeConfig(
+        mox.AccessModel.whitelist,
+        sendLastPublishedItem: sendLastPublishedItem,
+      );
       final primaryError = await _configureNodeWithFallback(
         pubsub,
         host,
@@ -685,7 +708,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         return;
       }
 
-      final fallbackConfig = _nodeConfig(mox.AccessModel.authorize);
+      final fallbackConfig = _nodeConfig(
+        mox.AccessModel.authorize,
+        sendLastPublishedItem: sendLastPublishedItem,
+      );
       final fallbackError = await _configureNodeWithFallback(
         pubsub,
         host,
@@ -707,7 +733,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          primaryConfig.withoutSendLastPublishedItem().toNodeConfig(),
+          primaryConfig.toNodeConfig(),
           nodeId: draftsPubSubNode,
         );
         final appliedError = await _configureNodeWithFallback(
@@ -728,7 +754,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          fallbackConfig.withoutSendLastPublishedItem().toNodeConfig(),
+          fallbackConfig.toNodeConfig(),
           nodeId: draftsPubSubNode,
         );
         final appliedError = await _configureNodeWithFallback(

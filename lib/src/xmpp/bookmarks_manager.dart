@@ -270,7 +270,8 @@ final class BookmarksManager extends mox.XmppManagerBase {
     }
   }
 
-  AxiPubSubNodeConfig _nodeConfig() => AxiPubSubNodeConfig(
+  AxiPubSubNodeConfig _nodeConfig({String? sendLastPublishedItem}) =>
+      AxiPubSubNodeConfig(
         accessModel: mox.AccessModel.whitelist,
         publishModel: _publishModelPublishers,
         deliverNotifications: _deliverNotificationsEnabled,
@@ -282,10 +283,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: null,
+        sendLastPublishedItem: sendLastPublishedItem,
       );
 
-  mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
+  mox.NodeConfig _createNodeConfig({String? sendLastPublishedItem}) =>
+      _nodeConfig(sendLastPublishedItem: sendLastPublishedItem).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -330,6 +332,15 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+
+  Future<String?> _resolveSendLastPublishedItem(
+    SafePubSubManager pubsub,
+    mox.JID host,
+  ) =>
+      pubsub.resolveSendLastPublishedItemForNode(
+        host: host,
+        node: _bookmarksNode,
+      );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -377,7 +388,9 @@ final class BookmarksManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_bookmarksEnsureStartEvent);
     try {
-      final config = _nodeConfig();
+      final sendLastPublishedItem =
+          await _resolveSendLastPublishedItem(pubsub, host);
+      final config = _nodeConfig(sendLastPublishedItem: sendLastPublishedItem);
       final configuredError = await _configureNodeWithFallback(
         pubsub,
         host,
@@ -398,7 +411,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          _createNodeConfig(),
+          config.toNodeConfig(),
           nodeId: _bookmarksNode,
         );
         final appliedError = await _configureNodeWithFallback(
