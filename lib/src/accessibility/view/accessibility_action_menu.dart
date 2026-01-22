@@ -836,19 +836,16 @@ class _AccessibilityActionContent extends StatelessWidget {
         .toList();
     final messageSection =
         messageSections.isNotEmpty ? messageSections.first : null;
-    int messageInitialIndex(List<AccessibilityMenuItem> items) {
+    int messageInitialIndex(
+      List<AccessibilityMenuItem> items,
+      int unreadCount,
+    ) {
       if (items.isEmpty) return 0;
-      var latestUnreadIndex = -1;
-      for (var i = 0; i < items.length; i++) {
-        final message = items[i].message;
-        if (message != null && !message.displayed) {
-          latestUnreadIndex = i;
-        }
+      final index = items.length - unreadCount;
+      if (index < 0) {
+        return 0;
       }
-      if (latestUnreadIndex != -1) {
-        return latestUnreadIndex;
-      }
-      return items.length - 1;
+      return index >= items.length ? items.length - 1 : index;
     }
 
     final actionSections = hasNewContact
@@ -958,16 +955,21 @@ class _AccessibilityActionContent extends StatelessWidget {
           ),
         if (state.statusMessage != null || state.errorMessage != null)
           const SizedBox(height: 12),
-        if (messageSection case final section?)
+        if (messageSection != null)
           FocusTraversalOrder(
             order: messagesOrder,
             child: _AccessibilityGroupMarker(
               group: messageCarouselKey,
               child: _MessageCarousel(
                 key: messageCarouselKey,
-                section: section,
+                section: messageSection,
                 focusNode: messageFocusNode,
-                initialIndex: messageInitialIndex(section.items),
+                initialIndex: messageInitialIndex(
+                  messageSection.items,
+                  state.recipients.length == 1
+                      ? state.recipients.first.unreadCount
+                      : 0,
+                ),
               ),
             ),
           ),
