@@ -613,6 +613,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _ensureUnreadWindowLoaded({
+    required Chat chat,
+    required int desiredWindow,
+  }) async {
+    if (chat.unreadCount <= _emptyMessageCount) {
+      return;
+    }
+    var localCount = await _archivedMessageCount(chat);
+    if (localCount >= desiredWindow) {
+      return;
+    }
+    if (chat.defaultTransport.isEmail) {
+      while (localCount < desiredWindow) {
+        await _loadEarlierFromEmail(desiredWindow: desiredWindow);
+        final refreshed = await _archivedMessageCount(chat);
+        if (refreshed <= localCount) {
+          break;
+        }
+        localCount = refreshed;
+      }
+      return;
+    }
+    if (!_xmppAllowedForChat(chat)) {
+      return;
+    }
+    if (_mamBeforeId == null && state.items.isEmpty) {
+      await _hydrateLatestFromMam(chat);
+      localCount = await _archivedMessageCount(chat);
+    }
+    while (localCount < desiredWindow && !_mamComplete) {
+      await _loadEarlierFromMam(desiredWindow: desiredWindow);
+      final refreshed = await _archivedMessageCount(chat);
+      if (refreshed <= localCount) {
+        break;
+      }
+      localCount = refreshed;
+    }
+  }
+
   Future<void> _catchUpFromMam() async {
     final chat = state.chat;
     if (chat == null) return;
@@ -982,6 +1021,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
         ? forcedViewFilter
         : state.viewFilter;
+    final unreadCount = event.chat.unreadCount;
+    final desiredLimit =
+        unreadCount > messageBatchSize ? unreadCount : messageBatchSize;
     emit(
       state.copyWith(
         chat: event.chat,
@@ -1021,11 +1063,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     if (resetContext) {
       await _subscribeToMessages(
-        limit: _currentMessageLimit,
-        filter: state.viewFilter,
+        limit: desiredLimit,
+        filter: nextViewFilter,
       );
       await _prefetchPeerAvatar(event.chat);
+    } else if (desiredLimit > _currentMessageLimit) {
+      await _subscribeToMessages(
+        limit: desiredLimit,
+        filter: nextViewFilter,
+      );
     }
+    await _ensureUnreadWindowLoaded(
+      chat: event.chat,
+      desiredWindow: desiredLimit,
+    );
     if (typingContextChanged) {
       await _subscribeToTypingParticipants(event.chat);
     }

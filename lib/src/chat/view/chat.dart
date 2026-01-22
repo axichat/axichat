@@ -1029,6 +1029,7 @@ class _ChatState extends State<Chat> {
   final _messageKeys = <String, GlobalKey>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
+  final Object _composerTapRegionGroup = Object();
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _selectionActionBarKey;
   GlobalKey? _reactionManagerKey;
@@ -3448,16 +3449,15 @@ class _ChatState extends State<Chat> {
               (trimmedQuery.isNotEmpty || hasSubjectFilter);
           final searchResults = searchState.results;
           final showToast = ShadToaster.maybeOf(context)?.show;
-          return Listener(
+          return GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onPointerUp: (event) => _maybeDismissSelection(event.position),
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              child: MultiBlocListener(
-                listeners: [
-                  BlocListener<ChatSearchCubit, ChatSearchState>(
-                    listenWhen: (previous, current) =>
-                        previous.active != current.active,
+            onTapUp: (details) =>
+                _maybeDismissSelection(details.globalPosition),
+            child: MultiBlocListener(
+              listeners: [
+                BlocListener<ChatSearchCubit, ChatSearchState>(
+                  listenWhen: (previous, current) =>
+                      previous.active != current.active,
                     listener: (_, searchState) {
                       if (!mounted) return;
                       if (searchState.active) {
@@ -5059,6 +5059,8 @@ class _ChatState extends State<Chat> {
                                                       textController:
                                                           _textController,
                                                       textFocusNode: _focusNode,
+                                                      tapRegionGroup:
+                                                          _composerTapRegionGroup,
                                                       onSubjectSubmitted: () =>
                                                           _focusNode
                                                               .requestFocus(),
@@ -8255,7 +8257,7 @@ class _ChatState extends State<Chat> {
                 ),
               ),
             ),
-          );
+          )
         },
       ),
     );
@@ -10997,6 +10999,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.subjectFocusNode,
     required this.textController,
     required this.textFocusNode,
+    required this.tapRegionGroup,
     required this.onSubjectSubmitted,
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
@@ -11026,6 +11029,7 @@ class _ChatComposerSection extends StatelessWidget {
   final FocusNode subjectFocusNode;
   final TextEditingController textController;
   final FocusNode textFocusNode;
+  final Object tapRegionGroup;
   final VoidCallback onSubjectSubmitted;
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
@@ -11211,14 +11215,25 @@ class _ChatComposerSection extends StatelessWidget {
         onRecipientRemoved: onRecipientRemoved,
         onRecipientToggled: onRecipientToggled,
         visibilityLabel: visibilityLabel,
+        tapRegionGroup: tapRegionGroup,
       ),
     );
     children.add(composer);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
+    return TapRegion(
+      groupId: tapRegionGroup,
+      onTapOutside: (_) {
+        if (!textFocusNode.hasFocus && !subjectFocusNode.hasFocus) {
+          return;
+        }
+        textFocusNode.unfocus();
+        subjectFocusNode.unfocus();
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
       ),
     );
   }
@@ -11365,7 +11380,7 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+          );
         ),
       ),
     );

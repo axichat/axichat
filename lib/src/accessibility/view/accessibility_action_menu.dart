@@ -836,6 +836,19 @@ class _AccessibilityActionContent extends StatelessWidget {
         .toList();
     final messageSection =
         messageSections.isNotEmpty ? messageSections.first : null;
+    int activeUnreadCount(
+      String? activeJid,
+      List<AccessibilityContact> recipients,
+    ) {
+      if (activeJid == null) return 0;
+      for (final recipient in recipients) {
+        if (recipient.jid == activeJid) {
+          return recipient.unreadCount;
+        }
+      }
+      return 0;
+    }
+
     int messageInitialIndex(
       List<AccessibilityMenuItem> items,
       int unreadCount,
@@ -966,9 +979,7 @@ class _AccessibilityActionContent extends StatelessWidget {
                 focusNode: messageFocusNode,
                 initialIndex: messageInitialIndex(
                   messageSection.items,
-                  state.recipients.length == 1
-                      ? state.recipients.first.unreadCount
-                      : 0,
+                  activeUnreadCount(state.activeChatJid, state.recipients),
                 ),
               ),
             ),

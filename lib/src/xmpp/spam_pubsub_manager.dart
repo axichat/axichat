@@ -26,7 +26,6 @@ const String _spamUpdatedAtAttr = 'updated_at';
 const String _spamSourceIdAttr = 'source_id';
 const String _publishModelPublishers = 'publishers';
 const String _sendLastOnSub = 'on_sub';
-const String _sendLastOnSubscribe = 'on_subscribe';
 const String _defaultMaxItems = '$spamSyncMaxItems';
 const String _spamSourceIdFallback = syncLegacySourceId;
 const bool _notifyEnabled = true;
@@ -179,6 +178,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
   bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureNodeCompleter;
+  Completer<void>? _subscribeCompleter;
 
   @override
   Future<bool> isSupported() async => true;
@@ -187,6 +189,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
+      _subscriptionReady = false;
       fireAndForget(
         _bootstrap,
         operationName: _spamPubSubBootstrapOperationName,
@@ -266,36 +269,6 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     }
     final sendLastValue = config.sendLastPublishedItem?.trim();
     final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
-    if (hasSendLast && sendLastValue == _sendLastOnSub) {
-      logger.fine(
-        'PubSub node config retry with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value}.',
-      );
-      final subscribeConfig = config.withSendLastPublishedItem(
-        _sendLastOnSubscribe,
-      );
-      final subscribeResult = await pubsub.configureNode(
-        host,
-        node,
-        subscribeConfig,
-      );
-      if (!subscribeResult.isType<mox.PubSubError>()) {
-        logger.fine(
-          'PubSub node configured with send_last=on_subscribe. node=$node '
-          'accessModel=${config.accessModel.value}.',
-        );
-        return null;
-      }
-      error = subscribeResult.get<mox.PubSubError>();
-      logger.fine(
-        'PubSub node config failed with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value} '
-        'error=${error.runtimeType}.',
-      );
-      if (error.indicatesMissingNode) {
-        return error;
-      }
-    }
     if (!hasSendLast) {
       return error;
     }
