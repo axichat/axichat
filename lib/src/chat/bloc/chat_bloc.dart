@@ -1061,6 +1061,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         viewFilter: nextViewFilter,
       ),
     );
+    _resetMamCursors(resetContext);
     if (resetContext) {
       await _subscribeToMessages(
         limit: desiredLimit,
@@ -1083,7 +1084,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (pinnedContextChanged) {
       await _subscribeToPinnedMessages(event.chat);
     }
-    _resetMamCursors(resetContext);
     if (_xmppAllowedForChat(event.chat) &&
         !_shouldSkipInitialMamSync(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
@@ -1237,6 +1237,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         items: filteredItems,
         allowSend: lifecycleState == AppLifecycleState.resumed,
       );
+    }
+    final updatedChat = state.chat;
+    if (updatedChat != null) {
+      final unreadCount = updatedChat.unreadCount;
+      if (unreadCount > _emptyMessageCount) {
+        final filteredOutCount = event.items.length - filteredItems.length;
+        final desiredWindow = unreadCount + filteredOutCount;
+        final desiredLimit =
+            desiredWindow > messageBatchSize ? desiredWindow : messageBatchSize;
+        if (desiredLimit > _currentMessageLimit) {
+          await _subscribeToMessages(
+            limit: desiredLimit,
+            filter: state.viewFilter,
+          );
+        }
+        await _ensureUnreadWindowLoaded(
+          chat: updatedChat,
+          desiredWindow: desiredLimit,
+        );
+      }
     }
   }
 

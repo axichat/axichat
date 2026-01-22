@@ -25,8 +25,6 @@ const String _blockAddressAttr = 'address';
 const String _blockUpdatedAtAttr = 'updated_at';
 const String _blockSourceIdAttr = 'source_id';
 const String _publishModelPublishers = 'publishers';
-const String _sendLastOnSub = 'on_sub';
-const String _sendLastOnSubscribe = 'on_subscribe';
 const String _defaultMaxItems = '$emailBlocklistSyncMaxItems';
 const String _blockSourceIdFallback = syncLegacySourceId;
 const bool _notifyEnabled = true;
@@ -185,6 +183,9 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
   bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureNodeCompleter;
+  Completer<void>? _subscribeCompleter;
 
   @override
   Future<bool> isSupported() async => true;
@@ -193,6 +194,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
+      _subscriptionReady = false;
       fireAndForget(
         _bootstrap,
         operationName: _emailBlocklistBootstrapOperationName,
@@ -248,7 +250,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastOnSub,
+        sendLastPublishedItem: null,
       );
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
@@ -272,36 +274,6 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     }
     final sendLastValue = config.sendLastPublishedItem?.trim();
     final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
-    if (hasSendLast && sendLastValue == _sendLastOnSub) {
-      logger.fine(
-        'PubSub node config retry with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value}.',
-      );
-      final subscribeConfig = config.withSendLastPublishedItem(
-        _sendLastOnSubscribe,
-      );
-      final subscribeResult = await pubsub.configureNode(
-        host,
-        node,
-        subscribeConfig,
-      );
-      if (!subscribeResult.isType<mox.PubSubError>()) {
-        logger.fine(
-          'PubSub node configured with send_last=on_subscribe. node=$node '
-          'accessModel=${config.accessModel.value}.',
-        );
-        return null;
-      }
-      error = subscribeResult.get<mox.PubSubError>();
-      logger.fine(
-        'PubSub node config failed with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value} '
-        'error=${error.runtimeType}.',
-      );
-      if (error.indicatesMissingNode) {
-        return error;
-      }
-    }
     if (!hasSendLast) {
       return error;
     }
@@ -332,7 +304,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastOnSub,
+        sendLastPublishedItem: null,
       );
 
   mox.JID? _selfPepHost() {
@@ -378,7 +350,15 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
+    if (_nodeReady) return;
+    final activeCompleter = _ensureNodeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
+      return;
+    }
     if (!_shouldAttemptEnsureNode()) return;
+    final completer = Completer<void>();
+    _ensureNodeCompleter = completer;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
     var success = false;
@@ -488,6 +468,8 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       }
     } finally {
       _ensureNodeInFlight = false;
+      _ensureNodeCompleter = null;
+      completer.complete();
       getAttributes().sendEvent(
         success
             ? _emailBlocklistEnsureSuccessEvent
@@ -508,11 +490,25 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-    final result = await pubsub.subscribe(host, emailBlocklistPubSubNode);
-    if (result.isType<mox.PubSubError>()) {
-      final error = result.get<mox.PubSubError>();
-      if (error is mox.MalformedResponseError) return;
+    if (_subscriptionReady) return;
+    final activeCompleter = _subscribeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
       return;
+    }
+    final completer = Completer<void>();
+    _subscribeCompleter = completer;
+    try {
+      final result = await pubsub.subscribe(host, emailBlocklistPubSubNode);
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        if (error is mox.MalformedResponseError) return;
+        return;
+      }
+      _subscriptionReady = true;
+    } finally {
+      _subscribeCompleter = null;
+      completer.complete();
     }
   }
 
@@ -735,7 +731,11 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     }
     if (subscriberJid.toString() != host.toString()) return;
 
-    if (event.state == mox.SubscriptionState.subscribed) return;
+    if (event.state == mox.SubscriptionState.subscribed) {
+      _subscriptionReady = true;
+      return;
+    }
+    _subscriptionReady = false;
     await subscribe();
   }
 
@@ -746,6 +746,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
@@ -763,6 +764,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {

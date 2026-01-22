@@ -971,7 +971,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
                 ],
               ),
             ),
-          );
+          ),
         }
         return RoomMembersSheet(
           roomState: roomState,
@@ -8257,7 +8257,6 @@ class _ChatState extends State<Chat> {
                 ),
               ),
             ),
-          )
         },
       ),
     );
@@ -12191,7 +12190,6 @@ class _CalendarTextSelectionDialogState
                 ),
               ),
             ),
-          );
         },
       ),
     );
