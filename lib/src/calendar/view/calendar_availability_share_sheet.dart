@@ -1230,11 +1230,13 @@ class _AvailabilityActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const spinner = SizedBox(
+    final spinnerColor = context.colorScheme.primaryForeground;
+    final spinner = SizedBox(
       width: _availabilitySheetHeaderIconSize,
       height: _availabilitySheetHeaderIconSize,
       child: CircularProgressIndicator(
         strokeWidth: _availabilitySheetProgressStrokeWidth,
+        valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
       ),
     );
     return Row(

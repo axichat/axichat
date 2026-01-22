@@ -247,6 +247,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         context: context,
         isScrollControlled: true,
         useRootNavigator: true,
+        showCloseButton: true,
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {
           return StatefulBuilder(
@@ -388,8 +389,14 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                       availableHeight.isFinite && availableHeight > 0
                           ? math.min(desiredHeight, availableHeight)
                           : desiredHeight;
+                  const EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
+                    calendarGutterLg,
+                    calendarInsetSm,
+                    calendarGutterLg,
+                    calendarGutterLg,
+                  );
                   return Padding(
-                    padding: const EdgeInsets.all(calendarGutterLg),
+                    padding: sheetPadding,
                     child: _DeadlineSheetContent(
                       maxHeight: maxHeight,
                       showTimeSelectors: widget.showTimeSelectors,

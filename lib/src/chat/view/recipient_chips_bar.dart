@@ -1293,7 +1293,6 @@ final class _RecipientAutocompleteOverlayState
   }
 
   void _syncPortalVisibility() {
-    _ensurePopEntryRegistered();
     final shouldShow = (widget.controller.text.trim().isNotEmpty ||
             widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
@@ -1307,6 +1306,8 @@ final class _RecipientAutocompleteOverlayState
             _portalController.show();
           }
         });
+      } else {
+        _popEntry.setCanPop(false);
       }
     } else {
       if (_portalController.isShowing) {
