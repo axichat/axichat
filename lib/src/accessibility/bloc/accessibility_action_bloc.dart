@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/common/safe_logging.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/jid_input.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -679,7 +680,7 @@ class AccessibilityActionBloc
       final result = await _messageService.fetchBeforeFromArchive(
         jid: remoteJid,
         before: beforeId,
-        pageSize: _messageWindowForUnread(desiredWindow),
+        pageSize: desiredWindow,
         isMuc: chat.type == ChatType.groupChat,
       );
       final nextBefore = result.firstId ?? beforeId;
@@ -688,7 +689,7 @@ class AccessibilityActionBloc
         filter: MessageTimelineFilter.directOnly,
         includePseudoMessages: false,
       );
-      if (result.complete || nextBefore == beforeId || localCount == 0) {
+      if (result.complete || nextBefore == beforeId) {
         break;
       }
       if (localCount >= desiredWindow) {
