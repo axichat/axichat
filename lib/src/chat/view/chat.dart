@@ -90,7 +90,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
@@ -1030,8 +1029,6 @@ class _ChatState extends State<Chat> {
   final _messageKeys = <String, GlobalKey>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
-  Offset? _messageListPointerDown;
-  int? _messageListPointerDownId;
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _selectionActionBarKey;
   GlobalKey? _reactionManagerKey;
@@ -2859,35 +2856,6 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  void _maybeDismissComposer(
-    Offset globalPosition, {
-    Offset? downPosition,
-  }) {
-    if (!_focusNode.hasFocus) return;
-    final messageListRect = _globalRectForKey(_messageListKey);
-    if (messageListRect == null ||
-        !messageListRect.contains(globalPosition) ||
-        (downPosition != null && !messageListRect.contains(downPosition))) {
-      return;
-    }
-    _focusNode.unfocus();
-  }
-
-  void _handlePointerDown(PointerDownEvent event) {
-    _messageListPointerDownId = event.pointer;
-    _messageListPointerDown = event.position;
-  }
-
-  void _handlePointerCancel(PointerCancelEvent event) {
-    _clearPointerDown(event);
-  }
-
-  void _clearPointerDown(PointerEvent event) {
-    if (_messageListPointerDownId != event.pointer) return;
-    _messageListPointerDownId = null;
-    _messageListPointerDown = null;
-  }
-
   Rect? _globalRectForKey(GlobalKey? key) {
     final context = key?.currentContext;
     if (context == null) return null;
@@ -3482,26 +3450,7 @@ class _ChatState extends State<Chat> {
           final showToast = ShadToaster.maybeOf(context)?.show;
           return Listener(
             behavior: HitTestBehavior.translucent,
-            onPointerDown: _handlePointerDown,
-            onPointerCancel: _handlePointerCancel,
-            onPointerUp: (event) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                _maybeDismissSelection(event.position);
-                final pointerDown = _messageListPointerDown;
-                final pointerId = _messageListPointerDownId;
-                if (pointerId == event.pointer && pointerDown != null) {
-                  final travel = (event.position - pointerDown).distance;
-                  if (travel <= kTouchSlop) {
-                    _maybeDismissComposer(
-                      event.position,
-                      downPosition: pointerDown,
-                    );
-                  }
-                }
-                _clearPointerDown(event);
-              });
-            },
+            onPointerUp: (event) => _maybeDismissSelection(event.position),
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               child: MultiBlocListener(
@@ -8292,49 +8241,15 @@ class _ChatState extends State<Chat> {
                             value: chatCalendarBloc,
                             child: scaffold,
                           );
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        final mediaQuery = MediaQuery.maybeOf(context);
-                        final shortestSide = mediaQuery?.size.shortestSide;
-                        final bool isCompactDevice = shortestSide != null &&
-                            shortestSide < compactDeviceBreakpoint;
-                        final bool allowSplitView = !isCompactDevice &&
-                            constraints.maxWidth >= smallScreen;
-                        final colors = context.colorScheme;
-                        final animationDuration =
-                            context.watch<SettingsCubit>().animationDuration;
-                        const double borderFadeStart = 0.9;
-                        final Curve borderFadeCurve = allowSplitView
-                            ? Curves.linear
-                            : const Interval(
-                                borderFadeStart,
-                                1.0,
-                                curve: Curves.easeOut,
-                              );
-                        return TweenAnimationBuilder<double>(
-                          tween: Tween<double>(
-                            begin: 1.0,
-                            end: allowSplitView ? 1.0 : 0.0,
-                          ),
-                          duration: animationDuration,
-                          curve: borderFadeCurve,
-                          child: content,
-                          builder: (context, value, child) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: colors.background,
-                                border: Border(
-                                  left: BorderSide(
-                                    color:
-                                        colors.border.withValues(alpha: value),
-                                  ),
-                                ),
-                              ),
-                              child: child,
-                            );
-                          },
-                        );
-                      },
+                    final colors = context.colorScheme;
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: colors.background,
+                        border: Border(
+                          left: BorderSide(color: colors.border),
+                        ),
+                      ),
+                      child: content,
                     );
                   },
                 ),
