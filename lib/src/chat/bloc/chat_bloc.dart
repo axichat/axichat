@@ -524,11 +524,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<int> _archivedMessageCount(Chat chat) {
     if (_messageService.messageStorageMode.isServerOnly) {
       final visibleMessages = state.items.where(
-        (message) =>
-            message.pseudoMessageType == null ||
-            message.pseudoMessageType!.isCalendarFragment ||
-            message.pseudoMessageType!.isCalendarTaskIcs ||
-            message.pseudoMessageType!.isCalendarAvailability,
+        (message) => message.pseudoMessageType == null,
       );
       return Future<int>.value(visibleMessages.length);
     }
@@ -1243,7 +1239,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final unreadCount = updatedChat.unreadCount;
       if (unreadCount > _emptyMessageCount) {
         final filteredOutCount = event.items.length - filteredItems.length;
-        final desiredWindow = unreadCount + filteredOutCount;
+        final pseudoCount = filteredItems
+            .where((message) => message.pseudoMessageType != null)
+            .length;
+        final desiredWindow = unreadCount + filteredOutCount + pseudoCount;
         final desiredLimit =
             desiredWindow > messageBatchSize ? desiredWindow : messageBatchSize;
         if (desiredLimit > _currentMessageLimit) {

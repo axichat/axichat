@@ -143,8 +143,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       connectionState,
     ) async {
       if (connectionState == ConnectionState.connected) {
-        await _attemptEmailProvisioningRecovery();
-        await _emailService?.handleNetworkAvailable();
+        await _triggerEmailReconnect();
         await _publishPendingAvatar();
         if (_authenticatedJid != null) {
           await _homeRefreshSyncService.syncOnLogin();
@@ -159,6 +158,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       }
     });
+    _xmppStreamReadySubscription = _xmppService.streamReadyStream.listen(
+      _handleXmppStreamReady,
+    );
     _foregroundListener = _handleForegroundServiceActiveChanged;
     foregroundServiceActive.addListener(_foregroundListener!);
     if (_emailService != null) {
@@ -230,6 +232,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   DateTime? _lastEmailProvisioningRetryAt;
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
+  StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
   StreamSubscription<EndpointConfig>? _endpointConfigSubscription;
   VoidCallback? _foregroundListener;
@@ -647,12 +650,33 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _triggerEmailReconnect();
   }
 
+  bool _hasEmailReconnectContext(EndpointConfig config) =>
+      !config.enableSmtp ||
+      (_emailService?.hasInMemoryReconnectContext ?? false);
+
   bool _canReconnectWithInMemoryCredentials() {
+    final EndpointConfig config = endpointConfig;
     final bool xmppReady =
-        !endpointConfig.enableXmpp || _xmppService.hasInMemoryReconnectContext;
-    final bool emailReady = !endpointConfig.enableSmtp ||
-        (_emailService?.hasInMemoryReconnectContext ?? false);
+        !config.enableXmpp || _xmppService.hasInMemoryReconnectContext;
+    final bool emailReady = _hasEmailReconnectContext(config);
     return xmppReady && emailReady;
+  }
+
+  Future<bool> _ensureEmailReconnectContext(EndpointConfig config) async {
+    if (!_stickyAuthActive) {
+      return true;
+    }
+    if (_loginInFlight) {
+      return false;
+    }
+    if (_hasEmailReconnectContext(config)) {
+      return true;
+    }
+    final bool didLogin = await _loginWithStoredCredentials();
+    if (!didLogin) {
+      await logout();
+    }
+    return false;
   }
 
   Future<void> _reconnectXmppForStickySession() async {
@@ -677,10 +701,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<void> _handleXmppStreamReady(XmppStreamReady _) async {
+    if (!_stickyAuthActive || _loginInFlight) {
+      return;
+    }
+    await _triggerEmailReconnect();
+  }
+
   Future<void> _triggerEmailReconnect() async {
-    if (!endpointConfig.enableSmtp) return;
-    final emailService = _emailService;
+    final EndpointConfig config = endpointConfig;
+    if (!config.enableSmtp) return;
+    final EmailService? emailService = _emailService;
     if (emailService == null) return;
+    final bool canReconnect = await _ensureEmailReconnectContext(config);
+    if (!canReconnect) {
+      return;
+    }
     try {
       await _attemptEmailProvisioningRecovery();
       await emailService.handleNetworkAvailable();
@@ -959,6 +995,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> close() async {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
+    await _xmppStreamReadySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
     await _endpointConfigSubscription?.cancel();
     _signupAvatarPublishRetryTimer?.cancel();
@@ -1052,13 +1089,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _emit(loginState);
       }
       await _authRecoveryFuture;
-      if (previousState is AuthenticationComplete && _xmppService.connected) {
+      await _endpointConfigRecoveryFuture;
+      final EndpointConfig config = endpointConfig;
+      final bool shouldSkipLogin = previousState is AuthenticationComplete &&
+          _xmppService.connected &&
+          _hasEmailReconnectContext(config);
+      if (shouldSkipLogin) {
         return;
       }
-      await _endpointConfigRecoveryFuture;
-      final config = endpointConfig;
-      final xmppEnabled = config.enableXmpp;
-      final smtpEnabled = config.enableSmtp;
+      final bool xmppEnabled = config.enableXmpp;
+      final bool smtpEnabled = config.enableSmtp;
       if (!xmppEnabled && !smtpEnabled) {
         _emit(const AuthenticationFailure('Enable XMPP or SMTP to continue.'));
         return;

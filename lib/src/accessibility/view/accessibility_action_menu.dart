@@ -854,11 +854,19 @@ class _AccessibilityActionContent extends StatelessWidget {
       int unreadCount,
     ) {
       if (items.isEmpty) return 0;
-      final index = items.length - unreadCount;
-      if (index < 0) {
-        return 0;
+      if (unreadCount <= 0) return 0;
+      var remainingUnread = unreadCount;
+      for (var index = items.length - 1; index >= 0; index--) {
+        final message = items[index].message;
+        if (message == null || message.pseudoMessageType != null) {
+          continue;
+        }
+        remainingUnread -= 1;
+        if (remainingUnread <= 0) {
+          return index;
+        }
       }
-      return index >= items.length ? items.length - 1 : index;
+      return 0;
     }
 
     final actionSections = hasNewContact

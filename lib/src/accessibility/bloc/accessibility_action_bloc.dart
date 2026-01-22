@@ -1073,9 +1073,10 @@ class AccessibilityActionBloc
     _rebuildSections(emit, nextState);
   }
 
-  void _startMessageStream(String jid) {
+  void _startMessageStream(String jid, {int? limit}) {
     _clearMessageStream();
-    final messagePageSize = _messageWindowForUnread(_unreadCountFor(jid));
+    final messagePageSize =
+        limit ?? _messageWindowForUnread(_unreadCountFor(jid));
     _messageStreamLimit = messagePageSize;
     _messageSubscription =
         _messageService.messageStreamForChat(jid, end: messagePageSize).listen(
@@ -1131,6 +1132,17 @@ class AccessibilityActionBloc
       statusMessage: incomingStatus ?? state.statusMessage,
     );
     emit(nextState);
+    final unreadCount = _unreadCountFor(event.jid);
+    if (unreadCount > 0) {
+      final pseudoCount =
+          ordered.where((message) => message.pseudoMessageType != null).length;
+      final desiredWindow = _messageWindowForUnread(
+        unreadCount + pseudoCount,
+      );
+      if (desiredWindow > _messageStreamLimit) {
+        _startMessageStream(event.jid, limit: desiredWindow);
+      }
+    }
     _rebuildSections(emit, nextState);
   }
 
