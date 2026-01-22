@@ -1181,9 +1181,6 @@ mixin AvatarService on XmppBase, MucService {
     const avatarMetadataInfoTag = 'info';
     const publishModelPublishers = 'publishers';
     const maxPublishedAvatarItems = '1';
-    const sendLastPublishedItemOnSub = 'on_sub';
-    const sendLastPublishedItemOnSubscribe = 'on_subscribe';
-    const sendLastPublishedItemNever = 'never';
     const publishNotRetrievableMessage =
         'Avatar publish succeeded but is not retrievable';
     const notifyEnabled = true;
@@ -1210,14 +1207,14 @@ mixin AvatarService on XmppBase, MucService {
       maxItems: maxPublishedAvatarItems,
       persistItems: persistItemsEnabled,
       publishModel: publishModelPublishers,
-      sendLastPublishedItem: sendLastPublishedItemNever,
+      sendLastPublishedItem: null,
     );
     final metadataPublishOptions = mox.PubSubPublishOptions(
       accessModel: accessModel,
       maxItems: maxPublishedAvatarItems,
       persistItems: persistItemsEnabled,
       publishModel: publishModelPublishers,
-      sendLastPublishedItem: sendLastPublishedItemOnSub,
+      sendLastPublishedItem: null,
     );
     final createNodeAccessModel =
         public ? mox.AccessModel.open : mox.AccessModel.presence;
@@ -1233,7 +1230,7 @@ mixin AvatarService on XmppBase, MucService {
       notifySub: notifyDisabled,
       presenceBasedDelivery: presenceBasedDelivery,
       persistItems: persistItemsEnabled,
-      sendLastPublishedItem: sendLastPublishedItemNever,
+      sendLastPublishedItem: null,
     );
     final metadataNodeConfig = AxiPubSubNodeConfig(
       accessModel: createNodeAccessModel,
@@ -1247,7 +1244,7 @@ mixin AvatarService on XmppBase, MucService {
       notifySub: notifyEnabled,
       presenceBasedDelivery: presenceBasedDelivery,
       persistItems: persistItemsEnabled,
-      sendLastPublishedItem: sendLastPublishedItemOnSub,
+      sendLastPublishedItem: null,
     );
 
     final encodedData = await compute(
@@ -1297,54 +1294,6 @@ mixin AvatarService on XmppBase, MucService {
       _avatarLog.fine(
         'Avatar node configure failed with ${configuredError.runtimeType}.',
       );
-      final sendLastValue = config.sendLastPublishedItem?.trim();
-      final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
-      if (hasSendLast &&
-          sendLastValue == sendLastPublishedItemOnSub &&
-          !configuredError.indicatesMissingNode) {
-        _avatarLog.fine(
-          'Retrying avatar node configure with send_last=on_subscribe.',
-        );
-        final subscribeConfig = config.withSendLastPublishedItem(
-          sendLastPublishedItemOnSubscribe,
-        );
-        final subscribeResult = await pubsub
-            .configureNode(host, node, subscribeConfig)
-            .timeout(_avatarPublishTimeout);
-        if (!subscribeResult.isType<mox.PubSubError>()) {
-          _avatarLog.fine(
-            'Avatar node configured with send_last=on_subscribe.',
-          );
-          _configuredAvatarNodes.add(cacheKey);
-          return;
-        }
-        configuredError = subscribeResult.get<mox.PubSubError>();
-        _avatarLog.fine(
-          'Avatar node configure failed with send_last=on_subscribe '
-          '(${configuredError.runtimeType}).',
-        );
-      }
-      final shouldAttemptSendLastFallback =
-          hasSendLast && !configuredError.indicatesMissingNode;
-      if (shouldAttemptSendLastFallback) {
-        _avatarLog.fine('Retrying avatar node configure without send_last.');
-        final strippedConfig = config.withoutSendLastPublishedItem();
-        final strippedResult = await pubsub
-            .configureNode(host, node, strippedConfig)
-            .timeout(_avatarPublishTimeout);
-        if (!strippedResult.isType<mox.PubSubError>()) {
-          _avatarLog.fine(
-            'Avatar node configured without send_last.',
-          );
-          _configuredAvatarNodes.add(cacheKey);
-          return;
-        }
-        configuredError = strippedResult.get<mox.PubSubError>();
-        _avatarLog.fine(
-          'Avatar node configure failed without send_last with '
-          '${configuredError.runtimeType}.',
-        );
-      }
       final shouldCreateNode = configuredError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
@@ -1366,40 +1315,6 @@ mixin AvatarService on XmppBase, MucService {
           _configuredAvatarNodes.add(cacheKey);
           return;
         }
-        var confirmedError = confirmed.get<mox.PubSubError>();
-        if (hasSendLast &&
-            sendLastValue == sendLastPublishedItemOnSub &&
-            !confirmedError.indicatesMissingNode) {
-          final subscribeConfirmed = await pubsub
-              .configureNode(
-                host,
-                node,
-                config.withSendLastPublishedItem(
-                  sendLastPublishedItemOnSubscribe,
-                ),
-              )
-              .timeout(_avatarPublishTimeout);
-          if (!subscribeConfirmed.isType<mox.PubSubError>()) {
-            _avatarLog.fine(
-              'Avatar node configured after create with send_last=on_subscribe.',
-            );
-            _configuredAvatarNodes.add(cacheKey);
-            return;
-          }
-          confirmedError = subscribeConfirmed.get<mox.PubSubError>();
-        }
-        if (hasSendLast) {
-          final strippedConfirmed = await pubsub
-              .configureNode(host, node, config.withoutSendLastPublishedItem())
-              .timeout(_avatarPublishTimeout);
-          if (!strippedConfirmed.isType<mox.PubSubError>()) {
-            _avatarLog.fine(
-              'Avatar node configured after create without send_last.',
-            );
-            _configuredAvatarNodes.add(cacheKey);
-            return;
-          }
-        }
       } on Exception {
         // ignore and retry below
       }
@@ -1415,40 +1330,6 @@ mixin AvatarService on XmppBase, MucService {
           _avatarLog.fine('Avatar node configured after create.');
           _configuredAvatarNodes.add(cacheKey);
           return;
-        }
-        var confirmedError = confirmed.get<mox.PubSubError>();
-        if (hasSendLast &&
-            sendLastValue == sendLastPublishedItemOnSub &&
-            !confirmedError.indicatesMissingNode) {
-          final subscribeConfirmed = await pubsub
-              .configureNode(
-                host,
-                node,
-                config.withSendLastPublishedItem(
-                  sendLastPublishedItemOnSubscribe,
-                ),
-              )
-              .timeout(_avatarPublishTimeout);
-          if (!subscribeConfirmed.isType<mox.PubSubError>()) {
-            _avatarLog.fine(
-              'Avatar node configured after create with send_last=on_subscribe.',
-            );
-            _configuredAvatarNodes.add(cacheKey);
-            return;
-          }
-          confirmedError = subscribeConfirmed.get<mox.PubSubError>();
-        }
-        if (hasSendLast) {
-          final strippedConfirmed = await pubsub
-              .configureNode(host, node, config.withoutSendLastPublishedItem())
-              .timeout(_avatarPublishTimeout);
-          if (!strippedConfirmed.isType<mox.PubSubError>()) {
-            _avatarLog.fine(
-              'Avatar node configured after create without send_last.',
-            );
-            _configuredAvatarNodes.add(cacheKey);
-            return;
-          }
         }
       } on Exception {
         return;

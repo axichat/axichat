@@ -555,6 +555,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
+        sendLastPublishedItem: null,
       );
 
   mox.NodeConfig _createNodeConfig(mox.AccessModel accessModel) =>
@@ -611,6 +612,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
+        sendLastPublishedItem: null,
       );
 
   mox.JID? _selfPepHost() {

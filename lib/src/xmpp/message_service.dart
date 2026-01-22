@@ -163,8 +163,6 @@ const String _pinPublishModelPublishers = 'publishers';
 const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
 const mox.PubSubAffiliation _pinAffiliationPublisher =
     mox.PubSubAffiliation.publisher;
-const String _pinSendLastOnSub = 'on_sub';
-const String _pinSendLastOnSubscribe = 'on_subscribe';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
 const bool _pinNotifyEnabled = true;
@@ -562,7 +560,7 @@ AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
       notifySub: _pinNotifyEnabled,
       presenceBasedDelivery: _pinPresenceBasedDeliveryDisabled,
       persistItems: _pinPersistItemsEnabled,
-      sendLastPublishedItem: _pinSendLastOnSub,
+      sendLastPublishedItem: null,
     );
 
 mox.NodeConfig _pinCreateNodeConfig(_PinNodePolicy policy) =>
@@ -574,7 +572,7 @@ mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
       maxItems: _pinSyncMaxItemsValue,
       persistItems: _pinPersistItemsEnabled,
       publishModel: _pinPublishModelForPolicy(policy),
-      sendLastPublishedItem: _pinSendLastOnSub,
+      sendLastPublishedItem: null,
     );
 
 String _safePinNodeLabel(String? nodeId) {
@@ -6868,65 +6866,6 @@ mixin MessageService
       'PubSub pin node config failed. node=$safeNodeLabel '
       'policy=${policy.name} error=${configuredError.runtimeType}.',
     );
-    final sendLastValue = config.sendLastPublishedItem?.trim();
-    final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
-    final shouldAttemptSendLastFallback =
-        hasSendLast && !configuredError.indicatesMissingNode;
-    if (shouldAttemptSendLastFallback && sendLastValue == _pinSendLastOnSub) {
-      _log.fine(
-        'PubSub pin node config retry with send_last=on_subscribe. '
-        'node=$safeNodeLabel policy=${policy.name}.',
-      );
-      final subscribeConfig =
-          config.withSendLastPublishedItem(_pinSendLastOnSubscribe);
-      configured = await pubsub.configureNode(host, nodeId, subscribeConfig);
-      if (!configured.isType<mox.PubSubError>()) {
-        _log.fine(
-          'PubSub pin node configured with send_last=on_subscribe. '
-          'node=$safeNodeLabel policy=${policy.name}.',
-        );
-        return _applyPinAffiliationsIfNeeded(
-          pubsub: pubsub,
-          host: host,
-          nodeId: nodeId,
-          policy: policy,
-          affiliations: affiliations,
-        );
-      }
-      configuredError = configured.get<mox.PubSubError>();
-      _log.fine(
-        'PubSub pin node config failed with send_last=on_subscribe. '
-        'node=$safeNodeLabel policy=${policy.name} '
-        'error=${configuredError.runtimeType}.',
-      );
-    }
-    if (shouldAttemptSendLastFallback) {
-      _log.fine(
-        'PubSub pin node config retry without send_last. node=$safeNodeLabel '
-        'policy=${policy.name}.',
-      );
-      final stripped = config.withoutSendLastPublishedItem();
-      configured = await pubsub.configureNode(host, nodeId, stripped);
-      if (!configured.isType<mox.PubSubError>()) {
-        _log.fine(
-          'PubSub pin node configured without send_last. node=$safeNodeLabel '
-          'policy=${policy.name}.',
-        );
-        return _applyPinAffiliationsIfNeeded(
-          pubsub: pubsub,
-          host: host,
-          nodeId: nodeId,
-          policy: policy,
-          affiliations: affiliations,
-        );
-      }
-      configuredError = configured.get<mox.PubSubError>();
-      _log.fine(
-        'PubSub pin node config failed without send_last. '
-        'node=$safeNodeLabel policy=${policy.name} '
-        'error=${configuredError.runtimeType}.',
-      );
-    }
     final shouldCreateNode = configuredError.indicatesMissingNode;
     if (!shouldCreateNode) {
       return false;

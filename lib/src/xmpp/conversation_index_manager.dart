@@ -227,6 +227,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
+        sendLastPublishedItem: null,
       );
 
   mox.NodeConfig _createNodeConfig() =>
@@ -283,6 +284,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
+        sendLastPublishedItem: null,
       );
 
   mox.JID? _selfPepHost() {
