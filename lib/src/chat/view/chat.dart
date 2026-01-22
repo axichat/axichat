@@ -1030,10 +1030,10 @@ class _ChatState extends State<Chat> {
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
   final Object _composerTapRegionGroup = Object();
+  final Object _selectionTapRegionGroup = Object();
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _selectionActionBarKey;
   GlobalKey? _reactionManagerKey;
-  final _selectionActionButtonKeys = <GlobalKey>[];
   double _selectionSpacerBaseHeight = 0;
   double _selectionSpacerHeight = 0;
   double _selectionControlsHeight = 0;
@@ -2824,48 +2824,6 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  void _maybeDismissSelection(Offset globalPosition) {
-    final selectedId = _selectedMessageId;
-    if (selectedId == null) return;
-    final hitRegions = <Rect>[];
-    void collect(GlobalKey? key, {double padding = 12.0}) {
-      final rect = _globalRectForKey(key);
-      if (rect != null) {
-        hitRegions.add(rect.inflate(padding));
-      }
-    }
-
-    final bubbleRect = _bubbleRegionRegistry.rectFor(selectedId);
-    if (bubbleRect != null) {
-      hitRegions.add(bubbleRect.inflate(12));
-    }
-    for (final key in _selectionActionButtonKeys) {
-      collect(key, padding: 0);
-    }
-    collect(_selectionActionBarKey, padding: 8);
-    collect(_reactionManagerKey, padding: 4);
-
-    final tappedInside = hitRegions.any(
-      (rect) => rect.contains(globalPosition),
-    );
-    if (hitRegions.isEmpty) {
-      _clearMessageSelection();
-      return;
-    }
-    if (!tappedInside) {
-      _clearMessageSelection();
-    }
-  }
-
-  Rect? _globalRectForKey(GlobalKey? key) {
-    final context = key?.currentContext;
-    if (context == null) return null;
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.attached) return null;
-    final origin = renderBox.localToGlobal(Offset.zero);
-    return origin & renderBox.size;
-  }
-
   void _toggleMessageSelection(Message message) {
     if (widget.readOnly) return;
     final messageId = message.stanzaID;
@@ -2889,7 +2847,6 @@ class _ChatState extends State<Chat> {
       _selectionActionBarKey = null;
       _reactionManagerKey = null;
       _selectionSpacerHeight = 0;
-      _selectionActionButtonKeys.clear();
       _selectionControlsHeight = 0;
       _selectionControlsMeasurementPending = false;
       _selectionAutoscrollActive = false;
@@ -3023,7 +2980,6 @@ class _ChatState extends State<Chat> {
               : _selectionExtrasViewportGap;
       _selectionSpacerHeight =
           baseHeadroom > _selectionHeadroomTolerance ? baseHeadroom : 0.0;
-      _selectionActionButtonKeys.clear();
       _selectionAutoscrollActive = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -7295,40 +7251,6 @@ class _ChatState extends State<Chat> {
                                                                 canTogglePins
                                                                     ? 1
                                                                     : 0;
-                                                            List<GlobalKey>?
-                                                                actionButtonKeys;
-                                                            if (isSingleSelection) {
-                                                              const baseActionCount =
-                                                                  6;
-                                                              final actionCount =
-                                                                  baseActionCount +
-                                                                      pinActionCount +
-                                                                      (canResend
-                                                                          ? 1
-                                                                          : 0) +
-                                                                      (canEdit
-                                                                          ? 1
-                                                                          : 0) +
-                                                                      (includeSelectAction
-                                                                          ? 1
-                                                                          : 0);
-                                                              actionButtonKeys =
-                                                                  List.generate(
-                                                                actionCount,
-                                                                (_) =>
-                                                                    GlobalKey(),
-                                                              );
-                                                              _selectionActionButtonKeys
-                                                                ..clear()
-                                                                ..addAll(
-                                                                  actionButtonKeys,
-                                                                );
-                                                            } else if (_selectedMessageId ==
-                                                                messageModel
-                                                                    .stanzaID) {
-                                                              _selectionActionButtonKeys
-                                                                  .clear();
-                                                            }
                                                             void onReply() {
                                                               context
                                                                   .read<
@@ -7466,8 +7388,6 @@ class _ChatState extends State<Chat> {
                                                                     onPinToggle,
                                                                 isPinned:
                                                                     isPinned,
-                                                                hitRegionKeys:
-                                                                    actionButtonKeys,
                                                                 onRevokeInvite:
                                                                     onRevokeInvite,
                                                               ),
@@ -11675,7 +11595,6 @@ class _MessageActionBar extends StatelessWidget {
     this.onEdit,
     this.onPinToggle,
     required this.isPinned,
-    this.hitRegionKeys,
     this.onRevokeInvite,
   });
 

@@ -977,6 +977,17 @@ class AxiTextSelectionGestureDetectorBuilder {
             case PointerDeviceKind.invertedStylus:
             case PointerDeviceKind.touch:
             case PointerDeviceKind.unknown:
+              final TextSelection? selection = renderEditable.selection;
+              if (selection != null && !selection.isCollapsed) {
+                return renderEditable.selectPositionAt(
+                  from: dragStartGlobalPosition -
+                      editableOffset -
+                      scrollableOffset,
+                  to: details.globalPosition,
+                  cause: SelectionChangedCause.drag,
+                );
+              }
+              return;
             case null:
               break;
           }
@@ -1000,10 +1011,21 @@ class AxiTextSelectionGestureDetectorBuilder {
             case PointerDeviceKind.touch:
             case PointerDeviceKind.unknown:
               if (renderEditable.hasFocus) {
-                renderEditable.selectPositionAt(
-                  from: details.globalPosition,
-                  cause: SelectionChangedCause.drag,
-                );
+                final TextSelection? selection = renderEditable.selection;
+                if (selection != null && !selection.isCollapsed) {
+                  renderEditable.selectPositionAt(
+                    from: dragStartGlobalPosition -
+                        editableOffset -
+                        scrollableOffset,
+                    to: details.globalPosition,
+                    cause: SelectionChangedCause.drag,
+                  );
+                } else {
+                  renderEditable.selectPositionAt(
+                    from: details.globalPosition,
+                    cause: SelectionChangedCause.drag,
+                  );
+                }
                 return _showMagnifierIfSupportedByPlatform(
                   details.globalPosition,
                 );
