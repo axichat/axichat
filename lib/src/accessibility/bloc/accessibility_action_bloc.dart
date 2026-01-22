@@ -83,6 +83,7 @@ class AccessibilityActionBloc
   StreamSubscription<List<Invite>>? _inviteSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<List<Draft>>? _draftSubscription;
+  int _messageStreamLimit = 0;
 
   List<Chat> _chats = const [];
   List<RosterItem> _roster = const [];
@@ -506,6 +507,22 @@ class AccessibilityActionBloc
     }
     _refreshContacts();
     _syncActiveChatRecipient(emit);
+    final activeJid = state.activeChatJid;
+    if (activeJid != null) {
+      var unreadCount = 0;
+      for (final contact in _contacts) {
+        if (contact.jid == activeJid) {
+          unreadCount = contact.unreadCount;
+          break;
+        }
+      }
+      const basePageSize = 50;
+      final desiredLimit =
+          unreadCount > basePageSize ? unreadCount : basePageSize;
+      if (desiredLimit > _messageStreamLimit) {
+        _startMessageStream(activeJid);
+      }
+    }
     _rebuildSections(emit, state);
   }
 
@@ -951,7 +968,17 @@ class AccessibilityActionBloc
 
   void _startMessageStream(String jid) {
     _clearMessageStream();
-    const messagePageSize = 50;
+    var unreadCount = 0;
+    for (final contact in _contacts) {
+      if (contact.jid == jid) {
+        unreadCount = contact.unreadCount;
+        break;
+      }
+    }
+    const basePageSize = 50;
+    final messagePageSize =
+        unreadCount > basePageSize ? unreadCount : basePageSize;
+    _messageStreamLimit = messagePageSize;
     _messageSubscription =
         _messageService.messageStreamForChat(jid, end: messagePageSize).listen(
       (messages) =>
