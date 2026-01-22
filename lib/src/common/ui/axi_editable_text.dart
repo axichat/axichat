@@ -2356,7 +2356,6 @@ class EditableTextState extends State<EditableText>
       widget.scrollController ??
       (_internalScrollController ??= ScrollController());
   ScrollController? _typingCaretScrollController;
-  ScrollController? _selectionOverlayScrollController;
 
   final LayerLink _toolbarLayerLink = LayerLink();
   final LayerLink _startHandleLayerLink = LayerLink();
@@ -3064,7 +3063,6 @@ class EditableTextState extends State<EditableText>
       widget.spellCheckConfiguration,
     );
     _attachTypingCaretScrollListener();
-    _attachSelectionOverlayScrollListener();
     _appLifecycleListener = AppLifecycleListener(
       onResume: () => _justResumed = true,
     );
@@ -3235,7 +3233,6 @@ class EditableTextState extends State<EditableText>
     }
     if (widget.scrollController != oldWidget.scrollController) {
       _attachTypingCaretScrollListener();
-      _attachSelectionOverlayScrollListener();
     }
 
     if (!_shouldCreateInputConnection) {
@@ -3308,9 +3305,6 @@ class EditableTextState extends State<EditableText>
   @override
   void dispose() {
     _typingCaretScrollController?.removeListener(_handleTypingCaretScroll);
-    _selectionOverlayScrollController?.removeListener(
-      _handleSelectionOverlayScroll,
-    );
     _internalScrollController?.dispose();
     _currentAutofillScope?.unregister(autofillId);
     widget.controller.removeListener(_didChangeTextEditingValue);
@@ -4815,23 +4809,6 @@ class EditableTextState extends State<EditableText>
 
   void _handleTypingCaretScroll() {
     _syncTypingCaretToSelection();
-  }
-
-  void _attachSelectionOverlayScrollListener() {
-    final ScrollController controller = _scrollController;
-    if (identical(_selectionOverlayScrollController, controller)) {
-      return;
-    }
-    _selectionOverlayScrollController
-        ?.removeListener(_handleSelectionOverlayScroll);
-    _selectionOverlayScrollController = controller;
-    _selectionOverlayScrollController!.addListener(
-      _handleSelectionOverlayScroll,
-    );
-  }
-
-  void _handleSelectionOverlayScroll() {
-    _selectionOverlay?.updateForScroll();
   }
 
   void _scheduleTypingLayoutCallback() {
