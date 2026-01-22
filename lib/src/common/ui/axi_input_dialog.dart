@@ -35,10 +35,6 @@ class AxiInputDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget resolvedTitle = DefaultTextStyle.merge(
-      style: context.modalHeaderTextStyle,
-      child: title,
-    );
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
     const loadingSemanticsLabel = 'Loading';
     final spinner = AxiProgressIndicator(
@@ -53,24 +49,81 @@ class AxiInputDialog extends StatelessWidget {
       gap: _inputDialogSpinnerGap,
       duration: _inputDialogLoadingAnimation,
     );
-    return ShadDialog(
-      title: resolvedTitle,
-      actions: [
-        ShadButton.outline(
-          onPressed: () => context.pop(),
-          child: Text(context.l10n.commonCancel),
-        ).withTapBounce(),
-        ...actions,
-        ShadButton(
-          enabled: callback != null && !loading,
-          onPressed: loading ? null : callback,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [spinnerSlot, Text(resolvedCallbackText)],
-          ),
-        ).withTapBounce(enabled: callback != null && !loading),
-      ],
-      child: content,
+    const double headerTopPadding = 16.0;
+    const double headerHorizontalPadding = 20.0;
+    const double headerRightPadding = 12.0;
+    const double headerBottomPadding = 12.0;
+    const double bodyHorizontalPadding = 20.0;
+    const double bodyBottomPadding = 16.0;
+    const double actionsHorizontalPadding = 20.0;
+    const double actionsBottomPadding = 20.0;
+    const double actionSpacing = 8.0;
+    const EdgeInsets dialogInsets = EdgeInsets.symmetric(
+      horizontal: 24,
+      vertical: 24,
+    );
+    const EdgeInsets headerPadding = EdgeInsets.fromLTRB(
+      headerHorizontalPadding,
+      headerTopPadding,
+      headerRightPadding,
+      headerBottomPadding,
+    );
+    const EdgeInsets bodyPadding = EdgeInsets.fromLTRB(
+      bodyHorizontalPadding,
+      0,
+      bodyHorizontalPadding,
+      bodyBottomPadding,
+    );
+    const EdgeInsets actionsPadding = EdgeInsets.fromLTRB(
+      actionsHorizontalPadding,
+      0,
+      actionsHorizontalPadding,
+      actionsBottomPadding,
+    );
+    final actionButtons = <Widget>[
+      ShadButton.outline(
+        onPressed: () => context.pop(),
+        child: Text(context.l10n.commonCancel),
+      ).withTapBounce(),
+      ...actions,
+      ShadButton(
+        enabled: callback != null && !loading,
+        onPressed: loading ? null : callback,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [spinnerSlot, Text(resolvedCallbackText)],
+        ),
+      ).withTapBounce(enabled: callback != null && !loading),
+    ];
+    return Dialog(
+      insetPadding: dialogInsets,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      child: AxiModalSurface(
+        padding: EdgeInsets.zero,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AxiSheetHeader(
+              title: title,
+              onClose: () => context.pop(),
+              padding: headerPadding,
+            ),
+            Padding(padding: bodyPadding, child: content),
+            Padding(
+              padding: actionsPadding,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: actionSpacing,
+                runSpacing: actionSpacing,
+                children: actionButtons,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

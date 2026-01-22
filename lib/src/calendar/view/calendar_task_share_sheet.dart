@@ -405,11 +405,13 @@ class _TaskShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const spinner = SizedBox(
+    final spinnerColor = context.colorScheme.primaryForeground;
+    final spinner = SizedBox(
       width: _taskShareHeaderIconSize,
       height: _taskShareHeaderIconSize,
       child: CircularProgressIndicator(
         strokeWidth: _taskShareProgressStrokeWidth,
+        valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
       ),
     );
     final Widget leading = SizedBox(

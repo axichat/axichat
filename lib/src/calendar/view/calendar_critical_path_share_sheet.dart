@@ -299,11 +299,13 @@ class _CriticalPathShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const spinner = SizedBox(
+    final spinnerColor = context.colorScheme.primaryForeground;
+    final spinner = SizedBox(
       width: _criticalPathShareHeaderIconSize,
       height: _criticalPathShareHeaderIconSize,
       child: CircularProgressIndicator(
         strokeWidth: _criticalPathShareProgressStrokeWidth,
+        valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
       ),
     );
     return Align(
