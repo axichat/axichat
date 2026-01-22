@@ -21,7 +21,6 @@ const _extensionsTag = 'extensions';
 const _nickTag = 'nick';
 const _passwordTag = 'password';
 const _publishModelPublishers = 'publishers';
-const _sendLastPublishedItemNever = 'never';
 const _defaultMaxItems = 'max';
 const int _bookmarksFetchLimitFallback = 1000;
 const _notifyEnabled = true;
@@ -283,11 +282,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastPublishedItemNever,
+        sendLastPublishedItem: null,
       );
 
-  mox.NodeConfig _createNodeConfig() =>
-      _nodeConfig().withoutSendLastPublishedItem().toNodeConfig();
+  mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -327,7 +325,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastPublishedItemNever,
+        sendLastPublishedItem: null,
       );
 
   SafePubSubManager? _pubSub() =>

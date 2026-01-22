@@ -12,6 +12,7 @@ import 'package:logging/logging.dart';
 const Duration _defaultCompletedRetention = Duration(seconds: 1);
 const Duration _defaultFailedRetention = Duration(seconds: 1);
 const Duration _minimumInProgressDuration = Duration(milliseconds: 350);
+const Duration _idleCompletionDelay = Duration(milliseconds: 300);
 const int _operationIdLength = 10;
 const String _operationIdSeparator = '-';
 
@@ -98,18 +99,28 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
 
   void _handleEvent(XmppOperationEvent event) {
     final key = _XmppOperationKey(kind: event.kind);
+    final now = DateTime.now();
+
     if (event.stage.isStart) {
+      final String operationId = _startOperation(event.kind);
       final _XmppOperationBatch? batch = _activeOperations[key];
       if (batch == null) {
-        final String operationId = _startOperation(event.kind);
         _activeOperations[key] = _XmppOperationBatch(
           operationId: operationId,
           pendingCount: 1,
-          startedAt: DateTime.now(),
+          startedAt: now,
         );
         return;
       }
-      batch.pendingCount += 1;
+      _cancelCompletion(operationId);
+      if (batch.pendingCount == 0) {
+        batch
+          ..hadFailure = false
+          ..hadSuccess = false;
+      }
+      batch
+        ..operationId = operationId
+        ..pendingCount += 1;
       return;
     }
 
@@ -130,18 +141,14 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
 
     batch
       ..pendingCount -= 1
+      ..hadSuccess = batch.hadSuccess || event.isSuccess
       ..hadFailure = batch.hadFailure || !event.isSuccess;
 
     if (batch.pendingCount > 0) {
       return;
     }
 
-    _activeOperations.remove(key);
-    _scheduleCompletion(
-      id: batch.operationId,
-      startedAt: batch.startedAt,
-      isSuccess: !batch.hadFailure,
-    );
+    _scheduleCompletion(key: key, batch: batch);
   }
 
   String _startOperation(XmppOperationKind kind) {
@@ -150,6 +157,10 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     final int index = operations.lastIndexWhere((item) => item.kind == kind);
     if (index != -1) {
       final XmppOperation existing = operations[index];
+      if (existing.status == XmppOperationStatus.inProgress) {
+        _cancelCompletion(existing.id);
+        return existing.id;
+      }
       _cancelRetention(existing.id);
       _cancelCompletion(existing.id);
       operations[index] = existing.copyWith(
@@ -181,29 +192,41 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   }
 
   void _scheduleCompletion({
-    required String id,
-    required DateTime startedAt,
-    required bool isSuccess,
+    required _XmppOperationKey key,
+    required _XmppOperationBatch batch,
   }) {
-    final elapsed = DateTime.now().difference(startedAt);
-    final remaining = _minimumInProgressDuration - elapsed;
-    if (remaining <= Duration.zero) {
-      _applyCompletion(id: id, isSuccess: isSuccess);
-      return;
-    }
+    final id = batch.operationId;
     _cancelCompletion(id);
-    _completionTimers[id] = Timer(remaining, () {
+    final elapsed = DateTime.now().difference(batch.startedAt);
+    final remaining = _minimumInProgressDuration - elapsed;
+    final delay =
+        remaining > _idleCompletionDelay ? remaining : _idleCompletionDelay;
+    final token = batch.bumpCompletionToken();
+    _completionTimers[id] = Timer(delay, () {
       _completionTimers.remove(id);
-      _applyCompletion(id: id, isSuccess: isSuccess);
+      final current = _activeOperations[key];
+      if (current == null ||
+          current.operationId != id ||
+          current.pendingCount > 0 ||
+          current.completionToken != token) {
+        return;
+      }
+      final isSuccess = current.hadSuccess || !current.hadFailure;
+      _applyCompletion(key: key, id: id, isSuccess: isSuccess);
     });
   }
 
-  void _applyCompletion({required String id, required bool isSuccess}) {
+  void _applyCompletion({
+    required _XmppOperationKey key,
+    required String id,
+    required bool isSuccess,
+  }) {
     if (isSuccess) {
       _completeOperation(id);
-      return;
+    } else {
+      _failOperation(id);
     }
-    _failOperation(id);
+    _activeOperations.remove(key);
   }
 
   void _updateOperation(String id, {XmppOperationStatus? status}) {
@@ -378,10 +401,19 @@ class _XmppOperationBatch {
     required this.operationId,
     required this.pendingCount,
     required this.startedAt,
-  }) : hadFailure = false;
+  })  : hadFailure = false,
+        hadSuccess = false,
+        completionToken = 0;
 
-  final String operationId;
+  String operationId;
   int pendingCount;
   bool hadFailure;
+  bool hadSuccess;
   final DateTime startedAt;
+  int completionToken;
+
+  int bumpCompletionToken() {
+    completionToken += 1;
+    return completionToken;
+  }
 }
