@@ -1239,6 +1239,12 @@ abstract class AppLocalizations {
   /// **'Selected messages have no text to copy'**
   String get chatCopyNoText;
 
+  /// No description provided for @chatCopySuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get chatCopySuccessMessage;
+
   /// No description provided for @chatShareSelectedNoText.
   ///
   /// In en, this message translates to:

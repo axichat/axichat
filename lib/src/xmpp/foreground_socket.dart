@@ -312,13 +312,13 @@ void startCallback() {
 
 class ForegroundSocket extends TaskHandler {
   static final _log = Logger('ForegroundSocket');
+  static const Duration _defaultEmailKeepaliveInterval = Duration(seconds: 45);
 
   XmppSocketWrapper? _socket;
   late final StreamSubscription<String> _dataSubscription;
   late final StreamSubscription<mox.XmppSocketEvent> _eventSubscription;
-  bool _emailKeepaliveEnabled = false;
-  Duration _emailKeepaliveInterval = const Duration(seconds: 45);
-  DateTime? _nextEmailKeepalive;
+  Timer? _emailKeepaliveTimer;
+  Duration _emailKeepaliveInterval = _defaultEmailKeepaliveInterval;
 
   static void _sendToMain(List<Object> strings) {
     final data = strings.join(join);
@@ -389,9 +389,7 @@ class ForegroundSocket extends TaskHandler {
   }
 
   @override
-  void onRepeatEvent(DateTime timestamp) {
-    _maybeEmitEmailKeepalive(timestamp);
-  }
+  void onRepeatEvent(DateTime timestamp) {}
 
   @override
   Future<void> onDestroy(DateTime timestamp, _) async {
@@ -399,8 +397,7 @@ class ForegroundSocket extends TaskHandler {
     _socket = null;
     await _dataSubscription.cancel();
     await _eventSubscription.cancel();
-    _emailKeepaliveEnabled = false;
-    _nextEmailKeepalive = null;
+    _stopEmailKeepaliveTimer();
   }
 
   void _handleEmailKeepaliveCommand(String payload) {
@@ -413,28 +410,27 @@ class ForegroundSocket extends TaskHandler {
         final intervalMs = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
         _emailKeepaliveInterval = intervalMs > 0
             ? Duration(milliseconds: intervalMs)
-            : const Duration(seconds: 45);
-        _emailKeepaliveEnabled = true;
-        final now = DateTime.now();
-        _nextEmailKeepalive = now.add(_emailKeepaliveInterval);
-        _emitEmailKeepaliveTick();
+            : _defaultEmailKeepaliveInterval;
+        _resetEmailKeepaliveTimer();
         break;
       case emailKeepaliveStopCommand:
-        _emailKeepaliveEnabled = false;
-        _nextEmailKeepalive = null;
+        _stopEmailKeepaliveTimer();
         break;
     }
   }
 
-  void _maybeEmitEmailKeepalive(DateTime timestamp) {
-    if (!_emailKeepaliveEnabled) {
-      return;
-    }
-    final nextTick = _nextEmailKeepalive;
-    if (nextTick == null || !timestamp.isBefore(nextTick)) {
-      _emitEmailKeepaliveTick();
-      _nextEmailKeepalive = timestamp.add(_emailKeepaliveInterval);
-    }
+  void _resetEmailKeepaliveTimer() {
+    _emailKeepaliveTimer?.cancel();
+    _emitEmailKeepaliveTick();
+    _emailKeepaliveTimer = Timer.periodic(
+      _emailKeepaliveInterval,
+      (_) => _emitEmailKeepaliveTick(),
+    );
+  }
+
+  void _stopEmailKeepaliveTimer() {
+    _emailKeepaliveTimer?.cancel();
+    _emailKeepaliveTimer = null;
   }
 
   void _emitEmailKeepaliveTick() {
@@ -462,6 +458,8 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   var _secureResult = false;
   var _listenerRegistered = false;
   var _serviceAcquired = false;
+  DateTime? _lastIncomingAt;
+  DateTime? _lastOutgoingAt;
 
   Future<void> _onReceiveTaskData(String data) async {
     final separatorIndex = data.indexOf(join);
@@ -471,6 +469,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
         separatorIndex == -1 ? 0 : data.length - separatorIndex - join.length;
     _log.fine('Received main: type=$type payloadLen=$payloadLength');
     if (data.startsWith('$dataPrefix$join')) {
+      _recordIncomingTraffic();
       _dataStream.add(data.substring('$dataPrefix$join'.length));
     } else if (data == socketErrorPrefix) {
       _eventStream.add(mox.XmppSocketErrorEvent(''));
@@ -558,6 +557,20 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   bool whitespacePingAllowed() => true;
 
   @override
+  DateTime? get lastIncomingAt => _lastIncomingAt;
+
+  @override
+  DateTime? get lastOutgoingAt => _lastOutgoingAt;
+
+  void _recordIncomingTraffic() {
+    _lastIncomingAt = DateTime.timestamp();
+  }
+
+  void _recordOutgoingTraffic() {
+    _lastOutgoingAt = DateTime.timestamp();
+  }
+
+  @override
   Future<bool> connect(String domain, {String? host, int? port}) async {
     await reset();
 
@@ -612,6 +625,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   @override
   void write(String data) {
+    _recordOutgoingTraffic();
     _sendToTask([writePrefix, data]);
   }
 
@@ -714,7 +728,7 @@ void initForegroundService() => FlutterForegroundTask.init(
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(5000),
+        eventAction: ForegroundTaskEventAction.nothing(),
         autoRunOnBoot: true,
         autoRunOnMyPackageReplaced: true,
         allowWakeLock: true,

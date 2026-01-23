@@ -644,6 +644,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ausgewählte Nachrichten enthalten keinen Text zum Kopieren.';
 
   @override
+  String get chatCopySuccessMessage => 'In die Zwischenablage kopiert';
+
+  @override
   String get chatShareSelectedNoText =>
       'Ausgewählte Nachrichten enthalten keinen Text zum Teilen.';
 

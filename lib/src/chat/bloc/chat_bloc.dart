@@ -1208,12 +1208,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
     );
     final filteredItems = filtered.messages;
+    final quoteIds = filteredItems
+        .map((message) => message.quoting?.trim())
+        .where((id) => id?.isNotEmpty == true)
+        .cast<String>()
+        .toSet();
+    final knownMessageIds = filteredItems
+        .map((message) => message.stanzaID)
+        .toSet()
+      ..addAll(state.quotedMessagesById.keys);
+    final missingQuoteIds =
+        quoteIds.where((id) => !knownMessageIds.contains(id)).toList();
+    final loadedQuotes = missingQuoteIds.isEmpty
+        ? const <Message>[]
+        : (await Future.wait(
+            missingQuoteIds.map(_messageService.loadMessageByStanzaId),
+          ))
+            .whereType<Message>()
+            .toList();
+    final updatedQuotedMessages = loadedQuotes.isEmpty
+        ? state.quotedMessagesById
+        : <String, Message>{
+            ...state.quotedMessagesById,
+            for (final message in loadedQuotes) message.stanzaID: message,
+          };
     emit(
       state.copyWith(
         items: filteredItems,
         messagesLoaded: true,
         attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
         attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
+        quotedMessagesById: updatedQuotedMessages,
       ),
     );
     if (state.chat?.type == ChatType.groupChat) {

@@ -15,6 +15,7 @@ class ChatState with _$ChatState {
     @Default(<PinnedMessageItem>[]) List<PinnedMessageItem> pinnedMessages,
     @Default(false) bool pinnedMessagesLoaded,
     @Default(false) bool pinnedMessagesHydrating,
+    @Default(<String, Message>{}) Map<String, Message> quotedMessagesById,
     Chat? chat,
     RoomState? roomState,
     Message? focused,

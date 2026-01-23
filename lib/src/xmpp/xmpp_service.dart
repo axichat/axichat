@@ -32,6 +32,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/security_flags.dart';
@@ -116,6 +117,8 @@ part 'message_sanitizer.dart';
 part 'xhtml_im_manager.dart';
 
 part 'mam_sm_guard.dart';
+
+part 'ping_controller.dart';
 
 part 'omemo_service.dart';
 
@@ -592,6 +595,8 @@ class XmppService extends XmppBase
   final StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
   StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
+  StreamSubscription<NetworkAvailability>? _networkAvailabilitySubscription;
+  final XmppPingController _pingController = XmppPingController(owner: this);
 
   @override
   XmppService get owner => this;
@@ -784,7 +789,7 @@ class XmppService extends XmppBase
             spamNotifyFeature,
             emailBlocklistNotifyFeature,
           ])),
-        mox.PingManager(const Duration(minutes: 3)),
+        XmppKeepAliveManager(),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
         SafePubSubManager(),
         mox.CSIManager(),
@@ -923,6 +928,7 @@ class XmppService extends XmppBase
     if (withForeground) {
       _scheduleConnectivityNotificationUpdate(state);
     }
+    _pingController.handleConnectionState(state);
   }
 
   void _scheduleConnectivityNotificationUpdate(ConnectionState state) {
@@ -1006,6 +1012,7 @@ class XmppService extends XmppBase
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
     _reconnectBlocked = false;
+    _ensureNetworkAvailabilityListener();
     if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
     }
@@ -1114,6 +1121,7 @@ class XmppService extends XmppBase
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
     _reconnectBlocked = false;
+    _ensureNetworkAvailabilityListener();
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
     if (activeJid != null && activeJid != targetJid.toBare().toString()) {
@@ -1951,6 +1959,27 @@ class XmppService extends XmppBase
     );
   }
 
+  void _ensureNetworkAvailabilityListener() {
+    if (_networkAvailabilitySubscription != null) {
+      return;
+    }
+    _networkAvailabilitySubscription =
+        NetworkAvailabilityService.instance.stream.listen((availability) {
+      if (!availability.isAvailable) {
+        return;
+      }
+      fireAndForget(
+        () => requestReconnect(ReconnectTrigger.networkAvailable),
+        operationName: 'XmppService.reconnectOnNetworkAvailable',
+      );
+    });
+  }
+
+  Future<void> _stopNetworkAvailabilityListener() async {
+    await _networkAvailabilitySubscription?.cancel();
+    _networkAvailabilitySubscription = null;
+  }
+
   void _resetConnectTimeoutTracking() {
     _consecutiveConnectTimeouts = 0;
   }
@@ -2282,6 +2311,8 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _setConnectionState(ConnectionState.notConnected);
+    _pingController.stop();
+    await _stopNetworkAvailabilityListener();
     await _clearSelfPresenceOnDisconnect();
     _connectInFlight = false;
     _consecutiveConnectTimeouts = 0;
@@ -2936,9 +2967,14 @@ final class _XmppStanzaSizeGuard {
   }
 }
 
+abstract class XmppTrafficTracker {
+  DateTime? get lastIncomingAt;
+  DateTime? get lastOutgoingAt;
+}
+
 /// Stream management negotiator that tolerates missing managers and avoids null
 /// dereferences during feature matching.
-class XmppSocketWrapper implements mox.BaseSocketWrapper {
+class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   XmppSocketWrapper();
 
   static final _log = Logger('XmppSocketWrapper');
@@ -2981,6 +3017,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   final Set<Socket> _expectedClosures = {};
   bool _secure = false;
   String _xmlTokenCarry = '';
+  DateTime? _lastIncomingAt;
+  DateTime? _lastOutgoingAt;
 
   @override
   bool isSecure() => _secure;
@@ -2990,6 +3028,20 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   @override
   bool whitespacePingAllowed() => true;
+
+  @override
+  DateTime? get lastIncomingAt => _lastIncomingAt;
+
+  @override
+  DateTime? get lastOutgoingAt => _lastOutgoingAt;
+
+  void _recordIncomingTraffic() {
+    _lastIncomingAt = DateTime.timestamp();
+  }
+
+  void _recordOutgoingTraffic() {
+    _lastOutgoingAt = DateTime.timestamp();
+  }
 
   void registerConnectionCallbacks({
     void Function()? onConnectSuccess,
@@ -3080,6 +3132,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
     _socketSubscription = socket.listen(
       (List<int> event) {
+        _recordIncomingTraffic();
         final data = utf8.decode(event);
         if (_containsForbiddenXml(data)) {
           _log.warning(_xmlForbiddenLog);
@@ -3229,6 +3282,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       return;
     }
 
+    _recordOutgoingTraffic();
     try {
       socket.write(data);
     } on Exception catch (error) {

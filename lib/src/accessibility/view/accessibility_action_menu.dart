@@ -123,6 +123,568 @@ String _stepLabelFor(BuildContext context, AccessibilityStepEntry entry) {
   }
 }
 
+List<AccessibilityMenuSection> _sectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+) {
+  final entry = state.stack.last;
+  switch (entry.kind) {
+    case AccessibilityStepKind.root:
+      return _rootSectionsFor(context, state);
+    case AccessibilityStepKind.contactPicker:
+      final purpose = entry.purpose ?? AccessibilityFlowPurpose.openChat;
+      return _contactSectionsFor(context, state, purpose);
+    case AccessibilityStepKind.unread:
+      return _unreadSectionsFor(context, state);
+    case AccessibilityStepKind.invites:
+      return _inviteSectionsFor(context, state);
+    case AccessibilityStepKind.composer:
+      return _conversationSectionsFor(context, state, entry);
+    case AccessibilityStepKind.newContact:
+      return _newContactSectionsFor(context, state);
+    case AccessibilityStepKind.chatMessages:
+      return _conversationSectionsFor(context, state, entry);
+    case AccessibilityStepKind.conversation:
+      return _conversationSectionsFor(context, state, entry);
+  }
+}
+
+List<AccessibilityMenuSection> _rootSectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+) {
+  final l10n = context.l10n;
+  final sections = <AccessibilityMenuSection>[];
+  final totalUnread = state.contacts.fold<int>(
+    0,
+    (count, contact) =>
+        contact.unreadCount > 0 ? count + contact.unreadCount : count,
+  );
+
+  sections.add(
+    AccessibilityMenuSection(
+      id: 'actions',
+      title: l10n.accessibilityActionsTitle,
+      items: [
+        AccessibilityMenuItem(
+          id: 'action-start-chat',
+          label: l10n.accessibilityStartNewChat,
+          description: l10n.accessibilityStartNewChatDescription,
+          kind: AccessibilityMenuItemKind.navigate,
+          action: const AccessibilityNavigateAction(
+            step: AccessibilityStepKind.contactPicker,
+            purpose: AccessibilityFlowPurpose.sendMessage,
+          ),
+          icon: Icons.add_comment_outlined,
+        ),
+        AccessibilityMenuItem(
+          id: 'action-unread',
+          label: l10n.accessibilityReadNewMessages,
+          description: l10n.accessibilityUnreadSummaryDescription,
+          kind: AccessibilityMenuItemKind.navigate,
+          action: const AccessibilityNavigateAction(
+            step: AccessibilityStepKind.unread,
+            purpose: AccessibilityFlowPurpose.reviewUnread,
+          ),
+          icon: Icons.mark_chat_unread_outlined,
+          badge: totalUnread > 0 ? totalUnread.toString() : null,
+        ),
+      ],
+    ),
+  );
+
+  if (state.invites.isNotEmpty) {
+    sections.addAll(_inviteSectionsFor(context, state));
+  }
+
+  final orderedDrafts = List<Draft>.of(state.drafts)
+    ..sort((a, b) => b.id.compareTo(a.id));
+
+  final chatItems = state.contacts
+      .where((contact) => contact.source == AccessibilityContactSource.chat)
+      .map(
+        (contact) => AccessibilityMenuItem(
+          id: 'chat-${contact.jid}',
+          label: contact.displayName,
+          description: contact.subtitle,
+          kind: AccessibilityMenuItemKind.command,
+          action: AccessibilityCommandAction(
+            command: AccessibilityCommand.openChat,
+            contact: contact,
+          ),
+          icon: contact.isGroup
+              ? Icons.groups_2_outlined
+              : Icons.chat_bubble_outline,
+          badge:
+              contact.unreadCount > 0 ? contact.unreadCount.toString() : null,
+        ),
+      )
+      .toList();
+
+  sections.add(
+    AccessibilityMenuSection(
+      id: 'chats',
+      title: l10n.homeTabChats,
+      items: chatItems.isEmpty
+          ? [
+              AccessibilityMenuItem(
+                id: 'chats-empty',
+                label: l10n.chatsEmptyList,
+                description: '',
+                kind: AccessibilityMenuItemKind.readOnly,
+                action: const AccessibilityNoopAction(),
+              ),
+            ]
+          : chatItems,
+    ),
+  );
+
+  if (orderedDrafts.isNotEmpty) {
+    sections.add(
+      AccessibilityMenuSection(
+        id: 'drafts',
+        title: l10n.homeTabDrafts,
+        items: _draftMenuItemsFor(context, state, orderedDrafts),
+      ),
+    );
+  }
+
+  return sections;
+}
+
+List<AccessibilityMenuItem> _draftMenuItemsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+  List<Draft> drafts,
+) {
+  final l10n = context.l10n;
+  return drafts.take(10).map((draft) {
+    final description = _draftDescriptionFor(context, state, draft);
+    final recipientsLabel = _draftRecipientsLabelFor(state, draft.jids);
+    final label = recipientsLabel.isEmpty
+        ? l10n.accessibilityDraftLabel(draft.id)
+        : l10n.accessibilityDraftLabelWithRecipients(recipientsLabel);
+    return AccessibilityMenuItem(
+      id: 'draft-${draft.id}',
+      label: label,
+      description: description,
+      kind: AccessibilityMenuItemKind.command,
+      action: AccessibilityCommandAction(
+        command: AccessibilityCommand.resumeDraft,
+        draft: draft,
+      ),
+      icon: Icons.note_outlined,
+    );
+  }).toList();
+}
+
+String _draftDescriptionFor(
+  BuildContext context,
+  AccessibilityActionState state,
+  Draft draft,
+) {
+  final l10n = context.l10n;
+  final recipientsLabel = _draftRecipientsLabelFor(state, draft.jids);
+  final body = (draft.body ?? '').trim();
+  final preview = body.isEmpty
+      ? l10n.accessibilityMessageNoContent
+      : (body.length > 80 ? '${body.substring(0, 80)}…' : body);
+  if (recipientsLabel.isEmpty) return preview;
+  return l10n.accessibilityDraftPreview(recipientsLabel, preview);
+}
+
+String _draftRecipientsLabelFor(
+  AccessibilityActionState state,
+  List<String> jids,
+) {
+  if (jids.isEmpty) return '';
+  final names = jids.map((jid) => _contactForJid(state, jid).displayName);
+  return names.join(', ');
+}
+
+List<AccessibilityMenuSection> _contactSectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+  AccessibilityFlowPurpose purpose,
+) {
+  final l10n = context.l10n;
+  final description = purpose == AccessibilityFlowPurpose.sendMessage
+      ? l10n.chatComposerMessageHint
+      : l10n.chatSearchMessages;
+  final items = state.contacts
+      .map(
+        (contact) => AccessibilityMenuItem(
+          id: 'contact-${contact.jid}',
+          label: contact.displayName,
+          description: contact.subtitle,
+          kind: purpose == AccessibilityFlowPurpose.sendMessage
+              ? AccessibilityMenuItemKind.selectContact
+              : AccessibilityMenuItemKind.command,
+          action: purpose == AccessibilityFlowPurpose.sendMessage
+              ? AccessibilitySelectContactAction(contact: contact)
+              : AccessibilityCommandAction(
+                  command: AccessibilityCommand.openChat,
+                  contact: contact,
+                ),
+          icon: contact.isGroup ? Icons.groups_outlined : Icons.person_outline,
+          badge:
+              contact.unreadCount > 0 ? contact.unreadCount.toString() : null,
+        ),
+      )
+      .toList();
+  if (purpose == AccessibilityFlowPurpose.sendMessage) {
+    items.add(
+      AccessibilityMenuItem(
+        id: 'new-contact',
+        label: l10n.accessibilityStartChat,
+        description: l10n.accessibilityStartChatHint,
+        kind: AccessibilityMenuItemKind.navigate,
+        action: const AccessibilityNavigateAction(
+          step: AccessibilityStepKind.newContact,
+          purpose: AccessibilityFlowPurpose.sendMessage,
+        ),
+        icon: Icons.create,
+      ),
+    );
+  }
+  return [
+    AccessibilityMenuSection(
+      id: 'contacts',
+      title: description,
+      items: items,
+    ),
+  ];
+}
+
+List<AccessibilityMenuSection> _unreadSectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+) {
+  final l10n = context.l10n;
+  final items = state.contacts
+      .where((contact) => contact.unreadCount > 0)
+      .map(
+        (contact) => AccessibilityMenuItem(
+          id: 'unread-${contact.jid}',
+          label: contact.displayName,
+          description: _unreadDescriptionFor(context, contact),
+          kind: AccessibilityMenuItemKind.command,
+          action: AccessibilityCommandAction(
+            command: AccessibilityCommand.openChat,
+            contact: contact,
+          ),
+          icon: Icons.mark_chat_unread_outlined,
+          badge: contact.unreadCount.toString(),
+        ),
+      )
+      .toList();
+  if (items.isEmpty) {
+    items.add(
+      AccessibilityMenuItem(
+        id: 'unread-none',
+        label: l10n.accessibilityUnreadEmpty,
+        description: '',
+        kind: AccessibilityMenuItemKind.command,
+        action: const AccessibilityCommandAction(
+          command: AccessibilityCommand.closeMenu,
+        ),
+        icon: Icons.mark_chat_unread_outlined,
+        disabled: true,
+      ),
+    );
+  }
+  return [
+    AccessibilityMenuSection(
+      id: 'unread',
+      title: l10n.accessibilityReadNewMessages,
+      items: items,
+    ),
+  ];
+}
+
+List<AccessibilityMenuSection> _inviteSectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+) {
+  final l10n = context.l10n;
+  final items = <AccessibilityMenuItem>[];
+  for (final invite in state.invites) {
+    items.addAll([
+      AccessibilityMenuItem(
+        id: 'invite-accept-${invite.jid}',
+        label: l10n.accessibilityAcceptInvite,
+        description: invite.jid,
+        kind: AccessibilityMenuItemKind.inviteDecision,
+        action: AccessibilityInviteDecisionAction(
+          invite: invite,
+          accept: true,
+        ),
+        icon: Icons.person_add_alt,
+      ),
+      AccessibilityMenuItem(
+        id: 'invite-reject-${invite.jid}',
+        label: l10n.accessibilityInviteDismissed,
+        description: invite.jid,
+        kind: AccessibilityMenuItemKind.inviteDecision,
+        action: AccessibilityInviteDecisionAction(
+          invite: invite,
+          accept: false,
+        ),
+        icon: Icons.person_off_outlined,
+        destructive: true,
+      ),
+    ]);
+  }
+  if (items.isEmpty) {
+    items.add(
+      AccessibilityMenuItem(
+        id: 'invites-none',
+        label: l10n.accessibilityInvitesEmpty,
+        description: '',
+        kind: AccessibilityMenuItemKind.command,
+        action: const AccessibilityCommandAction(
+          command: AccessibilityCommand.closeMenu,
+        ),
+        icon: Icons.person_add_disabled_outlined,
+        disabled: true,
+      ),
+    );
+  }
+  return [
+    AccessibilityMenuSection(
+      id: 'invites',
+      title: l10n.accessibilityInvitesTitle,
+      items: items,
+    ),
+  ];
+}
+
+List<AccessibilityMenuSection> _conversationSectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+  AccessibilityStepEntry entry,
+) {
+  return [_messageSectionFor(context, state, entry)];
+}
+
+AccessibilityMenuSection _messageSectionFor(
+  BuildContext context,
+  AccessibilityActionState state,
+  AccessibilityStepEntry entry,
+) {
+  final l10n = context.l10n;
+  final targetJid = entry.recipients.isNotEmpty
+      ? entry.recipients.first.jid
+      : state.activeChatJid;
+  if (targetJid == null) {
+    return AccessibilityMenuSection(
+      id: 'chat-messages',
+      title: l10n.accessibilityMessagesTitle,
+      items: [
+        AccessibilityMenuItem(
+          id: 'msg-none',
+          label: l10n.accessibilityNoConversationSelected,
+          description: '',
+          kind: AccessibilityMenuItemKind.readOnly,
+          action: const AccessibilityNoopAction(),
+        ),
+      ],
+    );
+  }
+  final contact = _contactFor(state, context, targetJid);
+  final items = <AccessibilityMenuItem>[];
+  var lastSender = '';
+  final attachmentIndex = state.attachments;
+  for (final message in state.messages) {
+    final senderLabel = _senderLabelFor(context, state, message);
+    final timestampLabel = _formatTimestamp(context, message.timestamp);
+    final attachments = attachmentIndex[_messageId(message)] ?? const [];
+    final attachment = attachments.isNotEmpty ? attachments.first : null;
+    final body = (message.body ?? '').trim();
+    final attachmentNote = _attachmentLabelFor(
+      context,
+      message,
+      metadata: attachments,
+    );
+    final fullBody = body.isNotEmpty
+        ? body
+        : (attachmentNote ?? l10n.accessibilityMessageNoContent);
+    final showSender = senderLabel != lastSender;
+    final label = showSender
+        ? l10n.accessibilityMessageLabel(
+            senderLabel,
+            timestampLabel,
+            fullBody,
+          )
+        : fullBody;
+    items.add(
+      AccessibilityMenuItem(
+        id: 'msg-${_messageId(message)}',
+        label: label,
+        description: showSender ? null : senderLabel,
+        kind: AccessibilityMenuItemKind.readOnly,
+        action: const AccessibilityNoopAction(),
+        message: message,
+        attachment: attachment,
+        attachmentLabel: attachmentNote,
+        senderLabel: senderLabel,
+        timestampLabel: timestampLabel,
+        showMetadata: showSender,
+      ),
+    );
+    lastSender = senderLabel;
+  }
+  if (items.isEmpty) {
+    items.add(
+      AccessibilityMenuItem(
+        id: 'msg-empty',
+        label: l10n.accessibilityMessagesEmpty,
+        description: '',
+        kind: AccessibilityMenuItemKind.readOnly,
+        action: const AccessibilityNoopAction(),
+      ),
+    );
+  }
+  final title = contact.displayName.isEmpty
+      ? l10n.accessibilityMessagesTitle
+      : l10n.accessibilityMessagesWithContact(contact.displayName);
+  return AccessibilityMenuSection(
+    id: 'chat-messages',
+    title: title,
+    items: items,
+  );
+}
+
+List<AccessibilityMenuSection> _newContactSectionsFor(
+  BuildContext context,
+  AccessibilityActionState state,
+) {
+  final l10n = context.l10n;
+  return [
+    AccessibilityMenuSection(
+      id: 'new-contact',
+      title: l10n.accessibilityStartChat,
+      items: [
+        AccessibilityMenuItem(
+          id: 'new-contact-confirm',
+          label: l10n.accessibilityStartChat,
+          description: l10n.accessibilityStartChatHint,
+          kind: AccessibilityMenuItemKind.command,
+          action: const AccessibilityCommandAction(
+            command: AccessibilityCommand.confirmNewContact,
+          ),
+          icon: Icons.check,
+          disabled: !state.newContactInput.trim().isValidJid,
+        ),
+      ],
+    ),
+  ];
+}
+
+String _unreadDescriptionFor(
+  BuildContext context,
+  AccessibilityContact contact,
+) =>
+    context.l10n.chatsUnreadLabel(contact.unreadCount);
+
+AccessibilityContact _contactFor(
+  AccessibilityActionState state,
+  BuildContext context,
+  String? jid,
+) {
+  final l10n = context.l10n;
+  final fallbackJid = jid ?? 'unknown';
+  final fallbackName = jid ?? l10n.accessibilityUnknownContact;
+  return state.contacts.firstWhere(
+    (contact) => contact.jid == fallbackJid,
+    orElse: () => AccessibilityContact(
+      jid: fallbackJid,
+      displayName: fallbackName,
+      subtitle: fallbackName,
+      source: AccessibilityContactSource.chat,
+      encryptionProtocol: EncryptionProtocol.none,
+      chatType: ChatType.chat,
+      unreadCount: 0,
+    ),
+  );
+}
+
+AccessibilityContact _contactForJid(
+  AccessibilityActionState state,
+  String jid,
+) {
+  return state.contacts.firstWhere(
+    (contact) => contact.jid == jid,
+    orElse: () => AccessibilityContact(
+      jid: jid,
+      displayName: jid,
+      subtitle: jid,
+      source: AccessibilityContactSource.manual,
+      encryptionProtocol: EncryptionProtocol.omemo,
+      chatType: ChatType.chat,
+      unreadCount: 0,
+    ),
+  );
+}
+
+String _senderLabelFor(
+  BuildContext context,
+  AccessibilityActionState state,
+  Message message,
+) {
+  final l10n = context.l10n;
+  final senderBare = message.senderJid.split('/').first;
+  final myJid = state.myJid;
+  if (myJid != null && senderBare == myJid) {
+    return l10n.chatSenderYou;
+  }
+  final matching = state.contacts.firstWhere(
+    (contact) => contact.jid == senderBare,
+    orElse: () => AccessibilityContact(
+      jid: senderBare,
+      displayName: senderBare,
+      subtitle: senderBare,
+      source: AccessibilityContactSource.chat,
+      encryptionProtocol: message.encryptionProtocol,
+      chatType: ChatType.chat,
+      unreadCount: 0,
+    ),
+  );
+  return matching.displayName;
+}
+
+String _formatTimestamp(BuildContext context, DateTime? timestamp) {
+  final l10n = context.l10n;
+  final safe = timestamp ?? DateTime.now();
+  return DateFormat.yMMMd(l10n.localeName).add_jm().format(safe);
+}
+
+String? _attachmentLabelFor(
+  BuildContext context,
+  Message message, {
+  List<FileMetadataData>? metadata,
+}) {
+  final l10n = context.l10n;
+  final resolvedMetadata =
+      metadata == null || metadata.isEmpty ? null : metadata.first;
+  final filename = resolvedMetadata?.filename.trim();
+  if (filename != null && filename.isNotEmpty) {
+    return l10n.accessibilityAttachmentWithName(filename);
+  }
+  if (metadata?.isNotEmpty == true || message.fileMetadataID != null) {
+    return l10n.accessibilityAttachmentGeneric;
+  }
+  if (message.isFileUploadNotification) {
+    return l10n.accessibilityUploadAvailable;
+  }
+  if (message.pseudoMessageType != null) {
+    return message.pseudoMessageType!.name;
+  }
+  return null;
+}
+
+String _messageId(Message message) => message.id ?? message.stanzaID;
+
 class AccessibilityActionMenu extends StatefulWidget {
   const AccessibilityActionMenu({super.key});
 
@@ -649,7 +1211,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
   }
 
   bool _hasMessageSection(AccessibilityActionState state) =>
-      state.sections.any((section) => section.id == 'chat-messages');
+      _sectionsFor(context, state)
+          .any((section) => section.id == 'chat-messages');
 
   bool _shouldWarnOnExit(AccessibilityActionState state) {
     final entry = state.currentEntry;
@@ -831,9 +1394,9 @@ class _AccessibilityActionContent extends StatelessWidget {
     final hasComposer = isConversation;
     final hasNewContact =
         state.currentEntry.kind == AccessibilityStepKind.newContact;
-    final messageSections = state.sections
-        .where((section) => section.id == 'chat-messages')
-        .toList();
+    final sections = _sectionsFor(context, state);
+    final messageSections =
+        sections.where((section) => section.id == 'chat-messages').toList();
     final messageSection =
         messageSections.isNotEmpty ? messageSections.first : null;
     int activeUnreadCount(
@@ -871,9 +1434,7 @@ class _AccessibilityActionContent extends StatelessWidget {
 
     final actionSections = hasNewContact
         ? <AccessibilityMenuSection>[]
-        : state.sections
-            .where((section) => section.id != 'chat-messages')
-            .toList();
+        : sections.where((section) => section.id != 'chat-messages').toList();
     final hasMessages = messageSections.isNotEmpty;
     final hasSections = actionSections.isNotEmpty;
     final conversationListHeight = _conversationListHeight(viewportHeight);
