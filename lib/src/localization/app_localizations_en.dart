@@ -355,6 +355,50 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chatComposerEmptyMessage => 'Message cannot be empty.';
+
+  @override
+  String get chatComposerEmailUnavailable =>
+      'Email sending is unavailable for this chat.';
+
+  @override
+  String get chatComposerFileUploadUnavailable =>
+      'File upload is not available on this server.';
+
+  @override
+  String get chatComposerSelectRecipient => 'Select at least one recipient.';
+
+  @override
+  String get chatComposerEmailRecipientUnavailable =>
+      'Email is unavailable for one or more recipients.';
+
+  @override
+  String get chatComposerEmailAttachmentRecipientRequired =>
+      'Add an email recipient to send attachments.';
+
+  @override
+  String get chatComposerDraftRecipientsUnavailable =>
+      'Unable to resolve recipients for this draft.';
+
+  @override
+  String get chatComposerSendFailed =>
+      'Unable to send message. Please try again.';
+
+  @override
+  String get chatEmailOfflineRetryMessage =>
+      'Email is offline. Retry once sync recovers.';
+
+  @override
+  String get chatEmailOfflineDraftsFallback =>
+      'Email is offline. Messages will be saved to Drafts until the connection returns.';
+
+  @override
+  String get chatEmailSyncRefreshing => 'Email sync is refreshing...';
+
+  @override
+  String get chatEmailSyncFailed => 'Email sync failed. Please try again.';
+
+  @override
   String get chatReadOnly => 'Read only';
 
   @override
@@ -1542,6 +1586,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter text. Use Tab to move forward or Escape to go back or close the menu.';
 
   @override
+  String get accessibilityLoadingLabel => 'Loading';
+
+  @override
   String get accessibilityComposerPlaceholder => 'Type a message';
 
   @override
@@ -2529,6 +2576,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatsCreateGroupChatTooltip => 'Create group chat';
 
   @override
+  String get chatsCreateGroupSuccess => 'Group chat created.';
+
+  @override
+  String get chatsCreateGroupFailure => 'Could not create group chat.';
+
+  @override
+  String get chatsRefreshFailed => 'Sync failed.';
+
+  @override
   String get chatsRoomLabel => 'Room';
 
   @override
@@ -2642,6 +2698,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => 'Syncing';
+
+  @override
+  String get emailSyncMessageSyncing => 'Syncing email...';
+
+  @override
+  String get emailSyncMessageConnecting => 'Connecting to email servers...';
+
+  @override
+  String get emailSyncMessageDisconnected => 'Disconnected from email servers.';
+
+  @override
+  String get emailSyncMessageGroupMembershipChanged =>
+      'Email group membership changed. Try reopening the chat.';
+
+  @override
+  String get emailSyncMessageHistorySyncing => 'Syncing email history...';
+
+  @override
+  String get emailSyncMessageRetrying => 'Email sync will retry shortly...';
 
   @override
   String get authChangePasswordPending => 'Updating password...';
@@ -4199,6 +4274,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarTaskShareReadOnlyLabel => 'Read only';
 
   @override
+  String get calendarTaskShareEditableLabel => 'Editable';
+
+  @override
   String get calendarTaskShareReadOnlyHint =>
       'Recipients can view this task, but only you can edit it.';
 
@@ -4529,6 +4607,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calendarAvailabilityRequestTitleFallback => 'Requested time';
+
+  @override
+  String get calendarAvailabilityShareFallback => 'Shared availability';
+
+  @override
+  String get calendarAvailabilityRequestFallback => 'Availability request';
+
+  @override
+  String get calendarAvailabilityResponseAcceptedFallback =>
+      'Availability accepted';
+
+  @override
+  String get calendarAvailabilityResponseDeclinedFallback =>
+      'Availability declined';
 
   @override
   String get calendarFreeBusyFree => 'Free';

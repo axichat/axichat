@@ -52,9 +52,6 @@ class ChatsList extends StatelessWidget {
     final showToast = ShadToaster.maybeOf(context)?.show;
     final bool isDesktopPlatform =
         EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
-    const creationSuccessMessage = 'Group chat created.';
-    const creationFailureMessage = 'Could not create group chat.';
-    const refreshFailureMessage = 'Sync failed.';
     const refreshSpinnerExtent = 56.0;
     const refreshSpinnerDimension = 20.0;
     const refreshOffsetToArmed = 96.0;
@@ -67,17 +64,21 @@ class ChatsList extends StatelessWidget {
       listener: (context, state) {
         if (state.creationStatus.isSuccess) {
           showToast?.call(
-            FeedbackToast.success(message: creationSuccessMessage),
+            FeedbackToast.success(message: l10n.chatsCreateGroupSuccess),
           );
           context.read<ChatsCubit>().clearCreationStatus();
         } else if (state.creationStatus.isFailure) {
-          showToast?.call(FeedbackToast.error(message: creationFailureMessage));
+          showToast?.call(
+            FeedbackToast.error(message: l10n.chatsCreateGroupFailure),
+          );
           context.read<ChatsCubit>().clearCreationStatus();
         }
         if (state.refreshStatus.isSuccess) {
           context.read<ChatsCubit>().clearRefreshStatus();
         } else if (state.refreshStatus.isFailure) {
-          showToast?.call(FeedbackToast.error(message: refreshFailureMessage));
+          showToast?.call(
+            FeedbackToast.error(message: l10n.chatsRefreshFailed),
+          );
           context.read<ChatsCubit>().clearRefreshStatus();
         }
       },

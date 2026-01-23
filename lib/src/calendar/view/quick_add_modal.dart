@@ -1636,7 +1636,6 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
   return showAdaptiveBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    useRootNavigator: true,
     showDragHandle: useSheet,
     isDismissible: true,
     barrierColor: Colors.black54,

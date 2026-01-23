@@ -347,6 +347,42 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get chatComposerEmptyMessage => '消息不能为空。';
+
+  @override
+  String get chatComposerEmailUnavailable => '此聊天无法发送邮件。';
+
+  @override
+  String get chatComposerFileUploadUnavailable => '此服务器不支持文件上传。';
+
+  @override
+  String get chatComposerSelectRecipient => '请选择至少一个收件人。';
+
+  @override
+  String get chatComposerEmailRecipientUnavailable => '一个或多个收件人无法使用邮件。';
+
+  @override
+  String get chatComposerEmailAttachmentRecipientRequired => '请添加邮件收件人以发送附件。';
+
+  @override
+  String get chatComposerDraftRecipientsUnavailable => '无法解析此草稿的收件人。';
+
+  @override
+  String get chatComposerSendFailed => '消息发送失败，请重试。';
+
+  @override
+  String get chatEmailOfflineRetryMessage => '邮件离线。同步恢复后再试。';
+
+  @override
+  String get chatEmailOfflineDraftsFallback => '邮件离线。消息将保存到草稿，直到连接恢复。';
+
+  @override
+  String get chatEmailSyncRefreshing => '邮件同步正在刷新...';
+
+  @override
+  String get chatEmailSyncFailed => '邮件同步失败，请重试。';
+
+  @override
   String get chatReadOnly => '只读';
 
   @override
@@ -1494,6 +1530,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get accessibilityTextFieldHint => '输入文本。按 Tab 前进，或按 Escape 返回或关闭菜单。';
 
   @override
+  String get accessibilityLoadingLabel => '加载中';
+
+  @override
   String get accessibilityComposerPlaceholder => '输入消息';
 
   @override
@@ -2457,6 +2496,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsCreateGroupChatTooltip => '创建群聊';
 
   @override
+  String get chatsCreateGroupSuccess => '群聊已创建。';
+
+  @override
+  String get chatsCreateGroupFailure => '无法创建群聊。';
+
+  @override
+  String get chatsRefreshFailed => '同步失败。';
+
+  @override
   String get chatsRoomLabel => '房间';
 
   @override
@@ -2570,6 +2618,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => '同步中';
+
+  @override
+  String get emailSyncMessageSyncing => '正在同步邮件...';
+
+  @override
+  String get emailSyncMessageConnecting => '正在连接邮件服务器...';
+
+  @override
+  String get emailSyncMessageDisconnected => '已与邮件服务器断开连接。';
+
+  @override
+  String get emailSyncMessageGroupMembershipChanged => '邮件群组成员已更改。请重新打开聊天。';
+
+  @override
+  String get emailSyncMessageHistorySyncing => '正在同步邮件历史...';
+
+  @override
+  String get emailSyncMessageRetrying => '邮件同步将很快重试...';
 
   @override
   String get authChangePasswordPending => '正在更新密码...';
@@ -4075,6 +4141,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarTaskShareReadOnlyLabel => '只读';
 
   @override
+  String get calendarTaskShareEditableLabel => '可编辑';
+
+  @override
   String get calendarTaskShareReadOnlyHint => '收件人可以查看此任务，但只有你可以编辑。';
 
   @override
@@ -4345,6 +4414,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get calendarAvailabilityRequestTitleFallback => '请求的时间';
+
+  @override
+  String get calendarAvailabilityShareFallback => '已共享可用时间';
+
+  @override
+  String get calendarAvailabilityRequestFallback => '可用时间请求';
+
+  @override
+  String get calendarAvailabilityResponseAcceptedFallback => '可用时间已接受';
+
+  @override
+  String get calendarAvailabilityResponseDeclinedFallback => '可用时间已拒绝';
 
   @override
   String get calendarFreeBusyFree => '空闲';
@@ -5568,6 +5649,42 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
+  String get chatComposerEmptyMessage => '訊息不能為空。';
+
+  @override
+  String get chatComposerEmailUnavailable => '此聊天無法傳送電郵。';
+
+  @override
+  String get chatComposerFileUploadUnavailable => '此伺服器不支援檔案上傳。';
+
+  @override
+  String get chatComposerSelectRecipient => '請選擇至少一位收件人。';
+
+  @override
+  String get chatComposerEmailRecipientUnavailable => '一位或多位收件人無法使用電郵。';
+
+  @override
+  String get chatComposerEmailAttachmentRecipientRequired => '請新增電郵收件人以傳送附件。';
+
+  @override
+  String get chatComposerDraftRecipientsUnavailable => '無法解析此草稿的收件人。';
+
+  @override
+  String get chatComposerSendFailed => '無法傳送訊息。請再試一次。';
+
+  @override
+  String get chatEmailOfflineRetryMessage => '電郵離線。同步恢復後再試。';
+
+  @override
+  String get chatEmailOfflineDraftsFallback => '電郵離線。訊息將儲存到草稿，直到連線恢復。';
+
+  @override
+  String get chatEmailSyncRefreshing => '電郵同步正在更新...';
+
+  @override
+  String get chatEmailSyncFailed => '電郵同步失敗。請再試一次。';
+
+  @override
   String get chatReadOnly => '唯讀';
 
   @override
@@ -6715,6 +6832,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get accessibilityTextFieldHint => '輸入文字。按 Tab 前進，或按 Escape 返回或關閉選單。';
 
   @override
+  String get accessibilityLoadingLabel => '載入中';
+
+  @override
   String get accessibilityComposerPlaceholder => '輸入訊息';
 
   @override
@@ -7678,6 +7798,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsCreateGroupChatTooltip => '建立群組聊天';
 
   @override
+  String get chatsCreateGroupSuccess => '群組聊天已建立。';
+
+  @override
+  String get chatsCreateGroupFailure => '無法建立群組聊天。';
+
+  @override
+  String get chatsRefreshFailed => '同步失敗。';
+
+  @override
   String get chatsRoomLabel => '聊天室';
 
   @override
@@ -7791,6 +7920,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get sessionCapabilityStatusSyncing => '同步中';
+
+  @override
+  String get emailSyncMessageSyncing => '正在同步電郵...';
+
+  @override
+  String get emailSyncMessageConnecting => '正在連線到電郵伺服器...';
+
+  @override
+  String get emailSyncMessageDisconnected => '已與電郵伺服器中斷連線。';
+
+  @override
+  String get emailSyncMessageGroupMembershipChanged => '電郵群組成員已變更。請重新開啟聊天。';
+
+  @override
+  String get emailSyncMessageHistorySyncing => '正在同步電郵歷史...';
+
+  @override
+  String get emailSyncMessageRetrying => '電郵同步將很快重試...';
 
   @override
   String get authChangePasswordPending => '正在更新密碼...';
@@ -9296,6 +9443,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarTaskShareReadOnlyLabel => '唯讀';
 
   @override
+  String get calendarTaskShareEditableLabel => '可編輯';
+
+  @override
   String get calendarTaskShareReadOnlyHint => '收件人可查看此工作，但只有你可以編輯。';
 
   @override
@@ -9566,6 +9716,18 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarAvailabilityRequestTitleFallback => '請求的時間';
+
+  @override
+  String get calendarAvailabilityShareFallback => '已分享可用時間';
+
+  @override
+  String get calendarAvailabilityRequestFallback => '可用時間請求';
+
+  @override
+  String get calendarAvailabilityResponseAcceptedFallback => '可用時間已接受';
+
+  @override
+  String get calendarAvailabilityResponseDeclinedFallback => '可用時間已拒絕';
 
   @override
   String get calendarFreeBusyFree => '空閒';

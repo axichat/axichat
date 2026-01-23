@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -32,6 +33,7 @@ import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -74,9 +76,6 @@ const int _connectivityDowngradeGraceSeconds = 2;
 const _connectivityDowngradeGrace = Duration(
   seconds: _connectivityDowngradeGraceSeconds,
 );
-const _emailSyncingMessage = 'Syncing email…';
-const _emailConnectingMessage = 'Connecting to email servers…';
-const _emailDisconnectedMessage = 'Disconnected from email servers.';
 const _coreDraftMessageId = 0;
 const int _deltaEventMessageUnset = 0;
 const String _securityModeSsl = 'ssl';
@@ -312,6 +311,10 @@ class EmailService {
   final NotificationService? _notificationService;
   final MessageService? _messageService;
   final ForegroundTaskBridge? _foregroundBridge;
+
+  AppLocalizations get _l10n =>
+      _notificationService?.localizations ??
+      lookupAppLocalizations(const Locale('en'));
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
@@ -2493,7 +2496,7 @@ class EmailService {
       EmailSyncState.error(
         details?.isNotEmpty == true
             ? details!
-            : 'Email group membership changed. Try reopening the chat.',
+            : _l10n.emailSyncMessageGroupMembershipChanged,
       ),
       source: _EmailSyncSource.selfNotInGroup,
     );
@@ -2517,7 +2520,7 @@ class EmailService {
           return;
         }
         _updateSyncState(
-          const EmailSyncState.recovering(_emailSyncingMessage),
+          EmailSyncState.recovering(_l10n.emailSyncMessageSyncing),
           source: source,
         );
         return;
@@ -2583,13 +2586,13 @@ class EmailService {
   }) {
     if (connectivity >= _connectivityConnectingMin) {
       _updateSyncState(
-        const EmailSyncState.recovering(_emailConnectingMessage),
+        EmailSyncState.recovering(_l10n.emailSyncMessageConnecting),
         source: source,
       );
       return;
     }
     _updateSyncState(
-      const EmailSyncState.offline(_emailDisconnectedMessage),
+      EmailSyncState.offline(_l10n.emailSyncMessageDisconnected),
       source: source,
     );
   }
@@ -2768,7 +2771,7 @@ class EmailService {
   }) async {
     if (_syncState.status == EmailSyncStatus.ready) {
       _updateSyncState(
-        const EmailSyncState.recovering('Syncing email history…'),
+        EmailSyncState.recovering(_l10n.emailSyncMessageHistorySyncing),
         source: _EmailSyncSource.bootstrapStart,
       );
     }
@@ -2792,7 +2795,7 @@ class EmailService {
       if (_syncState.status == EmailSyncStatus.ready ||
           _syncState.status == EmailSyncStatus.recovering) {
         _updateSyncState(
-          const EmailSyncState.recovering('Email sync will retry shortly…'),
+          EmailSyncState.recovering(_l10n.emailSyncMessageRetrying),
           source: _EmailSyncSource.bootstrapRetry,
         );
       }
