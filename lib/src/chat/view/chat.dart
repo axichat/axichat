@@ -7548,7 +7548,8 @@ class _ChatState extends State<Chat> {
                                                                   .end
                                                               : CrossAxisAlignment
                                                                   .start;
-                                                          final replyPreview =
+                                                          final Widget?
+                                                              replyPreview =
                                                               quotedModel ==
                                                                       null
                                                                   ? null
@@ -7578,21 +7579,11 @@ class _ChatState extends State<Chat> {
                                                                               final resolved = nick?.trim() ?? '';
                                                                               return resolved.isNotEmpty ? resolved : quotedModel.senderJid;
                                                                             }();
-                                                                      return Align(
-                                                                        alignment:
-                                                                            messageRowAlignment,
-                                                                        child:
-                                                                            ConstrainedBox(
-                                                                          constraints:
-                                                                              bubbleConstraints,
-                                                                          child:
-                                                                              _QuotedMessagePreview(
-                                                                            message:
-                                                                                quotedModel,
-                                                                            senderLabel:
-                                                                                quotedSenderLabel,
-                                                                          ),
-                                                                        ),
+                                                                      return _QuotedMessagePreview(
+                                                                        message:
+                                                                            quotedModel,
+                                                                        senderLabel:
+                                                                            quotedSenderLabel,
                                                                       );
                                                                     }();
                                                           final attachmentsAligned =
@@ -7752,6 +7743,16 @@ class _ChatState extends State<Chat> {
                                                             child:
                                                                 bubbleWithSlack,
                                                           );
+                                                          final Widget
+                                                              bubbleStackWithReply =
+                                                              _ReplyPreviewBubbleColumn(
+                                                            preview:
+                                                                replyPreview,
+                                                            bubble:
+                                                                bubbleWithSlack,
+                                                            spacing:
+                                                                calendarInsetLg,
+                                                          );
                                                           final messageBody =
                                                               Column(
                                                             mainAxisSize:
@@ -7760,16 +7761,7 @@ class _ChatState extends State<Chat> {
                                                             crossAxisAlignment:
                                                                 messageColumnAlignment,
                                                             children: [
-                                                              if (replyPreview !=
-                                                                  null)
-                                                                replyPreview,
-                                                              if (replyPreview !=
-                                                                  null)
-                                                                const SizedBox(
-                                                                  height:
-                                                                      calendarInsetLg,
-                                                                ),
-                                                              bubbleWithSlack,
+                                                              bubbleStackWithReply,
                                                               if (bubbleExtraChildren
                                                                   .isNotEmpty)
                                                                 extrasAligned,
@@ -12568,21 +12560,43 @@ class _QuotedMessagePreview extends StatelessWidget {
     final resolvedSenderLabel = senderLabel.trim();
     return Builder(
       builder: (context) {
+        const headerMaxLines = 1;
+        const previewMaxLines = 2;
         final split = ChatSubjectCodec.splitXmppBody(message.body);
-        final previewText = split.body.isNotEmpty ? split.body : split.subject;
-        final resolvedPreview = previewText ?? context.l10n.chatQuotedNoContent;
-        final quotedPreview = '"$resolvedPreview"';
+        final subject = split.subject?.trim();
+        final body = split.body.trim();
+        final previewParts = <String>[];
+        if (subject?.isNotEmpty == true) {
+          previewParts.add(subject!);
+        }
+        if (body.isNotEmpty) {
+          previewParts.add(body);
+        }
+        final previewText = previewParts.isNotEmpty
+            ? previewParts.join('\n')
+            : context.l10n.chatQuotedNoContent;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           spacing: calendarInsetSm,
           children: [
-            Text(
-              '${context.l10n.chatReplyingTo} $resolvedSenderLabel',
+            Text.rich(
+              TextSpan(
+                text: context.l10n.chatReplyingTo,
+                children: [
+                  const TextSpan(text: ' '),
+                  TextSpan(
+                    text: resolvedSenderLabel,
+                    style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              maxLines: headerMaxLines,
+              overflow: TextOverflow.ellipsis,
               style: mutedStyle,
             ),
             Text(
-              quotedPreview,
-              maxLines: 2,
+              previewText,
+              maxLines: previewMaxLines,
               overflow: TextOverflow.ellipsis,
               style: mutedStyle,
             ),
@@ -12590,6 +12604,101 @@ class _QuotedMessagePreview extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
+  const _ReplyPreviewBubbleColumn({
+    required this.preview,
+    required this.bubble,
+    required this.spacing,
+  });
+
+  final Widget? preview;
+  final Widget bubble;
+  final double spacing;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderReplyPreviewBubbleColumn(spacing: spacing);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderReplyPreviewBubbleColumn renderObject,
+  ) {
+    renderObject.spacing = spacing;
+  }
+
+  @override
+  List<Widget> get children =>
+      preview == null ? <Widget>[bubble] : <Widget>[preview!, bubble];
+}
+
+class _ReplyPreviewBubbleParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderReplyPreviewBubbleColumn extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _ReplyPreviewBubbleParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox,
+            _ReplyPreviewBubbleParentData> {
+  _RenderReplyPreviewBubbleColumn({required double spacing})
+      : _spacing = spacing;
+
+  double _spacing;
+
+  double get spacing => _spacing;
+
+  set spacing(double value) {
+    if (_spacing == value) return;
+    _spacing = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _ReplyPreviewBubbleParentData) {
+      child.parentData = _ReplyPreviewBubbleParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final previewChild = childCount > 1 ? firstChild : null;
+    final bubbleChild = childCount > 1 ? lastChild : firstChild;
+    if (bubbleChild == null) {
+      size = constraints.smallest;
+      return;
+    }
+    bubbleChild.layout(constraints.loose(), parentUsesSize: true);
+    final bubbleSize = bubbleChild.size;
+    var previewHeight = 0.0;
+    if (previewChild != null) {
+      previewChild.layout(
+        BoxConstraints.tightFor(width: bubbleSize.width),
+        parentUsesSize: true,
+      );
+      previewHeight = previewChild.size.height + spacing;
+      final previewParentData =
+          previewChild.parentData as _ReplyPreviewBubbleParentData;
+      previewParentData.offset = Offset.zero;
+    }
+    final bubbleParentData =
+        bubbleChild.parentData as _ReplyPreviewBubbleParentData;
+    bubbleParentData.offset = Offset(0, previewHeight);
+    size = constraints.constrain(
+      Size(bubbleSize.width, bubbleSize.height + previewHeight),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as _ReplyPreviewBubbleParentData;
+      context.paintChild(child, parentData.offset + offset);
+      child = parentData.nextSibling;
+    }
   }
 }
 
@@ -12608,6 +12717,8 @@ class _QuoteBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    const headerMaxLines = 1;
+    const previewMaxLines = 2;
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
@@ -12622,27 +12733,45 @@ class _QuoteBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               spacing: 4,
               children: [
-                Text(
-                  context.l10n.chatReplyingTo,
+                Text.rich(
+                  TextSpan(
+                    text: context.l10n.chatReplyingTo,
+                    children: [
+                      const TextSpan(text: ' '),
+                      TextSpan(
+                        text: isSelf
+                            ? context.l10n.chatSenderYou
+                            : message.senderJid,
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  maxLines: headerMaxLines,
+                  overflow: TextOverflow.ellipsis,
                   style: context.textTheme.small.copyWith(
                     color: colors.mutedForeground,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  isSelf ? context.l10n.chatSenderYou : message.senderJid,
-                  style: context.textTheme.small.copyWith(
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Builder(
                   builder: (context) {
                     final split = ChatSubjectCodec.splitXmppBody(message.body);
-                    final previewText =
-                        split.body.isNotEmpty ? split.body : split.subject;
+                    final subject = split.subject?.trim();
+                    final body = split.body.trim();
+                    final previewParts = <String>[];
+                    if (subject?.isNotEmpty == true) {
+                      previewParts.add(subject!);
+                    }
+                    if (body.isNotEmpty) {
+                      previewParts.add(body);
+                    }
+                    final previewText = previewParts.isNotEmpty
+                        ? previewParts.join('\n')
+                        : context.l10n.chatQuotedNoContent;
                     return Text(
-                      previewText ?? context.l10n.chatQuotedNoContent,
-                      maxLines: 2,
+                      previewText,
+                      maxLines: previewMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: context.textTheme.small,
                     );
