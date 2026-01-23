@@ -49,8 +49,8 @@ class SettingsState with _$SettingsState {
 }
 
 @freezed
+@JsonSerializable(fieldRename: FieldRename.snake)
 class AttachmentAutoDownloadSettings with _$AttachmentAutoDownloadSettings {
-  @JsonSerializable(fieldRename: FieldRename.snake)
   const factory AttachmentAutoDownloadSettings({
     @Default(true) bool imagesEnabled,
     @Default(false) bool videosEnabled,
