@@ -48,58 +48,19 @@ class SettingsState with _$SettingsState {
       _$SettingsStateFromJson(json);
 }
 
-@immutable
-class AttachmentAutoDownloadSettings {
-  const AttachmentAutoDownloadSettings({
-    this.imagesEnabled = true,
-    this.videosEnabled = false,
-    this.documentsEnabled = false,
-    this.archivesEnabled = false,
-  });
+@freezed
+class AttachmentAutoDownloadSettings with _$AttachmentAutoDownloadSettings {
+  const factory AttachmentAutoDownloadSettings({
+    @Default(true) bool imagesEnabled,
+    @Default(false) bool videosEnabled,
+    @Default(false) bool documentsEnabled,
+    @Default(false) bool archivesEnabled,
+  }) = _AttachmentAutoDownloadSettings;
 
-  final bool imagesEnabled;
-  final bool videosEnabled;
-  final bool documentsEnabled;
-  final bool archivesEnabled;
+  const AttachmentAutoDownloadSettings._();
 
-  AttachmentAutoDownloadSettings copyWith({
-    bool? imagesEnabled,
-    bool? videosEnabled,
-    bool? documentsEnabled,
-    bool? archivesEnabled,
-  }) {
-    return AttachmentAutoDownloadSettings(
-      imagesEnabled: imagesEnabled ?? this.imagesEnabled,
-      videosEnabled: videosEnabled ?? this.videosEnabled,
-      documentsEnabled: documentsEnabled ?? this.documentsEnabled,
-      archivesEnabled: archivesEnabled ?? this.archivesEnabled,
-    );
-  }
-
-  factory AttachmentAutoDownloadSettings.fromJson(
-    Map<String, Object?> json,
-  ) {
-    bool resolveBool(String snakeKey, String camelKey, bool fallback) {
-      final value = json[snakeKey] ?? json[camelKey];
-      return value is bool ? value : fallback;
-    }
-
-    return AttachmentAutoDownloadSettings(
-      imagesEnabled: resolveBool('images_enabled', 'imagesEnabled', true),
-      videosEnabled: resolveBool('videos_enabled', 'videosEnabled', false),
-      documentsEnabled:
-          resolveBool('documents_enabled', 'documentsEnabled', false),
-      archivesEnabled:
-          resolveBool('archives_enabled', 'archivesEnabled', false),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-        'images_enabled': imagesEnabled,
-        'videos_enabled': videosEnabled,
-        'documents_enabled': documentsEnabled,
-        'archives_enabled': archivesEnabled,
-      };
+  factory AttachmentAutoDownloadSettings.fromJson(Map<String, Object?> json) =>
+      _$AttachmentAutoDownloadSettingsFromJson(json);
 
   bool allowsCategory(FileMetadataDownloadCategory category) {
     return switch (category) {
@@ -112,22 +73,4 @@ class AttachmentAutoDownloadSettings {
 
   bool allowsMetadata(FileMetadataData metadata) =>
       allowsCategory(metadata.downloadCategory);
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is AttachmentAutoDownloadSettings &&
-        other.imagesEnabled == imagesEnabled &&
-        other.videosEnabled == videosEnabled &&
-        other.documentsEnabled == documentsEnabled &&
-        other.archivesEnabled == archivesEnabled;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-        imagesEnabled,
-        videosEnabled,
-        documentsEnabled,
-        archivesEnabled,
-      );
 }

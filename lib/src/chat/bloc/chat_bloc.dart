@@ -102,7 +102,6 @@ const _messageResendFailedLogMessage = 'Failed to resend message.';
 const _emailResendFailedLogMessage = 'Failed to resend email message.';
 const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
 const _xmppAttachmentSendFailedLogMessage = 'Failed to send XMPP attachment.';
-const _offlineDraftSaveFailedLogMessage = 'Failed to save offline email draft.';
 const _xmppDraftSaveFailedLogMessage = 'Failed to save XMPP draft.';
 const _mucOccupantSeparator = '/';
 const int _pinnedMessagesFetchPageLimit = 4;
@@ -377,7 +376,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
-  String? _lastOfflineDraftSignature;
   String? _lastEmailSendSignature;
   String? _lastXmppSendSignature;
 
@@ -498,12 +496,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final xmppService = _xmppService;
     if (xmppService == null) return false;
     return xmppService.hasGlobalMamSyncForCurrentSession;
-  }
-
-  bool get _shouldUseCoreDraftFallback {
-    final emailService = _emailService;
-    if (emailService == null) return false;
-    return emailService.isSmtpOnly;
   }
 
   Future<void> _prefetchPeerAvatar(Chat chat) async {
@@ -1927,14 +1919,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerError = null;
       }
       _emailSyncComposerMessage = null;
-      _lastOfflineDraftSignature = null;
     } else {
-      final fallback = nextState.status == EmailSyncStatus.offline
-          ? 'Email is offline. Messages will be saved to Drafts until the connection returns.'
-          : nextState.status == EmailSyncStatus.recovering
-              ? 'Email sync is refreshing…'
-              : 'Email sync failed. Please try again.';
-      final message = nextState.message ?? fallback;
+      final message = nextState.message ?? _l10n.messageErrorServiceUnavailable;
       _emailSyncComposerMessage = message;
       composerError = message;
     }
@@ -2271,16 +2257,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         state.copyWith(
           composerError: 'Email is unavailable for one or more recipients.',
         ),
-      );
-      return;
-    }
-    if (requiresEmail && state.emailSyncState.requiresAttention) {
-      await _handleBrokenEmailSend(
-        chat: chat,
-        recipients: emailRecipients,
-        rawText: trimmedText,
-        quotedDraft: quotedDraft,
-        emit: emit,
       );
       return;
     }
@@ -3756,103 +3732,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return true;
-  }
-
-  Future<void> _handleBrokenEmailSend({
-    required Chat chat,
-    required List<ComposerRecipient> recipients,
-    required String rawText,
-    required Message? quotedDraft,
-    required Emitter<ChatState> emit,
-  }) async {
-    final resolvedRecipients = _draftRecipientJids(
-      chat: chat,
-      recipients: recipients,
-    );
-    if (resolvedRecipients.isEmpty) {
-      emit(
-        _attachToast(
-          state.copyWith(
-            composerError: 'Unable to resolve recipients for this draft.',
-          ),
-          const ChatToast(
-            message: 'Unable to save draft while email is offline.',
-            variant: ChatToastVariant.destructive,
-          ),
-        ),
-      );
-      return;
-    }
-    final trimmed = rawText.trim();
-    final body = trimmed.isEmpty ? '' : _composeEmailBody(trimmed, quotedDraft);
-    final signature = _draftSignature(
-      recipients: resolvedRecipients,
-      body: body,
-      subject: state.emailSubject,
-      pendingAttachments: state.pendingAttachments,
-    );
-    final attachments =
-        state.pendingAttachments.map((pending) => pending.attachment).toList();
-    if (_lastOfflineDraftSignature == signature) {
-      emit(
-        _attachToast(
-          state,
-          const ChatToast(
-            message: 'Draft already saved while email is offline.',
-            variant: ChatToastVariant.warning,
-          ),
-        ),
-      );
-      return;
-    }
-    try {
-      await _messageService.saveDraft(
-        id: null,
-        jids: resolvedRecipients,
-        body: body,
-        subject: state.emailSubject,
-        quotingStanzaId: quotedDraft?.stanzaID,
-        attachments: attachments,
-      );
-      final emailService = _emailService;
-      if (emailService != null && _shouldUseCoreDraftFallback) {
-        try {
-          await emailService.saveDraftToCore(
-            chat: chat,
-            text: body,
-            subject: state.emailSubject,
-            attachments: attachments,
-          );
-        } on Exception {
-          // Best-effort: core draft sync should not block offline saves.
-        }
-      }
-      _lastOfflineDraftSignature = signature;
-      emit(
-        _attachToast(
-          state,
-          const ChatToast(
-            message:
-                'Saved to Drafts because email is offline. Reopen it once sync recovers.',
-          ),
-        ),
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.safeWarning(_offlineDraftSaveFailedLogMessage, error, stackTrace);
-      emit(
-        _attachToast(
-          state.copyWith(
-            composerError:
-                'Unable to save draft while email is offline. Try again shortly.',
-          ),
-          const ChatToast(
-            message:
-                'Unable to save draft while email is offline. Try again shortly.',
-            variant: ChatToastVariant.destructive,
-          ),
-        ),
-      );
-    }
   }
 
   List<String> _draftRecipientJids({
