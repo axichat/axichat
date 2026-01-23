@@ -47,7 +47,6 @@ Future<void> showCalendarCriticalPathShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    useRootNavigator: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarCriticalPathShareSheet(
       path: path,

@@ -362,6 +362,53 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get chatComposerEmptyMessage => 'Le message ne peut pas être vide.';
+
+  @override
+  String get chatComposerEmailUnavailable =>
+      'L\'envoi d\'e-mails n\'est pas disponible dans ce chat.';
+
+  @override
+  String get chatComposerFileUploadUnavailable =>
+      'Le téléversement de fichiers n\'est pas disponible sur ce serveur.';
+
+  @override
+  String get chatComposerSelectRecipient =>
+      'Sélectionnez au moins un destinataire.';
+
+  @override
+  String get chatComposerEmailRecipientUnavailable =>
+      'L\'e-mail n\'est pas disponible pour un ou plusieurs destinataires.';
+
+  @override
+  String get chatComposerEmailAttachmentRecipientRequired =>
+      'Ajoutez un destinataire e-mail pour envoyer des pièces jointes.';
+
+  @override
+  String get chatComposerDraftRecipientsUnavailable =>
+      'Impossible de déterminer les destinataires de ce brouillon.';
+
+  @override
+  String get chatComposerSendFailed =>
+      'Impossible d\'envoyer le message. Veuillez réessayer.';
+
+  @override
+  String get chatEmailOfflineRetryMessage =>
+      'L\'e-mail est hors ligne. Réessayez une fois la synchronisation rétablie.';
+
+  @override
+  String get chatEmailOfflineDraftsFallback =>
+      'L\'e-mail est hors ligne. Les messages seront enregistrés dans les brouillons jusqu\'au retour de la connexion.';
+
+  @override
+  String get chatEmailSyncRefreshing =>
+      'La synchronisation des e-mails s\'actualise...';
+
+  @override
+  String get chatEmailSyncFailed =>
+      'La synchronisation des e-mails a échoué. Veuillez réessayer.';
+
+  @override
   String get chatReadOnly => 'Lecture seule';
 
   @override
@@ -1570,6 +1617,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez du texte. Utilisez Tab pour avancer ou Échap pour revenir ou fermer le menu.';
 
   @override
+  String get accessibilityLoadingLabel => 'Chargement';
+
+  @override
   String get accessibilityComposerPlaceholder => 'Saisir un message';
 
   @override
@@ -2576,6 +2626,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatsCreateGroupChatTooltip => 'Créer un chat de groupe';
 
   @override
+  String get chatsCreateGroupSuccess => 'Discussion de groupe créée.';
+
+  @override
+  String get chatsCreateGroupFailure =>
+      'Impossible de créer la discussion de groupe.';
+
+  @override
+  String get chatsRefreshFailed => 'Synchronisation échouée.';
+
+  @override
   String get chatsRoomLabel => 'Salle';
 
   @override
@@ -2690,6 +2750,29 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => 'Synchronisation';
+
+  @override
+  String get emailSyncMessageSyncing => 'Synchronisation des e-mails...';
+
+  @override
+  String get emailSyncMessageConnecting =>
+      'Connexion aux serveurs de messagerie...';
+
+  @override
+  String get emailSyncMessageDisconnected =>
+      'Déconnecté des serveurs de messagerie.';
+
+  @override
+  String get emailSyncMessageGroupMembershipChanged =>
+      'L\'adhésion au groupe e-mail a changé. Rouvrez la discussion.';
+
+  @override
+  String get emailSyncMessageHistorySyncing =>
+      'Synchronisation de l\'historique des e-mails...';
+
+  @override
+  String get emailSyncMessageRetrying =>
+      'La synchronisation des e-mails réessaiera bientôt...';
 
   @override
   String get authChangePasswordPending => 'Mise à jour du mot de passe...';
@@ -4265,6 +4348,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarTaskShareReadOnlyLabel => 'Lecture seule';
 
   @override
+  String get calendarTaskShareEditableLabel => 'Modifiable';
+
+  @override
   String get calendarTaskShareReadOnlyHint =>
       'Les destinataires peuvent voir cette tâche, mais vous seul pouvez la modifier.';
 
@@ -4591,6 +4677,20 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get calendarAvailabilityRequestTitleFallback => 'Heure demandée';
+
+  @override
+  String get calendarAvailabilityShareFallback => 'Disponibilité partagée';
+
+  @override
+  String get calendarAvailabilityRequestFallback => 'Demande de disponibilité';
+
+  @override
+  String get calendarAvailabilityResponseAcceptedFallback =>
+      'Disponibilité acceptée';
+
+  @override
+  String get calendarAvailabilityResponseDeclinedFallback =>
+      'Disponibilité refusée';
 
   @override
   String get calendarFreeBusyFree => 'Libre';

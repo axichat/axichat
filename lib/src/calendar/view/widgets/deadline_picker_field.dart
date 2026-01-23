@@ -246,7 +246,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       await showAdaptiveBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        useRootNavigator: true,
         showCloseButton: true,
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {

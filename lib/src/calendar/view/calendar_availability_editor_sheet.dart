@@ -46,7 +46,6 @@ Future<CalendarAvailability?> showCalendarAvailabilityEditorSheet({
   return showAdaptiveBottomSheet<CalendarAvailability>(
     context: context,
     isScrollControlled: true,
-    useRootNavigator: true,
     builder: (sheetContext) => CalendarAvailabilityEditorSheet(
       model: model,
       availability: availability,

@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
@@ -64,12 +65,6 @@ const _calendarTaskIcsAttachmentSendFailureLogMessage =
     'Failed to send calendar task attachment';
 const _attachmentMimeTypeResolutionLogMessage =
     'Failed to resolve attachment mime type';
-const _sendSignatureSeparator = '::';
-const _sendSignatureSubjectTag = '::subject:';
-const _sendSignatureAttachmentTag = '::attachments:';
-const _sendSignatureQuoteTag = '::quote:';
-const _sendSignatureListSeparator = ',';
-const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
 const int _deltaMessageIdUnset = 0;
 const int _composerPinnedRecipientInsertIndex = 0;
@@ -1841,10 +1836,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _lastOfflineDraftSignature = null;
     } else {
       final fallback = nextState.status == EmailSyncStatus.offline
-          ? 'Email is offline. Messages will be saved to Drafts until the connection returns.'
+          ? _l10n.chatEmailOfflineDraftsFallback
           : nextState.status == EmailSyncStatus.recovering
-              ? 'Email sync is refreshing…'
-              : 'Email sync failed. Please try again.';
+              ? _l10n.chatEmailSyncRefreshing
+              : _l10n.chatEmailSyncFailed;
       final message = nextState.message ?? fallback;
       _emailSyncComposerMessage = message;
       composerError = message;
@@ -2073,7 +2068,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         !hasQueuedAttachments &&
         !hasSubject &&
         !hasCalendarTaskIcs) {
-      emit(state.copyWith(composerError: 'Message cannot be empty.'));
+      emit(state.copyWith(composerError: _l10n.chatComposerEmptyMessage));
       return;
     }
     if (state.composerError != null) {
@@ -2148,15 +2143,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
-        state.copyWith(
-          composerError: 'Email sending is unavailable for this chat.',
-        ),
+        state.copyWith(composerError: _l10n.chatComposerEmailUnavailable),
       );
       return;
     }
     if (attachmentsViaXmpp && !state.supportsHttpFileUpload) {
-      const message = 'File upload is not available on this server.';
-      emit(state.copyWith(composerError: message));
+      emit(
+        state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
+      );
       return;
     }
     final invalidEmailRecipients = requiresEmail
@@ -2169,13 +2163,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           })
         : const <ComposerRecipient>[];
     if (requiresEmail && emailRecipients.isEmpty) {
-      emit(state.copyWith(composerError: 'Select at least one recipient.'));
+      emit(state.copyWith(composerError: _l10n.chatComposerSelectRecipient));
       return;
     }
     if (requiresEmail && invalidEmailRecipients.isNotEmpty) {
       emit(
         state.copyWith(
-          composerError: 'Email is unavailable for one or more recipients.',
+          composerError: _l10n.chatComposerEmailRecipientUnavailable,
         ),
       );
       return;
@@ -2960,10 +2954,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state.copyWith(
-            composerError: 'Add an email recipient to send attachments.',
+            composerError: _l10n.chatComposerEmailAttachmentRecipientRequired,
           ),
-          const ChatToast(
-            message: 'Add an email recipient to send attachments.',
+          ChatToast(
+            message: _l10n.chatComposerEmailAttachmentRecipientRequired,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3075,8 +3069,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(
-            message: 'Email is offline. Retry once sync recovers.',
+          ChatToast(
+            message: _l10n.chatEmailOfflineRetryMessage,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3207,8 +3201,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(
-            message: 'Email is offline. Retry once sync recovers.',
+          ChatToast(
+            message: _l10n.chatEmailOfflineRetryMessage,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3606,8 +3600,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     if (!state.supportsHttpFileUpload) {
-      const message = 'File upload is not available on this server.';
-      emit(state.copyWith(composerError: message));
+      emit(
+        state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
+      );
       return false;
     }
     final orderedAttachments = attachments.toList(growable: false);
@@ -3701,7 +3696,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return false;
       } on XmppUploadNotSupportedException catch (_) {
-        const message = 'File upload is not available on this server.';
+        final message = _l10n.chatComposerFileUploadUnavailable;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -3782,7 +3777,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state.copyWith(
-            composerError: 'Unable to resolve recipients for this draft.',
+            composerError: _l10n.chatComposerDraftRecipientsUnavailable,
           ),
           const ChatToast(
             message: 'Unable to save draft while email is offline.',
@@ -3885,49 +3880,53 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return resolved.toList();
   }
 
-  String _draftSignature({
+  List<Object?> _draftSignaturePayload({
     required List<String> recipients,
     required String body,
     required String? subject,
     required List<PendingAttachment> pendingAttachments,
   }) {
     final sortedRecipients = List<String>.from(recipients)..sort();
-    final buffer =
-        StringBuffer(sortedRecipients.join(_sendSignatureListSeparator))
-          ..write(_sendSignatureSeparator)
-          ..write(body)
-          ..write(_sendSignatureSubjectTag)
-          ..write(subject ?? _emptySignatureValue);
-    if (pendingAttachments.isNotEmpty) {
-      final attachmentKeys = pendingAttachments
-          .map(_pendingAttachmentSignatureKey)
-          .where((key) => key.isNotEmpty)
-          .toList()
-        ..sort();
-      buffer
-        ..write(_sendSignatureAttachmentTag)
-        ..write(attachmentKeys.join(_sendSignatureListSeparator));
-    }
-    return buffer.toString();
+    final sortedAttachments = List<PendingAttachment>.from(pendingAttachments)
+      ..sort((a, b) => a.id.compareTo(b.id));
+    final attachmentPayloads = <List<Object?>>[
+      for (final pending in sortedAttachments)
+        _pendingAttachmentSignaturePayload(pending),
+    ];
+    return <Object?>[
+      sortedRecipients,
+      body,
+      subject ?? _emptySignatureValue,
+      attachmentPayloads,
+    ];
   }
 
-  String _pendingAttachmentSignatureKey(PendingAttachment pending) {
+  List<Object?> _pendingAttachmentSignaturePayload(PendingAttachment pending) {
     final attachment = pending.attachment;
-    final path = attachment.path;
-    if (path.isEmpty) return _emptySignatureValue;
-    return (StringBuffer(path)
-          ..write(_sendSignatureAttachmentFieldSeparator)
-          ..write(attachment.fileName)
-          ..write(_sendSignatureAttachmentFieldSeparator)
-          ..write(attachment.sizeBytes)
-          ..write(_sendSignatureAttachmentFieldSeparator)
-          ..write(attachment.mimeType ?? _emptySignatureValue)
-          ..write(_sendSignatureAttachmentFieldSeparator)
-          ..write(attachment.metadataId ?? _emptySignatureValue)
-          ..write(_sendSignatureAttachmentFieldSeparator)
-          ..write(pending.id))
-        .toString();
+    return <Object?>[
+      pending.id,
+      attachment.path,
+      attachment.fileName,
+      attachment.sizeBytes,
+      attachment.mimeType ?? _emptySignatureValue,
+      attachment.metadataId ?? _emptySignatureValue,
+    ];
   }
+
+  String _draftSignature({
+    required List<String> recipients,
+    required String body,
+    required String? subject,
+    required List<PendingAttachment> pendingAttachments,
+  }) =>
+      jsonEncode(
+        _draftSignaturePayload(
+          recipients: recipients,
+          body: body,
+          subject: subject,
+          pendingAttachments: pendingAttachments,
+        ),
+      );
 
   String _sendSignature({
     required List<String> recipients,
@@ -3936,20 +3935,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<PendingAttachment> pendingAttachments,
     required String? quoteId,
   }) {
-    final signature = _draftSignature(
+    final payload = _draftSignaturePayload(
       recipients: recipients,
       body: body,
       subject: subject,
       pendingAttachments: pendingAttachments,
     );
     final resolvedQuoteId = quoteId?.trim();
-    if (resolvedQuoteId == null || resolvedQuoteId.isEmpty) {
-      return signature;
+    if (resolvedQuoteId != null && resolvedQuoteId.isNotEmpty) {
+      payload.add(resolvedQuoteId);
     }
-    return (StringBuffer(signature)
-          ..write(_sendSignatureQuoteTag)
-          ..write(resolvedQuoteId))
-        .toString();
+    return jsonEncode(payload);
   }
 
   String _messageKey(Message message) => message.id ?? message.stanzaID;
@@ -4475,9 +4471,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to send fan-out message', error, stackTrace);
       emit(
-        state.copyWith(
-          composerError: 'Unable to send message. Please try again.',
-        ),
+        state.copyWith(composerError: _l10n.chatComposerSendFailed),
       );
       return false;
     }
