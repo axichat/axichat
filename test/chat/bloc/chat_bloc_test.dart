@@ -732,7 +732,7 @@ void main() {
     await syncController.close();
   });
 
-  test('saves drafts when email sync is offline', () async {
+  test('offline email send attempts send and does not save drafts', () async {
     final emailService = MockEmailService();
     when(
       () => emailService.syncState,
@@ -740,6 +740,19 @@ void main() {
     when(
       () => emailService.syncStateStream,
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    when(
+      () => emailService.sendMessage(
+        chat: any(named: 'chat'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        htmlBody: any(named: 'htmlBody'),
+      ),
+    ).thenThrow(
+      const DeltaNetworkException(
+        operation: 'send email message',
+        message: 'offline',
+      ),
+    );
     final emailChat = initialChat.copyWith(
       deltaChatId: 4,
       emailAddress: 'ally@example.com',
@@ -765,25 +778,22 @@ void main() {
     bloc.add(ChatMessageSent(text: 'Offline draft', recipients: recipients));
     await _pumpBloc();
 
-    final verification = verify(
-      () => messageService.saveDraft(
-        id: null,
-        jids: any(named: 'jids'),
-        body: 'Offline draft',
-        attachments: any(named: 'attachments'),
-      ),
-    )..called(1);
-    final capturedAttachments =
-        verification.captured.last as List<EmailAttachment>;
-    expect(capturedAttachments, isEmpty);
-    verifyNever(
+    verify(
       () => emailService.sendMessage(
         chat: any(named: 'chat'),
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        htmlBody: any(named: 'htmlBody'),
+      ),
+    ).called(1);
+    verifyNever(
+      () => messageService.saveDraft(
+        id: null,
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        attachments: any(named: 'attachments'),
       ),
     );
-    expect(bloc.state.toastId, greaterThan(0));
-    expect(bloc.state.toast?.message, contains('Drafts'));
 
     await bloc.close();
   });
