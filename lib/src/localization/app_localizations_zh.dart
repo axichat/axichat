@@ -616,6 +616,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatCopyNoText => '选中的消息没有可复制的文本。';
 
   @override
+  String get chatCopySuccessMessage => '已复制到剪贴板';
+
+  @override
   String get chatShareSelectedNoText => '选中的消息没有可分享的文本。';
 
   @override
@@ -5835,6 +5838,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatCopyNoText => '已選訊息沒有可複製的文字。';
+
+  @override
+  String get chatCopySuccessMessage => '已複製到剪貼簿';
 
   @override
   String get chatShareSelectedNoText => '已選訊息沒有可分享的文字。';

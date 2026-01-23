@@ -9,7 +9,10 @@ class AccessibilityActionState extends Equatable {
   const AccessibilityActionState({
     required this.visible,
     required this.stack,
-    required this.sections,
+    required this.contacts,
+    required this.invites,
+    required this.drafts,
+    required this.myJid,
     required this.composerText,
     required this.newContactInput,
     required this.busy,
@@ -27,7 +30,10 @@ class AccessibilityActionState extends Equatable {
         stack = const [
           AccessibilityStepEntry(kind: AccessibilityStepKind.root)
         ],
-        sections = const [],
+        contacts = const [],
+        invites = const [],
+        drafts = const [],
+        myJid = null,
         composerText = '',
         newContactInput = '',
         busy = false,
@@ -41,7 +47,10 @@ class AccessibilityActionState extends Equatable {
 
   final bool visible;
   final List<AccessibilityStepEntry> stack;
-  final List<AccessibilityMenuSection> sections;
+  final List<AccessibilityContact> contacts;
+  final List<Invite> invites;
+  final List<Draft> drafts;
+  final String? myJid;
   final String composerText;
   final String newContactInput;
   final bool busy;
@@ -58,7 +67,10 @@ class AccessibilityActionState extends Equatable {
   AccessibilityActionState copyWith({
     bool? visible,
     List<AccessibilityStepEntry>? stack,
-    List<AccessibilityMenuSection>? sections,
+    List<AccessibilityContact>? contacts,
+    List<Invite>? invites,
+    List<Draft>? drafts,
+    Object? myJid = _unset,
     String? composerText,
     String? newContactInput,
     bool? busy,
@@ -73,7 +85,10 @@ class AccessibilityActionState extends Equatable {
       AccessibilityActionState(
         visible: visible ?? this.visible,
         stack: stack ?? this.stack,
-        sections: sections ?? this.sections,
+        contacts: contacts ?? this.contacts,
+        invites: invites ?? this.invites,
+        drafts: drafts ?? this.drafts,
+        myJid: myJid == _unset ? this.myJid : myJid as String?,
         composerText: composerText ?? this.composerText,
         newContactInput: newContactInput ?? this.newContactInput,
         busy: busy ?? this.busy,
@@ -96,7 +111,10 @@ class AccessibilityActionState extends Equatable {
   List<Object?> get props => [
         visible,
         stack,
-        sections,
+        contacts,
+        invites,
+        drafts,
+        myJid,
         composerText,
         newContactInput,
         busy,

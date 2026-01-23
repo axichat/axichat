@@ -642,6 +642,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Los mensajes seleccionados no tienen texto para copiar.';
 
   @override
+  String get chatCopySuccessMessage => 'Copiado al portapapeles';
+
+  @override
   String get chatShareSelectedNoText =>
       'Los mensajes seleccionados no tienen texto para compartir.';
 

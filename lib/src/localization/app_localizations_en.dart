@@ -631,6 +631,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatCopyNoText => 'Selected messages have no text to copy';
 
   @override
+  String get chatCopySuccessMessage => 'Copied to clipboard';
+
+  @override
   String get chatShareSelectedNoText =>
       'Selected messages have no text to share';
 

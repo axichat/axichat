@@ -1052,15 +1052,13 @@ class _ChatState extends State<Chat> {
   double _selectionAutoscrollAccumulated = 0.0;
   bool _selectionControlsMeasurementPending = false;
   var _sendingAttachment = false;
+  RequestStatus _shareRequestStatus = RequestStatus.none;
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
       CalendarFragmentPolicy();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
-
-  bool get _anySelectionActive =>
-      _selectedMessageId != null || _multiSelectActive;
 
   void _typingListener() {
     final text = _textController.text;
@@ -1070,9 +1068,6 @@ class _ChatState extends State<Chat> {
       setState(() {
         _composerHasText = trimmedHasText;
       });
-    }
-    if (hasText && _anySelectionActive) {
-      _clearAllSelections();
     }
     _maybeClearPendingCalendarTaskIcs(text);
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
@@ -2911,11 +2906,6 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  void _clearAllSelections() {
-    _clearMessageSelection();
-    _clearMultiSelection();
-  }
-
   void _pruneMessageSelection(Set<String> availableIds) {
     if (!_multiSelectActive) return;
     final missing = _multiSelectedMessageIds
@@ -3993,6 +3983,11 @@ class _ChatState extends State<Chat> {
                                       chatEntity.type == ChatType.chat;
                                   final statusLabel =
                                       item?.status?.trim() ?? '';
+                                  final addressLabel = jid.trim();
+                                  const addressStatusSeparator = ' · ';
+                                  final secondaryLabel = statusLabel.isNotEmpty
+                                      ? '$addressLabel$addressStatusSeparator$statusLabel'
+                                      : addressLabel;
                                   final presence = item?.presence;
                                   final subscription = item?.subscription;
                                   final avatarTooltip = isGroupChat
@@ -4105,11 +4100,10 @@ class _ChatState extends State<Chat> {
                                                     ),
                                                 ],
                                               ),
-                                              if (statusLabel.isNotEmpty)
-                                                Text(
-                                                  statusLabel,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                              if (secondaryLabel.isNotEmpty)
+                                                SelectableText(
+                                                  secondaryLabel,
+                                                  maxLines: 1,
                                                   style:
                                                       context.textTheme.muted,
                                                 ),
@@ -4250,6 +4244,13 @@ class _ChatState extends State<Chat> {
                                         for (final item in state.items)
                                           item.stanzaID: item,
                                       };
+                                      for (final entry
+                                          in state.quotedMessagesById.entries) {
+                                        messageById.putIfAbsent(
+                                          entry.key,
+                                          () => entry.value,
+                                        );
+                                      }
                                       final pinnedStanzaIds = state
                                           .pinnedMessages
                                           .map((item) => item.messageStanzaId)
@@ -4873,6 +4874,8 @@ class _ChatState extends State<Chat> {
                                                       targets,
                                                     ),
                                                   ),
+                                                  shareStatus:
+                                                      _shareRequestStatus,
                                                   onForward: () =>
                                                       _forwardSelectedMessages(
                                                     List<Message>.of(
@@ -7336,6 +7339,8 @@ class _ChatState extends State<Chat> {
                                                                   onForward,
                                                               onCopy: onCopy,
                                                               onShare: onShare,
+                                                              shareStatus:
+                                                                  _shareRequestStatus,
                                                               onAddToCalendar:
                                                                   onAddToCalendar,
                                                               onDetails:
@@ -7753,13 +7758,18 @@ class _ChatState extends State<Chat> {
                                                           );
                                                           final Widget
                                                               bubbleStackWithReply =
-                                                              _ReplyPreviewBubbleColumn(
-                                                            preview:
-                                                                replyPreview,
-                                                            bubble:
-                                                                bubbleWithSlack,
-                                                            spacing:
-                                                                calendarInsetLg,
+                                                              Align(
+                                                            alignment:
+                                                                messageRowAlignment,
+                                                            child:
+                                                                _ReplyPreviewBubbleColumn(
+                                                              preview:
+                                                                  replyPreview,
+                                                              bubble:
+                                                                  bubbleWithSlack,
+                                                              spacing:
+                                                                  calendarInsetLg,
+                                                            ),
                                                           );
                                                           final messageBody =
                                                               Column(
@@ -8226,7 +8236,6 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleForward(Message message) async {
-    _clearAllSelections();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
     final forwardingMode = await _resolveForwardingMode(
@@ -8280,38 +8289,59 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  Future<void> _runShareAction(Future<void> Function() action) async {
+    if (_shareRequestStatus.isLoading) return;
+    setState(() {
+      _shareRequestStatus = RequestStatus.loading;
+    });
+    try {
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _shareRequestStatus = RequestStatus.none;
+        });
+      }
+    }
+  }
+
   Future<void> _shareMessage({
     required ChatMessage dashMessage,
     required Message model,
   }) async {
-    final l10n = context.l10n;
-    final content = _plainTextForMessage(
-      dashMessage: dashMessage,
-      model: model,
-    ).trim();
-    if (content.isEmpty) {
-      _showSnackbar(l10n.chatShareNoText);
-      return;
-    }
-    await Share.share(
-      content,
-      subject: l10n.chatShareSubjectPrefix(
-        context.read<ChatBloc>().state.chat?.title ??
-            l10n.chatShareFallbackSubject,
-      ),
-    );
+    await _runShareAction(() async {
+      final l10n = context.l10n;
+      final content = _plainTextForMessage(
+        dashMessage: dashMessage,
+        model: model,
+      ).trim();
+      if (content.isEmpty) {
+        _showSnackbar(l10n.chatShareNoText);
+        return;
+      }
+      await Share.share(
+        content,
+        subject: l10n.chatShareSubjectPrefix(
+          context.read<ChatBloc>().state.chat?.title ??
+              l10n.chatShareFallbackSubject,
+        ),
+      );
+    });
   }
 
   Future<void> _copyMessage({
     required ChatMessage dashMessage,
     required Message model,
   }) async {
+    final successMessage = context.l10n.chatCopySuccessMessage;
     final copiedText = _plainTextForMessage(
       dashMessage: dashMessage,
       model: model,
     );
     if (copiedText.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: copiedText));
+    if (!mounted) return;
+    FeedbackSystem.showSuccess(context, successMessage);
   }
 
   Future<void> _handleAddToCalendar({
@@ -8486,25 +8516,30 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatCopyNoText);
       return;
     }
+    final successMessage = l10n.chatCopySuccessMessage;
     await Clipboard.setData(ClipboardData(text: joined));
+    if (!mounted) return;
+    FeedbackSystem.showSuccess(context, successMessage);
     _clearMultiSelection();
   }
 
   Future<void> _shareSelectedMessages(List<Message> messages) async {
-    final l10n = context.l10n;
-    final joined = _joinedMessageText(messages).trim();
-    if (joined.isEmpty) {
-      _showSnackbar(l10n.chatShareSelectedNoText);
-      return;
-    }
-    await Share.share(
-      joined,
-      subject: l10n.chatShareSubjectPrefix(
-        context.read<ChatBloc>().state.chat?.title ??
-            l10n.chatShareFallbackSubject,
-      ),
-    );
-    _clearMultiSelection();
+    await _runShareAction(() async {
+      final l10n = context.l10n;
+      final joined = _joinedMessageText(messages).trim();
+      if (joined.isEmpty) {
+        _showSnackbar(l10n.chatShareSelectedNoText);
+        return;
+      }
+      await Share.share(
+        joined,
+        subject: l10n.chatShareSubjectPrefix(
+          context.read<ChatBloc>().state.chat?.title ??
+              l10n.chatShareFallbackSubject,
+        ),
+      );
+      _clearMultiSelection();
+    });
   }
 
   Future<void> _forwardSelectedMessages(List<Message> messages) async {
@@ -8536,7 +8571,6 @@ class _ChatState extends State<Chat> {
             ),
           );
     }
-    _clearMultiSelection();
   }
 
   Future<void> _addSelectedToCalendar(List<Message> messages) async {
@@ -11556,6 +11590,7 @@ class _MessageActionBar extends StatelessWidget {
     this.onForward,
     required this.onCopy,
     required this.onShare,
+    required this.shareStatus,
     required this.onAddToCalendar,
     required this.onDetails,
     this.onSelect,
@@ -11570,6 +11605,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onForward;
   final VoidCallback onCopy;
   final VoidCallback onShare;
+  final RequestStatus shareStatus;
   final VoidCallback onAddToCalendar;
   final VoidCallback onDetails;
   final VoidCallback? onSelect;
@@ -11634,9 +11670,14 @@ class _MessageActionBar extends StatelessWidget {
         onPressed: onCopy,
       ),
       ContextActionButton(
-        icon: const Icon(LucideIcons.share2, size: _messageActionIconSize),
+        icon: shareStatus.isLoading
+            ? AxiProgressIndicator(
+                dimension: _messageActionIconSize,
+                color: context.colorScheme.foreground,
+              )
+            : const Icon(LucideIcons.share2, size: _messageActionIconSize),
         label: l10n.chatActionShare,
-        onPressed: onShare,
+        onPressed: shareStatus.isLoading ? null : onShare,
       ),
       ContextActionButton(
         icon: const Icon(
@@ -11769,6 +11810,7 @@ class _MessageSelectionToolbar extends StatelessWidget {
     required this.onClear,
     required this.onCopy,
     required this.onShare,
+    required this.shareStatus,
     required this.onForward,
     required this.onAddToCalendar,
     this.showReactions = false,
@@ -11780,6 +11822,7 @@ class _MessageSelectionToolbar extends StatelessWidget {
   final VoidCallback onClear;
   final VoidCallback onCopy;
   final VoidCallback onShare;
+  final RequestStatus shareStatus;
   final VoidCallback onForward;
   final VoidCallback onAddToCalendar;
   final bool showReactions;
@@ -11821,9 +11864,14 @@ class _MessageSelectionToolbar extends StatelessWidget {
                 onPressed: onCopy,
               ),
               ContextActionButton(
-                icon: const Icon(LucideIcons.share2, size: 16),
+                icon: shareStatus.isLoading
+                    ? AxiProgressIndicator(
+                        dimension: 16,
+                        color: context.colorScheme.foreground,
+                      )
+                    : const Icon(LucideIcons.share2, size: 16),
                 label: l10n.chatActionShare,
-                onPressed: onShare,
+                onPressed: shareStatus.isLoading ? null : onShare,
               ),
               ContextActionButton(
                 icon: const Icon(LucideIcons.calendarPlus, size: 16),
@@ -12682,8 +12730,9 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     final bubbleSize = bubbleChild.size;
     var previewHeight = 0.0;
     if (previewChild != null) {
+      final previewWidth = bubbleSize.width;
       previewChild.layout(
-        BoxConstraints.tightFor(width: bubbleSize.width),
+        BoxConstraints.tightFor(width: previewWidth),
         parentUsesSize: true,
       );
       previewHeight = previewChild.size.height + spacing;

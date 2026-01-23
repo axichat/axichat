@@ -213,6 +213,7 @@
   "chatCalendarNoText": "Le message n’a pas de texte à ajouter au calendrier.",
   "chatCalendarUnavailable": "Le calendrier n’est pas disponible pour le moment.",
   "chatCopyNoText": "Les messages sélectionnés n’ont pas de texte à copier.",
+  "chatCopySuccessMessage": "Copié dans le presse-papiers",
   "chatShareSelectedNoText": "Les messages sélectionnés n’ont pas de texte à partager.",
   "chatForwardInviteForbidden": "Les invitations ne peuvent pas être transférées.",
   "chatAddToCalendarNoText": "Les messages sélectionnés n'ont pas de texte à ajouter au calendrier.",
