@@ -513,6 +513,12 @@ abstract class AppLocalizations {
   /// **'Received'**
   String get attachmentGalleryReceivedLabel;
 
+  /// No description provided for @attachmentGalleryMetaSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **' - '**
+  String get attachmentGalleryMetaSeparator;
+
   /// No description provided for @attachmentGalleryLayoutGridLabel.
   ///
   /// In en, this message translates to:
