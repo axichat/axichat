@@ -26,7 +26,6 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
@@ -3186,10 +3185,6 @@ class _CalendarWeekView extends StatelessWidget {
                     color: calendarBackgroundColor,
                     borderRadius: BorderRadius.zero,
                     border: Border(
-                      top: BorderSide(
-                        color: calendarBorderColor,
-                        width: calendarBorderStroke,
-                      ),
                       left: BorderSide(
                         color: calendarBorderColor,
                         width: calendarBorderStroke,

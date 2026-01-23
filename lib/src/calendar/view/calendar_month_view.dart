@@ -43,10 +43,6 @@ class CalendarMonthView extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.card,
         border: Border(
-          top: BorderSide(
-            color: calendarBorderColor,
-            width: calendarBorderStroke,
-          ),
           left: BorderSide(color: border.color),
           right: BorderSide(color: border.color),
           bottom: BorderSide(color: border.color),

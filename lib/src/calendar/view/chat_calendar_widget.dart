@@ -20,7 +20,6 @@ import 'package:axichat/src/calendar/view/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/sync_controls.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
-import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -395,6 +394,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color background = CalendarNavSurface.backgroundColor(context);
+    final Color border = context.colorScheme.border;
     final EdgeInsets toolbarPadding = calendarMarginLarge.copyWith(
       top: 0,
       bottom: 0,
@@ -402,6 +402,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
+        border: Border(bottom: BorderSide(color: border)),
       ),
       child: SizedBox(
         height: _chatCalendarToolbarHeight,

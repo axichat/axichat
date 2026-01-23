@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:drift/drift.dart';
 import 'package:logging/logging.dart';
+import 'package:axichat/src/storage/models/file_models.dart';
 
 import 'database.dart';
 import 'state_store.dart';
@@ -160,5 +162,45 @@ extension StateStoreOperations on XmppStateStore {
       _log.warning('Failed to $name, returning false', e, stackTrace);
       return false;
     }
+  }
+}
+
+extension AttachmentGalleryQueries on XmppDrift {
+  Stream<List<AttachmentGalleryItem>> watchAttachmentGallery({
+    String? chatJid,
+  }) {
+    final trimmedJid = chatJid?.trim();
+    final messagesTable = messages;
+    final messageAttachmentsTable = messageAttachments;
+    final fileMetadataTable = fileMetadata;
+    final attachmentQuery = select(messagesTable).join([
+      leftOuterJoin(
+        messageAttachmentsTable,
+        messageAttachmentsTable.messageId.equalsExp(messagesTable.id),
+      ),
+      innerJoin(
+        fileMetadataTable,
+        fileMetadataTable.id.equalsExp(
+              messageAttachmentsTable.fileMetadataId,
+            ) |
+            (messageAttachmentsTable.id.isNull() &
+                fileMetadataTable.id.equalsExp(messagesTable.fileMetadataID)),
+      ),
+    ]);
+    attachmentQuery.where(messagesTable.retracted.equals(false));
+    if (trimmedJid != null && trimmedJid.isNotEmpty) {
+      attachmentQuery.where(messagesTable.chatJid.equals(trimmedJid));
+    }
+    return attachmentQuery.watch().map((rows) {
+      final items = rows
+          .map(
+            (row) => AttachmentGalleryItem(
+              message: row.readTable(messagesTable),
+              metadata: row.readTable(fileMetadataTable),
+            ),
+          )
+          .toList(growable: false);
+      return List.unmodifiable(items);
+    });
   }
 }
