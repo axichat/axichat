@@ -39,7 +39,6 @@ class AccessibilityActionBloc
     on<AccessibilityMenuOpened>(_onMenuOpened);
     on<AccessibilityMenuClosed>(_onMenuClosed);
     on<AccessibilityMenuBack>(_onMenuBack);
-    on<AccessibilityMenuReset>(_onMenuReset);
     on<AccessibilityMenuActionTriggered>(_onMenuActionTriggered);
     on<AccessibilityComposerChanged>(_onComposerChanged);
     on<AccessibilitySendMessageRequested>(_onSendMessageRequested);
@@ -58,12 +57,11 @@ class AccessibilityActionBloc
     _draftSubscription = _messageService.draftsStream().listen(
           (items) => add(AccessibilityDataUpdated(drafts: items)),
         );
-    final rosterService = _rosterService;
-    if (rosterService != null) {
-      _rosterSubscription = rosterService.rosterStream().listen(
+    if (_rosterService != null) {
+      _rosterSubscription = _rosterService.rosterStream().listen(
             (items) => add(AccessibilityDataUpdated(roster: items)),
           );
-      _inviteSubscription = rosterService.invitesStream().listen(
+      _inviteSubscription = _rosterService.invitesStream().listen(
             (items) => add(AccessibilityDataUpdated(invites: items)),
           );
     }
@@ -128,7 +126,6 @@ class AccessibilityActionBloc
       messages: const [],
       activeChatJid: null,
       discardWarningActive: false,
-      recipients: const [],
       attachments: const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
@@ -146,7 +143,6 @@ class AccessibilityActionBloc
           newContactInput: '',
           statusMessage: null,
           errorMessage: null,
-          recipients: const [],
           messages: const [],
           activeChatJid: null,
           discardWarningActive: false,
@@ -171,31 +167,10 @@ class AccessibilityActionBloc
       activeChatJid: keepChatMessages ? state.activeChatJid : null,
       composerText: '',
       newContactInput: '',
-      recipients: nextStack.last.recipients,
       discardWarningActive: false,
       attachments: keepChatMessages
           ? state.attachments
           : const <String, List<FileMetadataData>>{},
-    );
-    emit(nextState);
-  }
-
-  Future<void> _onMenuReset(
-    AccessibilityMenuReset event,
-    Emitter<AccessibilityActionState> emit,
-  ) async {
-    await _clearMessageStream();
-    final nextState = state.copyWith(
-      stack: const [AccessibilityStepEntry(kind: AccessibilityStepKind.root)],
-      composerText: '',
-      newContactInput: '',
-      statusMessage: null,
-      errorMessage: null,
-      messages: const [],
-      activeChatJid: null,
-      discardWarningActive: false,
-      recipients: const [],
-      attachments: const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
   }
@@ -236,7 +211,6 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: keepChatMessages ? state.messages : const [],
         activeChatJid: keepChatMessages ? state.activeChatJid : null,
-        recipients: nextStack.last.recipients,
         discardWarningActive: false,
         attachments: keepChatMessages
             ? state.attachments
@@ -433,7 +407,6 @@ class AccessibilityActionBloc
       state.copyWith(
         stack: nextStack,
         activeChatJid: filtered.isEmpty ? null : state.activeChatJid,
-        recipients: filtered,
         statusMessage: filtered.isEmpty ? null : state.statusMessage,
       ),
     );
@@ -639,7 +612,6 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: leavingChat ? const [] : state.messages,
         activeChatJid: leavingChat ? null : state.activeChatJid,
-        recipients: nextEntry.recipients,
         discardWarningActive: false,
       ),
     );
@@ -765,7 +737,6 @@ class AccessibilityActionBloc
       composerText: draft.body ?? '',
       newContactInput: '',
       activeChatJid: activeJid ?? state.activeChatJid,
-      recipients: recipients,
       statusMessage: _l10n.accessibilityDraftLoaded,
       errorMessage: null,
       discardWarningActive: false,
@@ -793,7 +764,6 @@ class AccessibilityActionBloc
     emit(
       state.copyWith(
         stack: nextStack,
-        recipients: nextStack.last.recipients,
         statusMessage: null,
         errorMessage: null,
       ),
@@ -838,7 +808,6 @@ class AccessibilityActionBloc
           activeChatJid: activeJid,
           composerText: state.composerText,
           newContactInput: '',
-          recipients: recipients,
           statusMessage: null,
           errorMessage: null,
           discardWarningActive: false,
@@ -869,7 +838,6 @@ class AccessibilityActionBloc
           stack: nextStack,
           activeChatJid: activeJid,
           newContactInput: '',
-          recipients: recipients,
           statusMessage: null,
           errorMessage: null,
           discardWarningActive: false,
@@ -982,7 +950,6 @@ class AccessibilityActionBloc
     final nextState = state.copyWith(
       visible: true,
       stack: nextStack,
-      recipients: [contact],
       activeChatJid: contact.jid,
       messages: const [],
       attachments: const <String, List<FileMetadataData>>{},
@@ -1139,18 +1106,8 @@ class AccessibilityActionBloc
         nextStack.add(entry);
       }
     }
-    final currentEntry = baseState.currentEntry;
-    final shouldSyncRecipients =
-        currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            currentEntry.kind == AccessibilityStepKind.conversation;
-    if (stackChanged ||
-        (shouldSyncRecipients &&
-            (baseState.recipients.length != 1 ||
-                baseState.recipients.first != contact))) {
-      return baseState.copyWith(
-        stack: nextStack,
-        recipients: shouldSyncRecipients ? [contact] : baseState.recipients,
-      );
+    if (stackChanged) {
+      return baseState.copyWith(stack: nextStack);
     }
     return baseState;
   }

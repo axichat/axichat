@@ -96,8 +96,14 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     for (final entry in _entries) {
       final XmppOperation? updated = incoming.remove(entry.operation.id);
       if (updated == null) {
-        if (entry.operation.status != XmppOperationStatus.inProgress) {
-          _removeEntry(entry.operation.id);
+        if (entry.operation.status == XmppOperationStatus.inProgress) {
+          entry.operation = entry.operation.copyWith(
+            status: XmppOperationStatus.failure,
+          );
+          shouldRebuild = true;
+          _ensureExitScheduled(entry.operation.id);
+        } else {
+          _ensureExitScheduled(entry.operation.id);
         }
         continue;
       }
@@ -108,7 +114,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         if (updated.status == XmppOperationStatus.inProgress) {
           _cancelExitTimer(updated.id);
         } else {
-          _scheduleExit(updated.id);
+          _ensureExitScheduled(updated.id);
         }
       }
     }
@@ -199,6 +205,13 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       if (!mounted) return;
       _removeEntry(id);
     });
+  }
+
+  void _ensureExitScheduled(String id) {
+    if (_exitTimers.containsKey(id)) {
+      return;
+    }
+    _scheduleExit(id);
   }
 
   void _cancelExitTimer(String id) {
