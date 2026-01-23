@@ -112,39 +112,19 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   void toggleAutoDownloadImages(bool enabled) {
-    emit(
-      state.copyWith(
-        attachmentAutoDownloadSettings: state.attachmentAutoDownloadSettings
-            .copyWith(imagesEnabled: enabled),
-      ),
-    );
+    emit(state.copyWith(autoDownloadImages: enabled));
   }
 
   void toggleAutoDownloadVideos(bool enabled) {
-    emit(
-      state.copyWith(
-        attachmentAutoDownloadSettings: state.attachmentAutoDownloadSettings
-            .copyWith(videosEnabled: enabled),
-      ),
-    );
+    emit(state.copyWith(autoDownloadVideos: enabled));
   }
 
   void toggleAutoDownloadDocuments(bool enabled) {
-    emit(
-      state.copyWith(
-        attachmentAutoDownloadSettings: state.attachmentAutoDownloadSettings
-            .copyWith(documentsEnabled: enabled),
-      ),
-    );
+    emit(state.copyWith(autoDownloadDocuments: enabled));
   }
 
   void toggleAutoDownloadArchives(bool enabled) {
-    emit(
-      state.copyWith(
-        attachmentAutoDownloadSettings: state.attachmentAutoDownloadSettings
-            .copyWith(archivesEnabled: enabled),
-      ),
-    );
+    emit(state.copyWith(autoDownloadArchives: enabled));
   }
 
   @override
@@ -162,12 +142,17 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }) {
     final previousState = previous;
     if (previousState != null &&
-        previousState.attachmentAutoDownloadSettings ==
-            next.attachmentAutoDownloadSettings) {
+        previousState.autoDownloadImages == next.autoDownloadImages &&
+        previousState.autoDownloadVideos == next.autoDownloadVideos &&
+        previousState.autoDownloadDocuments == next.autoDownloadDocuments &&
+        previousState.autoDownloadArchives == next.autoDownloadArchives) {
       return;
     }
     _xmppService?.updateAttachmentAutoDownloadSettings(
-      next.attachmentAutoDownloadSettings,
+      imagesEnabled: next.autoDownloadImages,
+      videosEnabled: next.autoDownloadVideos,
+      documentsEnabled: next.autoDownloadDocuments,
+      archivesEnabled: next.autoDownloadArchives,
     );
   }
 
@@ -196,7 +181,6 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'autoDownloadVideos': 'auto_download_videos',
         'autoDownloadDocuments': 'auto_download_documents',
         'autoDownloadArchives': 'auto_download_archives',
-        'attachmentAutoDownloadSettings': 'attachment_auto_download_settings',
       };
       for (final entry in keyMap.entries) {
         if (migrated.containsKey(entry.key) &&
@@ -204,29 +188,25 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
           migrated[entry.value] = migrated[entry.key];
         }
       }
-      if (!migrated.containsKey('attachment_auto_download_settings')) {
-        const defaultAutoDownloadImages = true;
-        const defaultAutoDownloadVideos = false;
-        const defaultAutoDownloadDocuments = false;
-        const defaultAutoDownloadArchives = false;
-        final autoDownloadImages = migrated['auto_download_images'];
-        final autoDownloadVideos = migrated['auto_download_videos'];
-        final autoDownloadDocuments = migrated['auto_download_documents'];
-        final autoDownloadArchives = migrated['auto_download_archives'];
-        migrated['attachment_auto_download_settings'] = <String, Object?>{
-          'images_enabled': autoDownloadImages is bool
-              ? autoDownloadImages
-              : defaultAutoDownloadImages,
-          'videos_enabled': autoDownloadVideos is bool
-              ? autoDownloadVideos
-              : defaultAutoDownloadVideos,
-          'documents_enabled': autoDownloadDocuments is bool
-              ? autoDownloadDocuments
-              : defaultAutoDownloadDocuments,
-          'archives_enabled': autoDownloadArchives is bool
-              ? autoDownloadArchives
-              : defaultAutoDownloadArchives,
-        };
+      if (migrated.containsKey('attachment_auto_download_settings')) {
+        final defaultState = const SettingsState();
+        final settings = migrated['attachment_auto_download_settings'];
+        final Map<dynamic, dynamic> parsed =
+            settings is Map ? settings : const {};
+        final imagesValue = parsed['images_enabled'];
+        final videosValue = parsed['videos_enabled'];
+        final documentsValue = parsed['documents_enabled'];
+        final archivesValue = parsed['archives_enabled'];
+        migrated['auto_download_images'] =
+            imagesValue is bool ? imagesValue : defaultState.autoDownloadImages;
+        migrated['auto_download_videos'] =
+            videosValue is bool ? videosValue : defaultState.autoDownloadVideos;
+        migrated['auto_download_documents'] = documentsValue is bool
+            ? documentsValue
+            : defaultState.autoDownloadDocuments;
+        migrated['auto_download_archives'] = archivesValue is bool
+            ? archivesValue
+            : defaultState.autoDownloadArchives;
       }
       if (!migrated.containsKey('chat_read_receipts')) {
         if (migrated.containsKey('read_receipts')) {

@@ -7379,7 +7379,7 @@ mixin MessageService
         (db) => db.getFileMetadata(trimmedMetadataId),
       );
       if (metadata == null) return;
-      if (!attachmentAutoDownloadSettings.allowsMetadata(metadata)) {
+      if (!allowsAutoDownloadMetadata(metadata)) {
         return;
       }
       await downloadInboundAttachment(
