@@ -6,7 +6,10 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_dialog.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum NotificationRequestDisplayMode {
@@ -76,13 +79,31 @@ class _NotificationRequestState extends State<NotificationRequest> {
                   context,
                   widget.notificationService,
                 );
-                if (!mounted || confirmed != true) {
+                if (!context.mounted || confirmed != true) {
                   return;
                 }
+                if (!widget.displayMode.shouldShowFor(widget.capability)) {
+                  return;
+                }
+                if (!widget.capability.canForegroundService) {
+                  return;
+                }
+                final permissionCheck =
+                    widget.notificationService.hasAllNotificationPermissions();
                 setState(() {
-                  _future = widget.notificationService
-                      .hasAllNotificationPermissions();
+                  _future = permissionCheck;
                 });
+                if (!await permissionCheck) {
+                  return;
+                }
+                if (!context.mounted) {
+                  return;
+                }
+                final xmppService = context.read<XmppService>();
+                withForeground = true;
+                foregroundServiceActive.value = true;
+                initForegroundService();
+                await xmppService.ensureForegroundSocketIfActive();
               },
             );
           },

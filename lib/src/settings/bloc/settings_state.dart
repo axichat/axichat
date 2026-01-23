@@ -15,10 +15,8 @@ enum ShadColor {
   stone,
   violet,
   yellow,
-  zinc,
+  zinc;
 }
-
-const bool _emailForwardingGuideSeenDefault = false;
 
 @freezed
 class SettingsState with _$SettingsState {
@@ -33,7 +31,7 @@ class SettingsState with _$SettingsState {
     @Default(true) bool indicateTyping,
     @Default(false) bool lowMotion,
     @Default(true) bool colorfulAvatars,
-    @Default(_emailForwardingGuideSeenDefault) bool emailForwardingGuideSeen,
+    @Default(false) bool emailForwardingGuideSeen,
     @Default(MessageStorageMode.local) MessageStorageMode messageStorageMode,
     @Default(true) bool shareTokenSignatureEnabled,
     @Default(false) bool hideCompletedScheduled,
@@ -42,26 +40,38 @@ class SettingsState with _$SettingsState {
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
     @Default(false) bool autoLoadEmailImages,
-    @Default(AttachmentAutoDownloadSettings.defaultImagesEnabled)
-    bool autoDownloadImages,
-    @Default(AttachmentAutoDownloadSettings.defaultVideosEnabled)
-    bool autoDownloadVideos,
-    @Default(AttachmentAutoDownloadSettings.defaultDocumentsEnabled)
-    bool autoDownloadDocuments,
-    @Default(AttachmentAutoDownloadSettings.defaultArchivesEnabled)
-    bool autoDownloadArchives,
+    @Default(AttachmentAutoDownloadSettings())
+    AttachmentAutoDownloadSettings attachmentAutoDownloadSettings,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>
       _$SettingsStateFromJson(json);
 }
 
-extension SettingsAttachmentAutoDownload on SettingsState {
-  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
-      AttachmentAutoDownloadSettings(
-        imagesEnabled: autoDownloadImages,
-        videosEnabled: autoDownloadVideos,
-        documentsEnabled: autoDownloadDocuments,
-        archivesEnabled: autoDownloadArchives,
-      );
+@freezed
+class AttachmentAutoDownloadSettings with _$AttachmentAutoDownloadSettings {
+  @JsonSerializable(fieldRename: FieldRename.snake)
+  const factory AttachmentAutoDownloadSettings({
+    @Default(true) bool imagesEnabled,
+    @Default(false) bool videosEnabled,
+    @Default(false) bool documentsEnabled,
+    @Default(false) bool archivesEnabled,
+  }) = _AttachmentAutoDownloadSettings;
+
+  const AttachmentAutoDownloadSettings._();
+
+  factory AttachmentAutoDownloadSettings.fromJson(Map<String, Object?> json) =>
+      _$AttachmentAutoDownloadSettingsFromJson(json);
+
+  bool allowsCategory(FileMetadataDownloadCategory category) {
+    return switch (category) {
+      FileMetadataDownloadCategory.image => imagesEnabled,
+      FileMetadataDownloadCategory.video => videosEnabled,
+      FileMetadataDownloadCategory.document => documentsEnabled,
+      FileMetadataDownloadCategory.archive => archivesEnabled,
+    };
+  }
+
+  bool allowsMetadata(FileMetadataData metadata) =>
+      allowsCategory(metadata.downloadCategory);
 }
