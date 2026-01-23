@@ -161,6 +161,7 @@ List<AccessibilityMenuSection> _rootSectionsFor(
         contact.unreadCount > 0 ? count + contact.unreadCount : count,
   );
 
+  final summaryDismissId = 'unread-summary-$totalUnread';
   sections.add(
     AccessibilityMenuSection(
       id: 'actions',
@@ -188,6 +189,9 @@ List<AccessibilityMenuSection> _rootSectionsFor(
           ),
           icon: Icons.mark_chat_unread_outlined,
           badge: totalUnread > 0 ? totalUnread.toString() : null,
+          highlight: totalUnread > 0 &&
+              !state.dismissedHighlights.contains(summaryDismissId),
+          dismissId: totalUnread > 0 ? summaryDismissId : null,
         ),
       ],
     ),
@@ -361,23 +365,24 @@ List<AccessibilityMenuSection> _unreadSectionsFor(
   AccessibilityActionState state,
 ) {
   final l10n = context.l10n;
-  final items = state.contacts
-      .where((contact) => contact.unreadCount > 0)
-      .map(
-        (contact) => AccessibilityMenuItem(
-          id: 'unread-${contact.jid}',
-          label: contact.displayName,
-          description: _unreadDescriptionFor(context, contact),
-          kind: AccessibilityMenuItemKind.command,
-          action: AccessibilityCommandAction(
-            command: AccessibilityCommand.openChat,
-            contact: contact,
-          ),
-          icon: Icons.mark_chat_unread_outlined,
-          badge: contact.unreadCount.toString(),
-        ),
-      )
-      .toList();
+  final items =
+      state.contacts.where((contact) => contact.unreadCount > 0).map((contact) {
+    final dismissId = 'unread-${contact.jid}-${contact.unreadCount}';
+    return AccessibilityMenuItem(
+      id: 'unread-${contact.jid}',
+      label: contact.displayName,
+      description: _unreadDescriptionFor(context, contact),
+      kind: AccessibilityMenuItemKind.command,
+      action: AccessibilityCommandAction(
+        command: AccessibilityCommand.openChat,
+        contact: contact,
+      ),
+      icon: Icons.mark_chat_unread_outlined,
+      badge: contact.unreadCount.toString(),
+      highlight: !state.dismissedHighlights.contains(dismissId),
+      dismissId: dismissId,
+    );
+  }).toList();
   if (items.isEmpty) {
     items.add(
       AccessibilityMenuItem(
@@ -409,6 +414,7 @@ List<AccessibilityMenuSection> _inviteSectionsFor(
   final l10n = context.l10n;
   final items = <AccessibilityMenuItem>[];
   for (final invite in state.invites) {
+    final dismissId = 'invite-${invite.jid}';
     items.addAll([
       AccessibilityMenuItem(
         id: 'invite-accept-${invite.jid}',
@@ -420,6 +426,8 @@ List<AccessibilityMenuSection> _inviteSectionsFor(
           accept: true,
         ),
         icon: Icons.person_add_alt,
+        highlight: !state.dismissedHighlights.contains(dismissId),
+        dismissId: dismissId,
       ),
       AccessibilityMenuItem(
         id: 'invite-reject-${invite.jid}',
@@ -432,6 +440,8 @@ List<AccessibilityMenuSection> _inviteSectionsFor(
         ),
         icon: Icons.person_off_outlined,
         destructive: true,
+        highlight: !state.dismissedHighlights.contains(dismissId),
+        dismissId: dismissId,
       ),
     ]);
   }
@@ -1384,6 +1394,7 @@ class _AccessibilityActionContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final breadcrumbLabels = _breadcrumbLabels(state, context);
+    final currentRecipients = state.currentEntry.recipients;
     final headerTitle = breadcrumbLabels.isNotEmpty
         ? breadcrumbLabels.last
         : _entryLabel(state.currentEntry, context);
@@ -1548,7 +1559,7 @@ class _AccessibilityActionContent extends StatelessWidget {
                 focusNode: messageFocusNode,
                 initialIndex: messageInitialIndex(
                   messageSection.items,
-                  activeUnreadCount(state.activeChatJid, state.recipients),
+                  activeUnreadCount(state.activeChatJid, currentRecipients),
                 ),
               ),
             ),
@@ -1575,10 +1586,10 @@ class _AccessibilityActionContent extends StatelessWidget {
                 focusNode: actionsFocusNode,
                 groupKey: actionsGroupKey,
                 saveEnabled: state.composerText.trim().isNotEmpty &&
-                    state.recipients.isNotEmpty &&
+                    currentRecipients.isNotEmpty &&
                     !state.busy,
                 sendEnabled: state.composerText.trim().isNotEmpty &&
-                    state.recipients.isNotEmpty &&
+                    currentRecipients.isNotEmpty &&
                     !state.busy,
                 onSave: () => context.read<AccessibilityActionBloc>().add(
                       const AccessibilityMenuActionTriggered(
@@ -2087,6 +2098,7 @@ class _ComposerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final recipients = state.currentEntry.recipients;
     return FocusTraversalGroup(
       key: groupKey,
       policy: OrderedTraversalPolicy(),
@@ -2119,7 +2131,7 @@ class _ComposerSection extends StatelessWidget {
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: state.recipients
+                  children: recipients
                       .map(
                         (recipient) => Semantics(
                           label: context.l10n.accessibilityRecipientLabel(

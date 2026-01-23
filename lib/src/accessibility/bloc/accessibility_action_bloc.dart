@@ -89,7 +89,6 @@ class AccessibilityActionBloc
   List<Invite> _invites = const [];
   List<Draft> _drafts = const [];
   List<AccessibilityContact> _contacts = const [];
-  final Set<String> _dismissedHighlights = <String>{};
 
   @override
   Future<void> close() async {
@@ -217,10 +216,10 @@ class AccessibilityActionBloc
     );
   }
 
-  void _onMenuJumpedTo(
+  Future<void> _onMenuJumpedTo(
     AccessibilityMenuJumpedTo event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (event.index < 0 || event.index >= state.stack.length) return;
     final nextStack = state.stack.take(event.index + 1).toList();
     final keepChatMessages = nextStack.isNotEmpty &&
@@ -228,7 +227,7 @@ class AccessibilityActionBloc
             nextStack.last.kind == AccessibilityStepKind.conversation ||
             nextStack.last.kind == AccessibilityStepKind.composer);
     if (!keepChatMessages) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     emit(
       state.copyWith(
@@ -239,6 +238,9 @@ class AccessibilityActionBloc
         activeChatJid: keepChatMessages ? state.activeChatJid : null,
         recipients: nextStack.last.recipients,
         discardWarningActive: false,
+        attachments: keepChatMessages
+            ? state.attachments
+            : const <String, List<FileMetadataData>>{},
       ),
     );
   }
@@ -252,7 +254,7 @@ class AccessibilityActionBloc
       return;
     }
     if (action is AccessibilityNavigateAction) {
-      _handleNavigateAction(action, emit);
+      await _handleNavigateAction(action, emit);
       return;
     }
     if (action is AccessibilityCommandAction) {
@@ -406,10 +408,10 @@ class AccessibilityActionBloc
     }
   }
 
-  void _onRecipientRemoved(
+  Future<void> _onRecipientRemoved(
     AccessibilityRecipientRemoved event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (state.stack.length <= 1) return;
     final nextStack = List<AccessibilityStepEntry>.of(state.stack);
     final index = nextStack.lastIndexWhere(
@@ -424,7 +426,7 @@ class AccessibilityActionBloc
         .where((recipient) => recipient.jid != event.jid)
         .toList();
     if (filtered.isEmpty) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     nextStack[index] = entry.copyWith(recipients: filtered);
     emit(
@@ -491,17 +493,19 @@ class AccessibilityActionBloc
     }
     if (event.invites != null) {
       _invites = event.invites!;
-      _purgeDismissedHighlights();
     }
     if (event.drafts != null) {
       _drafts = event.drafts!;
     }
     _refreshContacts();
+    final dismissedHighlights =
+        _purgeDismissedHighlights(state.dismissedHighlights);
     var nextState = state.copyWith(
       contacts: _contacts,
       invites: _invites,
       drafts: _drafts,
       myJid: _chatsService.myJid,
+      dismissedHighlights: dismissedHighlights,
     );
     nextState = _syncActiveChatRecipient(nextState);
     final activeJid = nextState.activeChatJid;
@@ -509,7 +513,7 @@ class AccessibilityActionBloc
       final unreadCount = _unreadCountFor(activeJid);
       final desiredLimit = _messageWindowForUnread(unreadCount);
       if (desiredLimit > _messageStreamLimit) {
-        _startMessageStream(activeJid);
+        await _startMessageStream(activeJid);
       }
     }
     if (nextState != state) {
@@ -556,18 +560,20 @@ class AccessibilityActionBloc
     _contacts = [...orderedChats, ...rosterOnly];
   }
 
-  void _purgeDismissedHighlights() {
+  Set<String> _purgeDismissedHighlights(Set<String> dismissedHighlights) {
+    final pruned = Set<String>.of(dismissedHighlights);
     final validInviteIds = _invites.map((invite) => 'invite-${invite.jid}');
-    _dismissedHighlights.removeWhere(
+    pruned.removeWhere(
       (id) => id.startsWith('invite-') && !validInviteIds.contains(id),
     );
     final unreadDigests = _unreadDigest();
-    _dismissedHighlights.removeWhere(
+    pruned.removeWhere(
       (id) =>
           id.startsWith('unread-') &&
           !id.startsWith('unread-summary-') &&
           !unreadDigests.contains(id),
     );
+    return pruned;
   }
 
   bool _hasUnsavedInput(AccessibilityActionState state) {
@@ -605,10 +611,10 @@ class AccessibilityActionBloc
     return digests;
   }
 
-  void _handleNavigateAction(
+  Future<void> _handleNavigateAction(
     AccessibilityNavigateAction action,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     final leavingChat =
         (state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
                 state.currentEntry.kind == AccessibilityStepKind.conversation ||
@@ -617,7 +623,7 @@ class AccessibilityActionBloc
             action.step != AccessibilityStepKind.conversation &&
             action.step != AccessibilityStepKind.composer;
     if (leavingChat) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     final nextEntry = AccessibilityStepEntry(
       kind: action.step,
@@ -673,7 +679,7 @@ class AccessibilityActionBloc
       case AccessibilityCommand.resumeDraft:
         final draft = action.draft;
         if (draft == null) return;
-        _openDraftComposer(draft, emit);
+        await _openDraftComposer(draft, emit);
         break;
     }
   }
@@ -736,11 +742,14 @@ class AccessibilityActionBloc
     }
   }
 
-  void _openDraftComposer(Draft draft, Emitter<AccessibilityActionState> emit) {
+  Future<void> _openDraftComposer(
+    Draft draft,
+    Emitter<AccessibilityActionState> emit,
+  ) async {
     final recipients = draft.jids.map(_contactForJid).toList();
     final activeJid = recipients.isNotEmpty ? recipients.first.jid : null;
     if (activeJid != null) {
-      _startMessageStream(activeJid);
+      await _startMessageStream(activeJid);
     }
     final nextStack = List<AccessibilityStepEntry>.of(state.stack)
       ..add(
@@ -803,7 +812,7 @@ class AccessibilityActionBloc
         final nextStack = List<AccessibilityStepEntry>.of(state.stack);
         final previousIndex = nextStack.length - 2;
         final activeJid = recipients.first.jid;
-        _startMessageStream(activeJid);
+        await _startMessageStream(activeJid);
         if (previousIndex >= 0 &&
             nextStack[previousIndex].kind == AccessibilityStepKind.composer) {
           nextStack[previousIndex] = nextStack[previousIndex].copyWith(
@@ -845,7 +854,7 @@ class AccessibilityActionBloc
     if (stack.last.kind == AccessibilityStepKind.newContact) {
       final recipients = _mergeRecipients(stack.last.recipients, contact);
       final activeJid = recipients.first.jid;
-      _startMessageStream(activeJid);
+      await _startMessageStream(activeJid);
       final nextStack = stack
         ..removeLast()
         ..add(
@@ -934,7 +943,9 @@ class AccessibilityActionBloc
     String highlightId,
     Emitter<AccessibilityActionState> emit,
   ) {
-    _dismissedHighlights.add(highlightId);
+    final dismissed = Set<String>.of(state.dismissedHighlights)
+      ..add(highlightId);
+    emit(state.copyWith(dismissedHighlights: dismissed));
   }
 
   Future<void> _openChatMessages(
@@ -967,7 +978,7 @@ class AccessibilityActionBloc
     } else {
       nextStack.add(newEntry);
     }
-    _startMessageStream(contact.jid);
+    await _startMessageStream(contact.jid);
     final nextState = state.copyWith(
       visible: true,
       stack: nextStack,
@@ -982,8 +993,8 @@ class AccessibilityActionBloc
     emit(nextState);
   }
 
-  void _startMessageStream(String jid) {
-    _clearMessageStream();
+  Future<void> _startMessageStream(String jid) async {
+    await _clearMessageStream();
     final messagePageSize = _messageWindowForUnread(_unreadCountFor(jid));
     _messageStreamLimit = messagePageSize;
     _messageSubscription =
@@ -1118,7 +1129,9 @@ class AccessibilityActionBloc
     var stackChanged = false;
     final nextStack = <AccessibilityStepEntry>[];
     for (final entry in baseState.stack) {
-      if (entry.kind == AccessibilityStepKind.chatMessages &&
+      final isChatView = entry.kind == AccessibilityStepKind.chatMessages ||
+          entry.kind == AccessibilityStepKind.conversation;
+      if (isChatView &&
           (entry.recipients.length != 1 || entry.recipients.first != contact)) {
         nextStack.add(entry.copyWith(recipients: [contact]));
         stackChanged = true;
@@ -1126,10 +1139,18 @@ class AccessibilityActionBloc
         nextStack.add(entry);
       }
     }
+    final currentEntry = baseState.currentEntry;
+    final shouldSyncRecipients =
+        currentEntry.kind == AccessibilityStepKind.chatMessages ||
+            currentEntry.kind == AccessibilityStepKind.conversation;
     if (stackChanged ||
-        baseState.recipients.length != 1 ||
-        baseState.recipients.first != contact) {
-      return baseState.copyWith(stack: nextStack, recipients: [contact]);
+        (shouldSyncRecipients &&
+            (baseState.recipients.length != 1 ||
+                baseState.recipients.first != contact))) {
+      return baseState.copyWith(
+        stack: nextStack,
+        recipients: shouldSyncRecipients ? [contact] : baseState.recipients,
+      );
     }
     return baseState;
   }

@@ -701,6 +701,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (isReady && emailService.hasActiveSession) {
       return;
     }
+    final jid = _authenticatedJid;
+    if (!_loginInFlight && jid != null) {
+      final hasCredentials = await _hasEmailReconnectCredentials(jid);
+      if (!hasCredentials) {
+        await logout(severity: LogoutSeverity.auto);
+        return;
+      }
+    }
     try {
       await _attemptEmailProvisioningRecovery();
       await emailService.handleNetworkAvailable();
@@ -871,6 +879,42 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       passphraseKey: passphraseKey,
       passphrase: storedPassphrase,
     );
+  }
+
+  Future<bool> _hasEmailReconnectCredentials(String jid) async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      return false;
+    }
+    if (emailService.hasInMemoryReconnectContext ||
+        emailService.hasActiveSession) {
+      return true;
+    }
+    final secrets = await _readDatabaseSecrets(jid);
+    if (!secrets.hasSecrets) {
+      return false;
+    }
+    final storedAccount = await emailService.currentAccount(jid);
+    String? normalizeCredential(String? value) {
+      final trimmed = value?.trim();
+      return trimmed == null || trimmed.isEmpty ? null : trimmed;
+    }
+
+    final storedPassword = normalizeCredential(storedAccount?.password);
+    final storedAddress = normalizeCredential(storedAccount?.address);
+    final sessionCredentials = _sessionEmailCredentials;
+    final sessionMatches = sessionCredentials?.matches(jid) ?? false;
+    final sessionPassword = sessionMatches
+        ? normalizeCredential(sessionCredentials?.password)
+        : null;
+    final sessionAddress = sessionMatches
+        ? normalizeCredential(sessionCredentials?.address)
+        : null;
+    final hasStoredCredentials =
+        storedPassword != null && storedAddress != null;
+    final hasSessionCredentials =
+        sessionPassword != null && sessionAddress != null;
+    return hasStoredCredentials || hasSessionCredentials;
   }
 
   Future<void> _updateAuthTransactionCredentialClearance(
