@@ -1951,8 +1951,9 @@ WHERE delta_chat_id IS NOT NULL
       fileMetadataId: trimmedMetadataId,
     );
     final bool shouldUpdateChatSummary = !isInternalSync;
-    final bool shouldIncrementUnread =
-        shouldUpdateChatSummary && (hasBody || hasAttachment);
+    final bool shouldIncrementUnread = shouldUpdateChatSummary &&
+        (hasBody || hasAttachment) &&
+        message.pseudoMessageType == null;
     final int unreadIncrement = shouldIncrementUnread.toBinary;
     final DateTime? existingLastChangeTimestamp = shouldUpdateChatSummary
         ? null
@@ -2356,8 +2357,9 @@ WHERE jid = ?
       final String? trimmedBody = existing.body?.trim();
       final bool hasBody = trimmedBody?.isNotEmpty == true;
       final bool hasAttachment = existing.fileMetadataID?.isNotEmpty == true;
-      final bool shouldDecrementUnread =
-          (hasBody || hasAttachment) && !existing.displayed;
+      final bool shouldDecrementUnread = (hasBody || hasAttachment) &&
+          !existing.displayed &&
+          existing.pseudoMessageType == null;
       final int nextUnreadCount = lastMessage == null
           ? 0
           : shouldDecrementUnread && chat.unreadCount > 0

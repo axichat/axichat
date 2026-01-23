@@ -171,6 +171,10 @@ class HomeRefreshSyncService {
   Future<void> _refreshEmailUnread() async {
     final emailService = _emailService;
     if (emailService == null) return;
+    if (emailService.syncState.status != EmailSyncStatus.ready ||
+        !emailService.hasActiveSession) {
+      return;
+    }
     try {
       await emailService.performBackgroundFetch(
         timeout: _emailUnreadFetchTimeout,
@@ -218,6 +222,10 @@ class HomeRefreshSyncService {
   Future<void> _refreshEmailHistory() async {
     final emailService = _emailService;
     if (emailService == null) return;
+    if (emailService.syncState.status != EmailSyncStatus.ready ||
+        !emailService.hasActiveSession) {
+      return;
+    }
     try {
       await emailService.performBackgroundFetch(
         timeout: _emailHistoryFetchTimeout,
@@ -231,6 +239,10 @@ class HomeRefreshSyncService {
   Future<void> _syncEmailContacts() async {
     final emailService = _emailService;
     if (emailService == null) return;
+    if (emailService.syncState.status != EmailSyncStatus.ready ||
+        !emailService.hasActiveSession) {
+      return;
+    }
     try {
       await emailService.syncContactsFromCore();
     } on Exception {

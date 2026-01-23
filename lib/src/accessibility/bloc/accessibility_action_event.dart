@@ -31,10 +31,6 @@ class AccessibilityMenuJumpedTo extends AccessibilityActionEvent {
   List<Object?> get props => [index];
 }
 
-class AccessibilityMenuReset extends AccessibilityActionEvent {
-  const AccessibilityMenuReset();
-}
-
 class AccessibilityDiscardWarningRequested extends AccessibilityActionEvent {
   const AccessibilityDiscardWarningRequested();
 }

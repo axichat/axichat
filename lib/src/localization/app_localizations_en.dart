@@ -242,6 +242,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentGalleryReceivedLabel => 'Received';
 
   @override
+  String get attachmentGalleryMetaSeparator => ' - ';
+
+  @override
   String get attachmentGalleryLayoutGridLabel => 'Grid view';
 
   @override
@@ -673,6 +676,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatCopyNoText => 'Selected messages have no text to copy';
+
+  @override
+  String get chatCopySuccessMessage => 'Copied to clipboard';
 
   @override
   String get chatShareSelectedNoText =>

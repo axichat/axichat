@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
-import 'package:axichat/src/attachments/attachment_gallery_repository.dart';
-import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
-import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
+import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -24,115 +22,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _attachmentGalleryHorizontalPadding = 16.0;
-const double _attachmentGalleryTopPadding = 12.0;
-const double _attachmentGalleryBottomPadding = 16.0;
-const double _attachmentGalleryItemSpacing = 16.0;
-const double _attachmentGalleryControlsSpacing = 12.0;
-const double _attachmentGalleryControlSpacing = 8.0;
-const double _attachmentGalleryControlRowSpacing = 12.0;
-const double _attachmentGalleryControlsBreakpoint = 520.0;
-const double _attachmentGalleryGridSpacing = 12.0;
-const double _attachmentGalleryGridMinTileWidth = 200.0;
-const int _attachmentGalleryGridMinColumns = 2;
-const int _attachmentGalleryGridMaxColumns = 4;
-const double _attachmentGalleryPreviewMaxWidthFraction = 1.0;
-const double _attachmentGalleryFooterSpacing = 8.0;
-const double _attachmentGalleryMetaSpacing = 4.0;
-const double _attachmentGalleryGridHorizontalPadding =
-    _attachmentGalleryHorizontalPadding * 2;
-const double _attachmentGalleryGridMinAvailableWidth = 0.0;
-const int _attachmentGalleryFilenameMaxLines = 2;
-const int _attachmentGalleryMetaMaxLines = 1;
-const String _attachmentGalleryMetaSeparator = ' - ';
-const int _attachmentGallerySortBefore = -1;
-const int _attachmentGallerySortAfter = 1;
-const int _attachmentGalleryFallbackEpochMs = 0;
-final DateTime _attachmentGalleryFallbackTimestamp =
-    DateTime.fromMillisecondsSinceEpoch(_attachmentGalleryFallbackEpochMs);
-
-enum AttachmentGallerySortOption {
-  newestFirst,
-  oldestFirst,
-  nameAscending,
-  nameDescending,
-  sizeAscending,
-  sizeDescending,
-}
-
-enum AttachmentGalleryTypeFilter { all, images, videos, files }
-
-enum AttachmentGallerySourceFilter { all, sent, received }
-
-enum AttachmentGalleryLayout { grid, list }
-
-extension AttachmentGallerySortOptionLabels on AttachmentGallerySortOption {
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGallerySortOption.newestFirst => l10n.chatSearchSortNewestFirst,
-      AttachmentGallerySortOption.oldestFirst => l10n.chatSearchSortOldestFirst,
-      AttachmentGallerySortOption.nameAscending =>
-        l10n.attachmentGallerySortNameAscLabel,
-      AttachmentGallerySortOption.nameDescending =>
-        l10n.attachmentGallerySortNameDescLabel,
-      AttachmentGallerySortOption.sizeAscending =>
-        l10n.attachmentGallerySortSizeAscLabel,
-      AttachmentGallerySortOption.sizeDescending =>
-        l10n.attachmentGallerySortSizeDescLabel,
-    };
-  }
-
-  int compare(AttachmentGalleryItem a, AttachmentGalleryItem b) {
-    return switch (this) {
-      AttachmentGallerySortOption.newestFirst => _compareByTimestamp(
-          a,
-          b,
-          descending: true,
-        ),
-      AttachmentGallerySortOption.oldestFirst => _compareByTimestamp(
-          a,
-          b,
-          descending: false,
-        ),
-      AttachmentGallerySortOption.nameAscending => _compareByName(
-          a,
-          b,
-          descending: false,
-        ),
-      AttachmentGallerySortOption.nameDescending => _compareByName(
-          a,
-          b,
-          descending: true,
-        ),
-      AttachmentGallerySortOption.sizeAscending => _compareBySize(
-          a,
-          b,
-          descending: false,
-        ),
-      AttachmentGallerySortOption.sizeDescending => _compareBySize(
-          a,
-          b,
-          descending: true,
-        ),
-    };
-  }
-}
-
-AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
-  final resolvedWidth =
-      maxWidth > 0 ? maxWidth : _attachmentGalleryGridMinTileWidth;
-  final availableWidth =
-      (resolvedWidth - _attachmentGalleryGridHorizontalPadding)
-          .clamp(_attachmentGalleryGridMinAvailableWidth, resolvedWidth)
-          .toDouble();
-  final rawCount =
-      (availableWidth / _attachmentGalleryGridMinTileWidth).floor();
-  final crossAxisCount = rawCount
-      .clamp(_attachmentGalleryGridMinColumns, _attachmentGalleryGridMaxColumns)
-      .toInt();
-  final totalSpacing = _attachmentGalleryGridSpacing * (crossAxisCount - 1);
+AttachmentGalleryGridMetrics _resolveGridMetrics({
+  required double maxWidth,
+  required double horizontalPadding,
+  required double minTileWidth,
+  required double gridSpacing,
+  required int minColumns,
+  required int maxColumns,
+  required double minAvailableWidth,
+}) {
+  final resolvedWidth = maxWidth > 0 ? maxWidth : minTileWidth;
+  final availableWidth = (resolvedWidth - horizontalPadding)
+      .clamp(minAvailableWidth, resolvedWidth)
+      .toDouble();
+  final rawCount = (availableWidth / minTileWidth).floor();
+  final crossAxisCount = rawCount.clamp(minColumns, maxColumns).toInt();
+  final totalSpacing = gridSpacing * (crossAxisCount - 1);
   final tileWidth = math.max(
-    _attachmentGalleryGridMinAvailableWidth,
+    minAvailableWidth,
     (availableWidth - totalSpacing) / crossAxisCount,
   );
   return AttachmentGalleryGridMetrics(
@@ -141,105 +48,11 @@ AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
   );
 }
 
-int _compareByTimestamp(
-  AttachmentGalleryItem a,
-  AttachmentGalleryItem b, {
-  required bool descending,
+String? _resolveMetaText({
+  required Chat? chat,
+  required bool showChatLabel,
+  required String separator,
 }) {
-  final aTimestamp = a.message.timestamp ?? _attachmentGalleryFallbackTimestamp;
-  final bTimestamp = b.message.timestamp ?? _attachmentGalleryFallbackTimestamp;
-  final result = aTimestamp.compareTo(bTimestamp);
-  if (result == 0) return 0;
-  return descending ? -result : result;
-}
-
-int _compareByName(
-  AttachmentGalleryItem a,
-  AttachmentGalleryItem b, {
-  required bool descending,
-}) {
-  final result = a.metadata.normalizedFilename.compareTo(
-    b.metadata.normalizedFilename,
-  );
-  if (result != 0) {
-    return descending ? -result : result;
-  }
-  return _compareByTimestamp(a, b, descending: true);
-}
-
-int _compareBySize(
-  AttachmentGalleryItem a,
-  AttachmentGalleryItem b, {
-  required bool descending,
-}) {
-  final aSize = a.metadata.sizeBytes;
-  final bSize = b.metadata.sizeBytes;
-  if (aSize == null && bSize == null) {
-    return _compareByTimestamp(a, b, descending: true);
-  }
-  if (aSize == null) return _attachmentGallerySortAfter;
-  if (bSize == null) return _attachmentGallerySortBefore;
-  final result = aSize.compareTo(bSize);
-  if (result != 0) {
-    return descending ? -result : result;
-  }
-  return _compareByTimestamp(a, b, descending: true);
-}
-
-extension AttachmentGalleryTypeFilterLabels on AttachmentGalleryTypeFilter {
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGalleryTypeFilter.all => l10n.attachmentGalleryAllLabel,
-      AttachmentGalleryTypeFilter.images => l10n.attachmentGalleryImagesLabel,
-      AttachmentGalleryTypeFilter.videos => l10n.attachmentGalleryVideosLabel,
-      AttachmentGalleryTypeFilter.files => l10n.attachmentGalleryFilesLabel,
-    };
-  }
-
-  bool matches(FileMetadataData metadata) {
-    return switch (this) {
-      AttachmentGalleryTypeFilter.all => true,
-      AttachmentGalleryTypeFilter.images => metadata.isImage,
-      AttachmentGalleryTypeFilter.videos => metadata.isVideo,
-      AttachmentGalleryTypeFilter.files =>
-        metadata.mediaKind == AttachmentMediaKind.file,
-    };
-  }
-}
-
-extension AttachmentGallerySourceFilterLabels on AttachmentGallerySourceFilter {
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGallerySourceFilter.all => l10n.attachmentGalleryAllLabel,
-      AttachmentGallerySourceFilter.sent => l10n.attachmentGallerySentLabel,
-      AttachmentGallerySourceFilter.received =>
-        l10n.attachmentGalleryReceivedLabel,
-    };
-  }
-
-  bool matches({required bool isSelf}) {
-    return switch (this) {
-      AttachmentGallerySourceFilter.all => true,
-      AttachmentGallerySourceFilter.sent => isSelf,
-      AttachmentGallerySourceFilter.received => !isSelf,
-    };
-  }
-}
-
-bool _isSelfMessage(
-  Message message, {
-  required XmppService xmppService,
-  required EmailService? emailService,
-}) {
-  final sender = message.senderJid.trim().toLowerCase();
-  final xmppJid = xmppService.myJid?.trim().toLowerCase();
-  if (xmppJid != null && sender == xmppJid) return true;
-  final emailJid = emailService?.selfSenderJid?.trim().toLowerCase();
-  if (emailJid != null && sender == emailJid) return true;
-  return false;
-}
-
-String? _resolveMetaText({required Chat? chat, required bool showChatLabel}) {
   final parts = <String>[];
   if (showChatLabel && chat != null) {
     final label = chat.displayName.trim();
@@ -248,7 +61,7 @@ String? _resolveMetaText({required Chat? chat, required bool showChatLabel}) {
     }
   }
   if (parts.isEmpty) return null;
-  return parts.join(_attachmentGalleryMetaSeparator);
+  return parts.join(separator);
 }
 
 class AttachmentGalleryGridMetrics {
@@ -279,11 +92,13 @@ class AttachmentGalleryPanel extends StatelessWidget {
     if (resolvedChat == null) {
       return const SizedBox.shrink();
     }
-    final xmppService = context.read<XmppService>();
     return BlocProvider(
-      create: (context) => AttachmentGalleryCubit(
-        xmppService: xmppService,
+      create: (context) => AttachmentGalleryBloc(
+        xmppService: context.read<XmppService>(),
+        emailService: context.read<EmailService>(),
         chatJid: resolvedChat.jid,
+        chatOverride: resolvedChat,
+        showChatLabel: false,
       ),
       child: AxiSheetScaffold(
         header: AxiSheetHeader(
@@ -315,43 +130,22 @@ class AttachmentGalleryView extends StatefulWidget {
 }
 
 class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
-  final Set<String> _oneTimeAllowedStanzaIds = <String>{};
   late final TextEditingController _searchController = TextEditingController()
     ..addListener(_handleSearchChanged);
-  AttachmentGallerySortOption _sortOption =
-      AttachmentGallerySortOption.newestFirst;
-  AttachmentGalleryTypeFilter _typeFilter = AttachmentGalleryTypeFilter.all;
-  AttachmentGallerySourceFilter _sourceFilter =
-      AttachmentGallerySourceFilter.all;
-  AttachmentGalleryLayout? _layoutOverride;
-
-  String get _searchQuery => _searchController.text.trim().toLowerCase();
-
-  AttachmentGalleryLayout _resolveLayout({required bool hasVisualMedia}) {
+  AttachmentGalleryLayout _resolveLayout({
+    required bool hasVisualMedia,
+    required AttachmentGalleryLayout? overrideLayout,
+  }) {
     final defaultLayout = hasVisualMedia
         ? AttachmentGalleryLayout.grid
         : AttachmentGalleryLayout.list;
-    return _layoutOverride ?? defaultLayout;
+    return overrideLayout ?? defaultLayout;
   }
 
-  void _setLayout(AttachmentGalleryLayout nextLayout) {
-    if (_layoutOverride == nextLayout) return;
-    setState(() {
-      _layoutOverride = nextLayout;
-    });
-  }
-
-  bool _isOneTimeAttachmentAllowed(String stanzaId) {
-    final trimmed = stanzaId.trim();
-    if (trimmed.isEmpty) return false;
-    return _oneTimeAllowedStanzaIds.contains(trimmed);
-  }
-
-  bool _shouldAllowAttachment({required bool isSelf, required Chat? chat}) {
-    if (isSelf) return true;
-    final resolvedChat = chat;
-    if (resolvedChat == null) return false;
-    return resolvedChat.attachmentAutoDownload.isAllowed;
+  void _handleLayoutChanged(AttachmentGalleryLayout nextLayout) {
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryLayoutChanged(layout: nextLayout),
+        );
   }
 
   Future<void> _approveAttachment({
@@ -360,23 +154,13 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     required String stanzaId,
     required Chat? chat,
     required bool isEmailChat,
+    required bool isSelf,
   }) async {
     if (!mounted) return;
     final l10n = context.l10n;
     final senderEmail = chat?.emailAddress;
     final displaySender =
         senderEmail?.trim().isNotEmpty == true ? senderEmail! : senderJid;
-    final xmppService = context.read<XmppService>();
-    final emailService = RepositoryProvider.of<EmailService?>(context);
-    final isSelf = _isSelfMessage(
-      message,
-      xmppService: xmppService,
-      emailService: emailService,
-    );
-    final canTrustChat = !isSelf && chat != null;
-    final showAutoTrustToggle = canTrustChat;
-    final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
-    final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
     final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -386,42 +170,43 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           message: l10n.chatAttachmentConfirmMessage(displaySender),
           confirmLabel: l10n.chatAttachmentConfirmButton,
           cancelLabel: l10n.commonCancel,
-          showAutoTrustToggle: showAutoTrustToggle,
-          autoTrustLabel: autoTrustLabel,
-          autoTrustHint: autoTrustHint,
+          showAutoTrustToggle: !isSelf && chat != null,
+          autoTrustLabel: l10n.attachmentGalleryChatTrustLabel,
+          autoTrustHint: l10n.attachmentGalleryChatTrustHint,
         );
       },
     );
     if (!mounted) return;
     if (decision == null || !decision.approved) return;
 
-    if (decision.alwaysAllow && canTrustChat) {
-      final resolvedChat = chat;
-      if (context.read<ChatsCubit?>() != null) {
-        await context.read<ChatsCubit>().toggleAttachmentAutoDownload(
-              jid: resolvedChat.jid,
-              enabled: true,
-            );
-      } else {
-        await xmppService.toggleChatAttachmentAutoDownload(
-          jid: resolvedChat.jid,
-          enabled: true,
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryApprovalGranted(
+            message: message,
+            chat: chat,
+            alwaysAllow: decision.alwaysAllow,
+            isEmailChat: isEmailChat,
+            stanzaId: stanzaId,
+          ),
         );
-      }
-    }
-    if (isEmailChat && emailService != null) {
-      await emailService.downloadFullMessage(message);
-    }
-    if (mounted) {
-      setState(() {
-        _oneTimeAllowedStanzaIds.add(stanzaId.trim());
-      });
-    }
   }
 
   void _handleSearchChanged() {
     if (!mounted) return;
-    setState(() {});
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryQueryChanged(
+            query: _searchController.text,
+          ),
+        );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryChatsUpdated(
+            items: context.read<ChatsCubit>().state.items ?? const <Chat>[],
+          ),
+        );
   }
 
   @override
@@ -432,233 +217,211 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    ChatsState chatsState() => context.watch<ChatsCubit>().state;
-    final chats = chatsState().items ?? const <Chat>[];
-    final autoDownloadSettings =
-        context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
+    const horizontalPadding = 16.0;
+    const topPadding = 12.0;
+    const bottomPadding = 16.0;
+    const itemSpacing = 16.0;
+    const gridSpacing = 12.0;
+    const gridMinTileWidth = 200.0;
+    const gridMinColumns = 2;
+    const gridMaxColumns = 4;
+    const gridMinAvailableWidth = 0.0;
+    const gridHorizontalPadding = horizontalPadding * 2;
     final l10n = context.l10n;
-    final chatOverride = widget.chatOverride;
-    final showChatLabel = widget.showChatLabel;
-    final chatLookup = <String, Chat>{for (final chat in chats) chat.jid: chat};
-
-    return BlocBuilder<AttachmentGalleryCubit, AttachmentGalleryState>(
-      builder: (context, state) {
-        final items = state.items;
-        if (items.isEmpty) {
-          if (state.status.isLoading) {
-            return Center(
-              child: AxiProgressIndicator(
-                color: context.colorScheme.foreground,
+    return BlocListener<ChatsCubit, ChatsState>(
+      listenWhen: (previous, current) => previous.items != current.items,
+      listener: (context, state) {
+        context.read<AttachmentGalleryBloc>().add(
+              AttachmentGalleryChatsUpdated(
+                items: state.items ?? const <Chat>[],
               ),
             );
-          }
-          if (state.status.isFailure) {
+      },
+      child: BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
+        builder: (context, state) {
+          if (state.items.isEmpty) {
+            if (state.status.isLoading) {
+              return Center(
+                child: AxiProgressIndicator(
+                  color: context.colorScheme.foreground,
+                ),
+              );
+            }
+            if (state.status.isFailure) {
+              return Center(
+                child: Text(
+                  l10n.attachmentGalleryErrorMessage,
+                  style: context.textTheme.muted,
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
             return Center(
               child: Text(
-                l10n.attachmentGalleryErrorMessage,
+                context.l10n.draftNoAttachments,
                 style: context.textTheme.muted,
-                textAlign: TextAlign.center,
               ),
             );
           }
-          return Center(
-            child: Text(
-              context.l10n.draftNoAttachments,
-              style: context.textTheme.muted,
+
+          final layout = _resolveLayout(
+            hasVisualMedia: state.entries.any(
+              (entry) =>
+                  entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
             ),
+            overrideLayout: state.layoutOverride,
           );
-        }
-
-        final filteredItems = _filterItems(
-          items: items,
-          chatLookup: chatLookup,
-          chatOverride: chatOverride,
-          showChatLabel: showChatLabel,
-        );
-        final hasFilters = _hasActiveFilters;
-        final hasVisualMedia = filteredItems.any(
-          (item) => item.metadata.mediaKind != AttachmentMediaKind.file,
-        );
-        final layout = _resolveLayout(hasVisualMedia: hasVisualMedia);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                _attachmentGalleryHorizontalPadding,
-                _attachmentGalleryTopPadding,
-                _attachmentGalleryHorizontalPadding,
-                0,
-              ),
-              child: AttachmentGalleryControls(
-                searchController: _searchController,
-                sortOption: _sortOption,
-                onSortChanged: (value) {
-                  setState(() {
-                    _sortOption = value;
-                  });
-                },
-                typeFilter: _typeFilter,
-                onTypeFilterChanged: (value) {
-                  setState(() {
-                    _typeFilter = value;
-                  });
-                },
-                sourceFilter: _sourceFilter,
-                onSourceFilterChanged: (value) {
-                  setState(() {
-                    _sourceFilter = value;
-                  });
-                },
-                layout: layout,
-                onLayoutChanged: _setLayout,
-                onClearSearch: _searchController.clear,
-              ),
-            ),
-            const SizedBox(height: _attachmentGalleryItemSpacing),
-            Expanded(
-              child: filteredItems.isEmpty
-                  ? Center(
-                      child: Text(
-                        hasFilters
-                            ? context.l10n.chatEmptySearch
-                            : context.l10n.draftNoAttachments,
-                        style: context.textTheme.muted,
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : layout == AttachmentGalleryLayout.list
-                      ? ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(
-                            _attachmentGalleryHorizontalPadding,
-                            0,
-                            _attachmentGalleryHorizontalPadding,
-                            _attachmentGalleryBottomPadding,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  topPadding,
+                  horizontalPadding,
+                  0,
+                ),
+                child: AttachmentGalleryControls(
+                  searchController: _searchController,
+                  sortOption: state.sortOption,
+                  onSortChanged: (value) {
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGallerySortChanged(sortOption: value),
+                        );
+                  },
+                  typeFilter: state.typeFilter,
+                  onTypeFilterChanged: (value) {
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGalleryTypeFilterChanged(typeFilter: value),
+                        );
+                  },
+                  sourceFilter: state.sourceFilter,
+                  onSourceFilterChanged: (value) {
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGallerySourceFilterChanged(
+                            sourceFilter: value,
                           ),
-                          itemCount: filteredItems.length,
-                          separatorBuilder: (_, __) => const SizedBox(
-                              height: _attachmentGalleryItemSpacing),
-                          itemBuilder: (context, index) =>
-                              AttachmentGalleryEntry(
-                            item: filteredItems[index],
-                            chatOverride: chatOverride,
-                            chatLookup: chatLookup,
-                            showChatLabel: showChatLabel,
-                            autoDownloadSettings: autoDownloadSettings,
-                            layout: layout,
-                            isOneTimeAttachmentAllowed:
-                                _isOneTimeAttachmentAllowed,
-                            shouldAllowAttachment: _shouldAllowAttachment,
-                            onApproveAttachment: _approveAttachment,
-                          ),
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final gridMetrics = _resolveGridMetrics(
-                              constraints.maxWidth,
-                            );
-                            final rowCount = (filteredItems.length /
-                                    gridMetrics.crossAxisCount)
-                                .ceil();
-                            return ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(
-                                _attachmentGalleryHorizontalPadding,
-                                0,
-                                _attachmentGalleryHorizontalPadding,
-                                _attachmentGalleryBottomPadding,
-                              ),
-                              itemCount: rowCount,
-                              separatorBuilder: (_, __) => const SizedBox(
-                                height: _attachmentGalleryGridSpacing,
-                              ),
-                              itemBuilder: (context, rowIndex) {
-                                final rowStart =
-                                    rowIndex * gridMetrics.crossAxisCount;
-                                final rowEnd = math.min(
-                                  rowStart + gridMetrics.crossAxisCount,
-                                  filteredItems.length,
-                                );
-                                final rowItems = filteredItems.sublist(
-                                  rowStart,
-                                  rowEnd,
-                                );
-                                return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    for (var index = 0;
-                                        index < rowItems.length;
-                                        index += 1) ...[
-                                      SizedBox(
-                                        width: gridMetrics.tileWidth,
-                                        child: AttachmentGalleryEntry(
-                                          item: rowItems[index],
-                                          chatOverride: chatOverride,
-                                          chatLookup: chatLookup,
-                                          showChatLabel: showChatLabel,
-                                          autoDownloadSettings:
-                                              autoDownloadSettings,
-                                          layout: layout,
-                                          isOneTimeAttachmentAllowed:
-                                              _isOneTimeAttachmentAllowed,
-                                          shouldAllowAttachment:
-                                              _shouldAllowAttachment,
-                                          onApproveAttachment:
-                                              _approveAttachment,
-                                        ),
-                                      ),
-                                      if (index < rowItems.length - 1)
-                                        const SizedBox(
-                                          width: _attachmentGalleryGridSpacing,
-                                        ),
-                                    ],
-                                  ],
-                                );
-                              },
-                            );
-                          },
+                        );
+                  },
+                  layout: layout,
+                  onLayoutChanged: _handleLayoutChanged,
+                  onClearSearch: _searchController.clear,
+                ),
+              ),
+              const SizedBox(height: itemSpacing),
+              Expanded(
+                child: state.entries.isEmpty
+                    ? Center(
+                        child: Text(
+                          state.query.trim().isNotEmpty ||
+                                  state.typeFilter !=
+                                      AttachmentGalleryTypeFilter.all ||
+                                  state.sourceFilter !=
+                                      AttachmentGallerySourceFilter.all
+                              ? context.l10n.chatEmptySearch
+                              : context.l10n.draftNoAttachments,
+                          style: context.textTheme.muted,
+                          textAlign: TextAlign.center,
                         ),
-            ),
-          ],
-        );
-      },
+                      )
+                    : layout == AttachmentGalleryLayout.list
+                        ? ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(
+                              horizontalPadding,
+                              0,
+                              horizontalPadding,
+                              bottomPadding,
+                            ),
+                            itemCount: state.entries.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: itemSpacing),
+                            itemBuilder: (context, index) =>
+                                AttachmentGalleryEntry(
+                              entry: state.entries[index],
+                              showChatLabel: widget.showChatLabel,
+                              autoDownloadSettings: context
+                                  .watch<SettingsCubit>()
+                                  .state
+                                  .attachmentAutoDownloadSettings,
+                              layout: layout,
+                              onApproveAttachment: _approveAttachment,
+                              metaSeparator:
+                                  l10n.attachmentGalleryMetaSeparator,
+                            ),
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final gridMetrics = _resolveGridMetrics(
+                                maxWidth: constraints.maxWidth,
+                                horizontalPadding: gridHorizontalPadding,
+                                minTileWidth: gridMinTileWidth,
+                                gridSpacing: gridSpacing,
+                                minColumns: gridMinColumns,
+                                maxColumns: gridMaxColumns,
+                                minAvailableWidth: gridMinAvailableWidth,
+                              );
+                              final rowCount = (state.entries.length /
+                                      gridMetrics.crossAxisCount)
+                                  .ceil();
+                              return ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(
+                                  horizontalPadding,
+                                  0,
+                                  horizontalPadding,
+                                  bottomPadding,
+                                ),
+                                itemCount: rowCount,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: gridSpacing),
+                                itemBuilder: (context, rowIndex) {
+                                  final rowStart =
+                                      rowIndex * gridMetrics.crossAxisCount;
+                                  final rowEnd = math.min(
+                                    rowStart + gridMetrics.crossAxisCount,
+                                    state.entries.length,
+                                  );
+                                  final rowItems = state.entries.sublist(
+                                    rowStart,
+                                    rowEnd,
+                                  );
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      for (var index = 0;
+                                          index < rowItems.length;
+                                          index += 1) ...[
+                                        SizedBox(
+                                          width: gridMetrics.tileWidth,
+                                          child: AttachmentGalleryEntry(
+                                            entry: rowItems[index],
+                                            showChatLabel: widget.showChatLabel,
+                                            autoDownloadSettings: context
+                                                .watch<SettingsCubit>()
+                                                .state
+                                                .attachmentAutoDownloadSettings,
+                                            layout: layout,
+                                            onApproveAttachment:
+                                                _approveAttachment,
+                                            metaSeparator: l10n
+                                                .attachmentGalleryMetaSeparator,
+                                          ),
+                                        ),
+                                        if (index < rowItems.length - 1)
+                                          const SizedBox(width: gridSpacing),
+                                      ],
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          ),
+              ),
+            ],
+          );
+        },
+      ),
     );
-  }
-
-  bool get _hasActiveFilters {
-    final hasQuery = _searchQuery.isNotEmpty;
-    final hasTypeFilter = _typeFilter != AttachmentGalleryTypeFilter.all;
-    final hasSourceFilter = _sourceFilter != AttachmentGallerySourceFilter.all;
-    return hasQuery || hasTypeFilter || hasSourceFilter;
-  }
-
-  List<AttachmentGalleryItem> _filterItems({
-    required List<AttachmentGalleryItem> items,
-    required Map<String, Chat> chatLookup,
-    required Chat? chatOverride,
-    required bool showChatLabel,
-  }) {
-    final query = _searchQuery;
-    final hasQuery = query.isNotEmpty;
-    final xmppService = context.read<XmppService>();
-    final emailService = RepositoryProvider.of<EmailService?>(context);
-    final filtered = items.where((item) {
-      if (!_typeFilter.matches(item.metadata)) return false;
-      final isSelf = _isSelfMessage(
-        item.message,
-        xmppService: xmppService,
-        emailService: emailService,
-      );
-      if (!_sourceFilter.matches(isSelf: isSelf)) return false;
-      if (!hasQuery) return true;
-      if (item.metadata.normalizedFilename.contains(query)) return true;
-      if (!showChatLabel) return false;
-      final chat = chatOverride ?? chatLookup[item.message.chatJid];
-      final chatLabel = chat?.displayName.trim().toLowerCase() ?? '';
-      if (chatLabel.isEmpty) return false;
-      return chatLabel.contains(query);
-    }).toList();
-    filtered.sort(_sortOption.compare);
-    return filtered;
   }
 }
 
@@ -690,9 +453,10 @@ class AttachmentGalleryControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const controlsSpacing = 12.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: _attachmentGalleryControlsSpacing,
+      spacing: controlsSpacing,
       children: [
         AttachmentGallerySearchRow(
           searchController: searchController,
@@ -731,7 +495,7 @@ class AttachmentGallerySearchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final trimmedQuery = searchController.text.trim();
-    final canClear = trimmedQuery.isNotEmpty;
+    const controlSpacing = 8.0;
     return Row(
       children: [
         Expanded(
@@ -740,13 +504,13 @@ class AttachmentGallerySearchRow extends StatelessWidget {
             placeholder: Text(l10n.commonSearch),
           ),
         ),
-        const SizedBox(width: _attachmentGalleryControlSpacing),
+        const SizedBox(width: controlSpacing),
         AxiIconButton(
           iconData: LucideIcons.x,
           tooltip: l10n.commonClear,
-          onPressed: canClear ? onClearSearch : null,
+          onPressed: trimmedQuery.isNotEmpty ? onClearSearch : null,
         ),
-        const SizedBox(width: _attachmentGalleryControlSpacing),
+        const SizedBox(width: controlSpacing),
         AttachmentGalleryLayoutToggle(
           layout: layout,
           onChanged: onLayoutChanged,
@@ -768,26 +532,27 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const controlSpacing = 8.0;
     final l10n = context.l10n;
-    final bool isGrid = layout == AttachmentGalleryLayout.grid;
-    final bool isList = layout == AttachmentGalleryLayout.list;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiIconButton.ghost(
           iconData: LucideIcons.layoutGrid,
           tooltip: l10n.attachmentGalleryLayoutGridLabel,
-          usePrimary: isGrid,
-          onPressed:
-              isGrid ? null : () => onChanged(AttachmentGalleryLayout.grid),
+          usePrimary: layout == AttachmentGalleryLayout.grid,
+          onPressed: layout == AttachmentGalleryLayout.grid
+              ? null
+              : () => onChanged(AttachmentGalleryLayout.grid),
         ),
-        const SizedBox(width: _attachmentGalleryControlSpacing),
+        const SizedBox(width: controlSpacing),
         AxiIconButton.ghost(
           iconData: LucideIcons.list,
           tooltip: l10n.attachmentGalleryLayoutListLabel,
-          usePrimary: isList,
-          onPressed:
-              isList ? null : () => onChanged(AttachmentGalleryLayout.list),
+          usePrimary: layout == AttachmentGalleryLayout.list,
+          onPressed: layout == AttachmentGalleryLayout.list
+              ? null
+              : () => onChanged(AttachmentGalleryLayout.list),
         ),
       ],
     );
@@ -815,6 +580,9 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    const controlsBreakpoint = 520.0;
+    const controlRowSpacing = 12.0;
+    const controlSpacing = 8.0;
     return LayoutBuilder(
       builder: (context, constraints) {
         final sortSelect = AttachmentGallerySelect<AttachmentGallerySortOption>(
@@ -836,19 +604,19 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
           labelBuilder: (value) => value.label(l10n),
           options: AttachmentGallerySourceFilter.values,
         );
-        if (constraints.maxWidth < _attachmentGalleryControlsBreakpoint) {
+        if (constraints.maxWidth < controlsBreakpoint) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: _attachmentGalleryControlRowSpacing,
+            spacing: controlRowSpacing,
             children: [sortSelect, typeSelect, sourceSelect],
           );
         }
         return Row(
           children: [
             Expanded(child: sortSelect),
-            const SizedBox(width: _attachmentGalleryControlSpacing),
+            const SizedBox(width: controlSpacing),
             Expanded(child: typeSelect),
-            const SizedBox(width: _attachmentGalleryControlSpacing),
+            const SizedBox(width: controlSpacing),
             Expanded(child: sourceSelect),
           ],
         );
@@ -893,33 +661,27 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
 class AttachmentGalleryEntry extends StatefulWidget {
   const AttachmentGalleryEntry({
     super.key,
-    required this.item,
-    required this.chatOverride,
-    required this.chatLookup,
     required this.showChatLabel,
+    required this.entry,
     required this.autoDownloadSettings,
     required this.layout,
-    required this.isOneTimeAttachmentAllowed,
-    required this.shouldAllowAttachment,
     required this.onApproveAttachment,
+    required this.metaSeparator,
   });
 
-  final AttachmentGalleryItem item;
-  final Chat? chatOverride;
-  final Map<String, Chat> chatLookup;
   final bool showChatLabel;
+  final AttachmentGalleryEntryData entry;
   final AttachmentAutoDownloadSettings autoDownloadSettings;
   final AttachmentGalleryLayout layout;
-  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({required bool isSelf, required Chat? chat})
-      shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,
     required String stanzaId,
     required Chat? chat,
     required bool isEmailChat,
+    required bool isSelf,
   }) onApproveAttachment;
+  final String metaSeparator;
 
   @override
   State<AttachmentGalleryEntry> createState() => _AttachmentGalleryEntryState();
@@ -929,55 +691,52 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
   late Stream<FileMetadataData?> _metadataStream;
 
   @override
-  void initState() {
-    super.initState();
-    _metadataStream = _resolveMetadataStream(widget.item.metadata.id);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _metadataStream = _resolveMetadataStream(widget.entry.item.metadata.id);
   }
 
   @override
   void didUpdateWidget(covariant AttachmentGalleryEntry oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final nextId = widget.item.metadata.id;
-    if (oldWidget.item.metadata.id != nextId) {
+    final nextId = widget.entry.item.metadata.id;
+    if (oldWidget.entry.item.metadata.id != nextId) {
       _metadataStream = _resolveMetadataStream(nextId);
     }
   }
 
   Stream<FileMetadataData?> _resolveMetadataStream(String id) =>
-      context.read<XmppService>().fileMetadataStream(id);
+      context.read<AttachmentGalleryBloc>().fileMetadataStream(id);
 
   @override
   Widget build(BuildContext context) {
-    final xmppService = context.read<XmppService>();
-    final emailService = RepositoryProvider.of<EmailService?>(context);
-    final message = widget.item.message;
-    final metadata = widget.item.metadata;
-    final chat = widget.chatOverride ?? widget.chatLookup[message.chatJid];
-    final isEmailMessage =
-        message.deltaMsgId != null || message.deltaChatId != null;
-    final isEmailChat =
-        (chat?.defaultTransport.isEmail ?? false) || isEmailMessage;
-    final isSelf = _isSelfMessage(
-      message,
-      xmppService: xmppService,
-      emailService: emailService,
-    );
-    final allowByTrust = widget.shouldAllowAttachment(
-      isSelf: isSelf,
-      chat: chat,
-    );
-    final allowOnce = widget.isOneTimeAttachmentAllowed(message.stanzaID);
-    final allowAttachment = allowByTrust || allowOnce;
-    final downloadDelegate = isEmailChat && emailService != null
+    final message = widget.entry.item.message;
+    final metadata = widget.entry.item.metadata;
+    final chat = widget.entry.chat;
+    final isEmailChat = (chat?.defaultTransport.isEmail ?? false) ||
+        message.deltaMsgId != null ||
+        message.deltaChatId != null;
+    final allowAttachment = widget.entry.allowByTrust || widget.entry.allowOnce;
+    final downloadDelegate = isEmailChat
         ? AttachmentDownloadDelegate(
-            () => emailService.downloadFullMessage(message),
+            () {
+              final completer = Completer<bool>();
+              context.read<AttachmentGalleryBloc>().add(
+                    AttachmentGalleryEmailDownloadRequested(
+                      message: message,
+                      completer: completer,
+                    ),
+                  );
+              return completer.future;
+            },
           )
         : null;
     final autoDownloadAllowed = allowAttachment && !isEmailChat;
-    final autoDownloadUserInitiated = allowOnce && !isEmailChat;
+    final autoDownloadUserInitiated = widget.entry.allowOnce && !isEmailChat;
     final metaText = _resolveMetaText(
       chat: chat,
       showChatLabel: widget.showChatLabel,
+      separator: widget.metaSeparator,
     );
     final allowPressed = allowAttachment
         ? null
@@ -987,6 +746,7 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
               stanzaId: message.stanzaID,
               chat: chat,
               isEmailChat: isEmailChat,
+              isSelf: widget.entry.isSelf,
             );
     return widget.layout == AttachmentGalleryLayout.list
         ? AttachmentGalleryListItem(
@@ -1044,6 +804,9 @@ class AttachmentGalleryListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const metaMaxLines = 1;
+    const metaSpacing = 4.0;
+    const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1052,10 +815,10 @@ class AttachmentGalleryListItem extends StatelessWidget {
           Text(
             metaLabel,
             style: context.textTheme.muted,
-            maxLines: _attachmentGalleryMetaMaxLines,
+            maxLines: metaMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: _attachmentGalleryMetaSpacing),
+          const SizedBox(height: metaSpacing),
         ],
         ChatAttachmentPreview(
           stanzaId: stanzaId,
@@ -1067,7 +830,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
           autoDownloadUserInitiated: autoDownloadUserInitiated,
           downloadDelegate: downloadDelegate,
           onAllowPressed: onAllowPressed,
-          maxWidthFraction: _attachmentGalleryPreviewMaxWidthFraction,
+          maxWidthFraction: previewMaxWidthFraction,
         ),
       ],
     );
@@ -1102,8 +865,13 @@ class AttachmentGalleryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const footerSpacing = 8.0;
+    const filenameMaxLines = 2;
+    const metaMaxLines = 1;
+    const metaSpacing = 4.0;
+    const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
-    final showFilename = metadata.mediaKind != AttachmentMediaKind.file;
+    final showFilename = metadata.mediaKind != FileMetadataMediaKind.file;
     final preview = ChatAttachmentPreview(
       stanzaId: stanzaId,
       metadataStream: metadataStream,
@@ -1114,32 +882,32 @@ class AttachmentGalleryTile extends StatelessWidget {
       autoDownloadUserInitiated: autoDownloadUserInitiated,
       downloadDelegate: downloadDelegate,
       onAllowPressed: onAllowPressed,
-      maxWidthFraction: _attachmentGalleryPreviewMaxWidthFraction,
+      maxWidthFraction: previewMaxWidthFraction,
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         preview,
-        const SizedBox(height: _attachmentGalleryFooterSpacing),
+        const SizedBox(height: footerSpacing),
         if (showFilename)
           Text(
             metadata.filename,
             style: context.textTheme.small.copyWith(
               fontWeight: FontWeight.w600,
             ),
-            maxLines: _attachmentGalleryFilenameMaxLines,
+            maxLines: filenameMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
         if (metaLabel != null)
           Text(
             metaLabel,
             style: context.textTheme.muted,
-            maxLines: _attachmentGalleryMetaMaxLines,
+            maxLines: metaMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
         if (!showFilename && metaLabel == null)
-          const SizedBox(height: _attachmentGalleryMetaSpacing),
+          const SizedBox(height: metaSpacing),
       ],
     );
   }

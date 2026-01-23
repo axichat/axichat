@@ -41,8 +41,6 @@ const String _attachmentSizeAttr = 'size';
 const String _attachmentWidthAttr = 'width';
 const String _attachmentHeightAttr = 'height';
 const String _publishModelPublishers = 'publishers';
-const String _sendLastOnSub = 'on_sub';
-const String _sendLastOnSubscribe = 'on_subscribe';
 const String _defaultMaxItems = '$draftSyncMaxItems';
 const String _draftSourceIdFallback = draftSourceLegacyId;
 const bool _notifyEnabled = true;
@@ -490,6 +488,9 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
   bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureNodeCompleter;
+  Completer<void>? _subscribeCompleter;
 
   @override
   Future<bool> isSupported() async => true;
@@ -498,6 +499,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
+      _subscriptionReady = false;
       fireAndForget(
         _bootstrap,
         operationName: _draftsPubSubBootstrapOperationName,
@@ -540,7 +542,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     }
   }
 
-  AxiPubSubNodeConfig _nodeConfig(mox.AccessModel accessModel) =>
+  AxiPubSubNodeConfig _nodeConfig(
+    mox.AccessModel accessModel, {
+    String? sendLastPublishedItem,
+  }) =>
       AxiPubSubNodeConfig(
         accessModel: accessModel,
         publishModel: _publishModelPublishers,
@@ -553,11 +558,17 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastOnSub,
+        sendLastPublishedItem: sendLastPublishedItem,
       );
 
-  mox.NodeConfig _createNodeConfig(mox.AccessModel accessModel) =>
-      _nodeConfig(accessModel).withoutSendLastPublishedItem().toNodeConfig();
+  mox.NodeConfig _createNodeConfig(
+    mox.AccessModel accessModel, {
+    String? sendLastPublishedItem,
+  }) =>
+      _nodeConfig(
+        accessModel,
+        sendLastPublishedItem: sendLastPublishedItem,
+      ).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -580,36 +591,6 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     }
     final sendLastValue = config.sendLastPublishedItem?.trim();
     final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
-    if (hasSendLast && sendLastValue == _sendLastOnSub) {
-      logger.fine(
-        'PubSub node config retry with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value}.',
-      );
-      final subscribeConfig = config.withSendLastPublishedItem(
-        _sendLastOnSubscribe,
-      );
-      final subscribeResult = await pubsub.configureNode(
-        host,
-        node,
-        subscribeConfig,
-      );
-      if (!subscribeResult.isType<mox.PubSubError>()) {
-        logger.fine(
-          'PubSub node configured with send_last=on_subscribe. node=$node '
-          'accessModel=${config.accessModel.value}.',
-        );
-        return null;
-      }
-      error = subscribeResult.get<mox.PubSubError>();
-      logger.fine(
-        'PubSub node config failed with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value} '
-        'error=${error.runtimeType}.',
-      );
-      if (error.indicatesMissingNode) {
-        return error;
-      }
-    }
     if (!hasSendLast) {
       return error;
     }
@@ -640,7 +621,6 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastOnSub,
       );
 
   mox.JID? _selfPepHost() {
@@ -653,6 +633,15 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
 
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+
+  Future<String?> _resolveSendLastPublishedItem(
+    SafePubSubManager pubsub,
+    mox.JID host,
+  ) =>
+      pubsub.resolveSendLastPublishedItemForNode(
+        host: host,
+        node: draftsPubSubNode,
+      );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -686,13 +675,26 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
+    if (_nodeReady) return;
+    final activeCompleter = _ensureNodeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
+      return;
+    }
     if (!_shouldAttemptEnsureNode()) return;
+    final completer = Completer<void>();
+    _ensureNodeCompleter = completer;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
     var success = false;
     getAttributes().sendEvent(_draftsEnsureStartEvent);
     try {
-      final primaryConfig = _nodeConfig(mox.AccessModel.whitelist);
+      final sendLastPublishedItem =
+          await _resolveSendLastPublishedItem(pubsub, host);
+      final primaryConfig = _nodeConfig(
+        mox.AccessModel.whitelist,
+        sendLastPublishedItem: sendLastPublishedItem,
+      );
       final primaryError = await _configureNodeWithFallback(
         pubsub,
         host,
@@ -705,7 +707,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         return;
       }
 
-      final fallbackConfig = _nodeConfig(mox.AccessModel.authorize);
+      final fallbackConfig = _nodeConfig(
+        mox.AccessModel.authorize,
+        sendLastPublishedItem: sendLastPublishedItem,
+      );
       final fallbackError = await _configureNodeWithFallback(
         pubsub,
         host,
@@ -727,7 +732,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          primaryConfig.withoutSendLastPublishedItem().toNodeConfig(),
+          primaryConfig.toNodeConfig(),
           nodeId: draftsPubSubNode,
         );
         final appliedError = await _configureNodeWithFallback(
@@ -748,7 +753,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          fallbackConfig.withoutSendLastPublishedItem().toNodeConfig(),
+          fallbackConfig.toNodeConfig(),
           nodeId: draftsPubSubNode,
         );
         final appliedError = await _configureNodeWithFallback(
@@ -794,6 +799,8 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       }
     } finally {
       _ensureNodeInFlight = false;
+      _ensureNodeCompleter = null;
+      completer.complete();
       getAttributes().sendEvent(
         success ? _draftsEnsureSuccessEvent : _draftsEnsureFailureEvent,
       );
@@ -812,11 +819,25 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-    final result = await pubsub.subscribe(host, draftsPubSubNode);
-    if (result.isType<mox.PubSubError>()) {
-      final error = result.get<mox.PubSubError>();
-      if (error is mox.MalformedResponseError) return;
+    if (_subscriptionReady) return;
+    final activeCompleter = _subscribeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
       return;
+    }
+    final completer = Completer<void>();
+    _subscribeCompleter = completer;
+    try {
+      final result = await pubsub.subscribe(host, draftsPubSubNode);
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        if (error is mox.MalformedResponseError) return;
+        return;
+      }
+      _subscriptionReady = true;
+    } finally {
+      _subscribeCompleter = null;
+      completer.complete();
     }
   }
 
@@ -1027,7 +1048,11 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     }
     if (subscriberJid.toString() != host.toString()) return;
 
-    if (event.state == mox.SubscriptionState.subscribed) return;
+    if (event.state == mox.SubscriptionState.subscribed) {
+      _subscriptionReady = true;
+      return;
+    }
+    _subscriptionReady = false;
     await subscribe();
   }
 
@@ -1038,6 +1063,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
@@ -1055,6 +1081,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {

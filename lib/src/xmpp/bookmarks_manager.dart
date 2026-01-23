@@ -21,7 +21,6 @@ const _extensionsTag = 'extensions';
 const _nickTag = 'nick';
 const _passwordTag = 'password';
 const _publishModelPublishers = 'publishers';
-const _sendLastPublishedItemNever = 'never';
 const _defaultMaxItems = 'max';
 const int _bookmarksFetchLimitFallback = 1000;
 const _notifyEnabled = true;
@@ -217,6 +216,9 @@ final class BookmarksManager extends mox.XmppManagerBase {
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
   bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureNodeCompleter;
+  Completer<void>? _subscribeCompleter;
 
   @override
   Future<bool> isSupported() async => true;
@@ -225,6 +227,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
+      _subscriptionReady = false;
       fireAndForget(
         _bootstrap,
         operationName: _bookmarksBootstrapOperationName,
@@ -267,7 +270,8 @@ final class BookmarksManager extends mox.XmppManagerBase {
     }
   }
 
-  AxiPubSubNodeConfig _nodeConfig() => AxiPubSubNodeConfig(
+  AxiPubSubNodeConfig _nodeConfig({String? sendLastPublishedItem}) =>
+      AxiPubSubNodeConfig(
         accessModel: mox.AccessModel.whitelist,
         publishModel: _publishModelPublishers,
         deliverNotifications: _deliverNotificationsEnabled,
@@ -279,11 +283,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastPublishedItemNever,
+        sendLastPublishedItem: sendLastPublishedItem,
       );
 
-  mox.NodeConfig _createNodeConfig() =>
-      _nodeConfig().withoutSendLastPublishedItem().toNodeConfig();
+  mox.NodeConfig _createNodeConfig({String? sendLastPublishedItem}) =>
+      _nodeConfig(sendLastPublishedItem: sendLastPublishedItem).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -323,11 +327,19 @@ final class BookmarksManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastPublishedItemNever,
       );
 
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+
+  Future<String?> _resolveSendLastPublishedItem(
+    SafePubSubManager pubsub,
+    mox.JID host,
+  ) =>
+      pubsub.resolveSendLastPublishedItemForNode(
+        host: host,
+        node: _bookmarksNode,
+      );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -361,13 +373,23 @@ final class BookmarksManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
+    if (_nodeReady) return;
+    final activeCompleter = _ensureNodeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
+      return;
+    }
     if (!_shouldAttemptEnsureNode()) return;
+    final completer = Completer<void>();
+    _ensureNodeCompleter = completer;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
     var success = false;
     getAttributes().sendEvent(_bookmarksEnsureStartEvent);
     try {
-      final config = _nodeConfig();
+      final sendLastPublishedItem =
+          await _resolveSendLastPublishedItem(pubsub, host);
+      final config = _nodeConfig(sendLastPublishedItem: sendLastPublishedItem);
       final configuredError = await _configureNodeWithFallback(
         pubsub,
         host,
@@ -388,7 +410,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          _createNodeConfig(),
+          config.toNodeConfig(),
           nodeId: _bookmarksNode,
         );
         final appliedError = await _configureNodeWithFallback(
@@ -423,6 +445,8 @@ final class BookmarksManager extends mox.XmppManagerBase {
       }
     } finally {
       _ensureNodeInFlight = false;
+      _ensureNodeCompleter = null;
+      completer.complete();
       getAttributes().sendEvent(
         success ? _bookmarksEnsureSuccessEvent : _bookmarksEnsureFailureEvent,
       );
@@ -441,10 +465,25 @@ final class BookmarksManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-    final result = await pubsub.subscribe(host, _bookmarksNode);
-    if (result.isType<mox.PubSubError>()) {
-      final error = result.get<mox.PubSubError>();
-      if (error is mox.MalformedResponseError) return;
+    if (_subscriptionReady) return;
+    final activeCompleter = _subscribeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
+      return;
+    }
+    final completer = Completer<void>();
+    _subscribeCompleter = completer;
+    try {
+      final result = await pubsub.subscribe(host, _bookmarksNode);
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        if (error is mox.MalformedResponseError) return;
+        return;
+      }
+      _subscriptionReady = true;
+    } finally {
+      _subscribeCompleter = null;
+      completer.complete();
     }
   }
 
@@ -668,7 +707,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
     }
     if (subscriberJid.toString() != host.toString()) return;
 
-    if (event.state == mox.SubscriptionState.subscribed) return;
+    if (event.state == mox.SubscriptionState.subscribed) {
+      _subscriptionReady = true;
+      return;
+    }
+    _subscriptionReady = false;
     await subscribe();
   }
 
@@ -679,6 +722,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
@@ -693,6 +737,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {

@@ -519,11 +519,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<int> _archivedMessageCount(Chat chat) {
     if (_messageService.messageStorageMode.isServerOnly) {
       final visibleMessages = state.items.where(
-        (message) =>
-            message.pseudoMessageType == null ||
-            message.pseudoMessageType!.isCalendarFragment ||
-            message.pseudoMessageType!.isCalendarTaskIcs ||
-            message.pseudoMessageType!.isCalendarAvailability,
+        (message) => message.pseudoMessageType == null,
       );
       return Future<int>.value(visibleMessages.length);
     }
@@ -605,6 +601,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.fine('Failed to backfill email history', error, stackTrace);
     } finally {
       _emailHistoryLoading = false;
+    }
+  }
+
+  Future<void> _ensureUnreadWindowLoaded({
+    required Chat chat,
+    required int desiredWindow,
+  }) async {
+    if (chat.unreadCount <= _emptyMessageCount) {
+      return;
+    }
+    var localCount = await _archivedMessageCount(chat);
+    if (localCount >= desiredWindow) {
+      return;
+    }
+    if (chat.defaultTransport.isEmail) {
+      while (localCount < desiredWindow) {
+        await _loadEarlierFromEmail(desiredWindow: desiredWindow);
+        final refreshed = await _archivedMessageCount(chat);
+        if (refreshed <= localCount) {
+          break;
+        }
+        localCount = refreshed;
+      }
+      return;
+    }
+    if (!_xmppAllowedForChat(chat)) {
+      return;
+    }
+    if (_mamBeforeId == null && state.items.isEmpty) {
+      await _hydrateLatestFromMam(chat);
+      localCount = await _archivedMessageCount(chat);
+    }
+    while (localCount < desiredWindow && !_mamComplete) {
+      await _loadEarlierFromMam(desiredWindow: desiredWindow);
+      final refreshed = await _archivedMessageCount(chat);
+      if (refreshed <= localCount) {
+        break;
+      }
+      localCount = refreshed;
     }
   }
 
@@ -977,6 +1012,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
         ? forcedViewFilter
         : state.viewFilter;
+    final unreadCount = event.chat.unreadCount;
+    final desiredLimit =
+        unreadCount > messageBatchSize ? unreadCount : messageBatchSize;
     emit(
       state.copyWith(
         chat: event.chat,
@@ -1014,20 +1052,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         viewFilter: nextViewFilter,
       ),
     );
+    _resetMamCursors(resetContext);
     if (resetContext) {
       await _subscribeToMessages(
-        limit: _currentMessageLimit,
-        filter: state.viewFilter,
+        limit: desiredLimit,
+        filter: nextViewFilter,
       );
       await _prefetchPeerAvatar(event.chat);
+    } else if (desiredLimit > _currentMessageLimit) {
+      await _subscribeToMessages(
+        limit: desiredLimit,
+        filter: nextViewFilter,
+      );
     }
+    await _ensureUnreadWindowLoaded(
+      chat: event.chat,
+      desiredWindow: desiredLimit,
+    );
     if (typingContextChanged) {
       await _subscribeToTypingParticipants(event.chat);
     }
     if (pinnedContextChanged) {
       await _subscribeToPinnedMessages(event.chat);
     }
-    _resetMamCursors(resetContext);
     if (_xmppAllowedForChat(event.chat) &&
         !_shouldSkipInitialMamSync(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
@@ -1156,12 +1203,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
     );
     final filteredItems = filtered.messages;
+    final quoteIds = filteredItems
+        .map((message) => message.quoting?.trim())
+        .where((id) => id?.isNotEmpty == true)
+        .cast<String>()
+        .toSet();
+    final referencedQuotes = <String, Message>{
+      for (final message in filteredItems)
+        if (quoteIds.contains(message.stanzaID)) message.stanzaID: message,
+    };
+    final knownMessageIds = filteredItems
+        .map((message) => message.stanzaID)
+        .toSet()
+      ..addAll(state.quotedMessagesById.keys);
+    final missingQuoteIds =
+        quoteIds.where((id) => !knownMessageIds.contains(id)).toList();
+    final loadedQuotes = missingQuoteIds.isEmpty
+        ? const <Message>[]
+        : (await Future.wait(
+            missingQuoteIds.map(_messageService.loadMessageByStanzaId),
+          ))
+            .whereType<Message>()
+            .toList();
+    final updatedQuotedMessages = <String, Message>{
+      ...state.quotedMessagesById,
+      ...referencedQuotes,
+      for (final message in loadedQuotes) message.stanzaID: message,
+    };
     emit(
       state.copyWith(
         items: filteredItems,
         messagesLoaded: true,
         attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
         attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
+        quotedMessagesById: updatedQuotedMessages,
       ),
     );
     if (state.chat?.type == ChatType.groupChat) {
@@ -1181,6 +1256,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         items: filteredItems,
         allowSend: lifecycleState == AppLifecycleState.resumed,
       );
+    }
+    final updatedChat = state.chat;
+    if (updatedChat != null) {
+      final unreadCount = updatedChat.unreadCount;
+      if (unreadCount > _emptyMessageCount) {
+        final filteredOutCount = event.items.length - filteredItems.length;
+        final pseudoCount = filteredItems
+            .where((message) => message.pseudoMessageType != null)
+            .length;
+        final desiredWindow = unreadCount + filteredOutCount + pseudoCount;
+        final desiredLimit =
+            desiredWindow > messageBatchSize ? desiredWindow : messageBatchSize;
+        if (desiredLimit > _currentMessageLimit) {
+          await _subscribeToMessages(
+            limit: desiredLimit,
+            filter: state.viewFilter,
+          );
+        }
+        await _ensureUnreadWindowLoaded(
+          chat: updatedChat,
+          desiredWindow: desiredLimit,
+        );
+      }
     }
   }
 
@@ -2453,9 +2551,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           queuedAttachments.map((pending) => pending.id),
           emit,
         );
-      }
-      if (shouldClearComposer && state.quoting != null) {
-        emit(state.copyWith(quoting: null));
       }
       if (shouldClearComposer && (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);

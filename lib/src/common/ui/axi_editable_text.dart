@@ -4803,8 +4803,8 @@ class EditableTextState extends State<EditableText>
       return;
     }
     _typingCaretScrollController?.removeListener(_handleTypingCaretScroll);
-    _typingCaretScrollController = controller
-      ..addListener(_handleTypingCaretScroll);
+    _typingCaretScrollController = controller;
+    _typingCaretScrollController!.addListener(_handleTypingCaretScroll);
   }
 
   void _handleTypingCaretScroll() {

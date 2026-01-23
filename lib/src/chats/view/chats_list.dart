@@ -1181,7 +1181,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     final iconSize = scaled(16);
     final spacing = scaled(8);
     final l10n = context.l10n;
-    return Wrap(
+    final addressLabel = widget.chat.jid.trim();
+    final actionWrap = Wrap(
       spacing: spacing,
       runSpacing: spacing,
       alignment: WrapAlignment.center,
@@ -1282,6 +1283,22 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           destructive: true,
           onPressed: widget.onDelete,
         ),
+      ],
+    );
+    if (addressLabel.isEmpty) {
+      return actionWrap;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SelectableText(
+          addressLabel,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          style: context.textTheme.muted,
+        ),
+        SizedBox(height: spacing),
+        actionWrap,
       ],
     );
   }

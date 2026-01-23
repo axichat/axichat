@@ -513,6 +513,12 @@ abstract class AppLocalizations {
   /// **'Received'**
   String get attachmentGalleryReceivedLabel;
 
+  /// No description provided for @attachmentGalleryMetaSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **' - '**
+  String get attachmentGalleryMetaSeparator;
+
   /// No description provided for @attachmentGalleryLayoutGridLabel.
   ///
   /// In en, this message translates to:
@@ -1310,6 +1316,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Selected messages have no text to copy'**
   String get chatCopyNoText;
+
+  /// No description provided for @chatCopySuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get chatCopySuccessMessage;
 
   /// No description provided for @chatShareSelectedNoText.
   ///

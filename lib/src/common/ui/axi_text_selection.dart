@@ -977,6 +977,7 @@ class AxiTextSelectionGestureDetectorBuilder {
             case PointerDeviceKind.invertedStylus:
             case PointerDeviceKind.touch:
             case PointerDeviceKind.unknown:
+              return;
             case null:
               break;
           }

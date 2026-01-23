@@ -76,6 +76,7 @@ dependencies:
   shorebird_code_push: ^2.0.3
   url_launcher: ^6.3.0
   video_player: ^2.10.0
+  connectivity_plus: ^6.0.5
   flutter_html: ^3.0.0
   flutter_local_notifications: ^19.1.0
   flutter_native_timezone:
@@ -138,7 +139,7 @@ dev_dependencies:
 
 
 flutter:
-  #  default-flavor: production
+  default-flavor: production
   uses-material-design: true
 
   # Enable generation of localized Strings from arb files.

@@ -185,8 +185,6 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   static const String managerId = 'axi.conversation.index';
   static const String _defaultMaxItems = '1000';
   static const String _publishModelPublishers = 'publishers';
-  static const String _sendLastOnSub = 'on_sub';
-  static const String _sendLastOnSubscribe = 'on_subscribe';
   static const bool _notifyEnabled = true;
   static const bool _deliverNotificationsEnabled = true;
   static const bool _deliverPayloadsEnabled = true;
@@ -207,6 +205,9 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
   bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureNodeCompleter;
+  Completer<void>? _subscribeCompleter;
 
   @override
   Future<bool> isSupported() async => true;
@@ -214,7 +215,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   ConvItem? cachedForPeer(mox.JID peerBare) =>
       _cache[peerBare.toBare().toString()];
 
-  AxiPubSubNodeConfig _nodeConfig() => AxiPubSubNodeConfig(
+  AxiPubSubNodeConfig _nodeConfig({String? sendLastPublishedItem}) =>
+      AxiPubSubNodeConfig(
         accessModel: mox.AccessModel.whitelist,
         publishModel: _publishModelPublishers,
         deliverNotifications: _deliverNotificationsEnabled,
@@ -226,11 +228,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         notifySub: _notifyEnabled,
         presenceBasedDelivery: _presenceBasedDeliveryDisabled,
         persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: _sendLastOnSub,
+        sendLastPublishedItem: sendLastPublishedItem,
       );
 
-  mox.NodeConfig _createNodeConfig() =>
-      _nodeConfig().withoutSendLastPublishedItem().toNodeConfig();
+  mox.NodeConfig _createNodeConfig({String? sendLastPublishedItem}) =>
+      _nodeConfig(sendLastPublishedItem: sendLastPublishedItem).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -253,36 +255,6 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     }
     final sendLastValue = config.sendLastPublishedItem?.trim();
     final hasSendLast = sendLastValue != null && sendLastValue.isNotEmpty;
-    if (hasSendLast && sendLastValue == _sendLastOnSub) {
-      logger.fine(
-        'PubSub node config retry with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value}.',
-      );
-      final subscribeConfig = config.withSendLastPublishedItem(
-        _sendLastOnSubscribe,
-      );
-      final subscribeResult = await pubsub.configureNode(
-        host,
-        node,
-        subscribeConfig,
-      );
-      if (!subscribeResult.isType<mox.PubSubError>()) {
-        logger.fine(
-          'PubSub node configured with send_last=on_subscribe. node=$node '
-          'accessModel=${config.accessModel.value}.',
-        );
-        return null;
-      }
-      error = subscribeResult.get<mox.PubSubError>();
-      logger.fine(
-        'PubSub node config failed with send_last=on_subscribe. node=$node '
-        'accessModel=${config.accessModel.value} '
-        'error=${error.runtimeType}.',
-      );
-      if (error.indicatesMissingNode) {
-        return error;
-      }
-    }
     if (!hasSendLast) {
       return error;
     }
@@ -313,7 +285,6 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: _sendLastOnSub,
       );
 
   mox.JID? _selfPepHost() {
@@ -326,6 +297,15 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+
+  Future<String?> _resolveSendLastPublishedItem(
+    SafePubSubManager pubsub,
+    mox.JID host,
+  ) =>
+      pubsub.resolveSendLastPublishedItemForNode(
+        host: host,
+        node: conversationIndexNode,
+      );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -346,6 +326,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is mox.StreamNegotiationsDoneEvent) {
       if (event.resumed) return super.onXmppEvent(event);
+      _subscriptionReady = false;
       fireAndForget(
         _bootstrap,
         operationName: _conversationIndexBootstrapOperationName,
@@ -415,13 +396,23 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
+    if (_nodeReady) return;
+    final activeCompleter = _ensureNodeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
+      return;
+    }
     if (!_shouldAttemptEnsureNode()) return;
+    final completer = Completer<void>();
+    _ensureNodeCompleter = completer;
     _ensureNodeInFlight = true;
     _lastEnsureAttempt = DateTime.timestamp();
     var success = false;
     getAttributes().sendEvent(_conversationEnsureStartEvent);
     try {
-      final config = _nodeConfig();
+      final sendLastPublishedItem =
+          await _resolveSendLastPublishedItem(pubsub, host);
+      final config = _nodeConfig(sendLastPublishedItem: sendLastPublishedItem);
 
       final configuredError = await _configureNodeWithFallback(
         pubsub,
@@ -445,7 +436,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       try {
         await pubsub.createNodeWithConfig(
           host,
-          config.withoutSendLastPublishedItem().toNodeConfig(),
+          config.toNodeConfig(),
           nodeId: conversationIndexNode,
         );
         final appliedError = await _configureNodeWithFallback(
@@ -480,6 +471,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       }
     } finally {
       _ensureNodeInFlight = false;
+      _ensureNodeCompleter = null;
+      completer.complete();
       getAttributes().sendEvent(
         success
             ? _conversationEnsureSuccessEvent
@@ -500,11 +493,25 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-    final result = await pubsub.subscribe(host, conversationIndexNode);
-    if (result.isType<mox.PubSubError>()) {
-      final error = result.get<mox.PubSubError>();
-      if (error is mox.MalformedResponseError) return;
+    if (_subscriptionReady) return;
+    final activeCompleter = _subscribeCompleter;
+    if (activeCompleter != null) {
+      await activeCompleter.future;
       return;
+    }
+    final completer = Completer<void>();
+    _subscribeCompleter = completer;
+    try {
+      final result = await pubsub.subscribe(host, conversationIndexNode);
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        if (error is mox.MalformedResponseError) return;
+        return;
+      }
+      _subscriptionReady = true;
+    } finally {
+      _subscribeCompleter = null;
+      completer.complete();
     }
   }
 
@@ -774,7 +781,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     }
     if (subscriberJid.toString() != host.toString()) return;
 
-    if (event.state == mox.SubscriptionState.subscribed) return;
+    if (event.state == mox.SubscriptionState.subscribed) {
+      _subscriptionReady = true;
+      return;
+    }
+    _subscriptionReady = false;
     await subscribe();
   }
 
@@ -785,6 +796,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {
@@ -802,6 +814,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
     _nodeReady = false;
+    _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensureNodePending = true;
     if (!_ensureNodeInFlight) {

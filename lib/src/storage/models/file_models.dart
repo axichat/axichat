@@ -119,6 +119,16 @@ class FileMetadataData
       ).toColumns(nullToAbsent);
 }
 
+final class AttachmentGalleryItem {
+  const AttachmentGalleryItem({
+    required this.message,
+    required this.metadata,
+  });
+
+  final Message message;
+  final FileMetadataData metadata;
+}
+
 @UseRowClass(FileMetadataData)
 class FileMetadata extends Table {
   TextColumn get id => text().clientDefault(() => uuid.v4())();

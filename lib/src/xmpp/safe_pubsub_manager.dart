@@ -17,6 +17,7 @@ class SafePubSubManager extends mox.PubSubManager {
   SafePubSubManager();
 
   static const String _iqSet = 'set';
+  static const String _iqGet = 'get';
   static const String _iqResult = 'result';
   static const String _messageTag = 'message';
   static const String _eventTag = 'event';
@@ -45,12 +46,16 @@ class SafePubSubManager extends mox.PubSubManager {
       'http://jabber.org/protocol/pubsub#owner';
   static const String _pubsubTag = 'pubsub';
   static const String _configureTag = 'configure';
+  static const String _defaultTag = 'default';
   static const String _nodeUnknownLabel = '<unknown>';
   static const String _nodeRedactedLabel = '<redacted>';
   static const String _nodeJidMarker = '@';
 
   final Map<_SubscriptionCacheKey, mox.SubscriptionInfo> _subscriptionCache =
       {};
+  final Map<_SendLastCacheKey, String?> _sendLastValueCache = {};
+  final Map<_SendLastCacheKey, Future<String?>> _sendLastValueInFlight = {};
+  final Map<String, String?> _sendLastDefaultCache = {};
 
   XmppOperationKind _operationKindForNode(String? node) {
     final trimmed = node?.trim();
@@ -356,6 +361,155 @@ class SafePubSubManager extends mox.PubSubManager {
     } finally {
       attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
+  }
+
+  Future<String?> resolveSendLastPublishedItemForNode({
+    required mox.JID host,
+    required String node,
+  }) async {
+    final key = _SendLastCacheKey(host: host.toString(), node: node);
+    if (_sendLastValueCache.containsKey(key)) {
+      return _sendLastValueCache[key];
+    }
+    final inFlight = _sendLastValueInFlight[key];
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final future = _resolveSendLastPublishedItemForNode(
+      host: host,
+      node: node,
+    );
+    _sendLastValueInFlight[key] = future;
+    try {
+      final value = await future;
+      _sendLastValueCache[key] = value;
+      return value;
+    } finally {
+      _sendLastValueInFlight.remove(key);
+    }
+  }
+
+  Future<String?> _resolveSendLastPublishedItemForNode({
+    required mox.JID host,
+    required String node,
+  }) async {
+    final nodeForm = await _fetchNodeConfigForm(host: host, node: node);
+    if (nodeForm != null) {
+      final value = resolveSendLastPublishedItemValue(nodeForm);
+      if (value != null) {
+        logger.fine(
+          'PubSub send_last resolved. node=${_safeNodeLabel(node)} '
+          'value=$value.',
+        );
+      }
+      return value;
+    }
+    final defaultValue = await _resolveDefaultSendLastPublishedItem(host);
+    if (defaultValue != null) {
+      logger.fine(
+        'PubSub send_last resolved from default form. '
+        'node=${_safeNodeLabel(node)} value=$defaultValue.',
+      );
+    }
+    return defaultValue;
+  }
+
+  Future<String?> _resolveDefaultSendLastPublishedItem(mox.JID host) async {
+    final cacheKey = host.toString();
+    if (_sendLastDefaultCache.containsKey(cacheKey)) {
+      return _sendLastDefaultCache[cacheKey];
+    }
+    final form = await _fetchDefaultNodeConfigForm(host: host);
+    if (form == null) {
+      return null;
+    }
+    final value = resolveSendLastPublishedItemValue(form);
+    _sendLastDefaultCache[cacheKey] = value;
+    return value;
+  }
+
+  Future<mox.XMLNode?> _fetchNodeConfigForm({
+    required mox.JID host,
+    required String node,
+  }) async {
+    final result = await getAttributes().sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          type: _iqGet,
+          to: host.toString(),
+          children: [
+            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
+                  ..child(
+                    (mox.XmlBuilder(_configureTag)..attr(_nodeAttr, node))
+                        .build(),
+                  ))
+                .build(),
+          ],
+        ),
+        shouldEncrypt: false,
+      ),
+    );
+    if (result == null) {
+      logger.fine(
+        'PubSub config form fetch failed: null response. '
+        'node=${_safeNodeLabel(node)}.',
+      );
+      return null;
+    }
+    if (result.attributes['type'] != _iqResult) {
+      final error = mox.getPubSubError(result);
+      logger.fine(
+        'PubSub config form fetch failed. node=${_safeNodeLabel(node)} '
+        'error=${error.runtimeType} missingNode=${error.indicatesMissingNode}.',
+      );
+      return null;
+    }
+    final pubsub = result.firstTag(_pubsubTag, xmlns: _pubsubOwnerXmlns);
+    final configure = pubsub?.firstTag(_configureTag);
+    final form = configure?.firstTag(_dataFormTag, xmlns: _dataFormXmlns);
+    if (form == null) {
+      logger.fine(
+        'PubSub config form missing. node=${_safeNodeLabel(node)}.',
+      );
+    }
+    return form;
+  }
+
+  Future<mox.XMLNode?> _fetchDefaultNodeConfigForm({
+    required mox.JID host,
+  }) async {
+    final result = await getAttributes().sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          type: _iqGet,
+          to: host.toString(),
+          children: [
+            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
+                  ..child(mox.XmlBuilder(_defaultTag).build()))
+                .build(),
+          ],
+        ),
+        shouldEncrypt: false,
+      ),
+    );
+    if (result == null) {
+      logger.fine('PubSub default config form fetch failed: null response.');
+      return null;
+    }
+    if (result.attributes['type'] != _iqResult) {
+      final error = mox.getPubSubError(result);
+      logger.fine(
+        'PubSub default config form fetch failed. error=${error.runtimeType}.',
+      );
+      return null;
+    }
+    final pubsub = result.firstTag(_pubsubTag, xmlns: _pubsubOwnerXmlns);
+    final defaults = pubsub?.firstTag(_defaultTag);
+    final form = defaults?.firstTag(_dataFormTag, xmlns: _dataFormXmlns);
+    if (form == null) {
+      logger.fine('PubSub default config form missing.');
+    }
+    return form;
   }
 
   @override
@@ -706,4 +860,21 @@ final class _SubscriptionCacheKey {
 
   @override
   int get hashCode => Object.hash(jid, node, subId);
+}
+
+final class _SendLastCacheKey {
+  const _SendLastCacheKey({
+    required this.host,
+    required this.node,
+  });
+
+  final String host;
+  final String node;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _SendLastCacheKey && other.host == host && other.node == node;
+
+  @override
+  int get hashCode => Object.hash(host, node);
 }

@@ -16,6 +16,7 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -143,8 +144,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       connectionState,
     ) async {
       if (connectionState == ConnectionState.connected) {
-        await _attemptEmailProvisioningRecovery();
-        await _emailService?.handleNetworkAvailable();
+        await _triggerEmailReconnect();
         await _publishPendingAvatar();
         if (_authenticatedJid != null) {
           await _homeRefreshSyncService.syncOnLogin();
@@ -159,6 +159,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       }
     });
+    _xmppStreamReadySubscription = _xmppService.streamReadyStream.listen(
+      _handleXmppStreamReady,
+    );
     _foregroundListener = _handleForegroundServiceActiveChanged;
     foregroundServiceActive.addListener(_foregroundListener!);
     if (_emailService != null) {
@@ -230,6 +233,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   DateTime? _lastEmailProvisioningRetryAt;
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
+  StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
   StreamSubscription<EndpointConfig>? _endpointConfigSubscription;
   VoidCallback? _foregroundListener;
@@ -647,11 +651,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _triggerEmailReconnect();
   }
 
+  bool _hasEmailReconnectContext(EndpointConfig config) =>
+      !config.enableSmtp ||
+      (_emailService?.hasInMemoryReconnectContext ?? false);
+
   bool _canReconnectWithInMemoryCredentials() {
+    final EndpointConfig config = endpointConfig;
     final bool xmppReady =
-        !endpointConfig.enableXmpp || _xmppService.hasInMemoryReconnectContext;
-    final bool emailReady = !endpointConfig.enableSmtp ||
-        (_emailService?.hasInMemoryReconnectContext ?? false);
+        !config.enableXmpp || _xmppService.hasInMemoryReconnectContext;
+    final bool emailReady = _hasEmailReconnectContext(config);
     return xmppReady && emailReady;
   }
 
@@ -677,10 +685,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<void> _handleXmppStreamReady(XmppStreamReady _) async {
+    if (!_stickyAuthActive || _loginInFlight) {
+      return;
+    }
+    await _triggerEmailReconnect();
+  }
+
   Future<void> _triggerEmailReconnect() async {
-    if (!endpointConfig.enableSmtp) return;
-    final emailService = _emailService;
+    final EndpointConfig config = endpointConfig;
+    if (!config.enableSmtp) return;
+    final EmailService? emailService = _emailService;
     if (emailService == null) return;
+    final isReady = emailService.syncState.status == EmailSyncStatus.ready;
+    if (isReady && emailService.hasActiveSession) {
+      return;
+    }
+    final jid = _authenticatedJid;
+    if (!_loginInFlight && jid != null) {
+      final hasCredentials = await _hasEmailReconnectCredentials(jid);
+      if (!hasCredentials) {
+        await logout(severity: LogoutSeverity.auto);
+        return;
+      }
+    }
     try {
       await _attemptEmailProvisioningRecovery();
       await emailService.handleNetworkAvailable();
@@ -736,6 +764,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     final storedPassword = normalizeCredential(account?.password);
     final storedAddress = normalizeCredential(account?.address);
+    final activeAccount = emailService.activeAccount;
+    final activePassword = normalizeCredential(activeAccount?.password);
+    final activeAddress = normalizeCredential(activeAccount?.address);
     final sessionCredentials = _sessionEmailCredentials;
     final sessionMatches = sessionCredentials?.matches(jid) ?? false;
     final sessionPassword = sessionMatches
@@ -744,11 +775,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final sessionAddress = sessionMatches
         ? normalizeCredential(sessionCredentials?.address)
         : null;
-    final resolvedPassword = storedPassword ?? sessionPassword;
-    if (resolvedPassword == null) {
-      return;
-    }
-    final resolvedAddress = storedAddress ?? sessionAddress;
+    final resolvedPassword =
+        storedPassword ?? sessionPassword ?? activePassword;
+    final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
     _emailProvisioningRetryInFlight = true;
     _lastEmailProvisioningRetryAt = now;
     try {
@@ -766,6 +795,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         addressOverride: resolvedAddress,
         persistCredentials: rememberMe,
       );
+      final fatalError = _lastEmailProvisioningError;
+      if (fatalError != null &&
+          !fatalError.isRecoverable &&
+          _stickyAuthActive) {
+        await logout(severity: LogoutSeverity.auto);
+        _emit(AuthenticationFailure(fatalError.message));
+      }
     } finally {
       _emailProvisioningRetryInFlight = false;
     }
@@ -843,6 +879,42 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       passphraseKey: passphraseKey,
       passphrase: storedPassphrase,
     );
+  }
+
+  Future<bool> _hasEmailReconnectCredentials(String jid) async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      return false;
+    }
+    if (emailService.hasInMemoryReconnectContext ||
+        emailService.hasActiveSession) {
+      return true;
+    }
+    final secrets = await _readDatabaseSecrets(jid);
+    if (!secrets.hasSecrets) {
+      return false;
+    }
+    final storedAccount = await emailService.currentAccount(jid);
+    String? normalizeCredential(String? value) {
+      final trimmed = value?.trim();
+      return trimmed == null || trimmed.isEmpty ? null : trimmed;
+    }
+
+    final storedPassword = normalizeCredential(storedAccount?.password);
+    final storedAddress = normalizeCredential(storedAccount?.address);
+    final sessionCredentials = _sessionEmailCredentials;
+    final sessionMatches = sessionCredentials?.matches(jid) ?? false;
+    final sessionPassword = sessionMatches
+        ? normalizeCredential(sessionCredentials?.password)
+        : null;
+    final sessionAddress = sessionMatches
+        ? normalizeCredential(sessionCredentials?.address)
+        : null;
+    final hasStoredCredentials =
+        storedPassword != null && storedAddress != null;
+    final hasSessionCredentials =
+        sessionPassword != null && sessionAddress != null;
+    return hasStoredCredentials || hasSessionCredentials;
   }
 
   Future<void> _updateAuthTransactionCredentialClearance(
@@ -959,6 +1031,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> close() async {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
+    await _xmppStreamReadySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
     await _endpointConfigSubscription?.cancel();
     _signupAvatarPublishRetryTimer?.cancel();
@@ -1052,13 +1125,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _emit(loginState);
       }
       await _authRecoveryFuture;
-      if (previousState is AuthenticationComplete && _xmppService.connected) {
+      await _endpointConfigRecoveryFuture;
+      final EndpointConfig config = endpointConfig;
+      final bool shouldSkipLogin = previousState is AuthenticationComplete &&
+          _xmppService.connected &&
+          _hasEmailReconnectContext(config);
+      if (shouldSkipLogin) {
         return;
       }
-      await _endpointConfigRecoveryFuture;
-      final config = endpointConfig;
-      final xmppEnabled = config.enableXmpp;
-      final smtpEnabled = config.enableSmtp;
+      final bool xmppEnabled = config.enableXmpp;
+      final bool smtpEnabled = config.enableSmtp;
       if (!xmppEnabled && !smtpEnabled) {
         _emit(const AuthenticationFailure('Enable XMPP or SMTP to continue.'));
         return;
@@ -1134,7 +1210,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       String? emailPassword =
           emailCredentials?.password ?? fallbackEmailPassword;
       final String displayName = resolvedJid.split('@').first;
-      _authenticatedJid ??= resolvedJid;
 
       final bool canPreserveSession =
           wasAuthenticated && usingStoredCredentials;
@@ -1792,6 +1867,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
+    await _triggerEmailReconnect();
+    if (_xmppService.connectionState == ConnectionState.connected) {
+      await _homeRefreshSyncService.syncOnLogin();
+    }
     await _publishPendingAvatar();
   }
 
@@ -1969,10 +2048,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is! AuthenticationComplete) {
       return;
     }
-    if (exception.code != DeltaChatErrorCode.auth) {
+    final code = exception.code;
+    final bool isFatalAuthFailure = code == DeltaChatErrorCode.auth ||
+        code == DeltaChatErrorCode.permission;
+    if (!isFatalAuthFailure) {
       return;
     }
-    await logout(severity: LogoutSeverity.normal);
+    await logout(severity: LogoutSeverity.auto);
     const emailAuthFailureErrorText =
         'Email authentication failed. Please log in again.';
     _emit(const AuthenticationFailure(emailAuthFailureErrorText));
