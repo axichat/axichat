@@ -42,10 +42,14 @@ class SettingsState with _$SettingsState {
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
     @Default(false) bool autoLoadEmailImages,
-    @Default(defaultAutoDownloadImages) bool autoDownloadImages,
-    @Default(defaultAutoDownloadVideos) bool autoDownloadVideos,
-    @Default(defaultAutoDownloadDocuments) bool autoDownloadDocuments,
-    @Default(defaultAutoDownloadArchives) bool autoDownloadArchives,
+    @Default(AttachmentAutoDownloadSettings.defaultImagesEnabled)
+    bool autoDownloadImages,
+    @Default(AttachmentAutoDownloadSettings.defaultVideosEnabled)
+    bool autoDownloadVideos,
+    @Default(AttachmentAutoDownloadSettings.defaultDocumentsEnabled)
+    bool autoDownloadDocuments,
+    @Default(AttachmentAutoDownloadSettings.defaultArchivesEnabled)
+    bool autoDownloadArchives,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>

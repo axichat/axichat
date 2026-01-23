@@ -6,10 +6,10 @@ import 'package:axichat/src/storage/models.dart';
 
 class AttachmentAutoDownloadSettings {
   const AttachmentAutoDownloadSettings({
-    this.imagesEnabled = _defaultImagesEnabled,
-    this.videosEnabled = _defaultVideosEnabled,
-    this.documentsEnabled = _defaultDocumentsEnabled,
-    this.archivesEnabled = _defaultArchivesEnabled,
+    this.imagesEnabled = defaultImagesEnabled,
+    this.videosEnabled = defaultVideosEnabled,
+    this.documentsEnabled = defaultDocumentsEnabled,
+    this.archivesEnabled = defaultArchivesEnabled,
   });
 
   factory AttachmentAutoDownloadSettings.fromJson(Object? raw) {
@@ -21,12 +21,11 @@ class AttachmentAutoDownloadSettings {
     final documents = raw[_autoDownloadDocumentsKey];
     final archives = raw[_autoDownloadArchivesKey];
     return AttachmentAutoDownloadSettings(
-      imagesEnabled: images is bool ? images : _defaultImagesEnabled,
-      videosEnabled: videos is bool ? videos : _defaultVideosEnabled,
+      imagesEnabled: images is bool ? images : defaultImagesEnabled,
+      videosEnabled: videos is bool ? videos : defaultVideosEnabled,
       documentsEnabled:
-          documents is bool ? documents : _defaultDocumentsEnabled,
-      archivesEnabled:
-          archives is bool ? archives : _defaultArchivesEnabled,
+          documents is bool ? documents : defaultDocumentsEnabled,
+      archivesEnabled: archives is bool ? archives : defaultArchivesEnabled,
     );
   }
 
@@ -54,10 +53,10 @@ class AttachmentAutoDownloadSettings {
   bool allowsMetadata(FileMetadataData metadata) =>
       allowsCategory(metadata.downloadCategory);
 
-  static const bool _defaultImagesEnabled = true;
-  static const bool _defaultVideosEnabled = false;
-  static const bool _defaultDocumentsEnabled = false;
-  static const bool _defaultArchivesEnabled = false;
+  static const bool defaultImagesEnabled = true;
+  static const bool defaultVideosEnabled = false;
+  static const bool defaultDocumentsEnabled = false;
+  static const bool defaultArchivesEnabled = false;
 
   static const String _autoDownloadImagesKey = 'images';
   static const String _autoDownloadVideosKey = 'videos';

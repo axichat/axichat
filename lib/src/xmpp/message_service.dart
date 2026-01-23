@@ -6047,6 +6047,19 @@ mixin MessageService
         },
       );
 
+  Stream<List<AttachmentGalleryItem>> attachmentGalleryStream({
+    String? chatJid,
+  }) =>
+      createSingleItemStream<List<AttachmentGalleryItem>, XmppDatabase>(
+        watchFunction: (db) async {
+          if (db is! XmppDrift) {
+            return Stream.value(const <AttachmentGalleryItem>[]);
+          }
+          final repository = AttachmentGalleryRepository(db);
+          return repository.watch(chatJid: chatJid);
+        },
+      );
+
   Future<String?> downloadInboundAttachment({
     required String metadataId,
     String? stanzaId,

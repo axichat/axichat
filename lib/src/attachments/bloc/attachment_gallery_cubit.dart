@@ -3,9 +3,10 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/attachments/attachment_gallery_repository.dart';
 import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/storage/attachment_gallery_repository.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -38,30 +39,41 @@ class AttachmentGalleryState extends Equatable {
 }
 
 class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
-  AttachmentGalleryCubit({required XmppService xmppService, this.chatJid})
-      : _xmppService = xmppService,
+  AttachmentGalleryCubit({
+    required XmppService xmppService,
+    EmailService? emailService,
+    this.chatJid,
+  })  : _xmppService = xmppService,
+        _emailService = emailService,
         super(const AttachmentGalleryState()) {
-    Future<void>(() async {
-      await _subscribe();
-    });
+    emit(state.copyWith(status: RequestStatus.loading));
+    _subscription = _xmppService
+        .attachmentGalleryStream(chatJid: chatJid)
+        .listen(_handleItems, onError: _handleError);
   }
 
   final XmppService _xmppService;
+  final EmailService? _emailService;
   final String? chatJid;
   StreamSubscription<List<AttachmentGalleryItem>>? _subscription;
 
-  Future<void> _subscribe() async {
-    emit(state.copyWith(status: RequestStatus.loading));
-    final db = await _xmppService.database;
-    if (db is! XmppDrift) {
-      emit(state.copyWith(status: RequestStatus.failure, error: null));
-      return;
-    }
-    final repository = AttachmentGalleryRepository(db);
-    await _subscription?.cancel();
-    _subscription = repository
-        .watch(chatJid: chatJid)
-        .listen(_handleItems, onError: _handleError);
+  Stream<FileMetadataData?> fileMetadataStream(String id) =>
+      _xmppService.fileMetadataStream(id);
+
+  bool isSelfMessage(Message message) {
+    final sender = message.senderJid.trim().toLowerCase();
+    final xmppJid = _xmppService.myJid?.trim().toLowerCase();
+    if (xmppJid != null && sender == xmppJid) return true;
+    final emailJid = _emailService?.selfSenderJid?.trim().toLowerCase();
+    if (emailJid != null && sender == emailJid) return true;
+    return false;
+  }
+
+  Future<bool> downloadEmailMessage(Message message) async {
+    final service = _emailService;
+    if (service == null) return false;
+    await service.downloadFullMessage(message);
+    return true;
   }
 
   void _handleItems(List<AttachmentGalleryItem> items) {
