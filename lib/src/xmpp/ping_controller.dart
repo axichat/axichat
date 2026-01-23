@@ -80,13 +80,7 @@ final class XmppPingController {
     _lastPingSentAt = null;
   }
 
-  XmppTrafficTracker? _trafficTracker() {
-    final wrapper = _owner._connection.socketWrapper;
-    if (wrapper case final XmppTrafficTracker tracker) {
-      return tracker;
-    }
-    return null;
-  }
+  XmppTrafficTracker _trafficTracker() => _owner._connection.socketWrapper;
 
   void _scheduleIdleCheck() {
     _idleTimer?.cancel();
@@ -105,8 +99,8 @@ final class XmppPingController {
     final now = DateTime.timestamp();
     final tracker = _trafficTracker();
     final lastTraffic = _latestTraffic(
-      tracker?.lastIncomingAt,
-      tracker?.lastOutgoingAt,
+      tracker.lastIncomingAt,
+      tracker.lastOutgoingAt,
       _lastPingSentAt,
     );
     if (lastTraffic == null) {
@@ -158,8 +152,8 @@ final class XmppPingController {
     final now = DateTime.timestamp();
     final tracker = _trafficTracker();
     final lastTraffic = _latestTraffic(
-      tracker?.lastIncomingAt,
-      tracker?.lastOutgoingAt,
+      tracker.lastIncomingAt,
+      tracker.lastOutgoingAt,
       _lastPingSentAt,
     );
     if (lastTraffic != null &&
@@ -199,7 +193,7 @@ final class XmppPingController {
         return;
       }
       final tracker = _trafficTracker();
-      final lastIncoming = tracker?.lastIncomingAt;
+      final lastIncoming = tracker.lastIncomingAt;
       if (lastIncoming != null && lastIncoming.isAfter(sentAt)) {
         return;
       }

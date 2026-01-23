@@ -1213,6 +1213,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((id) => id?.isNotEmpty == true)
         .cast<String>()
         .toSet();
+    final referencedQuotes = <String, Message>{
+      for (final message in filteredItems)
+        if (quoteIds.contains(message.stanzaID)) message.stanzaID: message,
+    };
     final knownMessageIds = filteredItems
         .map((message) => message.stanzaID)
         .toSet()
@@ -1226,12 +1230,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ))
             .whereType<Message>()
             .toList();
-    final updatedQuotedMessages = loadedQuotes.isEmpty
-        ? state.quotedMessagesById
-        : <String, Message>{
-            ...state.quotedMessagesById,
-            for (final message in loadedQuotes) message.stanzaID: message,
-          };
+    final updatedQuotedMessages = <String, Message>{
+      ...state.quotedMessagesById,
+      ...referencedQuotes,
+      for (final message in loadedQuotes) message.stanzaID: message,
+    };
     emit(
       state.copyWith(
         items: filteredItems,

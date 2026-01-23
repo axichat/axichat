@@ -13,6 +13,7 @@ class AccessibilityActionState extends Equatable {
     required this.invites,
     required this.drafts,
     required this.myJid,
+    required this.dismissedHighlights,
     required this.composerText,
     required this.newContactInput,
     required this.busy,
@@ -34,6 +35,7 @@ class AccessibilityActionState extends Equatable {
         invites = const [],
         drafts = const [],
         myJid = null,
+        dismissedHighlights = const <String>{},
         composerText = '',
         newContactInput = '',
         busy = false,
@@ -51,6 +53,7 @@ class AccessibilityActionState extends Equatable {
   final List<Invite> invites;
   final List<Draft> drafts;
   final String? myJid;
+  final Set<String> dismissedHighlights;
   final String composerText;
   final String newContactInput;
   final bool busy;
@@ -71,6 +74,7 @@ class AccessibilityActionState extends Equatable {
     List<Invite>? invites,
     List<Draft>? drafts,
     Object? myJid = _unset,
+    Set<String>? dismissedHighlights,
     String? composerText,
     String? newContactInput,
     bool? busy,
@@ -89,6 +93,7 @@ class AccessibilityActionState extends Equatable {
         invites: invites ?? this.invites,
         drafts: drafts ?? this.drafts,
         myJid: myJid == _unset ? this.myJid : myJid as String?,
+        dismissedHighlights: dismissedHighlights ?? this.dismissedHighlights,
         composerText: composerText ?? this.composerText,
         newContactInput: newContactInput ?? this.newContactInput,
         busy: busy ?? this.busy,
@@ -115,6 +120,7 @@ class AccessibilityActionState extends Equatable {
         invites,
         drafts,
         myJid,
+        dismissedHighlights,
         composerText,
         newContactInput,
         busy,

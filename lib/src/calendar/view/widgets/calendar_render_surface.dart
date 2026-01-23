@@ -13,10 +13,10 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/layout/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
-import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_surface.dart';
 

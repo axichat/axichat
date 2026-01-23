@@ -57,7 +57,7 @@ class NetworkAvailabilityService {
       await waitFuture;
       return;
     }
-    await waitFuture.timeout(timeout, onTimeout: () {});
+    await waitFuture.timeout(timeout, onTimeout: () => _current);
   }
 
   Future<void> _handleConnectivityChange(Object? result) async {

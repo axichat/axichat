@@ -438,7 +438,9 @@ class XmppService extends XmppBase
     this._databaseFactory,
     this._notificationService,
     this._capability,
-  );
+  ) {
+    _pingController = XmppPingController(owner: this);
+  }
 
   static XmppService? _instance;
   static const bool _enableStreamManagement = true;
@@ -596,7 +598,7 @@ class XmppService extends XmppBase
       StreamController<mox.OmemoActivityEvent>.broadcast();
   StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
   StreamSubscription<NetworkAvailability>? _networkAvailabilitySubscription;
-  final XmppPingController _pingController = XmppPingController(owner: this);
+  late final XmppPingController _pingController;
 
   @override
   XmppService get owner => this;
