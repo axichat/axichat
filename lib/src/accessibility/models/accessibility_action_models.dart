@@ -136,18 +136,29 @@ enum AccessibilityCommand {
 class AccessibilityCommandAction extends AccessibilityMenuAction {
   const AccessibilityCommandAction({
     required this.command,
+    this.body,
+    this.recipients,
     this.contact,
     this.highlightId,
     this.draft,
   });
 
   final AccessibilityCommand command;
+  final String? body;
+  final List<AccessibilityContact>? recipients;
   final AccessibilityContact? contact;
   final String? highlightId;
   final Draft? draft;
 
   @override
-  List<Object?> get props => [command, contact, highlightId, draft];
+  List<Object?> get props => [
+        command,
+        body,
+        recipients,
+        contact,
+        highlightId,
+        draft,
+      ];
 }
 
 class AccessibilitySelectContactAction extends AccessibilityMenuAction {

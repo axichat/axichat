@@ -129,7 +129,6 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required String body,
     String? subject,
     List<EmailAttachment> attachments = const [],
-    bool autoSave = false,
   }) async {
     final result = await _messageService.saveDraft(
       id: id,
@@ -148,7 +147,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     } on Exception {
       // Best-effort: core draft syncing should not block local saves.
     }
-    emit(DraftSaveComplete(items: _items, autoSaved: autoSave));
+    emit(DraftSaveComplete(items: _items));
     return result;
   }
 

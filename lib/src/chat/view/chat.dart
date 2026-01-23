@@ -1013,6 +1013,8 @@ class _ChatState extends State<Chat> {
       _composerHasText || _pendingCalendarTaskIcs != null;
   String _lastSubjectValue = '';
   bool _subjectChangeSuppressed = false;
+  List<ComposerRecipient> _recipients = const [];
+  String? _recipientsChatJid;
   ChatCalendarBloc? _chatCalendarBloc;
   String? _chatCalendarJid;
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
@@ -1073,6 +1075,76 @@ class _ChatState extends State<Chat> {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
+  }
+
+  void _resetRecipientsForChat(chat_models.Chat? chat) {
+    final jid = chat?.jid;
+    if (jid == _recipientsChatJid) {
+      return;
+    }
+    _recipientsChatJid = jid;
+    if (chat == null) {
+      _recipients = const [];
+    } else {
+      _recipients = [
+        ComposerRecipient(
+          target: FanOutTarget.chat(chat),
+          included: true,
+          pinned: true,
+        ),
+      ];
+    }
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _handleRecipientAdded(FanOutTarget target) {
+    final index = _recipients.indexWhere((recipient) {
+      return recipient.key == target.key;
+    });
+    if (index >= 0) {
+      final recipient = _recipients[index];
+      final updated = List<ComposerRecipient>.from(_recipients)
+        ..[index] = recipient.copyWith(target: target, included: true);
+      setState(() {
+        _recipients = updated;
+      });
+      return;
+    }
+    setState(() {
+      _recipients = [
+        ..._recipients,
+        ComposerRecipient(target: target, included: true),
+      ];
+    });
+  }
+
+  void _handleRecipientRemoved(String key) {
+    final updated = _recipients.where((recipient) {
+      return recipient.key != key || recipient.pinned;
+    }).toList(growable: false);
+    if (updated.length == _recipients.length) return;
+    setState(() {
+      _recipients = updated;
+    });
+  }
+
+  void _handleRecipientToggled(String key) {
+    final index = _recipients.indexWhere((recipient) {
+      return recipient.key == key;
+    });
+    if (index == -1) return;
+    final current = _recipients[index];
+    if (current.pinned) return;
+    final updated = List<ComposerRecipient>.from(_recipients)
+      ..[index] = current.copyWith(included: !current.included);
+    setState(() {
+      _recipients = updated;
+    });
+  }
+
+  void _handleRecipientAddedFromChat(chat_models.Chat chat) {
+    _handleRecipientAdded(FanOutTarget.chat(chat));
   }
 
   void _maybeClearPendingCalendarTaskIcs(String text) {
@@ -2367,6 +2439,7 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(
           ChatMessageSent(
             text: resolvedText,
+            recipients: _recipients,
             calendarTaskIcs: _pendingCalendarTaskIcs,
             calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
           ),
@@ -2433,7 +2506,6 @@ class _ChatState extends State<Chat> {
     }
     final body = _textController.text;
     final subject = _subjectController.text;
-    final trimmedBody = body.trim();
     final trimmedSubject = subject.trim();
     final attachments = context
         .read<ChatBloc>()
@@ -2441,16 +2513,9 @@ class _ChatState extends State<Chat> {
         .pendingAttachments
         .map((pending) => pending.attachment)
         .toList();
-    final hasContent = trimmedBody.isNotEmpty ||
-        trimmedSubject.isNotEmpty ||
-        attachments.isNotEmpty;
-    if (!hasContent) {
-      _showSnackbar(l10n.chatDraftMissingContent);
-      return;
-    }
     final recipients = _resolveDraftRecipients(
       chat: context.read<ChatBloc>().state.chat!,
-      recipients: context.read<ChatBloc>().state.recipients,
+      recipients: _recipients,
     );
     try {
       await context.read<DraftCubit>().saveDraft(
@@ -2465,48 +2530,6 @@ class _ChatState extends State<Chat> {
     } catch (_) {
       if (!mounted) return;
       _showSnackbar(l10n.chatDraftSaveFailed);
-    }
-  }
-
-  Future<void> _stashComposerDraftIfDirty() async {
-    if (context.read<ChatBloc>().state.chat == null ||
-        context.read<DraftCubit?>() == null) {
-      return;
-    }
-    final body = _textController.text;
-    final subject = _subjectController.text;
-    final trimmedBody = body.trim();
-    final trimmedSubject = subject.trim();
-    final attachments = context
-        .read<ChatBloc>()
-        .state
-        .pendingAttachments
-        .map((pending) => pending.attachment)
-        .toList();
-    final recipients = _resolveDraftRecipients(
-      chat: context.read<ChatBloc>().state.chat!,
-      recipients: context.read<ChatBloc>().state.recipients,
-    );
-    final hasRecipientChanges = recipients.length > 1 ||
-        (recipients.isNotEmpty &&
-            recipients.first != context.read<ChatBloc>().state.chat!.jid);
-    final hasContent = trimmedBody.isNotEmpty ||
-        trimmedSubject.isNotEmpty ||
-        attachments.isNotEmpty ||
-        hasRecipientChanges;
-    if (!hasContent) {
-      return;
-    }
-    try {
-      await context.read<DraftCubit>().saveDraft(
-            id: null,
-            jids: recipients,
-            body: body,
-            subject: trimmedSubject.isEmpty ? null : subject,
-            attachments: attachments,
-          );
-    } catch (_) {
-      // Ignore best-effort auto-save failures.
     }
   }
 
@@ -2535,7 +2558,6 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleEditMessage(Message message) async {
-    await _stashComposerDraftIfDirty();
     if (!mounted) return;
     context.read<ChatBloc>().add(ChatMessageEditRequested(message));
   }
@@ -2622,7 +2644,12 @@ class _ChatState extends State<Chat> {
       }
       if (!mounted) return;
       for (final attachment in attachments) {
-        context.read<ChatBloc>().add(ChatAttachmentPicked(attachment));
+        context.read<ChatBloc>().add(
+              ChatAttachmentPicked(
+                attachment: attachment,
+                recipients: _recipients,
+              ),
+            );
       }
       _focusNode.requestFocus();
     } on PlatformException catch (error) {
@@ -2676,7 +2703,10 @@ class _ChatState extends State<Chat> {
         ShadContextMenuItem(
           leading: const Icon(LucideIcons.refreshCw),
           onPressed: () => context.read<ChatBloc>().add(
-                ChatAttachmentRetryRequested(pending.id),
+                ChatAttachmentRetryRequested(
+                  attachmentId: pending.id,
+                  recipients: _recipients,
+                ),
               ),
           child: Text(l10n.chatAttachmentRetry),
         ),
@@ -2804,7 +2834,10 @@ class _ChatState extends State<Chat> {
                       onTap: () {
                         Navigator.of(sheetContext).pop();
                         context.read<ChatBloc>().add(
-                              ChatAttachmentRetryRequested(pending.id),
+                              ChatAttachmentRetryRequested(
+                                attachmentId: pending.id,
+                                recipients: _recipients,
+                              ),
                             );
                       },
                     ),
@@ -3339,6 +3372,17 @@ class _ChatState extends State<Chat> {
     _focusNode.onKeyEvent = _handleComposerKeyEvent;
     _textController.addListener(_typingListener);
     _subjectController.addListener(_handleSubjectChanged);
+    final chat = context.read<ChatBloc>().state.chat;
+    _recipientsChatJid = chat?.jid;
+    if (chat != null) {
+      _recipients = [
+        ComposerRecipient(
+          target: FanOutTarget.chat(chat),
+          included: true,
+          pinned: true,
+        ),
+      ];
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _captureBaseSelectionHeadroom();
     });
@@ -3438,19 +3482,8 @@ class _ChatState extends State<Chat> {
                   final show = showToast;
                   if (toast == null || show == null) return;
                   final l10n = context.l10n;
-                  final actionDraftId = toast.actionDraftId;
-                  final actionLabel =
-                      toast.action == ChatToastAction.restoreDraft &&
-                              actionDraftId != null
-                          ? l10n.draftRestoreAction
-                          : null;
-                  final VoidCallback? onAction =
-                      toast.action == ChatToastAction.restoreDraft &&
-                              actionDraftId != null
-                          ? () => context
-                              .read<ChatBloc>()
-                              .add(ChatDraftRestoreRequested(actionDraftId))
-                          : null;
+                  const actionLabel = null;
+                  const VoidCallback? onAction = null;
                   final toastWidget = switch (toast.variant) {
                     ChatToastVariant.destructive => FeedbackToast.error(
                         title: l10n.toastWhoopsTitle,
@@ -3518,6 +3551,7 @@ class _ChatState extends State<Chat> {
                   _animatedMessageIds.clear();
                   _hydratedAnimatedMessages = false;
                   _chatOpenedAt = DateTime.now();
+                  _resetRecipientsForChat(state.chat);
                   if (state.messagesLoaded) {
                     _hydrateAnimatedMessages(state.items);
                   }
@@ -3620,7 +3654,7 @@ class _ChatState extends State<Chat> {
                 );
                 final shareContexts = state.shareContexts;
                 final shareReplies = state.shareReplies;
-                final recipients = state.recipients;
+                final recipients = _recipients;
                 final pendingAttachments = state.pendingAttachments;
                 final canSendEmailAttachments = emailService != null &&
                     chatEntity != null &&
@@ -3810,15 +3844,6 @@ class _ChatState extends State<Chat> {
                   if (!_chatRoute.isMain || openChatCalendar) {
                     _returnToMainRoute();
                     return false;
-                  }
-                  final targetJid = state.chat?.jid;
-                  final hasDraftText = _textController.text.isNotEmpty;
-                  if (hasDraftText && !isDefaultEmail && targetJid != null) {
-                    context.read<DraftCubit?>()?.saveDraft(
-                          id: null,
-                          jids: [targetJid],
-                          body: _textController.text,
-                        );
                   }
                   return true;
                 }
@@ -4947,36 +4972,20 @@ class _ChatState extends State<Chat> {
                                                       _composerTapRegionGroup,
                                                   onSubjectSubmitted: () =>
                                                       _focusNode.requestFocus(),
-                                                  onRecipientAdded: (target) =>
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatComposerRecipientAdded(
-                                                              target,
-                                                            ),
-                                                          ),
-                                                  onRecipientRemoved: (key) =>
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatComposerRecipientRemoved(
-                                                              key,
-                                                            ),
-                                                          ),
-                                                  onRecipientToggled: (key) =>
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatComposerRecipientToggled(
-                                                              key,
-                                                            ),
-                                                          ),
+                                                  onRecipientAdded:
+                                                      _handleRecipientAdded,
+                                                  onRecipientRemoved:
+                                                      _handleRecipientRemoved,
+                                                  onRecipientToggled:
+                                                      _handleRecipientToggled,
                                                   onAttachmentRetry: (id) =>
                                                       context
                                                           .read<ChatBloc>()
                                                           .add(
                                                             ChatAttachmentRetryRequested(
-                                                              id,
+                                                              attachmentId: id,
+                                                              recipients:
+                                                                  _recipients,
                                                             ),
                                                           ),
                                                   onAttachmentRemove: (id) =>
@@ -7955,8 +7964,9 @@ class _ChatState extends State<Chat> {
                             ChatRouteIndex.search => const _ChatSearchOverlay(
                                 panel: _ChatSearchPanel(),
                               ),
-                            ChatRouteIndex.details =>
-                              const _ChatDetailsOverlay(),
+                            ChatRouteIndex.details => _ChatDetailsOverlay(
+                                onAddRecipient: _handleRecipientAddedFromChat,
+                              ),
                             ChatRouteIndex.settings => _ChatSettingsOverlay(
                                 state: state,
                                 onViewFilterChanged: _setViewFilter,
@@ -9501,13 +9511,18 @@ class _ChatCalendarPanel extends StatelessWidget {
 }
 
 class _ChatDetailsOverlay extends StatelessWidget {
-  const _ChatDetailsOverlay();
+  const _ChatDetailsOverlay({required this.onAddRecipient});
+
+  final ValueChanged<chat_models.Chat> onAddRecipient;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: context.colorScheme.background,
-      child: const SafeArea(top: false, child: ChatMessageDetails()),
+      child: SafeArea(
+        top: false,
+        child: ChatMessageDetails(onAddRecipient: onAddRecipient),
+      ),
     );
   }
 }
@@ -10942,7 +10957,9 @@ class _ChatComposerSection extends StatelessWidget {
       (attachment) => attachment.isPreparing,
     );
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
+    final hasRecipients = recipients.any((recipient) => recipient.included);
     final sendEnabled = !hasPreparingAttachments &&
+        hasRecipients &&
         (composerHasText || hasQueuedAttachments || hasSubjectText);
     final subjectHeader = _SubjectTextField(
       controller: subjectController,

@@ -136,16 +136,23 @@ final class _TypingParticipantsUpdated extends ChatEvent {
 final class ChatMessageSent extends ChatEvent {
   const ChatMessageSent({
     required this.text,
+    required this.recipients,
     this.calendarTaskIcs,
     this.calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
   });
 
   final String text;
+  final List<ComposerRecipient> recipients;
   final CalendarTask? calendarTaskIcs;
   final bool calendarTaskIcsReadOnly;
 
   @override
-  List<Object?> get props => [calendarTaskIcs, calendarTaskIcsReadOnly];
+  List<Object?> get props => [
+        text,
+        recipients,
+        calendarTaskIcs,
+        calendarTaskIcsReadOnly,
+      ];
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {
@@ -306,31 +313,30 @@ final class ChatMessageEditRequested extends ChatEvent {
   List<Object?> get props => const [];
 }
 
-final class ChatDraftRestoreRequested extends ChatEvent {
-  const ChatDraftRestoreRequested(this.draftId);
-
-  final int draftId;
-
-  @override
-  List<Object?> get props => [draftId];
-}
-
 final class ChatAttachmentPicked extends ChatEvent {
-  const ChatAttachmentPicked(this.attachment);
+  const ChatAttachmentPicked({
+    required this.attachment,
+    required this.recipients,
+  });
 
   final EmailAttachment attachment;
+  final List<ComposerRecipient> recipients;
 
   @override
-  List<Object?> get props => [attachment];
+  List<Object?> get props => [attachment, recipients];
 }
 
 final class ChatAttachmentRetryRequested extends ChatEvent {
-  const ChatAttachmentRetryRequested(this.attachmentId);
+  const ChatAttachmentRetryRequested({
+    required this.attachmentId,
+    required this.recipients,
+  });
 
   final String attachmentId;
+  final List<ComposerRecipient> recipients;
 
   @override
-  List<Object?> get props => [attachmentId];
+  List<Object?> get props => [attachmentId, recipients];
 }
 
 final class ChatPendingAttachmentRemoved extends ChatEvent {
@@ -375,34 +381,6 @@ final class ChatViewFilterChanged extends ChatEvent {
 
   @override
   List<Object?> get props => [filter, persist];
-}
-
-final class ChatComposerRecipientAdded extends ChatEvent {
-  const ChatComposerRecipientAdded(this.target);
-
-  final FanOutTarget target;
-
-  @override
-  List<Object?> get props => [target];
-}
-
-final class ChatComposerRecipientRemoved extends ChatEvent {
-  const ChatComposerRecipientRemoved(this.recipientKey);
-
-  final String recipientKey;
-
-  @override
-  List<Object?> get props => [recipientKey];
-}
-
-final class ChatComposerRecipientToggled extends ChatEvent {
-  const ChatComposerRecipientToggled(this.recipientKey, {this.included});
-
-  final String recipientKey;
-  final bool? included;
-
-  @override
-  List<Object?> get props => [recipientKey, included];
 }
 
 final class ChatFanOutRetryRequested extends ChatEvent {

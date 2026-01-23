@@ -72,7 +72,6 @@ const _sendSignatureListSeparator = ',';
 const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
 const int _deltaMessageIdUnset = 0;
-const int _composerPinnedRecipientInsertIndex = 0;
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
 const _pinPermissionDeniedMessage =
@@ -239,7 +238,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
-    on<ChatDraftRestoreRequested>(_onChatDraftRestoreRequested);
     on<ChatInviteRequested>(_onChatInviteRequested);
     on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
@@ -248,9 +246,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
     on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
     on<ChatViewFilterChanged>(_onChatViewFilterChanged);
-    on<ChatComposerRecipientAdded>(_onComposerRecipientAdded);
-    on<ChatComposerRecipientRemoved>(_onComposerRecipientRemoved);
-    on<ChatComposerRecipientToggled>(_onComposerRecipientToggled);
     on<ChatFanOutRetryRequested>(_onFanOutRetryRequested);
     on<ChatSubjectChanged>(
       _onChatSubjectChanged,
@@ -1024,10 +1019,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       state.copyWith(
         chat: event.chat,
         showAlert: event.chat.alert != null && state.chat?.alert == null,
-        recipients: _syncRecipientsForChat(
-          event.chat,
-          resetContext: resetContext,
-        ),
         fanOutReports: resetContext ? const {} : state.fanOutReports,
         fanOutDrafts: resetContext ? const {} : state.fanOutDrafts,
         shareContexts: resetContext ? const {} : state.shareContexts,
@@ -2128,6 +2119,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(typing: false));
     final chat = state.chat;
     if (chat == null) return;
+    final recipients = event.recipients
+        .where((recipient) => recipient.included)
+        .toList(growable: false);
+    if (recipients.isEmpty) {
+      return;
+    }
     final storedStanzaIds = <String>{};
     final trimmedText = event.text.trim();
     final CalendarTask? requestedTask = event.calendarTaskIcs;
@@ -2180,7 +2177,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.type == ChatType.groupChat) {
       await _ensureMucMembership(chat);
     }
-    final recipients = _resolveComposerRecipients(chat);
     final split = _splitRecipientsForSend(
       recipients: recipients,
       forceEmail: false,
@@ -2978,67 +2974,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> _onChatDraftRestoreRequested(
-    ChatDraftRestoreRequested event,
-    Emitter<ChatState> emit,
-  ) async {
-    final chat = state.chat;
-    if (chat == null) return;
-    final db = await _messageService.database;
-    final draft = await db.getDraft(event.draftId);
-    if (draft == null) {
-      return;
-    }
-    final recipients = await _recipientsFromDraft(draft: draft, chat: chat);
-    final attachments =
-        await _attachmentsFromMetadataIds(draft.attachmentMetadataIds);
-    final pendingAttachments = attachments
-        .map(
-          (attachment) => PendingAttachment(
-            id: _nextPendingAttachmentId(),
-            attachment: attachment,
-          ),
-        )
-        .toList();
-    Message? quoted;
-    final quotedStanzaId = draft.quotingStanzaId?.trim();
-    if (quotedStanzaId != null && quotedStanzaId.isNotEmpty) {
-      quoted = await db.getMessageByStanzaID(quotedStanzaId);
-    }
-    final body = draft.body ?? '';
-    final resolvedSubject = draft.subject?.trim();
-    final shouldHydrateSubject = resolvedSubject != null &&
-        resolvedSubject.isNotEmpty &&
-        resolvedSubject != state.emailSubject;
-    final nextHydrationId = ++_composerHydrationSeed;
-    emit(
-      state.copyWith(
-        recipients: recipients,
-        pendingAttachments: pendingAttachments,
-        quoting: quoted,
-        composerHydrationId: nextHydrationId,
-        composerHydrationText: body,
-        composerError: null,
-        emailSubject:
-            shouldHydrateSubject ? resolvedSubject : state.emailSubject,
-        emailSubjectHydrationId: shouldHydrateSubject
-            ? state.emailSubjectHydrationId + 1
-            : state.emailSubjectHydrationId,
-        emailSubjectHydrationText:
-            shouldHydrateSubject ? resolvedSubject : state.emailSubject,
-        emailSubjectAutofillEligible: false,
-        emailSubjectAutofilled: false,
-      ),
-    );
-  }
-
   Future<void> _onChatAttachmentPicked(
     ChatAttachmentPicked event,
     Emitter<ChatState> emit,
   ) async {
     final chat = state.chat;
     if (chat == null) return;
-    final recipients = _resolveComposerRecipients(chat);
+    final recipients = event.recipients
+        .where((recipient) => recipient.included)
+        .toList(growable: false);
+    if (recipients.isEmpty) {
+      return;
+    }
     final split = _splitRecipientsForSend(
       recipients: recipients,
       forceEmail: false,
@@ -3157,7 +3104,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chat == null) {
       return;
     }
-    final recipients = _resolveComposerRecipients(chat);
+    final recipients = event.recipients
+        .where((recipient) => recipient.included)
+        .toList(growable: false);
+    if (recipients.isEmpty) {
+      return;
+    }
     final split = _splitRecipientsForSend(
       recipients: recipients,
       forceEmail: false,
@@ -3242,58 +3194,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _onComposerRecipientAdded(
-    ChatComposerRecipientAdded event,
-    Emitter<ChatState> emit,
-  ) {
-    final recipients = List<ComposerRecipient>.from(state.recipients);
-    final index = recipients.indexWhere(
-      (recipient) => recipient.key == event.target.key,
-    );
-    if (index >= 0) {
-      recipients[index] = recipients[index].copyWith(
-        target: event.target,
-        included: true,
-      );
-    } else {
-      recipients.add(ComposerRecipient(target: event.target));
-    }
-    emit(state.copyWith(recipients: recipients, composerError: null));
-  }
-
-  void _onComposerRecipientRemoved(
-    ChatComposerRecipientRemoved event,
-    Emitter<ChatState> emit,
-  ) {
-    final recipients = List<ComposerRecipient>.from(state.recipients);
-    final index = recipients.indexWhere(
-      (recipient) => recipient.key == event.recipientKey,
-    );
-    if (index == -1 || recipients[index].pinned) {
-      return;
-    }
-    recipients.removeAt(index);
-    emit(state.copyWith(recipients: recipients, composerError: null));
-  }
-
-  void _onComposerRecipientToggled(
-    ChatComposerRecipientToggled event,
-    Emitter<ChatState> emit,
-  ) {
-    final recipients = List<ComposerRecipient>.from(state.recipients);
-    final index = recipients.indexWhere(
-      (recipient) => recipient.key == event.recipientKey,
-    );
-    if (index == -1) {
-      return;
-    }
-    final recipient = recipients[index];
-    recipients[index] = recipient.copyWith(
-      included: event.included ?? !recipient.included,
-    );
-    emit(state.copyWith(recipients: recipients, composerError: null));
-  }
-
   Future<void> _onFanOutRetryRequested(
     ChatFanOutRetryRequested event,
     Emitter<ChatState> emit,
@@ -3317,18 +3217,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((status) => status.state == FanOutRecipientState.failed)
         .toList();
     if (failedStatuses.isEmpty) return;
-    final recipients = <ComposerRecipient>[];
-    for (final status in failedStatuses) {
-      final jid = status.chat.jid;
-      final existing = _recipientForChat(jid);
-      if (existing != null) {
-        recipients.add(existing.copyWith(included: true));
-      } else {
-        recipients.add(
-          ComposerRecipient(target: FanOutTarget.chat(status.chat)),
-        );
-      }
-    }
+    final recipients = failedStatuses
+        .map(
+          (status) => ComposerRecipient(
+            target: FanOutTarget.chat(status.chat),
+            included: true,
+          ),
+        )
+        .toList();
     if (recipients.isEmpty) return;
     await _sendFanOut(
       recipients: recipients,
@@ -3910,7 +3806,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     try {
-      final result = await _messageService.saveDraft(
+      await _messageService.saveDraft(
         id: null,
         jids: resolvedRecipients,
         body: body,
@@ -3935,11 +3831,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          ChatToast(
+          const ChatToast(
             message:
                 'Saved to Drafts because email is offline. Reopen it once sync recovers.',
-            action: ChatToastAction.restoreDraft,
-            actionDraftId: result.draftId,
           ),
         ),
       );
@@ -4356,21 +4250,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return '$quotedBody\n\n$body';
   }
 
-  List<ComposerRecipient> _includedRecipients() =>
-      state.recipients.where((recipient) => recipient.included).toList();
-
-  List<ComposerRecipient> _resolveComposerRecipients(Chat chat) {
-    final isGroupChat = chat.type == ChatType.groupChat;
-    if (isGroupChat) {
-      return _pinnedRecipientsForChat(chat);
-    }
-    final recipients = _includedRecipients();
-    if (recipients.isNotEmpty) {
-      return recipients;
-    }
-    return _pinnedRecipientsForChat(chat);
-  }
-
   ({
     List<ComposerRecipient> emailRecipients,
     List<ComposerRecipient> xmppRecipients,
@@ -4542,7 +4421,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         useSubjectToken: useSignatureToken,
         tokenAsSignature: useSignatureToken,
       );
-      final mergedRecipients = _mergeRecipientsWithReport(report);
       final reports =
           LinkedHashMap<String, FanOutSendReport>.from(state.fanOutReports)
             ..remove(report.shareId)
@@ -4557,7 +4435,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
       emit(
         state.copyWith(
-          recipients: mergedRecipients,
           fanOutReports: reports,
           fanOutDrafts: drafts,
           composerError: null,
@@ -4581,36 +4458,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
-  List<ComposerRecipient> _mergeRecipientsWithReport(FanOutSendReport report) {
-    if (report.statuses.isEmpty) {
-      return state.recipients;
-    }
-    final recipients = List<ComposerRecipient>.from(state.recipients);
-    var changed = false;
-    for (final status in report.statuses) {
-      final jid = status.chat.jid;
-      final statusAddress = status.chat.emailAddress?.trim().toLowerCase();
-      final matchesIndex = recipients.indexWhere((recipient) {
-        final targetChat = recipient.target.chat;
-        if (targetChat != null && targetChat.jid == jid) {
-          return true;
-        }
-        final recipientAddress = recipient.target.normalizedAddress;
-        return statusAddress != null &&
-            recipientAddress != null &&
-            recipientAddress == statusAddress;
-      });
-      if (matchesIndex >= 0 &&
-          recipients[matchesIndex].target.chat?.jid != jid) {
-        recipients[matchesIndex] = recipients[matchesIndex].copyWith(
-          target: FanOutTarget.chat(status.chat),
-        );
-        changed = true;
-      }
-    }
-    return changed ? recipients : state.recipients;
-  }
-
   Future<void> _rehydrateEmailDraft(
     Message message,
     Emitter<ChatState> emit,
@@ -4620,11 +4467,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null || service == null) return;
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
     shareContext ??= await service.shareContextForMessage(message);
-    final recipients = _recipientsForHydration(
-      chat: chat,
-      shareContext: shareContext,
-      resetRecipients: true,
-    );
     final pendingAttachments = <PendingAttachment>[];
     final attachments = await _attachmentsForMessage(message);
     for (final attachment in attachments) {
@@ -4641,7 +4483,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         nextSubject != null && nextSubject != state.emailSubject;
     emit(
       state.copyWith(
-        recipients: recipients,
         pendingAttachments: pendingAttachments,
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
@@ -4658,77 +4499,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailSubjectAutofilled: false,
       ),
     );
-  }
-
-  List<ComposerRecipient> _recipientsForHydration({
-    required Chat chat,
-    ShareContext? shareContext,
-    bool resetRecipients = false,
-  }) {
-    final recipients = resetRecipients
-        ? [
-            ComposerRecipient(
-              target: FanOutTarget.chat(chat),
-              included: true,
-              pinned: true,
-            ),
-          ]
-        : _syncRecipientsForChat(chat, resetContext: resetRecipients);
-    if (shareContext == null) {
-      return recipients;
-    }
-    final updated = List<ComposerRecipient>.from(recipients);
-    for (final participant in shareContext.participants) {
-      final jid = participant.jid;
-      if (jid == chat.jid) {
-        continue;
-      }
-      final target = FanOutTarget.chat(participant);
-      final index = updated.indexWhere((recipient) => recipient.key == jid);
-      if (index >= 0) {
-        updated[index] = updated[index].copyWith(
-          target: target,
-          included: true,
-        );
-      } else {
-        updated.add(ComposerRecipient(target: target, included: true));
-      }
-    }
-    return updated;
-  }
-
-  Future<List<ComposerRecipient>> _recipientsFromDraft({
-    required Draft draft,
-    required Chat chat,
-  }) async {
-    final db = await _messageService.database;
-    final recipients = <ComposerRecipient>[];
-    final seen = <String>{};
-    final pinned = _pinnedRecipientForChat(chat);
-    recipients.add(pinned);
-    seen.add(pinned.key);
-    for (final jid in draft.jids) {
-      final trimmed = jid.trim();
-      if (trimmed.isEmpty || !seen.add(trimmed)) {
-        continue;
-      }
-      final existing = await db.getChat(trimmed);
-      final target = existing == null
-          ? FanOutTarget.address(address: trimmed)
-          : FanOutTarget.chat(existing);
-      recipients.add(ComposerRecipient(target: target, included: true));
-    }
-    return recipients;
-  }
-
-  ComposerRecipient? _recipientForChat(String jid) {
-    for (final recipient in state.recipients) {
-      final chat = recipient.target.chat;
-      if (chat != null && chat.jid == jid) {
-        return recipient;
-      }
-    }
-    return null;
   }
 
   void _replacePendingAttachment(
@@ -4883,39 +4653,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return null;
-  }
-
-  List<ComposerRecipient> _syncRecipientsForChat(
-    Chat chat, {
-    required bool resetContext,
-  }) {
-    final isGroupChat = chat.type == ChatType.groupChat;
-    if (resetContext || isGroupChat) {
-      return _pinnedRecipientsForChat(chat);
-    }
-    final recipients = List<ComposerRecipient>.from(state.recipients);
-    final key = chat.jid;
-    recipients.removeWhere((recipient) => recipient.target.chat?.jid == key);
-    recipients.insert(
-      _composerPinnedRecipientInsertIndex,
-      _pinnedRecipientForChat(chat),
-    );
-    return recipients;
-  }
-
-  List<ComposerRecipient> _pinnedRecipientsForChat(Chat chat) {
-    final pinnedRecipient = _pinnedRecipientForChat(chat);
-    return <ComposerRecipient>[pinnedRecipient];
-  }
-
-  ComposerRecipient _pinnedRecipientForChat(Chat chat) {
-    const isIncluded = true;
-    const isPinned = true;
-    return ComposerRecipient(
-      target: FanOutTarget.chat(chat),
-      included: isIncluded,
-      pinned: isPinned,
-    );
   }
 
   Future<void> _rehydrateXmppDraft(

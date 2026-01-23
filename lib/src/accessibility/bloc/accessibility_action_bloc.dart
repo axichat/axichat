@@ -261,12 +261,13 @@ class AccessibilityActionBloc
     Emitter<AccessibilityActionState> emit,
   ) async {
     final currentEntry = state.stack.last;
-    final trimmedMessage = state.composerText.trim();
+    final trimmedMessage = event.body.trim();
+    final recipients = event.recipients;
     if ((currentEntry.kind != AccessibilityStepKind.composer &&
             currentEntry.kind != AccessibilityStepKind.chatMessages &&
             currentEntry.kind != AccessibilityStepKind.conversation) ||
         trimmedMessage.isEmpty ||
-        currentEntry.recipients.isEmpty) {
+        recipients.isEmpty) {
       emit(state.copyWith(errorMessage: _l10n.chatDraftMissingContent));
       return;
     }
@@ -279,7 +280,7 @@ class AccessibilityActionBloc
       ),
     );
     final failures = <String>[];
-    for (final contact in currentEntry.recipients) {
+    for (final contact in recipients) {
       if (_shouldSendEmail(contact)) {
         final emailService = _emailService;
         if (emailService == null) {
@@ -631,7 +632,12 @@ class AccessibilityActionBloc
         await _openChatMessages(contact, emit);
         break;
       case AccessibilityCommand.sendMessage:
-        add(const AccessibilitySendMessageRequested());
+        add(
+          AccessibilitySendMessageRequested(
+            body: action.body ?? '',
+            recipients: action.recipients ?? const <AccessibilityContact>[],
+          ),
+        );
         break;
       case AccessibilityCommand.addRecipient:
         _enterRecipientPicker(emit);
@@ -646,7 +652,11 @@ class AccessibilityActionBloc
         add(const AccessibilityConfirmNewContact());
         break;
       case AccessibilityCommand.saveDraft:
-        await _saveDraft(emit);
+        await _saveDraft(
+          emit,
+          body: action.body ?? '',
+          recipients: action.recipients ?? const <AccessibilityContact>[],
+        );
         break;
       case AccessibilityCommand.resumeDraft:
         final draft = action.draft;
@@ -656,12 +666,14 @@ class AccessibilityActionBloc
     }
   }
 
-  Future<void> _saveDraft(Emitter<AccessibilityActionState> emit) async {
+  Future<void> _saveDraft(
+    Emitter<AccessibilityActionState> emit, {
+    required String body,
+    required List<AccessibilityContact> recipients,
+  }) async {
     final entry = state.currentEntry;
     if (entry.kind != AccessibilityStepKind.composer) return;
-    final recipients = entry.recipients;
-    final body = state.composerText.trim();
-    if (recipients.isEmpty || body.isEmpty) {
+    if (recipients.isEmpty) {
       emit(
         state.copyWith(
           errorMessage: _l10n.chatDraftMissingContent,
