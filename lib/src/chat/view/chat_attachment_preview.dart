@@ -286,7 +286,10 @@ class ChatAttachmentPreview extends StatefulWidget {
     required this.metadataStream,
     this.initialMetadata,
     required this.allowed,
-    required this.autoDownloadSettings,
+    required this.autoDownloadImages,
+    required this.autoDownloadVideos,
+    required this.autoDownloadDocuments,
+    required this.autoDownloadArchives,
     required this.autoDownloadAllowed,
     this.autoDownloadUserInitiated = false,
     this.downloadDelegate,
@@ -299,7 +302,10 @@ class ChatAttachmentPreview extends StatefulWidget {
   final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData? initialMetadata;
   final bool allowed;
-  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadImages;
+  final bool autoDownloadVideos;
+  final bool autoDownloadDocuments;
+  final bool autoDownloadArchives;
   final bool autoDownloadAllowed;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
@@ -322,7 +328,12 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     if (!widget.autoDownloadAllowed) {
       return false;
     }
-    return widget.autoDownloadSettings.allowsMetadata(metadata);
+    return metadata.downloadCategory.isAutoDownloadAllowed(
+      imagesEnabled: widget.autoDownloadImages,
+      videosEnabled: widget.autoDownloadVideos,
+      documentsEnabled: widget.autoDownloadDocuments,
+      archivesEnabled: widget.autoDownloadArchives,
+    );
   }
 
   Future<FileTypeReport> _resolveTypeReportFuture({

@@ -7,6 +7,22 @@ enum FileMetadataMediaKind { image, video, file }
 
 enum FileMetadataDownloadCategory { image, video, document, archive }
 
+extension FileMetadataDownloadCategoryTools on FileMetadataDownloadCategory {
+  bool isAutoDownloadAllowed({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  }) {
+    return switch (this) {
+      FileMetadataDownloadCategory.image => imagesEnabled,
+      FileMetadataDownloadCategory.video => videosEnabled,
+      FileMetadataDownloadCategory.document => documentsEnabled,
+      FileMetadataDownloadCategory.archive => archivesEnabled,
+    };
+  }
+}
+
 extension FileMetadataTools on FileMetadataData {
   bool get isImage {
     const imageExtensions = <String>[

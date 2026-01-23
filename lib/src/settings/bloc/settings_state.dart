@@ -40,37 +40,12 @@ class SettingsState with _$SettingsState {
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
     @Default(false) bool autoLoadEmailImages,
-    @Default(AttachmentAutoDownloadSettings())
-    AttachmentAutoDownloadSettings attachmentAutoDownloadSettings,
+    @Default(true) bool autoDownloadImages,
+    @Default(false) bool autoDownloadVideos,
+    @Default(false) bool autoDownloadDocuments,
+    @Default(false) bool autoDownloadArchives,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>
       _$SettingsStateFromJson(json);
-}
-
-@freezed
-class AttachmentAutoDownloadSettings with _$AttachmentAutoDownloadSettings {
-  const factory AttachmentAutoDownloadSettings({
-    @Default(true) bool imagesEnabled,
-    @Default(false) bool videosEnabled,
-    @Default(false) bool documentsEnabled,
-    @Default(false) bool archivesEnabled,
-  }) = _AttachmentAutoDownloadSettings;
-
-  const AttachmentAutoDownloadSettings._();
-
-  factory AttachmentAutoDownloadSettings.fromJson(Map<String, Object?> json) =>
-      _$AttachmentAutoDownloadSettingsFromJson(json);
-
-  bool allowsCategory(FileMetadataDownloadCategory category) {
-    return switch (category) {
-      FileMetadataDownloadCategory.image => imagesEnabled,
-      FileMetadataDownloadCategory.video => videosEnabled,
-      FileMetadataDownloadCategory.document => documentsEnabled,
-      FileMetadataDownloadCategory.archive => archivesEnabled,
-    };
-  }
-
-  bool allowsMetadata(FileMetadataData metadata) =>
-      allowsCategory(metadata.downloadCategory);
 }

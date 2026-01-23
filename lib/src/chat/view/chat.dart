@@ -6629,11 +6629,11 @@ class _ChatState extends State<Chat> {
                                                                 !attachmentsBlockedForChat &&
                                                                     (allowAttachmentByTrust ||
                                                                         allowAttachmentOnce);
-                                                            final autoDownloadSettings = context
-                                                                .watch<
-                                                                    SettingsCubit>()
-                                                                .state
-                                                                .attachmentAutoDownloadSettings;
+                                                            final settingsState =
+                                                                context
+                                                                    .watch<
+                                                                        SettingsCubit>()
+                                                                    .state;
                                                             final chatAutoDownloadAllowed = state
                                                                     .chat
                                                                     ?.attachmentAutoDownload
@@ -6701,8 +6701,18 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                   allowed:
                                                                       allowAttachment,
-                                                                  autoDownloadSettings:
-                                                                      autoDownloadSettings,
+                                                                  autoDownloadImages:
+                                                                      settingsState
+                                                                          .autoDownloadImages,
+                                                                  autoDownloadVideos:
+                                                                      settingsState
+                                                                          .autoDownloadVideos,
+                                                                  autoDownloadDocuments:
+                                                                      settingsState
+                                                                          .autoDownloadDocuments,
+                                                                  autoDownloadArchives:
+                                                                      settingsState
+                                                                          .autoDownloadArchives,
                                                                   autoDownloadAllowed:
                                                                       autoDownloadAllowed,
                                                                   autoDownloadUserInitiated:
@@ -9419,8 +9429,7 @@ class _PinnedMessageTile extends StatelessWidget {
           : isOneTimeAttachmentAllowed(message.stanzaID);
       final allowAttachment = !attachmentsBlockedForPin &&
           (allowAttachmentByTrust || allowAttachmentOnce);
-      final autoDownloadSettings =
-          context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
+      final settingsState = context.watch<SettingsCubit>().state;
       final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
@@ -9443,7 +9452,10 @@ class _PinnedMessageTile extends StatelessWidget {
             metadataStream: metadataStreamFor(attachmentId),
             initialMetadata: metadataInitialFor(attachmentId),
             allowed: allowAttachment,
-            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadImages: settingsState.autoDownloadImages,
+            autoDownloadVideos: settingsState.autoDownloadVideos,
+            autoDownloadDocuments: settingsState.autoDownloadDocuments,
+            autoDownloadArchives: settingsState.autoDownloadArchives,
             autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: emailDownloadDelegate,

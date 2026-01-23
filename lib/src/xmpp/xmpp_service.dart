@@ -310,11 +310,22 @@ abstract interface class XmppBase {
 
   Stream<PubSubSupport> get pubSubSupportStream;
 
-  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings;
+  bool get autoDownloadImages;
 
-  void updateAttachmentAutoDownloadSettings(
-    AttachmentAutoDownloadSettings settings,
-  );
+  bool get autoDownloadVideos;
+
+  bool get autoDownloadDocuments;
+
+  bool get autoDownloadArchives;
+
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  });
+
+  bool allowsAutoDownloadMetadata(FileMetadataData metadata);
 
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
@@ -483,8 +494,10 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
-  AttachmentAutoDownloadSettings _attachmentAutoDownloadSettings =
-      const AttachmentAutoDownloadSettings();
+  var _autoDownloadImages = true;
+  var _autoDownloadVideos = false;
+  var _autoDownloadDocuments = false;
+  var _autoDownloadArchives = false;
 
   // Calendar sync message callback
   Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
@@ -540,14 +553,35 @@ class XmppService extends XmppBase
   }
 
   @override
-  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
-      _attachmentAutoDownloadSettings;
+  bool get autoDownloadImages => _autoDownloadImages;
+
+  bool get autoDownloadVideos => _autoDownloadVideos;
+
+  bool get autoDownloadDocuments => _autoDownloadDocuments;
+
+  bool get autoDownloadArchives => _autoDownloadArchives;
 
   @override
-  void updateAttachmentAutoDownloadSettings(
-    AttachmentAutoDownloadSettings settings,
-  ) {
-    _attachmentAutoDownloadSettings = settings;
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  }) {
+    _autoDownloadImages = imagesEnabled;
+    _autoDownloadVideos = videosEnabled;
+    _autoDownloadDocuments = documentsEnabled;
+    _autoDownloadArchives = archivesEnabled;
+  }
+
+  @override
+  bool allowsAutoDownloadMetadata(FileMetadataData metadata) {
+    return switch (metadata.downloadCategory) {
+      FileMetadataDownloadCategory.image => _autoDownloadImages,
+      FileMetadataDownloadCategory.video => _autoDownloadVideos,
+      FileMetadataDownloadCategory.document => _autoDownloadDocuments,
+      FileMetadataDownloadCategory.archive => _autoDownloadArchives,
+    };
   }
 
   @override

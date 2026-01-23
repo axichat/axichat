@@ -199,7 +199,7 @@ class SettingsControls extends StatelessWidget {
               child: ShadSwitch(
                 label: Text(l10n.settingsAutoDownloadImages),
                 sublabel: Text(l10n.settingsAutoDownloadImagesDescription),
-                value: state.attachmentAutoDownloadSettings.imagesEnabled,
+                value: state.autoDownloadImages,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
                     .toggleAutoDownloadImages(enabled),
@@ -210,7 +210,7 @@ class SettingsControls extends StatelessWidget {
               child: ShadSwitch(
                 label: Text(l10n.settingsAutoDownloadVideos),
                 sublabel: Text(l10n.settingsAutoDownloadVideosDescription),
-                value: state.attachmentAutoDownloadSettings.videosEnabled,
+                value: state.autoDownloadVideos,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
                     .toggleAutoDownloadVideos(enabled),
@@ -221,7 +221,7 @@ class SettingsControls extends StatelessWidget {
               child: ShadSwitch(
                 label: Text(l10n.settingsAutoDownloadDocuments),
                 sublabel: Text(l10n.settingsAutoDownloadDocumentsDescription),
-                value: state.attachmentAutoDownloadSettings.documentsEnabled,
+                value: state.autoDownloadDocuments,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
                     .toggleAutoDownloadDocuments(enabled),
@@ -232,7 +232,7 @@ class SettingsControls extends StatelessWidget {
               child: ShadSwitch(
                 label: Text(l10n.settingsAutoDownloadArchives),
                 sublabel: Text(l10n.settingsAutoDownloadArchivesDescription),
-                value: state.attachmentAutoDownloadSettings.archivesEnabled,
+                value: state.autoDownloadArchives,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
                     .toggleAutoDownloadArchives(enabled),
