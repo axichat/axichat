@@ -12,8 +12,6 @@ import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -158,6 +156,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     required String stanzaId,
     required Chat? chat,
     required bool isEmailChat,
+    required bool isSelf,
   }) async {
     if (!mounted) return;
     final l10n = context.l10n;
@@ -173,9 +172,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           message: l10n.chatAttachmentConfirmMessage(displaySender),
           confirmLabel: l10n.chatAttachmentConfirmButton,
           cancelLabel: l10n.commonCancel,
-          showAutoTrustToggle:
-              !context.read<AttachmentGalleryBloc>().isSelfMessage(message) &&
-                  chat != null,
+          showAutoTrustToggle: !isSelf && chat != null,
           autoTrustLabel: l10n.attachmentGalleryChatTrustLabel,
           autoTrustHint: l10n.attachmentGalleryChatTrustHint,
         );
@@ -684,6 +681,7 @@ class AttachmentGalleryEntry extends StatefulWidget {
     required String stanzaId,
     required Chat? chat,
     required bool isEmailChat,
+    required bool isSelf,
   }) onApproveAttachment;
   final String metaSeparator;
 
@@ -750,6 +748,7 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
               stanzaId: message.stanzaID,
               chat: chat,
               isEmailChat: isEmailChat,
+              isSelf: widget.entry.isSelf,
             );
     return widget.layout == AttachmentGalleryLayout.list
         ? AttachmentGalleryListItem(

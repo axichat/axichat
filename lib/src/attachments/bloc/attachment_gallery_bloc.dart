@@ -61,7 +61,7 @@ class AttachmentGalleryBloc
   Stream<FileMetadataData?> fileMetadataStream(String id) =>
       _xmppService.fileMetadataStream(id);
 
-  bool isSelfMessage(Message message) {
+  bool _isSelfMessage(Message message) {
     final sender = message.senderJid.trim().toLowerCase();
     final xmppJid = _xmppService.myJid?.trim().toLowerCase();
     if (xmppJid != null && sender == xmppJid) return true;
@@ -217,10 +217,10 @@ class AttachmentGalleryBloc
     AttachmentGalleryApprovalGranted event,
     Emitter<AttachmentGalleryState> emit,
   ) async {
-    final nextAllowedOnce = <String>{
-      ...state.allowedOnceStanzaIds,
-      event.stanzaId.trim(),
-    };
+    final trimmedStanzaId = event.stanzaId.trim();
+    final nextAllowedOnce = trimmedStanzaId.isEmpty
+        ? state.allowedOnceStanzaIds
+        : <String>{...state.allowedOnceStanzaIds, trimmedStanzaId};
     emit(
       state.copyWith(
         allowedOnceStanzaIds: nextAllowedOnce,
@@ -269,7 +269,8 @@ class AttachmentGalleryBloc
       if (!typeFilter.matches(item.metadata)) {
         continue;
       }
-      if (!sourceFilter.matches(isSelf: isSelfMessage(item.message))) {
+      final isSelf = _isSelfMessage(item.message);
+      if (!sourceFilter.matches(isSelf: isSelf)) {
         continue;
       }
       final chat = _chatOverride ?? chatLookup[item.message.chatJid];
@@ -288,10 +289,10 @@ class AttachmentGalleryBloc
         AttachmentGalleryEntryData(
           item: item,
           chat: chat,
-          isSelf: isSelfMessage(item.message),
+          isSelf: isSelf,
           allowOnce: allowedOnceStanzaIds.contains(item.message.stanzaID),
-          allowByTrust: isSelfMessage(item.message) ||
-              (chat?.attachmentAutoDownload.isAllowed ?? false),
+          allowByTrust:
+              isSelf || (chat?.attachmentAutoDownload.isAllowed ?? false),
         ),
       );
     }
