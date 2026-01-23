@@ -15,6 +15,7 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -830,6 +831,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         addressOverride: resolvedAddress,
         persistCredentials: rememberMe,
       );
+      final fatalError = _lastEmailProvisioningError;
+      if (fatalError != null &&
+          !fatalError.isRecoverable &&
+          _stickyAuthActive) {
+        await logout(severity: LogoutSeverity.normal);
+        _emit(AuthenticationFailure(fatalError.message));
+      }
     } finally {
       _emailProvisioningRetryInFlight = false;
     }

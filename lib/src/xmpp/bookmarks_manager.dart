@@ -327,7 +327,6 @@ final class BookmarksManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: null,
       );
 
   SafePubSubManager? _pubSub() =>
