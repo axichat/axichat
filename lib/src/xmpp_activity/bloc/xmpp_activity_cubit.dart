@@ -11,7 +11,7 @@ import 'package:logging/logging.dart';
 
 const Duration _defaultCompletedRetention = Duration(seconds: 1);
 const Duration _defaultFailedRetention = Duration(seconds: 1);
-const Duration _minimumInProgressDuration = Duration(milliseconds: 350);
+const Duration _minimumInProgressDuration = Duration(milliseconds: 100);
 const Duration _idleCompletionDelay = Duration(milliseconds: 300);
 const int _operationIdLength = 10;
 const String _operationIdSeparator = '-';

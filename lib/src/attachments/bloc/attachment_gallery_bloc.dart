@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/attachments/attachment_gallery_models.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -27,7 +28,7 @@ class AttachmentGalleryBloc
         _emailService = emailService,
         _chatOverride = chatOverride,
         _showChatLabel = showChatLabel,
-        super(const AttachmentGalleryState()) {
+        super(const AttachmentGalleryState(status: RequestStatus.loading)) {
     on<AttachmentGalleryItemsUpdated>(_onItemsUpdated);
     on<AttachmentGalleryLoadFailed>(_onLoadFailed);
     on<AttachmentGalleryChatsUpdated>(_onChatsUpdated);
@@ -38,7 +39,6 @@ class AttachmentGalleryBloc
     on<AttachmentGalleryLayoutChanged>(_onLayoutChanged);
     on<AttachmentGalleryApprovalGranted>(_onApprovalGranted);
     on<AttachmentGalleryEmailDownloadRequested>(_onEmailDownloadRequested);
-    emit(state.copyWith(status: RequestStatus.loading));
     _itemsSubscription =
         _xmppService.attachmentGalleryStream(chatJid: chatJid).listen(
               (items) => add(AttachmentGalleryItemsUpdated(items: items)),
