@@ -6055,8 +6055,7 @@ mixin MessageService
           if (db is! XmppDrift) {
             return Stream.value(const <AttachmentGalleryItem>[]);
           }
-          final repository = AttachmentGalleryRepository(db);
-          return repository.watch(chatJid: chatJid);
+          return db.watchAttachmentGallery(chatJid: chatJid);
         },
       );
 

@@ -361,6 +361,7 @@ class _CalendarAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color background = CalendarNavSurface.backgroundColor(context);
+    final Color border = context.colorScheme.border;
     final EdgeInsets toolbarPadding = calendarMarginLarge.copyWith(
       top: 0,
       bottom: 0,
@@ -368,6 +369,7 @@ class _CalendarAppBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
+        border: Border(bottom: BorderSide(color: border)),
       ),
       child: SizedBox(
         height: kToolbarHeight,

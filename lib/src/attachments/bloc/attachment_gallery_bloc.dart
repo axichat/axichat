@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/attachments/attachment_gallery_models.dart';
-import 'package:axichat/src/storage/attachment_gallery_repository.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
