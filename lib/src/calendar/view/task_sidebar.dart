@@ -636,12 +636,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           width: uiState.width,
           decoration: BoxDecoration(
             color: sidebarBackgroundColor,
-            border: Border(
-              top: BorderSide(
-                color: calendarBorderColor,
-                width: calendarBorderStroke,
-              ),
-            ),
           ),
           child: Stack(
             children: [
