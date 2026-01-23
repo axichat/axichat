@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
@@ -37,9 +36,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _draftComposerControlExtent = 42;
 const double _draftSubjectHeight = 32;
-const Duration _draftAutosaveDelay = Duration(seconds: 2);
-const int _draftSaveEpochStep = 1;
-const int _initialDraftSaveEpoch = 0;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -91,11 +87,6 @@ class _DraftFormState extends State<DraftForm> {
   bool _sendingDraft = false;
   bool _sendCompletionHandled = false;
   bool _seedAttachmentCleanupHandled = false;
-  Timer? _autosaveTimer;
-  int? _lastSavedSignature;
-  DateTime? _lastAutosaveAt;
-  bool _autosaveInFlight = false;
-  int _saveEpoch = _initialDraftSaveEpoch;
 
   @override
   void initState() {
@@ -125,7 +116,6 @@ class _DraftFormState extends State<DraftForm> {
         await _cleanupSeedAttachmentMetadata();
       });
     }
-    _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
     _bodyTextController.dispose();
     _subjectTextController.removeListener(_subjectListener);
@@ -145,7 +135,6 @@ class _DraftFormState extends State<DraftForm> {
       return;
     }
     setState(() => _sendErrorMessage = null);
-    _scheduleAutosave();
   }
 
   void _subjectListener() {
@@ -153,7 +142,6 @@ class _DraftFormState extends State<DraftForm> {
       return;
     }
     setState(() => _sendErrorMessage = null);
-    _scheduleAutosave();
   }
 
   void _appendTaskShareText(CalendarTask task) {
@@ -214,11 +202,9 @@ class _DraftFormState extends State<DraftForm> {
         child: BlocConsumer<DraftCubit, DraftState>(
           listener: (context, state) async {
             if (state is DraftSaveComplete) {
-              if (!state.autoSaved) {
-                ShadToaster.maybeOf(
-                  context,
-                )?.show(FeedbackToast.success(title: l10n.draftSaved));
-              }
+              ShadToaster.maybeOf(
+                context,
+              )?.show(FeedbackToast.success(title: l10n.draftSaved));
             }
             if (state is DraftSending) {
               if (_sendingDraft && mounted) {
@@ -289,9 +275,6 @@ class _DraftFormState extends State<DraftForm> {
             final readyToSend = sendBlocker == null &&
                 !_addingAttachment &&
                 !hasPreparingAttachments;
-            final bool showAutosaveHint = _lastAutosaveAt != null &&
-                _lastSavedSignature == _currentDraftSignature();
-
             return _DraftTaskDropRegion(
               onTaskDropped: enabled ? _handleTaskDrop : null,
               child: Column(
@@ -477,14 +460,6 @@ class _DraftFormState extends State<DraftForm> {
                               ],
                             ),
                           ),
-                        if (showAutosaveHint)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              l10n.draftAutosaved,
-                              style: context.textTheme.muted,
-                            ),
-                          ),
                         Row(
                           children: [
                             ShadButton.destructive(
@@ -616,7 +591,6 @@ class _DraftFormState extends State<DraftForm> {
       }
     });
     _revalidateFormIfNeeded();
-    _scheduleAutosave();
   }
 
   void _handleRecipientRemoved(String key) {
@@ -625,7 +599,6 @@ class _DraftFormState extends State<DraftForm> {
       _recipients.removeWhere((recipient) => recipient.key == key);
     });
     _revalidateFormIfNeeded();
-    _scheduleAutosave();
   }
 
   void _handleRecipientToggled(String key) {
@@ -637,7 +610,6 @@ class _DraftFormState extends State<DraftForm> {
       _recipients[index] = recipient.copyWith(included: !recipient.included);
     });
     _revalidateFormIfNeeded();
-    _scheduleAutosave();
   }
 
   Future<void> _handleAttachmentAdded() async {
@@ -722,7 +694,6 @@ class _DraftFormState extends State<DraftForm> {
       if (mounted) {
         setState(() => _addingAttachment = false);
       }
-      _scheduleAutosave();
     }
   }
 
@@ -731,16 +702,14 @@ class _DraftFormState extends State<DraftForm> {
       _pendingAttachments =
           _pendingAttachments.where((pending) => pending.id != id).toList();
     });
-    _scheduleAutosave();
   }
 
   Future<void> _handleSaveDraft() async {
-    await _saveDraft(autoSave: false);
+    await _saveDraft();
   }
 
-  Future<void> _saveDraft({required bool autoSave}) async {
+  Future<void> _saveDraft() async {
     if (context.read<DraftCubit?>() == null) return;
-    final int saveEpoch = _saveEpoch;
     final bool wasNewDraft = id == null;
     final List<String> attachmentIds =
         _pendingAttachments.map((pending) => pending.id).toList();
@@ -751,24 +720,13 @@ class _DraftFormState extends State<DraftForm> {
           body: _bodyTextController.text,
           subject: _subjectTextController.text,
           attachments: _currentAttachments(),
-          autoSave: autoSave,
         );
-    if (!mounted || saveEpoch != _saveEpoch) return;
-    final int signature = _draftSignature(
-      recipients: recipients,
-      body: _bodyTextController.text,
-      subject: _subjectTextController.text,
-      pendingAttachments: _pendingAttachments,
-    );
+    if (!mounted) return;
     setState(() {
       id = result.draftId;
-      _lastSavedSignature = signature;
-      _lastAutosaveAt = autoSave ? DateTime.now() : null;
     });
     widget.onDraftSaved?.call(result.draftId);
-    if (!autoSave &&
-        wasNewDraft &&
-        result.draftCount >= draftSyncWarningThreshold) {
+    if (wasNewDraft && result.draftCount >= draftSyncWarningThreshold) {
       ShadToaster.maybeOf(context)?.show(
         FeedbackToast.warning(
           message: context.l10n.draftLimitWarning(
@@ -836,103 +794,9 @@ class _DraftFormState extends State<DraftForm> {
     setState(() => _pendingAttachments = updated);
   }
 
-  void _scheduleAutosave() {
-    if (!_dependenciesInitialized || _sendingDraft) {
-      return;
-    }
-    if (_addingAttachment) {
-      return;
-    }
-    _autosaveTimer?.cancel();
-    _autosaveTimer = Timer(_draftAutosaveDelay, _handleAutosaveTick);
-  }
-
-  void _invalidatePendingSaves() {
-    _saveEpoch += _draftSaveEpochStep;
-  }
-
-  Future<void> _handleAutosaveTick() async {
-    if (!mounted || _autosaveInFlight) {
-      return;
-    }
-    if (!_shouldAutosave()) {
-      return;
-    }
-    final int signature = _currentDraftSignature();
-    if (_lastSavedSignature == signature) {
-      return;
-    }
-    _autosaveInFlight = true;
-    try {
-      await _saveDraft(autoSave: true);
-    } on Exception {
-      // Best-effort autosave should not block composition.
-    } finally {
-      _autosaveInFlight = false;
-    }
-  }
-
-  bool _shouldAutosave() {
-    if (context.read<DraftCubit?>() == null) {
-      return false;
-    }
-    if (_pendingAttachments.any((pending) => pending.isPreparing)) {
-      return false;
-    }
-    final String body = _bodyTextController.text.trim();
-    final String subject = _subjectTextController.text.trim();
-    final bool hasAttachments = _pendingAttachments.isNotEmpty;
-    final bool hasRecipients = _recipientStrings().isNotEmpty;
-    return hasRecipients ||
-        body.isNotEmpty ||
-        subject.isNotEmpty ||
-        hasAttachments;
-  }
-
-  int _currentDraftSignature() {
-    return _draftSignature(
-      recipients: _recipientStrings(),
-      body: _bodyTextController.text,
-      subject: _subjectTextController.text,
-      pendingAttachments: _pendingAttachments,
-    );
-  }
-
-  int _draftSignature({
-    required List<String> recipients,
-    required String body,
-    required String subject,
-    required List<PendingAttachment> pendingAttachments,
-  }) {
-    final List<Object?> values = <Object?>[
-      body,
-      subject,
-      ...recipients,
-      ...pendingAttachments.map(
-        (pending) => _attachmentSignature(pending.attachment),
-      ),
-    ];
-    return Object.hashAll(values);
-  }
-
-  Object _attachmentSignature(EmailAttachment attachment) {
-    final String? metadataId = attachment.metadataId;
-    if (metadataId != null && metadataId.isNotEmpty) {
-      return metadataId;
-    }
-    return Object.hash(
-      attachment.path,
-      attachment.fileName,
-      attachment.sizeBytes,
-      attachment.mimeType,
-    );
-  }
-
   Future<void> _handleDiscard() async {
     final l10n = context.l10n;
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
-    _autosaveTimer?.cancel();
-    _invalidatePendingSaves();
     if (id != null && context.read<DraftCubit?>() != null) {
       await context.read<DraftCubit>().deleteDraft(id: id!);
     }
@@ -946,8 +810,6 @@ class _DraftFormState extends State<DraftForm> {
       _bodyTextController.clear();
       _subjectTextController.clear();
       _showValidationMessages = false;
-      _lastAutosaveAt = null;
-      _lastSavedSignature = null;
     });
     _showToast(l10n.draftDiscarded);
     widget.onDiscarded?.call();
@@ -973,8 +835,6 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _handleSendDraft() async {
     final l10n = context.l10n;
-    _autosaveTimer?.cancel();
-    _invalidatePendingSaves();
     setState(() {
       _showValidationMessages = true;
       _sendErrorMessage = null;
@@ -1070,8 +930,6 @@ class _DraftFormState extends State<DraftForm> {
       _sendingDraft = false;
       _pendingAttachments = const [];
       _pendingAttachmentSeed = 0;
-      _lastAutosaveAt = null;
-      _lastSavedSignature = null;
     });
     ShadToaster.maybeOf(
       context,

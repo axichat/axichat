@@ -25,7 +25,6 @@ class ChatState with _$ChatState {
     @Default(true) bool showAlert,
     @Default(MessageTimelineFilter.allWithContact)
     MessageTimelineFilter viewFilter,
-    @Default(<ComposerRecipient>[]) List<ComposerRecipient> recipients,
     @Default(<String, FanOutSendReport>{})
     Map<String, FanOutSendReport> fanOutReports,
     @Default(<String, FanOutDraft>{}) Map<String, FanOutDraft> fanOutDrafts,

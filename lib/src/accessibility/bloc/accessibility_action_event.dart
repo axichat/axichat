@@ -54,7 +54,16 @@ class AccessibilityComposerChanged extends AccessibilityActionEvent {
 }
 
 class AccessibilitySendMessageRequested extends AccessibilityActionEvent {
-  const AccessibilitySendMessageRequested();
+  const AccessibilitySendMessageRequested({
+    required this.body,
+    required this.recipients,
+  });
+
+  final String body;
+  final List<AccessibilityContact> recipients;
+
+  @override
+  List<Object?> get props => [body, recipients];
 }
 
 class AccessibilityRecipientRemoved extends AccessibilityActionEvent {

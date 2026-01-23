@@ -1554,9 +1554,7 @@ class _AccessibilityActionContent extends StatelessWidget {
               child: _ActionButtonsGroup(
                 focusNode: actionsFocusNode,
                 groupKey: actionsGroupKey,
-                saveEnabled: state.composerText.trim().isNotEmpty &&
-                    currentRecipients.isNotEmpty &&
-                    !state.busy,
+                saveEnabled: currentRecipients.isNotEmpty && !state.busy,
                 sendEnabled: state.composerText.trim().isNotEmpty &&
                     currentRecipients.isNotEmpty &&
                     !state.busy,
@@ -1564,16 +1562,20 @@ class _AccessibilityActionContent extends StatelessWidget {
                   LogicalKeyboardKey.enter,
                 ),
                 onSave: () => context.read<AccessibilityActionBloc>().add(
-                      const AccessibilityMenuActionTriggered(
+                      AccessibilityMenuActionTriggered(
                         AccessibilityCommandAction(
                           command: AccessibilityCommand.saveDraft,
+                          body: state.composerText,
+                          recipients: currentRecipients,
                         ),
                       ),
                     ),
                 onSend: () => context.read<AccessibilityActionBloc>().add(
-                      const AccessibilityMenuActionTriggered(
+                      AccessibilityMenuActionTriggered(
                         AccessibilityCommandAction(
                           command: AccessibilityCommand.sendMessage,
+                          body: state.composerText,
+                          recipients: currentRecipients,
                         ),
                       ),
                     ),
