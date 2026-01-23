@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
+import 'package:axichat/src/attachments/attachment_gallery_models.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
-import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
+import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -14,146 +16,13 @@ import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/attachment_gallery_repository.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-enum AttachmentGallerySortOption {
-  newestFirst,
-  oldestFirst,
-  nameAscending,
-  nameDescending,
-  sizeAscending,
-  sizeDescending,
-  ;
-
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGallerySortOption.newestFirst => l10n.chatSearchSortNewestFirst,
-      AttachmentGallerySortOption.oldestFirst => l10n.chatSearchSortOldestFirst,
-      AttachmentGallerySortOption.nameAscending =>
-        l10n.attachmentGallerySortNameAscLabel,
-      AttachmentGallerySortOption.nameDescending =>
-        l10n.attachmentGallerySortNameDescLabel,
-      AttachmentGallerySortOption.sizeAscending =>
-        l10n.attachmentGallerySortSizeAscLabel,
-      AttachmentGallerySortOption.sizeDescending =>
-        l10n.attachmentGallerySortSizeDescLabel,
-    };
-  }
-
-  int compare(AttachmentGalleryItem a, AttachmentGalleryItem b) {
-    const fallbackEpochMs = 0;
-    const sortBefore = -1;
-    const sortAfter = 1;
-    final fallbackTimestamp =
-        DateTime.fromMillisecondsSinceEpoch(fallbackEpochMs);
-    int compareByTimestamp({required bool descending}) {
-      final aTimestamp = a.message.timestamp ?? fallbackTimestamp;
-      final bTimestamp = b.message.timestamp ?? fallbackTimestamp;
-      final result = aTimestamp.compareTo(bTimestamp);
-      if (result == 0) return 0;
-      return descending ? -result : result;
-    }
-
-    int compareByName({required bool descending}) {
-      final result = a.metadata.normalizedFilename.compareTo(
-        b.metadata.normalizedFilename,
-      );
-      if (result != 0) {
-        return descending ? -result : result;
-      }
-      return compareByTimestamp(descending: true);
-    }
-
-    int compareBySize({required bool descending}) {
-      final aSize = a.metadata.sizeBytes;
-      final bSize = b.metadata.sizeBytes;
-      if (aSize == null && bSize == null) {
-        return compareByTimestamp(descending: true);
-      }
-      if (aSize == null) return sortAfter;
-      if (bSize == null) return sortBefore;
-      final result = aSize.compareTo(bSize);
-      if (result != 0) {
-        return descending ? -result : result;
-      }
-      return compareByTimestamp(descending: true);
-    }
-
-    return switch (this) {
-      AttachmentGallerySortOption.newestFirst =>
-        compareByTimestamp(descending: true),
-      AttachmentGallerySortOption.oldestFirst =>
-        compareByTimestamp(descending: false),
-      AttachmentGallerySortOption.nameAscending =>
-        compareByName(descending: false),
-      AttachmentGallerySortOption.nameDescending =>
-        compareByName(descending: true),
-      AttachmentGallerySortOption.sizeAscending =>
-        compareBySize(descending: false),
-      AttachmentGallerySortOption.sizeDescending =>
-        compareBySize(descending: true),
-    };
-  }
-}
-
-enum AttachmentGalleryTypeFilter {
-  all,
-  images,
-  videos,
-  files;
-
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGalleryTypeFilter.all => l10n.attachmentGalleryAllLabel,
-      AttachmentGalleryTypeFilter.images => l10n.attachmentGalleryImagesLabel,
-      AttachmentGalleryTypeFilter.videos => l10n.attachmentGalleryVideosLabel,
-      AttachmentGalleryTypeFilter.files => l10n.attachmentGalleryFilesLabel,
-    };
-  }
-
-  bool matches(FileMetadataData metadata) {
-    return switch (this) {
-      AttachmentGalleryTypeFilter.all => true,
-      AttachmentGalleryTypeFilter.images => metadata.isImage,
-      AttachmentGalleryTypeFilter.videos => metadata.isVideo,
-      AttachmentGalleryTypeFilter.files =>
-        metadata.mediaKind == AttachmentMediaKind.file,
-    };
-  }
-}
-
-enum AttachmentGallerySourceFilter {
-  all,
-  sent,
-  received;
-
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGallerySourceFilter.all => l10n.attachmentGalleryAllLabel,
-      AttachmentGallerySourceFilter.sent => l10n.attachmentGallerySentLabel,
-      AttachmentGallerySourceFilter.received =>
-        l10n.attachmentGalleryReceivedLabel,
-    };
-  }
-
-  bool matches({required bool isSelf}) {
-    return switch (this) {
-      AttachmentGallerySourceFilter.all => true,
-      AttachmentGallerySourceFilter.sent => isSelf,
-      AttachmentGallerySourceFilter.received => !isSelf,
-    };
-  }
-}
-
-enum AttachmentGalleryLayout { grid, list }
 
 AttachmentGalleryGridMetrics _resolveGridMetrics({
   required double maxWidth,
@@ -207,18 +76,6 @@ class AttachmentGalleryGridMetrics {
   final double tileWidth;
 }
 
-class AttachmentGalleryEntryData {
-  const AttachmentGalleryEntryData({
-    required this.item,
-    required this.chat,
-    required this.isSelf,
-  });
-
-  final AttachmentGalleryItem item;
-  final Chat? chat;
-  final bool isSelf;
-}
-
 class AttachmentGalleryPanel extends StatelessWidget {
   const AttachmentGalleryPanel({
     super.key,
@@ -240,10 +97,12 @@ class AttachmentGalleryPanel extends StatelessWidget {
     final xmppService = context.read<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     return BlocProvider(
-      create: (context) => AttachmentGalleryCubit(
+      create: (context) => AttachmentGalleryBloc(
         xmppService: xmppService,
         emailService: emailService,
         chatJid: resolvedChat.jid,
+        chatOverride: resolvedChat,
+        showChatLabel: false,
       ),
       child: AxiSheetScaffold(
         header: AxiSheetHeader(
@@ -275,46 +134,22 @@ class AttachmentGalleryView extends StatefulWidget {
 }
 
 class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
-  final Set<String> _oneTimeAllowedStanzaIds = <String>{};
   late final TextEditingController _searchController = TextEditingController()
     ..addListener(_handleSearchChanged);
-  AttachmentGallerySortOption _sortOption =
-      AttachmentGallerySortOption.newestFirst;
-  AttachmentGalleryTypeFilter _typeFilter = AttachmentGalleryTypeFilter.all;
-  AttachmentGallerySourceFilter _sourceFilter =
-      AttachmentGallerySourceFilter.all;
-  AttachmentGalleryLayout? _layoutOverride;
-  List<AttachmentGalleryEntryData> _filteredItems =
-      const <AttachmentGalleryEntryData>[];
-  Map<String, Chat> _chatLookup = const <String, Chat>{};
-
-  String get _searchQuery => _searchController.text.trim().toLowerCase();
-
-  AttachmentGalleryLayout _resolveLayout({required bool hasVisualMedia}) {
+  AttachmentGalleryLayout _resolveLayout({
+    required bool hasVisualMedia,
+    required AttachmentGalleryLayout? overrideLayout,
+  }) {
     final defaultLayout = hasVisualMedia
         ? AttachmentGalleryLayout.grid
         : AttachmentGalleryLayout.list;
-    return _layoutOverride ?? defaultLayout;
+    return overrideLayout ?? defaultLayout;
   }
 
-  void _setLayout(AttachmentGalleryLayout nextLayout) {
-    if (_layoutOverride == nextLayout) return;
-    setState(() {
-      _layoutOverride = nextLayout;
-    });
-  }
-
-  bool _isOneTimeAttachmentAllowed(String stanzaId) {
-    final trimmed = stanzaId.trim();
-    if (trimmed.isEmpty) return false;
-    return _oneTimeAllowedStanzaIds.contains(trimmed);
-  }
-
-  bool _shouldAllowAttachment({required bool isSelf, required Chat? chat}) {
-    if (isSelf) return true;
-    final resolvedChat = chat;
-    if (resolvedChat == null) return false;
-    return resolvedChat.attachmentAutoDownload.isAllowed;
+  void _handleLayoutChanged(AttachmentGalleryLayout nextLayout) {
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryLayoutChanged(layout: nextLayout),
+        );
   }
 
   Future<void> _approveAttachment({
@@ -326,13 +161,9 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   }) async {
     if (!mounted) return;
     final l10n = context.l10n;
-    final attachmentCubit = context.read<AttachmentGalleryCubit>();
-    final chatsCubit = context.read<ChatsCubit>();
     final senderEmail = chat?.emailAddress;
     final displaySender =
         senderEmail?.trim().isNotEmpty == true ? senderEmail! : senderJid;
-    final isSelfBeforeDialog =
-        attachmentCubit.isSelfMessage(message);
     final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -342,7 +173,9 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           message: l10n.chatAttachmentConfirmMessage(displaySender),
           confirmLabel: l10n.chatAttachmentConfirmButton,
           cancelLabel: l10n.commonCancel,
-          showAutoTrustToggle: !isSelfBeforeDialog && chat != null,
+          showAutoTrustToggle:
+              !context.read<AttachmentGalleryBloc>().isSelfMessage(message) &&
+                  chat != null,
           autoTrustLabel: l10n.attachmentGalleryChatTrustLabel,
           autoTrustHint: l10n.attachmentGalleryChatTrustHint,
         );
@@ -351,96 +184,34 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     if (!mounted) return;
     if (decision == null || !decision.approved) return;
 
-    if (decision.alwaysAllow &&
-        !attachmentCubit.isSelfMessage(message) &&
-        chat != null) {
-      await chatsCubit.toggleAttachmentAutoDownload(
-            jid: chat.jid,
-            enabled: true,
-          );
-    }
-    if (isEmailChat) {
-      await attachmentCubit.downloadEmailMessage(message);
-    }
-    if (mounted) {
-      setState(() {
-        _oneTimeAllowedStanzaIds.add(stanzaId.trim());
-      });
-    }
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryApprovalGranted(
+            message: message,
+            chat: chat,
+            alwaysAllow: decision.alwaysAllow,
+            isEmailChat: isEmailChat,
+            stanzaId: stanzaId,
+          ),
+        );
   }
 
   void _handleSearchChanged() {
     if (!mounted) return;
-    setState(() {
-      _updateChatLookup(context.read<ChatsCubit>().state.items);
-      _rebuildFilteredItems(
-        items: context.read<AttachmentGalleryCubit>().state.items,
-        isSelfMessage: context.read<AttachmentGalleryCubit>().isSelfMessage,
-      );
-    });
-  }
-
-  void _updateChatLookup(List<Chat>? chats) {
-    if (!widget.showChatLabel && _searchQuery.isEmpty) {
-      _chatLookup = const <String, Chat>{};
-      return;
-    }
-    final resolvedChats = chats ?? const <Chat>[];
-    _chatLookup = <String, Chat>{
-      for (final chat in resolvedChats) chat.jid: chat,
-    };
-  }
-
-  void _rebuildFilteredItems({
-    required List<AttachmentGalleryItem> items,
-    required bool Function(Message message) isSelfMessage,
-  }) {
-    final query = _searchQuery;
-    final chatOverride = widget.chatOverride;
-    final showChatLabel = widget.showChatLabel;
-    final filtered = <AttachmentGalleryEntryData>[];
-    for (final item in items) {
-      if (!_typeFilter.matches(item.metadata)) {
-        continue;
-      }
-      final isSelf = isSelfMessage(item.message);
-      if (!_sourceFilter.matches(isSelf: isSelf)) {
-        continue;
-      }
-      if (query.isNotEmpty) {
-        if (!item.metadata.normalizedFilename.contains(query)) {
-          if (!showChatLabel) {
-            continue;
-          }
-          final chat = chatOverride ?? _chatLookup[item.message.chatJid];
-          final chatLabel = chat?.displayName.trim().toLowerCase() ?? '';
-          if (chatLabel.isEmpty || !chatLabel.contains(query)) {
-            continue;
-          }
-        }
-      }
-      filtered.add(
-        AttachmentGalleryEntryData(
-          item: item,
-          chat: chatOverride ?? _chatLookup[item.message.chatJid],
-          isSelf: isSelf,
-        ),
-      );
-    }
-    filtered.sort(
-      (a, b) => _sortOption.compare(a.item, b.item),
-    );
-    _filteredItems = List.unmodifiable(filtered);
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryQueryChanged(
+            query: _searchController.text,
+          ),
+        );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _updateChatLookup(context.read<ChatsCubit>().state.items);
-    _rebuildFilteredItems(
-      items: context.read<AttachmentGalleryCubit>().state.items,
-      isSelfMessage: context.read<AttachmentGalleryCubit>().isSelfMessage,
-    );
+    context.read<AttachmentGalleryBloc>().add(
+          AttachmentGalleryChatsUpdated(
+            items: context.read<ChatsCubit>().state.items ?? const <Chat>[],
+          ),
+        );
   }
 
   @override
@@ -465,27 +236,13 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) => previous.items != current.items,
       listener: (context, state) {
-        if (!mounted) return;
-        setState(() {
-          _updateChatLookup(state.items);
-          _rebuildFilteredItems(
-            items: context.read<AttachmentGalleryCubit>().state.items,
-            isSelfMessage: context.read<AttachmentGalleryCubit>().isSelfMessage,
-          );
-        });
-      },
-      child: BlocConsumer<AttachmentGalleryCubit, AttachmentGalleryState>(
-        listenWhen: (previous, current) => previous.items != current.items,
-        listener: (context, state) {
-          if (!mounted) return;
-          setState(() {
-            _rebuildFilteredItems(
-              items: state.items,
-              isSelfMessage:
-                  context.read<AttachmentGalleryCubit>().isSelfMessage,
+        context.read<AttachmentGalleryBloc>().add(
+              AttachmentGalleryChatsUpdated(
+                items: state.items ?? const <Chat>[],
+              ),
             );
-          });
-        },
+      },
+      child: BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
         builder: (context, state) {
           if (state.items.isEmpty) {
             if (state.status.isLoading) {
@@ -512,13 +269,13 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
             );
           }
 
-          final filteredItems = _filteredItems;
-          final hasFilters = _hasActiveFilters;
-          final hasVisualMedia = filteredItems.any(
-            (entry) =>
-                entry.item.metadata.mediaKind != AttachmentMediaKind.file,
+          final layout = _resolveLayout(
+            hasVisualMedia: state.entries.any(
+              (entry) =>
+                  entry.item.metadata.mediaKind != AttachmentMediaKind.file,
+            ),
+            overrideLayout: state.layoutOverride,
           );
-          final layout = _resolveLayout(hasVisualMedia: hasVisualMedia);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -531,56 +288,41 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                 ),
                 child: AttachmentGalleryControls(
                   searchController: _searchController,
-                  sortOption: _sortOption,
+                  sortOption: state.sortOption,
                   onSortChanged: (value) {
-                    setState(() {
-                      _sortOption = value;
-                      _rebuildFilteredItems(
-                        items:
-                            context.read<AttachmentGalleryCubit>().state.items,
-                        isSelfMessage: context
-                            .read<AttachmentGalleryCubit>()
-                            .isSelfMessage,
-                      );
-                    });
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGallerySortChanged(sortOption: value),
+                        );
                   },
-                  typeFilter: _typeFilter,
+                  typeFilter: state.typeFilter,
                   onTypeFilterChanged: (value) {
-                    setState(() {
-                      _typeFilter = value;
-                      _rebuildFilteredItems(
-                        items:
-                            context.read<AttachmentGalleryCubit>().state.items,
-                        isSelfMessage: context
-                            .read<AttachmentGalleryCubit>()
-                            .isSelfMessage,
-                      );
-                    });
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGalleryTypeFilterChanged(typeFilter: value),
+                        );
                   },
-                  sourceFilter: _sourceFilter,
+                  sourceFilter: state.sourceFilter,
                   onSourceFilterChanged: (value) {
-                    setState(() {
-                      _sourceFilter = value;
-                      _rebuildFilteredItems(
-                        items:
-                            context.read<AttachmentGalleryCubit>().state.items,
-                        isSelfMessage: context
-                            .read<AttachmentGalleryCubit>()
-                            .isSelfMessage,
-                      );
-                    });
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGallerySourceFilterChanged(
+                            sourceFilter: value,
+                          ),
+                        );
                   },
                   layout: layout,
-                  onLayoutChanged: _setLayout,
+                  onLayoutChanged: _handleLayoutChanged,
                   onClearSearch: _searchController.clear,
                 ),
               ),
               const SizedBox(height: itemSpacing),
               Expanded(
-                child: filteredItems.isEmpty
+                child: state.entries.isEmpty
                     ? Center(
                         child: Text(
-                          hasFilters
+                          state.query.trim().isNotEmpty ||
+                                  state.typeFilter !=
+                                      AttachmentGalleryTypeFilter.all ||
+                                  state.sourceFilter !=
+                                      AttachmentGallerySourceFilter.all
                               ? context.l10n.chatEmptySearch
                               : context.l10n.draftNoAttachments,
                           style: context.textTheme.muted,
@@ -595,21 +337,18 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                               horizontalPadding,
                               bottomPadding,
                             ),
-                            itemCount: filteredItems.length,
+                            itemCount: state.entries.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: itemSpacing),
                             itemBuilder: (context, index) =>
                                 AttachmentGalleryEntry(
-                              entry: filteredItems[index],
+                              entry: state.entries[index],
                               showChatLabel: widget.showChatLabel,
                               autoDownloadSettings: context
                                   .watch<SettingsCubit>()
                                   .state
                                   .attachmentAutoDownloadSettings,
                               layout: layout,
-                              isOneTimeAttachmentAllowed:
-                                  _isOneTimeAttachmentAllowed,
-                              shouldAllowAttachment: _shouldAllowAttachment,
                               onApproveAttachment: _approveAttachment,
                               metaSeparator:
                                   l10n.attachmentGalleryMetaSeparator,
@@ -626,7 +365,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                 maxColumns: gridMaxColumns,
                                 minAvailableWidth: gridMinAvailableWidth,
                               );
-                              final rowCount = (filteredItems.length /
+                              final rowCount = (state.entries.length /
                                       gridMetrics.crossAxisCount)
                                   .ceil();
                               return ListView.separated(
@@ -644,9 +383,9 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                       rowIndex * gridMetrics.crossAxisCount;
                                   final rowEnd = math.min(
                                     rowStart + gridMetrics.crossAxisCount,
-                                    filteredItems.length,
+                                    state.entries.length,
                                   );
-                                  final rowItems = filteredItems.sublist(
+                                  final rowItems = state.entries.sublist(
                                     rowStart,
                                     rowEnd,
                                   );
@@ -667,10 +406,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                                 .state
                                                 .attachmentAutoDownloadSettings,
                                             layout: layout,
-                                            isOneTimeAttachmentAllowed:
-                                                _isOneTimeAttachmentAllowed,
-                                            shouldAllowAttachment:
-                                                _shouldAllowAttachment,
                                             onApproveAttachment:
                                                 _approveAttachment,
                                             metaSeparator: l10n
@@ -692,12 +427,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
         },
       ),
     );
-  }
-
-  bool get _hasActiveFilters {
-    return _searchQuery.isNotEmpty ||
-        _typeFilter != AttachmentGalleryTypeFilter.all ||
-        _sourceFilter != AttachmentGallerySourceFilter.all;
   }
 }
 
@@ -810,25 +539,25 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     const controlSpacing = 8.0;
     final l10n = context.l10n;
-    final bool isGrid = layout == AttachmentGalleryLayout.grid;
-    final bool isList = layout == AttachmentGalleryLayout.list;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiIconButton.ghost(
           iconData: LucideIcons.layoutGrid,
           tooltip: l10n.attachmentGalleryLayoutGridLabel,
-          usePrimary: isGrid,
-          onPressed:
-              isGrid ? null : () => onChanged(AttachmentGalleryLayout.grid),
+          usePrimary: layout == AttachmentGalleryLayout.grid,
+          onPressed: layout == AttachmentGalleryLayout.grid
+              ? null
+              : () => onChanged(AttachmentGalleryLayout.grid),
         ),
         const SizedBox(width: controlSpacing),
         AxiIconButton.ghost(
           iconData: LucideIcons.list,
           tooltip: l10n.attachmentGalleryLayoutListLabel,
-          usePrimary: isList,
-          onPressed:
-              isList ? null : () => onChanged(AttachmentGalleryLayout.list),
+          usePrimary: layout == AttachmentGalleryLayout.list,
+          onPressed: layout == AttachmentGalleryLayout.list
+              ? null
+              : () => onChanged(AttachmentGalleryLayout.list),
         ),
       ],
     );
@@ -941,8 +670,6 @@ class AttachmentGalleryEntry extends StatefulWidget {
     required this.entry,
     required this.autoDownloadSettings,
     required this.layout,
-    required this.isOneTimeAttachmentAllowed,
-    required this.shouldAllowAttachment,
     required this.onApproveAttachment,
     required this.metaSeparator,
   });
@@ -951,9 +678,6 @@ class AttachmentGalleryEntry extends StatefulWidget {
   final AttachmentGalleryEntryData entry;
   final AttachmentAutoDownloadSettings autoDownloadSettings;
   final AttachmentGalleryLayout layout;
-  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({required bool isSelf, required Chat? chat})
-      shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -986,7 +710,7 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
   }
 
   Stream<FileMetadataData?> _resolveMetadataStream(String id) =>
-      context.read<AttachmentGalleryCubit>().fileMetadataStream(id);
+      context.read<AttachmentGalleryBloc>().fileMetadataStream(id);
 
   @override
   Widget build(BuildContext context) {
@@ -996,19 +720,23 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
     final isEmailChat = (chat?.defaultTransport.isEmail ?? false) ||
         message.deltaMsgId != null ||
         message.deltaChatId != null;
-    final allowOnce = widget.isOneTimeAttachmentAllowed(message.stanzaID);
-    final allowAttachment =
-        widget.shouldAllowAttachment(isSelf: widget.entry.isSelf, chat: chat) ||
-            allowOnce;
+    final allowAttachment = widget.entry.allowByTrust || widget.entry.allowOnce;
     final downloadDelegate = isEmailChat
         ? AttachmentDownloadDelegate(
-            () => context
-                .read<AttachmentGalleryCubit>()
-                .downloadEmailMessage(message),
+            () {
+              final completer = Completer<bool>();
+              context.read<AttachmentGalleryBloc>().add(
+                    AttachmentGalleryEmailDownloadRequested(
+                      message: message,
+                      completer: completer,
+                    ),
+                  );
+              return completer.future;
+            },
           )
         : null;
     final autoDownloadAllowed = allowAttachment && !isEmailChat;
-    final autoDownloadUserInitiated = allowOnce && !isEmailChat;
+    final autoDownloadUserInitiated = widget.entry.allowOnce && !isEmailChat;
     final metaText = _resolveMetaText(
       chat: chat,
       showChatLabel: widget.showChatLabel,

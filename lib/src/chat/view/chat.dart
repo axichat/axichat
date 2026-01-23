@@ -8,7 +8,7 @@ import 'dart:ui' as ui;
 
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
+import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
@@ -9579,9 +9579,12 @@ class _ChatGalleryOverlay extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return BlocProvider(
-      create: (context) => AttachmentGalleryCubit(
+      create: (context) => AttachmentGalleryBloc(
         xmppService: context.read<XmppService>(),
+        emailService: RepositoryProvider.of<EmailService?>(context),
         chatJid: resolvedChat.jid,
+        chatOverride: resolvedChat,
+        showChatLabel: false,
       ),
       child: ColoredBox(
         color: context.colorScheme.background,
