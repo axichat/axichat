@@ -5,19 +5,13 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-const double _attachmentGalleryLeadingInset = 12.0;
-const double _attachmentGalleryDividerThickness = 1.0;
-const double _attachmentGalleryDividerHeight = 1.0;
-const double _attachmentGalleryPreferredSizeHeight = 1.0;
-const double _attachmentGalleryLeadingWidth =
-    AxiIconButton.kDefaultSize + (_attachmentGalleryLeadingInset * 2);
 
 class AttachmentGalleryScreen extends StatelessWidget {
   const AttachmentGalleryScreen({super.key, required this.locate, this.chat});
@@ -27,26 +21,34 @@ class AttachmentGalleryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const leadingInset = 12.0;
+    const dividerThickness = 1.0;
+    const dividerHeight = 1.0;
+    const preferredSizeHeight = 1.0;
+    const leadingWidth = AxiIconButton.kDefaultSize + (leadingInset * 2);
     final l10n = context.l10n;
     final Chat? resolvedChat = chat;
     final String? chatJid = resolvedChat?.jid;
-    final bool showChatLabel = resolvedChat == null;
     final XmppService xmppService = locate<XmppService>();
+    final emailService = RepositoryProvider.of<EmailService?>(context);
     return BlocProvider(
-      create: (context) =>
-          AttachmentGalleryCubit(xmppService: xmppService, chatJid: chatJid),
+      create: (context) => AttachmentGalleryCubit(
+        xmppService: xmppService,
+        emailService: emailService,
+        chatJid: chatJid,
+      ),
       child: Scaffold(
         backgroundColor: context.colorScheme.background,
         appBar: AppBar(
           title: Text(l10n.draftAttachmentsLabel),
           backgroundColor: context.colorScheme.background,
-          surfaceTintColor: Colors.transparent,
+          surfaceTintColor: context.colorScheme.background,
           elevation: 0,
           scrolledUnderElevation: 0,
-          leadingWidth: _attachmentGalleryLeadingWidth,
+          leadingWidth: leadingWidth,
           leading: Padding(
             padding: const EdgeInsets.only(
-              left: _attachmentGalleryLeadingInset,
+              left: leadingInset,
             ),
             child: Align(
               alignment: Alignment.centerLeft,
@@ -63,11 +65,11 @@ class AttachmentGalleryScreen extends StatelessWidget {
           ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(
-              _attachmentGalleryPreferredSizeHeight,
+              preferredSizeHeight,
             ),
             child: Divider(
-              height: _attachmentGalleryDividerHeight,
-              thickness: _attachmentGalleryDividerThickness,
+              height: dividerHeight,
+              thickness: dividerThickness,
               color: context.colorScheme.border,
             ),
           ),
@@ -76,7 +78,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
           color: context.colorScheme.background,
           child: AttachmentGalleryView(
             chatOverride: resolvedChat,
-            showChatLabel: showChatLabel,
+            showChatLabel: resolvedChat == null,
           ),
         ),
       ),
