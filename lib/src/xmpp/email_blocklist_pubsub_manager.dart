@@ -307,7 +307,6 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
-        sendLastPublishedItem: null,
       );
 
   mox.JID? _selfPepHost() {
