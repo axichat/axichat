@@ -176,7 +176,20 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       return;
     }
     final XmppOperation operation = _pendingInsertions.removeAt(0);
-    final _ToastEntry entry = _ToastEntry(operation: operation);
+    XmppOperation? latest;
+    for (final candidate
+        in context.read<XmppActivityCubit>().state.operations) {
+      if (candidate.id == operation.id) {
+        latest = candidate;
+        break;
+      }
+    }
+    if (latest == null || latest.status != XmppOperationStatus.inProgress) {
+      _isInsertAnimating = false;
+      _processInsertQueue();
+      return;
+    }
+    final _ToastEntry entry = _ToastEntry(operation: latest);
     _isInsertAnimating = true;
     _entries.insert(0, entry);
     _listKey.currentState?.insertItem(0, duration: _entryDuration());

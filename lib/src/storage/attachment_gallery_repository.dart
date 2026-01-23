@@ -24,68 +24,31 @@ final class AttachmentGalleryRepository {
     final messages = _database.messages;
     final messageAttachments = _database.messageAttachments;
     final fileMetadata = _database.fileMetadata;
-    final attachmentQuery = _database.select(messageAttachments).join([
-      innerJoin(messages, messages.id.equalsExp(messageAttachments.messageId)),
-      innerJoin(
-        fileMetadata,
-        fileMetadata.id.equalsExp(messageAttachments.fileMetadataId),
-      ),
-    ]);
-    attachmentQuery.where(
-      messages.retracted.equals(excludeRetracted),
-    );
-    if (chatJid != null && chatJid.trim().isNotEmpty) {
-      attachmentQuery.where(messages.chatJid.equals(chatJid));
-    }
-    final fallbackQuery = _database.select(messages).join([
-      innerJoin(
-        fileMetadata,
-        fileMetadata.id.equalsExp(messages.fileMetadataID),
-      ),
+    final attachmentQuery = _database.select(messages).join([
       leftOuterJoin(
         messageAttachments,
         messageAttachments.messageId.equalsExp(messages.id),
       ),
+      innerJoin(
+        fileMetadata,
+        fileMetadata.id.equalsExp(messageAttachments.fileMetadataId) |
+            (messageAttachments.id.isNull() &
+                fileMetadata.id.equalsExp(messages.fileMetadataID)),
+      ),
     ]);
-    fallbackQuery.where(
-      messageAttachments.id.isNull() &
-          messages.retracted.equals(excludeRetracted),
-    );
+    attachmentQuery.where(messages.retracted.equals(excludeRetracted));
     if (chatJid != null && chatJid.trim().isNotEmpty) {
-      fallbackQuery.where(messages.chatJid.equals(chatJid));
+      attachmentQuery.where(messages.chatJid.equals(chatJid));
     }
-    return Stream.multi((multi) {
-      var attachmentItems = const <AttachmentGalleryItem>[];
-      var fallbackItems = const <AttachmentGalleryItem>[];
-      void emit() {
-        final combined = <AttachmentGalleryItem>[
-          ...attachmentItems,
-          ...fallbackItems,
-        ];
-        multi.add(List.unmodifiable(combined));
-      }
-
-      final attachmentSubscription = attachmentQuery.watch().listen((rows) {
-        attachmentItems = _mapItems(
-          rows: rows,
-          messages: messages,
-          fileMetadata: fileMetadata,
+    return attachmentQuery.watch().map(
+          (rows) => List.unmodifiable(
+            _mapItems(
+              rows: rows,
+              messages: messages,
+              fileMetadata: fileMetadata,
+            ),
+          ),
         );
-        emit();
-      }, onError: multi.addError);
-      final fallbackSubscription = fallbackQuery.watch().listen((rows) {
-        fallbackItems = _mapItems(
-          rows: rows,
-          messages: messages,
-          fileMetadata: fileMetadata,
-        );
-        emit();
-      }, onError: multi.addError);
-      multi.onCancel = () async {
-        await attachmentSubscription.cancel();
-        await fallbackSubscription.cancel();
-      };
-    });
   }
 }
 
