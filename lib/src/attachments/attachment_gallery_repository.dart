@@ -7,11 +7,6 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:drift/drift.dart';
 
-const bool _attachmentGalleryExcludeRetracted = false;
-const int _attachmentGalleryFallbackEpochMs = 0;
-final DateTime _attachmentGalleryFallbackTimestamp =
-    DateTime.fromMillisecondsSinceEpoch(_attachmentGalleryFallbackEpochMs);
-
 class AttachmentGalleryItem {
   const AttachmentGalleryItem({required this.message, required this.metadata});
 
@@ -25,6 +20,7 @@ final class AttachmentGalleryRepository {
   final XmppDrift _database;
 
   Stream<List<AttachmentGalleryItem>> watch({String? chatJid}) {
+    const excludeRetracted = false;
     final messages = _database.messages;
     final messageAttachments = _database.messageAttachments;
     final fileMetadata = _database.fileMetadata;
@@ -36,7 +32,7 @@ final class AttachmentGalleryRepository {
       ),
     ]);
     attachmentQuery.where(
-      messages.retracted.equals(_attachmentGalleryExcludeRetracted),
+      messages.retracted.equals(excludeRetracted),
     );
     if (chatJid != null && chatJid.trim().isNotEmpty) {
       attachmentQuery.where(messages.chatJid.equals(chatJid));
@@ -53,7 +49,7 @@ final class AttachmentGalleryRepository {
     ]);
     fallbackQuery.where(
       messageAttachments.id.isNull() &
-          messages.retracted.equals(_attachmentGalleryExcludeRetracted),
+          messages.retracted.equals(excludeRetracted),
     );
     if (chatJid != null && chatJid.trim().isNotEmpty) {
       fallbackQuery.where(messages.chatJid.equals(chatJid));
@@ -66,7 +62,6 @@ final class AttachmentGalleryRepository {
           ...attachmentItems,
           ...fallbackItems,
         ];
-        combined.sort(_compareByTimestamp);
         multi.add(List.unmodifiable(combined));
       }
 
@@ -107,10 +102,4 @@ List<AttachmentGalleryItem> _mapItems({
         ),
       )
       .toList(growable: false);
-}
-
-int _compareByTimestamp(AttachmentGalleryItem a, AttachmentGalleryItem b) {
-  final aTimestamp = a.message.timestamp ?? _attachmentGalleryFallbackTimestamp;
-  final bTimestamp = b.message.timestamp ?? _attachmentGalleryFallbackTimestamp;
-  return bTimestamp.compareTo(aTimestamp);
 }

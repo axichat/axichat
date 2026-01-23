@@ -4,22 +4,12 @@
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 
-const bool defaultAutoDownloadImages = true;
-const bool defaultAutoDownloadVideos = false;
-const bool defaultAutoDownloadDocuments = false;
-const bool defaultAutoDownloadArchives = false;
-
-const String _autoDownloadImagesKey = 'images';
-const String _autoDownloadVideosKey = 'videos';
-const String _autoDownloadDocumentsKey = 'documents';
-const String _autoDownloadArchivesKey = 'archives';
-
 class AttachmentAutoDownloadSettings {
   const AttachmentAutoDownloadSettings({
-    this.imagesEnabled = defaultAutoDownloadImages,
-    this.videosEnabled = defaultAutoDownloadVideos,
-    this.documentsEnabled = defaultAutoDownloadDocuments,
-    this.archivesEnabled = defaultAutoDownloadArchives,
+    this.imagesEnabled = _defaultImagesEnabled,
+    this.videosEnabled = _defaultVideosEnabled,
+    this.documentsEnabled = _defaultDocumentsEnabled,
+    this.archivesEnabled = _defaultArchivesEnabled,
   });
 
   factory AttachmentAutoDownloadSettings.fromJson(Object? raw) {
@@ -31,12 +21,12 @@ class AttachmentAutoDownloadSettings {
     final documents = raw[_autoDownloadDocumentsKey];
     final archives = raw[_autoDownloadArchivesKey];
     return AttachmentAutoDownloadSettings(
-      imagesEnabled: images is bool ? images : defaultAutoDownloadImages,
-      videosEnabled: videos is bool ? videos : defaultAutoDownloadVideos,
+      imagesEnabled: images is bool ? images : _defaultImagesEnabled,
+      videosEnabled: videos is bool ? videos : _defaultVideosEnabled,
       documentsEnabled:
-          documents is bool ? documents : defaultAutoDownloadDocuments,
+          documents is bool ? documents : _defaultDocumentsEnabled,
       archivesEnabled:
-          archives is bool ? archives : defaultAutoDownloadArchives,
+          archives is bool ? archives : _defaultArchivesEnabled,
     );
   }
 
@@ -63,4 +53,14 @@ class AttachmentAutoDownloadSettings {
 
   bool allowsMetadata(FileMetadataData metadata) =>
       allowsCategory(metadata.downloadCategory);
+
+  static const bool _defaultImagesEnabled = true;
+  static const bool _defaultVideosEnabled = false;
+  static const bool _defaultDocumentsEnabled = false;
+  static const bool _defaultArchivesEnabled = false;
+
+  static const String _autoDownloadImagesKey = 'images';
+  static const String _autoDownloadVideosKey = 'videos';
+  static const String _autoDownloadDocumentsKey = 'documents';
+  static const String _autoDownloadArchivesKey = 'archives';
 }

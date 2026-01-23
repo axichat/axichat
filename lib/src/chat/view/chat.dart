@@ -7184,23 +7184,11 @@ class _ChatState extends State<Chat> {
                                                               return bubbleSurface;
                                                             },
                                                           );
-                                                          final baseAlignment = self
-                                                              ? Alignment
-                                                                  .centerRight
-                                                              : Alignment
-                                                                  .centerLeft;
                                                           final shadowedBubble =
                                                               ConstrainedBox(
                                                             constraints:
                                                                 bubbleConstraints,
                                                             child: bubble,
-                                                          );
-                                                          final alignedBubble =
-                                                              Align(
-                                                            alignment:
-                                                                baseAlignment,
-                                                            child:
-                                                                shadowedBubble,
                                                           );
                                                           final canResend =
                                                               message.status ==
@@ -7597,6 +7585,8 @@ class _ChatState extends State<Chat> {
                                                                             quotedModel,
                                                                         senderLabel:
                                                                             quotedSenderLabel,
+                                                                        isSelf:
+                                                                            self,
                                                                       );
                                                                     }();
                                                           final attachmentsAligned =
@@ -7656,7 +7646,7 @@ class _ChatState extends State<Chat> {
                                                             () => GlobalKey(),
                                                           );
                                                           final bubbleDisplay =
-                                                              alignedBubble;
+                                                              shadowedBubble;
                                                           final selectableBubble =
                                                               GestureDetector(
                                                             behavior:
@@ -7710,9 +7700,7 @@ class _ChatState extends State<Chat> {
                                                                     message,
                                                                     previous,
                                                                   );
-                                                          Widget
-                                                              bubbleWithSlack =
-                                                              bubbleStack;
+                                                          Widget? senderLabel;
                                                           if (shouldShowSenderLabel) {
                                                             final double
                                                                 senderLabelLeftInset =
@@ -7722,54 +7710,37 @@ class _ChatState extends State<Chat> {
                                                                         _bubblePadding
                                                                             .left
                                                                     : _senderLabelNoInset;
-                                                            bubbleWithSlack =
-                                                                Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              crossAxisAlignment: self
-                                                                  ? CrossAxisAlignment
-                                                                      .end
-                                                                  : CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
+                                                            senderLabel =
                                                                 _MessageSenderLabel(
-                                                                  user: message
-                                                                      .user,
-                                                                  isSelf: self,
-                                                                  selfLabel: l10n
-                                                                      .chatSenderYou,
-                                                                  leftInset:
-                                                                      senderLabelLeftInset,
-                                                                ),
-                                                                bubbleStack,
-                                                              ],
+                                                              user:
+                                                                  message.user,
+                                                              isSelf: self,
+                                                              selfLabel: l10n
+                                                                  .chatSenderYou,
+                                                              leftInset:
+                                                                  senderLabelLeftInset,
                                                             );
                                                           }
-                                                          bubbleWithSlack =
+                                                          final bubbleWithSlack =
                                                               ConstrainedBox(
                                                             constraints:
                                                                 BoxConstraints(
                                                               maxWidth:
                                                                   bubbleMaxWidth,
                                                             ),
-                                                            child:
-                                                                bubbleWithSlack,
+                                                            child: bubbleStack,
                                                           );
                                                           final Widget
                                                               bubbleStackWithReply =
-                                                              Align(
-                                                            alignment:
-                                                                messageRowAlignment,
-                                                            child:
-                                                                _ReplyPreviewBubbleColumn(
-                                                              preview:
-                                                                  replyPreview,
-                                                              bubble:
-                                                                  bubbleWithSlack,
-                                                              spacing:
-                                                                  calendarInsetLg,
-                                                            ),
+                                                              _ReplyPreviewBubbleColumn(
+                                                            preview:
+                                                                replyPreview,
+                                                            senderLabel:
+                                                                senderLabel,
+                                                            bubble:
+                                                                bubbleWithSlack,
+                                                            spacing:
+                                                                calendarInsetLg,
                                                           );
                                                           final messageBody =
                                                               Column(
@@ -12602,22 +12573,18 @@ class _QuotedMessagePreview extends StatelessWidget {
   const _QuotedMessagePreview({
     required this.message,
     required this.senderLabel,
+    required this.isSelf,
   });
 
   final Message message;
   final String senderLabel;
+  final bool isSelf;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final mutedStyle = context.textTheme.small.copyWith(
-      color: colors.mutedForeground,
-    );
     final resolvedSenderLabel = senderLabel.trim();
     return Builder(
       builder: (context) {
-        const headerMaxLines = 1;
-        const previewMaxLines = 2;
         final split = ChatSubjectCodec.splitXmppBody(message.body);
         final subject = split.subject?.trim();
         final body = split.body.trim();
@@ -12629,32 +12596,85 @@ class _QuotedMessagePreview extends StatelessWidget {
           previewParts.add(body);
         }
         final previewText = previewParts.isNotEmpty
-            ? previewParts.join('\n')
+            ? previewParts.join(' — ')
             : context.l10n.chatQuotedNoContent;
+        final quotedPreview = '"$previewText"';
+        return _ReplyingToPreviewText(
+          senderLabel: resolvedSenderLabel,
+          quotedPreview: quotedPreview,
+          isSelf: isSelf,
+        );
+      },
+    );
+  }
+}
+
+class _ReplyingToPreviewText extends StatelessWidget {
+  const _ReplyingToPreviewText({
+    required this.senderLabel,
+    required this.quotedPreview,
+    required this.isSelf,
+  });
+
+  final String senderLabel;
+  final String quotedPreview;
+  final bool isSelf;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final baseStyle = context.textTheme.small;
+    final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
+    final replyPrefix = context.l10n.chatReplyingTo;
+    final headerSpan = TextSpan(
+      text: replyPrefix,
+      style: mutedStyle,
+      children: [
+        const TextSpan(text: ' '),
+        TextSpan(
+          text: senderLabel,
+          style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const TextSpan(text: ' '),
+      ],
+    );
+    final quoteSpan = TextSpan(text: quotedPreview, style: baseStyle);
+    final textAlign = isSelf ? TextAlign.end : TextAlign.start;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScaler =
+            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+        final painter = TextPainter(
+          text: TextSpan(children: [headerSpan, quoteSpan]),
+          textDirection: Directionality.of(context),
+          textScaler: textScaler,
+        )..layout(maxWidth: constraints.maxWidth);
+        final canInline = painter.computeLineMetrics().length <= 1;
+        if (canInline) {
+          return Text.rich(
+            TextSpan(children: [headerSpan, quoteSpan]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: textAlign,
+          );
+        }
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: calendarInsetSm,
+          crossAxisAlignment:
+              isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          spacing: 2,
           children: [
             Text.rich(
-              TextSpan(
-                text: context.l10n.chatReplyingTo,
-                children: [
-                  const TextSpan(text: ' '),
-                  TextSpan(
-                    text: resolvedSenderLabel,
-                    style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              maxLines: headerMaxLines,
+              headerSpan,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: mutedStyle,
+              textAlign: textAlign,
             ),
             Text(
-              previewText,
-              maxLines: previewMaxLines,
+              quotedPreview,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: mutedStyle,
+              textAlign: textAlign,
+              style: baseStyle,
             ),
           ],
         );
@@ -12666,29 +12686,41 @@ class _QuotedMessagePreview extends StatelessWidget {
 class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
   const _ReplyPreviewBubbleColumn({
     required this.preview,
+    required this.senderLabel,
     required this.bubble,
     required this.spacing,
   });
 
   final Widget? preview;
+  final Widget? senderLabel;
   final Widget bubble;
   final double spacing;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderReplyPreviewBubbleColumn(spacing: spacing);
+      _RenderReplyPreviewBubbleColumn(
+        spacing: spacing,
+        hasPreview: preview != null,
+        hasSenderLabel: senderLabel != null,
+      );
 
   @override
   void updateRenderObject(
     BuildContext context,
     covariant _RenderReplyPreviewBubbleColumn renderObject,
   ) {
-    renderObject.spacing = spacing;
+    renderObject
+      ..spacing = spacing
+      ..hasPreview = preview != null
+      ..hasSenderLabel = senderLabel != null;
   }
 
   @override
-  List<Widget> get children =>
-      preview == null ? <Widget>[bubble] : <Widget>[preview!, bubble];
+  List<Widget> get children => <Widget>[
+        if (senderLabel != null) senderLabel!,
+        if (preview != null) preview!,
+        bubble,
+      ];
 }
 
 class _ReplyPreviewBubbleParentData extends ContainerBoxParentData<RenderBox> {}
@@ -12698,16 +12730,39 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
         ContainerRenderObjectMixin<RenderBox, _ReplyPreviewBubbleParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox,
             _ReplyPreviewBubbleParentData> {
-  _RenderReplyPreviewBubbleColumn({required double spacing})
-      : _spacing = spacing;
+  _RenderReplyPreviewBubbleColumn({
+    required double spacing,
+    required bool hasPreview,
+    required bool hasSenderLabel,
+  })  : _spacing = spacing,
+        _hasPreview = hasPreview,
+        _hasSenderLabel = hasSenderLabel;
 
   double _spacing;
+  bool _hasPreview;
+  bool _hasSenderLabel;
 
   double get spacing => _spacing;
 
   set spacing(double value) {
     if (_spacing == value) return;
     _spacing = value;
+    markNeedsLayout();
+  }
+
+  bool get hasPreview => _hasPreview;
+
+  set hasPreview(bool value) {
+    if (_hasPreview == value) return;
+    _hasPreview = value;
+    markNeedsLayout();
+  }
+
+  bool get hasSenderLabel => _hasSenderLabel;
+
+  set hasSenderLabel(bool value) {
+    if (_hasSenderLabel == value) return;
+    _hasSenderLabel = value;
     markNeedsLayout();
   }
 
@@ -12720,31 +12775,51 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
 
   @override
   void performLayout() {
-    final previewChild = childCount > 1 ? firstChild : null;
-    final bubbleChild = childCount > 1 ? lastChild : firstChild;
+    final RenderBox? senderLabelChild = hasSenderLabel ? firstChild : null;
+    final RenderBox? previewChild = hasPreview
+        ? (hasSenderLabel ? childAfter(senderLabelChild!) : firstChild)
+        : null;
+    final RenderBox? bubbleChild = lastChild;
     if (bubbleChild == null) {
       size = constraints.smallest;
       return;
     }
     bubbleChild.layout(constraints.loosen(), parentUsesSize: true);
     final bubbleSize = bubbleChild.size;
+    final double bubbleWidth = bubbleSize.width;
     var previewHeight = 0.0;
+    var senderLabelHeight = 0.0;
+    if (senderLabelChild != null) {
+      senderLabelChild.layout(
+        BoxConstraints.tightFor(width: bubbleWidth),
+        parentUsesSize: true,
+      );
+      senderLabelHeight = senderLabelChild.size.height;
+      final senderLabelParentData =
+          senderLabelChild.parentData as _ReplyPreviewBubbleParentData;
+      senderLabelParentData.offset = Offset.zero;
+    }
     if (previewChild != null) {
-      final previewWidth = bubbleSize.width;
       previewChild.layout(
-        BoxConstraints.tightFor(width: previewWidth),
+        BoxConstraints.tightFor(width: bubbleWidth),
         parentUsesSize: true,
       );
       previewHeight = previewChild.size.height + spacing;
       final previewParentData =
           previewChild.parentData as _ReplyPreviewBubbleParentData;
-      previewParentData.offset = Offset.zero;
+      previewParentData.offset = Offset(0, senderLabelHeight);
     }
     final bubbleParentData =
         bubbleChild.parentData as _ReplyPreviewBubbleParentData;
-    bubbleParentData.offset = Offset(0, previewHeight);
+    bubbleParentData.offset = Offset(
+      0,
+      previewHeight + senderLabelHeight,
+    );
     size = constraints.constrain(
-      Size(bubbleSize.width, bubbleSize.height + previewHeight),
+      Size(
+        bubbleWidth,
+        bubbleSize.height + previewHeight + senderLabelHeight,
+      ),
     );
   }
 
@@ -12772,8 +12847,6 @@ class _QuoteBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const headerMaxLines = 1;
-    const previewMaxLines = 2;
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
@@ -12784,55 +12857,29 @@ class _QuoteBanner extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Text.rich(
-                  TextSpan(
-                    text: context.l10n.chatReplyingTo,
-                    children: [
-                      const TextSpan(text: ' '),
-                      TextSpan(
-                        text: isSelf
-                            ? context.l10n.chatSenderYou
-                            : message.senderJid,
-                        style: context.textTheme.small.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  maxLines: headerMaxLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.mutedForeground,
-                  ),
-                ),
-                Builder(
-                  builder: (context) {
-                    final split = ChatSubjectCodec.splitXmppBody(message.body);
-                    final subject = split.subject?.trim();
-                    final body = split.body.trim();
-                    final previewParts = <String>[];
-                    if (subject?.isNotEmpty == true) {
-                      previewParts.add(subject!);
-                    }
-                    if (body.isNotEmpty) {
-                      previewParts.add(body);
-                    }
-                    final previewText = previewParts.isNotEmpty
-                        ? previewParts.join('\n')
-                        : context.l10n.chatQuotedNoContent;
-                    return Text(
-                      previewText,
-                      maxLines: previewMaxLines,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textTheme.small,
-                    );
-                  },
-                ),
-              ],
+            child: Builder(
+              builder: (context) {
+                final split = ChatSubjectCodec.splitXmppBody(message.body);
+                final subject = split.subject?.trim();
+                final body = split.body.trim();
+                final previewParts = <String>[];
+                if (subject?.isNotEmpty == true) {
+                  previewParts.add(subject!);
+                }
+                if (body.isNotEmpty) {
+                  previewParts.add(body);
+                }
+                final previewText = previewParts.isNotEmpty
+                    ? previewParts.join(' — ')
+                    : context.l10n.chatQuotedNoContent;
+                final quotedPreview = '"$previewText"';
+                return _ReplyingToPreviewText(
+                  senderLabel:
+                      isSelf ? context.l10n.chatSenderYou : message.senderJid,
+                  quotedPreview: quotedPreview,
+                  isSelf: isSelf,
+                );
+              },
             ),
           ),
           AxiIconButton(

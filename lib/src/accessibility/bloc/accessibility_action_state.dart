@@ -19,7 +19,6 @@ class AccessibilityActionState extends Equatable {
     required this.busy,
     required this.statusMessage,
     required this.errorMessage,
-    required this.recipients,
     required this.messages,
     required this.activeChatJid,
     required this.discardWarningActive,
@@ -41,7 +40,6 @@ class AccessibilityActionState extends Equatable {
         busy = false,
         statusMessage = null,
         errorMessage = null,
-        recipients = const [],
         messages = const [],
         activeChatJid = null,
         discardWarningActive = false,
@@ -59,7 +57,6 @@ class AccessibilityActionState extends Equatable {
   final bool busy;
   final String? statusMessage;
   final String? errorMessage;
-  final List<AccessibilityContact> recipients;
   final List<Message> messages;
   final String? activeChatJid;
   final bool discardWarningActive;
@@ -80,7 +77,6 @@ class AccessibilityActionState extends Equatable {
     bool? busy,
     Object? statusMessage = _unset,
     Object? errorMessage = _unset,
-    List<AccessibilityContact>? recipients,
     List<Message>? messages,
     Object? activeChatJid = _unset,
     bool? discardWarningActive,
@@ -103,7 +99,6 @@ class AccessibilityActionState extends Equatable {
         errorMessage: errorMessage == _unset
             ? this.errorMessage
             : errorMessage as String?,
-        recipients: recipients ?? this.recipients,
         messages: messages ?? this.messages,
         activeChatJid: activeChatJid == _unset
             ? this.activeChatJid
@@ -126,7 +121,6 @@ class AccessibilityActionState extends Equatable {
         busy,
         statusMessage,
         errorMessage,
-        recipients,
         messages,
         activeChatJid,
         discardWarningActive,
