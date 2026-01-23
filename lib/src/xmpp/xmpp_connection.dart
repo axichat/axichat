@@ -43,6 +43,7 @@ class XmppConnection extends mox.XmppConnection {
               XmppConnectivityManager.forXmppConnection(
                 domainProvider: domainProvider.provide,
                 shouldContinue: reconnectionPolicy.getShouldReconnect,
+                networkAvailability: NetworkAvailabilityService.instance,
               ),
           negotiationsHandler: negotiationsHandler,
           socket: socketWrapper,
@@ -96,6 +97,8 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.smManager);
       case == mox.StreamManagementManager:
         return getManagerById(mox.smManager);
+      case == XmppKeepAliveManager:
+        return getManagerById(XmppKeepAliveManager.managerId);
       case == mox.ChatStateManager:
         return getManagerById(mox.chatStateManager);
       case == mox.CarbonsManager:
@@ -527,30 +530,36 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   XmppConnectivityManager._(
     this._endpoints, {
     required String? Function() domainProvider,
+    NetworkAvailabilityService? networkAvailability,
     Duration? pollInterval,
     Duration? waitTimeout,
     this.shouldContinue,
   })  : _domainProvider = domainProvider,
-        _pollInterval = pollInterval ?? timeoutDuration,
+        _networkAvailability = networkAvailability,
+        _pollInterval = pollInterval ?? _defaultPollInterval,
         _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
   final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
   final Future<bool> Function()? shouldContinue;
+  final NetworkAvailabilityService? _networkAvailability;
 
   final Duration _pollInterval;
   final Duration? _waitTimeout;
 
   static final _log = Logger('XmppConnectivityManager');
+  static const Duration _defaultPollInterval = Duration(seconds: 30);
 
   XmppConnectivityManager.forXmppConnection({
     required String? Function() domainProvider,
     required Future<bool> Function() shouldContinue,
+    NetworkAvailabilityService? networkAvailability,
     Duration? pollInterval,
     Duration? waitTimeout,
   }) : this._(
           const [],
           domainProvider: domainProvider,
+          networkAvailability: networkAvailability,
           pollInterval: pollInterval,
           waitTimeout: waitTimeout,
           shouldContinue: shouldContinue,
@@ -575,6 +584,9 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
   @override
   Future<bool> hasConnection() {
+    if (_networkAvailability?.current == NetworkAvailability.unavailable) {
+      return Future.value(false);
+    }
     final endpoints = _resolveEndpoints();
     if (endpoints.isEmpty) {
       return Future.value(true);
@@ -590,6 +602,17 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     var hasWarned = false;
     while (!await hasConnection()) {
       if (shouldContinue != null && !await shouldContinue!()) return;
+      if (_networkAvailability?.current == NetworkAvailability.unavailable) {
+        await _networkAvailability?.waitForAvailable(timeout: _waitTimeout);
+        final timeout = _waitTimeout;
+        if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
+          _log.warning(
+            'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
+          );
+          hasWarned = true;
+        }
+        continue;
+      }
 
       final timeout = _waitTimeout;
       if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {

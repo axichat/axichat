@@ -52,6 +52,7 @@ class RecipientChipsBar extends StatefulWidget {
     this.suggestionDomains = const <String>{},
     this.horizontalPadding = 16,
     this.visibilityLabel,
+    this.tapRegionGroup,
     this.allowAddressTargets = true,
     this.showSuggestionsWhenEmpty = true,
   });
@@ -67,6 +68,7 @@ class RecipientChipsBar extends StatefulWidget {
   final Set<String> suggestionDomains;
   final double horizontalPadding;
   final String? visibilityLabel;
+  final Object? tapRegionGroup;
   final bool allowAddressTargets;
   final bool showSuggestionsWhenEmpty;
 
@@ -78,7 +80,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     with SingleTickerProviderStateMixin {
   static const _collapsedVisibleCount = 4;
 
-  final Object _autocompleteTapRegionGroup = Object();
+  late Object _tapRegionGroup;
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   StreamSubscription<List<String>>? _recipientSuggestionSubscription;
@@ -102,6 +104,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
+    _tapRegionGroup = widget.tapRegionGroup ?? Object();
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -147,6 +150,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
+      _tapRegionGroup = widget.tapRegionGroup ?? Object();
+    }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
       _animateCollapse(_barCollapsed);
@@ -371,7 +377,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                         child: _RecipientAutocompleteField(
                           controller: _controller,
                           focusNode: _focusNode,
-                          tapRegionGroup: _autocompleteTapRegionGroup,
+                          tapRegionGroup: _tapRegionGroup,
                           backgroundColor: barBackground,
                           avatarPathsByJid: avatarPathsByJid,
                           showSuggestionsWhenEmpty:

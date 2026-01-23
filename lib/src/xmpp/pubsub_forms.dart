@@ -27,8 +27,42 @@ const _notifySubField = 'pubsub#notify_sub';
 const _presenceBasedDeliveryField = 'pubsub#presence_based_delivery';
 const _sendLastPublishedItemField = 'pubsub#send_last_published_item';
 
+const _optionTag = 'option';
 const _boolTrue = '1';
 const _boolFalse = '0';
+
+enum SendLastPublishedItemSetting {
+  never,
+  onSubscribe,
+  onPublish,
+  onSubAndPresence;
+
+  static SendLastPublishedItemSetting? fromString(String value) {
+    final normalized = value.trim().toLowerCase();
+    return switch (normalized) {
+      'never' => SendLastPublishedItemSetting.never,
+      'on_subscribe' => SendLastPublishedItemSetting.onSubscribe,
+      'on_publish' => SendLastPublishedItemSetting.onPublish,
+      'on_sub_and_presence' => SendLastPublishedItemSetting.onSubAndPresence,
+      _ => null,
+    };
+  }
+
+  String get value => switch (this) {
+        SendLastPublishedItemSetting.never => 'never',
+        SendLastPublishedItemSetting.onSubscribe => 'on_subscribe',
+        SendLastPublishedItemSetting.onPublish => 'on_publish',
+        SendLastPublishedItemSetting.onSubAndPresence => 'on_sub_and_presence',
+      };
+}
+
+const List<SendLastPublishedItemSetting> _sendLastPreferenceOrder =
+    <SendLastPublishedItemSetting>[
+  SendLastPublishedItemSetting.onSubscribe,
+  SendLastPublishedItemSetting.onSubAndPresence,
+  SendLastPublishedItemSetting.onPublish,
+  SendLastPublishedItemSetting.never,
+];
 
 mox.XMLNode _formField(String name, String value, {String? type}) =>
     mox.XMLNode(
@@ -38,6 +72,65 @@ mox.XMLNode _formField(String name, String value, {String? type}) =>
     );
 
 String _boolValue(bool value) => value ? _boolTrue : _boolFalse;
+
+mox.XMLNode? _findField(mox.XMLNode form, String name) {
+  for (final child in form.children) {
+    if (child.tag != _fieldTag) continue;
+    final rawVar = child.attributes[_varAttr]?.toString().trim();
+    if (rawVar == name) {
+      return child;
+    }
+  }
+  return null;
+}
+
+List<String> _fieldOptionValues(mox.XMLNode field) {
+  final values = <String>[];
+  for (final child in field.children) {
+    if (child.tag != _optionTag) continue;
+    final optionNode = child.firstTag(_valueTag);
+    final optionValue = optionNode?.innerText().trim();
+    if (optionValue == null || optionValue.isEmpty) {
+      continue;
+    }
+    values.add(optionValue);
+  }
+  return values;
+}
+
+List<String> _fieldValues(mox.XMLNode field) {
+  final values = <String>[];
+  for (final child in field.children) {
+    if (child.tag != _valueTag) continue;
+    final value = child.innerText().trim();
+    if (value.isNotEmpty) {
+      values.add(value);
+    }
+  }
+  return values;
+}
+
+String? resolveSendLastPublishedItemValue(mox.XMLNode form) {
+  final field = _findField(form, _sendLastPublishedItemField);
+  if (field == null) return null;
+  final optionValues = _fieldOptionValues(field);
+  final rawValues = optionValues.isEmpty ? _fieldValues(field) : optionValues;
+  if (rawValues.isEmpty) return null;
+  final allowed = <SendLastPublishedItemSetting>[];
+  for (final rawValue in rawValues) {
+    final parsed = SendLastPublishedItemSetting.fromString(rawValue);
+    if (parsed != null) {
+      allowed.add(parsed);
+    }
+  }
+  if (allowed.isEmpty) return null;
+  for (final preferred in _sendLastPreferenceOrder) {
+    if (allowed.contains(preferred)) {
+      return preferred.value;
+    }
+  }
+  return allowed.first.value;
+}
 
 final class AxiPubSubNodeConfig {
   const AxiPubSubNodeConfig({

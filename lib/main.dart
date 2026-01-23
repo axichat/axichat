@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
@@ -36,6 +37,7 @@ Future<void> main() async {
   final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
   firstFrameGate.defer(binding);
   _installKeyboardGuard();
+  await NetworkAvailabilityService.instance.start();
 
   const capability = Capability();
   const policy = Policy();
@@ -100,7 +102,7 @@ Future<void> main() async {
   final AuthBootstrap authBootstrap = AuthBootstrap(
     hasStoredLoginCredentials: hasStoredLoginCredentials,
   );
-  final Widget app = withForeground
+  final Widget app = capability.canForegroundService
       ? WithForegroundTask(
           child: Material(
             child: Axichat(

@@ -5,7 +5,6 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ShortcutHint extends StatelessWidget {
   const ShortcutHint({super.key, required this.shortcut, this.dense = false});
@@ -19,21 +18,9 @@ class ShortcutHint extends StatelessWidget {
     final label = shortcutLabel(context, shortcut);
     final parts = shortcutParts(shortcut, localizations);
     if (parts.isEmpty) return const SizedBox.shrink();
-    final colors = context.colorScheme;
-
     return Semantics(
       label: label,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 6,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: _buildKeycaps(
-          parts: parts,
-          dense: dense,
-          colors: colors,
-          textStyle: context.textTheme.small,
-        ),
-      ),
+      child: _ShortcutKeycaps(parts: parts, dense: dense),
     );
   }
 }
@@ -118,10 +105,6 @@ List<ShortcutActivator> findActionActivators(TargetPlatform platform) {
   ];
 }
 
-const MenuSerializableShortcut escapeShortcut = SingleActivator(
-  LogicalKeyboardKey.escape,
-);
-
 String _modifierLabel(
   LogicalKeyboardKey modifier,
   MaterialLocalizations localizations,
@@ -184,7 +167,14 @@ String _triggerLabel(
   LogicalKeyboardKey trigger,
   MaterialLocalizations localizations,
 ) {
-  final graphic = _shortcutGraphicEquivalents[trigger];
+  final graphicEquivalents = <LogicalKeyboardKey, String>{
+    LogicalKeyboardKey.arrowLeft: '←',
+    LogicalKeyboardKey.arrowRight: '→',
+    LogicalKeyboardKey.arrowUp: '↑',
+    LogicalKeyboardKey.arrowDown: '↓',
+    LogicalKeyboardKey.enter: '↵',
+  };
+  final graphic = graphicEquivalents[trigger];
   if (graphic != null) return graphic;
   if (trigger == LogicalKeyboardKey.escape) {
     return localizations.keyboardKeyEscape;
@@ -201,134 +191,140 @@ bool _usesSymbolicModifiers() {
       defaultTargetPlatform == TargetPlatform.iOS;
 }
 
-final Map<LogicalKeyboardKey, String> _shortcutGraphicEquivalents =
-    <LogicalKeyboardKey, String>{
-  LogicalKeyboardKey.arrowLeft: '←',
-  LogicalKeyboardKey.arrowRight: '→',
-  LogicalKeyboardKey.arrowUp: '↑',
-  LogicalKeyboardKey.arrowDown: '↓',
-  LogicalKeyboardKey.enter: '↵',
-};
-
-List<Widget> _buildKeycaps({
-  required List<String> parts,
-  required bool dense,
-  required ShadColorScheme colors,
-  required TextStyle textStyle,
-}) {
-  final keyBase = colors.card;
-  final topSheen = Color.lerp(keyBase, colors.foreground, 0.08)!;
-  final midTone = Color.lerp(keyBase, colors.foreground, 0.04)!;
-  final keyShadow = Color.lerp(colors.background, Colors.black, 0.65)!;
-  final borderWidth = dense ? 1.0 : 1.2;
-  const paddingDense = EdgeInsets.symmetric(horizontal: 7, vertical: 4);
-  const paddingComfort = EdgeInsets.symmetric(horizontal: 9, vertical: 5);
-  final EdgeInsets padding = dense ? paddingDense : paddingComfort;
-  const radiusValue = 8.5;
-  final radius = BorderRadius.circular(radiusValue);
-  final drop = dense ? 3.0 : 4.2;
-  final keyStyle = textStyle.copyWith(
-    color: colors.foreground,
-    fontWeight: FontWeight.w700,
-    letterSpacing: 0.2,
-  );
-  final connectorStyle = textStyle.copyWith(
-    color: colors.mutedForeground,
-    fontWeight: FontWeight.w600,
-  );
-
-  Widget keycap(String label) {
-    final backplateColor = Color.alphaBlend(
-      keyShadow.withValues(alpha: 0.35),
-      keyBase,
+MenuSerializableShortcut escapeShortcut() => const SingleActivator(
+      LogicalKeyboardKey.escape,
     );
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          top: drop,
-          left: 0,
-          right: 0,
-          child: DecoratedBox(
+
+class _ShortcutKeycaps extends StatelessWidget {
+  const _ShortcutKeycaps({required this.parts, required this.dense});
+
+  final List<String> parts;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textStyle = context.textTheme.small;
+    final keyBase = colors.card;
+    final topSheen = Color.lerp(keyBase, colors.foreground, 0.08)!;
+    final midTone = Color.lerp(keyBase, colors.foreground, 0.04)!;
+    final keyShadow = Color.lerp(colors.background, colors.foreground, 0.65)!;
+    final borderWidth = dense ? 1.0 : 1.2;
+    const paddingDense = EdgeInsets.symmetric(horizontal: 7, vertical: 4);
+    const paddingComfort = EdgeInsets.symmetric(horizontal: 9, vertical: 5);
+    final padding = dense ? paddingDense : paddingComfort;
+    final radius = context.radius;
+    final drop = dense ? 3.0 : 4.2;
+    final keyStyle = textStyle.copyWith(
+      color: colors.foreground,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.2,
+    );
+    final connectorStyle = textStyle.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w600,
+    );
+
+    Widget keycap(String label) {
+      final backplateColor = Color.alphaBlend(
+        keyShadow.withValues(alpha: 0.35),
+        keyBase,
+      );
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: drop,
+            left: 0,
+            right: 0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: backplateColor,
+                borderRadius: radius,
+                boxShadow: [
+                  BoxShadow(
+                    color: keyShadow.withValues(alpha: 0.45),
+                    offset: Offset(0, drop / 2),
+                    blurRadius: drop * 1.6,
+                    spreadRadius: 0.0,
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: padding,
+                child: Opacity(opacity: 0, child: Text(label, style: keyStyle)),
+              ),
+            ),
+          ),
+          DecoratedBox(
             decoration: BoxDecoration(
-              color: backplateColor,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [topSheen, midTone, colors.card],
+                stops: const [0, 0.45, 1],
+              ),
+              border: Border.all(
+                color: colors.border.withValues(alpha: 0.95),
+                width: borderWidth,
+              ),
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
-                  color: keyShadow.withValues(alpha: 0.45),
-                  offset: Offset(0, drop / 2),
-                  blurRadius: drop * 1.6,
-                  spreadRadius: 0.0,
+                  color: keyShadow.withValues(alpha: 0.3),
+                  offset: const Offset(0, 1.2),
+                  blurRadius: 3.2,
                 ),
               ],
             ),
-            child: Padding(
-              padding: padding,
-              child: Opacity(opacity: 0, child: Text(label, style: keyStyle)),
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [topSheen, midTone, colors.card],
-              stops: const [0, 0.45, 1],
-            ),
-            border: Border.all(
-              color: colors.border.withValues(alpha: 0.95),
-              width: borderWidth,
-            ),
-            borderRadius: radius,
-            boxShadow: [
-              BoxShadow(
-                color: keyShadow.withValues(alpha: 0.3),
-                offset: const Offset(0, 1.2),
-                blurRadius: 3.2,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: radius,
-            child: Stack(
-              children: [
-                Padding(
-                  padding: padding,
-                  child: Text(label, style: keyStyle),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.04),
-                          Colors.transparent,
-                          keyShadow.withValues(alpha: 0.12),
-                        ],
-                        stops: const [0, 0.5, 1],
+            child: ClipRRect(
+              borderRadius: radius,
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: padding,
+                    child: Text(label, style: keyStyle),
+                  ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: radius,
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            colors.foreground.withValues(alpha: 0.04),
+                            colors.background.withValues(alpha: 0.0),
+                            keyShadow.withValues(alpha: 0.12),
+                          ],
+                          stops: const [0, 0.5, 1],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      );
+    }
+
+    final widgets = <Widget>[];
+    for (var i = 0; i < parts.length; i++) {
+      widgets.add(keycap(parts[i]));
+      final hasNext = i < parts.length - 1;
+      if (hasNext) {
+        widgets.add(Text('+', style: connectorStyle));
+      }
+    }
+    const spacing = 8.0;
+    const runSpacing = 6.0;
+    return Wrap(
+      spacing: spacing,
+      runSpacing: runSpacing,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: widgets,
     );
   }
-
-  final widgets = <Widget>[];
-  for (var i = 0; i < parts.length; i++) {
-    widgets.add(keycap(parts[i]));
-    final hasNext = i < parts.length - 1;
-    if (hasNext) {
-      widgets.add(Text('+', style: connectorStyle));
-    }
-  }
-  return widgets;
 }

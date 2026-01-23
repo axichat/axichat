@@ -75,6 +75,7 @@ class SessionCapabilityIndicators extends StatelessWidget {
       status: _chatStatusLabel(l10n),
       background: colors.card,
       foreground: palette.foreground,
+      level: level,
     );
   }
 
@@ -90,6 +91,7 @@ class SessionCapabilityIndicators extends StatelessWidget {
       status: _emailStatusLabel(l10n),
       background: colors.card,
       foreground: palette.foreground,
+      level: level,
     );
   }
 
@@ -138,6 +140,7 @@ class _CapabilityChipData {
     required this.status,
     required this.background,
     required this.foreground,
+    required this.level,
   });
 
   final IconData icon;
@@ -145,6 +148,7 @@ class _CapabilityChipData {
   final String status;
   final Color background;
   final Color foreground;
+  final _CapabilityLevel level;
 }
 
 class _CapabilityChip extends StatelessWidget {
@@ -202,14 +206,19 @@ class _CapabilityChip extends StatelessWidget {
               fit: FlexFit.loose,
               child: Text.rich(
                 TextSpan(
-                  children: [
-                    TextSpan(text: data.label, style: labelStyle),
-                    TextSpan(
-                      text: _capabilityChipSeparator,
-                      style: separatorStyle,
-                    ),
-                    TextSpan(text: data.status, style: statusStyle),
-                  ],
+                  children: switch (data.level) {
+                    _CapabilityLevel.ready || _CapabilityLevel.syncing => [
+                        TextSpan(text: data.status, style: statusStyle),
+                      ],
+                    _ => [
+                        TextSpan(text: data.label, style: labelStyle),
+                        TextSpan(
+                          text: _capabilityChipSeparator,
+                          style: separatorStyle,
+                        ),
+                        TextSpan(text: data.status, style: statusStyle),
+                      ],
+                  },
                 ),
                 maxLines: maxLines,
                 overflow: TextOverflow.ellipsis,

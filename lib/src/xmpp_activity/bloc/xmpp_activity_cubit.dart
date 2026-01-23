@@ -9,9 +9,10 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:logging/logging.dart';
 
-const Duration _defaultCompletedRetention = Duration(seconds: 2);
-const Duration _defaultFailedRetention = Duration(seconds: 6);
-const Duration _minimumInProgressDuration = Duration(milliseconds: 350);
+const Duration _defaultCompletedRetention = Duration(seconds: 1);
+const Duration _defaultFailedRetention = Duration(seconds: 1);
+const Duration _minimumInProgressDuration = Duration(milliseconds: 100);
+const Duration _idleCompletionDelay = Duration(milliseconds: 300);
 const int _operationIdLength = 10;
 const String _operationIdSeparator = '-';
 
@@ -89,7 +90,9 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   final XmppBase _xmppBase;
   final Duration _completedRetention;
   final Duration _failedRetention;
-  final Map<_XmppOperationKey, _XmppOperationBatch> _activeOperations = {};
+  final Map<XmppOperationKind, List<_XmppOperationHandle>> _activeOperations =
+      {};
+  final Map<String, Timer> _startTimers = {};
   final Map<String, Timer> _retentionTimers = {};
   final Map<String, Timer> _completionTimers = {};
   late final StreamSubscription<XmppOperationEvent> _subscription;
@@ -97,79 +100,84 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   static final _logger = Logger('XmppActivityCubit');
 
   void _handleEvent(XmppOperationEvent event) {
-    final key = _XmppOperationKey(kind: event.kind);
+    final now = DateTime.now();
+
     if (event.stage.isStart) {
-      final _XmppOperationBatch? batch = _activeOperations[key];
-      if (batch == null) {
-        final String operationId = _startOperation(event.kind);
-        _activeOperations[key] = _XmppOperationBatch(
-          operationId: operationId,
-          pendingCount: 1,
-          startedAt: DateTime.now(),
-        );
-        return;
-      }
-      batch.pendingCount += 1;
+      final handle = _createHandle(event.kind, now);
+      final queue = _activeOperations.putIfAbsent(
+        event.kind,
+        () => <_XmppOperationHandle>[],
+      );
+      queue.add(handle);
+      _scheduleStart(handle);
       return;
     }
 
-    final _XmppOperationBatch? batch = _activeOperations[key];
-    if (batch == null) {
+    final queue = _activeOperations[event.kind];
+    if (queue == null || queue.isEmpty) {
       _logger.fine(
         'Received XMPP activity end without recorded start: ${event.kind}.',
       );
       return;
     }
 
-    if (batch.pendingCount <= 0) {
-      _logger.fine(
-        'Received XMPP activity end without active count: ${event.kind}.',
-      );
+    final handle = queue.removeAt(0);
+    if (queue.isEmpty) {
+      _activeOperations.remove(event.kind);
+    }
+    if (_cancelPendingStartIfNeeded(handle)) {
       return;
     }
-
-    batch
-      ..pendingCount -= 1
-      ..hadFailure = batch.hadFailure || !event.isSuccess;
-
-    if (batch.pendingCount > 0) {
-      return;
-    }
-
-    _activeOperations.remove(key);
-    _scheduleCompletion(
-      id: batch.operationId,
-      startedAt: batch.startedAt,
-      isSuccess: !batch.hadFailure,
-    );
+    _scheduleCompletion(handle: handle, isSuccess: event.isSuccess);
   }
 
-  String _startOperation(XmppOperationKind kind) {
-    final List<XmppOperation> operations =
-        List<XmppOperation>.of(state.operations);
-    final int index = operations.lastIndexWhere((item) => item.kind == kind);
-    if (index != -1) {
-      final XmppOperation existing = operations[index];
-      _cancelRetention(existing.id);
-      _cancelCompletion(existing.id);
-      operations[index] = existing.copyWith(
-        status: XmppOperationStatus.inProgress,
-        startedAt: DateTime.now(),
-      );
-      emit(state.copyWith(operations: List.unmodifiable(operations)));
-      return existing.id;
-    }
-
+  _XmppOperationHandle _createHandle(
+    XmppOperationKind kind,
+    DateTime startedAt,
+  ) {
     final String operationId = generateRandomString(length: _operationIdLength);
     final String id = '${kind.name}$_operationIdSeparator$operationId';
+    return _XmppOperationHandle(id: id, kind: kind, startedAt: startedAt);
+  }
+
+  void _scheduleStart(_XmppOperationHandle handle) {
+    _cancelStart(handle.id);
+    if (_minimumInProgressDuration == Duration.zero) {
+      _showOperation(handle);
+      return;
+    }
+    _startTimers[handle.id] = Timer(_minimumInProgressDuration, () {
+      _startTimers.remove(handle.id);
+      _showOperation(handle);
+    });
+  }
+
+  bool _cancelPendingStartIfNeeded(_XmppOperationHandle handle) {
+    final Timer? timer = _startTimers.remove(handle.id);
+    if (timer == null) {
+      return false;
+    }
+    timer.cancel();
+    final elapsed = DateTime.now().difference(handle.startedAt);
+    if (elapsed < _minimumInProgressDuration) {
+      return true;
+    }
+    _showOperation(handle);
+    return false;
+  }
+
+  void _showOperation(_XmppOperationHandle handle) {
+    final operations = List<XmppOperation>.of(state.operations);
+    if (operations.any((item) => item.id == handle.id)) {
+      return;
+    }
     final XmppOperation operation = XmppOperation(
-      id: id,
-      kind: kind,
-      startedAt: DateTime.now(),
+      id: handle.id,
+      kind: handle.kind,
+      startedAt: handle.startedAt,
     );
-    final List<XmppOperation> updated = operations..add(operation);
+    final updated = operations..add(operation);
     emit(state.copyWith(operations: List.unmodifiable(updated)));
-    return id;
   }
 
   void _completeOperation(String id) {
@@ -181,18 +189,16 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   }
 
   void _scheduleCompletion({
-    required String id,
-    required DateTime startedAt,
+    required _XmppOperationHandle handle,
     required bool isSuccess,
   }) {
-    final elapsed = DateTime.now().difference(startedAt);
-    final remaining = _minimumInProgressDuration - elapsed;
-    if (remaining <= Duration.zero) {
-      _applyCompletion(id: id, isSuccess: isSuccess);
-      return;
-    }
+    final id = handle.id;
     _cancelCompletion(id);
-    _completionTimers[id] = Timer(remaining, () {
+    final elapsed = DateTime.now().difference(handle.startedAt);
+    final remaining = _minimumInProgressDuration - elapsed;
+    final delay =
+        remaining > _idleCompletionDelay ? remaining : _idleCompletionDelay;
+    _completionTimers[id] = Timer(delay, () {
       _completionTimers.remove(id);
       _applyCompletion(id: id, isSuccess: isSuccess);
     });
@@ -201,9 +207,9 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   void _applyCompletion({required String id, required bool isSuccess}) {
     if (isSuccess) {
       _completeOperation(id);
-      return;
+    } else {
+      _failOperation(id);
     }
-    _failOperation(id);
   }
 
   void _updateOperation(String id, {XmppOperationStatus? status}) {
@@ -246,8 +252,17 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     timer?.cancel();
   }
 
+  void _cancelStart(String id) {
+    final timer = _startTimers.remove(id);
+    timer?.cancel();
+  }
+
   @override
   Future<void> close() async {
+    for (final timer in _startTimers.values) {
+      timer.cancel();
+    }
+    _startTimers.clear();
     for (final timer in _completionTimers.values) {
       timer.cancel();
     }
@@ -359,29 +374,14 @@ extension XmppOperationKindLabels on XmppOperationKind {
       };
 }
 
-class _XmppOperationKey {
-  const _XmppOperationKey({required this.kind});
-
-  final XmppOperationKind kind;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _XmppOperationKey && other.kind == kind;
-  }
-
-  @override
-  int get hashCode => kind.hashCode;
-}
-
-class _XmppOperationBatch {
-  _XmppOperationBatch({
-    required this.operationId,
-    required this.pendingCount,
+class _XmppOperationHandle {
+  _XmppOperationHandle({
+    required this.id,
+    required this.kind,
     required this.startedAt,
-  }) : hadFailure = false;
+  });
 
-  final String operationId;
-  int pendingCount;
-  bool hadFailure;
+  final String id;
+  final XmppOperationKind kind;
   final DateTime startedAt;
 }

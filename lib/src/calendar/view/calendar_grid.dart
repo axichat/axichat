@@ -3184,10 +3184,6 @@ class _CalendarWeekView extends StatelessWidget {
                     color: calendarBackgroundColor,
                     borderRadius: BorderRadius.zero,
                     border: Border(
-                      top: BorderSide(
-                        color: calendarBorderColor,
-                        width: calendarBorderStroke,
-                      ),
                       left: BorderSide(
                         color: calendarBorderColor,
                         width: calendarBorderStroke,

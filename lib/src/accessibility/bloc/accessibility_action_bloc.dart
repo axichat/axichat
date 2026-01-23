@@ -14,30 +14,12 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'accessibility_action_event.dart';
 part 'accessibility_action_state.dart';
-
-class _SectionWithInitial {
-  const _SectionWithInitial({required this.section, this.initialIndex});
-
-  final AccessibilityMenuSection section;
-  final int? initialIndex;
-}
-
-class _ConversationSectionsResult {
-  const _ConversationSectionsResult({
-    required this.sections,
-    this.initialMessageIndex,
-  });
-
-  final List<AccessibilityMenuSection> sections;
-  final int? initialMessageIndex;
-}
 
 class AccessibilityActionBloc
     extends Bloc<AccessibilityActionEvent, AccessibilityActionState> {
@@ -57,7 +39,6 @@ class AccessibilityActionBloc
     on<AccessibilityMenuOpened>(_onMenuOpened);
     on<AccessibilityMenuClosed>(_onMenuClosed);
     on<AccessibilityMenuBack>(_onMenuBack);
-    on<AccessibilityMenuReset>(_onMenuReset);
     on<AccessibilityMenuActionTriggered>(_onMenuActionTriggered);
     on<AccessibilityComposerChanged>(_onComposerChanged);
     on<AccessibilitySendMessageRequested>(_onSendMessageRequested);
@@ -76,12 +57,11 @@ class AccessibilityActionBloc
     _draftSubscription = _messageService.draftsStream().listen(
           (items) => add(AccessibilityDataUpdated(drafts: items)),
         );
-    final rosterService = _rosterService;
-    if (rosterService != null) {
-      _rosterSubscription = rosterService.rosterStream().listen(
+    if (_rosterService != null) {
+      _rosterSubscription = _rosterService.rosterStream().listen(
             (items) => add(AccessibilityDataUpdated(roster: items)),
           );
-      _inviteSubscription = rosterService.invitesStream().listen(
+      _inviteSubscription = _rosterService.invitesStream().listen(
             (items) => add(AccessibilityDataUpdated(invites: items)),
           );
     }
@@ -92,7 +72,6 @@ class AccessibilityActionBloc
   final EmailService? _emailService;
   final RosterService? _rosterService;
   final Logger _log;
-  static const int _messagePageSize = 50;
 
   late AppLocalizations _l10n;
 
@@ -101,13 +80,13 @@ class AccessibilityActionBloc
   StreamSubscription<List<Invite>>? _inviteSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<List<Draft>>? _draftSubscription;
+  int _messageStreamLimit = 0;
 
   List<Chat> _chats = const [];
   List<RosterItem> _roster = const [];
   List<Invite> _invites = const [];
   List<Draft> _drafts = const [];
   List<AccessibilityContact> _contacts = const [];
-  final Set<String> _dismissedHighlights = <String>{};
 
   @override
   Future<void> close() async {
@@ -130,7 +109,6 @@ class AccessibilityActionBloc
       discardWarningActive: false,
     );
     emit(nextState);
-    _rebuildSections(emit, nextState);
   }
 
   Future<void> _onMenuClosed(
@@ -148,11 +126,9 @@ class AccessibilityActionBloc
       messages: const [],
       activeChatJid: null,
       discardWarningActive: false,
-      recipients: const [],
       attachments: const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
-    _rebuildSections(emit, nextState);
   }
 
   Future<void> _onMenuBack(
@@ -167,7 +143,6 @@ class AccessibilityActionBloc
           newContactInput: '',
           statusMessage: null,
           errorMessage: null,
-          recipients: const [],
           messages: const [],
           activeChatJid: null,
           discardWarningActive: false,
@@ -192,35 +167,12 @@ class AccessibilityActionBloc
       activeChatJid: keepChatMessages ? state.activeChatJid : null,
       composerText: '',
       newContactInput: '',
-      recipients: nextStack.last.recipients,
       discardWarningActive: false,
       attachments: keepChatMessages
           ? state.attachments
           : const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
-    _rebuildSections(emit, nextState);
-  }
-
-  Future<void> _onMenuReset(
-    AccessibilityMenuReset event,
-    Emitter<AccessibilityActionState> emit,
-  ) async {
-    await _clearMessageStream();
-    final nextState = state.copyWith(
-      stack: const [AccessibilityStepEntry(kind: AccessibilityStepKind.root)],
-      composerText: '',
-      newContactInput: '',
-      statusMessage: null,
-      errorMessage: null,
-      messages: const [],
-      activeChatJid: null,
-      discardWarningActive: false,
-      recipients: const [],
-      attachments: const <String, List<FileMetadataData>>{},
-    );
-    emit(nextState);
-    _rebuildSections(emit, nextState);
   }
 
   void _onDiscardWarningRequested(
@@ -239,10 +191,10 @@ class AccessibilityActionBloc
     );
   }
 
-  void _onMenuJumpedTo(
+  Future<void> _onMenuJumpedTo(
     AccessibilityMenuJumpedTo event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (event.index < 0 || event.index >= state.stack.length) return;
     final nextStack = state.stack.take(event.index + 1).toList();
     final keepChatMessages = nextStack.isNotEmpty &&
@@ -250,7 +202,7 @@ class AccessibilityActionBloc
             nextStack.last.kind == AccessibilityStepKind.conversation ||
             nextStack.last.kind == AccessibilityStepKind.composer);
     if (!keepChatMessages) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     emit(
       state.copyWith(
@@ -260,9 +212,11 @@ class AccessibilityActionBloc
         messages: keepChatMessages ? state.messages : const [],
         activeChatJid: keepChatMessages ? state.activeChatJid : null,
         discardWarningActive: false,
+        attachments: keepChatMessages
+            ? state.attachments
+            : const <String, List<FileMetadataData>>{},
       ),
     );
-    _rebuildSections(emit, state);
   }
 
   Future<void> _onMenuActionTriggered(
@@ -274,15 +228,15 @@ class AccessibilityActionBloc
       return;
     }
     if (action is AccessibilityNavigateAction) {
-      _handleNavigateAction(action, emit);
+      await _handleNavigateAction(action, emit);
       return;
     }
     if (action is AccessibilityCommandAction) {
-      _handleCommandAction(action, emit);
+      await _handleCommandAction(action, emit);
       return;
     }
     if (action is AccessibilitySelectContactAction) {
-      _handleContactSelection(action.contact, emit);
+      await _handleContactSelection(action.contact, emit);
       return;
     }
     if (action is AccessibilityInviteDecisionAction) {
@@ -300,7 +254,6 @@ class AccessibilityActionBloc
   ) {
     final nextState = state.copyWith(composerText: event.value);
     emit(nextState.copyWith(discardWarningActive: false));
-    _rebuildSections(emit, nextState);
   }
 
   Future<void> _onSendMessageRequested(
@@ -309,11 +262,9 @@ class AccessibilityActionBloc
   ) async {
     final currentEntry = state.stack.last;
     final trimmedMessage = state.composerText.trim();
-    final isConversation =
-        currentEntry.kind == AccessibilityStepKind.composer ||
-            currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            currentEntry.kind == AccessibilityStepKind.conversation;
-    if (!isConversation ||
+    if ((currentEntry.kind != AccessibilityStepKind.composer &&
+            currentEntry.kind != AccessibilityStepKind.chatMessages &&
+            currentEntry.kind != AccessibilityStepKind.conversation) ||
         trimmedMessage.isEmpty ||
         currentEntry.recipients.isEmpty) {
       emit(state.copyWith(errorMessage: _l10n.chatDraftMissingContent));
@@ -401,7 +352,6 @@ class AccessibilityActionBloc
         discardWarningActive: false,
       ),
     );
-    _rebuildSections(emit, state);
   }
 
   bool _shouldSendEmail(AccessibilityContact contact) {
@@ -432,10 +382,10 @@ class AccessibilityActionBloc
     }
   }
 
-  void _onRecipientRemoved(
+  Future<void> _onRecipientRemoved(
     AccessibilityRecipientRemoved event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (state.stack.length <= 1) return;
     final nextStack = List<AccessibilityStepEntry>.of(state.stack);
     final index = nextStack.lastIndexWhere(
@@ -450,7 +400,7 @@ class AccessibilityActionBloc
         .where((recipient) => recipient.jid != event.jid)
         .toList();
     if (filtered.isEmpty) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     nextStack[index] = entry.copyWith(recipients: filtered);
     emit(
@@ -460,7 +410,6 @@ class AccessibilityActionBloc
         statusMessage: filtered.isEmpty ? null : state.statusMessage,
       ),
     );
-    _rebuildSections(emit, state);
   }
 
   void _onNewContactChanged(
@@ -474,7 +423,6 @@ class AccessibilityActionBloc
         discardWarningActive: false,
       ),
     );
-    _rebuildSections(emit, state);
   }
 
   Future<void> _onConfirmNewContact(
@@ -483,7 +431,7 @@ class AccessibilityActionBloc
   ) async {
     final trimmed = state.newContactInput.trim();
     if (!trimmed.isValidJid) {
-      emit(state.copyWith(errorMessage: _textInvalidAddress));
+      emit(state.copyWith(errorMessage: _l10n.jidInputInvalid));
       return;
     }
     final contact = AccessibilityContact(
@@ -495,7 +443,7 @@ class AccessibilityActionBloc
       chatType: ChatType.chat,
       unreadCount: 0,
     );
-    _handleContactSelection(contact, emit);
+    await _handleContactSelection(contact, emit);
   }
 
   void _onLocaleUpdated(
@@ -504,13 +452,12 @@ class AccessibilityActionBloc
   ) {
     if (_l10n.localeName == event.localization.localeName) return;
     _l10n = event.localization;
-    _rebuildSections(emit, state);
   }
 
-  void _onDataUpdated(
+  Future<void> _onDataUpdated(
     AccessibilityDataUpdated event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (event.chats != null) {
       _chats = event.chats!;
     }
@@ -519,14 +466,32 @@ class AccessibilityActionBloc
     }
     if (event.invites != null) {
       _invites = event.invites!;
-      _purgeDismissedHighlights();
     }
     if (event.drafts != null) {
       _drafts = event.drafts!;
     }
     _refreshContacts();
-    _syncActiveChatRecipient(emit);
-    _rebuildSections(emit, state);
+    final dismissedHighlights =
+        _purgeDismissedHighlights(state.dismissedHighlights);
+    var nextState = state.copyWith(
+      contacts: _contacts,
+      invites: _invites,
+      drafts: _drafts,
+      myJid: _chatsService.myJid,
+      dismissedHighlights: dismissedHighlights,
+    );
+    nextState = _syncActiveChatRecipient(nextState);
+    final activeJid = nextState.activeChatJid;
+    if (activeJid != null) {
+      final unreadCount = _unreadCountFor(activeJid);
+      final desiredLimit = _messageWindowForUnread(unreadCount);
+      if (desiredLimit > _messageStreamLimit) {
+        await _startMessageStream(activeJid);
+      }
+    }
+    if (nextState != state) {
+      emit(nextState);
+    }
   }
 
   void _refreshContacts() {
@@ -568,18 +533,20 @@ class AccessibilityActionBloc
     _contacts = [...orderedChats, ...rosterOnly];
   }
 
-  void _purgeDismissedHighlights() {
+  Set<String> _purgeDismissedHighlights(Set<String> dismissedHighlights) {
+    final pruned = Set<String>.of(dismissedHighlights);
     final validInviteIds = _invites.map((invite) => 'invite-${invite.jid}');
-    _dismissedHighlights.removeWhere(
+    pruned.removeWhere(
       (id) => id.startsWith('invite-') && !validInviteIds.contains(id),
     );
     final unreadDigests = _unreadDigest();
-    _dismissedHighlights.removeWhere(
+    pruned.removeWhere(
       (id) =>
           id.startsWith('unread-') &&
           !id.startsWith('unread-summary-') &&
           !unreadDigests.contains(id),
     );
+    return pruned;
   }
 
   bool _hasUnsavedInput(AccessibilityActionState state) {
@@ -595,6 +562,20 @@ class AccessibilityActionBloc
     return false;
   }
 
+  int _unreadCountFor(String jid) {
+    for (final contact in _contacts) {
+      if (contact.jid == jid) {
+        return contact.unreadCount;
+      }
+    }
+    return 0;
+  }
+
+  int _messageWindowForUnread(int unreadCount) {
+    const basePageSize = 50;
+    return unreadCount > basePageSize ? unreadCount : basePageSize;
+  }
+
   Set<String> _unreadDigest() {
     final digests = <String>{};
     for (final chat in _chats.where((chat) => chat.unreadCount > 0)) {
@@ -603,20 +584,19 @@ class AccessibilityActionBloc
     return digests;
   }
 
-  void _handleNavigateAction(
+  Future<void> _handleNavigateAction(
     AccessibilityNavigateAction action,
     Emitter<AccessibilityActionState> emit,
-  ) {
-    final isChatContext =
-        state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            state.currentEntry.kind == AccessibilityStepKind.conversation ||
-            state.currentEntry.kind == AccessibilityStepKind.composer;
-    final targetIsChat = action.step == AccessibilityStepKind.chatMessages ||
-        action.step == AccessibilityStepKind.conversation ||
-        action.step == AccessibilityStepKind.composer;
-    final leavingChat = isChatContext && !targetIsChat;
+  ) async {
+    final leavingChat =
+        (state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
+                state.currentEntry.kind == AccessibilityStepKind.conversation ||
+                state.currentEntry.kind == AccessibilityStepKind.composer) &&
+            action.step != AccessibilityStepKind.chatMessages &&
+            action.step != AccessibilityStepKind.conversation &&
+            action.step != AccessibilityStepKind.composer;
     if (leavingChat) {
-      _clearMessageStream();
+      await _clearMessageStream();
     }
     final nextEntry = AccessibilityStepEntry(
       kind: action.step,
@@ -635,13 +615,12 @@ class AccessibilityActionBloc
         discardWarningActive: false,
       ),
     );
-    _rebuildSections(emit, state);
   }
 
-  void _handleCommandAction(
+  Future<void> _handleCommandAction(
     AccessibilityCommandAction action,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (state.discardWarningActive) {
       emit(state.copyWith(discardWarningActive: false));
     }
@@ -649,7 +628,7 @@ class AccessibilityActionBloc
       case AccessibilityCommand.openChat:
         final contact = action.contact;
         if (contact == null) return;
-        _openChatMessages(contact, emit);
+        await _openChatMessages(contact, emit);
         break;
       case AccessibilityCommand.sendMessage:
         add(const AccessibilitySendMessageRequested());
@@ -667,12 +646,12 @@ class AccessibilityActionBloc
         add(const AccessibilityConfirmNewContact());
         break;
       case AccessibilityCommand.saveDraft:
-        _saveDraft(emit);
+        await _saveDraft(emit);
         break;
       case AccessibilityCommand.resumeDraft:
         final draft = action.draft;
         if (draft == null) return;
-        _openDraftComposer(draft, emit);
+        await _openDraftComposer(draft, emit);
         break;
     }
   }
@@ -735,11 +714,14 @@ class AccessibilityActionBloc
     }
   }
 
-  void _openDraftComposer(Draft draft, Emitter<AccessibilityActionState> emit) {
+  Future<void> _openDraftComposer(
+    Draft draft,
+    Emitter<AccessibilityActionState> emit,
+  ) async {
     final recipients = draft.jids.map(_contactForJid).toList();
     final activeJid = recipients.isNotEmpty ? recipients.first.jid : null;
     if (activeJid != null) {
-      _startMessageStream(activeJid);
+      await _startMessageStream(activeJid);
     }
     final nextStack = List<AccessibilityStepEntry>.of(state.stack)
       ..add(
@@ -760,7 +742,6 @@ class AccessibilityActionBloc
       discardWarningActive: false,
     );
     emit(nextState);
-    _rebuildSections(emit, nextState);
   }
 
   void _enterRecipientPicker(Emitter<AccessibilityActionState> emit) {
@@ -781,15 +762,18 @@ class AccessibilityActionBloc
       ),
     );
     emit(
-      state.copyWith(stack: nextStack, statusMessage: null, errorMessage: null),
+      state.copyWith(
+        stack: nextStack,
+        statusMessage: null,
+        errorMessage: null,
+      ),
     );
-    _rebuildSections(emit, state);
   }
 
-  void _handleContactSelection(
+  Future<void> _handleContactSelection(
     AccessibilityContact contact,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     final stack = List<AccessibilityStepEntry>.of(state.stack);
     if (state.stack.last.kind == AccessibilityStepKind.contactPicker) {
       final entry = state.stack.last;
@@ -797,11 +781,10 @@ class AccessibilityActionBloc
         final recipients = _mergeRecipients(entry.recipients, contact);
         final nextStack = List<AccessibilityStepEntry>.of(state.stack);
         final previousIndex = nextStack.length - 2;
-        final cameFromComposer = previousIndex >= 0 &&
-            nextStack[previousIndex].kind == AccessibilityStepKind.composer;
         final activeJid = recipients.first.jid;
-        _startMessageStream(activeJid);
-        if (cameFromComposer) {
+        await _startMessageStream(activeJid);
+        if (previousIndex >= 0 &&
+            nextStack[previousIndex].kind == AccessibilityStepKind.composer) {
           nextStack[previousIndex] = nextStack[previousIndex].copyWith(
             recipients: recipients,
             addingRecipient: false,
@@ -830,18 +813,17 @@ class AccessibilityActionBloc
           discardWarningActive: false,
         );
         emit(nextState);
-        _rebuildSections(emit, nextState);
         return;
       }
       if (entry.purpose == AccessibilityFlowPurpose.openChat) {
-        _openChatMessages(contact, emit);
+        await _openChatMessages(contact, emit);
         return;
       }
     }
     if (stack.last.kind == AccessibilityStepKind.newContact) {
       final recipients = _mergeRecipients(stack.last.recipients, contact);
       final activeJid = recipients.first.jid;
-      _startMessageStream(activeJid);
+      await _startMessageStream(activeJid);
       final nextStack = stack
         ..removeLast()
         ..add(
@@ -861,7 +843,6 @@ class AccessibilityActionBloc
           discardWarningActive: false,
         ),
       );
-      _rebuildSections(emit, state);
     }
   }
 
@@ -910,29 +891,45 @@ class AccessibilityActionBloc
       emit(
         state.copyWith(
           busy: false,
-          statusMessage:
-              action.accept ? _textInviteAccepted : _textInviteDismissed,
+          statusMessage: action.accept
+              ? _l10n.accessibilityInviteAccepted
+              : _l10n.accessibilityInviteDismissed,
         ),
       );
     } on XmppException catch (error, stackTrace) {
       _log.warning('Invite decision failed', error, stackTrace);
-      emit(state.copyWith(busy: false, errorMessage: _textInviteUpdateFailed));
+      emit(
+        state.copyWith(
+          busy: false,
+          errorMessage: _l10n.accessibilityInviteUpdateFailed,
+        ),
+      );
     }
-    _rebuildSections(emit, state);
   }
 
   void _handleDismissHighlight(
     String highlightId,
     Emitter<AccessibilityActionState> emit,
   ) {
-    _dismissedHighlights.add(highlightId);
-    _rebuildSections(emit, state);
+    final dismissed = Set<String>.of(state.dismissedHighlights)
+      ..add(highlightId);
+    emit(state.copyWith(dismissedHighlights: dismissed));
   }
 
-  void _openChatMessages(
+  Future<void> _openChatMessages(
     AccessibilityContact contact,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
+    Chat? chat;
+    for (final entry in _chats) {
+      if (entry.jid == contact.jid) {
+        chat = entry;
+        break;
+      }
+    }
+    if (chat?.open != true) {
+      await _chatsService.openChat(contact.jid);
+    }
     final nextStack = List<AccessibilityStepEntry>.of(state.stack);
     final newEntry = AccessibilityStepEntry(
       kind: AccessibilityStepKind.conversation,
@@ -949,11 +946,10 @@ class AccessibilityActionBloc
     } else {
       nextStack.add(newEntry);
     }
-    _startMessageStream(contact.jid);
+    await _startMessageStream(contact.jid);
     final nextState = state.copyWith(
       visible: true,
       stack: nextStack,
-      recipients: [contact],
       activeChatJid: contact.jid,
       messages: const [],
       attachments: const <String, List<FileMetadataData>>{},
@@ -962,13 +958,14 @@ class AccessibilityActionBloc
       discardWarningActive: false,
     );
     emit(nextState);
-    _rebuildSections(emit, nextState);
   }
 
-  void _startMessageStream(String jid) {
-    _clearMessageStream();
+  Future<void> _startMessageStream(String jid) async {
+    await _clearMessageStream();
+    final messagePageSize = _messageWindowForUnread(_unreadCountFor(jid));
+    _messageStreamLimit = messagePageSize;
     _messageSubscription =
-        _messageService.messageStreamForChat(jid, end: _messagePageSize).listen(
+        _messageService.messageStreamForChat(jid, end: messagePageSize).listen(
       (messages) =>
           add(AccessibilityMessagesUpdated(jid: jid, messages: messages)),
       onError: (error, stackTrace) {
@@ -1015,7 +1012,6 @@ class AccessibilityActionBloc
       statusMessage: incomingStatus ?? state.statusMessage,
     );
     emit(nextState);
-    _rebuildSections(emit, nextState);
   }
 
   Future<Map<String, List<FileMetadataData>>> _loadAttachments(
@@ -1091,495 +1087,18 @@ class AccessibilityActionBloc
     }
   }
 
-  void _rebuildSections(
-    Emitter<AccessibilityActionState> emit,
+  AccessibilityActionState _syncActiveChatRecipient(
     AccessibilityActionState baseState,
   ) {
-    final entry = baseState.stack.last;
-    int? messageInitialIndex;
-    final sections = switch (entry.kind) {
-      AccessibilityStepKind.root => _buildRootSections(),
-      AccessibilityStepKind.contactPicker => _buildContactSections(
-          entry.purpose ?? AccessibilityFlowPurpose.openChat,
-        ),
-      AccessibilityStepKind.unread => _buildUnreadSections(),
-      AccessibilityStepKind.invites => _buildInviteSections(),
-      AccessibilityStepKind.composer => () {
-          final result = _buildConversationSections(entry);
-          messageInitialIndex = result.initialMessageIndex;
-          return result.sections;
-        }(),
-      AccessibilityStepKind.newContact => _buildNewContactSections(),
-      AccessibilityStepKind.chatMessages => () {
-          final result = _buildConversationSections(entry);
-          messageInitialIndex = result.initialMessageIndex;
-          return result.sections;
-        }(),
-      AccessibilityStepKind.conversation => () {
-          final result = _buildConversationSections(entry);
-          messageInitialIndex = result.initialMessageIndex;
-          return result.sections;
-        }(),
-    };
-    emit(
-      baseState.copyWith(
-        sections: sections,
-        recipients: entry.recipients,
-        messageInitialIndex: messageInitialIndex,
-      ),
-    );
-  }
-
-  List<AccessibilityMenuSection> _buildRootSections() {
-    final sections = <AccessibilityMenuSection>[];
-    final totalUnread = _contacts.fold<int>(
-      0,
-      (count, contact) =>
-          contact.unreadCount > 0 ? count + contact.unreadCount : count,
-    );
-
-    sections.add(
-      AccessibilityMenuSection(
-        id: 'actions',
-        title: _textRootActionsTitle,
-        items: [
-          AccessibilityMenuItem(
-            id: 'action-start-chat',
-            label: _textStartNewChat,
-            description: _textStartNewChatDescription,
-            kind: AccessibilityMenuItemKind.navigate,
-            action: const AccessibilityNavigateAction(
-              step: AccessibilityStepKind.contactPicker,
-              purpose: AccessibilityFlowPurpose.sendMessage,
-            ),
-            icon: Icons.add_comment_outlined,
-          ),
-          AccessibilityMenuItem(
-            id: 'action-unread',
-            label: _textReadNewMessages,
-            description: _textUnreadSummaryDescription,
-            kind: AccessibilityMenuItemKind.navigate,
-            action: const AccessibilityNavigateAction(
-              step: AccessibilityStepKind.unread,
-              purpose: AccessibilityFlowPurpose.reviewUnread,
-            ),
-            icon: Icons.mark_chat_unread_outlined,
-            badge: totalUnread > 0 ? totalUnread.toString() : null,
-          ),
-        ],
-      ),
-    );
-
-    if (_invites.isNotEmpty) {
-      sections.addAll(_buildInviteSections());
-    }
-
-    final orderedDrafts = List<Draft>.of(_drafts)
-      ..sort((a, b) => b.id.compareTo(a.id));
-
-    final chatItems = _contacts
-        .where((contact) => contact.source == AccessibilityContactSource.chat)
-        .map(
-          (contact) => AccessibilityMenuItem(
-            id: 'chat-${contact.jid}',
-            label: contact.displayName,
-            description: contact.subtitle,
-            kind: AccessibilityMenuItemKind.command,
-            action: AccessibilityCommandAction(
-              command: AccessibilityCommand.openChat,
-              contact: contact,
-            ),
-            icon: contact.isGroup
-                ? Icons.groups_2_outlined
-                : Icons.chat_bubble_outline,
-            badge:
-                contact.unreadCount > 0 ? contact.unreadCount.toString() : null,
-          ),
-        )
-        .toList();
-
-    sections.add(
-      AccessibilityMenuSection(
-        id: 'chats',
-        title: _l10n.homeTabChats,
-        items: chatItems.isEmpty
-            ? [
-                AccessibilityMenuItem(
-                  id: 'chats-empty',
-                  label: _l10n.chatsEmptyList,
-                  description: '',
-                  kind: AccessibilityMenuItemKind.readOnly,
-                  action: const AccessibilityNoopAction(),
-                ),
-              ]
-            : chatItems,
-      ),
-    );
-
-    if (orderedDrafts.isNotEmpty) {
-      sections.add(
-        AccessibilityMenuSection(
-          id: 'drafts',
-          title: _l10n.homeTabDrafts,
-          items: _draftMenuItems(orderedDrafts),
-        ),
-      );
-    }
-
-    return sections;
-  }
-
-  List<AccessibilityMenuItem> _draftMenuItems(List<Draft> drafts) {
-    return drafts.take(10).map((draft) {
-      final description = _draftDescription(draft);
-      final recipientsLabel = _draftRecipientsLabel(draft.jids);
-      final label = recipientsLabel.isEmpty
-          ? _l10n.accessibilityDraftLabel(draft.id)
-          : _l10n.accessibilityDraftLabelWithRecipients(recipientsLabel);
-      return AccessibilityMenuItem(
-        id: 'draft-${draft.id}',
-        label: label,
-        description: description,
-        kind: AccessibilityMenuItemKind.command,
-        action: AccessibilityCommandAction(
-          command: AccessibilityCommand.resumeDraft,
-          draft: draft,
-        ),
-        icon: Icons.note_outlined,
-      );
-    }).toList();
-  }
-
-  String _draftDescription(Draft draft) {
-    final recipientsLabel = _draftRecipientsLabel(draft.jids);
-    final body = (draft.body ?? '').trim();
-    final preview = body.isEmpty
-        ? _l10n.accessibilityMessageNoContent
-        : (body.length > 80 ? '${body.substring(0, 80)}…' : body);
-    if (recipientsLabel.isEmpty) return preview;
-    return _l10n.accessibilityDraftPreview(recipientsLabel, preview);
-  }
-
-  String _draftRecipientsLabel(List<String> jids) {
-    if (jids.isEmpty) return '';
-    final names = jids.map((jid) => _contactForJid(jid).displayName).toList();
-    return names.join(', ');
-  }
-
-  List<AccessibilityMenuSection> _buildContactSections(
-    AccessibilityFlowPurpose purpose,
-  ) {
-    final description = purpose == AccessibilityFlowPurpose.sendMessage
-        ? _l10n.chatComposerMessageHint
-        : _l10n.chatSearchMessages;
-    final items = _contacts
-        .map(
-          (contact) => AccessibilityMenuItem(
-            id: 'contact-${contact.jid}',
-            label: contact.displayName,
-            description: contact.subtitle,
-            kind: purpose == AccessibilityFlowPurpose.sendMessage
-                ? AccessibilityMenuItemKind.selectContact
-                : AccessibilityMenuItemKind.command,
-            action: purpose == AccessibilityFlowPurpose.sendMessage
-                ? AccessibilitySelectContactAction(contact: contact)
-                : AccessibilityCommandAction(
-                    command: AccessibilityCommand.openChat,
-                    contact: contact,
-                  ),
-            icon:
-                contact.isGroup ? Icons.groups_outlined : Icons.person_outline,
-            badge:
-                contact.unreadCount > 0 ? contact.unreadCount.toString() : null,
-          ),
-        )
-        .toList();
-    if (purpose == AccessibilityFlowPurpose.sendMessage) {
-      items.add(
-        AccessibilityMenuItem(
-          id: 'new-contact',
-          label: _textNewContactTitle,
-          description: _textNewContactDescription,
-          kind: AccessibilityMenuItemKind.navigate,
-          action: const AccessibilityNavigateAction(
-            step: AccessibilityStepKind.newContact,
-            purpose: AccessibilityFlowPurpose.sendMessage,
-          ),
-          icon: Icons.create,
-        ),
-      );
-    }
-    return [
-      AccessibilityMenuSection(
-        id: 'contacts',
-        title: description,
-        items: items,
-      ),
-    ];
-  }
-
-  List<AccessibilityMenuSection> _buildUnreadSections() {
-    final items = _contacts
-        .where((contact) => contact.unreadCount > 0)
-        .map(
-          (contact) => AccessibilityMenuItem(
-            id: 'unread-${contact.jid}',
-            label: contact.displayName,
-            description: _unreadDescription(contact),
-            kind: AccessibilityMenuItemKind.command,
-            action: AccessibilityCommandAction(
-              command: AccessibilityCommand.openChat,
-              contact: contact,
-            ),
-            icon: Icons.mark_chat_unread_outlined,
-            badge: contact.unreadCount.toString(),
-          ),
-        )
-        .toList();
-    if (items.isEmpty) {
-      items.add(
-        AccessibilityMenuItem(
-          id: 'unread-none',
-          label: _l10n.accessibilityUnreadEmpty,
-          description: '',
-          kind: AccessibilityMenuItemKind.command,
-          action: const AccessibilityCommandAction(
-            command: AccessibilityCommand.closeMenu,
-          ),
-          icon: Icons.mark_chat_unread_outlined,
-          disabled: true,
-        ),
-      );
-    }
-    return [
-      AccessibilityMenuSection(
-        id: 'unread',
-        title: _textReadNewMessages,
-        items: items,
-      ),
-    ];
-  }
-
-  List<AccessibilityMenuSection> _buildInviteSections() {
-    final items = <AccessibilityMenuItem>[];
-    for (final invite in _invites) {
-      items.addAll([
-        AccessibilityMenuItem(
-          id: 'invite-accept-${invite.jid}',
-          label: _textAcceptInvite,
-          description: invite.jid,
-          kind: AccessibilityMenuItemKind.inviteDecision,
-          action: AccessibilityInviteDecisionAction(
-            invite: invite,
-            accept: true,
-          ),
-          icon: Icons.person_add_alt,
-        ),
-        AccessibilityMenuItem(
-          id: 'invite-reject-${invite.jid}',
-          label: _textInviteDismissed,
-          description: invite.jid,
-          kind: AccessibilityMenuItemKind.inviteDecision,
-          action: AccessibilityInviteDecisionAction(
-            invite: invite,
-            accept: false,
-          ),
-          icon: Icons.person_off_outlined,
-          destructive: true,
-        ),
-      ]);
-    }
-    if (items.isEmpty) {
-      items.add(
-        AccessibilityMenuItem(
-          id: 'invites-none',
-          label: _l10n.accessibilityInvitesEmpty,
-          description: '',
-          kind: AccessibilityMenuItemKind.command,
-          action: const AccessibilityCommandAction(
-            command: AccessibilityCommand.closeMenu,
-          ),
-          icon: Icons.person_add_disabled_outlined,
-          disabled: true,
-        ),
-      );
-    }
-    return [
-      AccessibilityMenuSection(
-        id: 'invites',
-        title: _textInvitesTitle,
-        items: items,
-      ),
-    ];
-  }
-
-  _SectionWithInitial _buildChatMessageSections(AccessibilityStepEntry entry) {
-    final targetJid = entry.recipients.isNotEmpty
-        ? entry.recipients.first.jid
-        : state.activeChatJid;
-    if (targetJid == null) {
-      return _SectionWithInitial(
-        section: AccessibilityMenuSection(
-          id: 'chat-messages',
-          title: _l10n.accessibilityMessagesTitle,
-          items: [
-            AccessibilityMenuItem(
-              id: 'msg-none',
-              label: _l10n.accessibilityNoConversationSelected,
-              description: '',
-              kind: AccessibilityMenuItemKind.readOnly,
-              action: const AccessibilityNoopAction(),
-            ),
-          ],
-        ),
-        initialIndex: 0,
-      );
-    }
-    final contact = _contactFor(targetJid);
-    final messages = state.messages;
-    final items = <AccessibilityMenuItem>[];
-    var lastSender = '';
-    final attachmentIndex = state.attachments;
-    for (final message in messages) {
-      final senderLabel = _senderLabelFor(message);
-      final timestampLabel = _formatTimestamp(message.timestamp);
-      final attachments = attachmentIndex[_messageId(message)] ?? const [];
-      final attachment = attachments.isNotEmpty ? attachments.first : null;
-      final body = (message.body ?? '').trim();
-      final attachmentNote = _attachmentLabelFor(
-        message,
-        metadata: attachments,
-      );
-      final fullBody = body.isNotEmpty
-          ? body
-          : (attachmentNote ?? _l10n.accessibilityMessageNoContent);
-      final showSender = senderLabel != lastSender;
-      final label = showSender
-          ? _l10n.accessibilityMessageLabel(
-              senderLabel,
-              timestampLabel,
-              fullBody,
-            )
-          : fullBody;
-      items.add(
-        AccessibilityMenuItem(
-          id: 'msg-${_messageId(message)}',
-          label: label,
-          description: showSender ? null : senderLabel,
-          kind: AccessibilityMenuItemKind.readOnly,
-          action: const AccessibilityNoopAction(),
-          message: message,
-          attachment: attachment,
-          attachmentLabel: attachmentNote,
-          senderLabel: senderLabel,
-          timestampLabel: timestampLabel,
-          showMetadata: showSender,
-        ),
-      );
-      lastSender = senderLabel;
-    }
-    var initialIndex = 0;
-    if (items.isNotEmpty) {
-      initialIndex = _initialMessageIndex(messages);
-    } else {
-      items.add(
-        AccessibilityMenuItem(
-          id: 'msg-empty',
-          label: _l10n.accessibilityMessagesEmpty,
-          description: '',
-          kind: AccessibilityMenuItemKind.readOnly,
-          action: const AccessibilityNoopAction(),
-        ),
-      );
-    }
-    final title = contact.displayName.isEmpty
-        ? _l10n.accessibilityMessagesTitle
-        : _l10n.accessibilityMessagesWithContact(contact.displayName);
-    return _SectionWithInitial(
-      section: AccessibilityMenuSection(
-        id: 'chat-messages',
-        title: title,
-        items: items,
-      ),
-      initialIndex: initialIndex,
-    );
-  }
-
-  _ConversationSectionsResult _buildConversationSections(
-    AccessibilityStepEntry entry,
-  ) {
-    final messages = _buildChatMessageSections(entry);
-    return _ConversationSectionsResult(
-      sections: [messages.section],
-      initialMessageIndex: messages.initialIndex,
-    );
-  }
-
-  List<AccessibilityMenuSection> _buildNewContactSections() {
-    return [
-      AccessibilityMenuSection(
-        id: 'new-contact',
-        title: _textSubmitNewContactTitle,
-        items: [
-          AccessibilityMenuItem(
-            id: 'new-contact-confirm',
-            label: _textSubmitNewContactTitle,
-            description: _textSubmitNewContactDescription,
-            kind: AccessibilityMenuItemKind.command,
-            action: const AccessibilityCommandAction(
-              command: AccessibilityCommand.confirmNewContact,
-            ),
-            icon: Icons.check,
-            disabled: !state.newContactInput.trim().isValidJid,
-          ),
-        ],
-      ),
-    ];
-  }
-
-  int _initialMessageIndex(List<Message> messages) {
-    if (messages.isEmpty) return 0;
-    final latestUnread = _latestIndexFor(messages, onlyUnread: true);
-    if (latestUnread != null) {
-      return latestUnread;
-    }
-    return _latestIndexFor(messages) ?? 0;
-  }
-
-  int? _latestIndexFor(List<Message> messages, {bool onlyUnread = false}) {
-    if (messages.isEmpty) return null;
-    final myBareJid = _chatsService.myJid?.split('/').first;
-    int? latestIndex;
-    DateTime latestTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
-    for (var i = 0; i < messages.length; i++) {
-      final message = messages[i];
-      if (onlyUnread) {
-        final senderBare = message.senderJid.split('/').first;
-        final fromMe = myBareJid != null && senderBare == myBareJid;
-        final unread = !fromMe && !message.displayed;
-        if (!unread) continue;
-      }
-      final timestamp =
-          message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
-      if (latestIndex == null || timestamp.isAfter(latestTimestamp)) {
-        latestIndex = i;
-        latestTimestamp = timestamp;
-      }
-    }
-    return latestIndex;
-  }
-
-  String _unreadDescription(AccessibilityContact contact) =>
-      _l10n.chatsUnreadLabel(contact.unreadCount);
-
-  void _syncActiveChatRecipient(Emitter<AccessibilityActionState> emit) {
-    final active = state.activeChatJid;
-    if (active == null) return;
+    final active = baseState.activeChatJid;
+    if (active == null) return baseState;
     final contact = _contactFor(active);
     var stackChanged = false;
     final nextStack = <AccessibilityStepEntry>[];
-    for (final entry in state.stack) {
-      if (entry.kind == AccessibilityStepKind.chatMessages &&
+    for (final entry in baseState.stack) {
+      final isChatView = entry.kind == AccessibilityStepKind.chatMessages ||
+          entry.kind == AccessibilityStepKind.conversation;
+      if (isChatView &&
           (entry.recipients.length != 1 || entry.recipients.first != contact)) {
         nextStack.add(entry.copyWith(recipients: [contact]));
         stackChanged = true;
@@ -1587,11 +1106,10 @@ class AccessibilityActionBloc
         nextStack.add(entry);
       }
     }
-    final recipientsChanged =
-        state.recipients.length != 1 || state.recipients.first != contact;
-    if (stackChanged || recipientsChanged) {
-      emit(state.copyWith(stack: nextStack, recipients: [contact]));
+    if (stackChanged) {
+      return baseState.copyWith(stack: nextStack);
     }
+    return baseState;
   }
 
   AccessibilityContact _contactFor(String? jid) {
@@ -1613,8 +1131,8 @@ class AccessibilityActionBloc
 
   String _senderLabelFor(Message message) {
     final senderBare = message.senderJid.split('/').first;
-    final me = _chatsService.myJid;
-    if (me != null && senderBare == me) {
+    final myJid = _chatsService.myJid;
+    if (myJid != null && senderBare == myJid) {
       return _l10n.chatSenderYou;
     }
     final matching = _contacts.firstWhere(
@@ -1637,28 +1155,6 @@ class AccessibilityActionBloc
     return DateFormat.yMMMd(_l10n.localeName).add_jm().format(safe);
   }
 
-  String? _attachmentLabelFor(
-    Message message, {
-    List<FileMetadataData>? metadata,
-  }) {
-    final resolvedMetadata =
-        metadata == null || metadata.isEmpty ? null : metadata.first;
-    final filename = resolvedMetadata?.filename.trim();
-    if (filename != null && filename.isNotEmpty) {
-      return _l10n.accessibilityAttachmentWithName(filename);
-    }
-    if (metadata?.isNotEmpty == true || message.fileMetadataID != null) {
-      return _l10n.accessibilityAttachmentGeneric;
-    }
-    if (message.isFileUploadNotification) {
-      return _l10n.accessibilityUploadAvailable;
-    }
-    if (message.pseudoMessageType != null) {
-      return message.pseudoMessageType!.name;
-    }
-    return null;
-  }
-
   String _messageId(Message message) => message.id ?? message.stanzaID;
 
   String _displayNameForChat(Chat chat) {
@@ -1669,27 +1165,4 @@ class AccessibilityActionBloc
     final title = chat.title.trim();
     return title.isEmpty ? chat.jid : chat.title;
   }
-
-  // ignore: unused_element
-  String get _textNeedsAttention => _l10n.accessibilityNeedsAttention;
-  String get _textReadNewMessages => _l10n.accessibilityReadNewMessages;
-  String get _textUnreadSummaryDescription =>
-      _l10n.accessibilityUnreadSummaryDescription;
-  String get _textRootActionsTitle => _l10n.accessibilityActionsTitle;
-  String get _textStartNewChat => _l10n.accessibilityStartNewChat;
-  String get _textStartNewChatDescription =>
-      _l10n.accessibilityStartNewChatDescription;
-  String get _textInvitesTitle => _l10n.accessibilityInvitesTitle;
-  // ignore: unused_element
-  String get _textPendingInvites => _l10n.accessibilityPendingInvites;
-  String get _textAcceptInvite => _l10n.accessibilityAcceptInvite;
-  String get _textNewContactTitle => _l10n.accessibilityStartChat;
-  String get _textNewContactDescription => _l10n.accessibilityStartChatHint;
-  String get _textSubmitNewContactTitle => _l10n.accessibilityStartChat;
-  String get _textSubmitNewContactDescription =>
-      _l10n.accessibilityStartChatHint;
-  String get _textInvalidAddress => _l10n.jidInputInvalid;
-  String get _textInviteAccepted => _l10n.accessibilityInviteAccepted;
-  String get _textInviteDismissed => _l10n.accessibilityInviteDismissed;
-  String get _textInviteUpdateFailed => _l10n.accessibilityInviteUpdateFailed;
 }
