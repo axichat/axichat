@@ -3,11 +3,11 @@
 
 import 'package:axichat/src/storage/models.dart';
 
-enum AttachmentMediaKind { image, video, file }
+enum FileMetadataMediaKind { image, video, file }
 
-enum AttachmentDownloadCategory { image, video, document, archive }
+enum FileMetadataDownloadCategory { image, video, document, archive }
 
-extension AttachmentMetadataKind on FileMetadataData {
+extension FileMetadataTools on FileMetadataData {
   bool get isImage {
     const imageExtensions = <String>[
       '.png',
@@ -76,17 +76,17 @@ extension AttachmentMetadataKind on FileMetadataData {
     return archiveExtensions.any(name.endsWith);
   }
 
-  AttachmentMediaKind get mediaKind {
-    if (isImage) return AttachmentMediaKind.image;
-    if (isVideo) return AttachmentMediaKind.video;
-    return AttachmentMediaKind.file;
+  FileMetadataMediaKind get mediaKind {
+    if (isImage) return FileMetadataMediaKind.image;
+    if (isVideo) return FileMetadataMediaKind.video;
+    return FileMetadataMediaKind.file;
   }
 
-  AttachmentDownloadCategory get downloadCategory {
-    if (isImage) return AttachmentDownloadCategory.image;
-    if (isVideo) return AttachmentDownloadCategory.video;
-    if (isArchive) return AttachmentDownloadCategory.archive;
-    return AttachmentDownloadCategory.document;
+  FileMetadataDownloadCategory get downloadCategory {
+    if (isImage) return FileMetadataDownloadCategory.image;
+    if (isVideo) return FileMetadataDownloadCategory.video;
+    if (isArchive) return FileMetadataDownloadCategory.archive;
+    return FileMetadataDownloadCategory.document;
   }
 
   String get normalizedFilename => filename.trim().toLowerCase();

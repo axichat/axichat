@@ -22,22 +22,15 @@ class AttachmentGalleryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const leadingInset = 12.0;
-    const dividerThickness = 1.0;
-    const dividerHeight = 1.0;
-    const preferredSizeHeight = 1.0;
     const leadingWidth = AxiIconButton.kDefaultSize + (leadingInset * 2);
     final l10n = context.l10n;
-    final Chat? resolvedChat = chat;
-    final String? chatJid = resolvedChat?.jid;
-    final XmppService xmppService = locate<XmppService>();
-    final emailService = RepositoryProvider.of<EmailService?>(context);
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
-        xmppService: xmppService,
-        emailService: emailService,
-        chatJid: chatJid,
-        chatOverride: resolvedChat,
-        showChatLabel: resolvedChat == null,
+        xmppService: locate<XmppService>(),
+        emailService: locate<EmailService>(),
+        chatJid: chat?.jid,
+        chatOverride: chat,
+        showChatLabel: chat == null,
       ),
       child: Scaffold(
         backgroundColor: context.colorScheme.background,
@@ -47,6 +40,12 @@ class AttachmentGalleryScreen extends StatelessWidget {
           surfaceTintColor: context.colorScheme.background,
           elevation: 0,
           scrolledUnderElevation: 0,
+          shape: Border(
+            bottom: BorderSide(
+              color: context.colorScheme.border,
+              width: 1,
+            ),
+          ),
           leadingWidth: leadingWidth,
           leading: Padding(
             padding: const EdgeInsets.only(
@@ -54,33 +53,19 @@ class AttachmentGalleryScreen extends StatelessWidget {
             ),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: AxiIconButton.kDefaultSize,
-                height: AxiIconButton.kDefaultSize,
-                child: AxiIconButton.ghost(
-                  iconData: LucideIcons.arrowLeft,
-                  tooltip: l10n.commonBack,
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
+              child: AxiIconButton.ghost(
+                iconData: LucideIcons.arrowLeft,
+                tooltip: l10n.commonBack,
+                onPressed: () => Navigator.of(context).maybePop(),
               ),
-            ),
-          ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(
-              preferredSizeHeight,
-            ),
-            child: Divider(
-              height: dividerHeight,
-              thickness: dividerThickness,
-              color: context.colorScheme.border,
             ),
           ),
         ),
         body: ColoredBox(
           color: context.colorScheme.background,
           child: AttachmentGalleryView(
-            chatOverride: resolvedChat,
-            showChatLabel: resolvedChat == null,
+            chatOverride: chat,
+            showChatLabel: chat == null,
           ),
         ),
       ),

@@ -5,13 +5,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
-import 'package:axichat/src/attachments/attachment_gallery_models.dart';
-import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -94,12 +92,10 @@ class AttachmentGalleryPanel extends StatelessWidget {
     if (resolvedChat == null) {
       return const SizedBox.shrink();
     }
-    final xmppService = context.read<XmppService>();
-    final emailService = RepositoryProvider.of<EmailService?>(context);
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
-        xmppService: xmppService,
-        emailService: emailService,
+        xmppService: context.read<XmppService>(),
+        emailService: context.read<EmailService>(),
         chatJid: resolvedChat.jid,
         chatOverride: resolvedChat,
         showChatLabel: false,
@@ -271,7 +267,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           final layout = _resolveLayout(
             hasVisualMedia: state.entries.any(
               (entry) =>
-                  entry.item.metadata.mediaKind != AttachmentMediaKind.file,
+                  entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
             ),
             overrideLayout: state.layoutOverride,
           );
@@ -875,7 +871,7 @@ class AttachmentGalleryTile extends StatelessWidget {
     const metaSpacing = 4.0;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
-    final showFilename = metadata.mediaKind != AttachmentMediaKind.file;
+    final showFilename = metadata.mediaKind != FileMetadataMediaKind.file;
     final preview = ChatAttachmentPreview(
       stanzaId: stanzaId,
       metadataStream: metadataStream,

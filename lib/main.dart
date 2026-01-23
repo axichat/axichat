@@ -102,7 +102,7 @@ Future<void> main() async {
   final AuthBootstrap authBootstrap = AuthBootstrap(
     hasStoredLoginCredentials: hasStoredLoginCredentials,
   );
-  final Widget app = withForeground
+  final Widget app = capability.canForegroundService
       ? WithForegroundTask(
           child: Material(
             child: Axichat(

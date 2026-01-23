@@ -10,7 +10,6 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
 import 'package:flutter/foundation.dart';
-import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
@@ -49,6 +48,7 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
