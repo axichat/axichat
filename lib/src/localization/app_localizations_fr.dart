@@ -244,6 +244,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get attachmentGalleryReceivedLabel => 'Reçu';
 
   @override
+  String get attachmentGalleryMetaSeparator => ' - ';
+
+  @override
   String get attachmentGalleryLayoutGridLabel => 'Grid view';
 
   @override

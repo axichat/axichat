@@ -235,6 +235,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachmentGalleryReceivedLabel => '已接收';
 
   @override
+  String get attachmentGalleryMetaSeparator => ' - ';
+
+  @override
   String get attachmentGalleryLayoutGridLabel => 'Grid view';
 
   @override
@@ -5457,6 +5460,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get attachmentGalleryReceivedLabel => '已接收';
+
+  @override
+  String get attachmentGalleryMetaSeparator => ' - ';
 
   @override
   String get attachmentGalleryLayoutGridLabel => 'Grid view';
