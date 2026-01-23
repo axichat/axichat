@@ -2,7 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
+import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -32,10 +32,12 @@ class AttachmentGalleryScreen extends StatelessWidget {
     final XmppService xmppService = locate<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     return BlocProvider(
-      create: (context) => AttachmentGalleryCubit(
+      create: (context) => AttachmentGalleryBloc(
         xmppService: xmppService,
         emailService: emailService,
         chatJid: chatJid,
+        chatOverride: resolvedChat,
+        showChatLabel: resolvedChat == null,
       ),
       child: Scaffold(
         backgroundColor: context.colorScheme.background,

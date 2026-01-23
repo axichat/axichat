@@ -394,7 +394,6 @@ class _ChatCalendarAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final Color background = CalendarNavSurface.backgroundColor(context);
     final EdgeInsets toolbarPadding = calendarMarginLarge.copyWith(
       top: 0,
@@ -403,7 +402,6 @@ class _ChatCalendarAppBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
-        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SizedBox(
         height: _chatCalendarToolbarHeight,

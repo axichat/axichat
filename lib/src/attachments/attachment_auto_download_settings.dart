@@ -23,8 +23,7 @@ class AttachmentAutoDownloadSettings {
     return AttachmentAutoDownloadSettings(
       imagesEnabled: images is bool ? images : defaultImagesEnabled,
       videosEnabled: videos is bool ? videos : defaultVideosEnabled,
-      documentsEnabled:
-          documents is bool ? documents : defaultDocumentsEnabled,
+      documentsEnabled: documents is bool ? documents : defaultDocumentsEnabled,
       archivesEnabled: archives is bool ? archives : defaultArchivesEnabled,
     );
   }

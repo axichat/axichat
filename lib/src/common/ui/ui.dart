@@ -195,33 +195,6 @@ class CalendarPalette {
     required ShadColorScheme scheme,
     required Brightness brightness,
   }) {
-    if (brightness == Brightness.light) {
-      _primary = const Color(0xFF0969DA);
-      _primaryHover = const Color(0xFF0860CA);
-
-      _background = const Color(0xFFFFFFFF);
-      _container = const Color(0xFFFFFFFF);
-      _sidebarBackground = const Color(0xFFF7F8FA);
-      _border = const Color(0xFFE1E4E8);
-      _borderDark = const Color(0xFFD1D5DA);
-      _borderLight = const Color(0xFFF0F0F0);
-      _selectedDay = const Color(0xFFF6F8FA);
-      _slotHover = const Color(0xFFE8F1FF);
-      _stripedSlot = const Color(0xFFFAFBFC);
-
-      _title = const Color(0xFF24292E);
-      _subtitle = const Color(0xFF6A737D);
-      _textLight = const Color(0xFF959DA5);
-      _timeLabel = const Color(0xFF6A737D);
-
-      _success = const Color(0xFF28A745);
-      _danger = const Color(0xFFDC3545);
-      _warning = const Color(0xFFFD7E14);
-      _yellow = const Color(0xFFFFC107);
-      _neutral = const Color(0xFF9CA3AF);
-      return;
-    }
-
     _primary = scheme.primary;
     const mixTarget = Colors.white;
     _primaryHover =
