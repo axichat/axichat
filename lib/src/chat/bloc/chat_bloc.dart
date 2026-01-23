@@ -2530,9 +2530,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emit,
         );
       }
-      if (shouldClearComposer && state.quoting != null) {
-        emit(state.copyWith(quoting: null));
-      }
       if (shouldClearComposer && (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);
       }

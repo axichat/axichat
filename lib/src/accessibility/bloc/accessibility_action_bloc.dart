@@ -4,8 +4,8 @@
 import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/safe_logging.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/jid_input.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -515,10 +515,6 @@ class AccessibilityActionBloc
       if (desiredLimit > _messageStreamLimit) {
         _startMessageStream(activeJid);
       }
-      await _ensureUnreadWindowLoaded(
-        jid: activeJid,
-        desiredWindow: desiredLimit,
-      );
     }
     _rebuildSections(emit, state);
   }
@@ -601,102 +597,6 @@ class AccessibilityActionBloc
   int _messageWindowForUnread(int unreadCount) {
     const basePageSize = 50;
     return unreadCount > basePageSize ? unreadCount : basePageSize;
-  }
-
-  Future<void> _ensureUnreadWindowLoaded({
-    required String jid,
-    required int desiredWindow,
-  }) async {
-    if (desiredWindow <= 0) {
-      return;
-    }
-    if (_unreadCountFor(jid) == 0) {
-      return;
-    }
-    Chat? chat;
-    for (final entry in _chats) {
-      if (entry.jid == jid) {
-        chat = entry;
-        break;
-      }
-    }
-    if (chat == null) {
-      return;
-    }
-    final remoteJid = chat.remoteJid;
-    var localCount = await _messageService.countLocalMessages(
-      jid: remoteJid,
-      filter: MessageTimelineFilter.directOnly,
-      includePseudoMessages: false,
-    );
-    if (localCount >= desiredWindow) {
-      return;
-    }
-    if (chat.defaultTransport.isEmail) {
-      final emailService = _emailService;
-      if (emailService == null) {
-        return;
-      }
-      if (state.messages.isEmpty) {
-        return;
-      }
-      Message? oldest;
-      for (final message in state.messages) {
-        if (message.deltaMsgId != null) {
-          oldest = message;
-          break;
-        }
-      }
-      oldest ??= state.messages.first;
-      await emailService.backfillChatHistory(
-        chat: chat,
-        desiredWindow: desiredWindow,
-        beforeMessageId: oldest.deltaMsgId,
-        beforeTimestamp: oldest.timestamp,
-        filter: MessageTimelineFilter.directOnly,
-      );
-      return;
-    }
-    if (_messageService is! XmppService) {
-      return;
-    }
-    if (state.messages.isEmpty) {
-      await _messageService.fetchLatestFromArchive(
-        jid: remoteJid,
-        pageSize: desiredWindow,
-        isMuc: chat.type == ChatType.groupChat,
-      );
-      localCount = await _messageService.countLocalMessages(
-        jid: remoteJid,
-        filter: MessageTimelineFilter.directOnly,
-        includePseudoMessages: false,
-      );
-      if (localCount >= desiredWindow || state.messages.isEmpty) {
-        return;
-      }
-    }
-    var beforeId = state.messages.first.stanzaID;
-    while (localCount < desiredWindow) {
-      final result = await _messageService.fetchBeforeFromArchive(
-        jid: remoteJid,
-        before: beforeId,
-        pageSize: desiredWindow,
-        isMuc: chat.type == ChatType.groupChat,
-      );
-      final nextBefore = result.firstId ?? beforeId;
-      localCount = await _messageService.countLocalMessages(
-        jid: remoteJid,
-        filter: MessageTimelineFilter.directOnly,
-        includePseudoMessages: false,
-      );
-      if (result.complete || nextBefore == beforeId) {
-        break;
-      }
-      if (localCount >= desiredWindow) {
-        break;
-      }
-      beforeId = nextBefore;
-    }
   }
 
   Set<String> _unreadDigest() {
@@ -1041,6 +941,19 @@ class AccessibilityActionBloc
     AccessibilityContact contact,
     Emitter<AccessibilityActionState> emit,
   ) {
+    Chat? chat;
+    for (final entry in _chats) {
+      if (entry.jid == contact.jid) {
+        chat = entry;
+        break;
+      }
+    }
+    if (chat?.open != true) {
+      fireAndForget(
+        () => _chatsService.openChat(contact.jid),
+        operationName: 'AccessibilityActionBloc.openChat',
+      );
+    }
     final nextStack = List<AccessibilityStepEntry>.of(state.stack);
     final newEntry = AccessibilityStepEntry(
       kind: AccessibilityStepKind.conversation,
@@ -1073,10 +986,9 @@ class AccessibilityActionBloc
     _rebuildSections(emit, nextState);
   }
 
-  void _startMessageStream(String jid, {int? limit}) {
+  void _startMessageStream(String jid) {
     _clearMessageStream();
-    final messagePageSize =
-        limit ?? _messageWindowForUnread(_unreadCountFor(jid));
+    final messagePageSize = _messageWindowForUnread(_unreadCountFor(jid));
     _messageStreamLimit = messagePageSize;
     _messageSubscription =
         _messageService.messageStreamForChat(jid, end: messagePageSize).listen(
@@ -1090,12 +1002,6 @@ class AccessibilityActionBloc
         );
       },
     );
-    Future<void>(() async {
-      await _ensureUnreadWindowLoaded(
-        jid: jid,
-        desiredWindow: messagePageSize,
-      );
-    });
   }
 
   Future<void> _clearMessageStream() async {
@@ -1132,17 +1038,6 @@ class AccessibilityActionBloc
       statusMessage: incomingStatus ?? state.statusMessage,
     );
     emit(nextState);
-    final unreadCount = _unreadCountFor(event.jid);
-    if (unreadCount > 0) {
-      final pseudoCount =
-          ordered.where((message) => message.pseudoMessageType != null).length;
-      final desiredWindow = _messageWindowForUnread(
-        unreadCount + pseudoCount,
-      );
-      if (desiredWindow > _messageStreamLimit) {
-        _startMessageStream(event.jid, limit: desiredWindow);
-      }
-    }
     _rebuildSections(emit, nextState);
   }
 

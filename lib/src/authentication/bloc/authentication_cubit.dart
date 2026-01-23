@@ -229,6 +229,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
   bool _emailProvisioningRetryInFlight = false;
+  bool _pendingEmailReconnect = false;
   DateTime? _lastEmailProvisioningRetryAt;
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
@@ -666,14 +667,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!_stickyAuthActive) {
       return true;
     }
-    if (_loginInFlight) {
-      return false;
-    }
     if (_hasEmailReconnectContext(config)) {
       return true;
     }
+    _pendingEmailReconnect = true;
     final bool didLogin = await _loginWithStoredCredentials();
     if (!didLogin) {
+      _pendingEmailReconnect = false;
       await logout();
     }
     return false;
@@ -713,16 +713,43 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!config.enableSmtp) return;
     final EmailService? emailService = _emailService;
     if (emailService == null) return;
+    if (_loginInFlight) {
+      _pendingEmailReconnect = true;
+      return;
+    }
     final bool canReconnect = await _ensureEmailReconnectContext(config);
     if (!canReconnect) {
       return;
     }
+    await _performEmailReconnect(emailService);
+  }
+
+  Future<void> _performEmailReconnect(EmailService emailService) async {
     try {
       await _attemptEmailProvisioningRecovery();
       await emailService.handleNetworkAvailable();
     } on Exception catch (error, stackTrace) {
       _log.finer('Email reconnect trigger failed', error, stackTrace);
     }
+  }
+
+  Future<void> _flushPendingEmailReconnect() async {
+    if (!_pendingEmailReconnect || _loginInFlight) {
+      return;
+    }
+    _pendingEmailReconnect = false;
+    if (!_stickyAuthActive) {
+      return;
+    }
+    final EndpointConfig config = endpointConfig;
+    if (!config.enableSmtp) {
+      return;
+    }
+    final EmailService? emailService = _emailService;
+    if (emailService == null) {
+      return;
+    }
+    await _performEmailReconnect(emailService);
   }
 
   Future<void> _attemptEmailProvisioningRecovery() async {
@@ -772,6 +799,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     final storedPassword = normalizeCredential(account?.password);
     final storedAddress = normalizeCredential(account?.address);
+    final activeAccount = emailService.activeAccount;
+    final activePassword = normalizeCredential(activeAccount?.password);
+    final activeAddress = normalizeCredential(activeAccount?.address);
     final sessionCredentials = _sessionEmailCredentials;
     final sessionMatches = sessionCredentials?.matches(jid) ?? false;
     final sessionPassword = sessionMatches
@@ -780,11 +810,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final sessionAddress = sessionMatches
         ? normalizeCredential(sessionCredentials?.address)
         : null;
-    final resolvedPassword = storedPassword ?? sessionPassword;
-    if (resolvedPassword == null) {
-      return;
-    }
-    final resolvedAddress = storedAddress ?? sessionAddress;
+    final resolvedPassword =
+        storedPassword ?? sessionPassword ?? activePassword;
+    final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
     _emailProvisioningRetryInFlight = true;
     _lastEmailProvisioningRetryAt = now;
     try {
@@ -1465,6 +1493,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     } finally {
       _loginInFlight = false;
+      await _flushPendingEmailReconnect();
     }
   }
 
