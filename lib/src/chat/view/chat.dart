@@ -93,7 +93,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
-import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
+import 'package:flutter/rendering.dart'
+    show
+        BoxHitTestResult,
+        ContainerBoxParentData,
+        ContainerRenderObjectMixin,
+        PipelineOwner,
+        RenderBox,
+        RenderBoxContainerDefaultsMixin,
+        RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -12670,7 +12678,7 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       size = constraints.smallest;
       return;
     }
-    bubbleChild.layout(constraints.loose(), parentUsesSize: true);
+    bubbleChild.layout(constraints.loosen(), parentUsesSize: true);
     final bubbleSize = bubbleChild.size;
     var previewHeight = 0.0;
     if (previewChild != null) {
@@ -12692,14 +12700,12 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
   }
 
   @override
-  void paint(PaintingContext context, Offset offset) {
-    RenderBox? child = firstChild;
-    while (child != null) {
-      final parentData = child.parentData as _ReplyPreviewBubbleParentData;
-      context.paintChild(child, parentData.offset + offset);
-      child = parentData.nextSibling;
-    }
-  }
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
 }
 
 class _QuoteBanner extends StatelessWidget {
