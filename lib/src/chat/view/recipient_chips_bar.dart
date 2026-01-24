@@ -1292,6 +1292,7 @@ final class _RecipientAutocompleteOverlayState
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ensurePopEntryRegistered();
+    _recomputeOptions();
   }
 
   void _syncPortalVisibility() {
@@ -1325,7 +1326,6 @@ final class _RecipientAutocompleteOverlayState
     super.initState();
     widget.controller.addListener(_recomputeOptions);
     widget.focusNode.addListener(_handleFocusChanged);
-    _recomputeOptions();
   }
 
   @override

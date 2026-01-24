@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/fade_scale_dialog.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/modal_close_button.dart';
 import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +73,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
             child: child,
           ),
         );
+        final Widget scopedSurface = KeyboardPopScope(child: surface);
         return MediaQuery(
           data: windowMediaQuery,
           child: Padding(
@@ -85,7 +87,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
                 constraints: BoxConstraints(
                   maxHeight: windowMediaQuery.size.height - topInset,
                 ),
-                child: surface,
+                child: scopedSurface,
               ),
             ),
           ),

@@ -3,6 +3,7 @@
 
 import 'package:animations/animations.dart';
 import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 
@@ -34,7 +35,7 @@ Future<T?> showFadeScaleDialog<T>({
   return showGeneralDialog<T>(
     context: context,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final Widget child = builder(dialogContext);
+      final Widget child = KeyboardPopScope(child: builder(dialogContext));
       if (!useSafeArea) return child;
       return SafeArea(child: child);
     },
