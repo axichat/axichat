@@ -12714,16 +12714,16 @@ class _ReplyingToPreviewText extends StatelessWidget {
     final baseStyle = context.textTheme.small;
     final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
     final replyPrefix = context.l10n.chatReplyingTo;
-    final headerSpan = TextSpan(
-      text: replyPrefix,
-      style: mutedStyle,
+    final senderSpan = TextSpan(
+      text: senderLabel,
+      style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
+    );
+    final headerPrefixSpan = TextSpan(text: replyPrefix, style: mutedStyle);
+    final headerWithNameSpan = TextSpan(
       children: [
+        headerPrefixSpan,
         const TextSpan(text: ' '),
-        TextSpan(
-          text: senderLabel,
-          style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const TextSpan(text: ' '),
+        senderSpan,
       ],
     );
     final quoteSpan = TextSpan(text: quotedPreview, style: baseStyle);
@@ -12732,15 +12732,62 @@ class _ReplyingToPreviewText extends StatelessWidget {
       builder: (context, constraints) {
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-        final painter = TextPainter(
-          text: TextSpan(children: [headerSpan, quoteSpan]),
+        final headerPainter = TextPainter(
+          text: headerWithNameSpan,
           textDirection: Directionality.of(context),
           textScaler: textScaler,
         )..layout(maxWidth: constraints.maxWidth);
-        final canInline = painter.computeLineMetrics().length <= 1;
+        final headerFits = headerPainter.computeLineMetrics().length <= 1;
+        if (!headerFits) {
+          final inlineQuoteSpan = TextSpan(
+            children: [
+              senderSpan,
+              const TextSpan(text: ' '),
+              quoteSpan,
+            ],
+          );
+          return Column(
+            crossAxisAlignment:
+                isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            spacing: 2,
+            children: [
+              Text(
+                replyPrefix,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: textAlign,
+                style: mutedStyle,
+              ),
+              Text.rich(
+                inlineQuoteSpan,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: textAlign,
+              ),
+            ],
+          );
+        }
+        final inlinePainter = TextPainter(
+          text: TextSpan(
+            children: [
+              headerWithNameSpan,
+              const TextSpan(text: ' '),
+              quoteSpan,
+            ],
+          ),
+          textDirection: Directionality.of(context),
+          textScaler: textScaler,
+        )..layout(maxWidth: constraints.maxWidth);
+        final canInline = inlinePainter.computeLineMetrics().length <= 1;
         if (canInline) {
           return Text.rich(
-            TextSpan(children: [headerSpan, quoteSpan]),
+            TextSpan(
+              children: [
+                headerWithNameSpan,
+                const TextSpan(text: ' '),
+                quoteSpan,
+              ],
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: textAlign,
@@ -12752,14 +12799,14 @@ class _ReplyingToPreviewText extends StatelessWidget {
           spacing: 2,
           children: [
             Text.rich(
-              headerSpan,
+              headerWithNameSpan,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: textAlign,
             ),
             Text(
               quotedPreview,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: textAlign,
               style: baseStyle,
@@ -12877,12 +12924,14 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     final double bubbleWidth = bubbleSize.width;
     var previewHeight = 0.0;
     var senderLabelHeight = 0.0;
+    var senderLabelWidth = 0.0;
     if (senderLabelChild != null) {
       senderLabelChild.layout(
-        BoxConstraints.tightFor(width: bubbleWidth),
+        constraints.loosen(),
         parentUsesSize: true,
       );
       senderLabelHeight = senderLabelChild.size.height;
+      senderLabelWidth = senderLabelChild.size.width;
       final senderLabelParentData =
           senderLabelChild.parentData as _ReplyPreviewBubbleParentData;
       senderLabelParentData.offset = Offset.zero;
@@ -12903,9 +12952,10 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       0,
       previewHeight + senderLabelHeight,
     );
+    final layoutWidth = math.max(bubbleWidth, senderLabelWidth);
     size = constraints.constrain(
       Size(
-        bubbleWidth,
+        layoutWidth,
         bubbleSize.height + previewHeight + senderLabelHeight,
       ),
     );
