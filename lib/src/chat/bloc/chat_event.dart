@@ -176,7 +176,7 @@ final class ChatMuted extends ChatEvent {
 final class ChatNotificationPreviewSettingChanged extends ChatEvent {
   const ChatNotificationPreviewSettingChanged(this.setting);
 
-  final NotificationPreviewSetting setting;
+  final NotificationPreviewSetting? setting;
 
   @override
   List<Object?> get props => [setting];

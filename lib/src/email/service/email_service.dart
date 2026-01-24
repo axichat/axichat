@@ -2343,9 +2343,9 @@ class EmailService {
       if (notificationBody == null) {
         return;
       }
-      final previewSetting = context.chat?.notificationPreviewSetting ??
-          NotificationPreviewSetting.inherit;
-      final showPreview = previewSetting.resolvePreview(
+      final previewSetting = context.chat?.notificationPreviewSetting;
+      final showPreview = NotificationPreviewSetting.resolveOverride(
+        previewSetting,
         notificationService.notificationPreviewsEnabled,
       );
       final notificationTarget = context.chat?.jid ?? context.message.chatJid;
@@ -2392,9 +2392,9 @@ class EmailService {
       final body = normalizedReaction == null || normalizedReaction.isEmpty
           ? _reactionNotificationFallback
           : '$_reactionNotificationPrefix$normalizedReaction';
-      final previewSetting = context.chat?.notificationPreviewSetting ??
-          NotificationPreviewSetting.inherit;
-      final showPreview = previewSetting.resolvePreview(
+      final previewSetting = context.chat?.notificationPreviewSetting;
+      final showPreview = NotificationPreviewSetting.resolveOverride(
+        previewSetting,
         notificationService.notificationPreviewsEnabled,
       );
       final notificationTarget = context.chat?.jid ?? context.message.chatJid;
@@ -2441,9 +2441,9 @@ class EmailService {
       final body = normalizedText == null || normalizedText.isEmpty
           ? _webxdcNotificationFallback
           : normalizedText;
-      final previewSetting = context.chat?.notificationPreviewSetting ??
-          NotificationPreviewSetting.inherit;
-      final showPreview = previewSetting.resolvePreview(
+      final previewSetting = context.chat?.notificationPreviewSetting;
+      final showPreview = NotificationPreviewSetting.resolveOverride(
+        previewSetting,
         notificationService.notificationPreviewsEnabled,
       );
       final notificationTarget = context.chat?.jid ?? context.message.chatJid;

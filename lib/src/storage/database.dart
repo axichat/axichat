@@ -424,17 +424,17 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> setChatNotificationPreviewSetting({
     required String jid,
-    required NotificationPreviewSetting setting,
+    required NotificationPreviewSetting? setting,
   });
 
   Future<void> setChatShareSignature({
     required String jid,
-    required bool enabled,
+    required bool? enabled,
   });
 
   Future<void> setChatAttachmentAutoDownload({
     required String jid,
-    required AttachmentAutoDownload value,
+    required AttachmentAutoDownload? value,
   });
 
   Future<void> markChatFavorited({
@@ -454,7 +454,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markChatMarkerResponsive({
     required String jid,
-    required bool responsive,
+    required bool? responsive,
   });
 
   Future<void> updateChatAvatar({
@@ -3791,7 +3791,7 @@ $limitClause
   @override
   Future<void> setChatNotificationPreviewSetting({
     required String jid,
-    required NotificationPreviewSetting setting,
+    required NotificationPreviewSetting? setting,
   }) async {
     _log.info('Updating chat notification preview setting');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -3802,7 +3802,7 @@ $limitClause
   @override
   Future<void> setChatShareSignature({
     required String jid,
-    required bool enabled,
+    required bool? enabled,
   }) async {
     _log.info('Updating chat share signature');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -3813,7 +3813,7 @@ $limitClause
   @override
   Future<void> setChatAttachmentAutoDownload({
     required String jid,
-    required AttachmentAutoDownload value,
+    required AttachmentAutoDownload? value,
   }) async {
     _log.info('Updating chat attachment auto-download state');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -3949,7 +3949,7 @@ $limitClause
   @override
   Future<void> markChatMarkerResponsive({
     required String jid,
-    required bool responsive,
+    required bool? responsive,
   }) async {
     _log.info('Updating chat marker responsiveness');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(

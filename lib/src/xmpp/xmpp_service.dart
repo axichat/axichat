@@ -1289,9 +1289,9 @@ class XmppService extends XmppBase
       if (chat?.muted ?? false) {
         return;
       }
-      final previewSetting = chat?.notificationPreviewSetting ??
-          NotificationPreviewSetting.inherit;
-      final showPreview = previewSetting.resolvePreview(
+      final previewSetting = chat?.notificationPreviewSetting;
+      final showPreview = NotificationPreviewSetting.resolveOverride(
+        previewSetting,
         _notificationService.notificationPreviewsEnabled,
       );
       final threadKey =
