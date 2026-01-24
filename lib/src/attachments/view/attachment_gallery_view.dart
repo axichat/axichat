@@ -88,26 +88,25 @@ class AttachmentGalleryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
-    if (resolvedChat == null) {
+    if (chat == null) {
       return const SizedBox.shrink();
     }
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: context.read<XmppService>(),
         emailService: context.read<EmailService>(),
-        chatJid: resolvedChat.jid,
-        chatOverride: resolvedChat,
+        chatJid: chat.jid,
+        chatOverride: chat,
         showChatLabel: false,
       ),
       child: AxiSheetScaffold(
         header: AxiSheetHeader(
           title: Text(title),
-          subtitle: Text(resolvedChat.displayName),
+          subtitle: Text(chat.displayName),
           onClose: onClose,
         ),
         body: AttachmentGalleryView(
-          chatOverride: resolvedChat,
+          chatOverride: chat,
           showChatLabel: false,
         ),
       ),

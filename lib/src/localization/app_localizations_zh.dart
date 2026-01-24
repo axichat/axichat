@@ -1800,6 +1800,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionAbout => 'About';
 
   @override
+  String get settingsAboutAxichat => 'About Axichat';
+
+  @override
+  String get settingsTermsLabel => 'Terms';
+
+  @override
+  String get settingsPrivacyLabel => 'Privacy';
+
+  @override
   String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
@@ -7118,6 +7127,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsSectionAbout => 'About';
+
+  @override
+  String get settingsAboutAxichat => 'About Axichat';
+
+  @override
+  String get settingsTermsLabel => 'Terms';
+
+  @override
+  String get settingsPrivacyLabel => 'Privacy';
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';

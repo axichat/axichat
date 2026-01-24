@@ -117,12 +117,8 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            const ListItemPadding(
-              child: EmailForwardingGuideActionButton(),
-            ),
-            const ListItemPadding(
-              child: EmailContactImportActionButton(),
-            ),
+            const EmailForwardingGuideActionButton(),
+            const EmailContactImportActionButton(),
             _SettingsActionButton(
               iconData: LucideIcons.image,
               label: context.l10n.draftAttachmentsLabel,
@@ -467,9 +463,7 @@ class SettingsControls extends StatelessWidget {
                   ),
             _SettingsActionButton(
               iconData: LucideIcons.info,
-              label: MaterialLocalizations.of(
-                context,
-              ).aboutListTileTitle(appDisplayName),
+              label: context.l10n.settingsAboutAxichat,
               onPressed: () => showAboutDialog(
                 context: context,
                 applicationName: appDisplayName,
@@ -478,11 +472,11 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             _SettingsLinkButton(
-              label: context.l10n.termsAgreementTerms,
+              label: context.l10n.settingsTermsLabel,
               link: termsUrl,
             ),
             _SettingsLinkButton(
-              label: context.l10n.termsAgreementPrivacy,
+              label: context.l10n.settingsPrivacyLabel,
               link: privacyUrl,
             ),
             _SettingsLinkButton(
@@ -675,27 +669,40 @@ class _SettingsActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive
-        ? context.colorScheme.destructive
-        : context.colorScheme.mutedForeground;
-    return ListItemPadding(
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: ShadButton.ghost(
-          size: ShadButtonSize.sm,
-          onPressed: onPressed,
-          child: IconTheme.merge(
-            data: IconThemeData(color: color),
-            child: DefaultTextStyle.merge(
-              style: context.textTheme.small.copyWith(color: color),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (iconData != null) Icon(iconData),
-                  if (iconData != null)
-                    SizedBox(width: _compactTilePadding.horizontal / 2),
-                  Flexible(child: Text(label)),
-                ],
+    final colors = context.colorScheme;
+    final backgroundColor = colors.card;
+    final foregroundColor =
+        destructive ? colors.destructive : colors.foreground;
+    final verticalInset = _compactTilePadding.vertical * 2 / 3;
+    final iconSpacing = _compactTilePadding.horizontal / 2;
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: _compactTilePadding.horizontal,
+        vertical: verticalInset,
+      ),
+      child: ClipRRect(
+        borderRadius: context.radius,
+        child: ColoredBox(
+          color: backgroundColor,
+          child: SizedBox(
+            width: double.infinity,
+            child: ShadButton.ghost(
+              size: ShadButtonSize.sm,
+              onPressed: onPressed,
+              child: IconTheme.merge(
+                data: IconThemeData(color: foregroundColor),
+                child: DefaultTextStyle.merge(
+                  style: context.textTheme.small.copyWith(
+                    color: foregroundColor,
+                  ),
+                  child: Row(
+                    children: [
+                      if (iconData != null) Icon(iconData),
+                      if (iconData != null) SizedBox(width: iconSpacing),
+                      Expanded(child: Text(label)),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -721,7 +728,6 @@ class _SettingsLinkButton extends StatelessWidget {
       builder: (_, followLink) => _SettingsActionButton(
         label: label,
         onPressed: followLink,
-        iconData: LucideIcons.externalLink,
       ),
     );
   }

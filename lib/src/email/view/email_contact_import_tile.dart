@@ -59,35 +59,55 @@ class EmailContactImportActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    const horizontalInset = _dialogFieldSpacing * 2;
+    const verticalInset = _dialogFieldSpacing / 2;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: ShadButton.ghost(
-            size: ShadButtonSize.sm,
-            onPressed: loading
-                ? null
-                : () {
-                    showFadeScaleDialog(
-                      context: context,
-                      builder: (dialogContext) => EmailContactImportDialog(
-                        cubit: context.read<EmailContactImportCubit>()..reset(),
+        return Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: horizontalInset,
+            vertical: verticalInset,
+          ),
+          child: ClipRRect(
+            borderRadius: context.radius,
+            child: ColoredBox(
+              color: colors.card,
+              child: SizedBox(
+                width: double.infinity,
+                child: ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: loading
+                      ? null
+                      : () {
+                          showFadeScaleDialog(
+                            context: context,
+                            builder: (dialogContext) =>
+                                EmailContactImportDialog(
+                              cubit: context.read<EmailContactImportCubit>()
+                                ..reset(),
+                            ),
+                          );
+                        },
+                  child: Row(
+                    children: [
+                      Icon(
+                        LucideIcons.userRoundPlus,
+                        color: colors.foreground,
                       ),
-                    );
-                  },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.userRoundPlus, color: colors.mutedForeground),
-                const SizedBox(width: _dialogFieldSpacing),
-                Text(
-                  context.l10n.emailContactsImportTitle,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.mutedForeground,
+                      const SizedBox(width: _dialogFieldSpacing),
+                      Expanded(
+                        child: Text(
+                          context.l10n.emailContactsImportTitle,
+                          style: context.textTheme.small.copyWith(
+                            color: colors.foreground,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         );

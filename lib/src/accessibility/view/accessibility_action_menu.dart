@@ -124,9 +124,6 @@ List<AccessibilityMenuSection> _rootSectionsFor(
     sections.addAll(_inviteSectionsFor(context, state));
   }
 
-  final orderedDrafts = List<Draft>.of(state.drafts)
-    ..sort((a, b) => b.id.compareTo(a.id));
-
   final chatItems = state.contacts
       .where((contact) => contact.source == AccessibilityContactSource.chat)
       .map(
@@ -166,12 +163,12 @@ List<AccessibilityMenuSection> _rootSectionsFor(
     ),
   );
 
-  if (orderedDrafts.isNotEmpty) {
+  if (state.drafts.isNotEmpty) {
     sections.add(
       AccessibilityMenuSection(
         id: 'drafts',
         title: l10n.homeTabDrafts,
-        items: _draftMenuItemsFor(context, state, orderedDrafts),
+        items: _draftMenuItemsFor(context, state, state.drafts),
       ),
     );
   }
