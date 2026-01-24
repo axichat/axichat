@@ -12764,7 +12764,12 @@ class _ReplyingToPreviewText extends StatelessWidget {
       ],
     );
     final quoteSpan = TextSpan(text: quotedPreview, style: baseStyle);
-    final textAlign = isSelf ? TextAlign.end : TextAlign.start;
+    final textDirection = Directionality.of(context);
+    final textAlign =
+        textDirection == TextDirection.rtl ? TextAlign.end : TextAlign.start;
+    final crossAxisAlignment = textDirection == TextDirection.rtl
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start;
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScaler =
@@ -12784,8 +12789,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
             ],
           );
           return Column(
-            crossAxisAlignment:
-                isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: crossAxisAlignment,
             spacing: 2,
             children: [
               Text(
@@ -12831,8 +12835,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
           );
         }
         return Column(
-          crossAxisAlignment:
-              isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: crossAxisAlignment,
           spacing: 2,
           children: [
             Text.rich(
@@ -13992,12 +13995,22 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     Navigator.of(context).pop(selected);
   }
 
+  Future<void> _handleClose() async {
+    final focusNode = FocusManager.instance.primaryFocus;
+    focusNode?.unfocus();
+    if (focusNode != null) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),
-      onClose: () => Navigator.of(context).maybePop(),
+      onClose: _handleClose,
     );
     return AxiSheetScaffold.scroll(
       header: header,
