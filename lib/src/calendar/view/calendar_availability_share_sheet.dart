@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_free_busy_editor.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
@@ -87,8 +88,9 @@ Future<void> showCalendarAvailabilityShareSheet({
     );
     return;
   }
+  final BuildContext modalContext = context.calendarModalContext;
   final record =
-      await Navigator.of(context).push<CalendarAvailabilityShareRecord>(
+      await Navigator.of(modalContext).push<CalendarAvailabilityShareRecord>(
     AxiFadePageRoute(
       duration: baseAnimationDuration,
       fullscreenDialog: true,
@@ -1250,7 +1252,12 @@ class _AvailabilityActionRow extends StatelessWidget {
         const SizedBox(width: _availabilityRecipientChipSpacing),
         ShadButton(
           size: ShadButtonSize.sm,
-          onPressed: isBusy ? null : onPressed,
+          onPressed: () {
+            if (isBusy) {
+              return;
+            }
+            onPressed();
+          },
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

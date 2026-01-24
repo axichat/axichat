@@ -18,6 +18,7 @@ import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
@@ -1633,8 +1634,9 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
     );
   }
 
+  final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<void>(
-    context: context,
+    context: modalContext,
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,

@@ -238,6 +238,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final Set<String> knownAddresses =
         widget.allowAddressTargets ? _knownAddresses() : const <String>{};
     const headerPadding = chipsBarHeaderPadding;
+    const double autocompleteFieldOuterPadding = 8.0;
+    const double autocompleteFieldInnerPadding = 12.0;
     final bodyPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
       vertical: 6,
@@ -378,6 +380,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                           controller: _controller,
                           focusNode: _focusNode,
                           tapRegionGroup: _tapRegionGroup,
+                          fieldOuterPadding: autocompleteFieldOuterPadding,
+                          fieldInnerPadding: autocompleteFieldInnerPadding,
                           backgroundColor: barBackground,
                           avatarPathsByJid: avatarPathsByJid,
                           showSuggestionsWhenEmpty:
@@ -1152,6 +1156,8 @@ class _RecipientAutocompleteField extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.tapRegionGroup,
+    required this.fieldOuterPadding,
+    required this.fieldInnerPadding,
     required this.backgroundColor,
     required this.avatarPathsByJid,
     required this.showSuggestionsWhenEmpty,
@@ -1166,6 +1172,8 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final Object tapRegionGroup;
+  final double fieldOuterPadding;
+  final double fieldInnerPadding;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
   final bool showSuggestionsWhenEmpty;
@@ -1180,29 +1188,79 @@ class _RecipientAutocompleteField extends StatelessWidget {
   Widget build(BuildContext context) {
     const double fieldMinWidth = 90.0;
     const double fieldMaxWidth = 120.0;
+    final double fieldHorizontalPadding =
+        (fieldOuterPadding + fieldInnerPadding) * 2;
+    final TextStyle? textStyle = Theme.of(context).textTheme.bodyMedium;
     return AutofillGroup(
-      child: IntrinsicWidth(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minWidth: fieldMinWidth,
-            maxWidth: fieldMaxWidth,
-          ),
-          child: _RecipientAutocompleteOverlay(
-            controller: controller,
-            focusNode: focusNode,
-            tapRegionGroup: tapRegionGroup,
-            backgroundColor: backgroundColor,
-            avatarPathsByJid: avatarPathsByJid,
-            showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
-            optionsBuilder: optionsBuilder,
-            highlightedIndexListenable: highlightedIndexListenable,
-            onManualEntry: onManualEntry,
-            onOptionsChanged: onOptionsChanged,
-            onSubmitted: onSubmitted,
-            onRecipientAdded: onRecipientAdded,
-          ),
+      child: _RecipientAutocompleteFieldSizer(
+        controller: controller,
+        minWidth: fieldMinWidth,
+        maxWidth: fieldMaxWidth,
+        horizontalPadding: fieldHorizontalPadding,
+        textStyle: textStyle,
+        child: _RecipientAutocompleteOverlay(
+          controller: controller,
+          focusNode: focusNode,
+          tapRegionGroup: tapRegionGroup,
+          fieldOuterPadding: fieldOuterPadding,
+          fieldInnerPadding: fieldInnerPadding,
+          backgroundColor: backgroundColor,
+          avatarPathsByJid: avatarPathsByJid,
+          showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
+          optionsBuilder: optionsBuilder,
+          highlightedIndexListenable: highlightedIndexListenable,
+          onManualEntry: onManualEntry,
+          onOptionsChanged: onOptionsChanged,
+          onSubmitted: onSubmitted,
+          onRecipientAdded: onRecipientAdded,
         ),
       ),
+    );
+  }
+}
+
+class _RecipientAutocompleteFieldSizer extends StatelessWidget {
+  const _RecipientAutocompleteFieldSizer({
+    required this.controller,
+    required this.minWidth,
+    required this.maxWidth,
+    required this.horizontalPadding,
+    required this.textStyle,
+    required this.child,
+  });
+
+  final TextEditingController controller;
+  final double minWidth;
+  final double maxWidth;
+  final double horizontalPadding;
+  final TextStyle? textStyle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle resolvedStyle =
+        textStyle ?? DefaultTextStyle.of(context).style;
+    final TextDirection textDirection = Directionality.of(context);
+    final TextScaler textScaler = MediaQuery.textScalerOf(context);
+
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        final String text = value.text;
+        final double measuredWidth = text.isEmpty
+            ? minWidth
+            : (TextPainter(
+                  text: TextSpan(text: text, style: resolvedStyle),
+                  textDirection: textDirection,
+                  textScaler: textScaler,
+                  maxLines: 1,
+                )..layout())
+                    .width +
+                horizontalPadding;
+        final double width = measuredWidth.clamp(minWidth, maxWidth).toDouble();
+        return SizedBox(width: width, child: child);
+      },
+      child: child,
     );
   }
 }
@@ -1212,6 +1270,8 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     required this.tapRegionGroup,
+    required this.fieldOuterPadding,
+    required this.fieldInnerPadding,
     required this.backgroundColor,
     required this.avatarPathsByJid,
     required this.showSuggestionsWhenEmpty,
@@ -1226,6 +1286,8 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final Object tapRegionGroup;
+  final double fieldOuterPadding;
+  final double fieldInnerPadding;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
   final bool showSuggestionsWhenEmpty;
@@ -1262,10 +1324,10 @@ final class _RecipientAutocompleteOverlayState
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
   void _handleTapOutside() {
-    if (!mounted || !widget.focusNode.hasFocus) {
+    if (!mounted) {
       return;
     }
-    widget.focusNode.unfocus();
+    _dismissOverlay();
   }
 
   void _recomputeOptions() {
@@ -1292,25 +1354,17 @@ final class _RecipientAutocompleteOverlayState
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ensurePopEntryRegistered();
-    _recomputeOptions();
   }
 
   void _syncPortalVisibility() {
-    final shouldShow = (widget.controller.text.trim().isNotEmpty ||
+    final shouldShow = widget.focusNode.hasFocus &&
+        (widget.controller.text.trim().isNotEmpty ||
             widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
     if (shouldShow) {
+      _popEntry.setCanPop(false);
       if (!_portalController.isShowing) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _ensurePopEntryRegistered();
-          _popEntry.setCanPop(false);
-          if (!_portalController.isShowing) {
-            _portalController.show();
-          }
-        });
-      } else {
-        _popEntry.setCanPop(false);
+        _portalController.show();
       }
     } else {
       if (_portalController.isShowing) {
@@ -1527,6 +1581,7 @@ final class _RecipientAutocompleteOverlayState
     final colors = context.colorScheme;
     final hintColor = materialColors.onSurfaceVariant.withValues(alpha: 0.8);
     final textStyle = Theme.of(context).textTheme.bodyMedium;
+    const double fieldVerticalPadding = 6.0;
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -1661,7 +1716,9 @@ final class _RecipientAutocompleteOverlayState
               key: _triggerKey,
               height: chipsBarHeight,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.fieldOuterPadding,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: DecoratedBox(
@@ -1670,9 +1727,9 @@ final class _RecipientAutocompleteOverlayState
                       borderRadius: BorderRadius.circular(chipsBarHeight / 2),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: widget.fieldInnerPadding,
+                        vertical: fieldVerticalPadding,
                       ),
                       child: Theme(
                         data: Theme.of(context).copyWith(

@@ -12,6 +12,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 
 typedef DeadlineChanged = void Function(DateTime? value);
 
@@ -243,8 +244,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     setState(() => _isBottomSheetOpen = true);
 
     try {
+      final BuildContext modalContext = context.calendarModalContext;
       await showAdaptiveBottomSheet<void>(
-        context: context,
+        context: modalContext,
         isScrollControlled: true,
         showCloseButton: true,
         surfacePadding: EdgeInsets.zero,
@@ -976,7 +978,7 @@ class _DeadlineSheetContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      top: true,
+      top: false,
       bottom: false,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),

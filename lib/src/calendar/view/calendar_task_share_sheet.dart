@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
@@ -50,8 +51,9 @@ Future<void> showCalendarTaskShareSheet({
     FeedbackSystem.showInfo(context, l10n.calendarTaskShareMissingChats);
     return;
   }
+  final BuildContext modalContext = context.calendarModalContext;
   final result = await showAdaptiveBottomSheet<bool>(
-    context: context,
+    context: modalContext,
     isScrollControlled: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
@@ -426,7 +428,12 @@ class _TaskShareActionRow extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: ShadButton(
         size: ShadButtonSize.sm,
-        onPressed: isBusy ? null : onPressed,
+        onPressed: () {
+          if (isBusy) {
+            return;
+          }
+          onPressed();
+        },
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -70,6 +70,7 @@ import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -1896,32 +1897,34 @@ class _ChatState extends State<Chat> {
       barrierColor: Colors.black.withValues(alpha: 0.45),
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              width: drawerWidth,
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider.value(value: locate<ChatBloc>()),
-                  BlocProvider.value(value: locate<RosterCubit>()),
-                ],
-                child: Builder(
-                  builder: (dialogContext) => _RoomMembersDrawerContent(
-                    onInvite: (jid) =>
-                        locate<ChatBloc>().add(ChatInviteRequested(jid)),
-                    onAction: (occupantId, action) => locate<ChatBloc>().add(
-                      ChatModerationActionRequested(
-                        occupantId: occupantId,
-                        action: action,
+        return KeyboardPopScope(
+          child: SafeArea(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                width: drawerWidth,
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider.value(value: locate<ChatBloc>()),
+                    BlocProvider.value(value: locate<RosterCubit>()),
+                  ],
+                  child: Builder(
+                    builder: (dialogContext) => _RoomMembersDrawerContent(
+                      onInvite: (jid) =>
+                          locate<ChatBloc>().add(ChatInviteRequested(jid)),
+                      onAction: (occupantId, action) => locate<ChatBloc>().add(
+                        ChatModerationActionRequested(
+                          occupantId: occupantId,
+                          action: action,
+                        ),
                       ),
+                      onChangeNickname: (nick) => locate<ChatBloc>().add(
+                        ChatNicknameChangeRequested(nick),
+                      ),
+                      onLeaveRoom: () => locate<ChatBloc>()
+                          .add(const ChatLeaveRoomRequested()),
+                      onClose: navigator.pop,
                     ),
-                    onChangeNickname: (nick) => locate<ChatBloc>().add(
-                      ChatNicknameChangeRequested(nick),
-                    ),
-                    onLeaveRoom: () =>
-                        locate<ChatBloc>().add(const ChatLeaveRoomRequested()),
-                    onClose: navigator.pop,
                   ),
                 ),
               ),
