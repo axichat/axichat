@@ -543,16 +543,17 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   Future<void> setChatNotificationPreviewSetting({
     required String jid,
-    required NotificationPreviewSetting setting,
+    required NotificationPreviewSetting? setting,
   }) async {
     await _dbOp<XmppDatabase>(
-      (db) => db.setChatNotificationPreviewSetting(jid: jid, setting: setting),
+      (db) =>
+          db.setChatNotificationPreviewSetting(jid: jid, setting: setting),
     );
   }
 
   Future<void> toggleChatShareSignature({
     required String jid,
-    required bool enabled,
+    required bool? enabled,
   }) async {
     await _dbOp<XmppDatabase>(
       (db) => db.setChatShareSignature(jid: jid, enabled: enabled),

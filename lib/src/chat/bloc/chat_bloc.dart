@@ -4284,8 +4284,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (service == null || recipients.isEmpty) return false;
     final chat = state.chat;
     if (chat == null) return false;
+    final chatShareSignatureEnabled =
+        chat.shareSignatureEnabled ?? _settingsState.shareTokenSignatureEnabled;
     final useSignatureToken = _settingsState.shareTokenSignatureEnabled &&
-        chat.shareSignatureEnabled &&
+        chatShareSignatureEnabled &&
         recipients.every((recipient) => recipient.target.shareSignatureEnabled);
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
     try {
