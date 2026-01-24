@@ -318,6 +318,14 @@ abstract interface class XmppBase {
 
   bool get autoDownloadArchives;
 
+  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
+      autoDownloadImages ||
+              autoDownloadVideos ||
+              autoDownloadDocuments ||
+              autoDownloadArchives
+          ? AttachmentAutoDownload.allowed
+          : AttachmentAutoDownload.blocked;
+
   void updateAttachmentAutoDownloadSettings({
     required bool imagesEnabled,
     required bool videosEnabled,

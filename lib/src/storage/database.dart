@@ -488,9 +488,15 @@ abstract interface class XmppDatabase implements Database {
 
   Future<RosterItem?> getRosterItem(String jid);
 
-  Future<void> saveRosterItem(RosterItem item);
+  Future<void> saveRosterItem({
+    required RosterItem item,
+    required AttachmentAutoDownload attachmentAutoDownload,
+  });
 
-  Future<void> saveRosterItems(List<RosterItem> items);
+  Future<void> saveRosterItems({
+    required List<RosterItem> items,
+    required AttachmentAutoDownload attachmentAutoDownload,
+  });
 
   Future<void> updateRosterItem(RosterItem item);
 
@@ -4014,21 +4020,37 @@ $limitClause
   }
 
   @override
-  Future<void> saveRosterItem(RosterItem item) async {
+  Future<void> saveRosterItem({
+    required RosterItem item,
+    required AttachmentAutoDownload attachmentAutoDownload,
+  }) async {
     _log.info('Saving roster item');
     await transaction(() async {
-      await createChat(Chat.fromJid(item.jid));
+      await createChat(
+        Chat.fromJid(
+          item.jid,
+          attachmentAutoDownload: attachmentAutoDownload,
+        ),
+      );
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
   }
 
   @override
-  Future<void> saveRosterItems(List<RosterItem> items) async {
+  Future<void> saveRosterItems({
+    required List<RosterItem> items,
+    required AttachmentAutoDownload attachmentAutoDownload,
+  }) async {
     await transaction(() async {
       for (final item in items) {
         _log.info('Saving roster item');
-        await createChat(Chat.fromJid(item.jid));
+        await createChat(
+          Chat.fromJid(
+            item.jid,
+            attachmentAutoDownload: attachmentAutoDownload,
+          ),
+        );
         await rosterAccessor.insertOrUpdateOne(item);
         await invitesAccessor.deleteOne(item.jid);
       }

@@ -1048,7 +1048,7 @@ class DeltaEventConsumer {
         warning == MessageWarning.emailSpamQuarantined;
     if (!isOutgoing &&
         msg.hasFile &&
-        resolvedChat.attachmentAutoDownload.resolveAllowed() &&
+        resolvedChat.attachmentAutoDownload.isAllowed &&
         !isSpamQuarantined) {
       fireAndForget(
         () => _context.downloadFullMessage(msg.id),

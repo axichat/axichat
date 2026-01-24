@@ -75,7 +75,10 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
     final items = rosterResult.items.map(RosterItem.fromMox).toList();
 
     await _dbOp<XmppDatabase>(
-      (db) => db.saveRosterItems(items),
+      (db) => db.saveRosterItems(
+        items: items,
+        attachmentAutoDownload: defaultChatAttachmentAutoDownload,
+      ),
       awaitDatabase: true,
     );
     if (this is AvatarService) {
@@ -140,7 +143,10 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
     if (existing == null) {
       await _dbOp<XmppDatabase>(
         (db) => db.createChat(
-          Chat.fromJid(normalized).copyWith(lastChangeTimestamp: createdAt),
+          Chat.fromJid(
+            normalized,
+            attachmentAutoDownload: defaultChatAttachmentAutoDownload,
+          ).copyWith(lastChangeTimestamp: createdAt),
         ),
       );
     }
@@ -253,7 +259,10 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
       }
 
       for (final item in added) {
-        await db.saveRosterItem(RosterItem.fromMox(item));
+        await db.saveRosterItem(
+          item: RosterItem.fromMox(item),
+          attachmentAutoDownload: defaultChatAttachmentAutoDownload,
+        );
         updatedJids.add(item.jid);
       }
 

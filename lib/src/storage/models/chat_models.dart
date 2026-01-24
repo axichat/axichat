@@ -263,18 +263,13 @@ enum ChatType { chat, groupChat, note }
 
 enum AttachmentAutoDownload {
   blocked,
-  allowed,
-  inherit;
+  allowed;
 
-  static const int defaultIndex = 2;
-
-  bool get isInherited => this == inherit;
+  static const int defaultIndex = 0;
 
   bool get isBlocked => this == blocked;
 
   bool get isAllowed => this == allowed;
-
-  bool resolveAllowed() => this != blocked;
 }
 
 enum NotificationPreviewSetting {
@@ -325,7 +320,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     DateTime? spamUpdatedAt,
     @Default(true) bool markerResponsive,
     @Default(true) bool shareSignatureEnabled,
-    @Default(AttachmentAutoDownload.inherit)
+    @Default(AttachmentAutoDownload.blocked)
     AttachmentAutoDownload attachmentAutoDownload,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
@@ -373,12 +368,17 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String? emailFromAddress,
   }) = _ChatFromDb;
 
-  factory Chat.fromJid(String jid) => Chat(
+  factory Chat.fromJid(
+    String jid, {
+    required AttachmentAutoDownload attachmentAutoDownload,
+  }) =>
+      Chat(
         jid: jid,
         title: mox.JID.fromString(jid).local,
         type: ChatType.chat,
         lastChangeTimestamp: DateTime.now(),
         contactJid: jid,
+        attachmentAutoDownload: attachmentAutoDownload,
       );
 
   const Chat._();
