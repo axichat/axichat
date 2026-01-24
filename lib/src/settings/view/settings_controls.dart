@@ -97,10 +97,6 @@ class SettingsControls extends StatelessWidget {
         final selectTextStyle = context.textTheme.small.copyWith(
           color: context.colorScheme.foreground,
         );
-        final actionButtonPadding = EdgeInsets.symmetric(
-          horizontal: _compactTilePadding.horizontal,
-          vertical: _compactTilePadding.vertical / 2,
-        );
         final double dividerIndent =
             fullWidthDividers ? 0.0 : _settingsSectionHeaderPadding.horizontal;
         return Column(
@@ -130,11 +126,17 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            EmailForwardingGuideActionButton(
-              padding: actionButtonPadding,
+            _SettingsActionButton(
+              iconData: LucideIcons.mail,
+              label: context.l10n.emailForwardingGuideTitle,
+              onPressed: () async =>
+                  await showEmailForwardingGuideDialog(context),
             ),
-            EmailContactImportActionButton(
-              padding: actionButtonPadding,
+            _SettingsActionButton(
+              iconData: LucideIcons.userRoundPlus,
+              label: context.l10n.emailContactsImportTitle,
+              onPressed: () async =>
+                  await _showEmailContactImportDialog(context),
             ),
             _SettingsActionButton(
               iconData: LucideIcons.image,
@@ -691,6 +693,15 @@ class SettingsControls extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _showEmailContactImportDialog(BuildContext context) async {
+    await showFadeScaleDialog<void>(
+      context: context,
+      builder: (dialogContext) => EmailContactImportDialog(
+        cubit: context.read<EmailContactImportCubit>()..reset(),
+      ),
+    );
+  }
 }
 
 class _SettingsActionButton extends StatelessWidget {
@@ -714,10 +725,7 @@ class _SettingsActionButton extends StatelessWidget {
     final verticalInset = _compactTilePadding.vertical / 2;
     final iconSpacing = _compactTilePadding.horizontal / 2;
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: _compactTilePadding.horizontal,
-        vertical: verticalInset,
-      ),
+      padding: EdgeInsets.symmetric(vertical: verticalInset),
       child: SizedBox(
         width: double.infinity,
         child: ShadButton.ghost(
@@ -729,20 +737,17 @@ class _SettingsActionButton extends StatelessWidget {
           hoverForegroundColor: foregroundColor,
           gap: iconSpacing,
           padding: EdgeInsets.symmetric(
-            horizontal: _compactTilePadding.horizontal,
+            horizontal: _settingsSectionHeaderPadding.horizontal,
             vertical: _compactTilePadding.vertical,
           ),
           onPressed: onPressed,
           leading:
               iconData == null ? null : Icon(iconData, color: foregroundColor),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              label,
-              textAlign: TextAlign.start,
-              style: context.textTheme.small.copyWith(
-                color: foregroundColor,
-              ),
+          child: Text(
+            label,
+            textAlign: TextAlign.start,
+            style: context.textTheme.small.copyWith(
+              color: foregroundColor,
             ),
           ),
         ).withTapBounce(enabled: onPressed != null),

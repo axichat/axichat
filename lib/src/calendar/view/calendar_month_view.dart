@@ -42,18 +42,18 @@ class CalendarMonthView extends StatelessWidget {
       color: colors.border.withValues(alpha: 0.35),
     );
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
-    final Border gridBorder =
-        _isChatCalendar(context) && spec.sizeClass != CalendarSizeClass.expanded
-            ? Border(
-                top: BorderSide(color: border.color),
-                right: BorderSide(color: border.color),
-                bottom: BorderSide(color: border.color),
-              )
-            : Border(
-                left: BorderSide(color: border.color),
-                right: BorderSide(color: border.color),
-                bottom: BorderSide(color: border.color),
-              );
+    final bool chatCalendar = _isChatCalendar(context) &&
+        spec.sizeClass != CalendarSizeClass.expanded;
+    final Border gridBorder = chatCalendar
+        ? Border(
+            right: BorderSide(color: border.color),
+            bottom: BorderSide(color: border.color),
+          )
+        : Border(
+            left: BorderSide(color: border.color),
+            right: BorderSide(color: border.color),
+            bottom: BorderSide(color: border.color),
+          );
 
     return Container(
       decoration: BoxDecoration(
@@ -119,12 +119,7 @@ class CalendarMonthView extends StatelessWidget {
   }
 
   bool _isChatCalendar(BuildContext context) {
-    try {
-      context.read<ChatCalendarBloc>();
-      return true;
-    } on FlutterError {
-      return false;
-    }
+    return BlocProvider.maybeOf<ChatCalendarBloc>(context) != null;
   }
 }
 

@@ -14,6 +14,7 @@ class AxiTapBounce extends StatefulWidget {
   const AxiTapBounce({
     super.key,
     required this.child,
+    this.controller,
     this.scale = 0.96,
     this.enabled = true,
     this.pressDuration = const Duration(milliseconds: 80),
@@ -23,6 +24,7 @@ class AxiTapBounce extends StatefulWidget {
   });
 
   final Widget child;
+  final AxiTapBounceController? controller;
   final double scale;
   final bool enabled;
   final Duration pressDuration;
@@ -76,26 +78,80 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
   }
 
   @override
+  void dispose() {
+    widget.controller?._detach(this);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
     final targetScale = _pressed ? widget.scale : 1.0;
     final duration = _pressed ? widget.pressDuration : widget.releaseDuration;
     final curve = _pressed ? widget.pressCurve : widget.releaseCurve;
+    final animationChild = AnimatedScale(
+      scale: targetScale,
+      duration: duration,
+      curve: curve,
+      alignment: Alignment.center,
+      child: widget.child,
+    );
+    final controller = widget.controller;
+    if (controller != null) {
+      controller
+        .._attach(this)
+        .._setFallbackHandlers(
+          onDown: _handleTapDown,
+          onUp: _handleTapUp,
+          onCancel: _handleTapCancel,
+        );
+      return animationChild;
+    }
     return GestureDetector(
       excludeFromSemantics: true,
       behavior: HitTestBehavior.translucent,
       onTapDown: _handleTapDown,
       onTapUp: _handleTapUp,
       onTapCancel: _handleTapCancel,
-      child: AnimatedScale(
-        scale: targetScale,
-        duration: duration,
-        curve: curve,
-        alignment: Alignment.center,
-        child: widget.child,
-      ),
+      child: animationChild,
     );
   }
+}
+
+class AxiTapBounceController {
+  _AxiTapBounceState? _state;
+  void Function(TapDownDetails details)? _fallbackDown;
+  void Function(TapUpDetails details)? _fallbackUp;
+  VoidCallback? _fallbackCancel;
+
+  void _attach(_AxiTapBounceState state) {
+    if (_state == state) return;
+    _state = state;
+  }
+
+  void _detach(_AxiTapBounceState state) {
+    if (_state != state) return;
+    _state = null;
+  }
+
+  void _setFallbackHandlers({
+    required void Function(TapDownDetails details) onDown,
+    required void Function(TapUpDetails details) onUp,
+    required VoidCallback onCancel,
+  }) {
+    _fallbackDown = onDown;
+    _fallbackUp = onUp;
+    _fallbackCancel = onCancel;
+  }
+
+  void handleTapDown(TapDownDetails details) =>
+      (_state?._handleTapDown ?? _fallbackDown)?.call(details);
+
+  void handleTapUp(TapUpDetails details) =>
+      (_state?._handleTapUp ?? _fallbackUp)?.call(details);
+
+  void handleTapCancel() =>
+      (_state?._handleTapCancel ?? _fallbackCancel)?.call();
 }
 
 extension AxiTapBounceExtension on Widget {

@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'widgets/calendar_sheet_header.dart';
 import 'widgets/task_form_section.dart';
 
@@ -171,7 +172,9 @@ class CalendarNavigation extends StatelessWidget {
           onViewChanged: onViewChanged,
         );
 
-        const Border? border = null;
+        final Border border = Border(
+          bottom: BorderSide(color: colors.border),
+        );
         const List<BoxShadow> navShadows = [];
         final brightness = ShadTheme.of(context).brightness;
         final Color navBackground = brightness == Brightness.dark
@@ -515,7 +518,8 @@ class CalendarSegmentedOption<T> {
 }
 
 class CalendarViewModeToggle extends StatelessWidget {
-  const CalendarViewModeToggle({super.key, super.key, 
+  const CalendarViewModeToggle({
+    super.key,
     required this.selectedView,
     required this.onChanged,
     required this.compact,
@@ -652,16 +656,16 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
                   child: _SegmentedToggleItem(
                     isFirst: index == 0,
                     isLast: index == options.length - 1,
-                    isSelected: options[index].value == selected,
+                    selected: options[index].value == selected,
                     cornerRadius: cornerRadius,
                     padding: padding,
                     minHeight: minHeight,
                     activeBackground: activeBackground,
                     hoverBackground: hoverBackground,
-                    onSelected: () => onChanged(options[indcolors.primary,
+                    onSelected: () => onChanged(options[index].value),
+                    activeTextColor: colors.primary,
                     inactiveTextColor: colors.mutedForeground,
-                    child: options[in
-                    child: options[index].label,dex].label,
+                    child: options[index].label,
                   ),
                 ),
               ],
@@ -677,7 +681,7 @@ class _SegmentedToggleItem extends StatelessWidget {
   const _SegmentedToggleItem({
     required this.isFirst,
     required this.isLast,
-    required this.isSelected,
+    required this.selected,
     required this.cornerRadius,
     required this.padding,
     required this.minHeight,
@@ -691,7 +695,7 @@ class _SegmentedToggleItem extends StatelessWidget {
 
   final bool isFirst;
   final bool isLast;
-  final bool isSelected;
+  final bool selected;
   final double cornerRadius;
   final EdgeInsets padding;
   final double minHeight;
@@ -722,19 +726,19 @@ class _SegmentedToggleItem extends StatelessWidget {
     );
     final Widget styledChild = IconTheme.merge(
       data: IconThemeData(
-        color: isSelected ? activeTextColor : inactiveTextColor,
+        color: selected ? activeTextColor : inactiveTextColor,
       ),
       child: DefaultTextStyle.merge(
         style: TextStyle(
-          color: isSelected ? activeTextColor : inactiveTextColor,
+          color: selected ? activeTextColor : inactiveTextColor,
         ),
         child: child,
       ),
     );
     return MouseRegion(
-      cursor: isSelected ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      cursor: selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: InkWell(
-        onTap: isSelected ? null : onSelected,
+        onTap: selected ? null : onSelected,
         customBorder: ContinuousRectangleBorder(borderRadius: radius),
         overlayColor: overlay,
         child: AnimatedContainer(
@@ -744,7 +748,7 @@ class _SegmentedToggleItem extends StatelessWidget {
           constraints: BoxConstraints(minHeight: minHeight),
           alignment: Alignment.center,
           decoration: ShapeDecoration(
-            color: isSelected ? activeBackground : Colors.transparent,
+            color: selected ? activeBackground : Colors.transparent,
             shape: ContinuousRectangleBorder(borderRadius: radius),
           ),
           child: styledChild,
@@ -758,13 +762,9 @@ class CalendarPaneToggle extends StatelessWidget {
   const CalendarPaneToggle({
     super.key,
     required this.controller,
-    required this.scheduleLabel,
-    required this.tasksLabel,
   });
 
   final TabController controller;
-  final Widget scheduleLabel;
-  final Widget tasksLabel;
 
   static const double _labelFontSize = 10;
   static const double _minWidth = 160;
@@ -773,12 +773,13 @@ class CalendarPaneToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
     final shadTheme = ShadTheme.of(context);
     final secondaryButtonTheme = shadTheme.secondaryButtonTheme;
     final buttonSizeTheme =
-        secondaryButtonTheme.sizesTheme?.sm ?? shadTheme.buttonSizesThemconst;
-    const EdgeInsetsng = EdgeInsets.symmetric(
+        secondaryButtonTheme.sizesTheme?.sm ?? shadTheme.buttonSizesTheme.sm!;
+    const EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: calendarGutterSm,
     );
     final double minHeight = buttonSizeTheme.height;
@@ -799,14 +800,11 @@ class CalendarPaneToggle extends StatelessWidget {
         (secondaryButtonTheme.decoration ?? const ShadDecoration()).copyWith(
       color: secondaryButtonTheme.backgroundColor ?? colors.secondary,
     );
-    final Widget scheduleText = DefaultTextStyle.merge(
+    final Widget scheduleText = Text(
+      l10n.calendarScheduleLabel,
       style: textStyle,
-      child: scheduleLabel,
     );
-    final Widget tasksText = DefaultTextStyle.merge(
-      style: textStyle,
-      child: tasksLabel,
-    );
+    final Widget tasksText = TasksTabLabel(textStyle: textStyle);
 
     return AnimatedBuilder(
       animation: controller,

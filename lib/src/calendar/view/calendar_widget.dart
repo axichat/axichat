@@ -409,9 +409,7 @@ class _CalendarActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool showPaneToggle = ResponsiveHelper.isMedium(context);
-    const Widget tasksLabel = abLabel();
-    final Widget scheduleLabel = Text(context.l10n.calendarScheduleLabel);
+    final bool showPaneToggle = !ResponsiveHelper.isCompact(context);
     return Wrap(
       spacing: _calendarShareActionSpacing,
       runSpacing: _calendarShareActionSpacing,
@@ -420,8 +418,6 @@ class _CalendarActionRow extends StatelessWidget {
         if (showPaneToggle)
           CalendarPaneToggle(
             controller: tabController,
-            scheduleLabel: scheduleLabel,
-            tasksLabel: tasksLabel,
           ),
         SyncControls(
           state: state,

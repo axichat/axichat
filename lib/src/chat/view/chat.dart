@@ -3857,22 +3857,6 @@ class _ChatState extends State<Chat> {
               );
               final bool chatCalendarAvailable =
                   chatCalendarEnabled && chatCalendarBloc != null;
-              final List<String> chatCalendarParticipants = supportsChatCalendar
-                  ? _resolveChatCalendarParticipants(
-                      chat: chatEntity,
-                      roomState: state.roomState,
-                      currentUserId: currentUserId,
-                    )
-                  : const <String>[];
-              final chatCalendarAvatarPaths = <String, String>{};
-              for (final participant in chatCalendarParticipants) {
-                final path = avatarPathForTypingParticipant(participant);
-                if (path == null || path.isEmpty) {
-                  continue;
-                }
-                chatCalendarAvatarPaths[participant] = path;
-              }
-
               final retryEntry = _lastReportEntryWhere(
                 fanOutReports.entries,
                 (entry) => entry.value.hasFailures,
@@ -8008,8 +7992,6 @@ class _ChatState extends State<Chat> {
                           ),
                           chat: chatEntity,
                           calendarAvailable: chatCalendarAvailable,
-                          participants: chatCalendarParticipants,
-                          avatarPaths: chatCalendarAvatarPaths,
                           calendarBloc: chatCalendarBloc,
                         );
                         final Widget overlayChild = switch (_chatRoute) {
@@ -8791,51 +8773,6 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  List<String> _resolveChatCalendarParticipants({
-    required chat_models.Chat? chat,
-    required RoomState? roomState,
-    required String? currentUserId,
-  }) {
-    if (chat == null) {
-      return const <String>[];
-    }
-    final participants = <String>[];
-    final seen = <String>{};
-    void addParticipant(String? value) {
-      final trimmed = value?.trim();
-      if (trimmed == null || trimmed.isEmpty) {
-        return;
-      }
-      final normalized = trimmed.toLowerCase();
-      if (seen.contains(normalized)) {
-        return;
-      }
-      seen.add(normalized);
-      participants.add(trimmed);
-    }
-
-    if (chat.type == ChatType.groupChat) {
-      final room = roomState;
-      if (room != null) {
-        final eligible = <Occupant>[
-          ...room.owners,
-          ...room.admins,
-          ...room.members,
-        ];
-        for (final occupant in eligible) {
-          final realJid = occupant.realJid?.trim();
-          addParticipant(
-            realJid?.isNotEmpty == true ? realJid : occupant.occupantId,
-          );
-        }
-      }
-      return participants;
-    }
-
-    addParticipant(chat.remoteJid);
-    return participants;
-  }
-
   Future<chat_models.Chat?> _selectForwardTarget() async {
     if (!mounted) return null;
     final options =
@@ -9580,15 +9517,11 @@ class _ChatCalendarPanel extends StatelessWidget {
   const _ChatCalendarPanel({
     required this.chat,
     required this.calendarAvailable,
-    required this.participants,
-    required this.avatarPaths,
     required this.calendarBloc,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
-  final List<String> participants;
-  final Map<String, String> avatarPaths;
   final ChatCalendarBloc? calendarBloc;
 
   @override
@@ -9605,8 +9538,6 @@ class _ChatCalendarPanel extends StatelessWidget {
       ],
       child: ChatCalendarWidget(
         chat: resolvedChat,
-        participants: participants,
-        avatarPaths: avatarPaths,
         showHeader: true,
         showBackButton: false,
       ),
@@ -9724,15 +9655,11 @@ class _ChatCalendarOverlay extends StatelessWidget {
     super.key,
     required this.chat,
     required this.calendarAvailable,
-    required this.participants,
-    required this.avatarPaths,
     required this.calendarBloc,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
-  final List<String> participants;
-  final Map<String, String> avatarPaths;
   final ChatCalendarBloc? calendarBloc;
 
   @override
@@ -9749,8 +9676,6 @@ class _ChatCalendarOverlay extends StatelessWidget {
         child: _ChatCalendarPanel(
           chat: resolvedChat,
           calendarAvailable: calendarAvailable,
-          participants: participants,
-          avatarPaths: avatarPaths,
           calendarBloc: resolvedBloc,
         ),
       ),

@@ -430,29 +430,36 @@ class _ProfileMainView extends StatelessWidget {
           ),
           child: ColoredBox(
             color: sidebarColor,
-            child: Padding(
-              padding: sidebarPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _ProfileStatusHeader(),
-                  const SizedBox(height: _profileWideHeaderSpacing),
-                  card,
-                  const SizedBox(height: _profileCardSectionSpacing),
-                  const ProfileFingerprint(),
-                  const SizedBox(height: _profileCardSectionSpacing),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: context.colorScheme.border,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: sidebarPadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _ProfileStatusHeader(),
+                      const SizedBox(height: _profileWideHeaderSpacing),
+                      card,
+                      const SizedBox(height: _profileCardSectionSpacing),
+                      const ProfileFingerprint(),
+                      const SizedBox(height: _profileCardSectionSpacing),
+                    ],
                   ),
-                  const SizedBox(height: _profileCardSectionSpacing),
-                  _SettingsJumpMenu(
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: context.colorScheme.border,
+                ),
+                Padding(
+                  padding: sidebarPadding,
+                  child: _SettingsJumpMenu(
                     anchors: settingsAnchors,
                     textAlign: TextAlign.right,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -892,7 +899,7 @@ class _SettingsJumpLink extends StatelessWidget {
       TextAlign.center => MainAxisAlignment.center,
       _ => MainAxisAlignment.start,
     };
-    final jumpColor = colors.mutedForeground;
+    final jumpColor = colors.foreground.withValues(alpha: 0.7);
     return SizedBox(
       width: double.infinity,
       child: ShadButton.ghost(

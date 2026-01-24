@@ -498,3 +498,20 @@ String _resolveForwardingAddress(BuildContext context) {
   final String? jid = context.read<XmppService>().myJid;
   return (jid ?? _emptyForwardingAddress).bareJid.trim();
 }
+
+Future<void> showEmailForwardingGuideDialog(BuildContext context) async {
+  final forwardingAddress = _resolveForwardingAddress(context);
+  await showFadeScaleDialog<void>(
+    context: context,
+    builder: (dialogContext) => EmailForwardingGuideDialog(
+      title: context.l10n.emailForwardingGuideTitle,
+      forwardingAddress: forwardingAddress,
+      notificationService: context.read<NotificationService>(),
+      capability: context.read<Capability>(),
+    ),
+  );
+  if (!context.mounted) {
+    return;
+  }
+  context.read<SettingsCubit>().markEmailForwardingGuideSeen();
+}

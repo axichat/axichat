@@ -24,6 +24,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
@@ -280,12 +281,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   bool _isChatCalendar(BuildContext context) {
-    try {
-      context.read<ChatCalendarBloc>();
-      return true;
-    } on FlutterError {
-      return false;
-    }
+    return BlocProvider.maybeOf<ChatCalendarBloc>(context) != null;
   }
 
   Map<LogicalKeySet, Intent> get _zoomShortcuts => {
@@ -3193,12 +3189,7 @@ class _CalendarWeekView extends StatelessWidget {
 
                 final Border border = gridState._isChatCalendar(context) &&
                         responsive.sizeClass != CalendarSizeClass.expanded
-                    ? Border(
-                        top: BorderSide(
-                          color: calendarBorderColor,
-                          width: calendarBorderStroke,
-                        ),
-                      )
+                    ? const Border()
                     : Border(
                         left: BorderSide(
                           color: calendarBorderColor,

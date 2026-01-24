@@ -905,7 +905,7 @@ class EmailService {
     _activeAccount = EmailAccount(address: address, password: password);
     await _markConnectionOverridesApplied(
       scope: scope,
-      persistCredentials: true,
+      persistCredentials: persistCredentials,
       connectionOverrides: connectionOverrides,
     );
   }
