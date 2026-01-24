@@ -4,8 +4,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:flutter/gestures.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 const double _defaultIconScale = 0.6;
 const double _ghostIconScale = 0.85;
@@ -98,52 +99,11 @@ class AxiIconButton extends StatefulWidget {
 }
 
 class _AxiIconButtonState extends State<AxiIconButton> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value) return;
-    if (!mounted) return;
-    setState(() {
-      _pressed = value;
-    });
-  }
-
-  bool _shouldHandleTapKind(PointerDeviceKind? kind) {
-    if (kind == null) {
-      return true;
-    }
-    if (kind == PointerDeviceKind.touch ||
-        kind == PointerDeviceKind.stylus ||
-        kind == PointerDeviceKind.invertedStylus) {
-      return true;
-    }
-    return kind == PointerDeviceKind.mouse ||
-        kind == PointerDeviceKind.trackpad;
-  }
-
-  void _handleTapDown(TapDownDetails details) {
-    if (!_shouldHandleTapKind(details.kind)) {
-      return;
-    }
-    _setPressed(true);
-  }
-
-  void _handleTapUp(TapUpDetails details) => _setPressed(false);
-
-  void _handleTapCancel() => _setPressed(false);
-
-  void _handleLongPressUp() => _setPressed(false);
-
-  @override
-  void didUpdateWidget(covariant AxiIconButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.onPressed == null && widget.onLongPress == null) {
-      _setPressed(false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final Duration animationDuration = context.select<SettingsCubit, Duration>(
+      (cubit) => cubit.animationDuration,
+    );
     final colors = context.colorScheme;
     final env = EnvScope.maybeOf(context);
     final isDesktop = env?.isDesktopPlatform ?? false;
@@ -204,10 +164,6 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             child: InkResponse(
               onTap: widget.onPressed,
               onLongPress: widget.onLongPress,
-              onTapDown: enabled ? _handleTapDown : null,
-              onTapUp: enabled ? _handleTapUp : null,
-              onTapCancel: enabled ? _handleTapCancel : null,
-              onLongPressUp: enabled ? _handleLongPressUp : null,
               containedInkWell: true,
               highlightShape: BoxShape.rectangle,
               customBorder: paintShape,
@@ -233,19 +189,24 @@ class _AxiIconButtonState extends State<AxiIconButton> {
     );
 
     if (enabled) {
-      const double pressScale = 0.96;
-      const Duration pressDuration = Duration(milliseconds: 80);
-      const Duration releaseDuration = Duration(milliseconds: 180);
-      const Curve pressCurve = Curves.easeOutCubic;
-      const Curve releaseCurve = Curves.easeOutBack;
-      final double targetScale = _pressed ? pressScale : 1.0;
-      final Duration duration = _pressed ? pressDuration : releaseDuration;
-      final Curve curve = _pressed ? pressCurve : releaseCurve;
-      tappable = AnimatedScale(
-        scale: targetScale,
-        duration: duration,
-        curve: curve,
-        alignment: Alignment.center,
+      const int pressDurationNumerator = 4;
+      const int pressDurationDenominator = 15;
+      const int releaseDurationNumerator = 3;
+      const int releaseDurationDenominator = 5;
+      final Duration pressDuration = Duration(
+        milliseconds:
+            (animationDuration.inMilliseconds * pressDurationNumerator) ~/
+                pressDurationDenominator,
+      );
+      final Duration releaseDuration = Duration(
+        milliseconds:
+            (animationDuration.inMilliseconds * releaseDurationNumerator) ~/
+                releaseDurationDenominator,
+      );
+      tappable = AxiTapBounce(
+        enabled: animationDuration != Duration.zero,
+        pressDuration: pressDuration,
+        releaseDuration: releaseDuration,
         child: tappable,
       );
     }

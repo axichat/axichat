@@ -393,19 +393,20 @@ class _ChatCalendarAppBar extends StatelessWidget {
                   tooltip: context.l10n.chatBack,
                   onPressed: onBackPressed,
                 ),
-              if (showBackButton)
+              if (showBackButton && participants.isNotEmpty)
                 const SizedBox(width: _chatCalendarParticipantsSpacing),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: participants.isEmpty
-                      ? const SizedBox.shrink()
-                      : ChatCalendarParticipantsStrip(
-                          participants: participants,
-                          avatarPaths: avatarPaths,
-                        ),
+              if (participants.isNotEmpty)
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ChatCalendarParticipantsStrip(
+                      participants: participants,
+                      avatarPaths: avatarPaths,
+                    ),
+                  ),
                 ),
-              ),
+              const Spacer(),
               _ChatCalendarActionRow(
                 state: state,
                 onShareAvailability: onShareAvailability,

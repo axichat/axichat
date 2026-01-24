@@ -853,19 +853,26 @@ class _SettingsJumpLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final MainAxisAlignment alignment = switch (textAlign) {
+      TextAlign.right => MainAxisAlignment.end,
+      TextAlign.center => MainAxisAlignment.center,
+      _ => MainAxisAlignment.start,
+    };
     return SizedBox(
       width: double.infinity,
       child: ShadButton.ghost(
         size: ShadButtonSize.sm,
+        width: double.infinity,
+        expands: true,
+        mainAxisAlignment: alignment,
+        foregroundColor: colors.foreground,
+        hoverForegroundColor: colors.foreground,
         onPressed: onTap,
-        child: SizedBox(
-          width: double.infinity,
-          child: Text(
-            label,
-            textAlign: textAlign,
-            style: context.textTheme.small.copyWith(
-              color: colors.foreground,
-            ),
+        child: Text(
+          label,
+          textAlign: textAlign,
+          style: context.textTheme.small.copyWith(
+            color: colors.foreground,
           ),
         ),
       ).withTapBounce(),

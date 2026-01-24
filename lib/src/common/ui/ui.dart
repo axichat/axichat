@@ -127,6 +127,24 @@ class CalendarPalette {
   static const double _sidebarDarkenAlpha = 0.08;
   static const double _stripedSlotDarkMix = 0.12;
   static const double _mutedTextAlpha = 0.7;
+  static const Color _lightBackground = Color(0xFFFFFFFF);
+  static const Color _lightContainer = Color(0xFFFFFFFF);
+  static const Color _lightSidebarBackground = Color(0xFFF7F8FA);
+  static const Color _lightBorder = Color(0xFFE1E4E8);
+  static const Color _lightBorderDark = Color(0xFFD1D5DA);
+  static const Color _lightBorderLight = Color(0xFFF0F0F0);
+  static const Color _lightSelectedDay = Color(0xFFF6F8FA);
+  static const Color _lightSlotHover = Color(0xFFE8F1FF);
+  static const Color _lightStripedSlot = Color(0xFFFAFBFC);
+  static const Color _lightTitle = Color(0xFF24292E);
+  static const Color _lightSubtitle = Color(0xFF6A737D);
+  static const Color _lightTextLight = Color(0xFF959DA5);
+  static const Color _lightTimeLabel = Color(0xFF6A737D);
+  static const Color _lightSuccess = Color(0xFF28A745);
+  static const Color _lightDanger = Color(0xFFDC3545);
+  static const Color _lightWarning = Color(0xFFFD7E14);
+  static const Color _lightYellow = Color(0xFFFFC107);
+  static const Color _lightNeutral = Color(0xFF9CA3AF);
 
   static Color _primary = const Color(0xFF0969DA);
   static Color _primaryHover = const Color(0xFF0860CA);
@@ -200,6 +218,29 @@ class CalendarPalette {
     const mixTarget = Colors.white;
     _primaryHover =
         Color.lerp(_primary, mixTarget, _primaryHoverMix) ?? _primary;
+    if (brightness == Brightness.light) {
+      _background = _lightBackground;
+      _container = _lightContainer;
+      _sidebarBackground = _lightSidebarBackground;
+      _border = _lightBorder;
+      _borderDark = _lightBorderDark;
+      _borderLight = _lightBorderLight;
+      _selectedDay = _lightSelectedDay;
+      _slotHover = _lightSlotHover;
+      _stripedSlot = _lightStripedSlot;
+
+      _title = _lightTitle;
+      _subtitle = _lightSubtitle;
+      _textLight = _lightTextLight;
+      _timeLabel = _lightTimeLabel;
+
+      _success = _lightSuccess;
+      _danger = _lightDanger;
+      _warning = _lightWarning;
+      _yellow = _lightYellow;
+      _neutral = _lightNeutral;
+      return;
+    }
 
     _background = scheme.background;
     _container = scheme.card;

@@ -563,31 +563,24 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               ],
               child: Stack(
                 children: [
-                  if (child != null) child else const SizedBox.shrink(),
-                  Overlay(
-                    initialEntries: [
-                      OverlayEntry(
-                        maintainState: true,
-                        builder: (context) => const Material(
-                          type: MaterialType.transparency,
-                          child: ComposeWindowOverlay(),
-                        ),
-                      ),
-                      OverlayEntry(
-                        maintainState: true,
-                        builder: (context) => const Material(
-                          type: MaterialType.transparency,
-                          child: OmemoOperationOverlay(),
-                        ),
-                      ),
-                      OverlayEntry(
-                        maintainState: true,
-                        builder: (context) => const Material(
-                          type: MaterialType.transparency,
-                          child: XmppOperationOverlay(),
-                        ),
-                      ),
-                    ],
+                  child ?? const SizedBox.shrink(),
+                  const Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: ComposeWindowOverlay(),
+                    ),
+                  ),
+                  const Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: OmemoOperationOverlay(),
+                    ),
+                  ),
+                  const Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: XmppOperationOverlay(),
+                    ),
                   ),
                 ],
               ),

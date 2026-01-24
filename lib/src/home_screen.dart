@@ -288,7 +288,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // ignore: unnecessary_type_check
     final isBlocking = xmppService is BlockingService;
     final isOmemo = xmppService is OmemoService;
-    final navPlacement = EnvScope.of(context).navPlacement;
+    final env = EnvScope.of(context);
+    final navPlacement = env.navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
@@ -432,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 controller.animateTo(index);
                               },
                               calendarAvailable: hasCalendarBloc,
-                              calendarActive: openCalendar || openChatCalendar,
+                              calendarActive: openCalendar,
                               onCalendarSelected: () {
                                 context.read<ChatsCubit?>()?.toggleCalendar();
                               },
@@ -506,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 showPrimary: !showChatCalendar,
                                 centerSecondary: false,
                                 centerPrimary: false,
-                                animatePaneChanges: true,
+                                animatePaneChanges: !env.isDesktopPlatform,
                                 primaryAlignment: Alignment.topLeft,
                                 secondaryAlignment: Alignment.topLeft,
                                 secondaryPadding: secondaryPanePadding,
@@ -549,7 +550,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       final Duration animationDuration =
                           context.watch<SettingsCubit>().animationDuration;
                       final Duration calendarTransitionDuration =
-                          animationDuration;
+                          env.isDesktopPlatform
+                              ? Duration.zero
+                              : animationDuration;
                       return SafeArea(
                         top: state is ConnectivityConnected || demoOffline,
                         child: _HomeCalendarViewTransition(

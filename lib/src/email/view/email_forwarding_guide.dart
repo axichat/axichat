@@ -125,6 +125,11 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
         width: double.infinity,
         child: ShadButton.ghost(
           size: ShadButtonSize.sm,
+          width: double.infinity,
+          expands: true,
+          mainAxisAlignment: MainAxisAlignment.start,
+          foregroundColor: colors.foreground,
+          hoverForegroundColor: colors.foreground,
           onPressed: () async => await _showGuideDialog(context),
           child: Row(
             children: [

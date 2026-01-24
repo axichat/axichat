@@ -706,6 +706,11 @@ class _SettingsActionButton extends StatelessWidget {
         width: double.infinity,
         child: ShadButton.ghost(
           size: ShadButtonSize.sm,
+          width: double.infinity,
+          expands: true,
+          mainAxisAlignment: MainAxisAlignment.start,
+          foregroundColor: foregroundColor,
+          hoverForegroundColor: foregroundColor,
           onPressed: onPressed,
           child: Row(
             children: [

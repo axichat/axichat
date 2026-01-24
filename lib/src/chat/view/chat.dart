@@ -3967,6 +3967,9 @@ class _ChatState extends State<Chat> {
               final scaffold = LayoutBuilder(
                 builder: (context, constraints) {
                   final double appBarWidth = constraints.maxWidth;
+                  const double avatarTitleSpacingOffset = 4.0;
+                  const double avatarTitleSpacing =
+                      _chatAppBarAvatarSpacing + avatarTitleSpacingOffset;
                   final double leadingWidthExpanded = leadingActionCount == 0
                       ? _chatAppBarCollapsedLeadingWidth
                       : _chatAppBarLeadingInset +
@@ -3979,7 +3982,7 @@ class _ChatState extends State<Chat> {
                           (_chatHeaderActionSpacing *
                               math.max(0, chatActionCount - 1));
                   const double titleReserveWidth = _chatAppBarAvatarSize +
-                      _chatAppBarAvatarSpacing +
+                      avatarTitleSpacing +
                       _chatAppBarTitleMinWidth;
                   const double actionsPaddingWidth =
                       _chatAppBarActionsPadding * 2;
@@ -4100,13 +4103,15 @@ class _ChatState extends State<Chat> {
                                 final titleStyle = baseTitleStyle.copyWith(
                                   fontSize: context.textTheme.large.fontSize,
                                 );
+                                const double subtitleLineHeight = 1.05;
+                                final TextStyle subtitleStyle = context
+                                    .textTheme.muted
+                                    .copyWith(height: subtitleLineHeight);
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     avatar,
-                                    const SizedBox(
-                                      width: _chatAppBarAvatarSpacing,
-                                    ),
+                                    const SizedBox(width: avatarTitleSpacing),
                                     Flexible(
                                       fit: FlexFit.loose,
                                       child: ConstrainedBox(
@@ -4174,7 +4179,7 @@ class _ChatState extends State<Chat> {
                                               SelectableText(
                                                 secondaryLabel,
                                                 maxLines: 1,
-                                                style: context.textTheme.muted,
+                                                style: subtitleStyle,
                                               ),
                                           ],
                                         ),
@@ -8034,8 +8039,11 @@ class _ChatState extends State<Chat> {
                             !_chatRoute.isMain && !_previousChatRoute.isMain;
                         final bool isCalendarEnter = _chatRoute.isCalendar;
                         final Key chatRouteKey = ValueKey(_chatRoute);
-                        final Duration overlayDuration =
-                            context.watch<SettingsCubit>().animationDuration;
+                        final Duration overlayDuration = isDesktopPlatform &&
+                                (_chatRoute.isCalendar ||
+                                    _previousChatRoute.isCalendar)
+                            ? Duration.zero
+                            : context.watch<SettingsCubit>().animationDuration;
                         final Widget overlayStack = PageTransitionSwitcher(
                           reverse: isLeavingToMain,
                           duration: overlayDuration,
