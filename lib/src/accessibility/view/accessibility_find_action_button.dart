@@ -19,6 +19,9 @@ class AccessibilityFindActionButton extends StatelessWidget {
     if (context.read<AccessibilityActionBloc?>() == null) {
       return const SizedBox.shrink();
     }
+    const double iconSize = 18.0;
+    const double compactPadding = 12.0;
+    const double labelGap = 10.0;
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final tooltip = context.l10n.accessibilityActionsShortcutTooltip(
@@ -31,8 +34,8 @@ class AccessibilityFindActionButton extends StatelessWidget {
           onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
                 const AccessibilityMenuOpened(),
               ),
-          padding: const EdgeInsets.all(12),
-          child: const Icon(LucideIcons.lifeBuoy, size: 18),
+          padding: const EdgeInsets.all(compactPadding),
+          child: const Icon(LucideIcons.lifeBuoy, size: iconSize),
         ),
       );
     }
@@ -43,8 +46,8 @@ class AccessibilityFindActionButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(LucideIcons.lifeBuoy, size: 18),
-          const SizedBox(width: 10),
+          const Icon(LucideIcons.lifeBuoy, size: iconSize),
+          const SizedBox(width: labelGap),
           ShortcutHint(shortcut: shortcut, dense: true),
         ],
       ),

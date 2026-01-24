@@ -205,16 +205,40 @@ class _ShortcutKeycaps extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textStyle = context.textTheme.small;
+    const double keyTopSheenBlend = 0.08;
+    const double keyMidToneBlend = 0.04;
+    const double keyShadowBlend = 0.65;
+    const double denseBorderWidth = 1.0;
+    const double regularBorderWidth = 1.2;
+    const double densePaddingHorizontal = 7.0;
+    const double densePaddingVertical = 4.0;
+    const double regularPaddingHorizontal = 9.0;
+    const double regularPaddingVertical = 5.0;
+    const double denseDrop = 3.0;
+    const double regularDrop = 4.2;
+    const double keyShadowAlpha = 0.35;
+    const double keyShadowOverlayAlpha = 0.45;
+    const double keyBorderAlpha = 0.95;
+    const double keyTopShadowAlpha = 0.3;
+    const double keyTopShadowOffset = 1.2;
+    const double keyTopShadowBlur = 3.2;
+    const double keyOverlayTopAlpha = 0.04;
+    const double keyOverlayMidAlpha = 0.0;
+    const double keyOverlayBottomAlpha = 0.12;
+    const keyGradientStops = [0.0, 0.45, 1.0];
+    const overlayGradientStops = [0.0, 0.5, 1.0];
     final keyBase = colors.card;
-    final topSheen = Color.lerp(keyBase, colors.foreground, 0.08)!;
-    final midTone = Color.lerp(keyBase, colors.foreground, 0.04)!;
-    final keyShadow = Color.lerp(colors.background, colors.foreground, 0.65)!;
-    final borderWidth = dense ? 1.0 : 1.2;
-    const paddingDense = EdgeInsets.symmetric(horizontal: 7, vertical: 4);
-    const paddingComfort = EdgeInsets.symmetric(horizontal: 9, vertical: 5);
-    final padding = dense ? paddingDense : paddingComfort;
+    final topSheen = Color.lerp(keyBase, colors.foreground, keyTopSheenBlend)!;
+    final midTone = Color.lerp(keyBase, colors.foreground, keyMidToneBlend)!;
+    final keyShadow =
+        Color.lerp(colors.background, colors.foreground, keyShadowBlend)!;
+    final borderWidth = dense ? denseBorderWidth : regularBorderWidth;
+    final padding = EdgeInsets.symmetric(
+      horizontal: dense ? densePaddingHorizontal : regularPaddingHorizontal,
+      vertical: dense ? densePaddingVertical : regularPaddingVertical,
+    );
     final radius = context.radius;
-    final drop = dense ? 3.0 : 4.2;
+    final drop = dense ? denseDrop : regularDrop;
     final keyStyle = textStyle.copyWith(
       color: colors.foreground,
       fontWeight: FontWeight.w700,
@@ -227,7 +251,7 @@ class _ShortcutKeycaps extends StatelessWidget {
 
     Widget keycap(String label) {
       final backplateColor = Color.alphaBlend(
-        keyShadow.withValues(alpha: 0.35),
+        keyShadow.withValues(alpha: keyShadowAlpha),
         keyBase,
       );
       return Stack(
@@ -243,7 +267,7 @@ class _ShortcutKeycaps extends StatelessWidget {
                 borderRadius: radius,
                 boxShadow: [
                   BoxShadow(
-                    color: keyShadow.withValues(alpha: 0.45),
+                    color: keyShadow.withValues(alpha: keyShadowOverlayAlpha),
                     offset: Offset(0, drop / 2),
                     blurRadius: drop * 1.6,
                     spreadRadius: 0.0,
@@ -262,18 +286,18 @@ class _ShortcutKeycaps extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [topSheen, midTone, colors.card],
-                stops: const [0, 0.45, 1],
+                stops: keyGradientStops,
               ),
               border: Border.all(
-                color: colors.border.withValues(alpha: 0.95),
+                color: colors.border.withValues(alpha: keyBorderAlpha),
                 width: borderWidth,
               ),
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
-                  color: keyShadow.withValues(alpha: 0.3),
-                  offset: const Offset(0, 1.2),
-                  blurRadius: 3.2,
+                  color: keyShadow.withValues(alpha: keyTopShadowAlpha),
+                  offset: const Offset(0, keyTopShadowOffset),
+                  blurRadius: keyTopShadowBlur,
                 ),
               ],
             ),
@@ -293,11 +317,13 @@ class _ShortcutKeycaps extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            colors.foreground.withValues(alpha: 0.04),
-                            colors.background.withValues(alpha: 0.0),
-                            keyShadow.withValues(alpha: 0.12),
+                            colors.foreground
+                                .withValues(alpha: keyOverlayTopAlpha),
+                            colors.background
+                                .withValues(alpha: keyOverlayMidAlpha),
+                            keyShadow.withValues(alpha: keyOverlayBottomAlpha),
                           ],
-                          stops: const [0, 0.5, 1],
+                          stops: overlayGradientStops,
                         ),
                       ),
                     ),

@@ -469,7 +469,9 @@ class AccessibilityActionBloc
       _invites = event.invites!;
     }
     if (event.drafts != null) {
-      _drafts = event.drafts!;
+      final sortedDrafts = List<Draft>.of(event.drafts!)
+        ..sort((a, b) => b.id.compareTo(a.id));
+      _drafts = sortedDrafts;
     }
     _refreshContacts();
     final dismissedHighlights =

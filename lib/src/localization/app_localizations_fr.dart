@@ -1843,6 +1843,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsButtonLabel => 'Paramètres';
 
   @override
+  String get settingsSectionAccount => 'Account';
+
+  @override
+  String get settingsSectionData => 'Data';
+
+  @override
   String get settingsSectionImportant => 'Important';
 
   @override
@@ -1881,10 +1887,25 @@ class AppLocalizationsFr extends AppLocalizations {
       'Désactive la plupart des animations. Mieux pour les appareils lents.';
 
   @override
-  String get settingsSectionChats => 'Discussions';
+  String get settingsSectionChats => 'Chat preferences';
 
   @override
-  String get settingsSectionEmail => 'E-mail';
+  String get settingsSectionEmail => 'Email preferences';
+
+  @override
+  String get settingsSectionAbout => 'About';
+
+  @override
+  String get settingsAboutAxichat => 'About Axichat';
+
+  @override
+  String get settingsTermsLabel => 'Terms';
+
+  @override
+  String get settingsPrivacyLabel => 'Privacy';
+
+  @override
+  String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
   String get settingsMessageStorageTitle => 'Stockage des messages';

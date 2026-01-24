@@ -3278,6 +3278,18 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsButtonLabel;
 
+  /// No description provided for @settingsSectionAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsSectionAccount;
+
+  /// No description provided for @settingsSectionData.
+  ///
+  /// In en, this message translates to:
+  /// **'Data'**
+  String get settingsSectionData;
+
   /// No description provided for @settingsSectionImportant.
   ///
   /// In en, this message translates to:
@@ -3353,14 +3365,44 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSectionChats.
   ///
   /// In en, this message translates to:
-  /// **'Chats'**
+  /// **'Chat preferences'**
   String get settingsSectionChats;
 
   /// No description provided for @settingsSectionEmail.
   ///
   /// In en, this message translates to:
-  /// **'Email'**
+  /// **'Email preferences'**
   String get settingsSectionEmail;
+
+  /// No description provided for @settingsSectionAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsSectionAbout;
+
+  /// No description provided for @settingsAboutAxichat.
+  ///
+  /// In en, this message translates to:
+  /// **'About Axichat'**
+  String get settingsAboutAxichat;
+
+  /// No description provided for @settingsTermsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms'**
+  String get settingsTermsLabel;
+
+  /// No description provided for @settingsPrivacyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get settingsPrivacyLabel;
+
+  /// No description provided for @settingsLicenseAgpl.
+  ///
+  /// In en, this message translates to:
+  /// **'AGPLv3'**
+  String get settingsLicenseAgpl;
 
   /// No description provided for @settingsMessageStorageTitle.
   ///

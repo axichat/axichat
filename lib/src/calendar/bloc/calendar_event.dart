@@ -1,18 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 
 part 'calendar_event.freezed.dart';
+
+enum CalendarShareFailure {
+  serviceUnavailable,
+  permissionDenied,
+  attachmentFailed,
+  sendFailed;
+}
+
+class CalendarShareResult {
+  const CalendarShareResult.success({
+    this.partialFailure = false,
+    this.record,
+  }) : failure = null;
+
+  const CalendarShareResult.failure(this.failure)
+      : partialFailure = false,
+        record = null;
+
+  final CalendarShareFailure? failure;
+  final bool partialFailure;
+  final CalendarAvailabilityShareRecord? record;
+
+  bool get isSuccess => failure == null;
+}
 
 @freezed
 class CalendarEvent with _$CalendarEvent {
@@ -259,6 +289,33 @@ class CalendarEvent with _$CalendarEvent {
     required String pathId,
     required List<String> orderedTaskIds,
   }) = CalendarCriticalPathReordered;
+
+  const factory CalendarEvent.taskShareRequested({
+    required CalendarTask task,
+    required List<FanOutTarget> recipients,
+    required String shareText,
+    required bool readOnly,
+    required Completer<CalendarShareResult> completer,
+  }) = CalendarTaskShareRequested;
+
+  const factory CalendarEvent.criticalPathShareRequested({
+    required CalendarFragment fragment,
+    required Chat recipient,
+    required String shareText,
+    required Completer<CalendarShareResult> completer,
+  }) = CalendarCriticalPathShareRequested;
+
+  const factory CalendarEvent.availabilityShareRequested({
+    required CalendarAvailabilityShareSource source,
+    required CalendarModel model,
+    required String ownerJid,
+    required List<Chat> recipients,
+    required CalendarDateTime rangeStart,
+    required CalendarDateTime rangeEnd,
+    CalendarAvailabilityOverlay? overrideOverlay,
+    required bool lockOverlay,
+    required Completer<CalendarShareResult> completer,
+  }) = CalendarAvailabilityShareRequested;
 }
 
 enum CalendarView { week, day, month }

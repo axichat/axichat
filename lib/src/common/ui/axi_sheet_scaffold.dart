@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -51,7 +52,7 @@ class AxiSheetHeader extends StatelessWidget {
           if (leading != null) ...[leading!, const SizedBox(width: 10)],
           Expanded(child: titleBlock),
           ModalCloseButton(
-            onPressed: onClose,
+            onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
             tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             backgroundColor: Colors.transparent,
             borderColor: Colors.transparent,
