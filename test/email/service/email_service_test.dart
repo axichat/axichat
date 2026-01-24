@@ -696,7 +696,10 @@ void main() {
       );
 
       final report = await service.fanOutSend(
-        targets: [FanOutTarget.chat(chatA), FanOutTarget.chat(chatB)],
+        targets: [
+          FanOutTarget.chat(chat: chatA, shareSignatureEnabled: true),
+          FanOutTarget.chat(chat: chatB, shareSignatureEnabled: true),
+        ],
         body: 'Hello everyone',
       );
 
@@ -914,7 +917,9 @@ void main() {
       ).thenAnswer((_) async => 202);
 
       await service.fanOutSend(
-        targets: [FanOutTarget.chat(chatBob)],
+        targets: [
+          FanOutTarget.chat(chat: chatBob, shareSignatureEnabled: true),
+        ],
         body: 'Retrying Carol only',
         shareId: shareId,
       );

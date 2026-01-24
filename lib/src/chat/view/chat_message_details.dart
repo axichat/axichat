@@ -2,15 +2,14 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -43,7 +42,9 @@ const double _messageDetailsHeadersDialogMaxHeight = 320.0;
 const double _messageDetailsHeadersCardPadding = 12.0;
 
 class ChatMessageDetails extends StatelessWidget {
-  const ChatMessageDetails({super.key});
+  const ChatMessageDetails({super.key, this.onAddRecipient});
+
+  final ValueChanged<Chat>? onAddRecipient;
 
   @override
   Widget build(BuildContext context) {
@@ -474,6 +475,7 @@ class ChatMessageDetails extends StatelessWidget {
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final onAddRecipient = this.onAddRecipient;
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -492,26 +494,24 @@ class ChatMessageDetails extends StatelessWidget {
             spacing: 8,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ShadButton.secondary(
-                size: ShadButtonSize.sm,
-                onPressed: () {
-                  final recipientName =
-                      recipient.contactDisplayName ?? recipient.title;
-                  context.read<ChatBloc>().add(
-                        ChatComposerRecipientAdded(
-                            FanOutTarget.chat(recipient)),
-                      );
-                  Navigator.of(dialogContext).pop();
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        l10n.chatMessageAddRecipientSuccess(recipientName),
+              if (onAddRecipient != null)
+                ShadButton.secondary(
+                  size: ShadButtonSize.sm,
+                  onPressed: () {
+                    final recipientName =
+                        recipient.contactDisplayName ?? recipient.title;
+                    onAddRecipient(recipient);
+                    Navigator.of(dialogContext).pop();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          l10n.chatMessageAddRecipientSuccess(recipientName),
+                        ),
                       ),
-                    ),
-                  );
-                },
-                child: Text(l10n.chatMessageAddRecipients),
-              ).withTapBounce(),
+                    );
+                  },
+                  child: Text(l10n.chatMessageAddRecipients),
+                ).withTapBounce(),
               ShadButton.secondary(
                 size: ShadButtonSize.sm,
                 onPressed: () {

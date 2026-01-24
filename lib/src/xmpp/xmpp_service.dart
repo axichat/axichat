@@ -28,6 +28,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
@@ -48,7 +49,6 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -310,11 +310,30 @@ abstract interface class XmppBase {
 
   Stream<PubSubSupport> get pubSubSupportStream;
 
-  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings;
+  bool get autoDownloadImages;
 
-  void updateAttachmentAutoDownloadSettings(
-    AttachmentAutoDownloadSettings settings,
-  );
+  bool get autoDownloadVideos;
+
+  bool get autoDownloadDocuments;
+
+  bool get autoDownloadArchives;
+
+  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
+      autoDownloadImages ||
+              autoDownloadVideos ||
+              autoDownloadDocuments ||
+              autoDownloadArchives
+          ? AttachmentAutoDownload.allowed
+          : AttachmentAutoDownload.blocked;
+
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  });
+
+  bool allowsAutoDownloadMetadata(FileMetadataData metadata);
 
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
@@ -483,8 +502,10 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
-  AttachmentAutoDownloadSettings _attachmentAutoDownloadSettings =
-      const AttachmentAutoDownloadSettings();
+  var _autoDownloadImages = true;
+  var _autoDownloadVideos = false;
+  var _autoDownloadDocuments = false;
+  var _autoDownloadArchives = false;
 
   // Calendar sync message callback
   Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
@@ -540,14 +561,38 @@ class XmppService extends XmppBase
   }
 
   @override
-  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
-      _attachmentAutoDownloadSettings;
+  bool get autoDownloadImages => _autoDownloadImages;
 
   @override
-  void updateAttachmentAutoDownloadSettings(
-    AttachmentAutoDownloadSettings settings,
-  ) {
-    _attachmentAutoDownloadSettings = settings;
+  bool get autoDownloadVideos => _autoDownloadVideos;
+
+  @override
+  bool get autoDownloadDocuments => _autoDownloadDocuments;
+
+  @override
+  bool get autoDownloadArchives => _autoDownloadArchives;
+
+  @override
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  }) {
+    _autoDownloadImages = imagesEnabled;
+    _autoDownloadVideos = videosEnabled;
+    _autoDownloadDocuments = documentsEnabled;
+    _autoDownloadArchives = archivesEnabled;
+  }
+
+  @override
+  bool allowsAutoDownloadMetadata(FileMetadataData metadata) {
+    return switch (metadata.downloadCategory) {
+      FileMetadataDownloadCategory.image => _autoDownloadImages,
+      FileMetadataDownloadCategory.video => _autoDownloadVideos,
+      FileMetadataDownloadCategory.document => _autoDownloadDocuments,
+      FileMetadataDownloadCategory.archive => _autoDownloadArchives,
+    };
   }
 
   @override
@@ -1244,9 +1289,9 @@ class XmppService extends XmppBase
       if (chat?.muted ?? false) {
         return;
       }
-      final previewSetting = chat?.notificationPreviewSetting ??
-          NotificationPreviewSetting.inherit;
-      final showPreview = previewSetting.resolvePreview(
+      final previewSetting = chat?.notificationPreviewSetting;
+      final showPreview = NotificationPreviewSetting.resolveOverride(
+        previewSetting,
         _notificationService.notificationPreviewsEnabled,
       );
       final threadKey =

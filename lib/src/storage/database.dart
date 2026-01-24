@@ -64,7 +64,7 @@ const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 const int _messageStatusSyncEnvelopeVersion = 1;
 const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeIdKey = 'id';
-const int _pinnedMessagesSchemaVersion = 27;
+const int _pinnedMessagesSchemaVersion = 28;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
@@ -424,17 +424,17 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> setChatNotificationPreviewSetting({
     required String jid,
-    required NotificationPreviewSetting setting,
+    required NotificationPreviewSetting? setting,
   });
 
   Future<void> setChatShareSignature({
     required String jid,
-    required bool enabled,
+    required bool? enabled,
   });
 
   Future<void> setChatAttachmentAutoDownload({
     required String jid,
-    required AttachmentAutoDownload value,
+    required AttachmentAutoDownload? value,
   });
 
   Future<void> markChatFavorited({
@@ -454,7 +454,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markChatMarkerResponsive({
     required String jid,
-    required bool responsive,
+    required bool? responsive,
   });
 
   Future<void> updateChatAvatar({
@@ -1512,6 +1512,9 @@ WHERE delta_chat_id IS NOT NULL
         }
         if (from < 27) {
           await m.addColumn(drafts, drafts.quotingStanzaId);
+        }
+        if (from < 28) {
+          await _rebuildChatsTable(m);
         }
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
@@ -3785,7 +3788,7 @@ $limitClause
   @override
   Future<void> setChatNotificationPreviewSetting({
     required String jid,
-    required NotificationPreviewSetting setting,
+    required NotificationPreviewSetting? setting,
   }) async {
     _log.info('Updating chat notification preview setting');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -3796,7 +3799,7 @@ $limitClause
   @override
   Future<void> setChatShareSignature({
     required String jid,
-    required bool enabled,
+    required bool? enabled,
   }) async {
     _log.info('Updating chat share signature');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -3807,7 +3810,7 @@ $limitClause
   @override
   Future<void> setChatAttachmentAutoDownload({
     required String jid,
-    required AttachmentAutoDownload value,
+    required AttachmentAutoDownload? value,
   }) async {
     _log.info('Updating chat attachment auto-download state');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -3943,7 +3946,7 @@ $limitClause
   @override
   Future<void> markChatMarkerResponsive({
     required String jid,
-    required bool responsive,
+    required bool? responsive,
   }) async {
     _log.info('Updating chat marker responsiveness');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
@@ -4509,6 +4512,84 @@ ON CONFLICT(address) DO UPDATE SET
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
     }
+  }
+
+  Future<void> _rebuildChatsTable(Migrator m) async {
+    const tableName = 'chats';
+    const tempTableName = '${tableName}_old';
+    const columnNames = <String>[
+      'jid',
+      'title',
+      'type',
+      'my_nickname',
+      'avatar_path',
+      'avatar_hash',
+      'last_message',
+      'alert',
+      'last_change_timestamp',
+      'unread_count',
+      'open',
+      'muted',
+      'notification_preview_setting',
+      'favorited',
+      'archived',
+      'hidden',
+      'spam',
+      'spam_updated_at',
+      'marker_responsive',
+      'share_signature_enabled',
+      'attachment_auto_download',
+      'encryption_protocol',
+      'contact_i_d',
+      'contact_display_name',
+      'contact_avatar_path',
+      'contact_avatar_hash',
+      'contact_jid',
+      'chat_state',
+      'delta_chat_id',
+      'email_address',
+      'email_from_address',
+    ];
+    final columns = columnNames.join(', ');
+    await customStatement('ALTER TABLE $tableName RENAME TO $tempTableName');
+    await m.createTable(chats);
+    await customStatement('''
+INSERT INTO $tableName ($columns)
+SELECT
+  jid,
+  title,
+  type,
+  my_nickname,
+  avatar_path,
+  avatar_hash,
+  last_message,
+  alert,
+  last_change_timestamp,
+  unread_count,
+  open,
+  muted,
+  NULL AS notification_preview_setting,
+  favorited,
+  archived,
+  hidden,
+  spam,
+  spam_updated_at,
+  NULL AS marker_responsive,
+  NULL AS share_signature_enabled,
+  NULL AS attachment_auto_download,
+  encryption_protocol,
+  contact_i_d,
+  contact_display_name,
+  contact_avatar_path,
+  contact_avatar_hash,
+  contact_jid,
+  chat_state,
+  delta_chat_id,
+  email_address,
+  email_from_address
+FROM $tempTableName
+''');
+    await customStatement('DROP TABLE $tempTableName');
   }
 
   Future<void> _rebuildMessageCopiesTable(Migrator m) async {

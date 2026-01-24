@@ -22,6 +22,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -176,7 +177,11 @@ class _CalendarAvailabilityShareScreenState
     if (lockedChat != null) {
       _recipients = <ComposerRecipient>[
         ComposerRecipient(
-          target: FanOutTarget.chat(lockedChat),
+          target: FanOutTarget.chat(
+            chat: lockedChat,
+            shareSignatureEnabled: lockedChat.shareSignatureEnabled ??
+                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+          ),
           pinned: true,
         ),
       ];

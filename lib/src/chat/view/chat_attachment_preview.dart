@@ -17,7 +17,6 @@ import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart'
     show XmppFileTooBigException, XmppService;
@@ -286,7 +285,10 @@ class ChatAttachmentPreview extends StatefulWidget {
     required this.metadataStream,
     this.initialMetadata,
     required this.allowed,
-    required this.autoDownloadSettings,
+    required this.autoDownloadImages,
+    required this.autoDownloadVideos,
+    required this.autoDownloadDocuments,
+    required this.autoDownloadArchives,
     required this.autoDownloadAllowed,
     this.autoDownloadUserInitiated = false,
     this.downloadDelegate,
@@ -299,7 +301,10 @@ class ChatAttachmentPreview extends StatefulWidget {
   final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData? initialMetadata;
   final bool allowed;
-  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadImages;
+  final bool autoDownloadVideos;
+  final bool autoDownloadDocuments;
+  final bool autoDownloadArchives;
   final bool autoDownloadAllowed;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
@@ -322,7 +327,12 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     if (!widget.autoDownloadAllowed) {
       return false;
     }
-    return widget.autoDownloadSettings.allowsMetadata(metadata);
+    return metadata.downloadCategory.isAutoDownloadAllowed(
+      imagesEnabled: widget.autoDownloadImages,
+      videosEnabled: widget.autoDownloadVideos,
+      documentsEnabled: widget.autoDownloadDocuments,
+      archivesEnabled: widget.autoDownloadArchives,
+    );
   }
 
   Future<FileTypeReport> _resolveTypeReportFuture({

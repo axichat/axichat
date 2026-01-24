@@ -18,6 +18,7 @@ import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
@@ -37,9 +38,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _draftComposerControlExtent = 42;
 const double _draftSubjectHeight = 32;
-const Duration _draftAutosaveDelay = Duration(seconds: 2);
-const int _draftSaveEpochStep = 1;
-const int _initialDraftSaveEpoch = 0;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -95,7 +93,7 @@ class _DraftFormState extends State<DraftForm> {
   int? _lastSavedSignature;
   DateTime? _lastAutosaveAt;
   bool _autosaveInFlight = false;
-  int _saveEpoch = _initialDraftSaveEpoch;
+  int _saveEpoch = 0;
 
   @override
   void initState() {
@@ -291,7 +289,6 @@ class _DraftFormState extends State<DraftForm> {
                 !hasPreparingAttachments;
             final bool showAutosaveHint = _lastAutosaveAt != null &&
                 _lastSavedSignature == _currentDraftSignature();
-
             return _DraftTaskDropRegion(
               onTaskDropped: enabled ? _handleTaskDrop : null,
               child: Column(
@@ -527,10 +524,29 @@ class _DraftFormState extends State<DraftForm> {
         }
       }
       if (match != null) {
-        recipients.add(ComposerRecipient(target: FanOutTarget.chat(match)));
+        recipients.add(
+          ComposerRecipient(
+            target: FanOutTarget.chat(
+              chat: match,
+              shareSignatureEnabled: match.shareSignatureEnabled ??
+                  context
+                      .read<SettingsCubit>()
+                      .state
+                      .shareTokenSignatureEnabled,
+            ),
+          ),
+        );
       } else {
         recipients.add(
-          ComposerRecipient(target: FanOutTarget.address(address: trimmed)),
+          ComposerRecipient(
+            target: FanOutTarget.address(
+              address: trimmed,
+              shareSignatureEnabled: context
+                  .read<SettingsCubit>()
+                  .state
+                  .shareTokenSignatureEnabled,
+            ),
+          ),
         );
       }
     }
@@ -801,41 +817,6 @@ class _DraftFormState extends State<DraftForm> {
     }
   }
 
-  Future<void> _applyAttachmentMetadataIds({
-    required List<String> metadataIds,
-    required List<String> expectedAttachmentIds,
-  }) async {
-    if (!mounted || metadataIds.isEmpty) {
-      return;
-    }
-    if (metadataIds.length != expectedAttachmentIds.length) {
-      return;
-    }
-    final idToMetadata = <String, String>{};
-    for (var index = 0; index < expectedAttachmentIds.length; index++) {
-      idToMetadata[expectedAttachmentIds[index]] = metadataIds[index];
-    }
-    var changed = false;
-    final updated = <PendingAttachment>[];
-    for (final pending in _pendingAttachments) {
-      final metadataId = idToMetadata[pending.id];
-      if (metadataId == null || pending.attachment.metadataId == metadataId) {
-        updated.add(pending);
-        continue;
-      }
-      changed = true;
-      updated.add(
-        pending.copyWith(
-          attachment: pending.attachment.copyWith(metadataId: metadataId),
-        ),
-      );
-    }
-    if (!changed) {
-      return;
-    }
-    setState(() => _pendingAttachments = updated);
-  }
-
   void _scheduleAutosave() {
     if (!_dependenciesInitialized || _sendingDraft) {
       return;
@@ -844,11 +825,12 @@ class _DraftFormState extends State<DraftForm> {
       return;
     }
     _autosaveTimer?.cancel();
-    _autosaveTimer = Timer(_draftAutosaveDelay, _handleAutosaveTick);
+    const delay = Duration(seconds: 2);
+    _autosaveTimer = Timer(delay, _handleAutosaveTick);
   }
 
   void _invalidatePendingSaves() {
-    _saveEpoch += _draftSaveEpochStep;
+    _saveEpoch += 1;
   }
 
   Future<void> _handleAutosaveTick() async {
@@ -928,6 +910,41 @@ class _DraftFormState extends State<DraftForm> {
     );
   }
 
+  Future<void> _applyAttachmentMetadataIds({
+    required List<String> metadataIds,
+    required List<String> expectedAttachmentIds,
+  }) async {
+    if (!mounted || metadataIds.isEmpty) {
+      return;
+    }
+    if (metadataIds.length != expectedAttachmentIds.length) {
+      return;
+    }
+    final idToMetadata = <String, String>{};
+    for (var index = 0; index < expectedAttachmentIds.length; index++) {
+      idToMetadata[expectedAttachmentIds[index]] = metadataIds[index];
+    }
+    var changed = false;
+    final updated = <PendingAttachment>[];
+    for (final pending in _pendingAttachments) {
+      final metadataId = idToMetadata[pending.id];
+      if (metadataId == null || pending.attachment.metadataId == metadataId) {
+        updated.add(pending);
+        continue;
+      }
+      changed = true;
+      updated.add(
+        pending.copyWith(
+          attachment: pending.attachment.copyWith(metadataId: metadataId),
+        ),
+      );
+    }
+    if (!changed) {
+      return;
+    }
+    setState(() => _pendingAttachments = updated);
+  }
+
   Future<void> _handleDiscard() async {
     final l10n = context.l10n;
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
@@ -996,7 +1013,8 @@ class _DraftFormState extends State<DraftForm> {
           return FanOutTarget.address(
             address: address,
             displayName: chat.contactDisplayName ?? chat.title,
-            shareSignatureEnabled: chat.shareSignatureEnabled,
+            shareSignatureEnabled: chat.shareSignatureEnabled ??
+                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
           );
         }
       }

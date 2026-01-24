@@ -4329,12 +4329,6 @@ mixin MessageService
       const fallback = _PeerCapabilities.empty;
       _capabilityCache[jid] = fallback;
       await _persistCapabilityCache();
-      await _dbOp<XmppDatabase>(
-        (db) => db.markChatMarkerResponsive(
-          jid: jid,
-          responsive: fallback.supportsMarkers,
-        ),
-      );
       return fallback;
     }
 
@@ -4347,13 +4341,6 @@ mixin MessageService
 
     _capabilityCache[jid] = capabilities;
     await _persistCapabilityCache();
-
-    await _dbOp<XmppDatabase>(
-      (db) => db.markChatMarkerResponsive(
-        jid: jid,
-        responsive: capabilities.supportsMarkers,
-      ),
-    );
 
     return capabilities;
   }
@@ -7367,7 +7354,9 @@ mixin MessageService
             return false;
           }
           if (chat == null) return false;
-          return chat.attachmentAutoDownload.isAllowed;
+          return (chat.attachmentAutoDownload ??
+                  defaultChatAttachmentAutoDownload)
+              .isAllowed;
         });
       }
       if (!isTrusted) return;
@@ -7375,7 +7364,7 @@ mixin MessageService
         (db) => db.getFileMetadata(trimmedMetadataId),
       );
       if (metadata == null) return;
-      if (!attachmentAutoDownloadSettings.allowsMetadata(metadata)) {
+      if (!allowsAutoDownloadMetadata(metadata)) {
         return;
       }
       await downloadInboundAttachment(
