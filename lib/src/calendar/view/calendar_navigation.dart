@@ -515,7 +515,7 @@ class CalendarSegmentedOption<T> {
 }
 
 class CalendarViewModeToggle extends StatelessWidget {
-  const CalendarViewModeToggle({
+  const CalendarViewModeToggle({super.key, super.key, 
     required this.selectedView,
     required this.onChanged,
     required this.compact,
@@ -658,10 +658,10 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
                     minHeight: minHeight,
                     activeBackground: activeBackground,
                     hoverBackground: hoverBackground,
-                    onSelected: () => onChanged(options[index].value),
-                    child: options[index].label,
-                    activeTextColor: colors.primary,
+                    onSelected: () => onChanged(options[indcolors.primary,
                     inactiveTextColor: colors.mutedForeground,
+                    child: options[in
+                    child: options[index].label,dex].label,
                   ),
                 ),
               ],
@@ -777,8 +777,8 @@ class CalendarPaneToggle extends StatelessWidget {
     final shadTheme = ShadTheme.of(context);
     final secondaryButtonTheme = shadTheme.secondaryButtonTheme;
     final buttonSizeTheme =
-        secondaryButtonTheme.sizesTheme?.sm ?? shadTheme.buttonSizesTheme.sm!;
-    final EdgeInsets padding = const EdgeInsets.symmetric(
+        secondaryButtonTheme.sizesTheme?.sm ?? shadTheme.buttonSizesThemconst;
+    const EdgeInsetsng = EdgeInsets.symmetric(
       horizontal: calendarGutterSm,
     );
     final double minHeight = buttonSizeTheme.height;

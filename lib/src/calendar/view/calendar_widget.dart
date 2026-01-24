@@ -410,7 +410,7 @@ class _CalendarActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool showPaneToggle = ResponsiveHelper.isMedium(context);
-    final Widget tasksLabel = const TasksTabLabel();
+    const Widget tasksLabel = abLabel();
     final Widget scheduleLabel = Text(context.l10n.calendarScheduleLabel);
     return Wrap(
       spacing: _calendarShareActionSpacing,

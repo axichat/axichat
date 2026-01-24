@@ -394,9 +394,9 @@ class _ProfileMainView extends StatelessWidget {
                   alignment: Alignment.bottomRight,
                   child: SafeArea(
                     minimum: const EdgeInsets.all(16),
-                    child: AxiFab(
-                      text: context.l10n.profileJumpToTop,
+                    child: AxiIconButton.ghost(
                       iconData: LucideIcons.arrowUp,
+                      tooltip: context.l10n.profileJumpToTop,
                       onPressed: () async {
                         if (!profileScrollController.hasClients) {
                           return;

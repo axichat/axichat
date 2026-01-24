@@ -2,10 +2,13 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -38,15 +41,24 @@ class CalendarMonthView extends StatelessWidget {
     final BorderSide border = BorderSide(
       color: colors.border.withValues(alpha: 0.35),
     );
+    final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
+    final Border gridBorder =
+        _isChatCalendar(context) && spec.sizeClass != CalendarSizeClass.expanded
+            ? Border(
+                top: BorderSide(color: border.color),
+                right: BorderSide(color: border.color),
+                bottom: BorderSide(color: border.color),
+              )
+            : Border(
+                left: BorderSide(color: border.color),
+                right: BorderSide(color: border.color),
+                bottom: BorderSide(color: border.color),
+              );
 
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
-        border: Border(
-          left: BorderSide(color: border.color),
-          right: BorderSide(color: border.color),
-          bottom: BorderSide(color: border.color),
-        ),
+        border: gridBorder,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,6 +116,15 @@ class CalendarMonthView extends StatelessWidget {
       );
     }
     return byDate;
+  }
+
+  bool _isChatCalendar(BuildContext context) {
+    try {
+      context.read<ChatCalendarBloc>();
+      return true;
+    } on FlutterError {
+      return false;
+    }
   }
 }
 
