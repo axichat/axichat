@@ -329,7 +329,6 @@ class SettingsControls extends StatelessWidget {
 
 class _SettingsSectionHeader extends StatelessWidget {
   const _SettingsSectionHeader({
-    super.key,
     required this.label,
     this.showDivider = true,
   });

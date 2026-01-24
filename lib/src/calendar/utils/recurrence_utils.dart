@@ -481,6 +481,7 @@ DateTime? _nextOccurrence(
         baseStart.day,
       );
   }
+  return null;
 }
 
 Iterable<DateTime> _simpleOccurrencesWithin({
