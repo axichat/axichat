@@ -60,11 +60,15 @@ class FanOutTarget extends Equatable {
     required this.shareSignatureEnabled,
   });
 
-  factory FanOutTarget.chat(Chat chat) => FanOutTarget._(
+  factory FanOutTarget.chat({
+    required Chat chat,
+    required bool shareSignatureEnabled,
+  }) =>
+      FanOutTarget._(
         chat: chat,
         address: chat.emailAddress,
         displayName: chat.contactDisplayName,
-        shareSignatureEnabled: chat.shareSignatureEnabled,
+        shareSignatureEnabled: shareSignatureEnabled,
       );
 
   factory FanOutTarget.address({

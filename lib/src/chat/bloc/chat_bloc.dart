@@ -3196,7 +3196,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final recipients = failedStatuses
         .map(
           (status) => ComposerRecipient(
-            target: FanOutTarget.chat(status.chat),
+            target: FanOutTarget.chat(
+              chat: status.chat,
+              shareSignatureEnabled: status.chat.shareSignatureEnabled ??
+                  _settingsState.shareTokenSignatureEnabled,
+            ),
             included: true,
           ),
         )

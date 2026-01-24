@@ -1135,7 +1135,11 @@ class _ChatState extends State<Chat> {
     } else {
       _recipients = [
         ComposerRecipient(
-          target: FanOutTarget.chat(chat),
+          target: FanOutTarget.chat(
+            chat: chat,
+            shareSignatureEnabled: chat.shareSignatureEnabled ??
+                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+          ),
           included: true,
           pinned: true,
         ),
@@ -1191,7 +1195,13 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleRecipientAddedFromChat(chat_models.Chat chat) {
-    _handleRecipientAdded(FanOutTarget.chat(chat));
+    _handleRecipientAdded(
+      FanOutTarget.chat(
+        chat: chat,
+        shareSignatureEnabled: chat.shareSignatureEnabled ??
+            context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+      ),
+    );
   }
 
   void _maybeClearPendingCalendarTaskIcs(String text) {
@@ -2350,7 +2360,9 @@ class _ChatState extends State<Chat> {
     if (isSelf) return true;
     final resolvedChat = chat;
     if (resolvedChat == null) return false;
-    return resolvedChat.attachmentAutoDownload.isAllowed;
+    return (resolvedChat.attachmentAutoDownload ??
+            context.watch<SettingsCubit>().state.defaultChatAttachmentAutoDownload)
+        .isAllowed;
   }
 
   bool _isOneTimeAttachmentAllowed(String stanzaId) {
@@ -3424,7 +3436,11 @@ class _ChatState extends State<Chat> {
     if (chat != null) {
       _recipients = [
         ComposerRecipient(
-          target: FanOutTarget.chat(chat),
+          target: FanOutTarget.chat(
+            chat: chat,
+            shareSignatureEnabled: chat.shareSignatureEnabled ??
+                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+          ),
           included: true,
           pinned: true,
         ),
@@ -6688,11 +6704,15 @@ class _ChatState extends State<Chat> {
                                                                   !attachmentsBlockedForChat &&
                                                                       (allowAttachmentByTrust ||
                                                                           allowAttachmentOnce);
-                                                              final chatAutoDownloadAllowed = state
-                                                                      .chat
-                                                                      ?.attachmentAutoDownload
-                                                                      .isAllowed ??
-                                                                  false;
+                                                              final chatAutoDownloadAllowed = (state
+                                                                          .chat
+                                                                          ?.attachmentAutoDownload ??
+                                                                      context
+                                                                          .watch<
+                                                                              SettingsCubit>()
+                                                                          .state
+                                                                          .defaultChatAttachmentAutoDownload)
+                                                                  .isAllowed;
                                                               final autoDownloadAllowed =
                                                                   allowAttachment &&
                                                                       chatAutoDownloadAllowed;
@@ -9483,7 +9503,9 @@ class _PinnedMessageTile extends StatelessWidget {
           : isOneTimeAttachmentAllowed(message.stanzaID);
       final allowAttachment = !attachmentsBlockedForPin &&
           (allowAttachmentByTrust || allowAttachmentOnce);
-      final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
+      final chatAutoDownloadAllowed = (chat.attachmentAutoDownload ??
+              context.watch<SettingsCubit>().state.defaultChatAttachmentAutoDownload)
+          .isAllowed;
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
       final emailDownloadDelegate = isEmailBacked && emailService != null
@@ -12177,7 +12199,8 @@ class _ChatSettingsButtons extends StatelessWidget {
         context.watch<BlocklistCubit?>()?.state;
     final bool globalSignatureEnabled =
         context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
-    final bool chatSignatureEnabled = chat.shareSignatureEnabled;
+    final bool chatSignatureEnabled =
+        chat.shareSignatureEnabled ?? globalSignatureEnabled;
     final bool signatureActive = globalSignatureEnabled && chatSignatureEnabled;
     final String signatureHint = globalSignatureEnabled
         ? l10n.chatSignatureHintEnabled
@@ -12411,8 +12434,8 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
     required this.onChanged,
   });
 
-  final NotificationPreviewSetting setting;
-  final ValueChanged<NotificationPreviewSetting> onChanged;
+  final NotificationPreviewSetting? setting;
+  final ValueChanged<NotificationPreviewSetting?> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -12421,36 +12444,41 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
       title: l10n.settingsNotificationPreviews,
       trailing: SizedBox(
         width: _chatSettingsSelectMinWidth,
-        child: AxiSelect<NotificationPreviewSetting>(
+        child: AxiSelect<NotificationPreviewSetting?>(
           initialValue: setting,
           onChanged: (value) {
-            if (value == null) return;
             onChanged(value);
           },
-          options: NotificationPreviewSetting.values
+          options: <NotificationPreviewSetting?>[
+            null,
+            ...NotificationPreviewSetting.values,
+          ]
               .map(
-                (option) => ShadOption<NotificationPreviewSetting>(
+                (option) => ShadOption<NotificationPreviewSetting?>(
                   value: option,
-                  child: Text(option.label(l10n)),
+                  child: Text(
+                    option == null
+                        ? l10n.chatNotificationPreviewOptionInherit
+                        : option.label(
+                            showLabel: l10n.chatNotificationPreviewOptionShow,
+                            hideLabel: l10n.chatNotificationPreviewOptionHide,
+                          ),
+                  ),
                 ),
               )
               .toList(),
-          selectedOptionBuilder: (_, value) => Text(value.label(l10n)),
+          selectedOptionBuilder: (_, value) => Text(
+            value == null
+                ? l10n.chatNotificationPreviewOptionInherit
+                : value.label(
+                    showLabel: l10n.chatNotificationPreviewOptionShow,
+                    hideLabel: l10n.chatNotificationPreviewOptionHide,
+                  ),
+          ),
         ),
       ),
     );
   }
-}
-
-extension NotificationPreviewSettingLabels on NotificationPreviewSetting {
-  String label(AppLocalizations l10n) => switch (this) {
-        NotificationPreviewSetting.inherit =>
-          l10n.chatNotificationPreviewOptionInherit,
-        NotificationPreviewSetting.show =>
-          l10n.chatNotificationPreviewOptionShow,
-        NotificationPreviewSetting.hide =>
-          l10n.chatNotificationPreviewOptionHide,
-      };
 }
 
 class _ChatAttachmentTrustToggle extends StatelessWidget {
@@ -12461,7 +12489,9 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final enabled = chat.attachmentAutoDownload.isAllowed;
+    final enabled = (chat.attachmentAutoDownload ??
+            context.watch<SettingsCubit>().state.defaultChatAttachmentAutoDownload)
+        .isAllowed;
     final hint = enabled
         ? l10n.chatAttachmentAutoDownloadHintOn
         : l10n.chatAttachmentAutoDownloadHintOff;
