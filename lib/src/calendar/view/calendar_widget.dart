@@ -81,10 +81,7 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
 ) {
   try {
-    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
-      context,
-      listen: false,
-    );
+    return context.read<CalendarAvailabilityShareCoordinator>();
   } on FlutterError {
     return null;
   }
@@ -229,7 +226,6 @@ class _CalendarWidgetState
                 ? null
                 : () => _openAvailabilityShareSheet(
                       state,
-                      availabilityCoordinator,
                     ),
           ),
           Expanded(child: tintedLayout),
@@ -287,7 +283,6 @@ class _CalendarWidgetState
 
   Future<void> _openAvailabilityShareSheet(
     CalendarState state,
-    CalendarAvailabilityShareCoordinator coordinator,
   ) async {
     final l10n = context.l10n;
     final xmpp = context.read<XmppService>();
@@ -301,7 +296,6 @@ class _CalendarWidgetState
     }
     await showCalendarAvailabilityShareSheet(
       context: context,
-      coordinator: coordinator,
       source: const CalendarAvailabilityShareSource.personal(),
       model: state.model,
       ownerJid: ownerJid,

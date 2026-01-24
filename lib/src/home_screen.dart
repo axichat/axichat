@@ -586,10 +586,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   final reminderController =
                       context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
+                  final emailService = context.read<EmailService?>();
                   const bool seedDemoCalendar = kEnableDemoChats;
                   final storage = calendarStorage;
 
                   final CalendarBloc bloc = CalendarBloc(
+                    xmppService: xmppService,
+                    emailService: emailService,
                     reminderController: reminderController,
                     syncManagerBuilder: (bloc) {
                       final manager = CalendarSyncManager(

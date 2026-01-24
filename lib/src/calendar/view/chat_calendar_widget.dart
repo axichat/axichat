@@ -66,29 +66,10 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
 ) {
   try {
-    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
-      context,
-      listen: false,
-    );
+    return context.read<CalendarAvailabilityShareCoordinator>();
   } on FlutterError {
     return null;
   }
-}
-
-String? _resolveAvailabilityOwnerJid({
-  required XmppService xmppService,
-  required Chat chat,
-}) {
-  final String? accountJid = xmppService.myJid?.trim();
-  if (chat.type != ChatType.groupChat) {
-    return accountJid;
-  }
-  final String? occupantId =
-      xmppService.roomStateFor(chat.jid)?.myOccupantId?.trim();
-  if (occupantId != null && occupantId.isNotEmpty) {
-    return occupantId;
-  }
-  return null;
 }
 
 class ChatCalendarWidget extends StatefulWidget {
@@ -275,7 +256,6 @@ class _ChatCalendarWidgetState
                   ? null
                   : () => _openAvailabilityShareSheet(
                         state,
-                        availabilityCoordinator,
                       ),
             ),
           Expanded(child: tintedLayout),
@@ -333,14 +313,10 @@ class _ChatCalendarWidgetState
 
   Future<void> _openAvailabilityShareSheet(
     CalendarState state,
-    CalendarAvailabilityShareCoordinator coordinator,
   ) async {
     final l10n = context.l10n;
     final xmpp = context.read<XmppService>();
-    final String? ownerJid = _resolveAvailabilityOwnerJid(
-      xmppService: xmpp,
-      chat: widget.chat,
-    );
+    final String? ownerJid = xmpp.myJid?.trim();
     if (ownerJid == null || ownerJid.isEmpty) {
       FeedbackSystem.showError(
         context,
@@ -350,7 +326,6 @@ class _ChatCalendarWidgetState
     }
     await showCalendarAvailabilityShareSheet(
       context: context,
-      coordinator: coordinator,
       source: CalendarAvailabilityShareSource.chat(chatJid: widget.chat.jid),
       model: state.model,
       ownerJid: ownerJid,

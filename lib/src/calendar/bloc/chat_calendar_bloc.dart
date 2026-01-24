@@ -15,6 +15,8 @@ class ChatCalendarBloc extends CalendarBloc {
     required ChatType chatType,
     required ChatCalendarSyncCoordinator coordinator,
     required super.storage,
+    required super.xmppService,
+    super.emailService,
     super.reminderController,
     super.availabilityCoordinator,
   })  : _chatJid = chatJid,

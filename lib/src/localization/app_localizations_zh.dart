@@ -7069,6 +7069,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsButtonLabel => '設定';
 
   @override
+  String get settingsSectionAccount => 'Account';
+
+  @override
+  String get settingsSectionData => 'Data';
+
+  @override
   String get settingsSectionImportant => '重要';
 
   @override
@@ -7105,10 +7111,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsLowMotionDescription => '停用大部分動畫，更適合較慢的裝置。';
 
   @override
-  String get settingsSectionChats => '聊天';
+  String get settingsSectionChats => 'Chat preferences';
 
   @override
-  String get settingsSectionEmail => '電郵';
+  String get settingsSectionEmail => 'Email preferences';
+
+  @override
+  String get settingsSectionAbout => 'About';
+
+  @override
+  String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
   String get settingsMessageStorageTitle => '訊息儲存';

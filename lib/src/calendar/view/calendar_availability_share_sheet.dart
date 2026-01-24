@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_preset_store.dart';
-import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
-import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
@@ -23,7 +25,6 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -49,17 +50,8 @@ const double _availabilityShareHeaderGap = 4.0;
 
 const Uuid _availabilityPresetIdGenerator = Uuid();
 
-XmppService? _maybeReadXmppService(BuildContext context) {
-  try {
-    return RepositoryProvider.of<XmppService>(context, listen: false);
-  } on FlutterError {
-    return null;
-  }
-}
-
 Future<void> showCalendarAvailabilityShareSheet({
   required BuildContext context,
-  required CalendarAvailabilityShareCoordinator coordinator,
   required CalendarAvailabilityShareSource source,
   required CalendarModel model,
   required String ownerJid,
@@ -94,7 +86,6 @@ Future<void> showCalendarAvailabilityShareSheet({
       duration: baseAnimationDuration,
       fullscreenDialog: true,
       builder: (routeContext) => CalendarAvailabilityShareScreen(
-        coordinator: coordinator,
         source: source,
         model: model,
         ownerJid: ownerJid,
@@ -121,7 +112,6 @@ enum _AvailabilityShareStep {
 class CalendarAvailabilityShareScreen extends StatefulWidget {
   const CalendarAvailabilityShareScreen({
     super.key,
-    required this.coordinator,
     required this.source,
     required this.model,
     required this.ownerJid,
@@ -130,7 +120,6 @@ class CalendarAvailabilityShareScreen extends StatefulWidget {
     this.initialChat,
   });
 
-  final CalendarAvailabilityShareCoordinator coordinator;
   final CalendarAvailabilityShareSource source;
   final CalendarModel model;
   final String ownerJid;
@@ -472,19 +461,6 @@ class _CalendarAvailabilityShareScreenState
     });
   }
 
-  Chat? _resolveSelectedChatForOwner() {
-    if (widget.lockToChat) {
-      return _selectedChat;
-    }
-    for (final recipient in _recipients) {
-      final chat = recipient.target.chat;
-      if (recipient.included && chat != null) {
-        return chat;
-      }
-    }
-    return _selectedChat;
-  }
-
   List<Chat> _includedRecipientChats() {
     final List<Chat> chats = <Chat>[];
     for (final recipient in _recipients) {
@@ -512,8 +488,8 @@ class _CalendarAvailabilityShareScreenState
       );
       return;
     }
-    final String? ownerJid = _resolveOwnerJid(_resolveSelectedChatForOwner());
-    if (ownerJid == null || ownerJid.isEmpty) {
+    final String ownerJid = widget.ownerJid.trim();
+    if (ownerJid.isEmpty) {
       FeedbackSystem.showError(
         context,
         context.l10n.calendarAvailabilityShareMissingJid,
@@ -540,40 +516,33 @@ class _CalendarAvailabilityShareScreenState
       ownerJid,
       tzid,
     );
-    CalendarAvailabilityShareRecord? latestRecord;
-    var failures = 0;
     try {
-      for (final Chat chat in recipients) {
-        final String resolvedOwner = _resolveOwnerJid(chat) ?? ownerJid;
-        final CalendarAvailabilityShareRecord? record =
-            await widget.coordinator.createShare(
-          source: widget.source,
-          model: _localModel,
-          ownerJid: resolvedOwner,
-          chatJid: chat.jid,
-          chatType: chat.type,
-          rangeStart: CalendarDateTime(value: start, tzid: tzid),
-          rangeEnd: CalendarDateTime(value: end, tzid: tzid),
-          overrideOverlay: customOverlay,
-          lockOverlay: _hasCustomDraft,
-        );
-        if (record == null) {
-          failures += 1;
-          continue;
-        }
-        latestRecord = record;
-      }
+      final completer = Completer<CalendarShareResult>();
+      context.read<CalendarBloc>().add(
+            CalendarEvent.availabilityShareRequested(
+              source: widget.source,
+              model: _localModel,
+              ownerJid: ownerJid,
+              recipients: recipients,
+              rangeStart: CalendarDateTime(value: start, tzid: tzid),
+              rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+              overrideOverlay: customOverlay,
+              lockOverlay: _hasCustomDraft,
+              completer: completer,
+            ),
+          );
+      final result = await completer.future;
       if (!mounted) {
         return;
       }
-      if (latestRecord == null) {
+      if (!result.isSuccess) {
         FeedbackSystem.showError(
           context,
           context.l10n.calendarAvailabilityShareFailed,
         );
         return;
       }
-      if (failures > 0) {
+      if (result.partialFailure) {
         FeedbackSystem.showInfo(
           context,
           context.l10n.calendarAvailabilitySharePartialFailure,
@@ -583,7 +552,7 @@ class _CalendarAvailabilityShareScreenState
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(latestRecord);
+      Navigator.of(context).pop(result.record);
     } catch (_) {
       if (!mounted) {
         return;
@@ -731,29 +700,6 @@ class _CalendarAvailabilityShareScreenState
         ? startLabel
         : context.l10n.commonRangeLabel(startLabel, endLabel);
     return context.l10n.calendarAvailabilityShareRecentPreset(rangeLabel);
-  }
-
-  String? _resolveOwnerJid(Chat? chat) {
-    if (chat == null) {
-      return null;
-    }
-    final String ownerJid = widget.ownerJid.trim();
-    if (ownerJid.isEmpty) {
-      return null;
-    }
-    if (chat.type != ChatType.groupChat) {
-      return ownerJid;
-    }
-    final XmppService? xmppService = _maybeReadXmppService(context);
-    if (xmppService == null) {
-      return null;
-    }
-    final String? occupantId =
-        xmppService.roomStateFor(chat.jid)?.myOccupantId?.trim();
-    if (occupantId == null || occupantId.isEmpty) {
-      return null;
-    }
-    return occupantId;
   }
 }
 

@@ -356,6 +356,12 @@ class CalendarBloc extends BaseCalendarBloc {
     }
     try {
       final recipients = event.recipients;
+      if (recipients.isEmpty) {
+        completer.complete(
+          const CalendarShareResult.failure(CalendarShareFailure.sendFailed),
+        );
+        return;
+      }
       final emailTargets = recipients
           .where(
             (target) =>
@@ -547,7 +553,7 @@ class CalendarBloc extends BaseCalendarBloc {
     CalendarTask task,
   ) async {
     try {
-      final transferService = CalendarTransferService();
+      const transferService = CalendarTransferService();
       final File file = await transferService.exportTaskIcs(task: task);
       CalendarTransferService.scheduleCleanup(file);
       final int sizeBytes = await file.length();

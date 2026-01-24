@@ -219,42 +219,47 @@ class _CalendarCriticalPathShareSheetState
       return;
     }
     setState(() => _isSending = true);
-    final XmppService? xmppService = _maybeReadXmppService(context);
     try {
-      if (xmppService == null) {
-        FeedbackSystem.showInfo(
-          context,
-          context.l10n.calendarCriticalPathShareMissingService,
-        );
-        return;
-      }
-      final CalendarFragmentShareDecision decision =
-          const CalendarFragmentPolicy().decisionForChat(
-        chat: selected,
-        roomState: xmppService.roomStateFor(selected.jid),
-      );
-      if (!decision.canWrite) {
-        FeedbackSystem.showInfo(
-          context,
-          context.l10n.calendarCriticalPathShareDenied,
-        );
-        return;
-      }
       final CalendarFragment fragment = _buildFragment();
       final String shareText =
           CalendarFragmentFormatter(context.l10n).describe(fragment).trim();
-      await xmppService.sendMessage(
-        jid: selected.jid,
-        text: shareText,
-        encryptionProtocol: selected.encryptionProtocol,
-        calendarFragment: fragment,
-        chatType: selected.type,
-      );
+      final completer = Completer<CalendarShareResult>();
+      context.read<CalendarBloc>().add(
+            CalendarEvent.criticalPathShareRequested(
+              fragment: fragment,
+              recipient: selected,
+              shareText: shareText,
+              completer: completer,
+            ),
+          );
+      final result = await completer.future;
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
-    } on Exception {
+      if (result.isSuccess) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      switch (result.failure) {
+        case CalendarShareFailure.serviceUnavailable:
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarCriticalPathShareMissingService,
+          );
+        case CalendarShareFailure.permissionDenied:
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarCriticalPathShareDenied,
+          );
+        case CalendarShareFailure.attachmentFailed:
+        case CalendarShareFailure.sendFailed:
+        case null:
+          FeedbackSystem.showError(
+            context,
+            context.l10n.calendarCriticalPathShareFailed,
+          );
+      }
+    } catch (_) {
       if (mounted) {
         FeedbackSystem.showError(
           context,
@@ -363,13 +368,5 @@ class _CriticalPathShareEmptyMessage extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-XmppService? _maybeReadXmppService(BuildContext context) {
-  try {
-    return RepositoryProvider.of<XmppService>(context, listen: false);
-  } on FlutterError {
-    return null;
   }
 }
