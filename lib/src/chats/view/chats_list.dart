@@ -247,30 +247,7 @@ class ChatsList extends StatelessWidget {
             );
           }
 
-          final animated = AnimatedSwitcher(
-            duration: context.watch<SettingsCubit>().animationDuration,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (widget, animation) {
-              final offsetAnimation = Tween<Offset>(
-                begin: const Offset(0, 0.08),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              );
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: offsetAnimation,
-                  child: widget,
-                ),
-              );
-            },
-            child: child,
-          );
+          final animated = child;
           final env = EnvScope.of(context);
           final enableRefresh = env.navPlacement == NavPlacement.bottom;
           if (!enableRefresh) return animated;

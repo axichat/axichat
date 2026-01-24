@@ -281,7 +281,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   bool _isChatCalendar(BuildContext context) {
-    return BlocProvider.maybeOf<ChatCalendarBloc>(context) != null;
+    try {
+      context.read<ChatCalendarBloc>();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Map<LogicalKeySet, Intent> get _zoomShortcuts => {

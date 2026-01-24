@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -753,7 +754,7 @@ class _SegmentedToggleItem extends StatelessWidget {
           ),
           child: styledChild,
         ),
-      ).withTapBounce(enabled: !isSelected),
+      ).withTapBounce(enabled: !selected),
     );
   }
 }

@@ -104,6 +104,9 @@ class AxiIconButton extends StatefulWidget {
 }
 
 class _AxiIconButtonState extends State<AxiIconButton> {
+  late final AxiTapBounceController _bounceController =
+      AxiTapBounceController();
+
   @override
   Widget build(BuildContext context) {
     final Duration animationDuration = context.select<SettingsCubit, Duration>(
@@ -166,6 +169,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             child: InkResponse(
               onTap: widget.onPressed,
               onLongPress: widget.onLongPress,
+              onTapDown: enabled ? _bounceController.handleTapDown : null,
+              onTapUp: enabled ? _bounceController.handleTapUp : null,
+              onTapCancel: enabled ? _bounceController.handleTapCancel : null,
+              onLongPressUp: enabled ? _bounceController.handleTapCancel : null,
               containedInkWell: true,
               highlightShape: BoxShape.rectangle,
               customBorder: paintShape,
@@ -209,6 +216,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 releaseDurationDenominator,
       );
       tappable = AxiTapBounce(
+        controller: _bounceController,
         enabled: animationDuration != Duration.zero,
         scale: resolvedButtonSize < compactSizeThreshold
             ? compactBounceScale
