@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -36,15 +37,23 @@ class _InMemoryStorage implements Storage {
 
 class _MockCalendarSyncManager extends Mock implements CalendarSyncManager {}
 
+class _MockXmppService extends Mock implements XmppService {}
+
 void main() {
   group('CalendarBloc', () {
     const String rawOverrideTitle = 'Raw override';
     late _InMemoryStorage storage;
     late _MockCalendarSyncManager syncManager;
+    late _MockXmppService xmppService;
     late CalendarBloc bloc;
     late CalendarStorageRegistry registry;
     late String undoBaseTaskId;
     late String undoOccurrenceId;
+    CalendarBloc buildBloc() => CalendarBloc(
+          syncManagerBuilder: (_) => syncManager,
+          xmppService: xmppService,
+          storage: storage,
+        );
 
     setUpAll(() {
       registerFallbackValue(CalendarTask.create(title: 'fallback'));
@@ -56,6 +65,7 @@ void main() {
       registry.registerPrefix(authStoragePrefix, storage);
       HydratedBloc.storage = registry;
       syncManager = _MockCalendarSyncManager();
+      xmppService = _MockXmppService();
 
       when(
         () => syncManager.sendTaskUpdate(any(), any()),
@@ -63,10 +73,7 @@ void main() {
       when(() => syncManager.requestFullSync()).thenAnswer((_) async {});
       when(() => syncManager.pushFullSync()).thenAnswer((_) async {});
 
-      bloc = CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      );
+      bloc = buildBloc();
     });
 
     tearDown(() async {
@@ -93,10 +100,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'undoRequested restores selection state after batch edit',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final DateTime start = DateTime(2024, 5, 1, 11);
         final CalendarTask recurring = CalendarTask(
@@ -180,10 +184,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'selectionToggled retains existing recurring selections when adding another occurrence',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final DateTime start = DateTime(2024, 1, 8, 9);
         final CalendarTask recurring = CalendarTask(
@@ -259,10 +260,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'selectionTitleChanged applies overrides for recurring occurrences only',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final DateTime start = DateTime(2024, 3, 10, 10);
         final CalendarTask recurring = CalendarTask(
@@ -319,10 +317,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'selectionTitleChanged keeps overrides with raw passthrough data',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         const String baseTaskId = 'raw-override-task';
         const String baseTitle = rawOverrideTitle;
@@ -463,10 +458,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskUpdated replaces existing task and syncs',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(title: 'Original');
         final model = CalendarModel.empty().addTask(seededTask);
@@ -497,10 +489,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'quickTaskAdded creates task from text input',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       act: (bloc) {
         bloc.add(const CalendarEvent.quickTaskAdded(text: 'Draft report'));
       },
@@ -523,10 +512,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskDeleted removes task and syncs',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(title: 'Delete me');
         final model = CalendarModel.empty().addTask(seededTask);
@@ -550,10 +536,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskCompleted toggles completion and syncs',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(title: 'Complete me');
         final model = CalendarModel.empty().addTask(seededTask);
@@ -582,10 +565,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskDropped repositions task and preserves duration',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final start = DateTime(2024, 2, 3, 9, 15);
         seededTask = CalendarTask(
@@ -639,10 +619,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskRepeated clones template for copy/paste',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(
           title: 'Template',
@@ -679,10 +656,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'commitTaskInteraction schedules unscheduled task',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(title: 'Unschedule me');
         final model = CalendarModel.empty().addTask(seededTask);
@@ -708,10 +682,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'commitTaskInteraction resizes scheduled task when duration changes',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(
           title: 'Resize me',
@@ -746,10 +717,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'commitTaskInteraction updates occurrence overrides',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(
           title: 'Recurring task',
@@ -808,10 +776,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'selectionTimeShifted moves selected tasks forward',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         selectionTaskA = CalendarTask.create(
           title: 'A',
@@ -856,10 +821,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'selectionModeEntered selects only requested recurring base task',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(
           title: 'Recurring base',
@@ -886,10 +848,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'selectionToggled adds only the chosen occurrence',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(
           title: 'Recurring task',
@@ -931,10 +890,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskDropped schedules unscheduled task',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final created = DateTime(2024, 6, 1, 8);
         seededTask = CalendarTask(
@@ -981,10 +937,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskSplit divides task without explicit duration using fallback window',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final start = DateTime(2024, 4, 12, 9, 0);
         seededTask = CalendarTask(
@@ -1045,10 +998,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskSplit on recurring occurrence stores override and follow-up segment',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final start = DateTime(2024, 5, 1, 14, 0);
         seededTask = CalendarTask(
@@ -1135,10 +1085,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskRepeated maintains duration window when pasted to new slot',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final start = DateTime(2024, 6, 10, 9);
         seededTask = CalendarTask(
@@ -1200,10 +1147,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskResized updates end date when duration changes',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final start = DateTime(2024, 7, 2, 11, 0);
         seededTask = CalendarTask(
@@ -1243,10 +1187,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskResized recomputes end when only start changes',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         final start = DateTime(2024, 7, 2, 11, 0);
         seededTask = CalendarTask(
@@ -1304,10 +1245,7 @@ void main() {
 
     blocTest<CalendarBloc, CalendarState>(
       'taskOccurrenceUpdated stores overrides on base task',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
+      build: () => buildBloc(),
       seed: () {
         seededTask = CalendarTask.create(
           title: 'Repeating',

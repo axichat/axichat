@@ -665,9 +665,6 @@ class _SettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final aboutLabel = MaterialLocalizations.of(
-      context,
-    ).aboutListTileTitle(appDisplayName);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
