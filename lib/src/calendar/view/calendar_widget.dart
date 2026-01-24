@@ -19,6 +19,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
@@ -444,19 +445,24 @@ class CalendarSurfaceNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigatorPopHandler<void>(
-      enabled: enablePop,
-      onPopWithResult: (_) {
-        final NavigatorState? navigator = navigatorKey.currentState;
-        if (navigator == null || !navigator.canPop()) {
-          return;
-        }
-        navigator.pop();
-      },
-      child: Navigator(
-        key: navigatorKey,
-        onDidRemovePage: (page) {},
-        pages: [MaterialPage<void>(key: _calendarSurfacePageKey, child: child)],
+    return CalendarModalScope(
+      navigatorKey: navigatorKey,
+      child: NavigatorPopHandler<void>(
+        enabled: enablePop,
+        onPopWithResult: (_) {
+          final NavigatorState? navigator = navigatorKey.currentState;
+          if (navigator == null || !navigator.canPop()) {
+            return;
+          }
+          navigator.pop();
+        },
+        child: Navigator(
+          key: navigatorKey,
+          onDidRemovePage: (page) {},
+          pages: [
+            MaterialPage<void>(key: _calendarSurfacePageKey, child: child),
+          ],
+        ),
       ),
     );
   }

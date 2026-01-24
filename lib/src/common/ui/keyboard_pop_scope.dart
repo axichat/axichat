@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class KeyboardPopScope extends StatelessWidget {
   const KeyboardPopScope({
@@ -14,22 +14,17 @@ class KeyboardPopScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: FocusManager.instance,
-      builder: (context, _) {
-        return PopScope(
-          canPop: !FocusManager.instance.isTextInputFocused,
-          onPopInvokedWithResult: (didPop, __) {
-            if (didPop) {
-              return;
-            }
-            if (FocusManager.instance.isTextInputFocused) {
-              FocusManager.instance.primaryFocus?.unfocus();
-            }
-          },
-          child: child,
-        );
+    return PopScope(
+      canPop: MediaQuery.viewInsetsOf(context).bottom == 0,
+      onPopInvokedWithResult: (didPop, __) {
+        if (didPop) {
+          return;
+        }
+        if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+          SystemChannels.textInput.invokeMethod('TextInput.hide');
+        }
       },
+      child: child,
     );
   }
 }

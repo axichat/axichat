@@ -18,6 +18,7 @@ import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart
 import 'package:axichat/src/calendar/view/widgets/calendar_ics_diagnostics_section.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_invitation_status_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_participants_field.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
@@ -72,8 +73,9 @@ Future<DayEventEditorResult?> showDayEventEditor({
     initialDate.month,
     initialDate.day,
   );
+  final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<DayEventEditorResult>(
-    context: context,
+    context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 720,
     surfacePadding: const EdgeInsets.symmetric(

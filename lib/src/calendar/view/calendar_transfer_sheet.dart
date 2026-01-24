@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +13,9 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   String? title,
 }) {
   final resolvedTitle = title ?? context.l10n.calendarExportChooseFormat;
+  final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<CalendarExportFormat>(
-    context: context,
+    context: modalContext,
     useSafeArea: true,
     showDragHandle: true,
     surfacePadding: EdgeInsets.zero,
