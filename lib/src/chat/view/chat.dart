@@ -12,7 +12,6 @@ import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
-import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
@@ -22,14 +21,14 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
-import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
-import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/chat_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
@@ -54,23 +53,25 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart'
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
+import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/bool_tool.dart';
-import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/unicode_safety.dart';
-import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -92,8 +93,6 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
-import 'package:flutter_html/flutter_html.dart' as html_widget;
-import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:flutter/rendering.dart'
     show
         BoxHitTestResult,
@@ -105,6 +104,7 @@ import 'package:flutter/rendering.dart'
         RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -3498,295 +3498,287 @@ class _ChatState extends State<Chat> {
 
   @override
   Widget build(BuildContext context) {
-    return BackButtonListener(
-      onBackButtonPressed: _handleSystemBack,
-      child: BlocBuilder<ChatSearchCubit, ChatSearchState>(
-        builder: (context, searchState) {
-          final trimmedQuery = searchState.query.trim();
-          final hasSubjectFilter =
-              searchState.subjectFilter?.isNotEmpty == true;
-          final searchFiltering = searchState.active &&
-              (trimmedQuery.isNotEmpty || hasSubjectFilter);
-          final searchResults = searchState.results;
-          final showToast = ShadToaster.maybeOf(context)?.show;
-          return MultiBlocListener(
-            listeners: [
-              BlocListener<ChatSearchCubit, ChatSearchState>(
-                listenWhen: (previous, current) =>
-                    previous.active != current.active,
-                listener: (_, searchState) {
-                  if (!mounted) return;
-                  if (searchState.active) {
-                    _openChatSearch();
-                    return;
-                  }
-                  if (_chatRoute.isSearch) {
-                    _returnToMainRoute();
-                  }
-                },
-              ),
-              BlocListener<ChatsCubit, ChatsState>(
-                listenWhen: (previous, current) =>
-                    previous.openChatRoute != current.openChatRoute,
-                listener: (_, chatsState) {
-                  if (!mounted) return;
-                  final nextRoute = chatsState.openChatRoute;
-                  if (_chatRoute == nextRoute) return;
-                  _setChatRoute(nextRoute);
-                },
-              ),
-              BlocListener<ChatBloc, ChatState>(
-                listenWhen: (previous, current) =>
-                    previous.toastId != current.toastId &&
-                    current.toast != null,
-                listener: (context, state) {
-                  final toast = state.toast;
-                  final show = showToast;
-                  if (toast == null || show == null) return;
-                  final l10n = context.l10n;
-                  const actionLabel = null;
-                  const VoidCallback? onAction = null;
-                  final toastWidget = switch (toast.variant) {
-                    ChatToastVariant.destructive => FeedbackToast.error(
-                        title: l10n.toastWhoopsTitle,
-                        message: toast.message,
-                        actionLabel: actionLabel,
-                        onAction: onAction,
-                      ),
-                    ChatToastVariant.warning => FeedbackToast.warning(
-                        title: l10n.toastHeadsUpTitle,
-                        message: toast.message,
-                        actionLabel: actionLabel,
-                        onAction: onAction,
-                      ),
-                    ChatToastVariant.info => FeedbackToast.success(
-                        title: l10n.toastAllSetTitle,
-                        message: toast.message,
-                        actionLabel: actionLabel,
-                        onAction: onAction,
-                      ),
-                  };
-                  show(toastWidget);
-                },
-              ),
-              BlocListener<ChatBloc, ChatState>(
-                listenWhen: (previous, current) =>
-                    current.composerClearId != 0 &&
-                    previous.composerClearId != current.composerClearId,
-                listener: (_, __) {
-                  _textController.clear();
-                  _composerHasText = false;
-                  if (_pendingCalendarTaskIcs != null ||
-                      _pendingCalendarSeedText != null) {
-                    setState(() {
-                      _pendingCalendarTaskIcs = null;
-                      _pendingCalendarSeedText = null;
-                    });
-                  }
-                  _focusNode.requestFocus();
-                },
-              ),
-              BlocListener<ChatBloc, ChatState>(
-                listenWhen: (previous, current) =>
-                    current.emailSubjectHydrationId != 0 &&
-                    previous.emailSubjectHydrationId !=
-                        current.emailSubjectHydrationId,
-                listener: (context, state) {
-                  final subject = state.emailSubjectHydrationText ?? '';
-                  _subjectChangeSuppressed = true;
-                  _subjectController
-                    ..text = subject
-                    ..selection = TextSelection.collapsed(
-                      offset: subject.length,
-                    );
-                  _lastSubjectValue = subject;
-                  _subjectChangeSuppressed = false;
-                  if (subject.isNotEmpty && !_subjectFocusNode.hasFocus) {
-                    _subjectFocusNode.requestFocus();
-                  }
-                },
-              ),
-              BlocListener<ChatBloc, ChatState>(
-                listenWhen: (previous, current) =>
-                    previous.chat?.jid != current.chat?.jid,
-                listener: (_, state) {
-                  _animatedMessageIds.clear();
-                  _hydratedAnimatedMessages = false;
-                  _chatOpenedAt = DateTime.now();
-                  _resetRecipientsForChat(state.chat);
-                  if (state.messagesLoaded) {
-                    _hydrateAnimatedMessages(state.items);
-                  }
-                },
-              ),
-              BlocListener<ChatBloc, ChatState>(
-                listenWhen: (previous, current) =>
-                    !_hydratedAnimatedMessages &&
-                    current.messagesLoaded &&
-                    (previous.items != current.items ||
-                        previous.messagesLoaded != current.messagesLoaded),
-                listener: (_, state) => _hydrateAnimatedMessages(state.items),
-              ),
-            ],
-            child: BlocConsumer<ChatBloc, ChatState>(
-              listenWhen: (previous, current) {
-                if (current.composerHydrationId == 0) return false;
-                return previous.composerHydrationId !=
-                    current.composerHydrationId;
+    return BlocBuilder<ChatSearchCubit, ChatSearchState>(
+      builder: (context, searchState) {
+        final trimmedQuery = searchState.query.trim();
+        final hasSubjectFilter = searchState.subjectFilter?.isNotEmpty == true;
+        final searchFiltering =
+            searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
+        final searchResults = searchState.results;
+        final showToast = ShadToaster.maybeOf(context)?.show;
+        return MultiBlocListener(
+          listeners: [
+            BlocListener<ChatSearchCubit, ChatSearchState>(
+              listenWhen: (previous, current) =>
+                  previous.active != current.active,
+              listener: (_, searchState) {
+                if (!mounted) return;
+                if (searchState.active) {
+                  _openChatSearch();
+                  return;
+                }
+                if (_chatRoute.isSearch) {
+                  _returnToMainRoute();
+                }
               },
+            ),
+            BlocListener<ChatsCubit, ChatsState>(
+              listenWhen: (previous, current) =>
+                  previous.openChatRoute != current.openChatRoute,
+              listener: (_, chatsState) {
+                if (!mounted) return;
+                final nextRoute = chatsState.openChatRoute;
+                if (_chatRoute == nextRoute) return;
+                _setChatRoute(nextRoute);
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.toastId != current.toastId && current.toast != null,
               listener: (context, state) {
-                final text = state.composerHydrationText ?? '';
-                _textController
-                  ..text = text
-                  ..selection = TextSelection.collapsed(offset: text.length);
-                _composerHasText = text.trim().isNotEmpty;
-                if (!_focusNode.hasFocus) {
-                  _focusNode.requestFocus();
+                final toast = state.toast;
+                final show = showToast;
+                if (toast == null || show == null) return;
+                final l10n = context.l10n;
+                const actionLabel = null;
+                const VoidCallback? onAction = null;
+                final toastWidget = switch (toast.variant) {
+                  ChatToastVariant.destructive => FeedbackToast.error(
+                      title: l10n.toastWhoopsTitle,
+                      message: toast.message,
+                      actionLabel: actionLabel,
+                      onAction: onAction,
+                    ),
+                  ChatToastVariant.warning => FeedbackToast.warning(
+                      title: l10n.toastHeadsUpTitle,
+                      message: toast.message,
+                      actionLabel: actionLabel,
+                      onAction: onAction,
+                    ),
+                  ChatToastVariant.info => FeedbackToast.success(
+                      title: l10n.toastAllSetTitle,
+                      message: toast.message,
+                      actionLabel: actionLabel,
+                      onAction: onAction,
+                    ),
+                };
+                show(toastWidget);
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  current.composerClearId != 0 &&
+                  previous.composerClearId != current.composerClearId,
+              listener: (_, __) {
+                _textController.clear();
+                _composerHasText = false;
+                if (_pendingCalendarTaskIcs != null ||
+                    _pendingCalendarSeedText != null) {
+                  setState(() {
+                    _pendingCalendarTaskIcs = null;
+                    _pendingCalendarSeedText = null;
+                  });
+                }
+                _focusNode.requestFocus();
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  current.emailSubjectHydrationId != 0 &&
+                  previous.emailSubjectHydrationId !=
+                      current.emailSubjectHydrationId,
+              listener: (context, state) {
+                final subject = state.emailSubjectHydrationText ?? '';
+                _subjectChangeSuppressed = true;
+                _subjectController
+                  ..text = subject
+                  ..selection = TextSelection.collapsed(
+                    offset: subject.length,
+                  );
+                _lastSubjectValue = subject;
+                _subjectChangeSuppressed = false;
+                if (subject.isNotEmpty && !_subjectFocusNode.hasFocus) {
+                  _subjectFocusNode.requestFocus();
                 }
               },
-              builder: (context, state) {
-                ProfileState? profileState() =>
-                    context.watch<ProfileCubit?>()?.state;
-                ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
-                final readOnly = widget.readOnly;
-                final emailService = RepositoryProvider.of<EmailService?>(
-                  context,
-                  listen: false,
-                );
-                final xmppService = context.read<XmppService>();
-                final emailSelfJid = emailService?.selfSenderJid;
-                final String? resolvedEmailSelfJid =
-                    emailSelfJid.resolveDeltaPlaceholderJid();
-                final xmppSelfJid = xmppService.myJid;
-                final chatEntity = state.chat;
-                final List<BlocklistEntry> blocklistEntries =
-                    _resolveBlocklistEntries();
-                final BlocklistEntry? chatBlocklistEntry = chatEntity == null
-                    ? null
-                    : _resolveChatBlocklistEntry(
-                        chat: chatEntity,
-                        entries: blocklistEntries,
-                      );
-                final bool isChatBlocked = chatBlocklistEntry != null;
-                final String? blockAddress = chatEntity == null
-                    ? null
-                    : _resolveChatBlockAddress(chat: chatEntity);
-                final bool attachmentsBlockedForChat =
-                    isChatBlocked || (chatEntity?.spam ?? false);
-                final jid = chatEntity?.jid;
-                final isDefaultEmail =
-                    chatEntity?.defaultTransport.isEmail ?? false;
-                final isGroupChat = chatEntity?.type == ChatType.groupChat;
-                final currentUserId = isDefaultEmail
-                    ? (resolvedEmailSelfJid ?? profileState()?.jid ?? '')
-                    : (profileState()?.jid ?? resolvedEmailSelfJid ?? '');
-                final String? resolvedProfileJid = profileState()?.jid.trim();
-                final String? selfXmppJid =
-                    resolvedProfileJid?.isNotEmpty == true
-                        ? resolvedProfileJid
-                        : xmppSelfJid;
-                final String? normalizedXmppSelfJid = _normalizeBareJid(
-                  selfXmppJid,
-                );
-                final String? normalizedEmailSelfJid = _normalizeBareJid(
-                  resolvedEmailSelfJid,
-                );
-                final String? normalizedChatJid = _normalizeBareJid(
-                  chatEntity?.remoteJid,
-                );
-                final bool isSelfChat = normalizedChatJid != null &&
-                    ((normalizedXmppSelfJid != null &&
-                            normalizedChatJid == normalizedXmppSelfJid) ||
-                        (normalizedEmailSelfJid != null &&
-                            normalizedChatJid == normalizedEmailSelfJid));
-                final String? selfAvatarPath =
-                    profileState()?.avatarPath?.trim();
-                final bool hasSelfAvatarPath =
-                    selfAvatarPath?.isNotEmpty == true;
-                final myOccupantId = state.roomState?.myOccupantId;
-                final myOccupant = myOccupantId == null
-                    ? null
-                    : state.roomState?.occupants[myOccupantId];
-                final selfNick =
-                    (myOccupant?.nick ?? chatEntity?.myNickname)?.trim();
-                final String? availabilityActorId = _availabilityActorId(
-                  chat: chatEntity,
-                  currentUserId: currentUserId,
-                  roomState: state.roomState,
-                );
-                final shareContexts = state.shareContexts;
-                final shareReplies = state.shareReplies;
-                final recipients = _recipients;
-                final pendingAttachments = state.pendingAttachments;
-                final canSendEmailAttachments = emailService != null &&
-                    chatEntity != null &&
-                    _hasEmailAttachmentTarget(
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.chat?.jid != current.chat?.jid,
+              listener: (_, state) {
+                _animatedMessageIds.clear();
+                _hydratedAnimatedMessages = false;
+                _chatOpenedAt = DateTime.now();
+                _resetRecipientsForChat(state.chat);
+                if (state.messagesLoaded) {
+                  _hydrateAnimatedMessages(state.items);
+                }
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  !_hydratedAnimatedMessages &&
+                  current.messagesLoaded &&
+                  (previous.items != current.items ||
+                      previous.messagesLoaded != current.messagesLoaded),
+              listener: (_, state) => _hydrateAnimatedMessages(state.items),
+            ),
+          ],
+          child: BlocConsumer<ChatBloc, ChatState>(
+            listenWhen: (previous, current) {
+              if (current.composerHydrationId == 0) return false;
+              return previous.composerHydrationId !=
+                  current.composerHydrationId;
+            },
+            listener: (context, state) {
+              final text = state.composerHydrationText ?? '';
+              _textController
+                ..text = text
+                ..selection = TextSelection.collapsed(offset: text.length);
+              _composerHasText = text.trim().isNotEmpty;
+              if (!_focusNode.hasFocus) {
+                _focusNode.requestFocus();
+              }
+            },
+            builder: (context, state) {
+              ProfileState? profileState() =>
+                  context.watch<ProfileCubit?>()?.state;
+              ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
+              final readOnly = widget.readOnly;
+              final emailService = RepositoryProvider.of<EmailService?>(
+                context,
+                listen: false,
+              );
+              final xmppService = context.read<XmppService>();
+              final emailSelfJid = emailService?.selfSenderJid;
+              final String? resolvedEmailSelfJid =
+                  emailSelfJid.resolveDeltaPlaceholderJid();
+              final xmppSelfJid = xmppService.myJid;
+              final chatEntity = state.chat;
+              final List<BlocklistEntry> blocklistEntries =
+                  _resolveBlocklistEntries();
+              final BlocklistEntry? chatBlocklistEntry = chatEntity == null
+                  ? null
+                  : _resolveChatBlocklistEntry(
                       chat: chatEntity,
-                      recipients: recipients,
+                      entries: blocklistEntries,
                     );
-                final attachmentsEnabled =
-                    state.supportsHttpFileUpload || canSendEmailAttachments;
-                final latestStatuses = _latestRecipientStatuses(state);
-                final fanOutReports = state.fanOutReports;
-                final warningEntry = fanOutReports.entries.isEmpty
-                    ? null
-                    : fanOutReports.entries.last;
-                final showAttachmentWarning =
-                    warningEntry?.value.attachmentWarning ?? false;
-                final rosterItems = (context.watch<RosterCubit>().cache['items']
-                        as List<RosterItem>?) ??
-                    const <RosterItem>[];
-                final rosterAvatarPathsByJid = <String, String>{};
-                for (final item in rosterItems) {
-                  final path = item.avatarPath?.trim();
-                  if (path == null || path.isEmpty) continue;
-                  rosterAvatarPathsByJid[item.jid.toLowerCase()] = path;
+              final bool isChatBlocked = chatBlocklistEntry != null;
+              final String? blockAddress = chatEntity == null
+                  ? null
+                  : _resolveChatBlockAddress(chat: chatEntity);
+              final bool attachmentsBlockedForChat =
+                  isChatBlocked || (chatEntity?.spam ?? false);
+              final jid = chatEntity?.jid;
+              final isDefaultEmail =
+                  chatEntity?.defaultTransport.isEmail ?? false;
+              final isGroupChat = chatEntity?.type == ChatType.groupChat;
+              final currentUserId = isDefaultEmail
+                  ? (resolvedEmailSelfJid ?? profileState()?.jid ?? '')
+                  : (profileState()?.jid ?? resolvedEmailSelfJid ?? '');
+              final String? resolvedProfileJid = profileState()?.jid.trim();
+              final String? selfXmppJid = resolvedProfileJid?.isNotEmpty == true
+                  ? resolvedProfileJid
+                  : xmppSelfJid;
+              final String? normalizedXmppSelfJid = _normalizeBareJid(
+                selfXmppJid,
+              );
+              final String? normalizedEmailSelfJid = _normalizeBareJid(
+                resolvedEmailSelfJid,
+              );
+              final String? normalizedChatJid = _normalizeBareJid(
+                chatEntity?.remoteJid,
+              );
+              final bool isSelfChat = normalizedChatJid != null &&
+                  ((normalizedXmppSelfJid != null &&
+                          normalizedChatJid == normalizedXmppSelfJid) ||
+                      (normalizedEmailSelfJid != null &&
+                          normalizedChatJid == normalizedEmailSelfJid));
+              final String? selfAvatarPath = profileState()?.avatarPath?.trim();
+              final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
+              final myOccupantId = state.roomState?.myOccupantId;
+              final myOccupant = myOccupantId == null
+                  ? null
+                  : state.roomState?.occupants[myOccupantId];
+              final selfNick =
+                  (myOccupant?.nick ?? chatEntity?.myNickname)?.trim();
+              final String? availabilityActorId = _availabilityActorId(
+                chat: chatEntity,
+                currentUserId: currentUserId,
+                roomState: state.roomState,
+              );
+              final shareContexts = state.shareContexts;
+              final shareReplies = state.shareReplies;
+              final recipients = _recipients;
+              final pendingAttachments = state.pendingAttachments;
+              final canSendEmailAttachments = emailService != null &&
+                  chatEntity != null &&
+                  _hasEmailAttachmentTarget(
+                    chat: chatEntity,
+                    recipients: recipients,
+                  );
+              final attachmentsEnabled =
+                  state.supportsHttpFileUpload || canSendEmailAttachments;
+              final latestStatuses = _latestRecipientStatuses(state);
+              final fanOutReports = state.fanOutReports;
+              final warningEntry = fanOutReports.entries.isEmpty
+                  ? null
+                  : fanOutReports.entries.last;
+              final showAttachmentWarning =
+                  warningEntry?.value.attachmentWarning ?? false;
+              final rosterItems = (context.watch<RosterCubit>().cache['items']
+                      as List<RosterItem>?) ??
+                  const <RosterItem>[];
+              final rosterAvatarPathsByJid = <String, String>{};
+              for (final item in rosterItems) {
+                final path = item.avatarPath?.trim();
+                if (path == null || path.isEmpty) continue;
+                rosterAvatarPathsByJid[item.jid.toLowerCase()] = path;
+              }
+              final chatAvatarPathsByJid = <String, String>{};
+              for (final chat
+                  in chatsState()?.items ?? const <chat_models.Chat>[]) {
+                final path =
+                    (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
+                if (path == null || path.isEmpty) continue;
+                final normalizedJid = chat.jid.trim().toLowerCase();
+                if (normalizedJid.isNotEmpty) {
+                  chatAvatarPathsByJid[normalizedJid] = path;
                 }
-                final chatAvatarPathsByJid = <String, String>{};
-                for (final chat
-                    in chatsState()?.items ?? const <chat_models.Chat>[]) {
-                  final path =
-                      (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
-                  if (path == null || path.isEmpty) continue;
-                  final normalizedJid = chat.jid.trim().toLowerCase();
-                  if (normalizedJid.isNotEmpty) {
-                    chatAvatarPathsByJid[normalizedJid] = path;
+                final normalizedRemoteJid = chat.remoteJid.trim().toLowerCase();
+                if (normalizedRemoteJid.isNotEmpty) {
+                  chatAvatarPathsByJid[normalizedRemoteJid] = path;
+                }
+              }
+              final normalizedSelfJids = <String>{};
+              if (normalizedXmppSelfJid != null) {
+                normalizedSelfJids.add(normalizedXmppSelfJid);
+              }
+              if (normalizedEmailSelfJid != null) {
+                normalizedSelfJids.add(normalizedEmailSelfJid);
+              }
+              if (normalizedSelfJids.isNotEmpty && hasSelfAvatarPath) {
+                final resolvedSelfAvatarPath = selfAvatarPath;
+                if (resolvedSelfAvatarPath != null &&
+                    resolvedSelfAvatarPath.isNotEmpty) {
+                  for (final selfJid in normalizedSelfJids) {
+                    rosterAvatarPathsByJid.putIfAbsent(
+                      selfJid,
+                      () => resolvedSelfAvatarPath,
+                    );
+                    chatAvatarPathsByJid.putIfAbsent(
+                      selfJid,
+                      () => resolvedSelfAvatarPath,
+                    );
                   }
-                  final normalizedRemoteJid =
-                      chat.remoteJid.trim().toLowerCase();
-                  if (normalizedRemoteJid.isNotEmpty) {
-                    chatAvatarPathsByJid[normalizedRemoteJid] = path;
-                  }
                 }
-                final normalizedSelfJids = <String>{};
-                if (normalizedXmppSelfJid != null) {
-                  normalizedSelfJids.add(normalizedXmppSelfJid);
-                }
-                if (normalizedEmailSelfJid != null) {
-                  normalizedSelfJids.add(normalizedEmailSelfJid);
-                }
-                if (normalizedSelfJids.isNotEmpty && hasSelfAvatarPath) {
-                  final resolvedSelfAvatarPath = selfAvatarPath;
-                  if (resolvedSelfAvatarPath != null &&
-                      resolvedSelfAvatarPath.isNotEmpty) {
-                    for (final selfJid in normalizedSelfJids) {
-                      rosterAvatarPathsByJid.putIfAbsent(
-                        selfJid,
-                        () => resolvedSelfAvatarPath,
-                      );
-                      chatAvatarPathsByJid.putIfAbsent(
-                        selfJid,
-                        () => resolvedSelfAvatarPath,
-                      );
-                    }
-                  }
-                }
-                String? avatarPathForBareJid(String jid) {
-                  final normalized = jid.trim().toLowerCase();
-                  if (normalized.isEmpty) return null;
-                  return rosterAvatarPathsByJid[normalized] ??
-                      chatAvatarPathsByJid[normalized];
-                }
+              }
+              String? avatarPathForBareJid(String jid) {
+                final normalized = jid.trim().toLowerCase();
+                if (normalized.isEmpty) return null;
+                return rosterAvatarPathsByJid[normalized] ??
+                    chatAvatarPathsByJid[normalized];
+              }
 
               String? avatarPathForTypingParticipant(String participant) {
                 final trimmed = participant.trim();
@@ -3885,28 +3877,28 @@ class _ChatState extends State<Chat> {
                 chatCalendarAvatarPaths[participant] = path;
               }
 
-                final retryEntry = _lastReportEntryWhere(
-                  fanOutReports.entries,
-                  (entry) => entry.value.hasFailures,
-                );
-                final retryReport = retryEntry?.value;
-                final retryShareId = retryEntry?.key;
-                final availableChats =
-                    (chatsState()?.items ?? const <chat_models.Chat>[])
-                        .where((chat) => chat.jid != chatEntity?.jid)
-                        .toList();
-                final openStack = chatsState()?.openStack ?? const <String>[];
-                final forwardStack =
-                    chatsState()?.forwardStack ?? const <String>[];
-                final bool openChatCalendar =
-                    chatsState()?.openChatCalendar ?? false;
-                bool prepareChatExit() {
-                  if (!_chatRoute.isMain || openChatCalendar) {
-                    _returnToMainRoute();
-                    return false;
-                  }
-                  return true;
+              final retryEntry = _lastReportEntryWhere(
+                fanOutReports.entries,
+                (entry) => entry.value.hasFailures,
+              );
+              final retryReport = retryEntry?.value;
+              final retryShareId = retryEntry?.key;
+              final availableChats =
+                  (chatsState()?.items ?? const <chat_models.Chat>[])
+                      .where((chat) => chat.jid != chatEntity?.jid)
+                      .toList();
+              final openStack = chatsState()?.openStack ?? const <String>[];
+              final forwardStack =
+                  chatsState()?.forwardStack ?? const <String>[];
+              final bool openChatCalendar =
+                  chatsState()?.openChatCalendar ?? false;
+              bool prepareChatExit() {
+                if (!_chatRoute.isMain || openChatCalendar) {
+                  _returnToMainRoute();
+                  return false;
                 }
+                return true;
+              }
 
               final selfUserId = isGroupChat && myOccupantId != null
                   ? myOccupantId
@@ -4667,3070 +4659,1036 @@ class _ChatState extends State<Chat> {
                                         return MessageStatus.pending;
                                       }
 
-                                        final shouldReplaceInviteBody =
-                                            isInvite || isInviteRevocation;
-                                        final renderedText =
-                                            shouldReplaceInviteBody
-                                                ? inviteLabel
-                                                : e.error.isNotNone
-                                                    ? bodyText.isNotEmpty
-                                                        ? context.l10n
-                                                            .chatMessageErrorWithBody(
-                                                            errorLabel,
-                                                            bodyTextTrimmed,
-                                                          )
-                                                        : errorLabel
-                                                    : displayedBody;
-                                        final attachmentIds =
-                                            attachmentsForMessage(e);
-                                        final hasAttachment =
-                                            attachmentIds.isNotEmpty;
-                                        final hasRenderableSubjectHeader =
-                                            showSubjectHeader &&
-                                                subjectText.isNotEmpty;
-                                        final shouldForceDashText = renderedText
-                                                .trim()
-                                                .isEmpty &&
-                                            (hasAttachment ||
-                                                hasRenderableSubjectHeader ||
-                                                e.retracted ||
-                                                e.edited);
-                                        final CalendarAvailabilityMessage?
-                                            validatedAvailabilityMessage =
-                                            _validatedAvailabilityMessage(
-                                          message: e,
-                                          roomState: state.roomState,
-                                          shareOwnersById:
-                                              availabilityShareOwnersById,
-                                          availabilityCoordinator:
-                                              availabilityCoordinator,
-                                        );
-                                        dashMessages.add(
-                                          ChatMessage(
-                                            user: author,
-                                            createdAt: e.timestamp!.toLocal(),
-                                            text: shouldForceDashText
-                                                ? _dashChatPlaceholderText
-                                                : renderedText,
-                                            status: statusFor(e),
-                                            customProperties: {
-                                              'id': e.stanzaID,
-                                              'body': bodyText,
-                                              'renderedText': renderedText,
-                                              'attachmentIds': attachmentIds,
-                                              'edited': e.edited,
-                                              'retracted': e.retracted,
-                                              'error': e.error,
-                                              'encrypted': e
-                                                  .encryptionProtocol.isNotNone,
-                                              'trust': e.trust,
-                                              'trusted': e.trusted,
-                                              'isSelf': isSelf,
-                                              'model': e,
-                                              _calendarFragmentPropertyKey:
-                                                  e.calendarFragment,
-                                              _calendarTaskIcsPropertyKey:
-                                                  e.calendarTaskIcs,
-                                              _calendarTaskIcsReadOnlyPropertyKey:
-                                                  e.calendarTaskIcsReadOnly,
-                                              _calendarAvailabilityPropertyKey:
-                                                  validatedAvailabilityMessage,
-                                              'quoted': quotedMessage,
-                                              'reactions': e.reactionsPreview,
-                                              'shareContext': shareContext,
-                                              'shareParticipants':
-                                                  bannerParticipants,
-                                              'replyParticipants':
-                                                  shareReplies[e.stanzaID],
-                                              'showSubject': showSubjectHeader,
-                                              'subjectLabel': subjectLabel,
-                                              'isEmailMessage': isEmailMessage,
-                                              'inviteRoom': inviteRoom,
-                                              'inviteRoomName': inviteRoomName,
-                                              'inviteToken': inviteToken,
-                                              'inviteRevoked': inviteRevoked,
-                                              'invitee': invitee,
-                                              'isInvite': isInvite,
-                                              'isInviteRevocation':
-                                                  isInviteRevocation,
-                                              'inviteLabel': inviteLabel,
-                                              'inviteActionLabel':
-                                                  inviteActionLabel,
-                                            },
-                                          ),
-                                        );
-                                      }
-                                      final emptyStateLabel = searchFiltering
-                                          ? context.l10n.chatEmptySearch
-                                          : context.l10n.chatEmptyMessages;
-                                      if (!loadingMessages &&
-                                          filteredItems.isEmpty) {
-                                        dashMessages.add(
-                                          ChatMessage(
-                                            user: spacerUser,
-                                            createdAt:
-                                                _selectionSpacerTimestamp,
-                                            text: ' ',
-                                            customProperties: {
-                                              'id': _emptyStateMessageId,
-                                              'emptyState': true,
-                                              'emptyLabel': emptyStateLabel,
-                                            },
-                                          ),
-                                        );
-                                      }
+                                      final shouldReplaceInviteBody =
+                                          isInvite || isInviteRevocation;
+                                      final renderedText =
+                                          shouldReplaceInviteBody
+                                              ? inviteLabel
+                                              : e.error.isNotNone
+                                                  ? bodyText.isNotEmpty
+                                                      ? context.l10n
+                                                          .chatMessageErrorWithBody(
+                                                          errorLabel,
+                                                          bodyTextTrimmed,
+                                                        )
+                                                      : errorLabel
+                                                  : displayedBody;
+                                      final attachmentIds =
+                                          attachmentsForMessage(e);
+                                      final hasAttachment =
+                                          attachmentIds.isNotEmpty;
+                                      final hasRenderableSubjectHeader =
+                                          showSubjectHeader &&
+                                              subjectText.isNotEmpty;
+                                      final shouldForceDashText =
+                                          renderedText.trim().isEmpty &&
+                                              (hasAttachment ||
+                                                  hasRenderableSubjectHeader ||
+                                                  e.retracted ||
+                                                  e.edited);
+                                      final CalendarAvailabilityMessage?
+                                          validatedAvailabilityMessage =
+                                          _validatedAvailabilityMessage(
+                                        message: e,
+                                        roomState: state.roomState,
+                                        shareOwnersById:
+                                            availabilityShareOwnersById,
+                                        availabilityCoordinator:
+                                            availabilityCoordinator,
+                                      );
+                                      dashMessages.add(
+                                        ChatMessage(
+                                          user: author,
+                                          createdAt: e.timestamp!.toLocal(),
+                                          text: shouldForceDashText
+                                              ? _dashChatPlaceholderText
+                                              : renderedText,
+                                          status: statusFor(e),
+                                          customProperties: {
+                                            'id': e.stanzaID,
+                                            'body': bodyText,
+                                            'renderedText': renderedText,
+                                            'attachmentIds': attachmentIds,
+                                            'edited': e.edited,
+                                            'retracted': e.retracted,
+                                            'error': e.error,
+                                            'encrypted':
+                                                e.encryptionProtocol.isNotNone,
+                                            'trust': e.trust,
+                                            'trusted': e.trusted,
+                                            'isSelf': isSelf,
+                                            'model': e,
+                                            _calendarFragmentPropertyKey:
+                                                e.calendarFragment,
+                                            _calendarTaskIcsPropertyKey:
+                                                e.calendarTaskIcs,
+                                            _calendarTaskIcsReadOnlyPropertyKey:
+                                                e.calendarTaskIcsReadOnly,
+                                            _calendarAvailabilityPropertyKey:
+                                                validatedAvailabilityMessage,
+                                            'quoted': quotedMessage,
+                                            'reactions': e.reactionsPreview,
+                                            'shareContext': shareContext,
+                                            'shareParticipants':
+                                                bannerParticipants,
+                                            'replyParticipants':
+                                                shareReplies[e.stanzaID],
+                                            'showSubject': showSubjectHeader,
+                                            'subjectLabel': subjectLabel,
+                                            'isEmailMessage': isEmailMessage,
+                                            'inviteRoom': inviteRoom,
+                                            'inviteRoomName': inviteRoomName,
+                                            'inviteToken': inviteToken,
+                                            'inviteRevoked': inviteRevoked,
+                                            'invitee': invitee,
+                                            'isInvite': isInvite,
+                                            'isInviteRevocation':
+                                                isInviteRevocation,
+                                            'inviteLabel': inviteLabel,
+                                            'inviteActionLabel':
+                                                inviteActionLabel,
+                                          },
+                                        ),
+                                      );
+                                    }
+                                    final emptyStateLabel = searchFiltering
+                                        ? context.l10n.chatEmptySearch
+                                        : context.l10n.chatEmptyMessages;
+                                    if (!loadingMessages &&
+                                        filteredItems.isEmpty) {
                                       dashMessages.add(
                                         ChatMessage(
                                           user: spacerUser,
                                           createdAt: _selectionSpacerTimestamp,
                                           text: ' ',
-                                          customProperties: const {
-                                            'id': _selectionSpacerMessageId,
-                                            'selectionSpacer': true,
+                                          customProperties: {
+                                            'id': _emptyStateMessageId,
+                                            'emptyState': true,
+                                            'emptyLabel': emptyStateLabel,
                                           },
                                         ),
                                       );
-                                      late final MessageListOptions
-                                          dashMessageListOptions;
-                                      dashMessageListOptions =
-                                          MessageListOptions(
-                                        scrollController: _scrollController,
-                                        scrollPhysics: _selectionAutoscrollActive
-                                            ? const AlwaysScrollableScrollPhysics(
-                                                parent: ClampingScrollPhysics(),
-                                              )
-                                            : const AlwaysScrollableScrollPhysics(
-                                                parent: BouncingScrollPhysics(),
-                                              ),
-                                        separatorFrequency:
-                                            SeparatorFrequency.days,
-                                        dateSeparatorBuilder: (date) {
-                                          if (date.isAtSameMomentAs(
-                                            _selectionSpacerTimestamp,
-                                          )) {
-                                            return const SizedBox.shrink();
-                                          }
-                                          return DefaultDateSeparator(
-                                            date: date,
-                                            messageListOptions:
-                                                dashMessageListOptions,
-                                          );
+                                    }
+                                    dashMessages.add(
+                                      ChatMessage(
+                                        user: spacerUser,
+                                        createdAt: _selectionSpacerTimestamp,
+                                        text: ' ',
+                                        customProperties: const {
+                                          'id': _selectionSpacerMessageId,
+                                          'selectionSpacer': true,
                                         },
-                                        typingBuilder: (_) =>
-                                            const SizedBox.shrink(),
-                                        onLoadEarlier: searchFiltering ||
-                                                state.items.length %
-                                                        ChatBloc
-                                                            .messageBatchSize !=
-                                                    0
-                                            ? null
-                                            : () async => context
-                                                .read<ChatBloc>()
-                                                .add(const ChatLoadEarlier()),
-                                        loadEarlierBuilder: Container(
-                                          padding: const EdgeInsets.all(12.0),
-                                          alignment: Alignment.center,
-                                          child: CircularProgressIndicator(
-                                            color: context.colorScheme.primary,
-                                          ),
-                                        ),
-                                      );
-                                      final composerHintText = isDefaultEmail
-                                          ? context.l10n.chatComposerEmailHint
-                                          : context
-                                              .l10n.chatComposerMessageHint;
-                                      Widget quoteSection;
-                                      final quoting = state.quoting;
-                                      if (quoting == null) {
-                                        quoteSection = const SizedBox.shrink();
-                                      } else {
-                                        quoteSection = Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 8,
-                                          ),
-                                          child: _QuoteBanner(
-                                            key: ValueKey<String?>(
-                                              quoting.stanzaID,
+                                      ),
+                                    );
+                                    late final MessageListOptions
+                                        dashMessageListOptions;
+                                    dashMessageListOptions = MessageListOptions(
+                                      scrollController: _scrollController,
+                                      scrollPhysics: _selectionAutoscrollActive
+                                          ? const AlwaysScrollableScrollPhysics(
+                                              parent: ClampingScrollPhysics(),
+                                            )
+                                          : const AlwaysScrollableScrollPhysics(
+                                              parent: BouncingScrollPhysics(),
                                             ),
-                                            message: quoting,
-                                            isSelf: _isQuotedMessageFromSelf(
-                                              quotedMessage: quoting,
-                                              isGroupChat: isGroupChat,
-                                              myOccupantId: myOccupantId,
-                                              selfNick: selfNick,
-                                              currentUserId: currentUserId,
-                                            ),
-                                            onClear: () => context
-                                                .read<ChatBloc>()
-                                                .add(const ChatQuoteCleared()),
-                                          ),
-                                        );
-                                      }
-                                      quoteSection = AnimatedSize(
-                                        duration: _bubbleFocusDuration,
-                                        curve: _bubbleFocusCurve,
-                                        alignment: Alignment.topCenter,
-                                        child: quoteSection,
-                                      );
-                                      final remoteTyping =
-                                          state.chat?.chatState?.name ==
-                                              'composing';
-                                      final demoTypingAvatars =
-                                          _demoTypingParticipants(state);
-                                      final fallbackTypingJid =
-                                          state.chat?.contactJid ??
-                                              state.chat?.jid;
-                                      final typingAvatars = demoTypingAvatars
-                                              .isNotEmpty
-                                          ? demoTypingAvatars
-                                          : state.typingParticipants.isNotEmpty
-                                              ? state.typingParticipants
-                                              : remoteTyping &&
-                                                      fallbackTypingJid !=
-                                                          null &&
-                                                      fallbackTypingJid
-                                                          .isNotEmpty
-                                                  ? [fallbackTypingJid]
-                                                  : const <String>[];
-                                      final typingAvatarPaths =
-                                          <String, String>{};
-                                      for (final participant in typingAvatars) {
-                                        final path =
-                                            avatarPathForTypingParticipant(
-                                          participant,
-                                        );
-                                        if (path == null || path.isEmpty) {
-                                          continue;
+                                      separatorFrequency:
+                                          SeparatorFrequency.days,
+                                      dateSeparatorBuilder: (date) {
+                                        if (date.isAtSameMomentAs(
+                                          _selectionSpacerTimestamp,
+                                        )) {
+                                          return const SizedBox.shrink();
                                         }
-                                        typingAvatarPaths[participant] = path;
-                                      }
-                                      final typingVisible =
-                                          state.typing == true ||
-                                              remoteTyping ||
-                                              typingAvatars.isNotEmpty ||
-                                              demoTypingAvatars.isNotEmpty;
-                                      final bottomSection =
-                                          _SizeReportingWidget(
-                                        onSizeChange:
-                                            _updateBottomSectionHeight,
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            quoteSection,
-                                            if (_multiSelectActive &&
-                                                selectedMessages.isNotEmpty)
-                                              () {
-                                                final targets =
-                                                    List<Message>.of(
-                                                  selectedMessages,
-                                                  growable: false,
-                                                );
-                                                final canReact = !isEmailChat;
-                                                return _MessageSelectionToolbar(
-                                                  count: targets.length,
-                                                  onClear: _clearMultiSelection,
-                                                  onCopy: () =>
-                                                      _copySelectedMessages(
-                                                    List<Message>.of(
-                                                      targets,
-                                                    ),
-                                                  ),
-                                                  onShare: () =>
-                                                      _shareSelectedMessages(
-                                                    List<Message>.of(
-                                                      targets,
-                                                    ),
-                                                  ),
-                                                  shareStatus:
-                                                      _shareRequestStatus,
-                                                  onForward: () =>
-                                                      _forwardSelectedMessages(
-                                                    List<Message>.of(
-                                                      targets,
-                                                    ),
-                                                  ),
-                                                  onAddToCalendar: () =>
-                                                      _addSelectedToCalendar(
-                                                    List<Message>.of(
-                                                      targets,
-                                                    ),
-                                                  ),
-                                                  showReactions: canReact,
-                                                  onReactionSelected: canReact
-                                                      ? (emoji) =>
-                                                          _toggleQuickReactionForMessages(
-                                                            targets,
-                                                            emoji,
-                                                          )
-                                                      : null,
-                                                  onReactionPicker: canReact
-                                                      ? () =>
-                                                          _handleMultiReactionSelection(
-                                                            List<Message>.of(
-                                                              targets,
-                                                            ),
-                                                          )
-                                                      : null,
-                                                );
-                                              }()
-                                            else
-                                              () {
-                                                if (widget.readOnly) {
-                                                  _ensureRecipientBarHeightCleared();
-                                                  return const _ReadOnlyComposerBanner();
-                                                }
-                                                final visibilityLabel =
-                                                    _recipientVisibilityLabel(
-                                                  chat: state.chat,
-                                                  recipients: recipients,
-                                                );
-                                                return _ChatComposerSection(
-                                                  hintText: composerHintText,
-                                                  recipients: recipients,
-                                                  availableChats:
-                                                      availableChats,
-                                                  latestStatuses:
-                                                      latestStatuses,
-                                                  visibilityLabel:
-                                                      visibilityLabel,
-                                                  pendingAttachments:
-                                                      pendingAttachments,
-                                                  composerHasText:
-                                                      _composerHasContent,
-                                                  composerError:
-                                                      state.composerError,
-                                                  showAttachmentWarning:
-                                                      showAttachmentWarning,
-                                                  retryReport: retryReport,
-                                                  retryShareId: retryShareId,
-                                                  subjectController:
-                                                      _subjectController,
-                                                  subjectFocusNode:
-                                                      _subjectFocusNode,
-                                                  textController:
-                                                      _textController,
-                                                  textFocusNode: _focusNode,
-                                                  tapRegionGroup:
-                                                      _composerTapRegionGroup,
-                                                  onSubjectSubmitted: () =>
-                                                      _focusNode.requestFocus(),
-                                                  onRecipientAdded:
-                                                      _handleRecipientAdded,
-                                                  onRecipientRemoved:
-                                                      _handleRecipientRemoved,
-                                                  onRecipientToggled:
-                                                      _handleRecipientToggled,
-                                                  onAttachmentRetry: (id) =>
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatAttachmentRetryRequested(
-                                                              attachmentId: id,
-                                                              recipients:
-                                                                  _recipients,
-                                                            ),
-                                                          ),
-                                                  onAttachmentRemove: (id) =>
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatPendingAttachmentRemoved(
-                                                              id,
-                                                            ),
-                                                          ),
-                                                  onPendingAttachmentPressed:
-                                                      _handlePendingAttachmentPressed,
-                                                  onPendingAttachmentLongPressed:
-                                                      _handlePendingAttachmentLongPressed,
-                                                  pendingAttachmentMenuBuilder:
-                                                      _pendingAttachmentMenuItems,
-                                                  buildComposerAccessories: ({
-                                                    required bool canSend,
-                                                  }) =>
-                                                      _composerAccessories(
-                                                    canSend: canSend,
-                                                    attachmentsEnabled:
-                                                        attachmentsEnabled,
-                                                  ),
-                                                  onTaskDropped:
-                                                      _handleTaskDrop,
-                                                  onSend: _handleSendMessage,
-                                                );
-                                              }(),
-                                          ],
+                                        return DefaultDateSeparator(
+                                          date: date,
+                                          messageListOptions:
+                                              dashMessageListOptions,
+                                        );
+                                      },
+                                      typingBuilder: (_) =>
+                                          const SizedBox.shrink(),
+                                      onLoadEarlier: searchFiltering ||
+                                              state.items.length %
+                                                      ChatBloc
+                                                          .messageBatchSize !=
+                                                  0
+                                          ? null
+                                          : () async => context
+                                              .read<ChatBloc>()
+                                              .add(const ChatLoadEarlier()),
+                                      loadEarlierBuilder: Container(
+                                        padding: const EdgeInsets.all(12.0),
+                                        alignment: Alignment.center,
+                                        child: CircularProgressIndicator(
+                                          color: context.colorScheme.primary,
+                                        ),
+                                      ),
+                                    );
+                                    final composerHintText = isDefaultEmail
+                                        ? context.l10n.chatComposerEmailHint
+                                        : context.l10n.chatComposerMessageHint;
+                                    Widget quoteSection;
+                                    final quoting = state.quoting;
+                                    if (quoting == null) {
+                                      quoteSection = const SizedBox.shrink();
+                                    } else {
+                                      quoteSection = Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        child: _QuoteBanner(
+                                          key: ValueKey<String?>(
+                                            quoting.stanzaID,
+                                          ),
+                                          message: quoting,
+                                          isSelf: _isQuotedMessageFromSelf(
+                                            quotedMessage: quoting,
+                                            isGroupChat: isGroupChat,
+                                            myOccupantId: myOccupantId,
+                                            selfNick: selfNick,
+                                            currentUserId: currentUserId,
+                                          ),
+                                          onClear: () => context
+                                              .read<ChatBloc>()
+                                              .add(const ChatQuoteCleared()),
                                         ),
                                       );
-                                      return Column(
+                                    }
+                                    quoteSection = AnimatedSize(
+                                      duration: _bubbleFocusDuration,
+                                      curve: _bubbleFocusCurve,
+                                      alignment: Alignment.topCenter,
+                                      child: quoteSection,
+                                    );
+                                    final remoteTyping =
+                                        state.chat?.chatState?.name ==
+                                            'composing';
+                                    final demoTypingAvatars =
+                                        _demoTypingParticipants(state);
+                                    final fallbackTypingJid =
+                                        state.chat?.contactJid ??
+                                            state.chat?.jid;
+                                    final typingAvatars = demoTypingAvatars
+                                            .isNotEmpty
+                                        ? demoTypingAvatars
+                                        : state.typingParticipants.isNotEmpty
+                                            ? state.typingParticipants
+                                            : remoteTyping &&
+                                                    fallbackTypingJid != null &&
+                                                    fallbackTypingJid.isNotEmpty
+                                                ? [fallbackTypingJid]
+                                                : const <String>[];
+                                    final typingAvatarPaths =
+                                        <String, String>{};
+                                    for (final participant in typingAvatars) {
+                                      final path =
+                                          avatarPathForTypingParticipant(
+                                        participant,
+                                      );
+                                      if (path == null || path.isEmpty) {
+                                        continue;
+                                      }
+                                      typingAvatarPaths[participant] = path;
+                                    }
+                                    final typingVisible =
+                                        state.typing == true ||
+                                            remoteTyping ||
+                                            typingAvatars.isNotEmpty ||
+                                            demoTypingAvatars.isNotEmpty;
+                                    final bottomSection = _SizeReportingWidget(
+                                      onSizeChange: _updateBottomSectionHeight,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          _ChatPinnedMessagesPanel(
-                                            key: ValueKey(
-                                              '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
-                                            ),
-                                            chat: chatEntity,
-                                            visible: _pinnedPanelVisible,
-                                            maxHeight: pinnedPanelMaxHeight,
-                                            pinnedMessages:
-                                                state.pinnedMessages,
-                                            pinnedMessagesLoaded:
-                                                state.pinnedMessagesLoaded,
-                                            pinnedMessagesHydrating:
-                                                state.pinnedMessagesHydrating,
-                                            onClose: _closePinnedMessages,
-                                            canTogglePins: canTogglePins,
-                                            canShowCalendarTasks:
-                                                chatCalendarBloc != null,
-                                            roomState: state.roomState,
-                                            metadataStreamFor:
-                                                _metadataStreamFor,
-                                            metadataInitialFor:
-                                                _metadataInitialFor,
-                                            attachmentsBlocked:
-                                                attachmentsBlockedForChat,
-                                            isOneTimeAttachmentAllowed:
-                                                _isOneTimeAttachmentAllowed,
-                                            shouldAllowAttachment:
-                                                _shouldAllowAttachment,
-                                            onApproveAttachment:
-                                                _approveAttachment,
+                                          quoteSection,
+                                          if (_multiSelectActive &&
+                                              selectedMessages.isNotEmpty)
+                                            () {
+                                              final targets = List<Message>.of(
+                                                selectedMessages,
+                                                growable: false,
+                                              );
+                                              final canReact = !isEmailChat;
+                                              return _MessageSelectionToolbar(
+                                                count: targets.length,
+                                                onClear: _clearMultiSelection,
+                                                onCopy: () =>
+                                                    _copySelectedMessages(
+                                                  List<Message>.of(
+                                                    targets,
+                                                  ),
+                                                ),
+                                                onShare: () =>
+                                                    _shareSelectedMessages(
+                                                  List<Message>.of(
+                                                    targets,
+                                                  ),
+                                                ),
+                                                shareStatus:
+                                                    _shareRequestStatus,
+                                                onForward: () =>
+                                                    _forwardSelectedMessages(
+                                                  List<Message>.of(
+                                                    targets,
+                                                  ),
+                                                ),
+                                                onAddToCalendar: () =>
+                                                    _addSelectedToCalendar(
+                                                  List<Message>.of(
+                                                    targets,
+                                                  ),
+                                                ),
+                                                showReactions: canReact,
+                                                onReactionSelected: canReact
+                                                    ? (emoji) =>
+                                                        _toggleQuickReactionForMessages(
+                                                          targets,
+                                                          emoji,
+                                                        )
+                                                    : null,
+                                                onReactionPicker: canReact
+                                                    ? () =>
+                                                        _handleMultiReactionSelection(
+                                                          List<Message>.of(
+                                                            targets,
+                                                          ),
+                                                        )
+                                                    : null,
+                                              );
+                                            }()
+                                          else
+                                            () {
+                                              if (widget.readOnly) {
+                                                _ensureRecipientBarHeightCleared();
+                                                return const _ReadOnlyComposerBanner();
+                                              }
+                                              final visibilityLabel =
+                                                  _recipientVisibilityLabel(
+                                                chat: state.chat,
+                                                recipients: recipients,
+                                              );
+                                              return _ChatComposerSection(
+                                                hintText: composerHintText,
+                                                recipients: recipients,
+                                                availableChats: availableChats,
+                                                latestStatuses: latestStatuses,
+                                                visibilityLabel:
+                                                    visibilityLabel,
+                                                pendingAttachments:
+                                                    pendingAttachments,
+                                                composerHasText:
+                                                    _composerHasContent,
+                                                composerError:
+                                                    state.composerError,
+                                                showAttachmentWarning:
+                                                    showAttachmentWarning,
+                                                retryReport: retryReport,
+                                                retryShareId: retryShareId,
+                                                subjectController:
+                                                    _subjectController,
+                                                subjectFocusNode:
+                                                    _subjectFocusNode,
+                                                textController: _textController,
+                                                textFocusNode: _focusNode,
+                                                tapRegionGroup:
+                                                    _composerTapRegionGroup,
+                                                onSubjectSubmitted: () =>
+                                                    _focusNode.requestFocus(),
+                                                onRecipientAdded:
+                                                    _handleRecipientAdded,
+                                                onRecipientRemoved:
+                                                    _handleRecipientRemoved,
+                                                onRecipientToggled:
+                                                    _handleRecipientToggled,
+                                                onAttachmentRetry: (id) =>
+                                                    context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          ChatAttachmentRetryRequested(
+                                                            attachmentId: id,
+                                                            recipients:
+                                                                _recipients,
+                                                          ),
+                                                        ),
+                                                onAttachmentRemove: (id) =>
+                                                    context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          ChatPendingAttachmentRemoved(
+                                                            id,
+                                                          ),
+                                                        ),
+                                                onPendingAttachmentPressed:
+                                                    _handlePendingAttachmentPressed,
+                                                onPendingAttachmentLongPressed:
+                                                    _handlePendingAttachmentLongPressed,
+                                                pendingAttachmentMenuBuilder:
+                                                    _pendingAttachmentMenuItems,
+                                                buildComposerAccessories: ({
+                                                  required bool canSend,
+                                                }) =>
+                                                    _composerAccessories(
+                                                  canSend: canSend,
+                                                  attachmentsEnabled:
+                                                      attachmentsEnabled,
+                                                ),
+                                                onTaskDropped: _handleTaskDrop,
+                                                onSend: _handleSendMessage,
+                                              );
+                                            }(),
+                                        ],
+                                      ),
+                                    );
+                                    return Column(
+                                      children: [
+                                        _ChatPinnedMessagesPanel(
+                                          key: ValueKey(
+                                            '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
                                           ),
-                                          Expanded(
-                                            child: KeyedSubtree(
-                                              key: _messageListKey,
-                                              child: Listener(
-                                                behavior:
-                                                    HitTestBehavior.translucent,
-                                                onPointerMove:
-                                                    _handleOutsideTapMove,
-                                                onPointerUp:
-                                                    _handleOutsideTapUp,
-                                                onPointerCancel:
-                                                    _handleOutsideTapCancel,
-                                                child: Stack(
-                                                  fit: StackFit.expand,
-                                                  children: [
-                                                    MediaQuery.removePadding(
-                                                      context: context,
-                                                      removeLeft: true,
-                                                      removeRight: true,
-                                                      child: _ChatMessageList(
-                                                        currentUser: user,
-                                                        messages: dashMessages,
-                                                        typingUsers: const [],
-                                                        quickReplyOptions:
-                                                            const QuickReplyOptions(),
-                                                        scrollToBottomOptions:
-                                                            const ScrollToBottomOptions(),
-                                                        messageOptions:
-                                                            MessageOptions(
-                                                          showOtherUsersAvatar:
-                                                              false,
-                                                          showCurrentUserAvatar:
-                                                              false,
-                                                          showOtherUsersName:
-                                                              false,
-                                                          borderRadius: 0,
-                                                          maxWidth:
-                                                              messageRowMaxWidth,
-                                                          messagePadding:
-                                                              EdgeInsets.zero,
-                                                          spaceWhenAvatarIsHidden:
-                                                              0,
-                                                          currentUserContainerColor:
-                                                              Colors
-                                                                  .transparent,
-                                                          containerColor: Colors
-                                                              .transparent,
-                                                          messageTextBuilder:
-                                                              (message,
-                                                                  previous,
-                                                                  next) {
-                                                            final colors =
-                                                                context
-                                                                    .colorScheme;
-                                                            final chatTokens =
-                                                                context
-                                                                    .chatTheme;
-                                                            final l10n =
-                                                                context.l10n;
-                                                            final isSelectionSpacer =
-                                                                message.customProperties?[
-                                                                        'selectionSpacer'] ==
-                                                                    true;
-                                                            if (isSelectionSpacer) {
-                                                              final spacerHeight =
-                                                                  selectionSpacerVisibleHeight;
-                                                              return _SelectionHeadroomSpacer(
-                                                                height:
-                                                                    spacerHeight,
-                                                              );
-                                                            }
-                                                            final bannerParticipants = (message
+                                          chat: chatEntity,
+                                          visible: _pinnedPanelVisible,
+                                          maxHeight: pinnedPanelMaxHeight,
+                                          pinnedMessages: state.pinnedMessages,
+                                          pinnedMessagesLoaded:
+                                              state.pinnedMessagesLoaded,
+                                          pinnedMessagesHydrating:
+                                              state.pinnedMessagesHydrating,
+                                          onClose: _closePinnedMessages,
+                                          canTogglePins: canTogglePins,
+                                          canShowCalendarTasks:
+                                              chatCalendarBloc != null,
+                                          roomState: state.roomState,
+                                          metadataStreamFor: _metadataStreamFor,
+                                          metadataInitialFor:
+                                              _metadataInitialFor,
+                                          attachmentsBlocked:
+                                              attachmentsBlockedForChat,
+                                          isOneTimeAttachmentAllowed:
+                                              _isOneTimeAttachmentAllowed,
+                                          shouldAllowAttachment:
+                                              _shouldAllowAttachment,
+                                          onApproveAttachment:
+                                              _approveAttachment,
+                                        ),
+                                        Expanded(
+                                          child: KeyedSubtree(
+                                            key: _messageListKey,
+                                            child: Listener(
+                                              behavior:
+                                                  HitTestBehavior.translucent,
+                                              onPointerMove:
+                                                  _handleOutsideTapMove,
+                                              onPointerUp: _handleOutsideTapUp,
+                                              onPointerCancel:
+                                                  _handleOutsideTapCancel,
+                                              child: Stack(
+                                                fit: StackFit.expand,
+                                                children: [
+                                                  MediaQuery.removePadding(
+                                                    context: context,
+                                                    removeLeft: true,
+                                                    removeRight: true,
+                                                    child: _ChatMessageList(
+                                                      currentUser: user,
+                                                      messages: dashMessages,
+                                                      typingUsers: const [],
+                                                      quickReplyOptions:
+                                                          const QuickReplyOptions(),
+                                                      scrollToBottomOptions:
+                                                          const ScrollToBottomOptions(),
+                                                      messageOptions:
+                                                          MessageOptions(
+                                                        showOtherUsersAvatar:
+                                                            false,
+                                                        showCurrentUserAvatar:
+                                                            false,
+                                                        showOtherUsersName:
+                                                            false,
+                                                        borderRadius: 0,
+                                                        maxWidth:
+                                                            messageRowMaxWidth,
+                                                        messagePadding:
+                                                            EdgeInsets.zero,
+                                                        spaceWhenAvatarIsHidden:
+                                                            0,
+                                                        currentUserContainerColor:
+                                                            Colors.transparent,
+                                                        containerColor:
+                                                            Colors.transparent,
+                                                        messageTextBuilder:
+                                                            (message, previous,
+                                                                next) {
+                                                          final colors = context
+                                                              .colorScheme;
+                                                          final chatTokens =
+                                                              context.chatTheme;
+                                                          final l10n =
+                                                              context.l10n;
+                                                          final isSelectionSpacer =
+                                                              message.customProperties?[
+                                                                      'selectionSpacer'] ==
+                                                                  true;
+                                                          if (isSelectionSpacer) {
+                                                            final spacerHeight =
+                                                                selectionSpacerVisibleHeight;
+                                                            return _SelectionHeadroomSpacer(
+                                                              height:
+                                                                  spacerHeight,
+                                                            );
+                                                          }
+                                                          final bannerParticipants = (message
+                                                                          .customProperties?[
+                                                                      'shareParticipants']
+                                                                  as List<
+                                                                      chat_models
+                                                                      .Chat>?) ??
+                                                              const <chat_models
+                                                                  .Chat>[];
+                                                          final recipientCutoutParticipants =
+                                                              bannerParticipants;
+                                                          final extraStyle =
+                                                              context.textTheme
+                                                                  .muted
+                                                                  .copyWith(
+                                                            fontStyle: FontStyle
+                                                                .italic,
+                                                          );
+                                                          final isEmptyState =
+                                                              message.customProperties?[
+                                                                      'emptyState'] ==
+                                                                  true;
+                                                          if (isEmptyState) {
+                                                            final emptyLabel = message
                                                                             .customProperties?[
-                                                                        'shareParticipants']
-                                                                    as List<
-                                                                        chat_models
-                                                                        .Chat>?) ??
-                                                                const <chat_models
-                                                                    .Chat>[];
-                                                            final recipientCutoutParticipants =
-                                                                bannerParticipants;
-                                                            final extraStyle =
-                                                                context
-                                                                    .textTheme
-                                                                    .muted
-                                                                    .copyWith(
-                                                              fontStyle:
-                                                                  FontStyle
-                                                                      .italic,
-                                                            );
-                                                            final isEmptyState =
-                                                                message.customProperties?[
-                                                                        'emptyState'] ==
-                                                                    true;
-                                                            if (isEmptyState) {
-                                                              final emptyLabel =
-                                                                  message.customProperties?[
-                                                                              'emptyLabel']
-                                                                          as String? ??
-                                                                      context
-                                                                          .l10n
-                                                                          .chatEmptyMessages;
-                                                              return Padding(
-                                                                padding:
-                                                                    const EdgeInsets
-                                                                        .symmetric(
-                                                                  vertical: 24,
-                                                                  horizontal:
-                                                                      _chatHorizontalPadding,
-                                                                ),
-                                                                child: Center(
-                                                                  child: Text(
-                                                                    emptyLabel,
-                                                                    style: context
-                                                                        .textTheme
-                                                                        .muted,
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            }
-                                                            final self = message
-                                                                            .customProperties?[
-                                                                        'isSelf']
-                                                                    as bool? ??
-                                                                (message.user
-                                                                        .id ==
-                                                                    profileState()
-                                                                        ?.jid);
-                                                            final bubbleMaxWidth = self
-                                                                ? outboundMessageRowMaxWidth
-                                                                : inboundMessageRowMaxWidth;
-                                                            final error = message
-                                                                        .customProperties?[
-                                                                    'error']
-                                                                as MessageError?;
-                                                            final isError =
-                                                                error?.isNotNone ??
-                                                                    false;
-                                                            final bubbleColor =
-                                                                isError
-                                                                    ? colors
-                                                                        .destructive
-                                                                    : self
-                                                                        ? colors
-                                                                            .primary
-                                                                        : colors
-                                                                            .card;
-                                                            final borderColor =
-                                                                self || isError
-                                                                    ? Colors
-                                                                        .transparent
-                                                                    : chatTokens
-                                                                        .recvEdge;
-                                                            final textColor =
-                                                                isError
-                                                                    ? colors
-                                                                        .destructiveForeground
-                                                                    : self
-                                                                        ? colors
-                                                                            .primaryForeground
-                                                                        : colors
-                                                                            .foreground;
-                                                            final detailColor =
-                                                                textColor;
-                                                            final chainedPrev =
-                                                                _chatMessagesShouldChain(
-                                                              message,
-                                                              previous,
-                                                            );
-                                                            final chainedNext =
-                                                                _chatMessagesShouldChain(
-                                                              message,
-                                                              next,
-                                                            );
-                                                            final baseTextStyle =
-                                                                context
-                                                                    .textTheme
-                                                                    .small
-                                                                    .copyWith(
-                                                              color: textColor,
-                                                              height: 1.3,
-                                                            );
-                                                            final linkStyle =
-                                                                baseTextStyle
-                                                                    .copyWith(
-                                                              color: self
-                                                                  ? colors
-                                                                      .primaryForeground
-                                                                  : colors
-                                                                      .primary,
-                                                              decoration:
-                                                                  TextDecoration
-                                                                      .underline,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            );
-                                                            final parsedText =
-                                                                parseMessageText(
-                                                              text: (message.customProperties?[
-                                                                          'renderedText']
-                                                                      as String?) ??
-                                                                  message.text,
-                                                              baseStyle:
-                                                                  baseTextStyle,
-                                                              linkStyle:
-                                                                  linkStyle,
-                                                            );
-                                                            final timeColor =
-                                                                detailColor;
-                                                            final detailStyle =
-                                                                context
-                                                                    .textTheme
-                                                                    .small
-                                                                    .copyWith(
-                                                              color: timeColor,
-                                                              fontSize: 11.0,
-                                                              height: 1.0,
-                                                              textBaseline:
-                                                                  TextBaseline
-                                                                      .alphabetic,
-                                                            );
-                                                            final surfaceDetailColor =
-                                                                colors
-                                                                    .foreground;
-                                                            final surfaceDetailStyle =
-                                                                detailStyle
-                                                                    .copyWith(
-                                                              color:
-                                                                  surfaceDetailColor,
-                                                            );
-                                                            final messageId =
-                                                                message.customProperties?[
-                                                                        'id']
-                                                                    as String?;
-                                                            final isEmailMessage = (message
-                                                                            .customProperties?[
-                                                                        'isEmailMessage']
-                                                                    as bool?) ??
-                                                                (messageId !=
-                                                                        null &&
-                                                                    messageById[messageId]
-                                                                            ?.deltaMsgId !=
-                                                                        null);
-                                                            final transportIconData =
-                                                                isEmailMessage
-                                                                    ? LucideIcons
-                                                                        .mail
-                                                                    : LucideIcons
-                                                                        .messageCircle;
-                                                            TextSpan
-                                                                iconDetailSpan(
-                                                              IconData icon,
-                                                              Color color, {
-                                                              required TextStyle
-                                                                  baseStyle,
-                                                            }) =>
-                                                                    TextSpan(
-                                                                      text: String
-                                                                          .fromCharCode(
-                                                                        icon.codePoint,
-                                                                      ),
-                                                                      style: baseStyle
-                                                                          .copyWith(
-                                                                        color:
-                                                                            color,
-                                                                        fontFamily:
-                                                                            icon.fontFamily,
-                                                                        package:
-                                                                            icon.fontPackage,
-                                                                      ),
-                                                                    );
-                                                            final timeLabel =
-                                                                '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                                                                '${message.createdAt.minute.toString().padLeft(2, '0')}';
-                                                            final time =
-                                                                TextSpan(
-                                                              text: timeLabel,
-                                                              style:
-                                                                  detailStyle,
-                                                            );
-                                                            final surfaceTime =
-                                                                TextSpan(
-                                                              text: timeLabel,
-                                                              style:
-                                                                  surfaceDetailStyle,
-                                                            );
-                                                            final statusIcon =
-                                                                message.status
-                                                                    ?.icon;
-                                                            final status =
-                                                                statusIcon ==
-                                                                        null
-                                                                    ? null
-                                                                    : iconDetailSpan(
-                                                                        statusIcon,
-                                                                        detailColor,
-                                                                        baseStyle:
-                                                                            detailStyle,
-                                                                      );
-                                                            final surfaceStatus =
-                                                                statusIcon ==
-                                                                        null
-                                                                    ? null
-                                                                    : iconDetailSpan(
-                                                                        statusIcon,
-                                                                        surfaceDetailColor,
-                                                                        baseStyle:
-                                                                            surfaceDetailStyle,
-                                                                      );
-                                                            final transportDetail =
-                                                                iconDetailSpan(
-                                                              transportIconData,
-                                                              detailColor,
-                                                              baseStyle:
-                                                                  detailStyle,
-                                                            );
-                                                            final surfaceTransportDetail =
-                                                                iconDetailSpan(
-                                                              transportIconData,
-                                                              surfaceDetailColor,
-                                                              baseStyle:
-                                                                  surfaceDetailStyle,
-                                                            );
-                                                            final trusted =
-                                                                message.customProperties![
-                                                                        'trusted']
-                                                                    as bool?;
-                                                            final messageModel = (message
-                                                                            .customProperties?[
-                                                                        'model']
-                                                                    as Message?) ??
-                                                                (messageId ==
-                                                                        null
-                                                                    ? null
-                                                                    : messageById[
-                                                                        messageId]);
-                                                            if (messageModel ==
-                                                                null) {
-                                                              final fallbackText =
-                                                                  message.text
-                                                                      .trim();
-                                                              final resolvedFallback =
-                                                                  fallbackText
-                                                                          .isNotEmpty
-                                                                      ? fallbackText
-                                                                      : l10n
-                                                                          .chatAttachmentUnavailable;
-                                                              return Padding(
-                                                                padding:
-                                                                    _messageFallbackOuterPadding,
-                                                                child: Align(
-                                                                  alignment: self
-                                                                      ? Alignment
-                                                                          .centerRight
-                                                                      : Alignment
-                                                                          .centerLeft,
-                                                                  child:
-                                                                      ConstrainedBox(
-                                                                    constraints:
-                                                                        BoxConstraints(
-                                                                      maxWidth:
-                                                                          bubbleMaxWidth,
-                                                                    ),
-                                                                    child:
-                                                                        DecoratedBox(
-                                                                      decoration:
-                                                                          BoxDecoration(
-                                                                        color:
-                                                                            bubbleColor,
-                                                                        borderRadius:
-                                                                            _bubbleBorderRadius(
-                                                                          isSelf:
-                                                                              self,
-                                                                          chainedPrevious:
-                                                                              chainedPrev,
-                                                                          chainedNext:
-                                                                              chainedNext,
-                                                                        ),
-                                                                        border: borderColor ==
-                                                                                Colors.transparent
-                                                                            ? null
-                                                                            : Border.all(
-                                                                                color: borderColor,
-                                                                              ),
-                                                                      ),
-                                                                      child:
-                                                                          Padding(
-                                                                        padding:
-                                                                            _messageFallbackInnerPadding,
-                                                                        child:
-                                                                            Text(
-                                                                          resolvedFallback,
-                                                                          style:
-                                                                              baseTextStyle,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            }
-                                                            final CalendarFragment?
-                                                                rawFragment =
-                                                                message.customProperties?[
-                                                                        _calendarFragmentPropertyKey]
-                                                                    as CalendarFragment?;
-                                                            final CalendarFragment?
-                                                                displayFragment =
-                                                                rawFragment;
-                                                            final CalendarTask?
-                                                                calendarTaskIcs =
-                                                                message.customProperties?[
-                                                                        _calendarTaskIcsPropertyKey]
-                                                                    as CalendarTask?;
-                                                            final bool
-                                                                calendarTaskIcsReadOnly =
-                                                                (message.customProperties?[
-                                                                            _calendarTaskIcsReadOnlyPropertyKey]
-                                                                        as bool?) ??
-                                                                    _calendarTaskIcsReadOnlyFallback;
-                                                            final CalendarAvailabilityMessage?
-                                                                availabilityMessage =
-                                                                message.customProperties?[
-                                                                        _calendarAvailabilityPropertyKey]
-                                                                    as CalendarAvailabilityMessage?;
-                                                            final verification =
-                                                                trusted == null
-                                                                    ? null
-                                                                    : iconDetailSpan(
-                                                                        trusted
-                                                                            .toShieldIcon,
-                                                                        trusted
-                                                                            ? axiGreen
-                                                                            : colors.destructive,
-                                                                        baseStyle:
-                                                                            detailStyle,
-                                                                      );
-                                                            final surfaceVerification =
-                                                                trusted == null
-                                                                    ? null
-                                                                    : iconDetailSpan(
-                                                                        trusted
-                                                                            .toShieldIcon,
-                                                                        trusted
-                                                                            ? axiGreen
-                                                                            : colors.destructive,
-                                                                        baseStyle:
-                                                                            surfaceDetailStyle,
-                                                                      );
-                                                            final quotedModel = (message
-                                                                            .customProperties?[
-                                                                        'quoted']
-                                                                    as Message?) ??
-                                                                (messageModel
-                                                                            .quoting ==
-                                                                        null
-                                                                    ? null
-                                                                    : messageById[
-                                                                        messageModel
-                                                                            .quoting!]);
-                                                            final reactions = (message
-                                                                            .customProperties?[
-                                                                        'reactions']
-                                                                    as List<
-                                                                        ReactionPreview>?) ??
-                                                                const <ReactionPreview>[];
-                                                            final replyParticipants = (message
-                                                                            .customProperties?[
-                                                                        'replyParticipants']
-                                                                    as List<
-                                                                        chat_models
-                                                                        .Chat>?) ??
-                                                                const <chat_models
-                                                                    .Chat>[];
-                                                            final attachmentIds =
-                                                                (message.customProperties?[
-                                                                            'attachmentIds']
-                                                                        as List<
-                                                                            String>?) ??
-                                                                    const <String>[];
-                                                            final showReplyStrip =
-                                                                isEmailMessage &&
-                                                                    replyParticipants
-                                                                        .isNotEmpty;
-                                                            final canReact =
-                                                                !isEmailChat;
-                                                            final isSingleSelection =
-                                                                !_multiSelectActive &&
-                                                                    _selectedMessageId ==
-                                                                        messageModel
-                                                                            .stanzaID;
-                                                            final isMultiSelection =
-                                                                _multiSelectActive &&
-                                                                    _multiSelectedMessageIds
-                                                                        .contains(
-                                                                      messageModel
-                                                                          .stanzaID,
-                                                                    );
-                                                            final isSelected =
-                                                                isSingleSelection ||
-                                                                    isMultiSelection;
-                                                            final showReactionManager =
-                                                                canReact &&
-                                                                    isSingleSelection;
-                                                            final showCompactReactions =
-                                                                !showReplyStrip &&
-                                                                    reactions
-                                                                        .isNotEmpty &&
-                                                                    !showReactionManager;
-                                                            final isInviteMessage = (message
-                                                                            .customProperties?[
-                                                                        'isInvite']
-                                                                    as bool?) ??
-                                                                (messageModel
-                                                                        .pseudoMessageType ==
-                                                                    PseudoMessageType
-                                                                        .mucInvite);
-                                                            final isInviteRevocationMessage = (message
-                                                                            .customProperties?[
-                                                                        'isInviteRevocation']
-                                                                    as bool?) ??
-                                                                (messageModel
-                                                                        .pseudoMessageType ==
-                                                                    PseudoMessageType
-                                                                        .mucInviteRevocation);
-                                                            final inviteRevoked =
-                                                                (message.customProperties?[
-                                                                            'inviteRevoked']
-                                                                        as bool?) ??
-                                                                    false;
-                                                            final showRecipientCutout =
-                                                                !showCompactReactions &&
-                                                                    isEmailChat &&
-                                                                    recipientCutoutParticipants
-                                                                            .length >
-                                                                        1;
-                                                            Widget?
-                                                                recipientOverlay;
-                                                            CutoutStyle?
-                                                                recipientStyle;
-                                                            var recipientAnchor =
-                                                                ChatBubbleCutoutAnchor
-                                                                    .bottom;
-                                                            Widget?
-                                                                avatarOverlay;
-                                                            CutoutStyle?
-                                                                avatarStyle;
-                                                            var avatarAnchor =
-                                                                ChatBubbleCutoutAnchor
-                                                                    .left;
-                                                            if (showRecipientCutout) {
-                                                              recipientOverlay =
-                                                                  _RecipientCutoutStrip(
-                                                                recipients:
-                                                                    recipientCutoutParticipants,
-                                                              );
-                                                              recipientStyle =
-                                                                  const CutoutStyle(
-                                                                depth:
-                                                                    _recipientCutoutDepth,
-                                                                cornerRadius:
-                                                                    _recipientCutoutRadius,
-                                                                padding:
-                                                                    _recipientCutoutPadding,
-                                                                offset:
-                                                                    _recipientCutoutOffset,
-                                                                minThickness:
-                                                                    _recipientCutoutMinThickness,
-                                                              );
-                                                            }
-                                                            Widget?
-                                                                selectionOverlay;
-                                                            CutoutStyle?
-                                                                selectionStyle;
-                                                            if (_multiSelectActive) {
-                                                              final indicator =
-                                                                  SelectionIndicator(
-                                                                visible: true,
-                                                                selected:
-                                                                    isMultiSelection,
-                                                                onPressed: () =>
-                                                                    _toggleMultiSelectMessage(
-                                                                  messageModel,
-                                                                ),
-                                                              );
-                                                              selectionOverlay =
-                                                                  Padding(
-                                                                padding:
-                                                                    const EdgeInsets
-                                                                        .only(
-                                                                  left:
-                                                                      _selectionIndicatorInset,
-                                                                ),
-                                                                child:
-                                                                    indicator,
-                                                              );
-                                                              selectionStyle =
-                                                                  const CutoutStyle(
-                                                                depth:
-                                                                    _selectionCutoutDepth,
-                                                                cornerRadius:
-                                                                    _selectionCutoutRadius,
-                                                                padding:
-                                                                    _selectionCutoutPadding,
-                                                                offset:
-                                                                    _selectionCutoutOffset,
-                                                                minThickness:
-                                                                    _selectionCutoutThickness,
-                                                                cornerClearance:
-                                                                    _selectionCutoutCornerClearance,
-                                                              );
-                                                            }
-                                                            final bubbleContentKey =
-                                                                message.customProperties?[
-                                                                        'id'] ??
-                                                                    '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
-                                                            final isDesktopPlatform =
-                                                                EnvScope.maybeOf(
-                                                                      context,
-                                                                    )?.isDesktopPlatform ??
-                                                                    false;
-                                                            final bubbleTextChildren =
-                                                                <Widget>[];
-                                                            final bubbleExtraChildren =
-                                                                <Widget>[];
-                                                            void addExtra(
-                                                              Widget child, {
-                                                              required ShapeBorder
-                                                                  shape,
-                                                              double spacing =
-                                                                  _messageExtraSpacing,
-                                                            }) {
-                                                              final Widget
-                                                                  extraChild =
-                                                                  _MessageExtraItem(
-                                                                shape: shape,
-                                                                onLongPress: widget
-                                                                            .readOnly ||
-                                                                        isDesktopPlatform
-                                                                    ? null
-                                                                    : () =>
-                                                                        _toggleMessageSelection(
-                                                                          messageModel,
-                                                                        ),
-                                                                onSecondaryTapUp:
-                                                                    isDesktopPlatform &&
-                                                                            !widget.readOnly
-                                                                        ? (
-                                                                            _,
-                                                                          ) =>
-                                                                            _toggleMessageSelection(
-                                                                              messageModel,
-                                                                            )
-                                                                        : null,
-                                                                child: child,
-                                                              );
-                                                              if (bubbleExtraChildren
-                                                                  .isNotEmpty) {
-                                                                bubbleExtraChildren
-                                                                  ..add(
-                                                                    _MessageExtraGap(
-                                                                      height:
-                                                                          spacing,
-                                                                    ),
-                                                                  )
-                                                                  ..add(
-                                                                    extraChild,
-                                                                  );
-                                                                return;
-                                                              }
-                                                              if (bubbleTextChildren
-                                                                      .isNotEmpty &&
-                                                                  spacing > 0) {
-                                                                bubbleExtraChildren
-                                                                    .add(
-                                                                  _MessageExtraGap(
-                                                                    height:
-                                                                        spacing,
-                                                                  ),
-                                                                );
-                                                              }
-                                                              bubbleExtraChildren
-                                                                  .add(
-                                                                extraChild,
-                                                              );
-                                                            }
-
-                                                            if (isError) {
-                                                              bubbleTextChildren
-                                                                  .addAll([
-                                                                Text(
-                                                                  l10n.chatErrorLabel,
+                                                                        'emptyLabel']
+                                                                    as String? ??
+                                                                context.l10n
+                                                                    .chatEmptyMessages;
+                                                            return Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                vertical: 24,
+                                                                horizontal:
+                                                                    _chatHorizontalPadding,
+                                                              ),
+                                                              child: Center(
+                                                                child: Text(
+                                                                  emptyLabel,
                                                                   style: context
                                                                       .textTheme
-                                                                      .small
-                                                                      .copyWith(
-                                                                    color:
-                                                                        textColor,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                  ),
+                                                                      .muted,
                                                                 ),
-                                                                DynamicInlineText(
-                                                                  key: ValueKey(
-                                                                    bubbleContentKey,
-                                                                  ),
-                                                                  text:
-                                                                      parsedText
-                                                                          .body,
-                                                                  details: [
-                                                                    time
-                                                                  ],
-                                                                  links:
-                                                                      parsedText
-                                                                          .links,
-                                                                  onLinkTap:
-                                                                      _handleLinkTap,
-                                                                  onLinkLongPress:
-                                                                      _handleLinkTap,
-                                                                ),
-                                                              ]);
-                                                            } else if (isInviteMessage ||
-                                                                isInviteRevocationMessage) {
-                                                              final String
-                                                                  inviteActionFallbackLabel =
-                                                                  context.l10n
-                                                                      .chatInviteActionFallbackLabel;
-                                                              final String
-                                                                  inviteLabel =
-                                                                  (message.customProperties?[
-                                                                              'inviteLabel']
-                                                                          as String?) ??
-                                                                      message
-                                                                          .text;
-                                                              final String
-                                                                  inviteActionLabel =
-                                                                  (message.customProperties?[
-                                                                              'inviteActionLabel']
-                                                                          as String?) ??
-                                                                      inviteActionFallbackLabel;
-                                                              final String
-                                                                  inviteRoomName =
-                                                                  (message.customProperties?['inviteRoomName']
-                                                                              as String?)
-                                                                          ?.trim() ??
-                                                                      '';
-                                                              final String
-                                                                  inviteRoom =
-                                                                  (message.customProperties?['inviteRoom']
-                                                                              as String?)
-                                                                          ?.trim() ??
-                                                                      '';
-                                                              final bool
-                                                                  inviteActionEnabled =
-                                                                  !inviteRevoked &&
-                                                                      !isInviteRevocationMessage;
-                                                              final String
-                                                                  inviteCardLabel =
-                                                                  inviteRoomName
-                                                                          .isNotEmpty
-                                                                      ? inviteRoomName
-                                                                      : inviteRoom
-                                                                              .isNotEmpty
-                                                                          ? inviteRoom
-                                                                          : inviteLabel;
-                                                              final String
-                                                                  inviteCardDetail =
-                                                                  inviteActionEnabled
-                                                                      ? inviteActionLabel
-                                                                      : inviteLabel;
-                                                              bubbleTextChildren
-                                                                  .add(
-                                                                DynamicInlineText(
-                                                                  key: ValueKey(
-                                                                    bubbleContentKey,
-                                                                  ),
-                                                                  text:
-                                                                      TextSpan(
-                                                                    text:
-                                                                        inviteLabel,
-                                                                    style:
-                                                                        baseTextStyle,
-                                                                  ),
-                                                                  details: [
-                                                                    time
-                                                                  ],
-                                                                  onLinkTap:
-                                                                      _handleLinkTap,
-                                                                  onLinkLongPress:
-                                                                      _handleLinkTap,
-                                                                ),
-                                                              );
-                                                              addExtra(
-                                                                _InviteAttachmentCard(
-                                                                  enabled:
-                                                                      inviteActionEnabled,
-                                                                  label:
-                                                                      inviteCardLabel,
-                                                                  detailLabel:
-                                                                      inviteCardDetail,
-                                                                  actionLabel:
-                                                                      inviteActionLabel,
-                                                                  onPressed: () =>
-                                                                      _handleInviteTap(
-                                                                    messageModel,
-                                                                  ),
-                                                                ),
-                                                                shape:
-                                                                    _inviteAttachmentShadowShape,
-                                                                spacing:
-                                                                    _attachmentPreviewSpacing,
-                                                              );
-                                                            } else {
-                                                              final subjectLabel =
-                                                                  (message.customProperties?[
-                                                                          'subjectLabel']
-                                                                      as String?);
-                                                              final showSubjectBanner =
-                                                                  (message.customProperties?['showSubject']
-                                                                              as bool?) ==
-                                                                          true &&
-                                                                      subjectLabel !=
-                                                                          null;
-                                                              if (showSubjectBanner) {
-                                                                final String
-                                                                    subjectText =
-                                                                    subjectLabel;
-                                                                final textTheme =
-                                                                    Theme.of(
-                                                                  context,
-                                                                ).textTheme;
-                                                                final baseSubjectStyle = textTheme
-                                                                        .titleSmall ??
-                                                                    textTheme
-                                                                        .bodyMedium ??
-                                                                    textTheme
-                                                                        .bodyLarge ??
-                                                                    context
-                                                                        .textTheme
-                                                                        .lead;
-                                                                final subjectStyle =
-                                                                    baseSubjectStyle
+                                                              ),
+                                                            );
+                                                          }
+                                                          final self = message
+                                                                          .customProperties?[
+                                                                      'isSelf']
+                                                                  as bool? ??
+                                                              (message.user
+                                                                      .id ==
+                                                                  profileState()
+                                                                      ?.jid);
+                                                          final bubbleMaxWidth = self
+                                                              ? outboundMessageRowMaxWidth
+                                                              : inboundMessageRowMaxWidth;
+                                                          final error = message
+                                                                      .customProperties?[
+                                                                  'error']
+                                                              as MessageError?;
+                                                          final isError = error
+                                                                  ?.isNotNone ??
+                                                              false;
+                                                          final bubbleColor =
+                                                              isError
+                                                                  ? colors
+                                                                      .destructive
+                                                                  : self
+                                                                      ? colors
+                                                                          .primary
+                                                                      : colors
+                                                                          .card;
+                                                          final borderColor =
+                                                              self || isError
+                                                                  ? Colors
+                                                                      .transparent
+                                                                  : chatTokens
+                                                                      .recvEdge;
+                                                          final textColor =
+                                                              isError
+                                                                  ? colors
+                                                                      .destructiveForeground
+                                                                  : self
+                                                                      ? colors
+                                                                          .primaryForeground
+                                                                      : colors
+                                                                          .foreground;
+                                                          final detailColor =
+                                                              textColor;
+                                                          final chainedPrev =
+                                                              _chatMessagesShouldChain(
+                                                            message,
+                                                            previous,
+                                                          );
+                                                          final chainedNext =
+                                                              _chatMessagesShouldChain(
+                                                            message,
+                                                            next,
+                                                          );
+                                                          final baseTextStyle =
+                                                              context.textTheme
+                                                                  .small
+                                                                  .copyWith(
+                                                            color: textColor,
+                                                            height: 1.3,
+                                                          );
+                                                          final linkStyle =
+                                                              baseTextStyle
+                                                                  .copyWith(
+                                                            color: self
+                                                                ? colors
+                                                                    .primaryForeground
+                                                                : colors
+                                                                    .primary,
+                                                            decoration:
+                                                                TextDecoration
+                                                                    .underline,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          );
+                                                          final parsedText =
+                                                              parseMessageText(
+                                                            text: (message.customProperties?[
+                                                                        'renderedText']
+                                                                    as String?) ??
+                                                                message.text,
+                                                            baseStyle:
+                                                                baseTextStyle,
+                                                            linkStyle:
+                                                                linkStyle,
+                                                          );
+                                                          final timeColor =
+                                                              detailColor;
+                                                          final detailStyle =
+                                                              context.textTheme
+                                                                  .small
+                                                                  .copyWith(
+                                                            color: timeColor,
+                                                            fontSize: 11.0,
+                                                            height: 1.0,
+                                                            textBaseline:
+                                                                TextBaseline
+                                                                    .alphabetic,
+                                                          );
+                                                          final surfaceDetailColor =
+                                                              colors.foreground;
+                                                          final surfaceDetailStyle =
+                                                              detailStyle
+                                                                  .copyWith(
+                                                            color:
+                                                                surfaceDetailColor,
+                                                          );
+                                                          final messageId = message
+                                                                  .customProperties?[
+                                                              'id'] as String?;
+                                                          final isEmailMessage = (message
+                                                                          .customProperties?[
+                                                                      'isEmailMessage']
+                                                                  as bool?) ??
+                                                              (messageId !=
+                                                                      null &&
+                                                                  messageById[messageId]
+                                                                          ?.deltaMsgId !=
+                                                                      null);
+                                                          final transportIconData =
+                                                              isEmailMessage
+                                                                  ? LucideIcons
+                                                                      .mail
+                                                                  : LucideIcons
+                                                                      .messageCircle;
+                                                          TextSpan
+                                                              iconDetailSpan(
+                                                            IconData icon,
+                                                            Color color, {
+                                                            required TextStyle
+                                                                baseStyle,
+                                                          }) =>
+                                                                  TextSpan(
+                                                                    text: String
+                                                                        .fromCharCode(
+                                                                      icon.codePoint,
+                                                                    ),
+                                                                    style: baseStyle
                                                                         .copyWith(
-                                                                  color:
-                                                                      textColor,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  height: 1.2,
-                                                                );
-                                                                final subjectPainter =
-                                                                    TextPainter(
-                                                                  text:
-                                                                      TextSpan(
-                                                                    text:
-                                                                        subjectText,
-                                                                    style:
-                                                                        subjectStyle,
+                                                                      color:
+                                                                          color,
+                                                                      fontFamily:
+                                                                          icon.fontFamily,
+                                                                      package: icon
+                                                                          .fontPackage,
+                                                                    ),
+                                                                  );
+                                                          final timeLabel =
+                                                              '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                                              '${message.createdAt.minute.toString().padLeft(2, '0')}';
+                                                          final time = TextSpan(
+                                                            text: timeLabel,
+                                                            style: detailStyle,
+                                                          );
+                                                          final surfaceTime =
+                                                              TextSpan(
+                                                            text: timeLabel,
+                                                            style:
+                                                                surfaceDetailStyle,
+                                                          );
+                                                          final statusIcon =
+                                                              message
+                                                                  .status?.icon;
+                                                          final status =
+                                                              statusIcon == null
+                                                                  ? null
+                                                                  : iconDetailSpan(
+                                                                      statusIcon,
+                                                                      detailColor,
+                                                                      baseStyle:
+                                                                          detailStyle,
+                                                                    );
+                                                          final surfaceStatus =
+                                                              statusIcon == null
+                                                                  ? null
+                                                                  : iconDetailSpan(
+                                                                      statusIcon,
+                                                                      surfaceDetailColor,
+                                                                      baseStyle:
+                                                                          surfaceDetailStyle,
+                                                                    );
+                                                          final transportDetail =
+                                                              iconDetailSpan(
+                                                            transportIconData,
+                                                            detailColor,
+                                                            baseStyle:
+                                                                detailStyle,
+                                                          );
+                                                          final surfaceTransportDetail =
+                                                              iconDetailSpan(
+                                                            transportIconData,
+                                                            surfaceDetailColor,
+                                                            baseStyle:
+                                                                surfaceDetailStyle,
+                                                          );
+                                                          final trusted = message
+                                                                  .customProperties![
+                                                              'trusted'] as bool?;
+                                                          final messageModel = (message
+                                                                          .customProperties?[
+                                                                      'model']
+                                                                  as Message?) ??
+                                                              (messageId == null
+                                                                  ? null
+                                                                  : messageById[
+                                                                      messageId]);
+                                                          if (messageModel ==
+                                                              null) {
+                                                            final fallbackText =
+                                                                message.text
+                                                                    .trim();
+                                                            final resolvedFallback =
+                                                                fallbackText
+                                                                        .isNotEmpty
+                                                                    ? fallbackText
+                                                                    : l10n
+                                                                        .chatAttachmentUnavailable;
+                                                            return Padding(
+                                                              padding:
+                                                                  _messageFallbackOuterPadding,
+                                                              child: Align(
+                                                                alignment: self
+                                                                    ? Alignment
+                                                                        .centerRight
+                                                                    : Alignment
+                                                                        .centerLeft,
+                                                                child:
+                                                                    ConstrainedBox(
+                                                                  constraints:
+                                                                      BoxConstraints(
+                                                                    maxWidth:
+                                                                        bubbleMaxWidth,
                                                                   ),
-                                                                  textDirection:
-                                                                      Directionality
-                                                                          .of(
-                                                                    context,
-                                                                  ),
-                                                                  textScaler: MediaQuery
-                                                                          .maybeTextScalerOf(
-                                                                        context,
-                                                                      ) ??
-                                                                      TextScaler
-                                                                          .noScaling,
-                                                                )..layout();
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  Text(
-                                                                    subjectText,
-                                                                    style:
-                                                                        subjectStyle,
-                                                                  ),
-                                                                );
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  Padding(
-                                                                    padding:
-                                                                        const EdgeInsets
-                                                                            .symmetric(
-                                                                      vertical:
-                                                                          _subjectDividerPadding,
+                                                                  child:
+                                                                      DecoratedBox(
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color:
+                                                                          bubbleColor,
+                                                                      borderRadius:
+                                                                          _bubbleBorderRadius(
+                                                                        isSelf:
+                                                                            self,
+                                                                        chainedPrevious:
+                                                                            chainedPrev,
+                                                                        chainedNext:
+                                                                            chainedNext,
+                                                                      ),
+                                                                      border: borderColor ==
+                                                                              Colors.transparent
+                                                                          ? null
+                                                                          : Border.all(
+                                                                              color: borderColor,
+                                                                            ),
                                                                     ),
                                                                     child:
-                                                                        DecoratedBox(
-                                                                      decoration:
-                                                                          BoxDecoration(
-                                                                        color: context
-                                                                            .colorScheme
-                                                                            .border,
-                                                                      ),
+                                                                        Padding(
+                                                                      padding:
+                                                                          _messageFallbackInnerPadding,
                                                                       child:
-                                                                          SizedBox(
-                                                                        height:
-                                                                            _subjectDividerThickness,
-                                                                        width: subjectPainter
-                                                                            .width,
+                                                                          Text(
+                                                                        resolvedFallback,
+                                                                        style:
+                                                                            baseTextStyle,
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                );
-                                                              }
-                                                              final rawRenderedText =
-                                                                  (message.customProperties?[
-                                                                              'renderedText']
-                                                                          as String?) ??
-                                                                      message
-                                                                          .text;
-                                                              final String
-                                                                  trimmedRenderedText =
-                                                                  rawRenderedText
-                                                                      .trim();
-                                                              final String?
-                                                                  normalizedHtmlBody =
-                                                                  HtmlContentCodec
-                                                                      .normalizeHtml(
-                                                                messageModel
-                                                                    .htmlBody,
-                                                              );
-                                                              final String?
-                                                                  normalizedHtmlText =
-                                                                  normalizedHtmlBody ==
-                                                                          null
-                                                                      ? null
-                                                                      : HtmlContentCodec
-                                                                          .toPlainText(
-                                                                          normalizedHtmlBody,
-                                                                        ).trim();
-                                                              final bool
-                                                                  isPlainTextHtml =
-                                                                  normalizedHtmlBody !=
-                                                                          null &&
-                                                                      HtmlContentCodec
-                                                                          .isPlainTextHtml(
-                                                                        normalizedHtmlBody,
-                                                                      );
-                                                              final bool shouldPreferPlainTextHtml = isPlainTextHtml ||
-                                                                  (isEmailChat &&
-                                                                      self &&
-                                                                      normalizedHtmlBody !=
-                                                                          null &&
-                                                                      normalizedHtmlText
-                                                                              ?.isNotEmpty ==
-                                                                          true &&
-                                                                      trimmedRenderedText
-                                                                          .isNotEmpty &&
-                                                                      normalizedHtmlText ==
-                                                                          trimmedRenderedText);
-                                                              final String?
-                                                                  taskShareText =
-                                                                  calendarTaskIcs
-                                                                      ?.toShareText(
-                                                                        context
-                                                                            .l10n,
-                                                                      )
-                                                                      .trim();
-                                                              final String?
-                                                                  fragmentFallbackText =
-                                                                  displayFragment ==
-                                                                          null
-                                                                      ? null
-                                                                      : CalendarFragmentFormatter(
-                                                                          context
-                                                                              .l10n,
-                                                                        )
-                                                                          .describe(
-                                                                            displayFragment,
-                                                                          )
-                                                                          .trim();
-                                                              final bool
-                                                                  hideFragmentText =
-                                                                  fragmentFallbackText !=
-                                                                          null &&
-                                                                      fragmentFallbackText
-                                                                          .isNotEmpty &&
-                                                                      fragmentFallbackText ==
-                                                                          trimmedRenderedText;
-                                                              final bool
-                                                                  hideAvailabilityText =
-                                                                  availabilityMessage !=
-                                                                          null &&
-                                                                      messageModel
-                                                                          .error
-                                                                          .isNone;
-                                                              final bool
-                                                                  hideTaskText =
-                                                                  taskShareText !=
-                                                                          null &&
-                                                                      taskShareText ==
-                                                                          trimmedRenderedText;
-                                                              final List<
-                                                                      InlineSpan>
-                                                                  surfaceDetails =
-                                                                  <InlineSpan>[
-                                                                surfaceTime,
-                                                                surfaceTransportDetail,
-                                                                if (self &&
-                                                                    surfaceStatus !=
-                                                                        null)
-                                                                  surfaceStatus,
-                                                                if (surfaceVerification !=
-                                                                    null)
-                                                                  surfaceVerification,
-                                                              ];
-                                                              final List<
-                                                                      InlineSpan>
-                                                                  shareMetadataDetails =
-                                                                  hideTaskText &&
-                                                                          calendarTaskIcs !=
-                                                                              null
-                                                                      ? _calendarTaskShareMetadata(
-                                                                          calendarTaskIcs,
-                                                                          context
-                                                                              .l10n,
-                                                                          surfaceDetailStyle,
-                                                                        )
-                                                                      : _emptyInlineSpans;
-                                                              final List<
-                                                                      InlineSpan>
-                                                                  fragmentFooterDetails =
-                                                                  hideFragmentText
-                                                                      ? surfaceDetails
-                                                                      : _emptyInlineSpans;
-                                                              final List<
-                                                                      InlineSpan>
-                                                                  availabilityFooterDetails =
-                                                                  hideAvailabilityText
-                                                                      ? surfaceDetails
-                                                                      : _emptyInlineSpans;
-                                                              final List<
-                                                                      InlineSpan>
-                                                                  taskFooterDetails =
-                                                                  hideTaskText
-                                                                      ? <InlineSpan>[
-                                                                          ...surfaceDetails,
-                                                                          ...shareMetadataDetails,
-                                                                        ]
-                                                                      : _emptyInlineSpans;
-                                                              CalendarAvailabilityShare?
-                                                                  availabilityShare;
-                                                              String?
-                                                                  availabilityShareRequesterJid;
-                                                              VoidCallback?
-                                                                  availabilityOnAccept;
-                                                              VoidCallback?
-                                                                  availabilityOnDecline;
-                                                              if (availabilityMessage !=
-                                                                  null) {
-                                                                availabilityMessage
-                                                                    .map(
-                                                                  share:
-                                                                      (value) {
-                                                                    final bool
-                                                                        isOwner =
-                                                                        availabilityActorId !=
-                                                                                null &&
-                                                                            _availabilitySenderMatchesClaim(
-                                                                              senderJid: availabilityActorId,
-                                                                              chatJid: chatEntity?.jid,
-                                                                              claimedJid: value.share.overlay.owner,
-                                                                              roomState: state.roomState,
-                                                                            );
-                                                                    final String?
-                                                                        requesterJid =
-                                                                        isOwner
-                                                                            ? null
-                                                                            : availabilityActorId;
-                                                                    availabilityShare =
-                                                                        value
-                                                                            .share;
-                                                                    availabilityShareRequesterJid =
-                                                                        requesterJid;
-                                                                  },
-                                                                  request:
-                                                                      (value) {
-                                                                    final requestOwnerJid = value
-                                                                        .request
-                                                                        .ownerJid
-                                                                        ?.trim();
-                                                                    final String? ownerJid = requestOwnerJid ==
-                                                                                null ||
-                                                                            requestOwnerJid.isEmpty
-                                                                        ? availabilityShareOwnersById[value.request.shareId] ??
-                                                                            availabilityCoordinator?.ownerJidForShare(
-                                                                              value.request.shareId,
-                                                                            )
-                                                                        : requestOwnerJid;
-                                                                    bool
-                                                                        isOwner =
-                                                                        false;
-                                                                    if (ownerJid !=
-                                                                            null &&
-                                                                        ownerJid
-                                                                            .trim()
-                                                                            .isNotEmpty &&
-                                                                        availabilityActorId !=
-                                                                            null) {
-                                                                      isOwner =
-                                                                          _availabilitySenderMatchesClaim(
-                                                                        senderJid:
-                                                                            availabilityActorId,
-                                                                        chatJid:
-                                                                            chatEntity?.jid,
-                                                                        claimedJid:
-                                                                            ownerJid,
-                                                                        roomState:
-                                                                            state.roomState,
-                                                                      );
-                                                                    } else if (chatEntity
-                                                                            ?.type ==
-                                                                        ChatType
-                                                                            .chat) {
-                                                                      final currentActor =
-                                                                          availabilityActorId;
-                                                                      if (currentActor !=
-                                                                          null) {
-                                                                        isOwner =
-                                                                            !_availabilitySenderMatchesClaim(
-                                                                          senderJid:
-                                                                              currentActor,
-                                                                          chatJid:
-                                                                              chatEntity?.jid,
-                                                                          claimedJid: value
-                                                                              .request
-                                                                              .requesterJid,
-                                                                          roomState:
-                                                                              state.roomState,
-                                                                        );
-                                                                      }
-                                                                    }
-                                                                    if (isOwner) {
-                                                                      availabilityOnAccept =
-                                                                          () =>
-                                                                              _handleAvailabilityAccept(
-                                                                                value.request,
-                                                                                canAddToPersonalCalendar: personalCalendarAvailable,
-                                                                                canAddToChatCalendar: chatCalendarAvailable,
-                                                                              );
-                                                                      availabilityOnDecline =
-                                                                          () =>
-                                                                              _handleAvailabilityDecline(
-                                                                                value.request,
-                                                                              );
-                                                                    }
-                                                                  },
-                                                                  response:
-                                                                      (_) {},
-                                                                );
-                                                              }
-                                                              if (availabilityMessage !=
-                                                                  null) {
-                                                                addExtra(
-                                                                  Builder(
-                                                                    builder:
-                                                                        (context) {
-                                                                      final CalendarAvailabilityShare?
-                                                                          resolvedShare =
-                                                                          availabilityShare;
-                                                                      final String?
-                                                                          resolvedRequesterJid =
-                                                                          availabilityShareRequesterJid;
-                                                                      final String?
-                                                                          resolvedOwnerLabel =
-                                                                          _resolveAvailabilityOwnerLabel(
-                                                                        ownerJid: resolvedShare
-                                                                            ?.overlay
-                                                                            .owner,
-                                                                        normalizedXmppSelfJid:
-                                                                            normalizedXmppSelfJid,
-                                                                        normalizedEmailSelfJid:
-                                                                            normalizedEmailSelfJid,
-                                                                        selfLabel: context
-                                                                            .l10n
-                                                                            .chatSenderYou,
-                                                                      );
-                                                                      final String?
-                                                                          resolvedChatLabel =
-                                                                          chatEntity
-                                                                              ?.displayName;
-                                                                      final VoidCallback? resolvedOnOpen = resolvedShare ==
-                                                                              null
-                                                                          ? null
-                                                                          : () =>
-                                                                              _openAvailabilityShareViewer(
-                                                                                share: resolvedShare,
-                                                                                requesterJid: resolvedRequesterJid,
-                                                                                chatCalendarAvailable: chatCalendarAvailable,
-                                                                                locate: context.read,
-                                                                                ownerLabel: resolvedOwnerLabel,
-                                                                                chatLabel: resolvedChatLabel,
-                                                                              );
-                                                                      return CalendarAvailabilityMessageCard(
-                                                                        message:
-                                                                            availabilityMessage,
-                                                                        footerDetails:
-                                                                            availabilityFooterDetails,
-                                                                        onOpen:
-                                                                            resolvedOnOpen,
-                                                                        onAccept:
-                                                                            availabilityOnAccept,
-                                                                        onDecline:
-                                                                            availabilityOnDecline,
-                                                                      );
-                                                                    },
-                                                                  ),
-                                                                  shape:
-                                                                      _calendarMessageCardShadowShape,
-                                                                );
-                                                              } else if (calendarTaskIcs !=
-                                                                  null) {
-                                                                final ShapeBorder
-                                                                    calendarTaskShape =
-                                                                    chatCalendarBloc ==
-                                                                            null
-                                                                        ? _calendarMessageCardShadowShape
-                                                                        : _calendarTaskShadowShape;
-                                                                addExtra(
-                                                                  chatCalendarBloc ==
-                                                                          null
-                                                                      ? CalendarFragmentCard(
-                                                                          fragment:
-                                                                              CalendarFragment.task(
-                                                                            task:
-                                                                                calendarTaskIcs,
-                                                                          ),
-                                                                          footerDetails:
-                                                                              taskFooterDetails,
-                                                                        )
-                                                                      : ChatCalendarTaskCard(
-                                                                          task:
-                                                                              calendarTaskIcs,
-                                                                          readOnly:
-                                                                              (calendarTaskIcsReadOnly && !self) || demoEmailCalendarEnabled,
-                                                                          requireImportConfirmation:
-                                                                              !self,
-                                                                          allowChatCopy:
-                                                                              !demoEmailCalendarEnabled,
-                                                                          demoQuickAdd:
-                                                                              demoEmailCalendarEnabled && !self,
-                                                                          footerDetails:
-                                                                              taskFooterDetails,
-                                                                          isShareFragment:
-                                                                              true,
-                                                                        ),
-                                                                  shape:
-                                                                      calendarTaskShape,
-                                                                );
-                                                              } else if (displayFragment !=
-                                                                  null) {
-                                                                final Widget
-                                                                    fragmentCard =
-                                                                    displayFragment
-                                                                        .maybeMap(
-                                                                  criticalPath: (
-                                                                    value,
-                                                                  ) =>
-                                                                      ChatCalendarCriticalPathCard(
-                                                                    path: value
-                                                                        .path,
-                                                                    tasks: value
-                                                                        .tasks,
-                                                                    footerDetails:
-                                                                        fragmentFooterDetails,
-                                                                  ),
-                                                                  orElse: () =>
-                                                                      CalendarFragmentCard(
-                                                                    fragment:
-                                                                        displayFragment,
-                                                                    footerDetails:
-                                                                        fragmentFooterDetails,
-                                                                  ),
-                                                                );
-                                                                addExtra(
-                                                                  fragmentCard,
-                                                                  shape:
-                                                                      _calendarMessageCardShadowShape,
-                                                                );
-                                                              }
-                                                              final String?
-                                                                  metadataIdForCaption =
-                                                                  attachmentIds
-                                                                          .isNotEmpty
-                                                                      ? attachmentIds
-                                                                          .first
-                                                                      : messageModel
-                                                                          .fileMetadataID;
-                                                              final bool
-                                                                  shouldRenderTextContent =
-                                                                  !hideFragmentText &&
-                                                                      !hideAvailabilityText &&
-                                                                      !hideTaskText;
-                                                              final bool hasAttachmentCaption = shouldRenderTextContent &&
-                                                                  trimmedRenderedText
-                                                                      .isEmpty &&
-                                                                  metadataIdForCaption !=
-                                                                      null &&
-                                                                  metadataIdForCaption
-                                                                      .isNotEmpty;
-                                                              if (hasAttachmentCaption) {
-                                                                final resolvedMetadataId =
-                                                                    metadataIdForCaption;
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  StreamBuilder<
-                                                                      FileMetadataData?>(
-                                                                    stream:
-                                                                        _metadataStreamFor(
-                                                                      resolvedMetadataId,
-                                                                    ),
-                                                                    initialData:
-                                                                        _metadataInitialFor(
-                                                                      resolvedMetadataId,
-                                                                    ),
-                                                                    builder: (
-                                                                      context,
-                                                                      snapshot,
-                                                                    ) {
-                                                                      final l10n =
-                                                                          context
-                                                                              .l10n;
-                                                                      final metadata =
-                                                                          snapshot
-                                                                              .data;
-                                                                      final filename =
-                                                                          metadata?.filename.trim() ??
-                                                                              '';
-                                                                      final resolvedFilename = filename
-                                                                              .isNotEmpty
-                                                                          ? filename
-                                                                          : l10n
-                                                                              .chatAttachmentFallbackLabel;
-                                                                      final sizeBytes =
-                                                                          metadata
-                                                                              ?.sizeBytes;
-                                                                      final sizeLabel = sizeBytes != null &&
-                                                                              sizeBytes >
-                                                                                  0
-                                                                          ? formatBytes(
-                                                                              sizeBytes,
-                                                                            )
-                                                                          : l10n
-                                                                              .chatAttachmentUnknownSize;
-                                                                      final caption =
-                                                                          l10n.chatAttachmentCaption(
-                                                                        resolvedFilename,
-                                                                        sizeLabel,
-                                                                      );
-                                                                      return DynamicInlineText(
-                                                                        key:
-                                                                            ValueKey(
-                                                                          bubbleContentKey,
-                                                                        ),
-                                                                        text:
-                                                                            TextSpan(
-                                                                          text:
-                                                                              caption,
-                                                                          style:
-                                                                              baseTextStyle,
-                                                                        ),
-                                                                        details: [
-                                                                          time,
-                                                                          transportDetail,
-                                                                          if (self &&
-                                                                              status != null)
-                                                                            status,
-                                                                          if (verification !=
-                                                                              null)
-                                                                            verification,
-                                                                        ],
-                                                                        onLinkTap:
-                                                                            _handleLinkTap,
-                                                                        onLinkLongPress:
-                                                                            _handleLinkTap,
-                                                                      );
-                                                                    },
-                                                                  ),
-                                                                );
-                                                              } else if (normalizedHtmlBody !=
-                                                                      null &&
-                                                                  shouldRenderTextContent &&
-                                                                  !shouldPreferPlainTextHtml) {
-                                                                // Render HTML email content
-                                                                final shouldLoadImages = context
-                                                                        .read<
-                                                                            SettingsCubit>()
-                                                                        .state
-                                                                        .autoLoadEmailImages ||
-                                                                    state
-                                                                        .loadedImageMessageIds
-                                                                        .contains(
-                                                                      messageModel
-                                                                          .id,
-                                                                    );
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  html_widget
-                                                                      .Html(
-                                                                    key:
-                                                                        ValueKey(
-                                                                      bubbleContentKey,
-                                                                    ),
-                                                                    data: HtmlContentCodec
-                                                                        .sanitizeHtml(
-                                                                      normalizedHtmlBody,
-                                                                    ),
-                                                                    extensions: [
-                                                                      createEmailImageExtension(
-                                                                        shouldLoad:
-                                                                            shouldLoadImages,
-                                                                        onLoadRequested: messageModel.id ==
-                                                                                null
-                                                                            ? null
-                                                                            : () {
-                                                                                context.read<ChatBloc>().add(
-                                                                                      ChatEmailImagesLoaded(
-                                                                                        messageModel.id!,
-                                                                                      ),
-                                                                                    );
-                                                                              },
-                                                                      ),
-                                                                    ],
-                                                                    style: {
-                                                                      'body': html_widget
-                                                                          .Style(
-                                                                        margin: html_widget
-                                                                            .Margins
-                                                                            .zero,
-                                                                        padding: html_widget
-                                                                            .HtmlPaddings
-                                                                            .zero,
-                                                                        color:
-                                                                            textColor,
-                                                                        fontSize:
-                                                                            html_widget.FontSize(
-                                                                          baseTextStyle.fontSize ??
-                                                                              14.0,
-                                                                        ),
-                                                                      ),
-                                                                      'a': html_widget
-                                                                          .Style(
-                                                                        color: self
-                                                                            ? colors.primaryForeground
-                                                                            : colors.primary,
-                                                                        textDecoration:
-                                                                            TextDecoration.underline,
-                                                                      ),
-                                                                    },
-                                                                    onLinkTap: (
-                                                                      url,
-                                                                      _,
-                                                                      __,
-                                                                    ) {
-                                                                      if (url !=
-                                                                          null) {
-                                                                        _handleLinkTap(
-                                                                          url,
-                                                                        );
-                                                                      }
-                                                                    },
-                                                                  ),
-                                                                );
-                                                                // Add details row below HTML content
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  Padding(
-                                                                    padding:
-                                                                        const EdgeInsets
-                                                                            .only(
-                                                                      top: 4,
-                                                                    ),
-                                                                    child: Text
-                                                                        .rich(
-                                                                      TextSpan(
-                                                                        children: [
-                                                                          time,
-                                                                          const TextSpan(
-                                                                            text:
-                                                                                ' ',
-                                                                          ),
-                                                                          transportDetail,
-                                                                          if (self &&
-                                                                              status != null) ...[
-                                                                            const TextSpan(
-                                                                              text: ' ',
-                                                                            ),
-                                                                            status,
-                                                                          ],
-                                                                          if (verification !=
-                                                                              null) ...[
-                                                                            const TextSpan(
-                                                                              text: ' ',
-                                                                            ),
-                                                                            verification,
-                                                                          ],
-                                                                        ],
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              } else if (shouldRenderTextContent) {
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  DynamicInlineText(
-                                                                    key:
-                                                                        ValueKey(
-                                                                      bubbleContentKey,
-                                                                    ),
-                                                                    text: parsedText
-                                                                        .body,
-                                                                    details: [
-                                                                      time,
-                                                                      transportDetail,
-                                                                      if (self &&
-                                                                          status !=
-                                                                              null)
-                                                                        status,
-                                                                      if (verification !=
-                                                                          null)
-                                                                        verification,
-                                                                    ],
-                                                                    links: parsedText
-                                                                        .links,
-                                                                    onLinkTap:
-                                                                        _handleLinkTap,
-                                                                    onLinkLongPress:
-                                                                        _handleLinkTap,
-                                                                  ),
-                                                                );
-                                                              }
-                                                              if (message.customProperties?[
-                                                                      'retracted'] ??
-                                                                  false) {
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  Text(
-                                                                    l10n.chatMessageRetracted,
-                                                                    style:
-                                                                        extraStyle,
-                                                                  ),
-                                                                );
-                                                              } else if (message
-                                                                          .customProperties?[
-                                                                      'edited'] ??
-                                                                  false) {
-                                                                bubbleTextChildren
-                                                                    .add(
-                                                                  Text(
-                                                                    l10n.chatMessageEdited,
-                                                                    style:
-                                                                        extraStyle,
-                                                                  ),
-                                                                );
-                                                              }
-                                                            }
-                                                            final bool
-                                                                hasBubbleText =
-                                                                bubbleTextChildren
-                                                                    .isNotEmpty;
-                                                            if (attachmentIds
-                                                                .isNotEmpty) {
-                                                              final bool
-                                                                  hasBubbleAnchor =
-                                                                  hasBubbleText ||
-                                                                      showCompactReactions ||
-                                                                      showReplyStrip ||
-                                                                      showRecipientCutout;
-                                                              final allowAttachmentByTrust =
-                                                                  _shouldAllowAttachment(
-                                                                isSelf: self,
-                                                                chat:
-                                                                    state.chat,
-                                                              );
-                                                              final allowAttachmentOnce =
-                                                                  attachmentsBlockedForChat
-                                                                      ? false
-                                                                      : _isOneTimeAttachmentAllowed(
-                                                                          messageModel
-                                                                              .stanzaID,
-                                                                        );
-                                                              final allowAttachment =
-                                                                  !attachmentsBlockedForChat &&
-                                                                      (allowAttachmentByTrust ||
-                                                                          allowAttachmentOnce);
-                                                              final chatAutoDownloadAllowed = (state
-                                                                          .chat
-                                                                          ?.attachmentAutoDownload ??
-                                                                      context
-                                                                          .watch<
-                                                                              SettingsCubit>()
-                                                                          .state
-                                                                          .defaultChatAttachmentAutoDownload)
-                                                                  .isAllowed;
-                                                              final autoDownloadAllowed =
-                                                                  allowAttachment &&
-                                                                      chatAutoDownloadAllowed;
-                                                              final emailService =
-                                                                  RepositoryProvider
-                                                                      .of<EmailService?>(
-                                                                          context);
-                                                              final emailDownloadDelegate =
-                                                                  isEmailChat &&
-                                                                          emailService !=
-                                                                              null
-                                                                      ? AttachmentDownloadDelegate(
-                                                                          () =>
-                                                                              emailService.downloadFullMessage(
-                                                                            messageModel,
-                                                                          ),
-                                                                        )
-                                                                      : null;
-                                                              final autoDownloadUserInitiated =
-                                                                  allowAttachmentOnce;
-                                                              for (var index =
-                                                                      0;
-                                                                  index <
-                                                                      attachmentIds
-                                                                          .length;
-                                                                  index += 1) {
-                                                                final attachmentId =
-                                                                    attachmentIds[
-                                                                        index];
-                                                                final bool
-                                                                    hasAttachmentAbove =
-                                                                    index > 0 ||
-                                                                        hasBubbleAnchor;
-                                                                final bool
-                                                                    hasAttachmentBelow =
-                                                                    index <
-                                                                        attachmentIds.length -
-                                                                            1;
-                                                                final OutlinedBorder
-                                                                    attachmentShape =
-                                                                    _attachmentSurfaceShape(
-                                                                  isSelf: self,
-                                                                  chainedPrevious:
-                                                                      hasAttachmentAbove,
-                                                                  chainedNext:
-                                                                      hasAttachmentBelow,
-                                                                );
-                                                                addExtra(
-                                                                  ChatAttachmentPreview(
-                                                                    stanzaId:
-                                                                        messageModel
-                                                                            .stanzaID,
-                                                                    metadataStream:
-                                                                        _metadataStreamFor(
-                                                                      attachmentId,
-                                                                    ),
-                                                                    initialMetadata:
-                                                                        _metadataInitialFor(
-                                                                      attachmentId,
-                                                                    ),
-                                                                    allowed:
-                                                                        allowAttachment,
-                                                                    autoDownloadImages: context
-                                                                        .watch<
-                                                                            SettingsCubit>()
-                                                                        .state
-                                                                        .autoDownloadImages,
-                                                                    autoDownloadVideos: context
-                                                                        .watch<
-                                                                            SettingsCubit>()
-                                                                        .state
-                                                                        .autoDownloadVideos,
-                                                                    autoDownloadDocuments: context
-                                                                        .watch<
-                                                                            SettingsCubit>()
-                                                                        .state
-                                                                        .autoDownloadDocuments,
-                                                                    autoDownloadArchives: context
-                                                                        .watch<
-                                                                            SettingsCubit>()
-                                                                        .state
-                                                                        .autoDownloadArchives,
-                                                                    autoDownloadAllowed:
-                                                                        autoDownloadAllowed,
-                                                                    autoDownloadUserInitiated:
-                                                                        autoDownloadUserInitiated,
-                                                                    downloadDelegate:
-                                                                        emailDownloadDelegate,
-                                                                    onAllowPressed: allowAttachment
-                                                                        ? null
-                                                                        : attachmentsBlockedForChat
-                                                                            ? null
-                                                                            : () => _approveAttachment(
-                                                                                  message: messageModel,
-                                                                                  senderJid: messageModel.senderJid,
-                                                                                  stanzaId: messageModel.stanzaID,
-                                                                                  isSelf: self,
-                                                                                  isEmailChat: isEmailChat,
-                                                                                  senderEmail: state.chat?.emailAddress,
-                                                                                ),
-                                                                    surfaceShape:
-                                                                        attachmentShape,
-                                                                  ),
-                                                                  shape:
-                                                                      attachmentShape,
-                                                                  spacing:
-                                                                      _attachmentPreviewSpacing,
-                                                                );
-                                                              }
-                                                            }
-                                                            var bubbleBottomInset =
-                                                                0.0;
-                                                            if (showCompactReactions) {
-                                                              bubbleBottomInset =
-                                                                  _reactionBubbleInset;
-                                                            }
-                                                            if (showReplyStrip) {
-                                                              bubbleBottomInset =
-                                                                  math.max(
-                                                                bubbleBottomInset,
-                                                                _recipientBubbleInset,
-                                                              );
-                                                            }
-                                                            if (showRecipientCutout) {
-                                                              bubbleBottomInset =
-                                                                  math.max(
-                                                                bubbleBottomInset,
-                                                                _recipientBubbleInset,
-                                                              );
-                                                            }
-                                                            final isRenderableBubble =
-                                                                !(isSelectionSpacer ||
-                                                                    isEmptyState);
-                                                            final requiresAvatarHeadroom =
-                                                                isGroupChat &&
-                                                                    isRenderableBubble &&
-                                                                    !self;
-                                                            final hasAvatarSlot =
-                                                                requiresAvatarHeadroom &&
-                                                                    !chainedPrev;
-                                                            EdgeInsetsGeometry
-                                                                bubblePadding =
-                                                                _bubblePadding;
-                                                            if (bubbleBottomInset >
-                                                                0) {
-                                                              bubblePadding =
-                                                                  bubblePadding
-                                                                      .add(
-                                                                EdgeInsets.only(
-                                                                  bottom:
-                                                                      bubbleBottomInset,
                                                                 ),
-                                                              );
-                                                            }
-                                                            if (selectionOverlay !=
-                                                                null) {
-                                                              bubblePadding =
-                                                                  bubblePadding
-                                                                      .add(
-                                                                EdgeInsets.only(
-                                                                  left: self
-                                                                      ? _selectionBubbleOutboundSpacing
-                                                                      : 0,
-                                                                  right: self
-                                                                      ? 0
-                                                                      : _selectionBubbleInboundSpacing,
-                                                                ),
-                                                              );
-                                                              bubblePadding =
-                                                                  bubblePadding
-                                                                      .add(
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                  vertical:
-                                                                      _selectionBubbleVerticalInset,
-                                                                ),
-                                                              );
-                                                            }
-                                                            if (hasAvatarSlot) {
-                                                              bubblePadding =
-                                                                  bubblePadding
-                                                                      .add(
-                                                                const EdgeInsets
-                                                                    .only(
-                                                                  left:
-                                                                      _messageAvatarContentInset,
-                                                                ),
-                                                              );
-                                                            }
-                                                            final bool
-                                                                hasAttachmentExtras =
-                                                                attachmentIds
-                                                                    .isNotEmpty;
-                                                            final bubbleBorderRadius =
-                                                                _bubbleBorderRadius(
-                                                              isSelf: self,
-                                                              chainedPrevious:
-                                                                  chainedPrev,
-                                                              chainedNext:
-                                                                  chainedNext,
-                                                              isSelected:
-                                                                  isSelected,
-                                                              flattenBottom:
-                                                                  hasAttachmentExtras,
+                                                              ),
                                                             );
-                                                            final selectionAllowance =
-                                                                selectionOverlay !=
-                                                                        null
-                                                                    ? _selectionOuterInset
-                                                                    : 0.0;
-                                                            final cappedBubbleWidth =
-                                                                math.min(
-                                                              bubbleMaxWidth,
-                                                              (self
-                                                                      ? outboundClampedBubbleWidth
-                                                                      : inboundClampedBubbleWidth) +
-                                                                  selectionAllowance,
-                                                            );
-                                                            final bubbleConstraints =
-                                                                BoxConstraints(
-                                                              maxWidth:
-                                                                  cappedBubbleWidth,
-                                                            );
-                                                            final bubbleHighlightColor =
-                                                                context
-                                                                    .colorScheme
-                                                                    .primary;
-                                                            final bool
-                                                                hasBubbleCutout =
-                                                                showCompactReactions ||
-                                                                    showReplyStrip ||
-                                                                    showRecipientCutout;
-                                                            final double
-                                                                bubbleAnchorHeight =
-                                                                hasBubbleText ||
-                                                                        !hasBubbleCutout
-                                                                    ? 0.0
-                                                                    : math.max(
-                                                                        showCompactReactions
-                                                                            ? _reactionCutoutDepth
-                                                                            : 0.0,
-                                                                        (showReplyStrip ||
-                                                                                showRecipientCutout)
-                                                                            ? _recipientCutoutDepth
-                                                                            : 0.0,
-                                                                      );
-                                                            final Color
-                                                                bubbleSurfaceColor =
-                                                                hasBubbleText
-                                                                    ? bubbleColor
-                                                                    : Colors
-                                                                        .transparent;
-                                                            final Color
-                                                                bubbleSurfaceBorder =
-                                                                hasBubbleText
-                                                                    ? borderColor
-                                                                    : Colors
-                                                                        .transparent;
-                                                            final bubbleContent =
-                                                                hasBubbleText
-                                                                    ? Padding(
-                                                                        padding:
-                                                                            bubblePadding,
-                                                                        child:
-                                                                            Column(
-                                                                          crossAxisAlignment:
-                                                                              CrossAxisAlignment.start,
-                                                                          spacing:
-                                                                              _messageExtraSpacing,
-                                                                          children:
-                                                                              bubbleTextChildren,
-                                                                        ),
-                                                                      )
-                                                                    : bubbleAnchorHeight >
-                                                                            0
-                                                                        ? SizedBox(
-                                                                            width:
-                                                                                bubbleConstraints.maxWidth,
-                                                                            height:
-                                                                                bubbleAnchorHeight,
-                                                                          )
-                                                                        : const SizedBox
-                                                                            .shrink();
-                                                            final nextIsTailSpacer =
-                                                                next?.customProperties?[
-                                                                        'selectionSpacer'] ==
-                                                                    true;
-                                                            final isLatestBubble =
-                                                                isRenderableBubble &&
-                                                                    (next ==
-                                                                            null ||
-                                                                        nextIsTailSpacer);
-                                                            final baseOuterBottom =
-                                                                isLatestBubble
-                                                                    ? 12.0
-                                                                    : 2.0;
-                                                            var extraOuterBottom =
-                                                                0.0;
-                                                            if (showCompactReactions) {
-                                                              extraOuterBottom =
-                                                                  math.max(
-                                                                extraOuterBottom,
-                                                                _reactionCutoutDepth,
-                                                              );
-                                                            }
-                                                            if (showReplyStrip) {
-                                                              extraOuterBottom =
-                                                                  math.max(
-                                                                extraOuterBottom,
-                                                                _recipientCutoutDepth,
-                                                              );
-                                                            }
-                                                            if (showRecipientCutout) {
-                                                              extraOuterBottom =
-                                                                  math.max(
-                                                                extraOuterBottom,
-                                                                _recipientCutoutDepth,
-                                                              );
-                                                            }
-                                                            double
-                                                                extraOuterLeft =
-                                                                0;
-                                                            double
-                                                                extraOuterRight =
-                                                                0;
-                                                            if (hasAvatarSlot) {
-                                                              final occupantIdCandidate =
-                                                                  messageModel
-                                                                      .occupantID
-                                                                      ?.trim();
-                                                              final occupantId = occupantIdCandidate !=
-                                                                          null &&
-                                                                      occupantIdCandidate
-                                                                          .isNotEmpty
-                                                                  ? occupantIdCandidate
-                                                                  : messageModel
-                                                                      .senderJid;
-                                                              final occupant = state
-                                                                      .roomState
-                                                                      ?.occupants[
-                                                                  occupantId];
-                                                              final realJid =
-                                                                  occupant
-                                                                      ?.realJid
-                                                                      ?.trim();
-                                                              final bareRealJid = realJid ==
-                                                                          null ||
-                                                                      realJid
-                                                                          .isEmpty
+                                                          }
+                                                          final CalendarFragment?
+                                                              rawFragment =
+                                                              message.customProperties?[
+                                                                      _calendarFragmentPropertyKey]
+                                                                  as CalendarFragment?;
+                                                          final CalendarFragment?
+                                                              displayFragment =
+                                                              rawFragment;
+                                                          final CalendarTask?
+                                                              calendarTaskIcs =
+                                                              message.customProperties?[
+                                                                      _calendarTaskIcsPropertyKey]
+                                                                  as CalendarTask?;
+                                                          final bool
+                                                              calendarTaskIcsReadOnly =
+                                                              (message.customProperties?[
+                                                                          _calendarTaskIcsReadOnlyPropertyKey]
+                                                                      as bool?) ??
+                                                                  _calendarTaskIcsReadOnlyFallback;
+                                                          final CalendarAvailabilityMessage?
+                                                              availabilityMessage =
+                                                              message.customProperties?[
+                                                                      _calendarAvailabilityPropertyKey]
+                                                                  as CalendarAvailabilityMessage?;
+                                                          final verification =
+                                                              trusted == null
                                                                   ? null
-                                                                  : realJid
-                                                                          .contains(
-                                                                      '/',
-                                                                    )
-                                                                      ? realJid
-                                                                          .split(
-                                                                            '/',
-                                                                          )
-                                                                          .first
-                                                                      : realJid;
-                                                              final normalizedBareRealJid =
-                                                                  bareRealJid
-                                                                      ?.toLowerCase();
-                                                              final senderJid =
-                                                                  messageModel
-                                                                      .senderJid
-                                                                      .trim();
-                                                              final senderBareJid =
-                                                                  senderJid
-                                                                          .contains(
-                                                                '/',
-                                                              )
-                                                                      ? senderJid
-                                                                          .split(
-                                                                            '/',
-                                                                          )
-                                                                          .first
-                                                                      : senderJid;
-                                                              final normalizedSenderBareJid =
-                                                                  senderBareJid
-                                                                      .toLowerCase();
-                                                              final isRoomChat =
-                                                                  state.roomState !=
-                                                                      null;
-                                                              final avatarLookupJid = (normalizedBareRealJid !=
-                                                                          null &&
-                                                                      normalizedBareRealJid
-                                                                          .isNotEmpty)
-                                                                  ? normalizedBareRealJid
-                                                                  : !isRoomChat &&
-                                                                          normalizedSenderBareJid
-                                                                              .isNotEmpty
-                                                                      ? normalizedSenderBareJid
-                                                                      : null;
-                                                              final messageAvatarPath = avatarLookupJid ==
+                                                                  : iconDetailSpan(
+                                                                      trusted
+                                                                          .toShieldIcon,
+                                                                      trusted
+                                                                          ? axiGreen
+                                                                          : colors
+                                                                              .destructive,
+                                                                      baseStyle:
+                                                                          detailStyle,
+                                                                    );
+                                                          final surfaceVerification =
+                                                              trusted == null
+                                                                  ? null
+                                                                  : iconDetailSpan(
+                                                                      trusted
+                                                                          .toShieldIcon,
+                                                                      trusted
+                                                                          ? axiGreen
+                                                                          : colors
+                                                                              .destructive,
+                                                                      baseStyle:
+                                                                          surfaceDetailStyle,
+                                                                    );
+                                                          final quotedModel = (message
+                                                                          .customProperties?[
+                                                                      'quoted']
+                                                                  as Message?) ??
+                                                              (messageModel
+                                                                          .quoting ==
                                                                       null
                                                                   ? null
-                                                                  : rosterAvatarPathsByJid[
-                                                                          avatarLookupJid] ??
-                                                                      chatAvatarPathsByJid[
-                                                                          avatarLookupJid];
-                                                              avatarOverlay =
-                                                                  _MessageAvatar(
-                                                                jid: messageModel
-                                                                    .senderJid,
-                                                                size:
-                                                                    _messageAvatarSize,
-                                                                avatarPath:
-                                                                    messageAvatarPath,
-                                                              );
-                                                              avatarStyle =
-                                                                  const CutoutStyle(
-                                                                depth:
-                                                                    _messageAvatarCutoutDepth,
-                                                                cornerRadius:
-                                                                    _messageAvatarCutoutRadius,
-                                                                padding:
-                                                                    _messageAvatarCutoutPadding,
-                                                                offset:
-                                                                    Offset.zero,
-                                                                minThickness:
-                                                                    _messageAvatarCutoutMinThickness,
-                                                                cornerClearance:
-                                                                    _messageAvatarCornerClearance,
-                                                                alignment:
-                                                                    _messageAvatarCutoutAlignment,
-                                                              );
-                                                              avatarAnchor =
-                                                                  ChatBubbleCutoutAnchor
-                                                                      .left;
-                                                            }
-                                                            extraOuterLeft =
-                                                                requiresAvatarHeadroom
-                                                                    ? _messageAvatarOuterInset
-                                                                    : 0;
-                                                            final outerPadding =
-                                                                EdgeInsets.only(
-                                                              top: 2,
-                                                              bottom: baseOuterBottom +
-                                                                  extraOuterBottom,
-                                                              left: _messageListHorizontalPadding +
-                                                                  extraOuterLeft,
-                                                              right: _messageListHorizontalPadding +
-                                                                  extraOuterRight,
-                                                            );
-                                                            final bubble =
-                                                                TweenAnimationBuilder<
-                                                                    double>(
-                                                              tween:
-                                                                  Tween<double>(
-                                                                begin: 0,
-                                                                end: isSelected
-                                                                    ? 1.0
-                                                                    : 0.0,
-                                                              ),
-                                                              duration:
-                                                                  _bubbleFocusDuration,
-                                                              curve:
-                                                                  _bubbleFocusCurve,
-                                                              child:
-                                                                  bubbleContent,
-                                                              builder: (
-                                                                context,
-                                                                shadowValue,
-                                                                child,
-                                                              ) {
-                                                                final bubbleSurface =
-                                                                    ChatBubbleSurface(
-                                                                  isSelf: self,
-                                                                  backgroundColor:
-                                                                      bubbleSurfaceColor,
-                                                                  borderColor:
-                                                                      bubbleSurfaceBorder,
-                                                                  borderRadius:
-                                                                      bubbleBorderRadius,
-                                                                  shadowOpacity:
-                                                                      hasBubbleText
-                                                                          ? shadowValue
-                                                                          : 0.0,
-                                                                  shadows:
-                                                                      _selectedBubbleShadows(
-                                                                    bubbleHighlightColor,
-                                                                  ),
-                                                                  bubbleWidthFraction:
-                                                                      _cutoutMaxWidthFraction,
-                                                                  cornerClearance:
-                                                                      _bubbleRadius +
-                                                                          _reactionCornerClearance,
-                                                                  body: child!,
-                                                                  reactionOverlay: showReplyStrip
-                                                                      ? _ReplyStrip(
-                                                                          participants:
-                                                                              replyParticipants,
-                                                                          onRecipientTap:
-                                                                              (
-                                                                            chat,
-                                                                          ) {
-                                                                            final chatsCubit =
-                                                                                context.read<ChatsCubit?>();
-                                                                            if (chatsCubit !=
-                                                                                null) {
-                                                                              chatsCubit.pushChat(
-                                                                                jid: chat.jid,
-                                                                              );
-                                                                            }
-                                                                          },
-                                                                        )
-                                                                      : showCompactReactions
-                                                                          ? _ReactionStrip(
-                                                                              reactions: reactions,
-                                                                              onReactionTap: canReact
-                                                                                  ? (
-                                                                                      emoji,
-                                                                                    ) =>
-                                                                                      _toggleQuickReaction(
-                                                                                        messageModel,
-                                                                                        emoji,
-                                                                                      )
-                                                                                  : null,
-                                                                            )
-                                                                          : null,
-                                                                  reactionStyle: showReplyStrip
-                                                                      ? const CutoutStyle(
-                                                                          depth:
-                                                                              _recipientCutoutDepth,
-                                                                          cornerRadius:
-                                                                              _recipientCutoutRadius,
-                                                                          padding:
-                                                                              _recipientCutoutPadding,
-                                                                          offset:
-                                                                              _recipientCutoutOffset,
-                                                                          minThickness:
-                                                                              _recipientCutoutMinThickness,
-                                                                        )
-                                                                      : showCompactReactions
-                                                                          ? const CutoutStyle(
-                                                                              depth: _reactionCutoutDepth,
-                                                                              cornerRadius: _reactionCutoutRadius,
-                                                                              padding: _reactionCutoutPadding,
-                                                                              offset: _reactionStripOffset,
-                                                                              minThickness: _reactionCutoutMinThickness,
-                                                                            )
-                                                                          : null,
-                                                                  recipientOverlay:
-                                                                      recipientOverlay,
-                                                                  recipientStyle:
-                                                                      recipientStyle,
-                                                                  recipientAnchor:
-                                                                      recipientAnchor,
-                                                                  avatarOverlay:
-                                                                      avatarOverlay,
-                                                                  avatarStyle:
-                                                                      avatarStyle,
-                                                                  avatarAnchor:
-                                                                      avatarAnchor,
-                                                                  selectionOverlay:
-                                                                      selectionOverlay,
-                                                                  selectionStyle:
-                                                                      selectionStyle,
-                                                                  selectionFollowsSelfEdge:
-                                                                      false,
-                                                                );
-                                                                return bubbleSurface;
-                                                              },
-                                                            );
-                                                            final shadowedBubble =
-                                                                ConstrainedBox(
-                                                              constraints:
-                                                                  bubbleConstraints,
-                                                              child: bubble,
-                                                            );
-                                                            final canResend =
-                                                                message.status ==
-                                                                    MessageStatus
-                                                                        .failed;
-                                                            final canEdit =
-                                                                message.status ==
-                                                                    MessageStatus
-                                                                        .failed;
-                                                            final includeSelectAction =
-                                                                !_multiSelectActive;
-                                                            final isPinned =
-                                                                pinnedStanzaIds
-                                                                    .contains(
-                                                              messageModel
-                                                                  .stanzaID,
-                                                            );
-                                                            void onReply() {
-                                                              context
-                                                                  .read<
-                                                                      ChatBloc>()
-                                                                  .add(
-                                                                    ChatQuoteRequested(
-                                                                      messageModel,
-                                                                    ),
-                                                                  );
-                                                              _focusNode
-                                                                  .requestFocus();
-                                                            }
-
-                                                            VoidCallback?
-                                                                onForward;
-                                                            if (!(isInviteMessage ||
-                                                                inviteRevoked ||
-                                                                isInviteRevocationMessage)) {
-                                                              onForward = () =>
-                                                                  _handleForward(
-                                                                    messageModel,
-                                                                  );
-                                                            }
-                                                            void onCopy() =>
-                                                                _copyMessage(
-                                                                  dashMessage:
-                                                                      message,
-                                                                  model:
-                                                                      messageModel,
-                                                                );
-                                                            void onShare() =>
-                                                                _shareMessage(
-                                                                  dashMessage:
-                                                                      message,
-                                                                  model:
-                                                                      messageModel,
-                                                                );
-                                                            void onAddToCalendar() =>
-                                                                _handleAddToCalendar(
-                                                                  dashMessage:
-                                                                      message,
-                                                                  model:
-                                                                      messageModel,
-                                                                );
-                                                            void onDetails() =>
-                                                                _showMessageDetails(
-                                                                  message,
-                                                                );
-                                                            VoidCallback?
-                                                                onSelect;
-                                                            if (includeSelectAction) {
-                                                              onSelect = () =>
-                                                                  _startMultiSelect(
-                                                                    messageModel,
-                                                                  );
-                                                            }
-                                                            VoidCallback?
-                                                                onResend;
-                                                            if (canResend) {
-                                                              onResend = () =>
-                                                                  context
-                                                                      .read<
-                                                                          ChatBloc>()
-                                                                      .add(
-                                                                        ChatMessageResendRequested(
-                                                                          messageModel,
-                                                                        ),
-                                                                      );
-                                                            }
-                                                            VoidCallback?
-                                                                onEdit;
-                                                            if (canEdit) {
-                                                              onEdit =
-                                                                  () async {
-                                                                await _handleEditMessage(
-                                                                  messageModel,
-                                                                );
-                                                              };
-                                                            }
-                                                            VoidCallback?
-                                                                onPinToggle;
-                                                            if (canTogglePins) {
-                                                              onPinToggle =
-                                                                  () => context
-                                                                      .read<
-                                                                          ChatBloc>()
-                                                                      .add(
-                                                                        ChatMessagePinRequested(
-                                                                          message:
-                                                                              messageModel,
-                                                                          pin:
-                                                                              !isPinned,
-                                                                        ),
-                                                                      );
-                                                            }
-                                                            VoidCallback?
-                                                                onRevokeInvite;
-                                                            if (isInviteMessage &&
-                                                                self) {
-                                                              onRevokeInvite =
-                                                                  () => context
-                                                                      .read<
-                                                                          ChatBloc>()
-                                                                      .add(
-                                                                        ChatInviteRevocationRequested(
-                                                                          messageModel,
-                                                                        ),
-                                                                      );
-                                                            }
-
-                                                            final Widget
-                                                                actionBar =
-                                                                KeyedSubtree(
-                                                              key: _selectionActionBarKey ??=
-                                                                  GlobalKey(),
-                                                              child:
-                                                                  _MessageActionBar(
-                                                                onReply:
-                                                                    onReply,
-                                                                onForward:
-                                                                    onForward,
-                                                                onCopy: onCopy,
-                                                                onShare:
-                                                                    onShare,
-                                                                shareStatus:
-                                                                    _shareRequestStatus,
-                                                                onAddToCalendar:
-                                                                    onAddToCalendar,
-                                                                onDetails:
-                                                                    onDetails,
-                                                                onSelect:
-                                                                    onSelect,
-                                                                onResend:
-                                                                    onResend,
-                                                                onEdit: onEdit,
-                                                                onPinToggle:
-                                                                    onPinToggle,
-                                                                isPinned:
-                                                                    isPinned,
-                                                                onRevokeInvite:
-                                                                    onRevokeInvite,
-                                                              ),
-                                                            );
-                                                            if (isSingleSelection) {
-                                                              _activeSelectionExtrasKey ??=
-                                                                  GlobalKey();
-                                                              _scheduleSelectionAutoscroll();
-                                                              _requestSelectionControlsMeasurement();
-                                                            } else if (_activeSelectionExtrasKey !=
-                                                                    null &&
-                                                                _selectedMessageId ==
+                                                                  : messageById[
+                                                                      messageModel
+                                                                          .quoting!]);
+                                                          final reactions = (message
+                                                                          .customProperties?[
+                                                                      'reactions']
+                                                                  as List<
+                                                                      ReactionPreview>?) ??
+                                                              const <ReactionPreview>[];
+                                                          final replyParticipants = (message
+                                                                          .customProperties?[
+                                                                      'replyParticipants']
+                                                                  as List<
+                                                                      chat_models
+                                                                      .Chat>?) ??
+                                                              const <chat_models
+                                                                  .Chat>[];
+                                                          final attachmentIds =
+                                                              (message.customProperties?[
+                                                                          'attachmentIds']
+                                                                      as List<
+                                                                          String>?) ??
+                                                                  const <String>[];
+                                                          final showReplyStrip =
+                                                              isEmailMessage &&
+                                                                  replyParticipants
+                                                                      .isNotEmpty;
+                                                          final canReact =
+                                                              !isEmailChat;
+                                                          final isSingleSelection =
+                                                              !_multiSelectActive &&
+                                                                  _selectedMessageId ==
+                                                                      messageModel
+                                                                          .stanzaID;
+                                                          final isMultiSelection =
+                                                              _multiSelectActive &&
+                                                                  _multiSelectedMessageIds
+                                                                      .contains(
                                                                     messageModel
-                                                                        .stanzaID) {
-                                                              _activeSelectionExtrasKey =
-                                                                  null;
-                                                            }
-                                                            final attachmentsKey =
-                                                                isSingleSelection
-                                                                    ? _activeSelectionExtrasKey
-                                                                    : null;
-                                                            final recipientHeadroom =
-                                                                showRecipientCutout
-                                                                    ? _recipientCutoutDepth
-                                                                    : 0.0;
-                                                            final attachmentTopPadding =
-                                                                (isSingleSelection
-                                                                        ? _selectionAttachmentSelectedGap
-                                                                        : _selectionAttachmentBaseGap) +
-                                                                    recipientHeadroom;
-                                                            final attachmentBottomPadding =
-                                                                _selectionExtrasViewportGap +
-                                                                    (showReactionManager
-                                                                        ? _reactionManagerShadowGap
-                                                                        : 0);
-                                                            final attachmentPadding =
-                                                                EdgeInsets.only(
-                                                              top:
-                                                                  attachmentTopPadding,
-                                                              bottom:
-                                                                  attachmentBottomPadding,
-                                                              left:
-                                                                  _chatHorizontalPadding,
-                                                              right:
-                                                                  _chatHorizontalPadding,
+                                                                        .stanzaID,
+                                                                  );
+                                                          final isSelected =
+                                                              isSingleSelection ||
+                                                                  isMultiSelection;
+                                                          final showReactionManager =
+                                                              canReact &&
+                                                                  isSingleSelection;
+                                                          final showCompactReactions =
+                                                              !showReplyStrip &&
+                                                                  reactions
+                                                                      .isNotEmpty &&
+                                                                  !showReactionManager;
+                                                          final isInviteMessage = (message
+                                                                          .customProperties?[
+                                                                      'isInvite']
+                                                                  as bool?) ??
+                                                              (messageModel
+                                                                      .pseudoMessageType ==
+                                                                  PseudoMessageType
+                                                                      .mucInvite);
+                                                          final isInviteRevocationMessage = (message
+                                                                          .customProperties?[
+                                                                      'isInviteRevocation']
+                                                                  as bool?) ??
+                                                              (messageModel
+                                                                      .pseudoMessageType ==
+                                                                  PseudoMessageType
+                                                                      .mucInviteRevocation);
+                                                          final inviteRevoked =
+                                                              (message.customProperties?[
+                                                                          'inviteRevoked']
+                                                                      as bool?) ??
+                                                                  false;
+                                                          final showRecipientCutout =
+                                                              !showCompactReactions &&
+                                                                  isEmailChat &&
+                                                                  recipientCutoutParticipants
+                                                                          .length >
+                                                                      1;
+                                                          Widget?
+                                                              recipientOverlay;
+                                                          CutoutStyle?
+                                                              recipientStyle;
+                                                          var recipientAnchor =
+                                                              ChatBubbleCutoutAnchor
+                                                                  .bottom;
+                                                          Widget? avatarOverlay;
+                                                          CutoutStyle?
+                                                              avatarStyle;
+                                                          var avatarAnchor =
+                                                              ChatBubbleCutoutAnchor
+                                                                  .left;
+                                                          if (showRecipientCutout) {
+                                                            recipientOverlay =
+                                                                _RecipientCutoutStrip(
+                                                              recipients:
+                                                                  recipientCutoutParticipants,
                                                             );
-                                                            final reactionManager =
-                                                                showReactionManager
-                                                                    ? KeyedSubtree(
-                                                                        key: _reactionManagerKey ??=
-                                                                            GlobalKey(),
-                                                                        child:
-                                                                            _ReactionManager(
-                                                                          reactions:
-                                                                              reactions,
-                                                                          onToggle: (
-                                                                            emoji,
-                                                                          ) =>
-                                                                              _toggleQuickReaction(
-                                                                            messageModel,
-                                                                            emoji,
-                                                                          ),
-                                                                          onAddCustom: () =>
-                                                                              _handleReactionSelection(
-                                                                            messageModel,
-                                                                          ),
-                                                                        ),
-                                                                      )
-                                                                    : null;
-                                                            final selectionExtrasKey =
-                                                                ValueKey(
-                                                              'selection-extras-${messageModel.stanzaID}-${isSingleSelection ? 'open' : 'closed'}',
+                                                            recipientStyle =
+                                                                const CutoutStyle(
+                                                              depth:
+                                                                  _recipientCutoutDepth,
+                                                              cornerRadius:
+                                                                  _recipientCutoutRadius,
+                                                              padding:
+                                                                  _recipientCutoutPadding,
+                                                              offset:
+                                                                  _recipientCutoutOffset,
+                                                              minThickness:
+                                                                  _recipientCutoutMinThickness,
                                                             );
-                                                            final selectionExtras =
-                                                                isSingleSelection
-                                                                    ? KeyedSubtree(
-                                                                        key:
-                                                                            selectionExtrasKey,
-                                                                        child:
-                                                                            KeyedSubtree(
-                                                                          key:
-                                                                              attachmentsKey,
-                                                                          child:
-                                                                              Align(
-                                                                            alignment: self
-                                                                                ? Alignment.centerRight
-                                                                                : Alignment.centerLeft,
-                                                                            child:
-                                                                                SizedBox(
-                                                                              width: selectionExtrasMaxWidth,
-                                                                              child: Padding(
-                                                                                padding: attachmentPadding,
-                                                                                child: Column(
-                                                                                  mainAxisSize: MainAxisSize.min,
-                                                                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                                                                  children: [
-                                                                                    actionBar,
-                                                                                    if (reactionManager != null)
-                                                                                      const SizedBox(
-                                                                                        height: 20,
-                                                                                      ),
-                                                                                    if (reactionManager != null) reactionManager,
-                                                                                  ],
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      )
-                                                                    : KeyedSubtree(
-                                                                        key:
-                                                                            selectionExtrasKey,
-                                                                        child: const SizedBox
-                                                                            .shrink(),
-                                                                      );
-                                                            final attachments =
-                                                                AnimatedSwitcher(
-                                                              duration:
-                                                                  _bubbleFocusDuration,
-                                                              reverseDuration:
-                                                                  _bubbleFocusDuration,
-                                                              switchInCurve:
-                                                                  _bubbleFocusCurve,
-                                                              switchOutCurve:
-                                                                  Curves
-                                                                      .easeInCubic,
-                                                              layoutBuilder: (
-                                                                currentChild,
-                                                                previousChildren,
-                                                              ) {
-                                                                return Stack(
-                                                                  clipBehavior:
-                                                                      Clip.none,
-                                                                  alignment:
-                                                                      Alignment
-                                                                          .topCenter,
-                                                                  children: [
-                                                                    ...previousChildren,
-                                                                    if (currentChild !=
-                                                                        null)
-                                                                      currentChild,
-                                                                  ],
-                                                                );
-                                                              },
-                                                              transitionBuilder:
-                                                                  (child,
-                                                                      animation) {
-                                                                final curvedAnimation =
-                                                                    CurvedAnimation(
-                                                                  parent:
-                                                                      animation,
-                                                                  curve:
-                                                                      _bubbleFocusCurve,
-                                                                  reverseCurve:
-                                                                      Curves
-                                                                          .easeInCubic,
-                                                                );
-                                                                final slideAnimation =
-                                                                    Tween<
-                                                                        Offset>(
-                                                                  begin:
-                                                                      const Offset(
-                                                                    0,
-                                                                    -0.18,
-                                                                  ),
-                                                                  end: Offset
-                                                                      .zero,
-                                                                ).animate(
-                                                                  curvedAnimation,
-                                                                );
-                                                                return ClipRect(
-                                                                  child:
-                                                                      FadeTransition(
-                                                                    opacity:
-                                                                        curvedAnimation,
-                                                                    child:
-                                                                        SizeTransition(
-                                                                      sizeFactor:
-                                                                          curvedAnimation,
-                                                                      axisAlignment:
-                                                                          -1,
-                                                                      child:
-                                                                          SlideTransition(
-                                                                        position:
-                                                                            slideAnimation,
-                                                                        child:
-                                                                            child,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              },
-                                                              child:
-                                                                  selectionExtras,
+                                                          }
+                                                          Widget?
+                                                              selectionOverlay;
+                                                          CutoutStyle?
+                                                              selectionStyle;
+                                                          if (_multiSelectActive) {
+                                                            final indicator =
+                                                                SelectionIndicator(
+                                                              visible: true,
+                                                              selected:
+                                                                  isMultiSelection,
+                                                              onPressed: () =>
+                                                                  _toggleMultiSelectMessage(
+                                                                messageModel,
+                                                              ),
                                                             );
-                                                            final messageRowAlignment = self
-                                                                ? Alignment
-                                                                    .centerRight
-                                                                : Alignment
-                                                                    .centerLeft;
-                                                            final messageColumnAlignment = self
-                                                                ? CrossAxisAlignment
-                                                                    .end
-                                                                : CrossAxisAlignment
-                                                                    .start;
-                                                            final Widget?
-                                                                replyPreview =
-                                                                quotedModel ==
-                                                                        null
-                                                                    ? null
-                                                                    : () {
-                                                                        final quotedIsSelf =
-                                                                            _isQuotedMessageFromSelf(
-                                                                          quotedMessage:
-                                                                              quotedModel,
-                                                                          isGroupChat:
-                                                                              isGroupChat,
-                                                                          myOccupantId:
-                                                                              myOccupantId,
-                                                                          selfNick:
-                                                                              selfNick,
-                                                                          currentUserId:
-                                                                              currentUserId,
-                                                                        );
-                                                                        final quotedSenderLabel = quotedIsSelf
-                                                                            ? l10n.chatSenderYou
-                                                                            : () {
-                                                                                if (!isGroupChat) {
-                                                                                  return quotedModel.senderJid;
-                                                                                }
-                                                                                final occupantId = quotedModel.occupantID?.trim() ?? '';
-                                                                                final occupant = occupantId.isNotEmpty ? state.roomState?.occupants[occupantId] : state.roomState?.occupants[quotedModel.senderJid];
-                                                                                final nick = occupant?.nick.trim() ?? _nickFromSender(quotedModel.senderJid);
-                                                                                final resolved = nick?.trim() ?? '';
-                                                                                return resolved.isNotEmpty ? resolved : quotedModel.senderJid;
-                                                                              }();
-                                                                        return _QuotedMessagePreview(
-                                                                          message:
-                                                                              quotedModel,
-                                                                          senderLabel:
-                                                                              quotedSenderLabel,
-                                                                          isSelf:
-                                                                              self,
-                                                                        );
-                                                                      }();
-                                                            final attachmentsAligned =
-                                                                attachments;
-                                                            final extraShadows =
-                                                                _selectedBubbleShadows(
-                                                              bubbleHighlightColor,
+                                                            selectionOverlay =
+                                                                Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                left:
+                                                                    _selectionIndicatorInset,
+                                                              ),
+                                                              child: indicator,
                                                             );
+                                                            selectionStyle =
+                                                                const CutoutStyle(
+                                                              depth:
+                                                                  _selectionCutoutDepth,
+                                                              cornerRadius:
+                                                                  _selectionCutoutRadius,
+                                                              padding:
+                                                                  _selectionCutoutPadding,
+                                                              offset:
+                                                                  _selectionCutoutOffset,
+                                                              minThickness:
+                                                                  _selectionCutoutThickness,
+                                                              cornerClearance:
+                                                                  _selectionCutoutCornerClearance,
+                                                            );
+                                                          }
+                                                          final bubbleContentKey =
+                                                              message.customProperties?[
+                                                                      'id'] ??
+                                                                  '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
+                                                          final isDesktopPlatform =
+                                                              EnvScope.maybeOf(
+                                                                    context,
+                                                                  )?.isDesktopPlatform ??
+                                                                  false;
+                                                          final bubbleTextChildren =
+                                                              <Widget>[];
+                                                          final bubbleExtraChildren =
+                                                              <Widget>[];
+                                                          void addExtra(
+                                                            Widget child, {
+                                                            required ShapeBorder
+                                                                shape,
+                                                            double spacing =
+                                                                _messageExtraSpacing,
+                                                          }) {
                                                             final Widget
-                                                                extrasAligned =
-                                                                bubbleExtraChildren
-                                                                        .isEmpty
-                                                                    ? const SizedBox
-                                                                        .shrink()
-                                                                    : TweenAnimationBuilder<
-                                                                        double>(
-                                                                        tween: Tween<
-                                                                            double>(
-                                                                          begin:
-                                                                              0,
-                                                                          end: isSelected
-                                                                              ? 1.0
-                                                                              : 0.0,
-                                                                        ),
-                                                                        duration:
-                                                                            _bubbleFocusDuration,
-                                                                        curve:
-                                                                            _bubbleFocusCurve,
-                                                                        builder:
-                                                                            (
-                                                                          context,
-                                                                          shadowValue,
-                                                                          child,
-                                                                        ) {
-                                                                          return ConstrainedBox(
-                                                                            constraints:
-                                                                                bubbleConstraints,
-                                                                            child:
-                                                                                _MessageExtrasColumn(
-                                                                              shadowValue: shadowValue,
-                                                                              shadows: extraShadows,
-                                                                              crossAxisAlignment: self ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                                                              children: bubbleExtraChildren,
-                                                                            ),
-                                                                          );
-                                                                        },
-                                                                      );
-                                                            final messageKey =
-                                                                _messageKeys
-                                                                    .putIfAbsent(
-                                                              messageModel
-                                                                  .stanzaID,
-                                                              () => GlobalKey(),
-                                                            );
-                                                            final bubbleDisplay =
-                                                                shadowedBubble;
-                                                            final selectableBubble =
-                                                                GestureDetector(
-                                                              behavior:
-                                                                  HitTestBehavior
-                                                                      .translucent,
-                                                              onTap: () {
-                                                                if (_multiSelectActive) {
-                                                                  return;
-                                                                }
-                                                                if (isSingleSelection) {
-                                                                  _clearMessageSelection();
-                                                                }
-                                                              },
+                                                                extraChild =
+                                                                _MessageExtraItem(
+                                                              shape: shape,
                                                               onLongPress: widget
                                                                           .readOnly ||
                                                                       isDesktopPlatform
@@ -7750,302 +5708,2325 @@ class _ChatState extends State<Chat> {
                                                                             messageModel,
                                                                           )
                                                                       : null,
-                                                              child:
-                                                                  bubbleDisplay,
+                                                              child: child,
                                                             );
-                                                            final bubbleStack =
-                                                                Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .center,
-                                                              children: [
-                                                                selectableBubble,
-                                                              ],
-                                                            );
-                                                            final shouldShowSenderLabel =
-                                                                isRenderableBubble &&
-                                                                    !_chatMessagesShouldChain(
-                                                                      message,
-                                                                      previous,
-                                                                    );
-                                                            Widget? senderLabel;
-                                                            if (shouldShowSenderLabel) {
-                                                              final double senderLabelLeftInset = !self &&
-                                                                      hasAvatarSlot
-                                                                  ? _messageAvatarContentInset +
-                                                                      _bubblePadding
-                                                                          .left
-                                                                  : _senderLabelNoInset;
-                                                              senderLabel =
-                                                                  _MessageSenderLabel(
-                                                                user: message
-                                                                    .user,
-                                                                isSelf: self,
-                                                                selfLabel: l10n
-                                                                    .chatSenderYou,
-                                                                leftInset:
-                                                                    senderLabelLeftInset,
+                                                            if (bubbleExtraChildren
+                                                                .isNotEmpty) {
+                                                              bubbleExtraChildren
+                                                                ..add(
+                                                                  _MessageExtraGap(
+                                                                    height:
+                                                                        spacing,
+                                                                  ),
+                                                                )
+                                                                ..add(
+                                                                  extraChild,
+                                                                );
+                                                              return;
+                                                            }
+                                                            if (bubbleTextChildren
+                                                                    .isNotEmpty &&
+                                                                spacing > 0) {
+                                                              bubbleExtraChildren
+                                                                  .add(
+                                                                _MessageExtraGap(
+                                                                  height:
+                                                                      spacing,
+                                                                ),
                                                               );
                                                             }
-                                                            final bubbleWithSlack =
-                                                                ConstrainedBox(
-                                                              constraints:
-                                                                  BoxConstraints(
-                                                                maxWidth:
-                                                                    bubbleMaxWidth,
+                                                            bubbleExtraChildren
+                                                                .add(
+                                                              extraChild,
+                                                            );
+                                                          }
+
+                                                          if (isError) {
+                                                            bubbleTextChildren
+                                                                .addAll([
+                                                              Text(
+                                                                l10n.chatErrorLabel,
+                                                                style: context
+                                                                    .textTheme
+                                                                    .small
+                                                                    .copyWith(
+                                                                  color:
+                                                                      textColor,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
                                                               ),
-                                                              child:
-                                                                  bubbleStack,
+                                                              DynamicInlineText(
+                                                                key: ValueKey(
+                                                                  bubbleContentKey,
+                                                                ),
+                                                                text: parsedText
+                                                                    .body,
+                                                                details: [time],
+                                                                links:
+                                                                    parsedText
+                                                                        .links,
+                                                                onLinkTap:
+                                                                    _handleLinkTap,
+                                                                onLinkLongPress:
+                                                                    _handleLinkTap,
+                                                              ),
+                                                            ]);
+                                                          } else if (isInviteMessage ||
+                                                              isInviteRevocationMessage) {
+                                                            final String
+                                                                inviteActionFallbackLabel =
+                                                                context.l10n
+                                                                    .chatInviteActionFallbackLabel;
+                                                            final String
+                                                                inviteLabel =
+                                                                (message.customProperties?[
+                                                                            'inviteLabel']
+                                                                        as String?) ??
+                                                                    message
+                                                                        .text;
+                                                            final String
+                                                                inviteActionLabel =
+                                                                (message.customProperties?[
+                                                                            'inviteActionLabel']
+                                                                        as String?) ??
+                                                                    inviteActionFallbackLabel;
+                                                            final String
+                                                                inviteRoomName =
+                                                                (message.customProperties?['inviteRoomName']
+                                                                            as String?)
+                                                                        ?.trim() ??
+                                                                    '';
+                                                            final String
+                                                                inviteRoom =
+                                                                (message.customProperties?['inviteRoom']
+                                                                            as String?)
+                                                                        ?.trim() ??
+                                                                    '';
+                                                            final bool
+                                                                inviteActionEnabled =
+                                                                !inviteRevoked &&
+                                                                    !isInviteRevocationMessage;
+                                                            final String
+                                                                inviteCardLabel =
+                                                                inviteRoomName
+                                                                        .isNotEmpty
+                                                                    ? inviteRoomName
+                                                                    : inviteRoom
+                                                                            .isNotEmpty
+                                                                        ? inviteRoom
+                                                                        : inviteLabel;
+                                                            final String
+                                                                inviteCardDetail =
+                                                                inviteActionEnabled
+                                                                    ? inviteActionLabel
+                                                                    : inviteLabel;
+                                                            bubbleTextChildren
+                                                                .add(
+                                                              DynamicInlineText(
+                                                                key: ValueKey(
+                                                                  bubbleContentKey,
+                                                                ),
+                                                                text: TextSpan(
+                                                                  text:
+                                                                      inviteLabel,
+                                                                  style:
+                                                                      baseTextStyle,
+                                                                ),
+                                                                details: [time],
+                                                                onLinkTap:
+                                                                    _handleLinkTap,
+                                                                onLinkLongPress:
+                                                                    _handleLinkTap,
+                                                              ),
                                                             );
-                                                            final Widget
-                                                                bubbleStackWithReply =
-                                                                _ReplyPreviewBubbleColumn(
-                                                              preview:
-                                                                  replyPreview,
-                                                              senderLabel:
-                                                                  senderLabel,
-                                                              bubble:
-                                                                  bubbleWithSlack,
+                                                            addExtra(
+                                                              _InviteAttachmentCard(
+                                                                enabled:
+                                                                    inviteActionEnabled,
+                                                                label:
+                                                                    inviteCardLabel,
+                                                                detailLabel:
+                                                                    inviteCardDetail,
+                                                                actionLabel:
+                                                                    inviteActionLabel,
+                                                                onPressed: () =>
+                                                                    _handleInviteTap(
+                                                                  messageModel,
+                                                                ),
+                                                              ),
+                                                              shape:
+                                                                  _inviteAttachmentShadowShape,
                                                               spacing:
-                                                                  calendarInsetLg,
+                                                                  _attachmentPreviewSpacing,
                                                             );
-                                                            final messageBody =
-                                                                Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              crossAxisAlignment:
-                                                                  messageColumnAlignment,
-                                                              children: [
-                                                                bubbleStackWithReply,
-                                                                if (bubbleExtraChildren
-                                                                    .isNotEmpty)
-                                                                  extrasAligned,
-                                                                attachmentsAligned,
-                                                              ],
+                                                          } else {
+                                                            final subjectLabel =
+                                                                (message.customProperties?[
+                                                                        'subjectLabel']
+                                                                    as String?);
+                                                            final showSubjectBanner =
+                                                                (message.customProperties?['showSubject']
+                                                                            as bool?) ==
+                                                                        true &&
+                                                                    subjectLabel !=
+                                                                        null;
+                                                            if (showSubjectBanner) {
+                                                              final String
+                                                                  subjectText =
+                                                                  subjectLabel;
+                                                              final textTheme =
+                                                                  Theme.of(
+                                                                context,
+                                                              ).textTheme;
+                                                              final baseSubjectStyle = textTheme
+                                                                      .titleSmall ??
+                                                                  textTheme
+                                                                      .bodyMedium ??
+                                                                  textTheme
+                                                                      .bodyLarge ??
+                                                                  context
+                                                                      .textTheme
+                                                                      .lead;
+                                                              final subjectStyle =
+                                                                  baseSubjectStyle
+                                                                      .copyWith(
+                                                                color:
+                                                                    textColor,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                height: 1.2,
+                                                              );
+                                                              final subjectPainter =
+                                                                  TextPainter(
+                                                                text: TextSpan(
+                                                                  text:
+                                                                      subjectText,
+                                                                  style:
+                                                                      subjectStyle,
+                                                                ),
+                                                                textDirection:
+                                                                    Directionality
+                                                                        .of(
+                                                                  context,
+                                                                ),
+                                                                textScaler: MediaQuery
+                                                                        .maybeTextScalerOf(
+                                                                      context,
+                                                                    ) ??
+                                                                    TextScaler
+                                                                        .noScaling,
+                                                              )..layout();
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                Text(
+                                                                  subjectText,
+                                                                  style:
+                                                                      subjectStyle,
+                                                                ),
+                                                              );
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .symmetric(
+                                                                    vertical:
+                                                                        _subjectDividerPadding,
+                                                                  ),
+                                                                  child:
+                                                                      DecoratedBox(
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: context
+                                                                          .colorScheme
+                                                                          .border,
+                                                                    ),
+                                                                    child:
+                                                                        SizedBox(
+                                                                      height:
+                                                                          _subjectDividerThickness,
+                                                                      width: subjectPainter
+                                                                          .width,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            }
+                                                            final rawRenderedText =
+                                                                (message.customProperties?[
+                                                                            'renderedText']
+                                                                        as String?) ??
+                                                                    message
+                                                                        .text;
+                                                            final String
+                                                                trimmedRenderedText =
+                                                                rawRenderedText
+                                                                    .trim();
+                                                            final String?
+                                                                normalizedHtmlBody =
+                                                                HtmlContentCodec
+                                                                    .normalizeHtml(
+                                                              messageModel
+                                                                  .htmlBody,
                                                             );
-                                                            final bubbleResizeDuration =
-                                                                isSingleSelection
-                                                                    ? _bubbleFocusDuration
-                                                                    : _bubbleSizeSnapDuration;
-                                                            final bubbleResizeCurve =
-                                                                isSingleSelection
-                                                                    ? _bubbleFocusCurve
-                                                                    : Curves
-                                                                        .linear;
-                                                            final Widget
-                                                                animatedMessage =
-                                                                AxiAnimatedSize(
-                                                              duration:
-                                                                  bubbleResizeDuration,
-                                                              reverseDuration:
-                                                                  bubbleResizeDuration,
-                                                              curve:
-                                                                  bubbleResizeCurve,
-                                                              alignment:
-                                                                  Alignment
-                                                                      .topCenter,
-                                                              clipBehavior:
-                                                                  Clip.none,
-                                                              child:
-                                                                  messageBody,
-                                                            );
-                                                            final Widget
-                                                                messageRegion =
-                                                                _MessageBubbleRegion(
-                                                              messageId:
-                                                                  messageModel
-                                                                      .stanzaID,
-                                                              registry:
-                                                                  _bubbleRegionRegistry,
-                                                              child:
-                                                                  animatedMessage,
-                                                            );
-                                                            final Widget
-                                                                messageArrival =
-                                                                isRenderableBubble
-                                                                    ? _MessageArrivalAnimator(
-                                                                        key:
-                                                                            ValueKey(
-                                                                          'arrival-${messageModel.stanzaID}',
+                                                            final String?
+                                                                normalizedHtmlText =
+                                                                normalizedHtmlBody ==
+                                                                        null
+                                                                    ? null
+                                                                    : HtmlContentCodec
+                                                                        .toPlainText(
+                                                                        normalizedHtmlBody,
+                                                                      ).trim();
+                                                            final bool
+                                                                isPlainTextHtml =
+                                                                normalizedHtmlBody !=
+                                                                        null &&
+                                                                    HtmlContentCodec
+                                                                        .isPlainTextHtml(
+                                                                      normalizedHtmlBody,
+                                                                    );
+                                                            final bool shouldPreferPlainTextHtml = isPlainTextHtml ||
+                                                                (isEmailChat &&
+                                                                    self &&
+                                                                    normalizedHtmlBody !=
+                                                                        null &&
+                                                                    normalizedHtmlText
+                                                                            ?.isNotEmpty ==
+                                                                        true &&
+                                                                    trimmedRenderedText
+                                                                        .isNotEmpty &&
+                                                                    normalizedHtmlText ==
+                                                                        trimmedRenderedText);
+                                                            final String?
+                                                                taskShareText =
+                                                                calendarTaskIcs
+                                                                    ?.toShareText(
+                                                                      context
+                                                                          .l10n,
+                                                                    )
+                                                                    .trim();
+                                                            final String?
+                                                                fragmentFallbackText =
+                                                                displayFragment ==
+                                                                        null
+                                                                    ? null
+                                                                    : CalendarFragmentFormatter(
+                                                                        context
+                                                                            .l10n,
+                                                                      )
+                                                                        .describe(
+                                                                          displayFragment,
+                                                                        )
+                                                                        .trim();
+                                                            final bool hideFragmentText = fragmentFallbackText !=
+                                                                    null &&
+                                                                fragmentFallbackText
+                                                                    .isNotEmpty &&
+                                                                fragmentFallbackText ==
+                                                                    trimmedRenderedText;
+                                                            final bool
+                                                                hideAvailabilityText =
+                                                                availabilityMessage !=
+                                                                        null &&
+                                                                    messageModel
+                                                                        .error
+                                                                        .isNone;
+                                                            final bool
+                                                                hideTaskText =
+                                                                taskShareText !=
+                                                                        null &&
+                                                                    taskShareText ==
+                                                                        trimmedRenderedText;
+                                                            final List<
+                                                                    InlineSpan>
+                                                                surfaceDetails =
+                                                                <InlineSpan>[
+                                                              surfaceTime,
+                                                              surfaceTransportDetail,
+                                                              if (self &&
+                                                                  surfaceStatus !=
+                                                                      null)
+                                                                surfaceStatus,
+                                                              if (surfaceVerification !=
+                                                                  null)
+                                                                surfaceVerification,
+                                                            ];
+                                                            final List<
+                                                                    InlineSpan>
+                                                                shareMetadataDetails =
+                                                                hideTaskText &&
+                                                                        calendarTaskIcs !=
+                                                                            null
+                                                                    ? _calendarTaskShareMetadata(
+                                                                        calendarTaskIcs,
+                                                                        context
+                                                                            .l10n,
+                                                                        surfaceDetailStyle,
+                                                                      )
+                                                                    : _emptyInlineSpans;
+                                                            final List<
+                                                                    InlineSpan>
+                                                                fragmentFooterDetails =
+                                                                hideFragmentText
+                                                                    ? surfaceDetails
+                                                                    : _emptyInlineSpans;
+                                                            final List<
+                                                                    InlineSpan>
+                                                                availabilityFooterDetails =
+                                                                hideAvailabilityText
+                                                                    ? surfaceDetails
+                                                                    : _emptyInlineSpans;
+                                                            final List<
+                                                                    InlineSpan>
+                                                                taskFooterDetails =
+                                                                hideTaskText
+                                                                    ? <InlineSpan>[
+                                                                        ...surfaceDetails,
+                                                                        ...shareMetadataDetails,
+                                                                      ]
+                                                                    : _emptyInlineSpans;
+                                                            CalendarAvailabilityShare?
+                                                                availabilityShare;
+                                                            String?
+                                                                availabilityShareRequesterJid;
+                                                            VoidCallback?
+                                                                availabilityOnAccept;
+                                                            VoidCallback?
+                                                                availabilityOnDecline;
+                                                            if (availabilityMessage !=
+                                                                null) {
+                                                              availabilityMessage
+                                                                  .map(
+                                                                share: (value) {
+                                                                  final bool
+                                                                      isOwner =
+                                                                      availabilityActorId !=
+                                                                              null &&
+                                                                          _availabilitySenderMatchesClaim(
+                                                                            senderJid:
+                                                                                availabilityActorId,
+                                                                            chatJid:
+                                                                                chatEntity?.jid,
+                                                                            claimedJid:
+                                                                                value.share.overlay.owner,
+                                                                            roomState:
+                                                                                state.roomState,
+                                                                          );
+                                                                  final String?
+                                                                      requesterJid =
+                                                                      isOwner
+                                                                          ? null
+                                                                          : availabilityActorId;
+                                                                  availabilityShare =
+                                                                      value
+                                                                          .share;
+                                                                  availabilityShareRequesterJid =
+                                                                      requesterJid;
+                                                                },
+                                                                request:
+                                                                    (value) {
+                                                                  final requestOwnerJid = value
+                                                                      .request
+                                                                      .ownerJid
+                                                                      ?.trim();
+                                                                  final String? ownerJid = requestOwnerJid ==
+                                                                              null ||
+                                                                          requestOwnerJid
+                                                                              .isEmpty
+                                                                      ? availabilityShareOwnersById[value
+                                                                              .request
+                                                                              .shareId] ??
+                                                                          availabilityCoordinator
+                                                                              ?.ownerJidForShare(
+                                                                            value.request.shareId,
+                                                                          )
+                                                                      : requestOwnerJid;
+                                                                  bool isOwner =
+                                                                      false;
+                                                                  if (ownerJid !=
+                                                                          null &&
+                                                                      ownerJid
+                                                                          .trim()
+                                                                          .isNotEmpty &&
+                                                                      availabilityActorId !=
+                                                                          null) {
+                                                                    isOwner =
+                                                                        _availabilitySenderMatchesClaim(
+                                                                      senderJid:
+                                                                          availabilityActorId,
+                                                                      chatJid:
+                                                                          chatEntity
+                                                                              ?.jid,
+                                                                      claimedJid:
+                                                                          ownerJid,
+                                                                      roomState:
+                                                                          state
+                                                                              .roomState,
+                                                                    );
+                                                                  } else if (chatEntity
+                                                                          ?.type ==
+                                                                      ChatType
+                                                                          .chat) {
+                                                                    final currentActor =
+                                                                        availabilityActorId;
+                                                                    if (currentActor !=
+                                                                        null) {
+                                                                      isOwner =
+                                                                          !_availabilitySenderMatchesClaim(
+                                                                        senderJid:
+                                                                            currentActor,
+                                                                        chatJid:
+                                                                            chatEntity?.jid,
+                                                                        claimedJid: value
+                                                                            .request
+                                                                            .requesterJid,
+                                                                        roomState:
+                                                                            state.roomState,
+                                                                      );
+                                                                    }
+                                                                  }
+                                                                  if (isOwner) {
+                                                                    availabilityOnAccept =
+                                                                        () =>
+                                                                            _handleAvailabilityAccept(
+                                                                              value.request,
+                                                                              canAddToPersonalCalendar: personalCalendarAvailable,
+                                                                              canAddToChatCalendar: chatCalendarAvailable,
+                                                                            );
+                                                                    availabilityOnDecline =
+                                                                        () =>
+                                                                            _handleAvailabilityDecline(
+                                                                              value.request,
+                                                                            );
+                                                                  }
+                                                                },
+                                                                response:
+                                                                    (_) {},
+                                                              );
+                                                            }
+                                                            if (availabilityMessage !=
+                                                                null) {
+                                                              addExtra(
+                                                                Builder(
+                                                                  builder:
+                                                                      (context) {
+                                                                    final CalendarAvailabilityShare?
+                                                                        resolvedShare =
+                                                                        availabilityShare;
+                                                                    final String?
+                                                                        resolvedRequesterJid =
+                                                                        availabilityShareRequesterJid;
+                                                                    final String?
+                                                                        resolvedOwnerLabel =
+                                                                        _resolveAvailabilityOwnerLabel(
+                                                                      ownerJid: resolvedShare
+                                                                          ?.overlay
+                                                                          .owner,
+                                                                      normalizedXmppSelfJid:
+                                                                          normalizedXmppSelfJid,
+                                                                      normalizedEmailSelfJid:
+                                                                          normalizedEmailSelfJid,
+                                                                      selfLabel: context
+                                                                          .l10n
+                                                                          .chatSenderYou,
+                                                                    );
+                                                                    final String?
+                                                                        resolvedChatLabel =
+                                                                        chatEntity
+                                                                            ?.displayName;
+                                                                    final VoidCallback?
+                                                                        resolvedOnOpen =
+                                                                        resolvedShare ==
+                                                                                null
+                                                                            ? null
+                                                                            : () =>
+                                                                                _openAvailabilityShareViewer(
+                                                                                  share: resolvedShare,
+                                                                                  requesterJid: resolvedRequesterJid,
+                                                                                  chatCalendarAvailable: chatCalendarAvailable,
+                                                                                  locate: context.read,
+                                                                                  ownerLabel: resolvedOwnerLabel,
+                                                                                  chatLabel: resolvedChatLabel,
+                                                                                );
+                                                                    return CalendarAvailabilityMessageCard(
+                                                                      message:
+                                                                          availabilityMessage,
+                                                                      footerDetails:
+                                                                          availabilityFooterDetails,
+                                                                      onOpen:
+                                                                          resolvedOnOpen,
+                                                                      onAccept:
+                                                                          availabilityOnAccept,
+                                                                      onDecline:
+                                                                          availabilityOnDecline,
+                                                                    );
+                                                                  },
+                                                                ),
+                                                                shape:
+                                                                    _calendarMessageCardShadowShape,
+                                                              );
+                                                            } else if (calendarTaskIcs !=
+                                                                null) {
+                                                              final ShapeBorder
+                                                                  calendarTaskShape =
+                                                                  chatCalendarBloc ==
+                                                                          null
+                                                                      ? _calendarMessageCardShadowShape
+                                                                      : _calendarTaskShadowShape;
+                                                              addExtra(
+                                                                chatCalendarBloc ==
+                                                                        null
+                                                                    ? CalendarFragmentCard(
+                                                                        fragment:
+                                                                            CalendarFragment.task(
+                                                                          task:
+                                                                              calendarTaskIcs,
                                                                         ),
-                                                                        animate:
-                                                                            _shouldAnimateMessage(
+                                                                        footerDetails:
+                                                                            taskFooterDetails,
+                                                                      )
+                                                                    : ChatCalendarTaskCard(
+                                                                        task:
+                                                                            calendarTaskIcs,
+                                                                        readOnly:
+                                                                            (calendarTaskIcsReadOnly && !self) ||
+                                                                                demoEmailCalendarEnabled,
+                                                                        requireImportConfirmation:
+                                                                            !self,
+                                                                        allowChatCopy:
+                                                                            !demoEmailCalendarEnabled,
+                                                                        demoQuickAdd:
+                                                                            demoEmailCalendarEnabled &&
+                                                                                !self,
+                                                                        footerDetails:
+                                                                            taskFooterDetails,
+                                                                        isShareFragment:
+                                                                            true,
+                                                                      ),
+                                                                shape:
+                                                                    calendarTaskShape,
+                                                              );
+                                                            } else if (displayFragment !=
+                                                                null) {
+                                                              final Widget
+                                                                  fragmentCard =
+                                                                  displayFragment
+                                                                      .maybeMap(
+                                                                criticalPath: (
+                                                                  value,
+                                                                ) =>
+                                                                    ChatCalendarCriticalPathCard(
+                                                                  path: value
+                                                                      .path,
+                                                                  tasks: value
+                                                                      .tasks,
+                                                                  footerDetails:
+                                                                      fragmentFooterDetails,
+                                                                ),
+                                                                orElse: () =>
+                                                                    CalendarFragmentCard(
+                                                                  fragment:
+                                                                      displayFragment,
+                                                                  footerDetails:
+                                                                      fragmentFooterDetails,
+                                                                ),
+                                                              );
+                                                              addExtra(
+                                                                fragmentCard,
+                                                                shape:
+                                                                    _calendarMessageCardShadowShape,
+                                                              );
+                                                            }
+                                                            final String?
+                                                                metadataIdForCaption =
+                                                                attachmentIds
+                                                                        .isNotEmpty
+                                                                    ? attachmentIds
+                                                                        .first
+                                                                    : messageModel
+                                                                        .fileMetadataID;
+                                                            final bool
+                                                                shouldRenderTextContent =
+                                                                !hideFragmentText &&
+                                                                    !hideAvailabilityText &&
+                                                                    !hideTaskText;
+                                                            final bool
+                                                                hasAttachmentCaption =
+                                                                shouldRenderTextContent &&
+                                                                    trimmedRenderedText
+                                                                        .isEmpty &&
+                                                                    metadataIdForCaption !=
+                                                                        null &&
+                                                                    metadataIdForCaption
+                                                                        .isNotEmpty;
+                                                            if (hasAttachmentCaption) {
+                                                              final resolvedMetadataId =
+                                                                  metadataIdForCaption;
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                StreamBuilder<
+                                                                    FileMetadataData?>(
+                                                                  stream:
+                                                                      _metadataStreamFor(
+                                                                    resolvedMetadataId,
+                                                                  ),
+                                                                  initialData:
+                                                                      _metadataInitialFor(
+                                                                    resolvedMetadataId,
+                                                                  ),
+                                                                  builder: (
+                                                                    context,
+                                                                    snapshot,
+                                                                  ) {
+                                                                    final l10n =
+                                                                        context
+                                                                            .l10n;
+                                                                    final metadata =
+                                                                        snapshot
+                                                                            .data;
+                                                                    final filename =
+                                                                        metadata?.filename.trim() ??
+                                                                            '';
+                                                                    final resolvedFilename = filename
+                                                                            .isNotEmpty
+                                                                        ? filename
+                                                                        : l10n
+                                                                            .chatAttachmentFallbackLabel;
+                                                                    final sizeBytes =
+                                                                        metadata
+                                                                            ?.sizeBytes;
+                                                                    final sizeLabel = sizeBytes !=
+                                                                                null &&
+                                                                            sizeBytes >
+                                                                                0
+                                                                        ? formatBytes(
+                                                                            sizeBytes,
+                                                                          )
+                                                                        : l10n
+                                                                            .chatAttachmentUnknownSize;
+                                                                    final caption =
+                                                                        l10n.chatAttachmentCaption(
+                                                                      resolvedFilename,
+                                                                      sizeLabel,
+                                                                    );
+                                                                    return DynamicInlineText(
+                                                                      key:
+                                                                          ValueKey(
+                                                                        bubbleContentKey,
+                                                                      ),
+                                                                      text:
+                                                                          TextSpan(
+                                                                        text:
+                                                                            caption,
+                                                                        style:
+                                                                            baseTextStyle,
+                                                                      ),
+                                                                      details: [
+                                                                        time,
+                                                                        transportDetail,
+                                                                        if (self &&
+                                                                            status !=
+                                                                                null)
+                                                                          status,
+                                                                        if (verification !=
+                                                                            null)
+                                                                          verification,
+                                                                      ],
+                                                                      onLinkTap:
+                                                                          _handleLinkTap,
+                                                                      onLinkLongPress:
+                                                                          _handleLinkTap,
+                                                                    );
+                                                                  },
+                                                                ),
+                                                              );
+                                                            } else if (normalizedHtmlBody !=
+                                                                    null &&
+                                                                shouldRenderTextContent &&
+                                                                !shouldPreferPlainTextHtml) {
+                                                              // Render HTML email content
+                                                              final shouldLoadImages = context
+                                                                      .read<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoLoadEmailImages ||
+                                                                  state
+                                                                      .loadedImageMessageIds
+                                                                      .contains(
+                                                                    messageModel
+                                                                        .id,
+                                                                  );
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                html_widget
+                                                                    .Html(
+                                                                  key: ValueKey(
+                                                                    bubbleContentKey,
+                                                                  ),
+                                                                  data: HtmlContentCodec
+                                                                      .sanitizeHtml(
+                                                                    normalizedHtmlBody,
+                                                                  ),
+                                                                  extensions: [
+                                                                    createEmailImageExtension(
+                                                                      shouldLoad:
+                                                                          shouldLoadImages,
+                                                                      onLoadRequested: messageModel.id ==
+                                                                              null
+                                                                          ? null
+                                                                          : () {
+                                                                              context.read<ChatBloc>().add(
+                                                                                    ChatEmailImagesLoaded(
+                                                                                      messageModel.id!,
+                                                                                    ),
+                                                                                  );
+                                                                            },
+                                                                    ),
+                                                                  ],
+                                                                  style: {
+                                                                    'body':
+                                                                        html_widget
+                                                                            .Style(
+                                                                      margin: html_widget
+                                                                          .Margins
+                                                                          .zero,
+                                                                      padding: html_widget
+                                                                          .HtmlPaddings
+                                                                          .zero,
+                                                                      color:
+                                                                          textColor,
+                                                                      fontSize:
+                                                                          html_widget
+                                                                              .FontSize(
+                                                                        baseTextStyle.fontSize ??
+                                                                            14.0,
+                                                                      ),
+                                                                    ),
+                                                                    'a': html_widget
+                                                                        .Style(
+                                                                      color: self
+                                                                          ? colors
+                                                                              .primaryForeground
+                                                                          : colors
+                                                                              .primary,
+                                                                      textDecoration:
+                                                                          TextDecoration
+                                                                              .underline,
+                                                                    ),
+                                                                  },
+                                                                  onLinkTap: (
+                                                                    url,
+                                                                    _,
+                                                                    __,
+                                                                  ) {
+                                                                    if (url !=
+                                                                        null) {
+                                                                      _handleLinkTap(
+                                                                        url,
+                                                                      );
+                                                                    }
+                                                                  },
+                                                                ),
+                                                              );
+                                                              // Add details row below HTML content
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .only(
+                                                                    top: 4,
+                                                                  ),
+                                                                  child:
+                                                                      Text.rich(
+                                                                    TextSpan(
+                                                                      children: [
+                                                                        time,
+                                                                        const TextSpan(
+                                                                          text:
+                                                                              ' ',
+                                                                        ),
+                                                                        transportDetail,
+                                                                        if (self &&
+                                                                            status !=
+                                                                                null) ...[
+                                                                          const TextSpan(
+                                                                            text:
+                                                                                ' ',
+                                                                          ),
+                                                                          status,
+                                                                        ],
+                                                                        if (verification !=
+                                                                            null) ...[
+                                                                          const TextSpan(
+                                                                            text:
+                                                                                ' ',
+                                                                          ),
+                                                                          verification,
+                                                                        ],
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            } else if (shouldRenderTextContent) {
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                DynamicInlineText(
+                                                                  key: ValueKey(
+                                                                    bubbleContentKey,
+                                                                  ),
+                                                                  text:
+                                                                      parsedText
+                                                                          .body,
+                                                                  details: [
+                                                                    time,
+                                                                    transportDetail,
+                                                                    if (self &&
+                                                                        status !=
+                                                                            null)
+                                                                      status,
+                                                                    if (verification !=
+                                                                        null)
+                                                                      verification,
+                                                                  ],
+                                                                  links:
+                                                                      parsedText
+                                                                          .links,
+                                                                  onLinkTap:
+                                                                      _handleLinkTap,
+                                                                  onLinkLongPress:
+                                                                      _handleLinkTap,
+                                                                ),
+                                                              );
+                                                            }
+                                                            if (message.customProperties?[
+                                                                    'retracted'] ??
+                                                                false) {
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                Text(
+                                                                  l10n.chatMessageRetracted,
+                                                                  style:
+                                                                      extraStyle,
+                                                                ),
+                                                              );
+                                                            } else if (message
+                                                                        .customProperties?[
+                                                                    'edited'] ??
+                                                                false) {
+                                                              bubbleTextChildren
+                                                                  .add(
+                                                                Text(
+                                                                  l10n.chatMessageEdited,
+                                                                  style:
+                                                                      extraStyle,
+                                                                ),
+                                                              );
+                                                            }
+                                                          }
+                                                          final bool
+                                                              hasBubbleText =
+                                                              bubbleTextChildren
+                                                                  .isNotEmpty;
+                                                          if (attachmentIds
+                                                              .isNotEmpty) {
+                                                            final bool
+                                                                hasBubbleAnchor =
+                                                                hasBubbleText ||
+                                                                    showCompactReactions ||
+                                                                    showReplyStrip ||
+                                                                    showRecipientCutout;
+                                                            final allowAttachmentByTrust =
+                                                                _shouldAllowAttachment(
+                                                              isSelf: self,
+                                                              chat: state.chat,
+                                                            );
+                                                            final allowAttachmentOnce =
+                                                                attachmentsBlockedForChat
+                                                                    ? false
+                                                                    : _isOneTimeAttachmentAllowed(
+                                                                        messageModel
+                                                                            .stanzaID,
+                                                                      );
+                                                            final allowAttachment =
+                                                                !attachmentsBlockedForChat &&
+                                                                    (allowAttachmentByTrust ||
+                                                                        allowAttachmentOnce);
+                                                            final chatAutoDownloadAllowed = (state
+                                                                        .chat
+                                                                        ?.attachmentAutoDownload ??
+                                                                    context
+                                                                        .watch<
+                                                                            SettingsCubit>()
+                                                                        .state
+                                                                        .defaultChatAttachmentAutoDownload)
+                                                                .isAllowed;
+                                                            final autoDownloadAllowed =
+                                                                allowAttachment &&
+                                                                    chatAutoDownloadAllowed;
+                                                            final emailService =
+                                                                RepositoryProvider
+                                                                    .of<EmailService?>(
+                                                                        context);
+                                                            final emailDownloadDelegate =
+                                                                isEmailChat &&
+                                                                        emailService !=
+                                                                            null
+                                                                    ? AttachmentDownloadDelegate(
+                                                                        () => emailService
+                                                                            .downloadFullMessage(
                                                                           messageModel,
                                                                         ),
-                                                                        isSelf:
-                                                                            self,
-                                                                        child:
-                                                                            messageRegion,
                                                                       )
-                                                                    : messageRegion;
-                                                            final Widget
-                                                                selectionRegion =
-                                                                isSingleSelection
-                                                                    ? TapRegion(
-                                                                        groupId:
-                                                                            _selectionTapRegionGroup,
-                                                                        onTapOutside:
-                                                                            _armOutsideTapDismiss,
-                                                                        child:
-                                                                            messageArrival,
+                                                                    : null;
+                                                            final autoDownloadUserInitiated =
+                                                                allowAttachmentOnce;
+                                                            for (var index = 0;
+                                                                index <
+                                                                    attachmentIds
+                                                                        .length;
+                                                                index += 1) {
+                                                              final attachmentId =
+                                                                  attachmentIds[
+                                                                      index];
+                                                              final bool
+                                                                  hasAttachmentAbove =
+                                                                  index > 0 ||
+                                                                      hasBubbleAnchor;
+                                                              final bool
+                                                                  hasAttachmentBelow =
+                                                                  index <
+                                                                      attachmentIds
+                                                                              .length -
+                                                                          1;
+                                                              final OutlinedBorder
+                                                                  attachmentShape =
+                                                                  _attachmentSurfaceShape(
+                                                                isSelf: self,
+                                                                chainedPrevious:
+                                                                    hasAttachmentAbove,
+                                                                chainedNext:
+                                                                    hasAttachmentBelow,
+                                                              );
+                                                              addExtra(
+                                                                ChatAttachmentPreview(
+                                                                  stanzaId:
+                                                                      messageModel
+                                                                          .stanzaID,
+                                                                  metadataStream:
+                                                                      _metadataStreamFor(
+                                                                    attachmentId,
+                                                                  ),
+                                                                  initialMetadata:
+                                                                      _metadataInitialFor(
+                                                                    attachmentId,
+                                                                  ),
+                                                                  allowed:
+                                                                      allowAttachment,
+                                                                  autoDownloadImages: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadImages,
+                                                                  autoDownloadVideos: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadVideos,
+                                                                  autoDownloadDocuments: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadDocuments,
+                                                                  autoDownloadArchives: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadArchives,
+                                                                  autoDownloadAllowed:
+                                                                      autoDownloadAllowed,
+                                                                  autoDownloadUserInitiated:
+                                                                      autoDownloadUserInitiated,
+                                                                  downloadDelegate:
+                                                                      emailDownloadDelegate,
+                                                                  onAllowPressed: allowAttachment
+                                                                      ? null
+                                                                      : attachmentsBlockedForChat
+                                                                          ? null
+                                                                          : () => _approveAttachment(
+                                                                                message: messageModel,
+                                                                                senderJid: messageModel.senderJid,
+                                                                                stanzaId: messageModel.stanzaID,
+                                                                                isSelf: self,
+                                                                                isEmailChat: isEmailChat,
+                                                                                senderEmail: state.chat?.emailAddress,
+                                                                              ),
+                                                                  surfaceShape:
+                                                                      attachmentShape,
+                                                                ),
+                                                                shape:
+                                                                    attachmentShape,
+                                                                spacing:
+                                                                    _attachmentPreviewSpacing,
+                                                              );
+                                                            }
+                                                          }
+                                                          var bubbleBottomInset =
+                                                              0.0;
+                                                          if (showCompactReactions) {
+                                                            bubbleBottomInset =
+                                                                _reactionBubbleInset;
+                                                          }
+                                                          if (showReplyStrip) {
+                                                            bubbleBottomInset =
+                                                                math.max(
+                                                              bubbleBottomInset,
+                                                              _recipientBubbleInset,
+                                                            );
+                                                          }
+                                                          if (showRecipientCutout) {
+                                                            bubbleBottomInset =
+                                                                math.max(
+                                                              bubbleBottomInset,
+                                                              _recipientBubbleInset,
+                                                            );
+                                                          }
+                                                          final isRenderableBubble =
+                                                              !(isSelectionSpacer ||
+                                                                  isEmptyState);
+                                                          final requiresAvatarHeadroom =
+                                                              isGroupChat &&
+                                                                  isRenderableBubble &&
+                                                                  !self;
+                                                          final hasAvatarSlot =
+                                                              requiresAvatarHeadroom &&
+                                                                  !chainedPrev;
+                                                          EdgeInsetsGeometry
+                                                              bubblePadding =
+                                                              _bubblePadding;
+                                                          if (bubbleBottomInset >
+                                                              0) {
+                                                            bubblePadding =
+                                                                bubblePadding
+                                                                    .add(
+                                                              EdgeInsets.only(
+                                                                bottom:
+                                                                    bubbleBottomInset,
+                                                              ),
+                                                            );
+                                                          }
+                                                          if (selectionOverlay !=
+                                                              null) {
+                                                            bubblePadding =
+                                                                bubblePadding
+                                                                    .add(
+                                                              EdgeInsets.only(
+                                                                left: self
+                                                                    ? _selectionBubbleOutboundSpacing
+                                                                    : 0,
+                                                                right: self
+                                                                    ? 0
+                                                                    : _selectionBubbleInboundSpacing,
+                                                              ),
+                                                            );
+                                                            bubblePadding =
+                                                                bubblePadding
+                                                                    .add(
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                vertical:
+                                                                    _selectionBubbleVerticalInset,
+                                                              ),
+                                                            );
+                                                          }
+                                                          if (hasAvatarSlot) {
+                                                            bubblePadding =
+                                                                bubblePadding
+                                                                    .add(
+                                                              const EdgeInsets
+                                                                  .only(
+                                                                left:
+                                                                    _messageAvatarContentInset,
+                                                              ),
+                                                            );
+                                                          }
+                                                          final bool
+                                                              hasAttachmentExtras =
+                                                              attachmentIds
+                                                                  .isNotEmpty;
+                                                          final bubbleBorderRadius =
+                                                              _bubbleBorderRadius(
+                                                            isSelf: self,
+                                                            chainedPrevious:
+                                                                chainedPrev,
+                                                            chainedNext:
+                                                                chainedNext,
+                                                            isSelected:
+                                                                isSelected,
+                                                            flattenBottom:
+                                                                hasAttachmentExtras,
+                                                          );
+                                                          final selectionAllowance =
+                                                              selectionOverlay !=
+                                                                      null
+                                                                  ? _selectionOuterInset
+                                                                  : 0.0;
+                                                          final cappedBubbleWidth =
+                                                              math.min(
+                                                            bubbleMaxWidth,
+                                                            (self
+                                                                    ? outboundClampedBubbleWidth
+                                                                    : inboundClampedBubbleWidth) +
+                                                                selectionAllowance,
+                                                          );
+                                                          final bubbleConstraints =
+                                                              BoxConstraints(
+                                                            maxWidth:
+                                                                cappedBubbleWidth,
+                                                          );
+                                                          final bubbleHighlightColor =
+                                                              context
+                                                                  .colorScheme
+                                                                  .primary;
+                                                          final bool
+                                                              hasBubbleCutout =
+                                                              showCompactReactions ||
+                                                                  showReplyStrip ||
+                                                                  showRecipientCutout;
+                                                          final double
+                                                              bubbleAnchorHeight =
+                                                              hasBubbleText ||
+                                                                      !hasBubbleCutout
+                                                                  ? 0.0
+                                                                  : math.max(
+                                                                      showCompactReactions
+                                                                          ? _reactionCutoutDepth
+                                                                          : 0.0,
+                                                                      (showReplyStrip ||
+                                                                              showRecipientCutout)
+                                                                          ? _recipientCutoutDepth
+                                                                          : 0.0,
+                                                                    );
+                                                          final Color
+                                                              bubbleSurfaceColor =
+                                                              hasBubbleText
+                                                                  ? bubbleColor
+                                                                  : Colors
+                                                                      .transparent;
+                                                          final Color
+                                                              bubbleSurfaceBorder =
+                                                              hasBubbleText
+                                                                  ? borderColor
+                                                                  : Colors
+                                                                      .transparent;
+                                                          final bubbleContent =
+                                                              hasBubbleText
+                                                                  ? Padding(
+                                                                      padding:
+                                                                          bubblePadding,
+                                                                      child:
+                                                                          Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        spacing:
+                                                                            _messageExtraSpacing,
+                                                                        children:
+                                                                            bubbleTextChildren,
+                                                                      ),
+                                                                    )
+                                                                  : bubbleAnchorHeight >
+                                                                          0
+                                                                      ? SizedBox(
+                                                                          width:
+                                                                              bubbleConstraints.maxWidth,
+                                                                          height:
+                                                                              bubbleAnchorHeight,
+                                                                        )
+                                                                      : const SizedBox
+                                                                          .shrink();
+                                                          final nextIsTailSpacer =
+                                                              next?.customProperties?[
+                                                                      'selectionSpacer'] ==
+                                                                  true;
+                                                          final isLatestBubble =
+                                                              isRenderableBubble &&
+                                                                  (next ==
+                                                                          null ||
+                                                                      nextIsTailSpacer);
+                                                          final baseOuterBottom =
+                                                              isLatestBubble
+                                                                  ? 12.0
+                                                                  : 2.0;
+                                                          var extraOuterBottom =
+                                                              0.0;
+                                                          if (showCompactReactions) {
+                                                            extraOuterBottom =
+                                                                math.max(
+                                                              extraOuterBottom,
+                                                              _reactionCutoutDepth,
+                                                            );
+                                                          }
+                                                          if (showReplyStrip) {
+                                                            extraOuterBottom =
+                                                                math.max(
+                                                              extraOuterBottom,
+                                                              _recipientCutoutDepth,
+                                                            );
+                                                          }
+                                                          if (showRecipientCutout) {
+                                                            extraOuterBottom =
+                                                                math.max(
+                                                              extraOuterBottom,
+                                                              _recipientCutoutDepth,
+                                                            );
+                                                          }
+                                                          double
+                                                              extraOuterLeft =
+                                                              0;
+                                                          double
+                                                              extraOuterRight =
+                                                              0;
+                                                          if (hasAvatarSlot) {
+                                                            final occupantIdCandidate =
+                                                                messageModel
+                                                                    .occupantID
+                                                                    ?.trim();
+                                                            final occupantId = occupantIdCandidate !=
+                                                                        null &&
+                                                                    occupantIdCandidate
+                                                                        .isNotEmpty
+                                                                ? occupantIdCandidate
+                                                                : messageModel
+                                                                    .senderJid;
+                                                            final occupant = state
+                                                                    .roomState
+                                                                    ?.occupants[
+                                                                occupantId];
+                                                            final realJid =
+                                                                occupant
+                                                                    ?.realJid
+                                                                    ?.trim();
+                                                            final bareRealJid = realJid ==
+                                                                        null ||
+                                                                    realJid
+                                                                        .isEmpty
+                                                                ? null
+                                                                : realJid
+                                                                        .contains(
+                                                                    '/',
+                                                                  )
+                                                                    ? realJid
+                                                                        .split(
+                                                                          '/',
+                                                                        )
+                                                                        .first
+                                                                    : realJid;
+                                                            final normalizedBareRealJid =
+                                                                bareRealJid
+                                                                    ?.toLowerCase();
+                                                            final senderJid =
+                                                                messageModel
+                                                                    .senderJid
+                                                                    .trim();
+                                                            final senderBareJid =
+                                                                senderJid
+                                                                        .contains(
+                                                              '/',
+                                                            )
+                                                                    ? senderJid
+                                                                        .split(
+                                                                          '/',
+                                                                        )
+                                                                        .first
+                                                                    : senderJid;
+                                                            final normalizedSenderBareJid =
+                                                                senderBareJid
+                                                                    .toLowerCase();
+                                                            final isRoomChat =
+                                                                state.roomState !=
+                                                                    null;
+                                                            final avatarLookupJid = (normalizedBareRealJid !=
+                                                                        null &&
+                                                                    normalizedBareRealJid
+                                                                        .isNotEmpty)
+                                                                ? normalizedBareRealJid
+                                                                : !isRoomChat &&
+                                                                        normalizedSenderBareJid
+                                                                            .isNotEmpty
+                                                                    ? normalizedSenderBareJid
+                                                                    : null;
+                                                            final messageAvatarPath =
+                                                                avatarLookupJid ==
+                                                                        null
+                                                                    ? null
+                                                                    : rosterAvatarPathsByJid[
+                                                                            avatarLookupJid] ??
+                                                                        chatAvatarPathsByJid[
+                                                                            avatarLookupJid];
+                                                            avatarOverlay =
+                                                                _MessageAvatar(
+                                                              jid: messageModel
+                                                                  .senderJid,
+                                                              size:
+                                                                  _messageAvatarSize,
+                                                              avatarPath:
+                                                                  messageAvatarPath,
+                                                            );
+                                                            avatarStyle =
+                                                                const CutoutStyle(
+                                                              depth:
+                                                                  _messageAvatarCutoutDepth,
+                                                              cornerRadius:
+                                                                  _messageAvatarCutoutRadius,
+                                                              padding:
+                                                                  _messageAvatarCutoutPadding,
+                                                              offset:
+                                                                  Offset.zero,
+                                                              minThickness:
+                                                                  _messageAvatarCutoutMinThickness,
+                                                              cornerClearance:
+                                                                  _messageAvatarCornerClearance,
+                                                              alignment:
+                                                                  _messageAvatarCutoutAlignment,
+                                                            );
+                                                            avatarAnchor =
+                                                                ChatBubbleCutoutAnchor
+                                                                    .left;
+                                                          }
+                                                          extraOuterLeft =
+                                                              requiresAvatarHeadroom
+                                                                  ? _messageAvatarOuterInset
+                                                                  : 0;
+                                                          final outerPadding =
+                                                              EdgeInsets.only(
+                                                            top: 2,
+                                                            bottom: baseOuterBottom +
+                                                                extraOuterBottom,
+                                                            left: _messageListHorizontalPadding +
+                                                                extraOuterLeft,
+                                                            right: _messageListHorizontalPadding +
+                                                                extraOuterRight,
+                                                          );
+                                                          final bubble =
+                                                              TweenAnimationBuilder<
+                                                                  double>(
+                                                            tween:
+                                                                Tween<double>(
+                                                              begin: 0,
+                                                              end: isSelected
+                                                                  ? 1.0
+                                                                  : 0.0,
+                                                            ),
+                                                            duration:
+                                                                _bubbleFocusDuration,
+                                                            curve:
+                                                                _bubbleFocusCurve,
+                                                            child:
+                                                                bubbleContent,
+                                                            builder: (
+                                                              context,
+                                                              shadowValue,
+                                                              child,
+                                                            ) {
+                                                              final bubbleSurface =
+                                                                  ChatBubbleSurface(
+                                                                isSelf: self,
+                                                                backgroundColor:
+                                                                    bubbleSurfaceColor,
+                                                                borderColor:
+                                                                    bubbleSurfaceBorder,
+                                                                borderRadius:
+                                                                    bubbleBorderRadius,
+                                                                shadowOpacity:
+                                                                    hasBubbleText
+                                                                        ? shadowValue
+                                                                        : 0.0,
+                                                                shadows:
+                                                                    _selectedBubbleShadows(
+                                                                  bubbleHighlightColor,
+                                                                ),
+                                                                bubbleWidthFraction:
+                                                                    _cutoutMaxWidthFraction,
+                                                                cornerClearance:
+                                                                    _bubbleRadius +
+                                                                        _reactionCornerClearance,
+                                                                body: child!,
+                                                                reactionOverlay: showReplyStrip
+                                                                    ? _ReplyStrip(
+                                                                        participants:
+                                                                            replyParticipants,
+                                                                        onRecipientTap:
+                                                                            (
+                                                                          chat,
+                                                                        ) {
+                                                                          final chatsCubit =
+                                                                              context.read<ChatsCubit?>();
+                                                                          if (chatsCubit !=
+                                                                              null) {
+                                                                            chatsCubit.pushChat(
+                                                                              jid: chat.jid,
+                                                                            );
+                                                                          }
+                                                                        },
                                                                       )
-                                                                    : messageArrival;
-                                                            final alignedMessage =
-                                                                SizedBox(
-                                                              width:
-                                                                  messageRowMaxWidth,
-                                                              child:
-                                                                  AnimatedAlign(
-                                                                duration:
-                                                                    _bubbleFocusDuration,
+                                                                    : showCompactReactions
+                                                                        ? _ReactionStrip(
+                                                                            reactions:
+                                                                                reactions,
+                                                                            onReactionTap: canReact
+                                                                                ? (
+                                                                                    emoji,
+                                                                                  ) =>
+                                                                                    _toggleQuickReaction(
+                                                                                      messageModel,
+                                                                                      emoji,
+                                                                                    )
+                                                                                : null,
+                                                                          )
+                                                                        : null,
+                                                                reactionStyle: showReplyStrip
+                                                                    ? const CutoutStyle(
+                                                                        depth:
+                                                                            _recipientCutoutDepth,
+                                                                        cornerRadius:
+                                                                            _recipientCutoutRadius,
+                                                                        padding:
+                                                                            _recipientCutoutPadding,
+                                                                        offset:
+                                                                            _recipientCutoutOffset,
+                                                                        minThickness:
+                                                                            _recipientCutoutMinThickness,
+                                                                      )
+                                                                    : showCompactReactions
+                                                                        ? const CutoutStyle(
+                                                                            depth:
+                                                                                _reactionCutoutDepth,
+                                                                            cornerRadius:
+                                                                                _reactionCutoutRadius,
+                                                                            padding:
+                                                                                _reactionCutoutPadding,
+                                                                            offset:
+                                                                                _reactionStripOffset,
+                                                                            minThickness:
+                                                                                _reactionCutoutMinThickness,
+                                                                          )
+                                                                        : null,
+                                                                recipientOverlay:
+                                                                    recipientOverlay,
+                                                                recipientStyle:
+                                                                    recipientStyle,
+                                                                recipientAnchor:
+                                                                    recipientAnchor,
+                                                                avatarOverlay:
+                                                                    avatarOverlay,
+                                                                avatarStyle:
+                                                                    avatarStyle,
+                                                                avatarAnchor:
+                                                                    avatarAnchor,
+                                                                selectionOverlay:
+                                                                    selectionOverlay,
+                                                                selectionStyle:
+                                                                    selectionStyle,
+                                                                selectionFollowsSelfEdge:
+                                                                    false,
+                                                              );
+                                                              return bubbleSurface;
+                                                            },
+                                                          );
+                                                          final shadowedBubble =
+                                                              ConstrainedBox(
+                                                            constraints:
+                                                                bubbleConstraints,
+                                                            child: bubble,
+                                                          );
+                                                          final canResend =
+                                                              message.status ==
+                                                                  MessageStatus
+                                                                      .failed;
+                                                          final canEdit =
+                                                              message.status ==
+                                                                  MessageStatus
+                                                                      .failed;
+                                                          final includeSelectAction =
+                                                              !_multiSelectActive;
+                                                          final isPinned =
+                                                              pinnedStanzaIds
+                                                                  .contains(
+                                                            messageModel
+                                                                .stanzaID,
+                                                          );
+                                                          void onReply() {
+                                                            context
+                                                                .read<
+                                                                    ChatBloc>()
+                                                                .add(
+                                                                  ChatQuoteRequested(
+                                                                    messageModel,
+                                                                  ),
+                                                                );
+                                                            _focusNode
+                                                                .requestFocus();
+                                                          }
+
+                                                          VoidCallback?
+                                                              onForward;
+                                                          if (!(isInviteMessage ||
+                                                              inviteRevoked ||
+                                                              isInviteRevocationMessage)) {
+                                                            onForward = () =>
+                                                                _handleForward(
+                                                                  messageModel,
+                                                                );
+                                                          }
+                                                          void onCopy() =>
+                                                              _copyMessage(
+                                                                dashMessage:
+                                                                    message,
+                                                                model:
+                                                                    messageModel,
+                                                              );
+                                                          void onShare() =>
+                                                              _shareMessage(
+                                                                dashMessage:
+                                                                    message,
+                                                                model:
+                                                                    messageModel,
+                                                              );
+                                                          void onAddToCalendar() =>
+                                                              _handleAddToCalendar(
+                                                                dashMessage:
+                                                                    message,
+                                                                model:
+                                                                    messageModel,
+                                                              );
+                                                          void onDetails() =>
+                                                              _showMessageDetails(
+                                                                message,
+                                                              );
+                                                          VoidCallback?
+                                                              onSelect;
+                                                          if (includeSelectAction) {
+                                                            onSelect = () =>
+                                                                _startMultiSelect(
+                                                                  messageModel,
+                                                                );
+                                                          }
+                                                          VoidCallback?
+                                                              onResend;
+                                                          if (canResend) {
+                                                            onResend = () =>
+                                                                context
+                                                                    .read<
+                                                                        ChatBloc>()
+                                                                    .add(
+                                                                      ChatMessageResendRequested(
+                                                                        messageModel,
+                                                                      ),
+                                                                    );
+                                                          }
+                                                          VoidCallback? onEdit;
+                                                          if (canEdit) {
+                                                            onEdit = () async {
+                                                              await _handleEditMessage(
+                                                                messageModel,
+                                                              );
+                                                            };
+                                                          }
+                                                          VoidCallback?
+                                                              onPinToggle;
+                                                          if (canTogglePins) {
+                                                            onPinToggle = () =>
+                                                                context
+                                                                    .read<
+                                                                        ChatBloc>()
+                                                                    .add(
+                                                                      ChatMessagePinRequested(
+                                                                        message:
+                                                                            messageModel,
+                                                                        pin:
+                                                                            !isPinned,
+                                                                      ),
+                                                                    );
+                                                          }
+                                                          VoidCallback?
+                                                              onRevokeInvite;
+                                                          if (isInviteMessage &&
+                                                              self) {
+                                                            onRevokeInvite =
+                                                                () => context
+                                                                    .read<
+                                                                        ChatBloc>()
+                                                                    .add(
+                                                                      ChatInviteRevocationRequested(
+                                                                        messageModel,
+                                                                      ),
+                                                                    );
+                                                          }
+
+                                                          final Widget
+                                                              actionBar =
+                                                              KeyedSubtree(
+                                                            key:
+                                                                _selectionActionBarKey ??=
+                                                                    GlobalKey(),
+                                                            child:
+                                                                _MessageActionBar(
+                                                              onReply: onReply,
+                                                              onForward:
+                                                                  onForward,
+                                                              onCopy: onCopy,
+                                                              onShare: onShare,
+                                                              shareStatus:
+                                                                  _shareRequestStatus,
+                                                              onAddToCalendar:
+                                                                  onAddToCalendar,
+                                                              onDetails:
+                                                                  onDetails,
+                                                              onSelect:
+                                                                  onSelect,
+                                                              onResend:
+                                                                  onResend,
+                                                              onEdit: onEdit,
+                                                              onPinToggle:
+                                                                  onPinToggle,
+                                                              isPinned:
+                                                                  isPinned,
+                                                              onRevokeInvite:
+                                                                  onRevokeInvite,
+                                                            ),
+                                                          );
+                                                          if (isSingleSelection) {
+                                                            _activeSelectionExtrasKey ??=
+                                                                GlobalKey();
+                                                            _scheduleSelectionAutoscroll();
+                                                            _requestSelectionControlsMeasurement();
+                                                          } else if (_activeSelectionExtrasKey !=
+                                                                  null &&
+                                                              _selectedMessageId ==
+                                                                  messageModel
+                                                                      .stanzaID) {
+                                                            _activeSelectionExtrasKey =
+                                                                null;
+                                                          }
+                                                          final attachmentsKey =
+                                                              isSingleSelection
+                                                                  ? _activeSelectionExtrasKey
+                                                                  : null;
+                                                          final recipientHeadroom =
+                                                              showRecipientCutout
+                                                                  ? _recipientCutoutDepth
+                                                                  : 0.0;
+                                                          final attachmentTopPadding =
+                                                              (isSingleSelection
+                                                                      ? _selectionAttachmentSelectedGap
+                                                                      : _selectionAttachmentBaseGap) +
+                                                                  recipientHeadroom;
+                                                          final attachmentBottomPadding =
+                                                              _selectionExtrasViewportGap +
+                                                                  (showReactionManager
+                                                                      ? _reactionManagerShadowGap
+                                                                      : 0);
+                                                          final attachmentPadding =
+                                                              EdgeInsets.only(
+                                                            top:
+                                                                attachmentTopPadding,
+                                                            bottom:
+                                                                attachmentBottomPadding,
+                                                            left:
+                                                                _chatHorizontalPadding,
+                                                            right:
+                                                                _chatHorizontalPadding,
+                                                          );
+                                                          final reactionManager =
+                                                              showReactionManager
+                                                                  ? KeyedSubtree(
+                                                                      key: _reactionManagerKey ??=
+                                                                          GlobalKey(),
+                                                                      child:
+                                                                          _ReactionManager(
+                                                                        reactions:
+                                                                            reactions,
+                                                                        onToggle: (
+                                                                          emoji,
+                                                                        ) =>
+                                                                            _toggleQuickReaction(
+                                                                          messageModel,
+                                                                          emoji,
+                                                                        ),
+                                                                        onAddCustom:
+                                                                            () =>
+                                                                                _handleReactionSelection(
+                                                                          messageModel,
+                                                                        ),
+                                                                      ),
+                                                                    )
+                                                                  : null;
+                                                          final selectionExtrasKey =
+                                                              ValueKey(
+                                                            'selection-extras-${messageModel.stanzaID}-${isSingleSelection ? 'open' : 'closed'}',
+                                                          );
+                                                          final selectionExtras =
+                                                              isSingleSelection
+                                                                  ? KeyedSubtree(
+                                                                      key:
+                                                                          selectionExtrasKey,
+                                                                      child:
+                                                                          KeyedSubtree(
+                                                                        key:
+                                                                            attachmentsKey,
+                                                                        child:
+                                                                            Align(
+                                                                          alignment: self
+                                                                              ? Alignment.centerRight
+                                                                              : Alignment.centerLeft,
+                                                                          child:
+                                                                              SizedBox(
+                                                                            width:
+                                                                                selectionExtrasMaxWidth,
+                                                                            child:
+                                                                                Padding(
+                                                                              padding: attachmentPadding,
+                                                                              child: Column(
+                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                crossAxisAlignment: CrossAxisAlignment.center,
+                                                                                children: [
+                                                                                  actionBar,
+                                                                                  if (reactionManager != null)
+                                                                                    const SizedBox(
+                                                                                      height: 20,
+                                                                                    ),
+                                                                                  if (reactionManager != null) reactionManager,
+                                                                                ],
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    )
+                                                                  : KeyedSubtree(
+                                                                      key:
+                                                                          selectionExtrasKey,
+                                                                      child: const SizedBox
+                                                                          .shrink(),
+                                                                    );
+                                                          final attachments =
+                                                              AnimatedSwitcher(
+                                                            duration:
+                                                                _bubbleFocusDuration,
+                                                            reverseDuration:
+                                                                _bubbleFocusDuration,
+                                                            switchInCurve:
+                                                                _bubbleFocusCurve,
+                                                            switchOutCurve:
+                                                                Curves
+                                                                    .easeInCubic,
+                                                            layoutBuilder: (
+                                                              currentChild,
+                                                              previousChildren,
+                                                            ) {
+                                                              return Stack(
+                                                                clipBehavior:
+                                                                    Clip.none,
+                                                                alignment:
+                                                                    Alignment
+                                                                        .topCenter,
+                                                                children: [
+                                                                  ...previousChildren,
+                                                                  if (currentChild !=
+                                                                      null)
+                                                                    currentChild,
+                                                                ],
+                                                              );
+                                                            },
+                                                            transitionBuilder:
+                                                                (child,
+                                                                    animation) {
+                                                              final curvedAnimation =
+                                                                  CurvedAnimation(
+                                                                parent:
+                                                                    animation,
                                                                 curve:
                                                                     _bubbleFocusCurve,
-                                                                alignment:
-                                                                    messageRowAlignment,
+                                                                reverseCurve: Curves
+                                                                    .easeInCubic,
+                                                              );
+                                                              final slideAnimation =
+                                                                  Tween<Offset>(
+                                                                begin:
+                                                                    const Offset(
+                                                                  0,
+                                                                  -0.18,
+                                                                ),
+                                                                end:
+                                                                    Offset.zero,
+                                                              ).animate(
+                                                                curvedAnimation,
+                                                              );
+                                                              return ClipRect(
                                                                 child:
-                                                                    selectionRegion,
-                                                              ),
+                                                                    FadeTransition(
+                                                                  opacity:
+                                                                      curvedAnimation,
+                                                                  child:
+                                                                      SizeTransition(
+                                                                    sizeFactor:
+                                                                        curvedAnimation,
+                                                                    axisAlignment:
+                                                                        -1,
+                                                                    child:
+                                                                        SlideTransition(
+                                                                      position:
+                                                                          slideAnimation,
+                                                                      child:
+                                                                          child,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
+                                                            child:
+                                                                selectionExtras,
+                                                          );
+                                                          final messageRowAlignment =
+                                                              self
+                                                                  ? Alignment
+                                                                      .centerRight
+                                                                  : Alignment
+                                                                      .centerLeft;
+                                                          final messageColumnAlignment = self
+                                                              ? CrossAxisAlignment
+                                                                  .end
+                                                              : CrossAxisAlignment
+                                                                  .start;
+                                                          final Widget?
+                                                              replyPreview =
+                                                              quotedModel ==
+                                                                      null
+                                                                  ? null
+                                                                  : () {
+                                                                      final quotedIsSelf =
+                                                                          _isQuotedMessageFromSelf(
+                                                                        quotedMessage:
+                                                                            quotedModel,
+                                                                        isGroupChat:
+                                                                            isGroupChat,
+                                                                        myOccupantId:
+                                                                            myOccupantId,
+                                                                        selfNick:
+                                                                            selfNick,
+                                                                        currentUserId:
+                                                                            currentUserId,
+                                                                      );
+                                                                      final quotedSenderLabel = quotedIsSelf
+                                                                          ? l10n.chatSenderYou
+                                                                          : () {
+                                                                              if (!isGroupChat) {
+                                                                                return quotedModel.senderJid;
+                                                                              }
+                                                                              final occupantId = quotedModel.occupantID?.trim() ?? '';
+                                                                              final occupant = occupantId.isNotEmpty ? state.roomState?.occupants[occupantId] : state.roomState?.occupants[quotedModel.senderJid];
+                                                                              final nick = occupant?.nick.trim() ?? _nickFromSender(quotedModel.senderJid);
+                                                                              final resolved = nick?.trim() ?? '';
+                                                                              return resolved.isNotEmpty ? resolved : quotedModel.senderJid;
+                                                                            }();
+                                                                      return _QuotedMessagePreview(
+                                                                        message:
+                                                                            quotedModel,
+                                                                        senderLabel:
+                                                                            quotedSenderLabel,
+                                                                        isSelf:
+                                                                            self,
+                                                                      );
+                                                                    }();
+                                                          final attachmentsAligned =
+                                                              attachments;
+                                                          final extraShadows =
+                                                              _selectedBubbleShadows(
+                                                            bubbleHighlightColor,
+                                                          );
+                                                          final Widget
+                                                              extrasAligned =
+                                                              bubbleExtraChildren
+                                                                      .isEmpty
+                                                                  ? const SizedBox
+                                                                      .shrink()
+                                                                  : TweenAnimationBuilder<
+                                                                      double>(
+                                                                      tween: Tween<
+                                                                          double>(
+                                                                        begin:
+                                                                            0,
+                                                                        end: isSelected
+                                                                            ? 1.0
+                                                                            : 0.0,
+                                                                      ),
+                                                                      duration:
+                                                                          _bubbleFocusDuration,
+                                                                      curve:
+                                                                          _bubbleFocusCurve,
+                                                                      builder: (
+                                                                        context,
+                                                                        shadowValue,
+                                                                        child,
+                                                                      ) {
+                                                                        return ConstrainedBox(
+                                                                          constraints:
+                                                                              bubbleConstraints,
+                                                                          child:
+                                                                              _MessageExtrasColumn(
+                                                                            shadowValue:
+                                                                                shadowValue,
+                                                                            shadows:
+                                                                                extraShadows,
+                                                                            crossAxisAlignment: self
+                                                                                ? CrossAxisAlignment.end
+                                                                                : CrossAxisAlignment.start,
+                                                                            children:
+                                                                                bubbleExtraChildren,
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                    );
+                                                          final messageKey =
+                                                              _messageKeys
+                                                                  .putIfAbsent(
+                                                            messageModel
+                                                                .stanzaID,
+                                                            () => GlobalKey(),
+                                                          );
+                                                          final bubbleDisplay =
+                                                              shadowedBubble;
+                                                          final selectableBubble =
+                                                              GestureDetector(
+                                                            behavior:
+                                                                HitTestBehavior
+                                                                    .translucent,
+                                                            onTap: () {
+                                                              if (_multiSelectActive) {
+                                                                return;
+                                                              }
+                                                              if (isSingleSelection) {
+                                                                _clearMessageSelection();
+                                                              }
+                                                            },
+                                                            onLongPress: widget
+                                                                        .readOnly ||
+                                                                    isDesktopPlatform
+                                                                ? null
+                                                                : () =>
+                                                                    _toggleMessageSelection(
+                                                                      messageModel,
+                                                                    ),
+                                                            onSecondaryTapUp:
+                                                                isDesktopPlatform &&
+                                                                        !widget
+                                                                            .readOnly
+                                                                    ? (
+                                                                        _,
+                                                                      ) =>
+                                                                        _toggleMessageSelection(
+                                                                          messageModel,
+                                                                        )
+                                                                    : null,
+                                                            child:
+                                                                bubbleDisplay,
+                                                          );
+                                                          final bubbleStack =
+                                                              Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .center,
+                                                            children: [
+                                                              selectableBubble,
+                                                            ],
+                                                          );
+                                                          final shouldShowSenderLabel =
+                                                              isRenderableBubble &&
+                                                                  !_chatMessagesShouldChain(
+                                                                    message,
+                                                                    previous,
+                                                                  );
+                                                          Widget? senderLabel;
+                                                          if (shouldShowSenderLabel) {
+                                                            final double
+                                                                senderLabelLeftInset =
+                                                                !self &&
+                                                                        hasAvatarSlot
+                                                                    ? _messageAvatarContentInset +
+                                                                        _bubblePadding
+                                                                            .left
+                                                                    : _senderLabelNoInset;
+                                                            senderLabel =
+                                                                _MessageSenderLabel(
+                                                              user:
+                                                                  message.user,
+                                                              isSelf: self,
+                                                              selfLabel: l10n
+                                                                  .chatSenderYou,
+                                                              leftInset:
+                                                                  senderLabelLeftInset,
                                                             );
-                                                            return KeyedSubtree(
-                                                              key: messageKey,
-                                                              child: Padding(
-                                                                padding:
-                                                                    outerPadding,
-                                                                child:
-                                                                    alignedMessage,
-                                                              ),
-                                                            );
-                                                          },
+                                                          }
+                                                          final bubbleWithSlack =
+                                                              ConstrainedBox(
+                                                            constraints:
+                                                                BoxConstraints(
+                                                              maxWidth:
+                                                                  bubbleMaxWidth,
+                                                            ),
+                                                            child: bubbleStack,
+                                                          );
+                                                          final Widget
+                                                              bubbleStackWithReply =
+                                                              _ReplyPreviewBubbleColumn(
+                                                            preview:
+                                                                replyPreview,
+                                                            senderLabel:
+                                                                senderLabel,
+                                                            bubble:
+                                                                bubbleWithSlack,
+                                                            spacing:
+                                                                calendarInsetLg,
+                                                          );
+                                                          final messageBody =
+                                                              Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            crossAxisAlignment:
+                                                                messageColumnAlignment,
+                                                            children: [
+                                                              bubbleStackWithReply,
+                                                              if (bubbleExtraChildren
+                                                                  .isNotEmpty)
+                                                                extrasAligned,
+                                                              attachmentsAligned,
+                                                            ],
+                                                          );
+                                                          final bubbleResizeDuration =
+                                                              isSingleSelection
+                                                                  ? _bubbleFocusDuration
+                                                                  : _bubbleSizeSnapDuration;
+                                                          final bubbleResizeCurve =
+                                                              isSingleSelection
+                                                                  ? _bubbleFocusCurve
+                                                                  : Curves
+                                                                      .linear;
+                                                          final Widget
+                                                              animatedMessage =
+                                                              AxiAnimatedSize(
+                                                            duration:
+                                                                bubbleResizeDuration,
+                                                            reverseDuration:
+                                                                bubbleResizeDuration,
+                                                            curve:
+                                                                bubbleResizeCurve,
+                                                            alignment: Alignment
+                                                                .topCenter,
+                                                            clipBehavior:
+                                                                Clip.none,
+                                                            child: messageBody,
+                                                          );
+                                                          final Widget
+                                                              messageRegion =
+                                                              _MessageBubbleRegion(
+                                                            messageId:
+                                                                messageModel
+                                                                    .stanzaID,
+                                                            registry:
+                                                                _bubbleRegionRegistry,
+                                                            child:
+                                                                animatedMessage,
+                                                          );
+                                                          final Widget
+                                                              messageArrival =
+                                                              isRenderableBubble
+                                                                  ? _MessageArrivalAnimator(
+                                                                      key:
+                                                                          ValueKey(
+                                                                        'arrival-${messageModel.stanzaID}',
+                                                                      ),
+                                                                      animate:
+                                                                          _shouldAnimateMessage(
+                                                                        messageModel,
+                                                                      ),
+                                                                      isSelf:
+                                                                          self,
+                                                                      child:
+                                                                          messageRegion,
+                                                                    )
+                                                                  : messageRegion;
+                                                          final Widget
+                                                              selectionRegion =
+                                                              isSingleSelection
+                                                                  ? TapRegion(
+                                                                      groupId:
+                                                                          _selectionTapRegionGroup,
+                                                                      onTapOutside:
+                                                                          _armOutsideTapDismiss,
+                                                                      child:
+                                                                          messageArrival,
+                                                                    )
+                                                                  : messageArrival;
+                                                          final alignedMessage =
+                                                              SizedBox(
+                                                            width:
+                                                                messageRowMaxWidth,
+                                                            child:
+                                                                AnimatedAlign(
+                                                              duration:
+                                                                  _bubbleFocusDuration,
+                                                              curve:
+                                                                  _bubbleFocusCurve,
+                                                              alignment:
+                                                                  messageRowAlignment,
+                                                              child:
+                                                                  selectionRegion,
+                                                            ),
+                                                          );
+                                                          return KeyedSubtree(
+                                                            key: messageKey,
+                                                            child: Padding(
+                                                              padding:
+                                                                  outerPadding,
+                                                              child:
+                                                                  alignedMessage,
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                      messageListOptions:
+                                                          dashMessageListOptions,
+                                                      readOnly: true,
+                                                    ),
+                                                  ),
+                                                  if (loadingMessages)
+                                                    IgnorePointer(
+                                                      child: Align(
+                                                        alignment:
+                                                            Alignment.center,
+                                                        child: SizedBox(
+                                                          width:
+                                                              _messageLoadingSpinnerSize,
+                                                          height:
+                                                              _messageLoadingSpinnerSize,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            strokeWidth:
+                                                                _messageLoadingStrokeWidth,
+                                                            color: context
+                                                                .colorScheme
+                                                                .primary,
+                                                          ),
                                                         ),
-                                                        messageListOptions:
-                                                            dashMessageListOptions,
-                                                        readOnly: true,
                                                       ),
                                                     ),
-                                                    if (loadingMessages)
-                                                      IgnorePointer(
-                                                        child: Align(
-                                                          alignment:
-                                                              Alignment.center,
-                                                          child: SizedBox(
-                                                            width:
-                                                                _messageLoadingSpinnerSize,
-                                                            height:
-                                                                _messageLoadingSpinnerSize,
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                              strokeWidth:
-                                                                  _messageLoadingStrokeWidth,
-                                                              color: context
-                                                                  .colorScheme
-                                                                  .primary,
-                                                            ),
+                                                  if (typingVisible)
+                                                    Positioned(
+                                                      left: 0,
+                                                      right: 0,
+                                                      bottom:
+                                                          _typingIndicatorBottomInset,
+                                                      child: IgnorePointer(
+                                                        child: Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal:
+                                                                _messageListHorizontalPadding,
                                                           ),
-                                                        ),
-                                                      ),
-                                                    if (typingVisible)
-                                                      Positioned(
-                                                        left: 0,
-                                                        right: 0,
-                                                        bottom:
-                                                            _typingIndicatorBottomInset,
-                                                        child: IgnorePointer(
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                              horizontal:
-                                                                  _messageListHorizontalPadding,
-                                                            ),
-                                                            child: Align(
-                                                              alignment: Alignment
-                                                                  .bottomCenter,
-                                                              child:
-                                                                  DecoratedBox(
-                                                                decoration:
-                                                                    BoxDecoration(
+                                                          child: Align(
+                                                            alignment: Alignment
+                                                                .bottomCenter,
+                                                            child: DecoratedBox(
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: context
+                                                                    .colorScheme
+                                                                    .card,
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                  _typingIndicatorRadius,
+                                                                ),
+                                                                border:
+                                                                    Border.all(
                                                                   color: context
                                                                       .colorScheme
-                                                                      .card,
-                                                                  borderRadius:
-                                                                      BorderRadius
-                                                                          .circular(
-                                                                    _typingIndicatorRadius,
-                                                                  ),
-                                                                  border: Border
-                                                                      .all(
-                                                                    color: context
-                                                                        .colorScheme
-                                                                        .border,
-                                                                  ),
+                                                                      .border,
                                                                 ),
-                                                                child: Padding(
-                                                                  padding:
-                                                                      _typingIndicatorPadding,
-                                                                  child:
-                                                                      _TypingIndicatorPill(
-                                                                    participants:
-                                                                        typingAvatars,
-                                                                    avatarPaths:
-                                                                        typingAvatarPaths,
-                                                                  ),
+                                                              ),
+                                                              child: Padding(
+                                                                padding:
+                                                                    _typingIndicatorPadding,
+                                                                child:
+                                                                    _TypingIndicatorPill(
+                                                                  participants:
+                                                                      typingAvatars,
+                                                                  avatarPaths:
+                                                                      typingAvatarPaths,
                                                                 ),
                                                               ),
                                                             ),
                                                           ),
                                                         ),
                                                       ),
-                                                  ],
-                                                ),
+                                                    ),
+                                                ],
                                               ),
                                             ),
                                           ),
-                                          bottomSection,
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                        ),
+                                        bottomSection,
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
-                            ],
-                          );
-                          final Widget calendarOverlay = _ChatCalendarOverlay(
-                            key: ValueKey(
-                              '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
                             ),
-                            chat: chatEntity,
-                            calendarAvailable: chatCalendarAvailable,
-                            participants: chatCalendarParticipants,
-                            avatarPaths: chatCalendarAvatarPaths,
-                            calendarBloc: chatCalendarBloc,
-                          );
-                          final Widget overlayChild = switch (_chatRoute) {
-                            ChatRouteIndex.main => const SizedBox.expand(),
-                            ChatRouteIndex.search => const _ChatSearchOverlay(
-                                panel: _ChatSearchPanel(),
-                              ),
-                            ChatRouteIndex.details => _ChatDetailsOverlay(
-                                onAddRecipient: _handleRecipientAddedFromChat,
-                              ),
-                            ChatRouteIndex.settings => _ChatSettingsOverlay(
-                                state: state,
-                                onViewFilterChanged: _setViewFilter,
-                                onToggleNotifications: _toggleNotifications,
-                                onSpamToggle: (sendToSpam) =>
-                                    _handleSpamToggle(sendToSpam: sendToSpam),
-                                isChatBlocked: isChatBlocked,
-                                blocklistEntry: chatBlocklistEntry,
-                                blockAddress: blockAddress,
-                              ),
-                            ChatRouteIndex.gallery => _ChatGalleryOverlay(
-                                chat: chatEntity,
-                              ),
-                            ChatRouteIndex.calendar => const SizedBox.expand(),
-                          };
+                          ],
+                        );
+                        final Widget calendarOverlay = _ChatCalendarOverlay(
+                          key: ValueKey(
+                            '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                          ),
+                          chat: chatEntity,
+                          calendarAvailable: chatCalendarAvailable,
+                          participants: chatCalendarParticipants,
+                          avatarPaths: chatCalendarAvatarPaths,
+                          calendarBloc: chatCalendarBloc,
+                        );
+                        final Widget overlayChild = switch (_chatRoute) {
+                          ChatRouteIndex.main => const SizedBox.expand(),
+                          ChatRouteIndex.search => const _ChatSearchOverlay(
+                              panel: _ChatSearchPanel(),
+                            ),
+                          ChatRouteIndex.details => _ChatDetailsOverlay(
+                              onAddRecipient: _handleRecipientAddedFromChat,
+                            ),
+                          ChatRouteIndex.settings => _ChatSettingsOverlay(
+                              state: state,
+                              onViewFilterChanged: _setViewFilter,
+                              onToggleNotifications: _toggleNotifications,
+                              onSpamToggle: (sendToSpam) =>
+                                  _handleSpamToggle(sendToSpam: sendToSpam),
+                              isChatBlocked: isChatBlocked,
+                              blocklistEntry: chatBlocklistEntry,
+                              blockAddress: blockAddress,
+                            ),
+                          ChatRouteIndex.gallery => _ChatGalleryOverlay(
+                              chat: chatEntity,
+                            ),
+                          ChatRouteIndex.calendar => const SizedBox.expand(),
+                        };
 
                         final bool isDesktopPlatform =
                             EnvScope.maybeOf(context)?.isDesktopPlatform ??
