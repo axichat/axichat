@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -65,16 +66,22 @@ class _LanguageLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final textStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.foreground,
+    );
     final text = style == LanguageLabelStyle.compact
         ? language.abbreviation(l10n)
         : language.label(l10n);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(language.flag(l10n)),
-        const SizedBox(width: 8),
-        Text(text),
-      ],
+    return DefaultTextStyle.merge(
+      style: textStyle,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(language.flag(l10n)),
+          const SizedBox(width: 8),
+          Text(text),
+        ],
+      ),
     );
   }
 }

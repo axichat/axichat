@@ -92,6 +92,9 @@ class SettingsControls extends StatelessWidget {
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
         final exportState = context.watch<ProfileExportCubit>().state;
+        final selectTextStyle = context.textTheme.small.copyWith(
+          color: context.colorScheme.foreground,
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
@@ -233,12 +236,18 @@ class SettingsControls extends StatelessWidget {
                           .map(
                             (themeMode) => ShadOption<ThemeMode>(
                               value: themeMode,
-                              child: Text(themeMode.label(context.l10n)),
+                              child: Text(
+                                themeMode.label(context.l10n),
+                                style: selectTextStyle,
+                              ),
                             ),
                           )
                           .toList(),
                       selectedOptionBuilder: (BuildContext context, mode) =>
-                          Text(mode.label(context.l10n)),
+                          Text(
+                        mode.label(context.l10n),
+                        style: selectTextStyle,
+                      ),
                     ),
                   ),
                 ],
@@ -261,13 +270,16 @@ class SettingsControls extends StatelessWidget {
                           .map(
                             (colorScheme) => ShadOption<ShadColor>(
                               value: colorScheme,
-                              child: Text(colorScheme.name),
+                              child: Text(
+                                colorScheme.name,
+                                style: selectTextStyle,
+                              ),
                             ),
                           )
                           .toList(),
                       selectedOptionBuilder:
                           (BuildContext context, ShadColor value) =>
-                              Text(value.name),
+                              Text(value.name, style: selectTextStyle),
                     ),
                   ),
                 ],
@@ -474,14 +486,17 @@ class SettingsControls extends StatelessWidget {
             _SettingsLinkButton(
               label: context.l10n.settingsTermsLabel,
               link: termsUrl,
+              iconData: LucideIcons.fileText,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsPrivacyLabel,
               link: privacyUrl,
+              iconData: LucideIcons.shieldCheck,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsLicenseAgpl,
               link: licenseUrl,
+              iconData: LucideIcons.fileText,
             ),
           ],
         );
@@ -670,43 +685,36 @@ class _SettingsActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final backgroundColor = colors.card;
     final foregroundColor =
         destructive ? colors.destructive : colors.foreground;
-    final verticalInset = _compactTilePadding.vertical * 2 / 3;
+    final verticalInset = _compactTilePadding.vertical / 2;
     final iconSpacing = _compactTilePadding.horizontal / 2;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: _compactTilePadding.horizontal,
         vertical: verticalInset,
       ),
-      child: ClipRRect(
-        borderRadius: context.radius,
-        child: ColoredBox(
-          color: backgroundColor,
-          child: SizedBox(
-            width: double.infinity,
-            child: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: onPressed,
-              child: IconTheme.merge(
-                data: IconThemeData(color: foregroundColor),
-                child: DefaultTextStyle.merge(
-                  style: context.textTheme.small.copyWith(
-                    color: foregroundColor,
-                  ),
-                  child: Row(
-                    children: [
-                      if (iconData != null) Icon(iconData),
-                      if (iconData != null) SizedBox(width: iconSpacing),
-                      Expanded(child: Text(label)),
-                    ],
-                  ),
-                ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: onPressed,
+          child: IconTheme.merge(
+            data: IconThemeData(color: foregroundColor),
+            child: DefaultTextStyle.merge(
+              style: context.textTheme.small.copyWith(
+                color: foregroundColor,
+              ),
+              child: Row(
+                children: [
+                  if (iconData != null) Icon(iconData),
+                  if (iconData != null) SizedBox(width: iconSpacing),
+                  Expanded(child: Text(label)),
+                ],
               ),
             ),
           ),
-        ),
+        ).withTapBounce(enabled: onPressed != null),
       ),
     );
   }
@@ -716,10 +724,12 @@ class _SettingsLinkButton extends StatelessWidget {
   const _SettingsLinkButton({
     required this.label,
     required this.link,
+    this.iconData,
   });
 
   final String label;
   final String link;
+  final IconData? iconData;
 
   @override
   Widget build(BuildContext context) {
@@ -727,6 +737,7 @@ class _SettingsLinkButton extends StatelessWidget {
       uri: Uri.parse(link),
       builder: (_, followLink) => _SettingsActionButton(
         label: label,
+        iconData: iconData,
         onPressed: followLink,
       ),
     );
@@ -767,6 +778,9 @@ class MessageStorageTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final selectTextStyle = context.textTheme.small.copyWith(
+      color: colors.foreground,
+    );
     return AnimatedContainer(
       duration: baseAnimationDuration,
       decoration: ShapeDecoration(
@@ -822,6 +836,7 @@ class MessageStorageTile extends StatelessWidget {
                                 mode.isLocal
                                     ? l10n.settingsMessageStorageLocal
                                     : l10n.settingsMessageStorageServerOnly,
+                                style: selectTextStyle,
                               ),
                             ),
                           )
@@ -830,6 +845,7 @@ class MessageStorageTile extends StatelessWidget {
                         mode.isLocal
                             ? l10n.settingsMessageStorageLocal
                             : l10n.settingsMessageStorageServerOnly,
+                        style: selectTextStyle,
                       ),
                     );
                   },

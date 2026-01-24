@@ -69,46 +69,39 @@ class EmailContactImportActionButton extends StatelessWidget {
             horizontal: horizontalInset,
             vertical: verticalInset,
           ),
-          child: ClipRRect(
-            borderRadius: context.radius,
-            child: ColoredBox(
-              color: colors.card,
-              child: SizedBox(
-                width: double.infinity,
-                child: ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: loading
-                      ? null
-                      : () {
-                          showFadeScaleDialog(
-                            context: context,
-                            builder: (dialogContext) =>
-                                EmailContactImportDialog(
-                              cubit: context.read<EmailContactImportCubit>()
-                                ..reset(),
-                            ),
-                          );
-                        },
-                  child: Row(
-                    children: [
-                      Icon(
-                        LucideIcons.userRoundPlus,
+          child: SizedBox(
+            width: double.infinity,
+            child: ShadButton.ghost(
+              size: ShadButtonSize.sm,
+              onPressed: loading
+                  ? null
+                  : () {
+                      showFadeScaleDialog(
+                        context: context,
+                        builder: (dialogContext) => EmailContactImportDialog(
+                          cubit: context.read<EmailContactImportCubit>()
+                            ..reset(),
+                        ),
+                      );
+                    },
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.userRoundPlus,
+                    color: colors.foreground,
+                  ),
+                  const SizedBox(width: _dialogFieldSpacing),
+                  Expanded(
+                    child: Text(
+                      context.l10n.emailContactsImportTitle,
+                      style: context.textTheme.small.copyWith(
                         color: colors.foreground,
                       ),
-                      const SizedBox(width: _dialogFieldSpacing),
-                      Expanded(
-                        child: Text(
-                          context.l10n.emailContactsImportTitle,
-                          style: context.textTheme.small.copyWith(
-                            color: colors.foreground,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ),
+            ).withTapBounce(enabled: !loading),
           ),
         );
       },
@@ -217,6 +210,9 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
         final TextStyle fileStyle = _selectedFileName == null
             ? context.textTheme.muted
             : context.textTheme.small;
+        final TextStyle selectTextStyle = context.textTheme.small.copyWith(
+          color: context.colorScheme.foreground,
+        );
         final EmailContactImportFailureReason? failureReason =
             state is EmailContactImportFailure ? state.reason : null;
         return AxiInputDialog(
@@ -256,12 +252,15 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                     .map(
                       (format) => ShadOption<EmailContactImportFormat>(
                         value: format,
-                        child: Text(format.label(l10n)),
+                        child: Text(
+                          format.label(l10n),
+                          style: selectTextStyle,
+                        ),
                       ),
                     )
                     .toList(),
                 selectedOptionBuilder: (context, format) =>
-                    Text(format.label(l10n)),
+                    Text(format.label(l10n), style: selectTextStyle),
               ),
               const SizedBox(height: _dialogRowSpacing),
               Text(
