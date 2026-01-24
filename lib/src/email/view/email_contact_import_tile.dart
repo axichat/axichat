@@ -72,7 +72,7 @@ class EmailContactImportActionButton extends StatelessWidget {
           child: ClipRRect(
             borderRadius: context.radius,
             child: ColoredBox(
-              color: colors.card,
+              color: colors.secondary,
               child: SizedBox(
                 width: double.infinity,
                 child: ShadButton.ghost(
@@ -106,7 +106,7 @@ class EmailContactImportActionButton extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
+                ).withTapBounce(enabled: !loading),
               ),
             ),
           ),
@@ -217,6 +217,9 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
         final TextStyle fileStyle = _selectedFileName == null
             ? context.textTheme.muted
             : context.textTheme.small;
+        final TextStyle selectTextStyle = context.textTheme.small.copyWith(
+          color: context.colorScheme.foreground,
+        );
         final EmailContactImportFailureReason? failureReason =
             state is EmailContactImportFailure ? state.reason : null;
         return AxiInputDialog(
@@ -256,12 +259,15 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                     .map(
                       (format) => ShadOption<EmailContactImportFormat>(
                         value: format,
-                        child: Text(format.label(l10n)),
+                        child: Text(
+                          format.label(l10n),
+                          style: selectTextStyle,
+                        ),
                       ),
                     )
                     .toList(),
                 selectedOptionBuilder: (context, format) =>
-                    Text(format.label(l10n)),
+                    Text(format.label(l10n), style: selectTextStyle),
               ),
               const SizedBox(height: _dialogRowSpacing),
               Text(
