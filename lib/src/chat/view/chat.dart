@@ -1308,6 +1308,8 @@ class _ChatState extends State<Chat> {
       return null;
     }
     final reminderController = context.read<CalendarReminderController>();
+    final xmppService = context.read<XmppService>();
+    final emailService = context.read<EmailService?>();
     final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
       context,
     );
@@ -1316,6 +1318,8 @@ class _ChatState extends State<Chat> {
       chatType: resolvedChat.type,
       coordinator: resolvedCoordinator,
       storage: storage,
+      xmppService: xmppService,
+      emailService: emailService,
       reminderController: reminderController,
       availabilityCoordinator: availabilityCoordinator,
     )..add(const CalendarEvent.started());
@@ -13995,12 +13999,19 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     Navigator.of(context).pop(selected);
   }
 
+  Future<void> _handleClose() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),
-      onClose: () => Navigator.of(context).maybePop(),
+      onClose: _handleClose,
     );
     return AxiSheetScaffold.scroll(
       header: header,

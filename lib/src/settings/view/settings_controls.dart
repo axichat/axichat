@@ -115,8 +115,12 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            ListItemPadding(child: const EmailForwardingGuideActionButton()),
-            ListItemPadding(child: const EmailContactImportActionButton()),
+            const ListItemPadding(
+              child: EmailForwardingGuideActionButton(),
+            ),
+            const ListItemPadding(
+              child: EmailContactImportActionButton(),
+            ),
             _SettingsActionButton(
               iconData: LucideIcons.image,
               label: context.l10n.draftAttachmentsLabel,

@@ -12,8 +12,6 @@ import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
