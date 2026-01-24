@@ -311,6 +311,11 @@ class _ProfileMainView extends StatelessWidget {
                         card,
                         const SizedBox(height: _profileCardSectionSpacing),
                         const ProfileFingerprint(),
+                        const SizedBox(height: _profileCardSectionSpacing),
+                        _SettingsJumpMenu(
+                          anchors: settingsAnchors,
+                          alignment: Alignment.center,
+                        ),
                       ],
                     ),
                   ),
@@ -348,7 +353,10 @@ class _ProfileMainView extends StatelessWidget {
                   const SizedBox(height: _profileCardSectionSpacing),
                   const ProfileFingerprint(),
                   const SizedBox(height: _profileCardSectionSpacing),
-                  _SettingsJumpMenu(anchors: settingsAnchors),
+                  _SettingsJumpMenu(
+                    anchors: settingsAnchors,
+                    alignment: Alignment.centerRight,
+                  ),
                 ],
               ),
             ),
@@ -682,9 +690,13 @@ class _SettingsPanel extends StatelessWidget {
 }
 
 class _SettingsJumpMenu extends StatelessWidget {
-  const _SettingsJumpMenu({required this.anchors});
+  const _SettingsJumpMenu({
+    required this.anchors,
+    required this.alignment,
+  });
 
   final SettingsSectionAnchors anchors;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -700,6 +712,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.accountKey,
             animationDuration,
           ),
+          alignment: alignment,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionData,
@@ -707,6 +720,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.dataKey,
             animationDuration,
           ),
+          alignment: alignment,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionAppearance,
@@ -714,6 +728,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.appearanceKey,
             animationDuration,
           ),
+          alignment: alignment,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionChats,
@@ -721,6 +736,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.chatPreferencesKey,
             animationDuration,
           ),
+          alignment: alignment,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionEmail,
@@ -728,6 +744,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.emailPreferencesKey,
             animationDuration,
           ),
+          alignment: alignment,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionAbout,
@@ -735,6 +752,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.aboutKey,
             animationDuration,
           ),
+          alignment: alignment,
         ),
       ],
     );
@@ -760,22 +778,27 @@ class _SettingsJumpLink extends StatelessWidget {
   const _SettingsJumpLink({
     required this.label,
     required this.onTap,
+    required this.alignment,
   });
 
   final String label;
   final VoidCallback onTap;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
+    return SizedBox(
+      width: double.infinity,
       child: ShadButton.ghost(
         size: ShadButtonSize.sm,
         onPressed: onTap,
-        child: Text(
-          label,
-          style: context.textTheme.muted.copyWith(
-            color: context.colorScheme.mutedForeground,
+        child: Align(
+          alignment: alignment,
+          child: Text(
+            label,
+            style: context.textTheme.muted.copyWith(
+              color: context.colorScheme.mutedForeground,
+            ),
           ),
         ),
       ),

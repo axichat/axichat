@@ -3380,6 +3380,24 @@ abstract class AppLocalizations {
   /// **'About'**
   String get settingsSectionAbout;
 
+  /// No description provided for @settingsAboutAxichat.
+  ///
+  /// In en, this message translates to:
+  /// **'About Axichat'**
+  String get settingsAboutAxichat;
+
+  /// No description provided for @settingsTermsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms'**
+  String get settingsTermsLabel;
+
+  /// No description provided for @settingsPrivacyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get settingsPrivacyLabel;
+
   /// No description provided for @settingsLicenseAgpl.
   ///
   /// In en, this message translates to:
