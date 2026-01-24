@@ -1836,6 +1836,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsButtonLabel => 'Configuración';
 
   @override
+  String get settingsSectionAccount => 'Account';
+
+  @override
+  String get settingsSectionData => 'Data';
+
+  @override
   String get settingsSectionImportant => 'Importante';
 
   @override
@@ -1874,10 +1880,16 @@ class AppLocalizationsEs extends AppLocalizations {
       'Desactiva la mayoría de las animaciones. Mejor para dispositivos lentos.';
 
   @override
-  String get settingsSectionChats => 'Chats';
+  String get settingsSectionChats => 'Chat preferences';
 
   @override
-  String get settingsSectionEmail => 'Correo';
+  String get settingsSectionEmail => 'Email preferences';
+
+  @override
+  String get settingsSectionAbout => 'About';
+
+  @override
+  String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
   String get settingsMessageStorageTitle => 'Almacenamiento de mensajes';

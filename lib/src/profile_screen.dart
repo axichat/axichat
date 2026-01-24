@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -10,9 +9,7 @@ import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
-import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
-import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -23,31 +20,24 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
-import 'package:axichat/src/profile/view/contact_export_sheet.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
-import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:url_launcher/link.dart';
 
 import 'authentication/view/logout_button.dart';
 
 enum _ProfileRoute { main, changePassword, delete }
 
-const double _profileActionSpacing = 8.0;
 const double _profileHeaderSpacing = 12.0;
 const double _profileHeaderTextSpacing = 4.0;
 const double _profileHeaderWrapSpacing = 2.0;
@@ -64,27 +54,7 @@ const double _profileWideLayoutMinWidth = _profileColumnMaxWidth +
     _profileSettingsMinWidth +
     _profileWideColumnSpacing +
     _profileWideHorizontalPadding * 2;
-const double _profileLegalSeparatorSpacing = 6.0;
-const double _profileLegalFontSizeDelta = 2.0;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
-const String _profileAgplLabel = 'AGPLv3';
-const String _profileLegalSeparatorText = '•';
-const double _profileSettingsCompactTileHeight = 52.0;
-const EdgeInsets _profileSettingsCompactTilePadding = EdgeInsets.symmetric(
-  horizontal: 16,
-  vertical: 6,
-);
-const String _aboutLegalese = 'Copyright (C) 2025 Axichat LLC\n\n'
-    'This program is free software: you can redistribute it and/or modify '
-    'it under the terms of the GNU Affero General Public License as '
-    'published by the Free Software Foundation, either version 3 of the '
-    'License, or (at your option) any later version.\n\n'
-    'This program is distributed in the hope that it will be useful, '
-    'but WITHOUT ANY WARRANTY; without even the implied warranty of '
-    'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
-    'GNU Affero General Public License for more details.\n\n'
-    'You should have received a copy of the GNU Affero General Public License '
-    'along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.locate});
@@ -135,10 +105,12 @@ class _ProfileBodyState extends State<_ProfileBody> {
   var _profileRoute = _ProfileRoute.main;
   final ScrollController _settingsScrollController = ScrollController();
   final SettingsSectionAnchors _settingsAnchors = SettingsSectionAnchors(
-    importantKey: GlobalKey(),
+    accountKey: GlobalKey(),
+    dataKey: GlobalKey(),
     appearanceKey: GlobalKey(),
-    chatsKey: GlobalKey(),
-    emailKey: GlobalKey(),
+    chatPreferencesKey: GlobalKey(),
+    emailPreferencesKey: GlobalKey(),
+    aboutKey: GlobalKey(),
   );
 
   @override
@@ -187,7 +159,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final colors = context.colorScheme;
         final demoOffline =
             context.read<XmppService?>()?.demoOfflineMode ?? false;
-        final profileSidebarColor = colors.card;
+        final profileSidebarColor = colors.background;
         final ConnectionState connectionState = _xmppStateFor(
           state,
           demoOffline: demoOffline,
@@ -311,6 +283,8 @@ class _ProfileMainView extends StatelessWidget {
       showTopDivider: !isWideLayout,
       applicationVersion: applicationVersion,
       anchors: settingsAnchors,
+      locate: locate,
+      onNavigate: onNavigate,
     );
     if (!isWideLayout) {
       const profileSectionPadding = EdgeInsets.symmetric(
@@ -380,6 +354,7 @@ class _ProfileMainView extends StatelessWidget {
             ),
           ),
         ),
+        Container(width: 1, color: context.colorScheme.border),
         const SizedBox(width: _profileWideColumnSpacing),
         Expanded(
           child: SingleChildScrollView(
@@ -421,8 +396,6 @@ class _ProfileCardSection extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, profileState) {
-        final exportState = context.watch<ProfileExportCubit>().state;
-        final exportEnabled = !exportState.isBusy;
         final usernameStyle = context.textTheme.large.copyWith(
           fontWeight: FontWeight.w700,
           color: context.colorScheme.foreground,
@@ -434,101 +407,6 @@ class _ProfileCardSection extends StatelessWidget {
           builder: (context, constraints) {
             final bool wideCard = isWideLayout && constraints.maxWidth >= 360.0;
             final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
-            final actions = <AxiMenuAction>[
-              AxiMenuAction(
-                label: l10n.profileEditAvatar,
-                icon: LucideIcons.user,
-                onPressed: () => context.push(
-                  const AvatarEditorRoute().location,
-                  extra: locate,
-                ),
-              ),
-              AxiMenuAction(
-                label: l10n.profileArchives,
-                icon: LucideIcons.archive,
-                onPressed: () => context.push(
-                  const ArchivesRoute().location,
-                  extra: locate,
-                ),
-              ),
-              AxiMenuAction(
-                label: l10n.profileExportActionLabel(
-                  ProfileExportKind.xmppMessages.label(l10n),
-                ),
-                icon: LucideIcons.messagesSquare,
-                enabled: exportEnabled,
-                onPressed: exportEnabled
-                    ? () async {
-                        await _handleXmppMessageExport(context);
-                      }
-                    : null,
-              ),
-              AxiMenuAction(
-                label: l10n.profileExportActionLabel(
-                  ProfileExportKind.xmppContacts.label(l10n),
-                ),
-                icon: LucideIcons.users,
-                enabled: exportEnabled,
-                onPressed: exportEnabled
-                    ? () async {
-                        await _handleXmppContactsExport(context);
-                      }
-                    : null,
-              ),
-              AxiMenuAction(
-                label: l10n.profileExportActionLabel(
-                  ProfileExportKind.emailMessages.label(l10n),
-                ),
-                icon: LucideIcons.mail,
-                enabled: exportEnabled,
-                onPressed: exportEnabled
-                    ? () async {
-                        await _handleEmailMessageExport(context);
-                      }
-                    : null,
-              ),
-              AxiMenuAction(
-                label: l10n.profileExportActionLabel(
-                  ProfileExportKind.emailContacts.label(l10n),
-                ),
-                icon: LucideIcons.userRound,
-                enabled: exportEnabled,
-                onPressed: exportEnabled
-                    ? () async {
-                        await _handleEmailContactsExport(context);
-                      }
-                    : null,
-              ),
-              AxiMenuAction(
-                label: l10n.profileChangePassword,
-                icon: LucideIcons.keyRound,
-                onPressed: () => onNavigate(_ProfileRoute.changePassword),
-              ),
-              AxiMenuAction(
-                label: l10n.profileDeleteAccount,
-                icon: LucideIcons.trash2,
-                destructive: true,
-                onPressed: () => onNavigate(_ProfileRoute.delete),
-              ),
-            ];
-            final attachmentButton = AxiIconButton(
-              iconData: LucideIcons.image,
-              tooltip: l10n.draftAttachmentsLabel,
-              onPressed: () => context.push(
-                const AttachmentGalleryRoute().location,
-                extra: locate,
-              ),
-            );
-            final actionButtons = Wrap(
-              alignment: WrapAlignment.center,
-              spacing: _profileActionSpacing,
-              runSpacing: _profileActionSpacing,
-              children: [
-                const LogoutButton(),
-                attachmentButton,
-                AxiMore(actions: actions),
-              ],
-            );
             final header = Align(
               alignment: Alignment.center,
               child: ConstrainedBox(
@@ -618,6 +496,8 @@ class _ProfileCardSection extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(width: _profileHeaderSpacing),
+                    const LogoutButton(),
                   ],
                 ),
               ),
@@ -663,167 +543,16 @@ class _ProfileCardSection extends StatelessWidget {
                     },
                   ),
                 ),
-                Align(alignment: Alignment.center, child: actionButtons),
               ],
             );
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: _profileCardSectionSpacing,
-              children: [profileCard, const _ProfileLegalLinks()],
+              children: [profileCard],
             );
           },
         );
       },
-    );
-  }
-
-  Future<void> _handleXmppMessageExport(BuildContext context) async {
-    final bool confirmed = await _confirmMessageExport(context);
-    if (!context.mounted || !confirmed) {
-      return;
-    }
-    final result =
-        await context.read<ProfileExportCubit>().exportXmppMessages();
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
-  }
-
-  Future<void> _handleEmailMessageExport(BuildContext context) async {
-    final bool confirmed = await _confirmMessageExport(context);
-    if (!context.mounted || !confirmed) {
-      return;
-    }
-    final result =
-        await context.read<ProfileExportCubit>().exportEmailMessages();
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
-  }
-
-  Future<void> _handleXmppContactsExport(BuildContext context) async {
-    final ContactExportFormat? format = await showContactExportFormatSheet(
-      context,
-    );
-    if (!context.mounted || format == null) {
-      return;
-    }
-    final result = await context.read<ProfileExportCubit>().exportXmppContacts(
-          format,
-        );
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
-  }
-
-  Future<void> _handleEmailContactsExport(BuildContext context) async {
-    final ContactExportFormat? format = await showContactExportFormatSheet(
-      context,
-    );
-    if (!context.mounted || format == null) {
-      return;
-    }
-    final result = await context.read<ProfileExportCubit>().exportEmailContacts(
-          format,
-        );
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
-  }
-
-  Future<bool> _confirmMessageExport(BuildContext context) async {
-    final l10n = context.l10n;
-    final bool? confirmed = await confirm(
-      context,
-      title: l10n.chatExportWarningTitle,
-      message: l10n.chatExportWarningMessage,
-      confirmLabel: l10n.commonContinue,
-      cancelLabel: l10n.commonCancel,
-      destructiveConfirm: false,
-    );
-    return confirmed == true;
-  }
-
-  Future<void> _handleExportResult(
-    BuildContext context,
-    ProfileExportResult result,
-  ) async {
-    final showToast = ShadToaster.maybeOf(context)?.show;
-    final l10n = context.l10n;
-    final label = result.kind.label(l10n);
-    if (result.outcome.isEmpty) {
-      showToast?.call(
-        FeedbackToast.info(message: l10n.profileExportEmptyMessage(label)),
-      );
-      return;
-    }
-    if (result.outcome.isFailure || result.file == null) {
-      showToast?.call(
-        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
-      );
-      return;
-    }
-    final exportFile = result.file!;
-    final exportFileName = p.basename(exportFile.path);
-    if (!await exportFile.exists()) {
-      if (!context.mounted) {
-        return;
-      }
-      showToast?.call(
-        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
-      );
-      return;
-    }
-    String? savePath;
-    try {
-      savePath = await FilePicker.platform.saveFile(fileName: exportFileName);
-    } on Exception {
-      if (!context.mounted) {
-        return;
-      }
-      showToast?.call(
-        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
-      );
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    if (savePath == null || savePath.trim().isEmpty) {
-      return;
-    }
-    try {
-      final destination = File(savePath);
-      final samePath = p.equals(destination.path, exportFile.path);
-      if (!samePath) {
-        if (await destination.exists()) {
-          await destination.delete();
-        }
-        await exportFile.copy(destination.path);
-        try {
-          await exportFile.delete();
-        } on Exception {
-          // Keep going even if temp cleanup fails.
-        }
-      }
-    } on Exception {
-      if (!context.mounted) {
-        return;
-      }
-      showToast?.call(
-        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
-      );
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    showToast?.call(
-      FeedbackToast.success(message: l10n.profileExportReadyMessage(label)),
     );
   }
 }
@@ -841,95 +570,6 @@ class _ProfileStatusHeader extends StatelessWidget {
         SizedBox(height: _profileIndicatorSpacing),
         ShorebirdChecker(),
       ],
-    );
-  }
-}
-
-class _ProfileLegalLinks extends StatelessWidget {
-  const _ProfileLegalLinks();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final baseSize = context.textTheme.small.fontSize;
-    final textStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-      fontSize: baseSize == null ? null : baseSize - _profileLegalFontSizeDelta,
-    );
-    final termsLabel = l10n.termsAgreementTerms.toUpperCase();
-    final privacyLabel = l10n.termsAgreementPrivacy.toUpperCase();
-    final Widget termsLink = _ProfileMutedLink(
-      link: termsUrl,
-      text: termsLabel,
-      textStyle: textStyle,
-    );
-    final Widget privacyLink = _ProfileMutedLink(
-      link: privacyUrl,
-      text: privacyLabel,
-      textStyle: textStyle,
-    );
-    final Widget agplLink = _ProfileMutedLink(
-      link: licenseUrl,
-      text: _profileAgplLabel,
-      textStyle: textStyle,
-    );
-    final Widget separator = Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: _profileLegalSeparatorSpacing,
-      ),
-      child: Text(_profileLegalSeparatorText, style: textStyle),
-    );
-    final Widget trailingSeparator = Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: _profileLegalSeparatorSpacing,
-      ),
-      child: Text(_profileLegalSeparatorText, style: textStyle),
-    );
-    return Align(
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: _profileHeaderTextSpacing,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            runSpacing: _profileHeaderWrapSpacing,
-            children: [
-              termsLink,
-              separator,
-              privacyLink,
-              trailingSeparator,
-              agplLink,
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileMutedLink extends StatelessWidget {
-  const _ProfileMutedLink({
-    required this.text,
-    required this.link,
-    required this.textStyle,
-  });
-
-  final String text;
-  final String link;
-  final TextStyle? textStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Link(
-      uri: Uri.parse(link),
-      builder: (_, followLink) => ShadGestureDetector(
-        cursor: SystemMouseCursors.click,
-        hoverStrategies: mobileHoverStrategies,
-        onTap: followLink,
-        child: Text(text, style: textStyle),
-      ),
     );
   }
 }
@@ -1013,11 +653,15 @@ class _SettingsPanel extends StatelessWidget {
     required this.showTopDivider,
     required this.applicationVersion,
     required this.anchors,
+    required this.locate,
+    required this.onNavigate,
   });
 
   final bool showTopDivider;
   final String? applicationVersion;
   final SettingsSectionAnchors anchors;
+  final T Function<T>() locate;
+  final ValueChanged<_ProfileRoute> onNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -1027,20 +671,13 @@ class _SettingsPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SettingsControls(showDivider: showTopDivider, anchors: anchors),
-        ListItemPadding(
-          child: AxiListTile(
-            leading: const Icon(LucideIcons.info),
-            title: aboutLabel,
-            onTap: () => showAboutDialog(
-              context: context,
-              applicationName: appDisplayName,
-              applicationVersion: applicationVersion,
-              applicationLegalese: _aboutLegalese,
-            ),
-            minTileHeight: _profileSettingsCompactTileHeight,
-            contentPadding: _profileSettingsCompactTilePadding,
-          ),
+        SettingsControls(
+          showDivider: showTopDivider,
+          anchors: anchors,
+          locate: locate,
+          onChangePassword: () => onNavigate(_ProfileRoute.changePassword),
+          onDeleteAccount: () => onNavigate(_ProfileRoute.delete),
+          applicationVersion: applicationVersion,
         ),
       ],
     );
@@ -1058,38 +695,47 @@ class _SettingsJumpMenu extends StatelessWidget {
         context.watch<SettingsCubit>().animationDuration;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: _profileHeaderTextSpacing,
       children: [
-        Text(
-          context.l10n.settingsButtonLabel,
-          style: context.textTheme.muted,
-        ),
-        const SizedBox(height: _profileHeaderTextSpacing),
-        if (context.read<Capability>().canForegroundService)
-          _SettingsJumpTile(
-            label: context.l10n.settingsSectionImportant,
-            onTap: () async => await _jumpTo(
-              anchors.importantKey,
-              animationDuration,
-            ),
+        _SettingsJumpLink(
+          label: context.l10n.settingsSectionAccount,
+          onTap: () async => await _jumpTo(
+            anchors.accountKey,
+            animationDuration,
           ),
-        _SettingsJumpTile(
+        ),
+        _SettingsJumpLink(
+          label: context.l10n.settingsSectionData,
+          onTap: () async => await _jumpTo(
+            anchors.dataKey,
+            animationDuration,
+          ),
+        ),
+        _SettingsJumpLink(
           label: context.l10n.settingsSectionAppearance,
           onTap: () async => await _jumpTo(
             anchors.appearanceKey,
             animationDuration,
           ),
         ),
-        _SettingsJumpTile(
+        _SettingsJumpLink(
           label: context.l10n.settingsSectionChats,
           onTap: () async => await _jumpTo(
-            anchors.chatsKey,
+            anchors.chatPreferencesKey,
             animationDuration,
           ),
         ),
-        _SettingsJumpTile(
+        _SettingsJumpLink(
           label: context.l10n.settingsSectionEmail,
           onTap: () async => await _jumpTo(
-            anchors.emailKey,
+            anchors.emailPreferencesKey,
+            animationDuration,
+          ),
+        ),
+        _SettingsJumpLink(
+          label: context.l10n.settingsSectionAbout,
+          onTap: () async => await _jumpTo(
+            anchors.aboutKey,
             animationDuration,
           ),
         ),
@@ -1113,8 +759,8 @@ class _SettingsJumpMenu extends StatelessWidget {
   }
 }
 
-class _SettingsJumpTile extends StatelessWidget {
-  const _SettingsJumpTile({
+class _SettingsJumpLink extends StatelessWidget {
+  const _SettingsJumpLink({
     required this.label,
     required this.onTap,
   });
@@ -1124,12 +770,17 @@ class _SettingsJumpTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListItemPadding(
-      child: AxiListTile(
-        title: label,
-        onTap: onTap,
-        minTileHeight: _profileSettingsCompactTileHeight,
-        contentPadding: _profileSettingsCompactTilePadding,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ShadButton.ghost(
+        size: ShadButtonSize.sm,
+        onPressed: onTap,
+        child: Text(
+          label,
+          style: context.textTheme.muted.copyWith(
+            color: context.colorScheme.mutedForeground,
+          ),
+        ),
       ),
     );
   }
@@ -1152,13 +803,4 @@ class _ProfileFormPage extends StatelessWidget {
       ),
     );
   }
-}
-
-extension ProfileExportKindLabels on ProfileExportKind {
-  String label(AppLocalizations l10n) => switch (this) {
-        ProfileExportKind.xmppMessages => l10n.profileExportXmppMessagesLabel,
-        ProfileExportKind.xmppContacts => l10n.profileExportXmppContactsLabel,
-        ProfileExportKind.emailMessages => l10n.profileExportEmailMessagesLabel,
-        ProfileExportKind.emailContacts => l10n.profileExportEmailContactsLabel,
-      };
 }

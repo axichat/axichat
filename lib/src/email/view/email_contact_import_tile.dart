@@ -53,6 +53,49 @@ class EmailContactImportTile extends StatelessWidget {
   }
 }
 
+class EmailContactImportActionButton extends StatelessWidget {
+  const EmailContactImportActionButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
+      selector: (state) => state is EmailContactImportInProgress,
+      builder: (context, loading) {
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: loading
+                ? null
+                : () {
+                    showFadeScaleDialog(
+                      context: context,
+                      builder: (dialogContext) => EmailContactImportDialog(
+                        cubit: context.read<EmailContactImportCubit>()..reset(),
+                      ),
+                    );
+                  },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.userRoundPlus, color: colors.mutedForeground),
+                const SizedBox(width: _dialogFieldSpacing),
+                Text(
+                  context.l10n.emailContactsImportTitle,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class EmailContactImportDialog extends StatefulWidget {
   const EmailContactImportDialog({super.key, required this.cubit});
 
