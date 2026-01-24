@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
+import 'package:axichat/src/calendar/view/calendar_navigation.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
@@ -252,6 +253,7 @@ class _ChatCalendarWidgetState
               participants: widget.participants,
               avatarPaths: widget.avatarPaths,
               state: state,
+              tabController: mobileTabController,
               onShareAvailability: availabilityCoordinator == null
                   ? null
                   : () => _openAvailabilityShareSheet(
@@ -355,6 +357,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
     required this.participants,
     required this.avatarPaths,
     required this.state,
+    required this.tabController,
     this.onShareAvailability,
     this.onBackPressed,
     this.showBackButton = true,
@@ -363,6 +366,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
   final List<String> participants;
   final Map<String, String> avatarPaths;
   final CalendarState state;
+  final TabController tabController;
   final VoidCallback? onShareAvailability;
   final VoidCallback? onBackPressed;
   final bool showBackButton;
@@ -375,6 +379,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
       top: 0,
       bottom: 0,
     );
+    final bool showParticipants = ResponsiveHelper.isCompact(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
@@ -393,9 +398,9 @@ class _ChatCalendarAppBar extends StatelessWidget {
                   tooltip: context.l10n.chatBack,
                   onPressed: onBackPressed,
                 ),
-              if (showBackButton && participants.isNotEmpty)
+              if (showBackButton && showParticipants && participants.isNotEmpty)
                 const SizedBox(width: _chatCalendarParticipantsSpacing),
-              if (participants.isNotEmpty)
+              if (showParticipants && participants.isNotEmpty)
                 Flexible(
                   fit: FlexFit.loose,
                   child: Align(
@@ -409,6 +414,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
               const Spacer(),
               _ChatCalendarActionRow(
                 state: state,
+                tabController: tabController,
                 onShareAvailability: onShareAvailability,
               ),
             ],
@@ -420,18 +426,32 @@ class _ChatCalendarAppBar extends StatelessWidget {
 }
 
 class _ChatCalendarActionRow extends StatelessWidget {
-  const _ChatCalendarActionRow({required this.state, this.onShareAvailability});
+  const _ChatCalendarActionRow({
+    required this.state,
+    required this.tabController,
+    this.onShareAvailability,
+  });
 
   final CalendarState state;
+  final TabController tabController;
   final VoidCallback? onShareAvailability;
 
   @override
   Widget build(BuildContext context) {
+    final bool showPaneToggle = ResponsiveHelper.isMedium(context);
+    final Widget tasksLabel = const TasksTabLabel();
+    final Widget scheduleLabel = Text(context.l10n.calendarScheduleLabel);
     return Wrap(
       spacing: _chatCalendarShareActionSpacing,
       runSpacing: _chatCalendarShareActionSpacing,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        if (showPaneToggle)
+          CalendarPaneToggle(
+            controller: tabController,
+            scheduleLabel: scheduleLabel,
+            tasksLabel: tasksLabel,
+          ),
         SyncControls(
           state: state,
           compact: true,

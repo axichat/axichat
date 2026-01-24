@@ -92,7 +92,7 @@ extension ModalTypography on BuildContext {
   }
 }
 
-const smallScreen = 820.0;
+const smallScreen = 920.0;
 const mediumScreen = 900.0;
 const largeScreen = 1200.0;
 const compactDeviceBreakpoint = 600.0;

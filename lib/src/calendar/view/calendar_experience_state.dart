@@ -142,25 +142,33 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         final double keyboardInset = mediaQuery.viewInsets.bottom;
         final double bottomInset =
             keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
-        final Widget tabSwitcher = buildDragAwareTabBar(
-          context: context,
-          bottomInset: bottomInset,
-          scheduleTabLabel: buildScheduleTabLabel(context),
-          tasksTabLabel: buildTasksTabLabel(
-            context,
-            highlightTasksTab,
-            _tasksTabPulse,
-          ),
-        );
-        final Widget cancelBucket = buildDragCancelBucket(
-          context: context,
-          bottomInset: bottomInset,
-        );
-        final Widget mobileTabShell = buildMobileTabShell(
-          context,
-          tabSwitcher,
-          cancelBucket,
-        );
+        final bool showMobileTabBar =
+            spec.sizeClass == CalendarSizeClass.compact;
+        final Widget tabSwitcher = showMobileTabBar
+            ? buildDragAwareTabBar(
+                context: context,
+                bottomInset: bottomInset,
+                scheduleTabLabel: buildScheduleTabLabel(context),
+                tasksTabLabel: buildTasksTabLabel(
+                  context,
+                  highlightTasksTab,
+                  _tasksTabPulse,
+                ),
+              )
+            : const SizedBox.shrink();
+        final Widget cancelBucket = showMobileTabBar
+            ? buildDragCancelBucket(
+                context: context,
+                bottomInset: bottomInset,
+              )
+            : const SizedBox.shrink();
+        final Widget mobileTabShell = showMobileTabBar
+            ? buildMobileTabShell(
+                context,
+                tabSwitcher,
+                cancelBucket,
+              )
+            : const SizedBox.shrink();
         final Widget layout = _buildLayout(
           usesDesktopLayout: usesDesktopLayout,
           navigation: navigation,

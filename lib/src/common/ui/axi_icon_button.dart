@@ -5,8 +5,10 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:logging/logging.dart';
 
 const double _defaultIconScale = 0.6;
 const double _ghostIconScale = 0.85;
@@ -99,6 +101,15 @@ class AxiIconButton extends StatefulWidget {
 }
 
 class _AxiIconButtonState extends State<AxiIconButton> {
+  late final Logger _logger;
+  int? _lastSizeSignature;
+
+  @override
+  void initState() {
+    super.initState();
+    _logger = Logger('AxiIconButton');
+  }
+
   @override
   Widget build(BuildContext context) {
     final Duration animationDuration = context.select<SettingsCubit, Duration>(
@@ -120,8 +131,9 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             ? Colors.transparent
             : (isGhost ? colors.secondary : colors.card));
     final bool enabled = widget.onPressed != null || widget.onLongPress != null;
-    final double fallbackIconSize = context.iconTheme.size ??
-        AxiIconButton.kDefaultSize * _defaultIconScale;
+    final double? themeIconSize = context.iconTheme.size;
+    final double fallbackIconSize =
+        themeIconSize ?? AxiIconButton.kDefaultSize * _defaultIconScale;
     final double resolvedIconSize = widget.iconSize ??
         (isGhost ? fallbackIconSize * _ghostIconScale : fallbackIconSize);
     final double resolvedButtonSize =
@@ -147,6 +159,22 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             data: IconThemeData(size: resolvedIconSize),
             child: baseIcon,
           );
+    if (kDebugMode) {
+      final int sizeSignature = Object.hash(
+        widget.iconSize,
+        themeIconSize,
+        widget.ghost,
+        resolvedIconSize,
+      );
+      if (sizeSignature != _lastSizeSignature) {
+        _lastSizeSignature = sizeSignature;
+        _logger.fine(
+          'AxiIconButton size change: widgetIconSize=${widget.iconSize}, '
+          'themeIconSize=$themeIconSize, ghost=${widget.ghost}, '
+          'resolved=$resolvedIconSize',
+        );
+      }
+    }
 
     Widget tappable = SizedBox(
       width: resolvedTapTargetSize,

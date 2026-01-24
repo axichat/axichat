@@ -413,11 +413,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       final bool openCalendar = hasCalendarBloc &&
                           (context.watch<ChatsCubit?>()?.state.openCalendar ??
                               false);
-                      final bool openChatCalendar = context
-                              .watch<ChatsCubit?>()
-                              ?.state
-                              .openChatCalendar ??
-                          false;
+                      final chatRoute =
+                          context.watch<ChatsCubit?>()?.state.openChatRoute;
                       final navRail = navPlacement == NavPlacement.rail
                           ? _HomeNavigationRail(
                               tabs: tabs,
@@ -546,7 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               false;
 
                       final bool showChatCalendar =
-                          openChatCalendar && openJid != null;
+                          openJid != null && (chatRoute?.isCalendar ?? false);
                       final Duration animationDuration =
                           context.watch<SettingsCubit>().animationDuration;
                       final Duration calendarTransitionDuration =

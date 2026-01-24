@@ -703,7 +703,7 @@ class _SignupFormState extends State<SignupForm>
                                               server: state.server,
                                             ),
                                             validator: (text) {
-                                              final value = text ?? '';
+                                              final value = text;
                                               if (value.isEmpty) {
                                                 return context
                                                     .l10n.authUsernameRequired;
@@ -836,10 +836,8 @@ class _SignupFormState extends State<SignupForm>
                                       enabled:
                                           !loading && !_pwnedCheckInProgress,
                                       controller: _password2TextController,
-                                      confirmValidator: (text) => text ==
-                                                  null ||
-                                              text !=
-                                                  _passwordTextController.text
+                                      confirmValidator: (text) => text !=
+                                              _passwordTextController.text
                                           ? context.l10n.authPasswordsMismatch
                                           : null,
                                     ),
@@ -965,7 +963,7 @@ class _SignupFormState extends State<SignupForm>
                                         enabled: !loading,
                                         controller: _captchaTextController,
                                         validator: (text) {
-                                          if (text == null || text.isEmpty) {
+                                          if (text.isEmpty) {
                                             return context
                                                 .l10n.signupCaptchaValidation;
                                           }

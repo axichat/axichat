@@ -147,7 +147,7 @@ class _LoginFormState extends State<LoginForm> {
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
                         validator: (text) {
-                          if (text == null || text.isEmpty) {
+                          if (text.isEmpty) {
                             return context.l10n.authUsernameRequired;
                           }
                           return null;

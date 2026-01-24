@@ -8829,11 +8829,9 @@ class _ChatState extends State<Chat> {
           );
         }
       }
-      addParticipant(currentUserId);
       return participants;
     }
 
-    addParticipant(currentUserId);
     addParticipant(chat.remoteJid);
     return participants;
   }

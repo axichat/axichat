@@ -20,6 +20,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/calendar_navigation.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
@@ -222,6 +223,7 @@ class _CalendarWidgetState
         children: [
           _CalendarAppBar(
             state: state,
+            tabController: mobileTabController,
             onBackPressed: _handleCalendarBackPressed,
             onShareAvailability: availabilityCoordinator == null
                 ? null
@@ -345,11 +347,13 @@ class _CalendarWidgetState
 class _CalendarAppBar extends StatelessWidget {
   const _CalendarAppBar({
     required this.state,
+    required this.tabController,
     required this.onBackPressed,
     this.onShareAvailability,
   });
 
   final CalendarState state;
+  final TabController tabController;
   final VoidCallback onBackPressed;
   final VoidCallback? onShareAvailability;
 
@@ -381,6 +385,7 @@ class _CalendarAppBar extends StatelessWidget {
               const Spacer(),
               _CalendarActionRow(
                 state: state,
+                tabController: tabController,
                 onShareAvailability: onShareAvailability,
               ),
             ],
@@ -392,18 +397,32 @@ class _CalendarAppBar extends StatelessWidget {
 }
 
 class _CalendarActionRow extends StatelessWidget {
-  const _CalendarActionRow({required this.state, this.onShareAvailability});
+  const _CalendarActionRow({
+    required this.state,
+    required this.tabController,
+    this.onShareAvailability,
+  });
 
   final CalendarState state;
+  final TabController tabController;
   final VoidCallback? onShareAvailability;
 
   @override
   Widget build(BuildContext context) {
+    final bool showPaneToggle = ResponsiveHelper.isMedium(context);
+    final Widget tasksLabel = const TasksTabLabel();
+    final Widget scheduleLabel = Text(context.l10n.calendarScheduleLabel);
     return Wrap(
       spacing: _calendarShareActionSpacing,
       runSpacing: _calendarShareActionSpacing,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        if (showPaneToggle)
+          CalendarPaneToggle(
+            controller: tabController,
+            scheduleLabel: scheduleLabel,
+            tasksLabel: tasksLabel,
+          ),
         SyncControls(
           state: state,
           showTransferMenu: _calendarActionShowTransferMenu,

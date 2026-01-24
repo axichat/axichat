@@ -28,9 +28,6 @@ const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 const bool clearEmailCredentialsOnLogout = true;
 
-const missingDatabaseSecretsErrorText =
-    'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
-
 Uri _registrationMatcher() =>
     any<Uri>(that: predicate((Uri uri) => uri.path.contains('/register/new/')));
 
@@ -308,7 +305,8 @@ void main() {
           bloc.login(username: invalidUsername, password: invalidPassword),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -333,7 +331,8 @@ void main() {
           bloc.login(username: invalidUsername, password: validPassword),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -358,7 +357,8 @@ void main() {
           bloc.login(username: validUsername, password: invalidPassword),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -400,7 +400,7 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-          'Username and password have different nullness.',
+          AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
       ],
       verify: (bloc) {
@@ -426,7 +426,7 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-          'Username and password have different nullness.',
+          AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
       ],
       verify: (bloc) {
@@ -483,7 +483,9 @@ void main() {
       act: (bloc) => bloc.login(),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure(missingDatabaseSecretsErrorText),
+        const AuthenticationFailure(
+          AuthKeyMessage(AuthMessageKey.missingDatabaseSecrets),
+        ),
       ],
       verify: (bloc) {
         expect(
@@ -539,7 +541,8 @@ void main() {
           bloc.login(username: invalidUsername, password: invalidPassword),
       expect: () => const [
         AuthenticationLogInInProgress(),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (_) {
         expect(
@@ -647,7 +650,8 @@ void main() {
       act: (bloc) => bloc.login(),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -760,7 +764,7 @@ void main() {
       expect: () => [
         const AuthenticationNone(),
         const AuthenticationFailure(
-          'Email authentication failed. Please log in again.',
+          AuthKeyMessage(AuthMessageKey.emailAuthFailed),
         ),
       ],
       verify: (bloc) {
@@ -823,7 +827,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verify(
@@ -864,7 +869,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verify(
@@ -918,7 +924,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (_) {
         verifyNever(
@@ -964,17 +971,13 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
       ),
-      expect: () {
-        const signupCleanupMessage =
-            'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
-        return [
-          const AuthenticationSignUpInProgress(),
-          const AuthenticationSignupFailure(
-            signupCleanupMessage,
-            isCleanupBlocked: true,
-          ),
-        ];
-      },
+      expect: () => [
+        const AuthenticationSignUpInProgress(),
+        const AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.signupCleanupInProgress),
+          isCleanupBlocked: true,
+        ),
+      ],
       verify: (bloc) {
         verifyNever(
           () => mockHttpClient.post(
@@ -1015,7 +1018,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         final payload = credentialStorage['pending_signup_rollbacks'];

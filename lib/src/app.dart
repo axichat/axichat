@@ -96,10 +96,49 @@ class _AxichatState extends State<Axichat> {
       CalendarReminderController(
     notificationService: widget._notificationService,
   );
+  late final XmppService _xmppService;
+  late final XmppActivityCubit _xmppActivityCubit;
+
+  @override
+  void initState() {
+    super.initState();
+    _xmppService = widget._xmppService ??
+        XmppService(
+          buildConnection: () => withForeground && foregroundServiceActive.value
+              ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
+              : XmppConnection(),
+          buildStateStore: (prefix, passphrase) async {
+            final Logger logger = Logger('XmppStateStore');
+            await Hive.initFlutter(prefix);
+            if (!Hive.isAdapterRegistered(1)) {
+              Hive.registerAdapter(PresenceAdapter());
+            }
+            await Hive.openBoxWithRetry(
+              XmppStateStore.boxName,
+              encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+              logger: logger,
+            );
+            await widget._storageManager.ensureAuthStorage(
+              passphrase: passphrase,
+            );
+            return XmppStateStore();
+          },
+          buildDatabase: (prefix, passphrase) async {
+            return XmppDrift(
+              file: await dbFileFor(prefix),
+              passphrase: passphrase,
+            );
+          },
+          notificationService: widget._notificationService,
+          capability: widget._capability,
+        );
+    _xmppActivityCubit = XmppActivityCubit(xmppBase: _xmppService);
+  }
 
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
+    _xmppActivityCubit.close();
     Future<void>(() async {
       await _reminderController.clearAll();
     });
@@ -113,41 +152,7 @@ class _AxichatState extends State<Axichat> {
         ChangeNotifierProvider<CalendarStorageManager>(
           create: (context) => widget._storageManager,
         ),
-        if (widget._xmppService == null)
-          RepositoryProvider<XmppService>(
-            create: (context) => XmppService(
-              buildConnection: () =>
-                  withForeground && foregroundServiceActive.value
-                      ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
-                      : XmppConnection(),
-              buildStateStore: (prefix, passphrase) async {
-                final Logger logger = Logger('XmppStateStore');
-                await Hive.initFlutter(prefix);
-                if (!Hive.isAdapterRegistered(1)) {
-                  Hive.registerAdapter(PresenceAdapter());
-                }
-                await Hive.openBoxWithRetry(
-                  XmppStateStore.boxName,
-                  encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
-                  logger: logger,
-                );
-                await widget._storageManager.ensureAuthStorage(
-                  passphrase: passphrase,
-                );
-                return XmppStateStore();
-              },
-              buildDatabase: (prefix, passphrase) async {
-                return XmppDrift(
-                  file: await dbFileFor(prefix),
-                  passphrase: passphrase,
-                );
-              },
-              notificationService: widget._notificationService,
-              capability: widget._capability,
-            ),
-          )
-        else
-          RepositoryProvider<XmppService>.value(value: widget._xmppService!),
+        RepositoryProvider<XmppService>.value(value: _xmppService),
         RepositoryProvider<MessageService>(
           create: (context) => context.read<XmppService>(),
         ),
@@ -201,10 +206,7 @@ class _AxichatState extends State<Axichat> {
             create: (context) =>
                 OmemoActivityCubit(xmppBase: context.read<XmppService>()),
           ),
-          BlocProvider(
-            create: (context) =>
-                XmppActivityCubit(xmppBase: context.read<XmppService>()),
-          ),
+          BlocProvider.value(value: _xmppActivityCubit),
           BlocProvider(create: (context) => ShareIntentCubit()..initialize()),
           BlocProvider(
             create: (context) => ChatsCubit(
