@@ -313,7 +313,7 @@ class _ProfileMainView extends StatelessWidget {
       anchors: settingsAnchors,
     );
     if (!isWideLayout) {
-      final profileSectionPadding = EdgeInsets.symmetric(
+      const profileSectionPadding = EdgeInsets.symmetric(
         horizontal: _profileHeaderSpacing,
         vertical: _profileHeaderSpacing,
       );
@@ -349,7 +349,7 @@ class _ProfileMainView extends StatelessWidget {
         ),
       );
     }
-    final sidebarPadding = EdgeInsets.symmetric(
+    const sidebarPadding = EdgeInsets.symmetric(
       horizontal: _profileWideHorizontalPadding,
       vertical: _profileWideHeaderSpacing,
     );
@@ -1054,7 +1054,6 @@ class _SettingsJumpMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Capability capability = context.read<Capability>();
     final Duration animationDuration =
         context.watch<SettingsCubit>().animationDuration;
     return Column(
@@ -1065,7 +1064,7 @@ class _SettingsJumpMenu extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         const SizedBox(height: _profileHeaderTextSpacing),
-        if (capability.canForegroundService)
+        if (context.read<Capability>().canForegroundService)
           _SettingsJumpTile(
             label: context.l10n.settingsSectionImportant,
             onTap: () async => await _jumpTo(
