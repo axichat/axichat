@@ -1726,21 +1726,16 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                 Row(
                   children: [
                     Expanded(
-                      child: AxiTextInput(
+                      child: SearchInputField(
                         controller: _controller,
                         focusNode: _focusNode,
                         placeholder: Text(placeholder),
+                        clearTooltip: l10n.commonClear,
+                        onClear: () =>
+                            context.read<HomeSearchCubit?>()?.clearQuery(
+                                  tab: tab,
+                                ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    AxiIconButton(
-                      iconData: LucideIcons.x,
-                      tooltip: l10n.commonClear,
-                      onPressed: _controller.text.isEmpty
-                          ? null
-                          : () => context.read<HomeSearchCubit?>()?.clearQuery(
-                                tab: tab,
-                              ),
                     ),
                     const SizedBox(width: 8),
                     ShadButton.ghost(

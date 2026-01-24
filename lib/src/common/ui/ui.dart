@@ -56,6 +56,7 @@ export 'password_input.dart';
 export 'presence_indicator.dart';
 export 'selection_indicator.dart';
 export 'squircle_border.dart';
+export 'search_input_field.dart';
 export 'string_to_color.dart';
 export 'typing_text_input.dart';
 

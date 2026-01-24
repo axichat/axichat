@@ -69,46 +69,39 @@ class EmailContactImportActionButton extends StatelessWidget {
             horizontal: horizontalInset,
             vertical: verticalInset,
           ),
-          child: ClipRRect(
-            borderRadius: context.radius,
-            child: ColoredBox(
-              color: colors.secondary,
-              child: SizedBox(
-                width: double.infinity,
-                child: ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: loading
-                      ? null
-                      : () {
-                          showFadeScaleDialog(
-                            context: context,
-                            builder: (dialogContext) =>
-                                EmailContactImportDialog(
-                              cubit: context.read<EmailContactImportCubit>()
-                                ..reset(),
-                            ),
-                          );
-                        },
-                  child: Row(
-                    children: [
-                      Icon(
-                        LucideIcons.userRoundPlus,
+          child: SizedBox(
+            width: double.infinity,
+            child: ShadButton.ghost(
+              size: ShadButtonSize.sm,
+              onPressed: loading
+                  ? null
+                  : () {
+                      showFadeScaleDialog(
+                        context: context,
+                        builder: (dialogContext) => EmailContactImportDialog(
+                          cubit: context.read<EmailContactImportCubit>()
+                            ..reset(),
+                        ),
+                      );
+                    },
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.userRoundPlus,
+                    color: colors.foreground,
+                  ),
+                  const SizedBox(width: _dialogFieldSpacing),
+                  Expanded(
+                    child: Text(
+                      context.l10n.emailContactsImportTitle,
+                      style: context.textTheme.small.copyWith(
                         color: colors.foreground,
                       ),
-                      const SizedBox(width: _dialogFieldSpacing),
-                      Expanded(
-                        child: Text(
-                          context.l10n.emailContactsImportTitle,
-                          style: context.textTheme.small.copyWith(
-                            color: colors.foreground,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ).withTapBounce(enabled: !loading),
+                ],
               ),
-            ),
+            ).withTapBounce(enabled: !loading),
           ),
         );
       },
