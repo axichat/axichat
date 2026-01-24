@@ -1393,7 +1393,6 @@ final class _RecipientAutocompleteOverlayState
       oldWidget.focusNode.removeListener(_handleFocusChanged);
       widget.focusNode.addListener(_handleFocusChanged);
     }
-    _recomputeOptions();
   }
 
   @override
