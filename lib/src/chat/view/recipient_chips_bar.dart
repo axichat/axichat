@@ -28,8 +28,6 @@ const double _suggestionMaxHeight = 320;
 const double _chipAvatarSize = 20.0;
 const double _chipStatusBadgeSize = 12.0;
 const double _chipStatusBadgeBorderWidth = 1.5;
-const double _recipientAutocompleteFieldMinWidth = 90.0;
-const double _recipientAutocompleteMaxWidth = 120.0;
 const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
   4,
   0,
@@ -106,7 +104,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? Object();
+    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -153,7 +151,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? Object();
+      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1195,12 +1193,14 @@ class _RecipientAutocompleteField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const double fieldMinWidth = 90.0;
+    const double fieldMaxWidth = 120.0;
     return AutofillGroup(
       child: IntrinsicWidth(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
-            minWidth: _recipientAutocompleteFieldMinWidth,
-            maxWidth: _recipientAutocompleteMaxWidth,
+            minWidth: fieldMinWidth,
+            maxWidth: fieldMaxWidth,
           ),
           child: _RecipientAutocompleteOverlay(
             controller: controller,
@@ -1277,14 +1277,10 @@ final class _RecipientAutocompleteOverlayState
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
   void _handleTapOutside() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final primaryFocus = FocusManager.instance.primaryFocus;
-      if (primaryFocus != widget.focusNode) {
-        return;
-      }
-      widget.focusNode.unfocus();
-    });
+    if (!mounted || !widget.focusNode.hasFocus) {
+      return;
+    }
+    widget.focusNode.unfocus();
   }
 
   void _recomputeOptions() {
@@ -1311,6 +1307,7 @@ final class _RecipientAutocompleteOverlayState
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ensurePopEntryRegistered();
+    _recomputeOptions();
   }
 
   void _syncPortalVisibility() {
@@ -1344,7 +1341,6 @@ final class _RecipientAutocompleteOverlayState
     super.initState();
     widget.controller.addListener(_recomputeOptions);
     widget.focusNode.addListener(_handleFocusChanged);
-    _recomputeOptions();
   }
 
   @override

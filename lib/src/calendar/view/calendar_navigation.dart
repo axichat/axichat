@@ -998,7 +998,6 @@ class _DateLabelState extends State<_DateLabel> {
     await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      useRootNavigator: true,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         var sheetMonth = _visibleMonth;

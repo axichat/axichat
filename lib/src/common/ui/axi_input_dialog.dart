@@ -36,7 +36,7 @@ class AxiInputDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
-    const loadingSemanticsLabel = 'Loading';
+    final loadingSemanticsLabel = context.l10n.accessibilityLoadingLabel;
     final spinner = AxiProgressIndicator(
       dimension: _inputDialogSpinnerDimension,
       color: context.colorScheme.primaryForeground,

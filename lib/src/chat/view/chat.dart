@@ -1033,6 +1033,7 @@ class _ChatState extends State<Chat> {
 
   var _chatRoute = ChatRouteIndex.main;
   var _previousChatRoute = ChatRouteIndex.main;
+  LocalHistoryEntry? _chatRouteHistoryEntry;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
@@ -3462,6 +3463,7 @@ class _ChatState extends State<Chat> {
       _lastScrollStorageKey = currentKey;
       _restoreScrollOffsetForCurrentChat();
       _syncChatRoute();
+      _updateChatRouteHistoryEntry();
       return;
     }
     if (_lastScrollStorageKey != currentKey) {
@@ -3470,6 +3472,7 @@ class _ChatState extends State<Chat> {
       _restoreScrollOffsetForCurrentChat();
     }
     _syncChatRoute();
+    _updateChatRouteHistoryEntry();
   }
 
   @override
@@ -3489,15 +3492,8 @@ class _ChatState extends State<Chat> {
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
     _disposeChatCalendarBloc();
+    _clearChatRouteHistoryEntry();
     super.dispose();
-  }
-
-  Future<bool> _handleSystemBack() async {
-    if (_chatRoute.isMain) {
-      return false;
-    }
-    _setChatRoute(ChatRouteIndex.main);
-    return true;
   }
 
   @override
@@ -3792,104 +3788,102 @@ class _ChatState extends State<Chat> {
                       chatAvatarPathsByJid[normalized];
                 }
 
-                String? avatarPathForTypingParticipant(String participant) {
-                  final trimmed = participant.trim();
-                  if (trimmed.isEmpty) return null;
-                  final slashIndex = trimmed.indexOf('/');
-                  if (slashIndex == -1) {
-                    return avatarPathForBareJid(trimmed);
-                  }
-                  final bareParticipant =
-                      trimmed.substring(0, slashIndex).trim().toLowerCase();
-                  final roomJid = chatEntity?.jid.trim().toLowerCase();
-                  final isRoomParticipant =
-                      roomJid != null && bareParticipant == roomJid;
-                  if (!isRoomParticipant) {
-                    return avatarPathForBareJid(
-                      trimmed.substring(0, slashIndex),
-                    );
-                  }
-                  final roomState = state.roomState;
-                  if (roomState == null) return null;
-                  final nick = trimmed.substring(slashIndex + 1).trim();
-                  if (nick.isEmpty) return null;
+              String? avatarPathForTypingParticipant(String participant) {
+                final trimmed = participant.trim();
+                if (trimmed.isEmpty) return null;
+                final slashIndex = trimmed.indexOf('/');
+                if (slashIndex == -1) {
+                  return avatarPathForBareJid(trimmed);
+                }
+                final bareParticipant =
+                    trimmed.substring(0, slashIndex).trim().toLowerCase();
+                final roomJid = chatEntity?.jid.trim().toLowerCase();
+                final isRoomParticipant =
+                    roomJid != null && bareParticipant == roomJid;
+                if (!isRoomParticipant) {
+                  return avatarPathForBareJid(
+                    trimmed.substring(0, slashIndex),
+                  );
+                }
+                final roomState = state.roomState;
+                if (roomState == null) return null;
+                final nick = trimmed.substring(slashIndex + 1).trim();
+                if (nick.isEmpty) return null;
 
-                  Occupant? occupant = roomState.occupants[trimmed];
-                  if (occupant == null) {
-                    for (final candidate in roomState.occupants.values) {
-                      if (candidate.nick == nick) {
-                        occupant = candidate;
-                        break;
-                      }
+                Occupant? occupant = roomState.occupants[trimmed];
+                if (occupant == null) {
+                  for (final candidate in roomState.occupants.values) {
+                    if (candidate.nick == nick) {
+                      occupant = candidate;
+                      break;
                     }
                   }
-
-                  final realJid = occupant?.realJid?.trim();
-                  if (realJid == null || realJid.isEmpty) return null;
-                  final realSlashIndex = realJid.indexOf('/');
-                  final bareRealJid = realSlashIndex == -1
-                      ? realJid
-                      : realJid.substring(0, realSlashIndex);
-                  return avatarPathForBareJid(bareRealJid);
                 }
 
-                final storageManager = context.watch<CalendarStorageManager>();
-                final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
-                  storageManager: storageManager,
-                  xmppService: xmppService,
-                );
-                final bool demoEmailCalendarEnabled = kEnableDemoChats &&
-                    (chatEntity?.defaultTransport.isEmail ?? false);
-                final storage = storageManager.authStorage;
-                final ChatCalendarSyncCoordinator? demoEmailCoordinator =
-                    demoEmailCalendarEnabled && storage != null
-                        ? ChatCalendarSyncCoordinator(
-                            storage: ChatCalendarStorage(storage: storage),
-                            sendMessage: ({
-                              required String jid,
-                              required CalendarSyncOutbound outbound,
-                              required ChatType chatType,
-                            }) async {},
-                          )
-                        : null;
-                final bool personalCalendarAvailable =
-                    storageManager.isAuthStorageReady;
-                final bool supportsChatCalendar =
-                    chatEntity?.supportsChatCalendar ?? false;
-                final bool chatCalendarReady =
-                    storageManager.isAuthStorageReady &&
-                        chatCalendarCoordinator != null;
-                final bool demoEmailCalendarReady =
-                    demoEmailCoordinator != null;
-                final bool chatCalendarEnabled =
-                    (supportsChatCalendar && chatCalendarReady) ||
-                        demoEmailCalendarReady;
-                final ChatCalendarBloc? chatCalendarBloc =
-                    _resolveChatCalendarBloc(
-                  chat: chatEntity,
-                  calendarAvailable: chatCalendarEnabled,
-                  coordinator: supportsChatCalendar
-                      ? chatCalendarCoordinator
-                      : demoEmailCoordinator,
-                );
-                final bool chatCalendarAvailable =
-                    chatCalendarEnabled && chatCalendarBloc != null;
-                final List<String> chatCalendarParticipants =
-                    supportsChatCalendar
-                        ? _resolveChatCalendarParticipants(
-                            chat: chatEntity,
-                            roomState: state.roomState,
-                            currentUserId: currentUserId,
-                          )
-                        : const <String>[];
-                final chatCalendarAvatarPaths = <String, String>{};
-                for (final participant in chatCalendarParticipants) {
-                  final path = avatarPathForTypingParticipant(participant);
-                  if (path == null || path.isEmpty) {
-                    continue;
-                  }
-                  chatCalendarAvatarPaths[participant] = path;
+                final realJid = occupant?.realJid?.trim();
+                if (realJid == null || realJid.isEmpty) return null;
+                final realSlashIndex = realJid.indexOf('/');
+                final bareRealJid = realSlashIndex == -1
+                    ? realJid
+                    : realJid.substring(0, realSlashIndex);
+                return avatarPathForBareJid(bareRealJid);
+              }
+
+              final storageManager = context.watch<CalendarStorageManager>();
+              final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
+                storageManager: storageManager,
+                xmppService: xmppService,
+              );
+              final bool demoEmailCalendarEnabled = kEnableDemoChats &&
+                  (chatEntity?.defaultTransport.isEmail ?? false);
+              final storage = storageManager.authStorage;
+              final ChatCalendarSyncCoordinator? demoEmailCoordinator =
+                  demoEmailCalendarEnabled && storage != null
+                      ? ChatCalendarSyncCoordinator(
+                          storage: ChatCalendarStorage(storage: storage),
+                          sendMessage: ({
+                            required String jid,
+                            required CalendarSyncOutbound outbound,
+                            required ChatType chatType,
+                          }) async {},
+                        )
+                      : null;
+              final bool personalCalendarAvailable =
+                  storageManager.isAuthStorageReady;
+              final bool supportsChatCalendar =
+                  chatEntity?.supportsChatCalendar ?? false;
+              final bool chatCalendarReady =
+                  storageManager.isAuthStorageReady &&
+                      chatCalendarCoordinator != null;
+              final bool demoEmailCalendarReady = demoEmailCoordinator != null;
+              final bool chatCalendarEnabled =
+                  (supportsChatCalendar && chatCalendarReady) ||
+                      demoEmailCalendarReady;
+              final ChatCalendarBloc? chatCalendarBloc =
+                  _resolveChatCalendarBloc(
+                chat: chatEntity,
+                calendarAvailable: chatCalendarEnabled,
+                coordinator: supportsChatCalendar
+                    ? chatCalendarCoordinator
+                    : demoEmailCoordinator,
+              );
+              final bool chatCalendarAvailable =
+                  chatCalendarEnabled && chatCalendarBloc != null;
+              final List<String> chatCalendarParticipants = supportsChatCalendar
+                  ? _resolveChatCalendarParticipants(
+                      chat: chatEntity,
+                      roomState: state.roomState,
+                      currentUserId: currentUserId,
+                    )
+                  : const <String>[];
+              final chatCalendarAvatarPaths = <String, String>{};
+              for (final participant in chatCalendarParticipants) {
+                final path = avatarPathForTypingParticipant(participant);
+                if (path == null || path.isEmpty) {
+                  continue;
                 }
+                chatCalendarAvatarPaths[participant] = path;
+              }
 
                 final retryEntry = _lastReportEntryWhere(
                   fanOutReports.entries,
@@ -3914,774 +3908,746 @@ class _ChatState extends State<Chat> {
                   return true;
                 }
 
-                final selfUserId = isGroupChat && myOccupantId != null
-                    ? myOccupantId
-                    : currentUserId;
-                final user = ChatUser(
-                  id: selfUserId,
-                  firstName: (isGroupChat ? myOccupant?.nick : null) ??
-                      profileState()?.username ??
-                      '',
-                );
-                final spacerUser = ChatUser(
-                  id: _selectionSpacerMessageId,
-                  firstName: '',
-                );
-                final bool canShowSettings = !readOnly && jid != null;
-                final bool isSettingsRoute =
-                    canShowSettings && _chatRoute.isSettings;
-                final isEmailBacked = chatEntity?.isEmailBacked ?? false;
-                final canManagePins = !isGroupChat ||
-                    isEmailBacked ||
-                    (state.roomState?.myAffiliation.canManagePins ?? false);
-                final canTogglePins = !readOnly && canManagePins;
-                final int pinnedCount = state.pinnedMessages.length;
-                const IconData pinnedIcon = LucideIcons.pin;
-                final bool showingChatCalendar =
-                    openChatCalendar || _chatRoute.isCalendar;
-                final AppBarActionItem? closeAction = readOnly
-                    ? null
-                    : AppBarActionItem(
-                        label: context.l10n.commonClose,
-                        iconData: LucideIcons.x,
-                        onPressed: () {
-                          if (!prepareChatExit()) return;
-                          final chatsCubit = context.read<ChatsCubit>();
-                          chatsCubit.closeAllChats();
-                        },
-                      );
-                final List<AppBarActionItem> navigationActions =
-                    <AppBarActionItem>[
-                  if (!readOnly && openStack.length > 1)
-                    AppBarActionItem(
-                      label: context.l10n.chatBack,
-                      iconData: LucideIcons.arrowLeft,
+              final selfUserId = isGroupChat && myOccupantId != null
+                  ? myOccupantId
+                  : currentUserId;
+              final user = ChatUser(
+                id: selfUserId,
+                firstName: (isGroupChat ? myOccupant?.nick : null) ??
+                    profileState()?.username ??
+                    '',
+              );
+              final spacerUser = ChatUser(
+                id: _selectionSpacerMessageId,
+                firstName: '',
+              );
+              final bool canShowSettings = !readOnly && jid != null;
+              final bool isSettingsRoute =
+                  canShowSettings && _chatRoute.isSettings;
+              final isEmailBacked = chatEntity?.isEmailBacked ?? false;
+              final canManagePins = !isGroupChat ||
+                  isEmailBacked ||
+                  (state.roomState?.myAffiliation.canManagePins ?? false);
+              final canTogglePins = !readOnly && canManagePins;
+              final int pinnedCount = state.pinnedMessages.length;
+              const IconData pinnedIcon = LucideIcons.pin;
+              final bool showingChatCalendar =
+                  openChatCalendar || _chatRoute.isCalendar;
+              final AppBarActionItem? closeAction = readOnly
+                  ? null
+                  : AppBarActionItem(
+                      label: context.l10n.commonClose,
+                      iconData: LucideIcons.x,
                       onPressed: () {
                         if (!prepareChatExit()) return;
                         final chatsCubit = context.read<ChatsCubit>();
-                        chatsCubit.popChat();
+                        chatsCubit.closeAllChats();
                       },
-                    ),
-                  if (!readOnly && forwardStack.isNotEmpty)
-                    AppBarActionItem(
-                      label: context.l10n.chatMessageOpenChat,
-                      iconData: LucideIcons.arrowRight,
-                      onPressed: () {
-                        if (!prepareChatExit()) return;
-                        final chatsCubit = context.read<ChatsCubit>();
-                        chatsCubit.restoreChat();
-                      },
-                    ),
-                ];
-                final List<AppBarActionItem> leadingActions =
-                    <AppBarActionItem>[
-                  if (closeAction != null) closeAction,
-                  ...navigationActions,
-                ];
-                final int leadingActionCount = leadingActions.length;
-                final int chatActionCount = _chatBaseActionCount +
-                    (isGroupChat ? 1 : 0) +
-                    (chatCalendarAvailable ? 1 : 0) +
-                    (canShowSettings ? 1 : 0);
-                final scaffold = LayoutBuilder(
-                  builder: (context, constraints) {
-                    final double appBarWidth = constraints.maxWidth;
-                    final double leadingWidthExpanded = leadingActionCount == 0
-                        ? _chatAppBarCollapsedLeadingWidth
-                        : _chatAppBarLeadingInset +
-                            (AxiIconButton.kTapTargetSize *
-                                leadingActionCount) +
-                            (_chatAppBarLeadingSpacing *
-                                math.max(0, leadingActionCount - 1));
-                    final double chatActionsWidth = chatActionCount == 0
-                        ? 0
-                        : (AxiIconButton.kTapTargetSize * chatActionCount) +
-                            (_chatHeaderActionSpacing *
-                                math.max(0, chatActionCount - 1));
-                    const double titleReserveWidth = _chatAppBarAvatarSize +
-                        _chatAppBarAvatarSpacing +
-                        _chatAppBarTitleMinWidth;
-                    const double actionsPaddingWidth =
-                        _chatAppBarActionsPadding * 2;
-                    final bool collapseAppBarActions = leadingActionCount > 0 &&
-                        appBarWidth <
-                            leadingWidthExpanded +
-                                chatActionsWidth +
-                                titleReserveWidth +
-                                actionsPaddingWidth;
-                    final List<AppBarActionItem> visibleLeadingActions =
-                        collapseAppBarActions
-                            ? <AppBarActionItem>[
-                                if (closeAction != null) closeAction,
-                              ]
-                            : leadingActions;
-                    final int visibleLeadingActionCount =
-                        visibleLeadingActions.length;
-                    final double leadingWidth = visibleLeadingActionCount == 0
-                        ? _chatAppBarCollapsedLeadingWidth
-                        : _chatAppBarLeadingInset +
-                            (AxiIconButton.kTapTargetSize *
-                                visibleLeadingActionCount) +
-                            (_chatAppBarLeadingSpacing *
-                                math.max(0, visibleLeadingActionCount - 1));
-                    return Scaffold(
-                      backgroundColor: context.colorScheme.background,
-                      appBar: AppBar(
-                        scrolledUnderElevation: 0,
-                        forceMaterialTransparency: true,
-                        automaticallyImplyLeading: false,
-                        centerTitle: false,
-                        shape: Border(
-                          bottom: BorderSide(color: context.colorScheme.border),
-                        ),
-                        actionsPadding: const EdgeInsets.symmetric(
-                          horizontal: _chatAppBarActionsPadding,
-                        ),
-                        leadingWidth: leadingWidth,
-                        leading: visibleLeadingActionCount == 0
-                            ? null
-                            : Padding(
-                                padding: const EdgeInsets.only(
-                                  left: _chatAppBarLeadingInset,
-                                ),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: AppBarActions(
-                                    actions: visibleLeadingActions,
-                                    spacing: _chatAppBarLeadingSpacing,
-                                    overflowBreakpoint: 0,
-                                    availableWidth: leadingWidth,
-                                  ),
+                    );
+              final List<AppBarActionItem> navigationActions =
+                  <AppBarActionItem>[
+                if (!readOnly && openStack.length > 1)
+                  AppBarActionItem(
+                    label: context.l10n.chatBack,
+                    iconData: LucideIcons.arrowLeft,
+                    onPressed: () {
+                      if (!prepareChatExit()) return;
+                      final chatsCubit = context.read<ChatsCubit>();
+                      chatsCubit.popChat();
+                    },
+                  ),
+                if (!readOnly && forwardStack.isNotEmpty)
+                  AppBarActionItem(
+                    label: context.l10n.chatMessageOpenChat,
+                    iconData: LucideIcons.arrowRight,
+                    onPressed: () {
+                      if (!prepareChatExit()) return;
+                      final chatsCubit = context.read<ChatsCubit>();
+                      chatsCubit.restoreChat();
+                    },
+                  ),
+              ];
+              final List<AppBarActionItem> leadingActions = <AppBarActionItem>[
+                if (closeAction != null) closeAction,
+                ...navigationActions,
+              ];
+              final int leadingActionCount = leadingActions.length;
+              final int chatActionCount = _chatBaseActionCount +
+                  (isGroupChat ? 1 : 0) +
+                  (chatCalendarAvailable ? 1 : 0) +
+                  (canShowSettings ? 1 : 0);
+              final scaffold = LayoutBuilder(
+                builder: (context, constraints) {
+                  final double appBarWidth = constraints.maxWidth;
+                  final double leadingWidthExpanded = leadingActionCount == 0
+                      ? _chatAppBarCollapsedLeadingWidth
+                      : _chatAppBarLeadingInset +
+                          (AxiIconButton.kTapTargetSize * leadingActionCount) +
+                          (_chatAppBarLeadingSpacing *
+                              math.max(0, leadingActionCount - 1));
+                  final double chatActionsWidth = chatActionCount == 0
+                      ? 0
+                      : (AxiIconButton.kTapTargetSize * chatActionCount) +
+                          (_chatHeaderActionSpacing *
+                              math.max(0, chatActionCount - 1));
+                  const double titleReserveWidth = _chatAppBarAvatarSize +
+                      _chatAppBarAvatarSpacing +
+                      _chatAppBarTitleMinWidth;
+                  const double actionsPaddingWidth =
+                      _chatAppBarActionsPadding * 2;
+                  final bool collapseAppBarActions = leadingActionCount > 0 &&
+                      appBarWidth <
+                          leadingWidthExpanded +
+                              chatActionsWidth +
+                              titleReserveWidth +
+                              actionsPaddingWidth;
+                  final List<AppBarActionItem> visibleLeadingActions =
+                      collapseAppBarActions
+                          ? <AppBarActionItem>[
+                              if (closeAction != null) closeAction,
+                            ]
+                          : leadingActions;
+                  final int visibleLeadingActionCount =
+                      visibleLeadingActions.length;
+                  final double leadingWidth = visibleLeadingActionCount == 0
+                      ? _chatAppBarCollapsedLeadingWidth
+                      : _chatAppBarLeadingInset +
+                          (AxiIconButton.kTapTargetSize *
+                              visibleLeadingActionCount) +
+                          (_chatAppBarLeadingSpacing *
+                              math.max(0, visibleLeadingActionCount - 1));
+                  return Scaffold(
+                    backgroundColor: context.colorScheme.background,
+                    appBar: AppBar(
+                      scrolledUnderElevation: 0,
+                      forceMaterialTransparency: true,
+                      automaticallyImplyLeading: false,
+                      centerTitle: false,
+                      shape: Border(
+                        bottom: BorderSide(color: context.colorScheme.border),
+                      ),
+                      actionsPadding: const EdgeInsets.symmetric(
+                        horizontal: _chatAppBarActionsPadding,
+                      ),
+                      leadingWidth: leadingWidth,
+                      leading: visibleLeadingActionCount == 0
+                          ? null
+                          : Padding(
+                              padding: const EdgeInsets.only(
+                                left: _chatAppBarLeadingInset,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: AppBarActions(
+                                  actions: visibleLeadingActions,
+                                  spacing: _chatAppBarLeadingSpacing,
+                                  overflowBreakpoint: 0,
+                                  availableWidth: leadingWidth,
                                 ),
                               ),
-                        title: jid == null
-                            ? const SizedBox.shrink()
-                            : BlocBuilder<RosterCubit, RosterState>(
-                                buildWhen: (_, current) =>
-                                    current is RosterAvailable,
-                                builder: (context, rosterState) {
-                                  final cached = rosterState is RosterAvailable
-                                      ? rosterState.items
-                                      : context.read<RosterCubit>()['items']
-                                          as List<RosterItem>?;
-                                  final rosterItems =
-                                      cached ?? const <RosterItem>[];
-                                  final item = rosterItems
-                                      .where((entry) => entry.jid == jid)
-                                      .singleOrNull;
-                                  final canRenameContact = !readOnly &&
-                                      chatEntity != null &&
-                                      chatEntity.type == ChatType.chat;
-                                  final statusLabel =
-                                      item?.status?.trim() ?? '';
-                                  final addressLabel = jid.trim();
-                                  const addressStatusSeparator = ' · ';
-                                  final secondaryLabel = statusLabel.isNotEmpty
-                                      ? '$addressLabel$addressStatusSeparator$statusLabel'
-                                      : addressLabel;
-                                  final presence = item?.presence;
-                                  final subscription = item?.subscription;
-                                  final avatarTooltip = isGroupChat
-                                      ? context.l10n.chatRoomMembers
-                                      : null;
-                                  Widget avatar = TransportAwareAvatar(
-                                    chat: chatEntity!,
-                                    size: _chatAppBarAvatarSize,
-                                    badgeOffset: const Offset(-6, -4),
-                                    presence: presence,
-                                    status: statusLabel,
-                                    subscription: subscription,
+                            ),
+                      title: jid == null
+                          ? const SizedBox.shrink()
+                          : BlocBuilder<RosterCubit, RosterState>(
+                              buildWhen: (_, current) =>
+                                  current is RosterAvailable,
+                              builder: (context, rosterState) {
+                                final cached = rosterState is RosterAvailable
+                                    ? rosterState.items
+                                    : context.read<RosterCubit>()['items']
+                                        as List<RosterItem>?;
+                                final rosterItems =
+                                    cached ?? const <RosterItem>[];
+                                final item = rosterItems
+                                    .where((entry) => entry.jid == jid)
+                                    .singleOrNull;
+                                final canRenameContact = !readOnly &&
+                                    chatEntity != null &&
+                                    chatEntity.type == ChatType.chat;
+                                final statusLabel = item?.status?.trim() ?? '';
+                                final addressLabel = jid.trim();
+                                const addressStatusSeparator = ' · ';
+                                final secondaryLabel = statusLabel.isNotEmpty
+                                    ? '$addressLabel$addressStatusSeparator$statusLabel'
+                                    : addressLabel;
+                                final presence = item?.presence;
+                                final subscription = item?.subscription;
+                                final avatarTooltip = isGroupChat
+                                    ? context.l10n.chatRoomMembers
+                                    : null;
+                                Widget avatar = TransportAwareAvatar(
+                                  chat: chatEntity!,
+                                  size: _chatAppBarAvatarSize,
+                                  badgeOffset: const Offset(-6, -4),
+                                  presence: presence,
+                                  status: statusLabel,
+                                  subscription: subscription,
+                                );
+                                if (avatarTooltip != null) {
+                                  avatar = AxiTooltip(
+                                    builder: (context) => Text(avatarTooltip),
+                                    child: avatar,
                                   );
-                                  if (avatarTooltip != null) {
-                                    avatar = AxiTooltip(
-                                      builder: (context) => Text(avatarTooltip),
+                                }
+                                if (isGroupChat) {
+                                  avatar = MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: GestureDetector(
+                                      onTap: _showMembers,
                                       child: avatar,
-                                    );
-                                  }
-                                  if (isGroupChat) {
-                                    avatar = MouseRegion(
-                                      cursor: SystemMouseCursors.click,
-                                      child: GestureDetector(
-                                        onTap: _showMembers,
-                                        child: avatar,
-                                      ),
-                                    );
-                                  }
-                                  final double titleMaxWidth =
-                                      appBarWidth * _chatAppBarTitleWidthScale;
-                                  final double clampedTitleWidth =
-                                      titleMaxWidth.clamp(
-                                    _chatAppBarTitleMinWidth,
-                                    _chatAppBarTitleMaxWidth,
+                                    ),
                                   );
-                                  final baseTitleStyle = Theme.of(
-                                        context,
-                                      ).appBarTheme.titleTextStyle ??
-                                      context.textTheme.h4;
-                                  final titleStyle = baseTitleStyle.copyWith(
-                                    fontSize: context.textTheme.large.fontSize,
-                                  );
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      avatar,
-                                      const SizedBox(
-                                        width: _chatAppBarAvatarSpacing,
-                                      ),
-                                      Flexible(
-                                        fit: FlexFit.loose,
-                                        child: ConstrainedBox(
-                                          constraints: BoxConstraints(
-                                            maxWidth: clampedTitleWidth,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Flexible(
-                                                    fit: FlexFit.loose,
-                                                    child: Text(
-                                                      state.chat?.displayName ??
-                                                          '',
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: titleStyle,
+                                }
+                                final double titleMaxWidth =
+                                    appBarWidth * _chatAppBarTitleWidthScale;
+                                final double clampedTitleWidth =
+                                    titleMaxWidth.clamp(
+                                  _chatAppBarTitleMinWidth,
+                                  _chatAppBarTitleMaxWidth,
+                                );
+                                final baseTitleStyle = Theme.of(
+                                      context,
+                                    ).appBarTheme.titleTextStyle ??
+                                    context.textTheme.h4;
+                                final titleStyle = baseTitleStyle.copyWith(
+                                  fontSize: context.textTheme.large.fontSize,
+                                );
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    avatar,
+                                    const SizedBox(
+                                      width: _chatAppBarAvatarSpacing,
+                                    ),
+                                    Flexible(
+                                      fit: FlexFit.loose,
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: clampedTitleWidth,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Flexible(
+                                                  fit: FlexFit.loose,
+                                                  child: Text(
+                                                    state.chat?.displayName ??
+                                                        '',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: titleStyle,
+                                                  ),
+                                                ),
+                                                if (canRenameContact)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsetsDirectional
+                                                            .only(
+                                                      start: 6,
+                                                    ),
+                                                    child: AxiTooltip(
+                                                      builder: (context) =>
+                                                          Text(
+                                                        context.l10n
+                                                            .chatContactRenameTooltip,
+                                                      ),
+                                                      child:
+                                                          ShadIconButton.ghost(
+                                                        onPressed:
+                                                            _promptContactRename,
+                                                        icon: Icon(
+                                                          LucideIcons
+                                                              .pencilLine,
+                                                          size:
+                                                              _chatAppBarRenameIconSize,
+                                                          color: context
+                                                              .colorScheme
+                                                              .mutedForeground,
+                                                        ),
+                                                        decoration:
+                                                            const ShadDecoration(
+                                                          secondaryBorder:
+                                                              ShadBorder.none,
+                                                          secondaryFocusedBorder:
+                                                              ShadBorder.none,
+                                                        ),
+                                                      ).withTapBounce(),
                                                     ),
                                                   ),
-                                                  if (canRenameContact)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsetsDirectional
-                                                              .only(
-                                                        start: 6,
-                                                      ),
-                                                      child: AxiTooltip(
-                                                        builder: (context) =>
-                                                            Text(
-                                                          context.l10n
-                                                              .chatContactRenameTooltip,
-                                                        ),
-                                                        child: ShadIconButton
-                                                            .ghost(
-                                                          onPressed:
-                                                              _promptContactRename,
-                                                          icon: Icon(
-                                                            LucideIcons
-                                                                .pencilLine,
-                                                            size:
-                                                                _chatAppBarRenameIconSize,
-                                                            color: context
-                                                                .colorScheme
-                                                                .mutedForeground,
-                                                          ),
-                                                          decoration:
-                                                              const ShadDecoration(
-                                                            secondaryBorder:
-                                                                ShadBorder.none,
-                                                            secondaryFocusedBorder:
-                                                                ShadBorder.none,
-                                                          ),
-                                                        ).withTapBounce(),
-                                                      ),
-                                                    ),
-                                                ],
+                                              ],
+                                            ),
+                                            if (secondaryLabel.isNotEmpty)
+                                              SelectableText(
+                                                secondaryLabel,
+                                                maxLines: 1,
+                                                style: context.textTheme.muted,
                                               ),
-                                              if (secondaryLabel.isNotEmpty)
-                                                SelectableText(
-                                                  secondaryLabel,
-                                                  maxLines: 1,
-                                                  style:
-                                                      context.textTheme.muted,
-                                                ),
-                                            ],
-                                          ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  );
-                                },
-                              ),
-                        actions: [
-                          if (jid != null)
-                            BlocSelector<ChatSearchCubit, ChatSearchState,
-                                bool>(
-                              selector: (state) => state.active,
-                              builder: (context, searchActive) {
-                                final l10n = context.l10n;
-                                final colors = context.colorScheme;
-                                final bool isPinnedPanelVisible =
-                                    _pinnedPanelVisible;
-                                final Color pinnedIconColor =
-                                    isPinnedPanelVisible
-                                        ? colors.primary
-                                        : colors.foreground;
-                                final List<AppBarActionItem> chatActions =
-                                    <AppBarActionItem>[
-                                  if (isGroupChat)
-                                    AppBarActionItem(
-                                      label: l10n.chatRoomMembers,
-                                      iconData: LucideIcons.users,
-                                      onPressed: _showMembers,
                                     ),
-                                  AppBarActionItem(
-                                    label: searchActive
-                                        ? l10n.chatSearchClose
-                                        : l10n.chatSearchMessages,
-                                    iconData: LucideIcons.search,
-                                    onPressed: () => context
-                                        .read<ChatSearchCubit>()
-                                        .toggleActive(),
-                                  ),
-                                  AppBarActionItem(
-                                    label: l10n.chatAttachmentTooltip,
-                                    iconData: LucideIcons.image,
-                                    onPressed: _openChatAttachments,
-                                  ),
-                                  AppBarActionItem(
-                                    label: _pinnedPanelVisible
-                                        ? l10n.commonClose
-                                        : l10n.chatPinnedMessagesTooltip,
-                                    iconData: pinnedIcon,
-                                    icon: _PinnedBadgeIcon(
-                                      iconData: pinnedIcon,
-                                      count: pinnedCount,
-                                      iconColor: pinnedIconColor,
-                                    ),
-                                    onPressed: _togglePinnedMessages,
-                                  ),
-                                  if (chatCalendarAvailable)
-                                    AppBarActionItem(
-                                      label: showingChatCalendar
-                                          ? l10n.commonClose
-                                          : l10n.homeRailCalendar,
-                                      iconData: LucideIcons.calendarClock,
-                                      onPressed: () {
-                                        if (showingChatCalendar) {
-                                          _closeChatCalendar();
-                                          return;
-                                        }
-                                        _openChatCalendar();
-                                      },
-                                    ),
-                                  if (canShowSettings)
-                                    AppBarActionItem(
-                                      label: isSettingsRoute
-                                          ? l10n.chatCloseSettings
-                                          : l10n.chatSettings,
-                                      iconData: LucideIcons.settings,
-                                      onPressed: _toggleSettingsPanel,
-                                    ),
-                                ];
-                                final List<AppBarActionItem> combinedActions =
-                                    collapseAppBarActions
-                                        ? <AppBarActionItem>[
-                                            ...navigationActions,
-                                            ...chatActions,
-                                          ]
-                                        : chatActions;
-                                return AppBarActions(
-                                  actions: combinedActions,
-                                  spacing: _chatHeaderActionSpacing,
-                                  overflowBreakpoint: 0,
-                                  availableWidth: appBarWidth,
-                                  forceCollapsed:
-                                      collapseAppBarActions ? true : null,
+                                  ],
                                 );
                               },
-                            )
-                          else
-                            const SizedBox.shrink(),
-                        ],
-                      ),
-                      body: Builder(
-                        builder: (context) {
-                          final Widget chatMainBody = Column(
-                            children: [
-                              const ChatAlert(),
-                              _UnknownSenderBanner(
-                                readOnly: readOnly,
-                                isSelfChat: isSelfChat,
-                                onAddContact: _handleAddContact,
-                                onReportSpam: () =>
-                                    _handleSpamToggle(sendToSpam: true),
-                              ),
-                              Expanded(
-                                child: IgnorePointer(
-                                  ignoring: !_chatRoute.allowsChatInteraction,
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final rawContentWidth = math.max(
-                                        0.0,
-                                        constraints.maxWidth,
-                                      );
-                                      final availableWidth = math.max(
-                                        0.0,
-                                        rawContentWidth -
-                                            (_messageListHorizontalPadding * 2),
-                                      );
-                                      final isCompact =
-                                          availableWidth < smallScreen;
-                                      final pinnedPanelMaxHeight = math.max(
-                                        _chatPinnedPanelMinHeight,
-                                        constraints.maxHeight -
-                                            _bottomSectionHeight,
-                                      );
-                                      final messageById = {
-                                        for (final item in state.items)
-                                          item.stanzaID: item,
-                                      };
-                                      for (final entry
-                                          in state.quotedMessagesById.entries) {
-                                        messageById.putIfAbsent(
-                                          entry.key,
-                                          () => entry.value,
-                                        );
+                            ),
+                      actions: [
+                        if (jid != null)
+                          BlocSelector<ChatSearchCubit, ChatSearchState, bool>(
+                            selector: (state) => state.active,
+                            builder: (context, searchActive) {
+                              final l10n = context.l10n;
+                              final colors = context.colorScheme;
+                              final bool isPinnedPanelVisible =
+                                  _pinnedPanelVisible;
+                              final Color pinnedIconColor = isPinnedPanelVisible
+                                  ? colors.primary
+                                  : colors.foreground;
+                              final List<AppBarActionItem> chatActions =
+                                  <AppBarActionItem>[
+                                if (isGroupChat)
+                                  AppBarActionItem(
+                                    label: l10n.chatRoomMembers,
+                                    iconData: LucideIcons.users,
+                                    onPressed: _showMembers,
+                                  ),
+                                AppBarActionItem(
+                                  label: searchActive
+                                      ? l10n.chatSearchClose
+                                      : l10n.chatSearchMessages,
+                                  iconData: LucideIcons.search,
+                                  onPressed: () => context
+                                      .read<ChatSearchCubit>()
+                                      .toggleActive(),
+                                ),
+                                AppBarActionItem(
+                                  label: l10n.chatAttachmentTooltip,
+                                  iconData: LucideIcons.image,
+                                  onPressed: _openChatAttachments,
+                                ),
+                                AppBarActionItem(
+                                  label: _pinnedPanelVisible
+                                      ? l10n.commonClose
+                                      : l10n.chatPinnedMessagesTooltip,
+                                  iconData: pinnedIcon,
+                                  icon: _PinnedBadgeIcon(
+                                    iconData: pinnedIcon,
+                                    count: pinnedCount,
+                                    iconColor: pinnedIconColor,
+                                  ),
+                                  onPressed: _togglePinnedMessages,
+                                ),
+                                if (chatCalendarAvailable)
+                                  AppBarActionItem(
+                                    label: showingChatCalendar
+                                        ? l10n.commonClose
+                                        : l10n.homeRailCalendar,
+                                    iconData: LucideIcons.calendarClock,
+                                    onPressed: () {
+                                      if (showingChatCalendar) {
+                                        _closeChatCalendar();
+                                        return;
                                       }
-                                      final pinnedStanzaIds = state
-                                          .pinnedMessages
-                                          .map((item) => item.messageStanzaId)
-                                          .toSet();
-                                      if (searchFiltering) {
-                                        for (final item in searchResults) {
-                                          messageById[item.stanzaID] = item;
-                                        }
-                                      }
-                                      _pruneMessageSelection(
-                                        messageById.keys.toSet(),
+                                      _openChatCalendar();
+                                    },
+                                  ),
+                                if (canShowSettings)
+                                  AppBarActionItem(
+                                    label: isSettingsRoute
+                                        ? l10n.chatCloseSettings
+                                        : l10n.chatSettings,
+                                    iconData: LucideIcons.settings,
+                                    onPressed: _toggleSettingsPanel,
+                                  ),
+                              ];
+                              final List<AppBarActionItem> combinedActions =
+                                  collapseAppBarActions
+                                      ? <AppBarActionItem>[
+                                          ...navigationActions,
+                                          ...chatActions,
+                                        ]
+                                      : chatActions;
+                              return AppBarActions(
+                                actions: combinedActions,
+                                spacing: _chatHeaderActionSpacing,
+                                overflowBreakpoint: 0,
+                                availableWidth: appBarWidth,
+                                forceCollapsed:
+                                    collapseAppBarActions ? true : null,
+                              );
+                            },
+                          )
+                        else
+                          const SizedBox.shrink(),
+                      ],
+                    ),
+                    body: Builder(
+                      builder: (context) {
+                        final Widget chatMainBody = Column(
+                          children: [
+                            const ChatAlert(),
+                            _UnknownSenderBanner(
+                              readOnly: readOnly,
+                              isSelfChat: isSelfChat,
+                              onAddContact: _handleAddContact,
+                              onReportSpam: () =>
+                                  _handleSpamToggle(sendToSpam: true),
+                            ),
+                            Expanded(
+                              child: IgnorePointer(
+                                ignoring: !_chatRoute.allowsChatInteraction,
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final rawContentWidth = math.max(
+                                      0.0,
+                                      constraints.maxWidth,
+                                    );
+                                    final availableWidth = math.max(
+                                      0.0,
+                                      rawContentWidth -
+                                          (_messageListHorizontalPadding * 2),
+                                    );
+                                    final isCompact =
+                                        availableWidth < smallScreen;
+                                    final pinnedPanelMaxHeight = math.max(
+                                      _chatPinnedPanelMinHeight,
+                                      constraints.maxHeight -
+                                          _bottomSectionHeight,
+                                    );
+                                    final messageById = {
+                                      for (final item in state.items)
+                                        item.stanzaID: item,
+                                    };
+                                    for (final entry
+                                        in state.quotedMessagesById.entries) {
+                                      messageById.putIfAbsent(
+                                        entry.key,
+                                        () => entry.value,
                                       );
-                                      final activeItems = searchFiltering
-                                          ? searchResults
-                                          : state.items;
-                                      final attachmentsByMessageId = state
-                                          .attachmentMetadataIdsByMessageId;
-                                      final groupLeaderByMessageId = state
-                                          .attachmentGroupLeaderByMessageId;
-                                      const emptyAttachments = <String>[];
-                                      String messageKey(Message message) =>
-                                          message.id ?? message.stanzaID;
-                                      bool isGroupedNonLeader(Message message) {
-                                        final messageId = message.id;
-                                        if (messageId == null ||
-                                            messageId.isEmpty) {
-                                          return false;
-                                        }
-                                        final leaderId =
-                                            groupLeaderByMessageId[messageId];
-                                        return leaderId != null &&
-                                            leaderId != messageId;
+                                    }
+                                    final pinnedStanzaIds = state.pinnedMessages
+                                        .map((item) => item.messageStanzaId)
+                                        .toSet();
+                                    if (searchFiltering) {
+                                      for (final item in searchResults) {
+                                        messageById[item.stanzaID] = item;
                                       }
+                                    }
+                                    _pruneMessageSelection(
+                                      messageById.keys.toSet(),
+                                    );
+                                    final activeItems = searchFiltering
+                                        ? searchResults
+                                        : state.items;
+                                    final attachmentsByMessageId =
+                                        state.attachmentMetadataIdsByMessageId;
+                                    final groupLeaderByMessageId =
+                                        state.attachmentGroupLeaderByMessageId;
+                                    const emptyAttachments = <String>[];
+                                    String messageKey(Message message) =>
+                                        message.id ?? message.stanzaID;
+                                    bool isGroupedNonLeader(Message message) {
+                                      final messageId = message.id;
+                                      if (messageId == null ||
+                                          messageId.isEmpty) {
+                                        return false;
+                                      }
+                                      final leaderId =
+                                          groupLeaderByMessageId[messageId];
+                                      return leaderId != null &&
+                                          leaderId != messageId;
+                                    }
 
-                                      List<String> attachmentsForMessage(
-                                        Message message,
-                                      ) {
-                                        final key = messageKey(message);
-                                        return attachmentsByMessageId[key] ??
-                                            emptyAttachments;
-                                      }
+                                    List<String> attachmentsForMessage(
+                                      Message message,
+                                    ) {
+                                      final key = messageKey(message);
+                                      return attachmentsByMessageId[key] ??
+                                          emptyAttachments;
+                                    }
 
-                                      final displayItems = activeItems
-                                          .where(
-                                            (message) =>
-                                                !isGroupedNonLeader(message),
-                                          )
-                                          .toList();
-                                      final filteredItems = displayItems.where((
-                                        message,
-                                      ) {
-                                        final hasHtml = message
-                                                .normalizedHtmlBody
-                                                ?.isNotEmpty ==
-                                            true;
-                                        final attachments =
-                                            attachmentsForMessage(message);
-                                        return message.body != null ||
-                                            hasHtml ||
-                                            message.error.isNotNone ||
-                                            attachments.isNotEmpty;
-                                      }).toList();
-                                      final availabilityCoordinator =
-                                          _maybeReadAvailabilityShareCoordinator(
-                                        context,
-                                      );
-                                      final availabilityShareOwnersById =
-                                          <String, String>{};
-                                      for (final item in filteredItems) {
-                                        final availabilityMessage =
-                                            item.calendarAvailabilityMessage;
-                                        if (availabilityMessage == null) {
-                                          continue;
-                                        }
-                                        availabilityMessage.maybeMap(
-                                          share: (value) {
-                                            final owner =
-                                                value.share.overlay.owner;
-                                            final bool isValid =
-                                                _availabilitySenderMatchesClaim(
-                                              senderJid: item.senderJid,
-                                              chatJid: item.chatJid,
-                                              claimedJid: owner,
-                                              roomState: state.roomState,
-                                            );
-                                            if (isValid) {
-                                              availabilityShareOwnersById[
-                                                  value.share.id] = owner;
-                                            }
-                                          },
-                                          orElse: () {},
-                                        );
-                                      }
-                                      final isEmailChat = state
-                                              .chat?.defaultTransport.isEmail ==
+                                    final displayItems = activeItems
+                                        .where(
+                                          (message) =>
+                                              !isGroupedNonLeader(message),
+                                        )
+                                        .toList();
+                                    final filteredItems = displayItems.where((
+                                      message,
+                                    ) {
+                                      final hasHtml = message
+                                              .normalizedHtmlBody?.isNotEmpty ==
                                           true;
-                                      final loadingMessages =
-                                          !state.messagesLoaded;
-                                      final selectedMessages =
-                                          _collectSelectedMessages(
-                                        filteredItems,
-                                      );
-                                      if (_multiSelectActive &&
-                                          selectedMessages.isEmpty) {
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) {
-                                          if (!mounted) return;
-                                          _clearMultiSelection();
-                                        });
+                                      final attachments =
+                                          attachmentsForMessage(message);
+                                      return message.body != null ||
+                                          hasHtml ||
+                                          message.error.isNotNone ||
+                                          attachments.isNotEmpty;
+                                    }).toList();
+                                    final availabilityCoordinator =
+                                        _maybeReadAvailabilityShareCoordinator(
+                                      context,
+                                    );
+                                    final availabilityShareOwnersById =
+                                        <String, String>{};
+                                    for (final item in filteredItems) {
+                                      final availabilityMessage =
+                                          item.calendarAvailabilityMessage;
+                                      if (availabilityMessage == null) {
+                                        continue;
                                       }
-                                      final selectionActive =
-                                          _selectedMessageId != null;
-                                      final selectionSpacerVisibleHeight =
-                                          selectionActive
-                                              ? math.max(
-                                                  _messageListTailSpacer,
-                                                  _selectionSpacerHeight,
-                                                )
-                                              : _messageListTailSpacer;
-                                      final baseBubbleMaxWidth = availableWidth *
-                                          (isCompact
-                                              ? _compactBubbleWidthFraction
-                                              : _regularBubbleWidthFraction);
-                                      final inboundAvatarReservation =
-                                          isGroupChat
-                                              ? _messageRowAvatarReservation
-                                              : 0.0;
-                                      final inboundClampedBubbleWidth =
-                                          baseBubbleMaxWidth.clamp(
-                                        0.0,
-                                        availableWidth -
-                                            inboundAvatarReservation,
-                                      );
-                                      final outboundClampedBubbleWidth =
-                                          baseBubbleMaxWidth.clamp(
-                                        0.0,
-                                        availableWidth,
-                                      );
-                                      final inboundMessageRowMaxWidth =
-                                          math.min(
-                                        availableWidth -
-                                            inboundAvatarReservation,
-                                        inboundClampedBubbleWidth +
-                                            _selectionOuterInset,
-                                      );
-                                      final outboundMessageRowMaxWidth =
-                                          math.min(
-                                        availableWidth,
-                                        outboundClampedBubbleWidth +
-                                            _selectionOuterInset,
-                                      );
-                                      final messageRowMaxWidth =
-                                          rawContentWidth;
-                                      final selectionExtrasMaxWidth = math.min(
-                                        availableWidth,
-                                        _selectionExtrasMaxWidth,
-                                      );
-                                      final dashMessages = <ChatMessage>[];
-                                      final shownSubjectShares = <String>{};
-                                      final revokedInviteTokens = <String>{
-                                        for (final invite
-                                            in filteredItems.where(
-                                          (m) =>
-                                              m.pseudoMessageType ==
-                                              PseudoMessageType
-                                                  .mucInviteRevocation,
-                                        ))
-                                          if (invite.pseudoMessageData
-                                                  ?.containsKey('token') ==
-                                              true)
-                                            invite.pseudoMessageData?['token']
-                                                as String,
-                                      };
-                                      for (var index = 0;
-                                          index < filteredItems.length;
-                                          index++) {
-                                        final e = filteredItems[index];
-                                        final senderBare = _bareJid(
-                                          e.senderJid,
-                                        );
-                                        final normalizedSenderBare =
-                                            _normalizeBareJid(e.senderJid);
-                                        final isSelfXmpp = senderBare != null &&
-                                            senderBare ==
-                                                _bareJid(profileState()?.jid);
-                                        final isSelfEmail = senderBare !=
-                                                null &&
-                                            resolvedEmailSelfJid != null &&
-                                            senderBare ==
-                                                _bareJid(resolvedEmailSelfJid);
-                                        final bool isDeltaPlaceholderSender =
-                                            normalizedSenderBare != null &&
-                                                normalizedSenderBare
-                                                    .isDeltaPlaceholderJid;
-                                        final isMucSelf = isGroupChat &&
-                                            _isMucSelfMessage(
-                                              senderJid: e.senderJid,
-                                              occupantId: e.occupantID,
-                                              myOccupantId: myOccupantId,
-                                              selfNick: selfNick,
-                                            );
-                                        final isSelf = isSelfXmpp ||
-                                            isSelfEmail ||
-                                            isMucSelf ||
-                                            isDeltaPlaceholderSender;
-                                        final occupantId = isGroupChat
-                                            ? (isSelf
-                                                ? myOccupantId
-                                                : e.senderJid)
-                                            : null;
-                                        final occupant = !isGroupChat
-                                            ? null
-                                            : state.roomState
-                                                ?.occupants[occupantId];
-                                        final isEmailMessage =
-                                            e.deltaMsgId != null;
-                                        final fallbackNick =
-                                            _nickFromSender(e.senderJid) ??
-                                                state.chat?.title ??
-                                                '';
-                                        final authorLabel = (isSelf
-                                                ? user.firstName
-                                                : (occupant?.nick ??
-                                                    fallbackNick)) ??
-                                            '';
-                                        final authorId =
-                                            isSelf ? user.id : e.senderJid;
-                                        final author = ChatUser(
-                                          id: authorId,
-                                          firstName: authorLabel,
-                                        );
-                                        final quotedMessage = e.quoting == null
-                                            ? null
-                                            : messageById[e.quoting!];
-                                        final shareContext =
-                                            shareContexts[e.stanzaID];
-                                        final bannerParticipants =
-                                            List<chat_models.Chat>.of(
-                                          _participantsForBanner(
-                                            shareContext,
-                                            state.chat?.jid,
-                                            currentUserId,
-                                          ),
-                                        );
-                                        bool showSubjectHeader = false;
-                                        String? subjectLabel;
-                                        String bodyText = e.body ?? '';
-                                        final inviteToken =
-                                            e.pseudoMessageData?['token']
-                                                as String?;
-                                        final inviteRoom =
-                                            e.pseudoMessageData?['roomJid']
-                                                as String?;
-                                        final inviteRoomName =
-                                            (e.pseudoMessageData?['roomName']
-                                                    as String?)
-                                                ?.trim();
-                                        final invitee =
-                                            e.pseudoMessageData?['invitee']
-                                                as String?;
-                                        final isInvite = e.pseudoMessageType ==
-                                            PseudoMessageType.mucInvite;
-                                        final isInviteRevocation =
-                                            e.pseudoMessageType ==
-                                                PseudoMessageType
-                                                    .mucInviteRevocation;
-                                        final unknownRoomFallbackLabel = context
-                                            .l10n.chatInviteRoomFallbackLabel;
-                                        final resolvedInviteRoomName =
-                                            inviteRoomName?.isNotEmpty == true
-                                                ? inviteRoomName!
-                                                : unknownRoomFallbackLabel;
-                                        final inviteBodyLabel =
-                                            context.l10n.chatInviteBodyLabel;
-                                        final inviteRevokedBodyLabel =
-                                            context.l10n.chatInviteRevokedLabel;
-                                        final inviteLabel = isInvite
-                                            ? inviteBodyLabel
-                                            : inviteRevokedBodyLabel;
-                                        final inviteActionLabel =
-                                            context.l10n.chatInviteActionLabel(
-                                          resolvedInviteRoomName,
-                                        );
-                                        final inviteRevoked =
-                                            inviteToken != null &&
-                                                revokedInviteTokens.contains(
-                                                  inviteToken,
-                                                );
-                                        if (shareContext?.subject
-                                                ?.trim()
-                                                .isNotEmpty ==
-                                            true) {
-                                          subjectLabel =
-                                              shareContext!.subject!.trim();
-                                          if (shownSubjectShares.add(
-                                            shareContext.shareId,
-                                          )) {
-                                            showSubjectHeader = true;
-                                          }
-                                        } else {
-                                          final split =
-                                              ChatSubjectCodec.splitXmppBody(
-                                            e.body,
+                                      availabilityMessage.maybeMap(
+                                        share: (value) {
+                                          final owner =
+                                              value.share.overlay.owner;
+                                          final bool isValid =
+                                              _availabilitySenderMatchesClaim(
+                                            senderJid: item.senderJid,
+                                            chatJid: item.chatJid,
+                                            claimedJid: owner,
+                                            roomState: state.roomState,
                                           );
-                                          subjectLabel = split.subject;
-                                          bodyText = split.body;
-                                        }
-                                        if (!showSubjectHeader &&
-                                            shareContext == null &&
-                                            subjectLabel?.isNotEmpty == true) {
+                                          if (isValid) {
+                                            availabilityShareOwnersById[
+                                                value.share.id] = owner;
+                                          }
+                                        },
+                                        orElse: () {},
+                                      );
+                                    }
+                                    final isEmailChat =
+                                        state.chat?.defaultTransport.isEmail ==
+                                            true;
+                                    final loadingMessages =
+                                        !state.messagesLoaded;
+                                    final selectedMessages =
+                                        _collectSelectedMessages(
+                                      filteredItems,
+                                    );
+                                    if (_multiSelectActive &&
+                                        selectedMessages.isEmpty) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                        if (!mounted) return;
+                                        _clearMultiSelection();
+                                      });
+                                    }
+                                    final selectionActive =
+                                        _selectedMessageId != null;
+                                    final selectionSpacerVisibleHeight =
+                                        selectionActive
+                                            ? math.max(
+                                                _messageListTailSpacer,
+                                                _selectionSpacerHeight,
+                                              )
+                                            : _messageListTailSpacer;
+                                    final baseBubbleMaxWidth = availableWidth *
+                                        (isCompact
+                                            ? _compactBubbleWidthFraction
+                                            : _regularBubbleWidthFraction);
+                                    final inboundAvatarReservation = isGroupChat
+                                        ? _messageRowAvatarReservation
+                                        : 0.0;
+                                    final inboundClampedBubbleWidth =
+                                        baseBubbleMaxWidth.clamp(
+                                      0.0,
+                                      availableWidth - inboundAvatarReservation,
+                                    );
+                                    final outboundClampedBubbleWidth =
+                                        baseBubbleMaxWidth.clamp(
+                                      0.0,
+                                      availableWidth,
+                                    );
+                                    final inboundMessageRowMaxWidth = math.min(
+                                      availableWidth - inboundAvatarReservation,
+                                      inboundClampedBubbleWidth +
+                                          _selectionOuterInset,
+                                    );
+                                    final outboundMessageRowMaxWidth = math.min(
+                                      availableWidth,
+                                      outboundClampedBubbleWidth +
+                                          _selectionOuterInset,
+                                    );
+                                    final messageRowMaxWidth = rawContentWidth;
+                                    final selectionExtrasMaxWidth = math.min(
+                                      availableWidth,
+                                      _selectionExtrasMaxWidth,
+                                    );
+                                    final dashMessages = <ChatMessage>[];
+                                    final shownSubjectShares = <String>{};
+                                    final revokedInviteTokens = <String>{
+                                      for (final invite in filteredItems.where(
+                                        (m) =>
+                                            m.pseudoMessageType ==
+                                            PseudoMessageType
+                                                .mucInviteRevocation,
+                                      ))
+                                        if (invite.pseudoMessageData
+                                                ?.containsKey('token') ==
+                                            true)
+                                          invite.pseudoMessageData?['token']
+                                              as String,
+                                    };
+                                    for (var index = 0;
+                                        index < filteredItems.length;
+                                        index++) {
+                                      final e = filteredItems[index];
+                                      final senderBare = _bareJid(
+                                        e.senderJid,
+                                      );
+                                      final normalizedSenderBare =
+                                          _normalizeBareJid(e.senderJid);
+                                      final isSelfXmpp = senderBare != null &&
+                                          senderBare ==
+                                              _bareJid(profileState()?.jid);
+                                      final isSelfEmail = senderBare != null &&
+                                          resolvedEmailSelfJid != null &&
+                                          senderBare ==
+                                              _bareJid(resolvedEmailSelfJid);
+                                      final bool isDeltaPlaceholderSender =
+                                          normalizedSenderBare != null &&
+                                              normalizedSenderBare
+                                                  .isDeltaPlaceholderJid;
+                                      final isMucSelf = isGroupChat &&
+                                          _isMucSelfMessage(
+                                            senderJid: e.senderJid,
+                                            occupantId: e.occupantID,
+                                            myOccupantId: myOccupantId,
+                                            selfNick: selfNick,
+                                          );
+                                      final isSelf = isSelfXmpp ||
+                                          isSelfEmail ||
+                                          isMucSelf ||
+                                          isDeltaPlaceholderSender;
+                                      final occupantId = isGroupChat
+                                          ? (isSelf
+                                              ? myOccupantId
+                                              : e.senderJid)
+                                          : null;
+                                      final occupant = !isGroupChat
+                                          ? null
+                                          : state
+                                              .roomState?.occupants[occupantId];
+                                      final isEmailMessage =
+                                          e.deltaMsgId != null;
+                                      final fallbackNick =
+                                          _nickFromSender(e.senderJid) ??
+                                              state.chat?.title ??
+                                              '';
+                                      final authorLabel = (isSelf
+                                              ? user.firstName
+                                              : (occupant?.nick ??
+                                                  fallbackNick)) ??
+                                          '';
+                                      final authorId =
+                                          isSelf ? user.id : e.senderJid;
+                                      final author = ChatUser(
+                                        id: authorId,
+                                        firstName: authorLabel,
+                                      );
+                                      final quotedMessage = e.quoting == null
+                                          ? null
+                                          : messageById[e.quoting!];
+                                      final shareContext =
+                                          shareContexts[e.stanzaID];
+                                      final bannerParticipants =
+                                          List<chat_models.Chat>.of(
+                                        _participantsForBanner(
+                                          shareContext,
+                                          state.chat?.jid,
+                                          currentUserId,
+                                        ),
+                                      );
+                                      bool showSubjectHeader = false;
+                                      String? subjectLabel;
+                                      String bodyText = e.body ?? '';
+                                      final inviteToken =
+                                          e.pseudoMessageData?['token']
+                                              as String?;
+                                      final inviteRoom =
+                                          e.pseudoMessageData?['roomJid']
+                                              as String?;
+                                      final inviteRoomName =
+                                          (e.pseudoMessageData?['roomName']
+                                                  as String?)
+                                              ?.trim();
+                                      final invitee =
+                                          e.pseudoMessageData?['invitee']
+                                              as String?;
+                                      final isInvite = e.pseudoMessageType ==
+                                          PseudoMessageType.mucInvite;
+                                      final isInviteRevocation = e
+                                              .pseudoMessageType ==
+                                          PseudoMessageType.mucInviteRevocation;
+                                      final unknownRoomFallbackLabel = context
+                                          .l10n.chatInviteRoomFallbackLabel;
+                                      final resolvedInviteRoomName =
+                                          inviteRoomName?.isNotEmpty == true
+                                              ? inviteRoomName!
+                                              : unknownRoomFallbackLabel;
+                                      final inviteBodyLabel =
+                                          context.l10n.chatInviteBodyLabel;
+                                      final inviteRevokedBodyLabel =
+                                          context.l10n.chatInviteRevokedLabel;
+                                      final inviteLabel = isInvite
+                                          ? inviteBodyLabel
+                                          : inviteRevokedBodyLabel;
+                                      final inviteActionLabel =
+                                          context.l10n.chatInviteActionLabel(
+                                        resolvedInviteRoomName,
+                                      );
+                                      final inviteRevoked =
+                                          inviteToken != null &&
+                                              revokedInviteTokens.contains(
+                                                inviteToken,
+                                              );
+                                      if (shareContext?.subject
+                                              ?.trim()
+                                              .isNotEmpty ==
+                                          true) {
+                                        subjectLabel =
+                                            shareContext!.subject!.trim();
+                                        if (shownSubjectShares.add(
+                                          shareContext.shareId,
+                                        )) {
                                           showSubjectHeader = true;
                                         }
-                                        final subjectText =
-                                            subjectLabel?.trim() ?? '';
-                                        final bodyTextTrimmed = bodyText.trim();
-                                        final isSubjectOnlyBody =
-                                            showSubjectHeader &&
-                                                subjectText.isNotEmpty &&
-                                                bodyTextTrimmed == subjectText;
-                                        final displayedBody =
-                                            isSubjectOnlyBody ? '' : bodyText;
-                                        final errorLabel =
-                                            e.error.label(context.l10n);
-                                        MessageStatus statusFor(Message e) {
-                                          if (e.error.isNotNone) {
-                                            return MessageStatus.failed;
-                                          }
-                                          if (isEmailChat) {
-                                            if (e.received || e.displayed) {
-                                              return MessageStatus.received;
-                                            }
-                                            if (e.acked) {
-                                              return MessageStatus.sent;
-                                            }
-                                            return MessageStatus.pending;
-                                          }
-                                          if (e.displayed) {
-                                            return MessageStatus.read;
-                                          }
-                                          if (e.received) {
+                                      } else {
+                                        final split =
+                                            ChatSubjectCodec.splitXmppBody(
+                                          e.body,
+                                        );
+                                        subjectLabel = split.subject;
+                                        bodyText = split.body;
+                                      }
+                                      if (!showSubjectHeader &&
+                                          shareContext == null &&
+                                          subjectLabel?.isNotEmpty == true) {
+                                        showSubjectHeader = true;
+                                      }
+                                      final subjectText =
+                                          subjectLabel?.trim() ?? '';
+                                      final bodyTextTrimmed = bodyText.trim();
+                                      final isSubjectOnlyBody =
+                                          showSubjectHeader &&
+                                              subjectText.isNotEmpty &&
+                                              bodyTextTrimmed == subjectText;
+                                      final displayedBody =
+                                          isSubjectOnlyBody ? '' : bodyText;
+                                      final errorLabel =
+                                          e.error.label(context.l10n);
+                                      MessageStatus statusFor(Message e) {
+                                        if (e.error.isNotNone) {
+                                          return MessageStatus.failed;
+                                        }
+                                        if (isEmailChat) {
+                                          if (e.received || e.displayed) {
                                             return MessageStatus.received;
                                           }
                                           if (e.acked) {
@@ -4689,6 +4655,17 @@ class _ChatState extends State<Chat> {
                                           }
                                           return MessageStatus.pending;
                                         }
+                                        if (e.displayed) {
+                                          return MessageStatus.read;
+                                        }
+                                        if (e.received) {
+                                          return MessageStatus.received;
+                                        }
+                                        if (e.acked) {
+                                          return MessageStatus.sent;
+                                        }
+                                        return MessageStatus.pending;
+                                      }
 
                                         final shouldReplaceInviteBody =
                                             isInvite || isInviteRevocation;
@@ -8070,133 +8047,132 @@ class _ChatState extends State<Chat> {
                             ChatRouteIndex.calendar => const SizedBox.expand(),
                           };
 
-                          final bool isDesktopPlatform =
-                              EnvScope.maybeOf(context)?.isDesktopPlatform ??
-                                  false;
-                          final bool isLeavingToMain =
-                              _chatRoute.isMain && !_previousChatRoute.isMain;
-                          final bool isOverlaySwap =
-                              !_chatRoute.isMain && !_previousChatRoute.isMain;
-                          final bool isCalendarEnter = _chatRoute.isCalendar;
-                          final Key chatRouteKey = ValueKey(_chatRoute);
-                          final Duration overlayDuration =
-                              context.watch<SettingsCubit>().animationDuration;
-                          final Widget overlayStack = PageTransitionSwitcher(
-                            reverse: isLeavingToMain,
-                            duration: overlayDuration,
-                            layoutBuilder: (entries) =>
-                                Stack(fit: StackFit.expand, children: entries),
-                            transitionBuilder:
-                                (child, primaryAnimation, secondaryAnimation) {
-                              final bool isExiting = child.key != chatRouteKey;
-                              final Animation<double> enterAnimation =
-                                  CurvedAnimation(
-                                parent: primaryAnimation,
-                                curve: _chatOverlayFadeCurve,
-                              );
-                              final Animation<double> exitAnimation =
-                                  CurvedAnimation(
-                                parent: isLeavingToMain
-                                    ? primaryAnimation
-                                    : secondaryAnimation,
-                                curve: _chatOverlayFadeCurve,
-                              );
-                              if (isExiting) {
-                                final Widget exiting = isOverlaySwap
-                                    ? child
-                                    : FadeTransition(
-                                        opacity: exitAnimation,
-                                        child: child,
-                                      );
-                                return TickerMode(
-                                  enabled: false,
-                                  child: IgnorePointer(
-                                    ignoring: true,
-                                    child: ExcludeSemantics(
-                                      excluding: true,
-                                      child: exiting,
-                                    ),
-                                  ),
-                                );
-                              }
-                              final Widget entering = isCalendarEnter
-                                  ? (isDesktopPlatform
-                                      ? FadeTransition(
-                                          opacity: enterAnimation,
-                                          child: child,
-                                        )
-                                      : SlideTransition(
-                                          position: Tween<Offset>(
-                                            begin: _chatCalendarSlideOffset,
-                                            end: Offset.zero,
-                                          ).animate(enterAnimation),
-                                          child: FadeScaleTransition(
-                                            animation: enterAnimation,
-                                            child: child,
-                                          ),
-                                        ))
+                        final bool isDesktopPlatform =
+                            EnvScope.maybeOf(context)?.isDesktopPlatform ??
+                                false;
+                        final bool isLeavingToMain =
+                            _chatRoute.isMain && !_previousChatRoute.isMain;
+                        final bool isOverlaySwap =
+                            !_chatRoute.isMain && !_previousChatRoute.isMain;
+                        final bool isCalendarEnter = _chatRoute.isCalendar;
+                        final Key chatRouteKey = ValueKey(_chatRoute);
+                        final Duration overlayDuration =
+                            context.watch<SettingsCubit>().animationDuration;
+                        final Widget overlayStack = PageTransitionSwitcher(
+                          reverse: isLeavingToMain,
+                          duration: overlayDuration,
+                          layoutBuilder: (entries) =>
+                              Stack(fit: StackFit.expand, children: entries),
+                          transitionBuilder:
+                              (child, primaryAnimation, secondaryAnimation) {
+                            final bool isExiting = child.key != chatRouteKey;
+                            final Animation<double> enterAnimation =
+                                CurvedAnimation(
+                              parent: primaryAnimation,
+                              curve: _chatOverlayFadeCurve,
+                            );
+                            final Animation<double> exitAnimation =
+                                CurvedAnimation(
+                              parent: isLeavingToMain
+                                  ? primaryAnimation
+                                  : secondaryAnimation,
+                              curve: _chatOverlayFadeCurve,
+                            );
+                            if (isExiting) {
+                              final Widget exiting = isOverlaySwap
+                                  ? child
                                   : FadeTransition(
-                                      opacity: enterAnimation,
+                                      opacity: exitAnimation,
                                       child: child,
                                     );
                               return TickerMode(
-                                enabled: !isExiting,
+                                enabled: false,
                                 child: IgnorePointer(
-                                  ignoring: isExiting,
+                                  ignoring: true,
                                   child: ExcludeSemantics(
-                                    excluding: isExiting,
-                                    child: entering,
+                                    excluding: true,
+                                    child: exiting,
                                   ),
                                 ),
                               );
-                            },
-                            child: KeyedSubtree(
-                              key: chatRouteKey,
-                              child: overlayChild,
-                            ),
-                          );
-                          final Widget calendarOverlayVisibility =
-                              _ChatCalendarOverlayVisibility(
-                            visible: _chatRoute.isCalendar,
-                            duration: overlayDuration,
-                            curve: _chatOverlayFadeCurve,
-                            useDesktopFade: isDesktopPlatform,
-                            child: calendarOverlay,
-                          );
-                          return Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              chatMainBody,
-                              overlayStack,
-                              calendarOverlayVisibility,
-                            ],
-                          );
-                        },
-                      ),
-                    );
-                  },
-                );
-                final Widget content = chatCalendarBloc == null
-                    ? scaffold
-                    : BlocProvider<ChatCalendarBloc>.value(
-                        value: chatCalendarBloc,
-                        child: scaffold,
-                      );
-                final colors = context.colorScheme;
-                return Container(
-                  decoration: BoxDecoration(
-                    color: colors.background,
-                    border: Border(
-                      left: BorderSide(color: colors.border),
+                            }
+                            final Widget entering = isCalendarEnter
+                                ? (isDesktopPlatform
+                                    ? FadeTransition(
+                                        opacity: enterAnimation,
+                                        child: child,
+                                      )
+                                    : SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: _chatCalendarSlideOffset,
+                                          end: Offset.zero,
+                                        ).animate(enterAnimation),
+                                        child: FadeScaleTransition(
+                                          animation: enterAnimation,
+                                          child: child,
+                                        ),
+                                      ))
+                                : FadeTransition(
+                                    opacity: enterAnimation,
+                                    child: child,
+                                  );
+                            return TickerMode(
+                              enabled: !isExiting,
+                              child: IgnorePointer(
+                                ignoring: isExiting,
+                                child: ExcludeSemantics(
+                                  excluding: isExiting,
+                                  child: entering,
+                                ),
+                              ),
+                            );
+                          },
+                          child: KeyedSubtree(
+                            key: chatRouteKey,
+                            child: overlayChild,
+                          ),
+                        );
+                        final Widget calendarOverlayVisibility =
+                            _ChatCalendarOverlayVisibility(
+                          visible: _chatRoute.isCalendar,
+                          duration: overlayDuration,
+                          curve: _chatOverlayFadeCurve,
+                          useDesktopFade: isDesktopPlatform,
+                          child: calendarOverlay,
+                        );
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            chatMainBody,
+                            overlayStack,
+                            calendarOverlayVisibility,
+                          ],
+                        );
+                      },
                     ),
+                  );
+                },
+              );
+              final Widget content = chatCalendarBloc == null
+                  ? scaffold
+                  : BlocProvider<ChatCalendarBloc>.value(
+                      value: chatCalendarBloc,
+                      child: scaffold,
+                    );
+              final colors = context.colorScheme;
+              return Container(
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  border: Border(
+                    left: BorderSide(color: colors.border),
                   ),
-                  child: content,
-                );
-              },
-            ),
-          );
-        },
-      ),
+                ),
+                child: content,
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -8698,6 +8674,46 @@ class _ChatState extends State<Chat> {
     _setChatRoute(nextRoute);
   }
 
+  void _handleChatRouteHistoryRemoved() {
+    if (_chatRouteHistoryEntry == null) {
+      return;
+    }
+    _chatRouteHistoryEntry = null;
+    if (!mounted) {
+      return;
+    }
+    if (_chatRoute.isMain) {
+      return;
+    }
+    _setChatRoute(ChatRouteIndex.main);
+  }
+
+  void _clearChatRouteHistoryEntry() {
+    final entry = _chatRouteHistoryEntry;
+    _chatRouteHistoryEntry = null;
+    entry?.remove();
+  }
+
+  void _updateChatRouteHistoryEntry() {
+    final route = ModalRoute.of(context);
+    if (route == null) {
+      _clearChatRouteHistoryEntry();
+      return;
+    }
+    if (_chatRoute.isMain) {
+      _clearChatRouteHistoryEntry();
+      return;
+    }
+    if (_chatRouteHistoryEntry != null) {
+      return;
+    }
+    final entry = LocalHistoryEntry(
+      onRemove: _handleChatRouteHistoryRemoved,
+    );
+    _chatRouteHistoryEntry = entry;
+    route.addLocalHistoryEntry(entry);
+  }
+
   void _setChatRoute(ChatRouteIndex nextRoute) {
     if (!mounted) return;
     final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
@@ -8726,6 +8742,7 @@ class _ChatState extends State<Chat> {
       context.read<ChatSearchCubit?>()?.setActive(false);
     }
     context.read<ChatsCubit>().setOpenChatRoute(route: nextRoute);
+    _updateChatRouteHistoryEntry();
   }
 
   void _returnToMainRoute() {

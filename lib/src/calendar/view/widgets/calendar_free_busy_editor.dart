@@ -769,7 +769,6 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      useRootNavigator: true,
       builder: (sheetContext) => _FreeBusyEditSheet(
         segment: segment,
         rangeStart: widget.rangeStart,

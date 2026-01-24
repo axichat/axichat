@@ -13,12 +13,6 @@ const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeAckedKey = 'acked';
 const String _messageStatusSyncEnvelopeReceivedKey = 'received';
 const String _messageStatusSyncEnvelopeDisplayedKey = 'displayed';
-const String _availabilityShareFallbackText = 'Shared availability';
-const String _availabilityRequestFallbackText = 'Availability request';
-const String _availabilityResponseAcceptedFallbackText =
-    'Availability accepted';
-const String _availabilityResponseDeclinedFallbackText =
-    'Availability declined';
 const String _calendarSyncOperationUpdate = 'update';
 const String _calendarSyncOperationDelete = 'delete';
 const String _calendarSyncEntityTask = 'task';
@@ -3017,12 +3011,14 @@ mixin MessageService
   }
 
   String _availabilityFallbackText(CalendarAvailabilityMessage message) {
+    final XmppService service = owner as XmppService;
+    final l10n = service._notificationService.localizations;
     return message.map(
-      share: (_) => _availabilityShareFallbackText,
-      request: (_) => _availabilityRequestFallbackText,
+      share: (_) => l10n.calendarAvailabilityShareFallback,
+      request: (_) => l10n.calendarAvailabilityRequestFallback,
       response: (value) => value.response.status.isAccepted
-          ? _availabilityResponseAcceptedFallbackText
-          : _availabilityResponseDeclinedFallbackText,
+          ? l10n.calendarAvailabilityResponseAcceptedFallback
+          : l10n.calendarAvailabilityResponseDeclinedFallback,
     );
   }
 
