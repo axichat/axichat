@@ -7799,6 +7799,7 @@ class _ChatState extends State<Chat> {
                                                                 bubbleWithSlack,
                                                             spacing:
                                                                 calendarInsetLg,
+                                                            alignEnd: self,
                                                           );
                                                           final messageBody =
                                                               Column(
@@ -12868,12 +12869,14 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
     required this.senderLabel,
     required this.bubble,
     required this.spacing,
+    required this.alignEnd,
   });
 
   final Widget? preview;
   final Widget? senderLabel;
   final Widget bubble;
   final double spacing;
+  final bool alignEnd;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -12881,6 +12884,7 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
         spacing: spacing,
         hasPreview: preview != null,
         hasSenderLabel: senderLabel != null,
+        alignEnd: alignEnd,
       );
 
   @override
@@ -12891,7 +12895,8 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
     renderObject
       ..spacing = spacing
       ..hasPreview = preview != null
-      ..hasSenderLabel = senderLabel != null;
+      ..hasSenderLabel = senderLabel != null
+      ..alignEnd = alignEnd;
   }
 
   @override
@@ -12913,13 +12918,16 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     required double spacing,
     required bool hasPreview,
     required bool hasSenderLabel,
+    required bool alignEnd,
   })  : _spacing = spacing,
         _hasPreview = hasPreview,
-        _hasSenderLabel = hasSenderLabel;
+        _hasSenderLabel = hasSenderLabel,
+        _alignEnd = alignEnd;
 
   double _spacing;
   bool _hasPreview;
   bool _hasSenderLabel;
+  bool _alignEnd;
 
   double get spacing => _spacing;
 
@@ -12942,6 +12950,14 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
   set hasSenderLabel(bool value) {
     if (_hasSenderLabel == value) return;
     _hasSenderLabel = value;
+    markNeedsLayout();
+  }
+
+  bool get alignEnd => _alignEnd;
+
+  set alignEnd(bool value) {
+    if (_alignEnd == value) return;
+    _alignEnd = value;
     markNeedsLayout();
   }
 
@@ -12976,9 +12992,15 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       );
       senderLabelHeight = senderLabelChild.size.height;
       senderLabelWidth = senderLabelChild.size.width;
+    }
+    final layoutWidth = math.max(bubbleWidth, senderLabelWidth);
+    if (senderLabelChild != null) {
       final senderLabelParentData =
           senderLabelChild.parentData as _ReplyPreviewBubbleParentData;
-      senderLabelParentData.offset = Offset.zero;
+      senderLabelParentData.offset = Offset(
+        alignEnd ? layoutWidth - senderLabelWidth : 0,
+        0,
+      );
     }
     if (previewChild != null) {
       previewChild.layout(
@@ -12988,15 +13010,17 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       previewHeight = previewChild.size.height + spacing;
       final previewParentData =
           previewChild.parentData as _ReplyPreviewBubbleParentData;
-      previewParentData.offset = Offset(0, senderLabelHeight);
+      previewParentData.offset = Offset(
+        alignEnd ? layoutWidth - bubbleWidth : 0,
+        senderLabelHeight,
+      );
     }
     final bubbleParentData =
         bubbleChild.parentData as _ReplyPreviewBubbleParentData;
     bubbleParentData.offset = Offset(
-      0,
+      alignEnd ? layoutWidth - bubbleWidth : 0,
       previewHeight + senderLabelHeight,
     );
-    final layoutWidth = math.max(bubbleWidth, senderLabelWidth);
     size = constraints.constrain(
       Size(
         layoutWidth,

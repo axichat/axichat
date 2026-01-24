@@ -228,8 +228,7 @@ class _ShortcutKeycaps extends StatelessWidget {
     const keyGradientStops = [0.0, 0.45, 1.0];
     const overlayGradientStops = [0.0, 0.5, 1.0];
     final keyBase = colors.card;
-    final topSheen =
-        Color.lerp(keyBase, colors.foreground, keyTopSheenBlend)!;
+    final topSheen = Color.lerp(keyBase, colors.foreground, keyTopSheenBlend)!;
     final midTone = Color.lerp(keyBase, colors.foreground, keyMidToneBlend)!;
     final keyShadow =
         Color.lerp(colors.background, colors.foreground, keyShadowBlend)!;
