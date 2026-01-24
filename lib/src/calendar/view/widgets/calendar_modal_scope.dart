@@ -16,7 +16,9 @@ class CalendarModalScope extends InheritedWidget {
     return context.dependOnInheritedWidgetOfExactType<CalendarModalScope>();
   }
 
-  BuildContext? get navigatorContext => navigatorKey.currentContext;
+  BuildContext? get navigatorContext =>
+      navigatorKey.currentState?.overlay?.context ??
+      navigatorKey.currentContext;
 
   @override
   bool updateShouldNotify(CalendarModalScope oldWidget) {
