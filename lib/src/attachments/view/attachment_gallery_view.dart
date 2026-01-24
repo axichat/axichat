@@ -12,7 +12,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/axi_input.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -518,26 +517,15 @@ class AttachmentGallerySearchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final trimmedQuery = searchController.text.trim();
     const double controlSpacing = 8.0;
-    const double clearButtonSize = 28.0;
-    const double clearIconSize = 14.0;
     return Row(
       children: [
         Expanded(
-          child: AxiInput(
+          child: SearchInputField(
             controller: searchController,
             placeholder: Text(l10n.commonSearch),
-            trailing: trimmedQuery.isEmpty
-                ? null
-                : AxiIconButton.ghost(
-                    iconData: LucideIcons.x,
-                    tooltip: l10n.commonClear,
-                    buttonSize: clearButtonSize,
-                    tapTargetSize: clearButtonSize,
-                    iconSize: clearIconSize,
-                    onPressed: onClearSearch,
-                  ),
+            clearTooltip: l10n.commonClear,
+            onClear: onClearSearch,
           ),
         ),
         const SizedBox(width: controlSpacing),

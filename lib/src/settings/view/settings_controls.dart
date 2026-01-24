@@ -685,9 +685,6 @@ class _SettingsActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const ghostBackgroundOpacity = 0.6;
-    final backgroundColor =
-        colors.secondary.withValues(alpha: ghostBackgroundOpacity);
     final foregroundColor =
         destructive ? colors.destructive : colors.foreground;
     final verticalInset = _compactTilePadding.vertical / 2;
@@ -697,40 +694,27 @@ class _SettingsActionButton extends StatelessWidget {
         horizontal: _compactTilePadding.horizontal,
         vertical: verticalInset,
       ),
-      child: ClipRRect(
-        borderRadius: context.radius,
-        child: ColoredBox(
-          color: backgroundColor,
-          child: SizedBox(
-            width: double.infinity,
-            child: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: onPressed,
-              child: IconTheme.merge(
-                data: IconThemeData(color: foregroundColor),
-                child: DefaultTextStyle.merge(
-                  style: context.textTheme.small.copyWith(
-                    color: foregroundColor,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: Row(
-                        children: [
-                          if (iconData != null) Icon(iconData),
-                          if (iconData != null)
-                            SizedBox(width: iconSpacing),
-                          Expanded(child: Text(label)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: onPressed,
+          child: IconTheme.merge(
+            data: IconThemeData(color: foregroundColor),
+            child: DefaultTextStyle.merge(
+              style: context.textTheme.small.copyWith(
+                color: foregroundColor,
               ),
-            ).withTapBounce(enabled: onPressed != null),
+              child: Row(
+                children: [
+                  if (iconData != null) Icon(iconData),
+                  if (iconData != null) SizedBox(width: iconSpacing),
+                  Expanded(child: Text(label)),
+                ],
+              ),
+            ),
           ),
-        ),
+        ).withTapBounce(enabled: onPressed != null),
       ),
     );
   }
