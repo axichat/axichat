@@ -414,14 +414,16 @@ class AttachmentGalleryBloc
           }
         }
       }
+      final defaultAutoDownload =
+          _xmppService.defaultChatAttachmentAutoDownload;
       filtered.add(
         AttachmentGalleryEntryData(
           item: item,
           chat: chat,
           isSelf: isSelf,
           allowOnce: allowedOnceStanzaIds.contains(item.message.stanzaID),
-          allowByTrust:
-              isSelf || (chat?.attachmentAutoDownload.isAllowed ?? false),
+          allowByTrust: isSelf ||
+              (chat?.attachmentAutoDownload ?? defaultAutoDownload).isAllowed,
         ),
       );
     }

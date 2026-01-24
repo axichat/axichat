@@ -18,6 +18,7 @@ import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
@@ -523,7 +524,15 @@ class _DraftFormState extends State<DraftForm> {
         }
       }
       if (match != null) {
-        recipients.add(ComposerRecipient(target: FanOutTarget.chat(match)));
+        recipients.add(
+          ComposerRecipient(
+            target: FanOutTarget.chat(
+              chat: match,
+              shareSignatureEnabled: match.shareSignatureEnabled ??
+                  context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+            ),
+          ),
+        );
       } else {
         recipients.add(
           ComposerRecipient(target: FanOutTarget.address(address: trimmed)),
@@ -993,7 +1002,8 @@ class _DraftFormState extends State<DraftForm> {
           return FanOutTarget.address(
             address: address,
             displayName: chat.contactDisplayName ?? chat.title,
-            shareSignatureEnabled: chat.shareSignatureEnabled,
+            shareSignatureEnabled: chat.shareSignatureEnabled ??
+                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
           );
         }
       }

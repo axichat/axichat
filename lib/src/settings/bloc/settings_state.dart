@@ -49,3 +49,13 @@ class SettingsState with _$SettingsState {
   factory SettingsState.fromJson(Map<String, Object?> json) =>
       _$SettingsStateFromJson(json);
 }
+
+extension SettingsStateAttachmentDefaults on SettingsState {
+  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
+      autoDownloadImages ||
+              autoDownloadVideos ||
+              autoDownloadDocuments ||
+              autoDownloadArchives
+          ? AttachmentAutoDownload.allowed
+          : AttachmentAutoDownload.blocked;
+}

@@ -770,6 +770,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     Set<String> knownDomains,
     Set<String> knownAddresses,
   ) {
+    FanOutTarget chatTarget(Chat chat) => FanOutTarget.chat(
+          chat: chat,
+          shareSignatureEnabled: chat.shareSignatureEnabled ??
+              context.watch<SettingsCubit>().state.shareTokenSignatureEnabled,
+        );
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
     final results = <FanOutTarget>[];
@@ -785,7 +790,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
     if (query.isEmpty) {
       for (final chat in candidates) {
-        if (addTarget(FanOutTarget.chat(chat))) {
+        if (addTarget(chatTarget(chat))) {
           return results;
         }
       }
@@ -800,8 +805,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
 
     for (final chat in candidates) {
-      if (_chatMatchesQuery(chat, query) &&
-          addTarget(FanOutTarget.chat(chat))) {
+      if (_chatMatchesQuery(chat, query) && addTarget(chatTarget(chat))) {
         if (results.length >= _maxAutocompleteSuggestions) {
           return results;
         }

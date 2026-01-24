@@ -278,6 +278,12 @@ enum NotificationPreviewSetting {
 
   bool get isHidden => this == hide;
 
+  String label({
+    required String showLabel,
+    required String hideLabel,
+  }) =>
+      isShown ? showLabel : hideLabel;
+
   bool resolvePreview(bool globalSetting) => isShown ? true : false;
 
   static bool resolveOverride(
