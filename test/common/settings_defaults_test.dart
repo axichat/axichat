@@ -13,7 +13,7 @@ void main() {
     test('keeps archive auto-download disabled by default', () {
       const expectAutoDownloadArchives = false;
       expect(
-        state.attachmentAutoDownloadSettings.archivesEnabled,
+        state.autoDownloadArchives,
         expectAutoDownloadArchives,
       );
     });

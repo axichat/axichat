@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -160,7 +158,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsState? fromJson(Map<String, dynamic> json) {
     try {
       final migrated = Map<String, dynamic>.from(json);
-      final keyMap = <String, String>{
+      const keyMap = <String, String>{
         'themeMode': 'theme_mode',
         'shadColor': 'shad_color',
         'notificationPreviewsEnabled': 'notification_previews_enabled',
@@ -189,7 +187,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         }
       }
       if (migrated.containsKey('attachment_auto_download_settings')) {
-        final defaultState = const SettingsState();
+        const defaultState = SettingsState();
         final settings = migrated['attachment_auto_download_settings'];
         final Map<dynamic, dynamic> parsed =
             settings is Map ? settings : const {};

@@ -2614,7 +2614,6 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     final items = _items;
     final scheme = context.colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final settingsState = context.read<SettingsCubit>().state;
     final hasFocus = widget.focusNode.hasFocus;
     final hasItems = items.isNotEmpty;
     final clampedIndex = _currentIndex.clamp(
@@ -2726,12 +2725,22 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                           attachment,
                         ),
                         allowed: true,
-                        autoDownloadImages: settingsState.autoDownloadImages,
-                        autoDownloadVideos: settingsState.autoDownloadVideos,
-                        autoDownloadDocuments:
-                            settingsState.autoDownloadDocuments,
-                        autoDownloadArchives:
-                            settingsState.autoDownloadArchives,
+                        autoDownloadImages: context
+                            .watch<SettingsCubit>()
+                            .state
+                            .autoDownloadImages,
+                        autoDownloadVideos: context
+                            .watch<SettingsCubit>()
+                            .state
+                            .autoDownloadVideos,
+                        autoDownloadDocuments: context
+                            .watch<SettingsCubit>()
+                            .state
+                            .autoDownloadDocuments,
+                        autoDownloadArchives: context
+                            .watch<SettingsCubit>()
+                            .state
+                            .autoDownloadArchives,
                         autoDownloadAllowed: autoDownloadAllowed,
                       ),
                     )

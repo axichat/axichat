@@ -7371,7 +7371,7 @@ mixin MessageService
             return false;
           }
           if (chat == null) return false;
-          return chat.attachmentAutoDownload.isAllowed;
+          return chat.attachmentAutoDownload.resolveAllowed();
         });
       }
       if (!isTrusted) return;

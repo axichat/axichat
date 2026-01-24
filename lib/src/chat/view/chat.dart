@@ -2303,7 +2303,7 @@ class _ChatState extends State<Chat> {
     if (isSelf) return true;
     final resolvedChat = chat;
     if (resolvedChat == null) return false;
-    return resolvedChat.attachmentAutoDownload.isAllowed;
+    return resolvedChat.attachmentAutoDownload.resolveAllowed();
   }
 
   bool _isOneTimeAttachmentAllowed(String stanzaId) {
@@ -6629,11 +6629,6 @@ class _ChatState extends State<Chat> {
                                                                 !attachmentsBlockedForChat &&
                                                                     (allowAttachmentByTrust ||
                                                                         allowAttachmentOnce);
-                                                            final settingsState =
-                                                                context
-                                                                    .watch<
-                                                                        SettingsCubit>()
-                                                                    .state;
                                                             final chatAutoDownloadAllowed = state
                                                                     .chat
                                                                     ?.attachmentAutoDownload
@@ -6701,18 +6696,26 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                   allowed:
                                                                       allowAttachment,
-                                                                  autoDownloadImages:
-                                                                      settingsState
-                                                                          .autoDownloadImages,
-                                                                  autoDownloadVideos:
-                                                                      settingsState
-                                                                          .autoDownloadVideos,
-                                                                  autoDownloadDocuments:
-                                                                      settingsState
-                                                                          .autoDownloadDocuments,
-                                                                  autoDownloadArchives:
-                                                                      settingsState
-                                                                          .autoDownloadArchives,
+                                                                  autoDownloadImages: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadImages,
+                                                                  autoDownloadVideos: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadVideos,
+                                                                  autoDownloadDocuments: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadDocuments,
+                                                                  autoDownloadArchives: context
+                                                                      .watch<
+                                                                          SettingsCubit>()
+                                                                      .state
+                                                                      .autoDownloadArchives,
                                                                   autoDownloadAllowed:
                                                                       autoDownloadAllowed,
                                                                   autoDownloadUserInitiated:
@@ -9429,8 +9432,8 @@ class _PinnedMessageTile extends StatelessWidget {
           : isOneTimeAttachmentAllowed(message.stanzaID);
       final allowAttachment = !attachmentsBlockedForPin &&
           (allowAttachmentByTrust || allowAttachmentOnce);
-      final settingsState = context.watch<SettingsCubit>().state;
-      final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
+      final chatAutoDownloadAllowed =
+          chat.attachmentAutoDownload.resolveAllowed();
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
       final emailDownloadDelegate = isEmailBacked && emailService != null
@@ -9452,10 +9455,14 @@ class _PinnedMessageTile extends StatelessWidget {
             metadataStream: metadataStreamFor(attachmentId),
             initialMetadata: metadataInitialFor(attachmentId),
             allowed: allowAttachment,
-            autoDownloadImages: settingsState.autoDownloadImages,
-            autoDownloadVideos: settingsState.autoDownloadVideos,
-            autoDownloadDocuments: settingsState.autoDownloadDocuments,
-            autoDownloadArchives: settingsState.autoDownloadArchives,
+            autoDownloadImages:
+                context.watch<SettingsCubit>().state.autoDownloadImages,
+            autoDownloadVideos:
+                context.watch<SettingsCubit>().state.autoDownloadVideos,
+            autoDownloadDocuments:
+                context.watch<SettingsCubit>().state.autoDownloadDocuments,
+            autoDownloadArchives:
+                context.watch<SettingsCubit>().state.autoDownloadArchives,
             autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: emailDownloadDelegate,
@@ -12116,11 +12123,10 @@ class _ChatSettingsButtons extends StatelessWidget {
     final AppLocalizations l10n = context.l10n;
     final colors = context.colorScheme;
     final destructiveColor = colors.destructive;
-    final SettingsState settingsState = context.watch<SettingsCubit>().state;
     final BlocklistState? blocklistState =
         context.watch<BlocklistCubit?>()?.state;
     final bool globalSignatureEnabled =
-        settingsState.shareTokenSignatureEnabled;
+        context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
     final bool chatSignatureEnabled = chat.shareSignatureEnabled;
     final bool signatureActive = globalSignatureEnabled && chatSignatureEnabled;
     final String signatureHint = globalSignatureEnabled
@@ -12405,7 +12411,7 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final enabled = chat.attachmentAutoDownload.isAllowed;
+    final enabled = chat.attachmentAutoDownload.resolveAllowed();
     final hint = enabled
         ? l10n.chatAttachmentAutoDownloadHintOn
         : l10n.chatAttachmentAutoDownloadHintOff;
