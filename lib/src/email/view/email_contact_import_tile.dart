@@ -54,21 +54,25 @@ class EmailContactImportTile extends StatelessWidget {
 }
 
 class EmailContactImportActionButton extends StatelessWidget {
-  const EmailContactImportActionButton({super.key});
+  const EmailContactImportActionButton({
+    super.key,
+    this.padding,
+  });
+
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const horizontalInset = _dialogFieldSpacing * 2;
-    const verticalInset = _dialogFieldSpacing / 2;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
         return Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: horizontalInset,
-            vertical: verticalInset,
-          ),
+          padding: padding ??
+              const EdgeInsets.symmetric(
+                horizontal: _dialogFieldSpacing * 2,
+                vertical: _dialogFieldSpacing / 2,
+              ),
           child: SizedBox(
             width: double.infinity,
             child: ShadButton.ghost(
