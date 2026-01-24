@@ -1749,6 +1749,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsButtonLabel => '设置';
 
   @override
+  String get settingsSectionAccount => 'Account';
+
+  @override
+  String get settingsSectionData => 'Data';
+
+  @override
   String get settingsSectionImportant => '重要';
 
   @override
@@ -1785,10 +1791,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLowMotionDescription => '禁用大部分动画，更适合性能较慢的设备。';
 
   @override
-  String get settingsSectionChats => '聊天';
+  String get settingsSectionChats => 'Chat preferences';
 
   @override
-  String get settingsSectionEmail => '邮件';
+  String get settingsSectionEmail => 'Email preferences';
+
+  @override
+  String get settingsSectionAbout => 'About';
+
+  @override
+  String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
   String get settingsMessageStorageTitle => '消息存储';

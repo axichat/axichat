@@ -13995,22 +13995,12 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     Navigator.of(context).pop(selected);
   }
 
-  Future<void> _handleClose() async {
-    final focusNode = FocusManager.instance.primaryFocus;
-    focusNode?.unfocus();
-    if (focusNode != null) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),
-      onClose: _handleClose,
+      onClose: () => Navigator.of(context).maybePop(),
     );
     return AxiSheetScaffold.scroll(
       header: header,
