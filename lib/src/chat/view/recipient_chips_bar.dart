@@ -104,7 +104,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? Object();
+    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -151,7 +151,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? Object();
+      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1262,14 +1262,10 @@ final class _RecipientAutocompleteOverlayState
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
   void _handleTapOutside() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final primaryFocus = FocusManager.instance.primaryFocus;
-      if (primaryFocus != widget.focusNode) {
-        return;
-      }
-      widget.focusNode.unfocus();
-    });
+    if (!mounted || !widget.focusNode.hasFocus) {
+      return;
+    }
+    widget.focusNode.unfocus();
   }
 
   void _recomputeOptions() {
