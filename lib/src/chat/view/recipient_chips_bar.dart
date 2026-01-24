@@ -391,6 +391,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             availableAutocompleteChats,
                             knownDomains,
                             knownAddresses,
+                            shareTokenSignatureEnabled: context
+                                .watch<SettingsCubit>()
+                                .state
+                                .shareTokenSignatureEnabled,
                           ),
                           highlightedIndexListenable:
                               _highlightedSuggestionIndex,
@@ -776,17 +780,17 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     String raw,
     List<Chat> candidates,
     Set<String> knownDomains,
-    Set<String> knownAddresses,
-  ) {
+    Set<String> knownAddresses, {
+    required bool shareTokenSignatureEnabled,
+  }) {
     FanOutTarget chatTarget(Chat chat) => FanOutTarget.chat(
           chat: chat,
-          shareSignatureEnabled: chat.shareSignatureEnabled ??
-              context.watch<SettingsCubit>().state.shareTokenSignatureEnabled,
+          shareSignatureEnabled:
+              chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
         );
     FanOutTarget addressTarget(String address) => FanOutTarget.address(
           address: address,
-          shareSignatureEnabled:
-              context.watch<SettingsCubit>().state.shareTokenSignatureEnabled,
+          shareSignatureEnabled: shareTokenSignatureEnabled,
         );
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
