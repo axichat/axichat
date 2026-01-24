@@ -956,6 +956,7 @@ mixin MucService on XmppBase, BaseStreamService {
           myNickname: nick,
           lastChangeTimestamp: DateTime.timestamp(),
           contactJid: roomJid,
+          attachmentAutoDownload: defaultChatAttachmentAutoDownload,
         ),
       ),
       awaitDatabase: true,
@@ -1429,6 +1430,7 @@ mixin MucService on XmppBase, BaseStreamService {
             myNickname: resolvedNickname,
             lastChangeTimestamp: DateTime.timestamp(),
             contactJid: roomJid,
+            attachmentAutoDownload: defaultChatAttachmentAutoDownload,
           ),
         );
         return;
@@ -2326,6 +2328,7 @@ mixin MucService on XmppBase, BaseStreamService {
                 myNickname: nickname,
                 lastChangeTimestamp: DateTime.timestamp(),
                 contactJid: roomJid,
+                attachmentAutoDownload: defaultChatAttachmentAutoDownload,
               ),
             );
             return;

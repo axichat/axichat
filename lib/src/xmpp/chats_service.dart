@@ -757,6 +757,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
               favorited: pinned,
               archived: archived,
               contactJid: peerJid,
+              attachmentAutoDownload: defaultChatAttachmentAutoDownload,
             ),
           );
           continue;

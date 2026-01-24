@@ -420,8 +420,8 @@ class AttachmentGalleryBloc
           chat: chat,
           isSelf: isSelf,
           allowOnce: allowedOnceStanzaIds.contains(item.message.stanzaID),
-          allowByTrust: isSelf ||
-              (chat?.attachmentAutoDownload.resolveAllowed() ?? false),
+          allowByTrust:
+              isSelf || (chat?.attachmentAutoDownload.isAllowed ?? false),
         ),
       );
     }

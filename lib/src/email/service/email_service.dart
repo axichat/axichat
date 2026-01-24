@@ -1478,7 +1478,10 @@ class EmailService {
     final String resolvedTitle =
         displayName?.isNotEmpty == true ? displayName! : resolvedAddress;
     final String resolvedDisplayName = resolvedTitle;
-    return Chat.fromJid(resolvedAddress).copyWith(
+    return Chat.fromJid(
+      resolvedAddress,
+      attachmentAutoDownload: AttachmentAutoDownload.allowed,
+    ).copyWith(
       title: resolvedTitle,
       contactDisplayName: resolvedDisplayName,
       emailAddress: resolvedAddress,
