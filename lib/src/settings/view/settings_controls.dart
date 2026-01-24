@@ -28,15 +28,35 @@ const EdgeInsets _settingsSectionHeaderPadding = EdgeInsets.symmetric(
   vertical: 6.0,
 );
 
+class SettingsSectionAnchors {
+  SettingsSectionAnchors({
+    this.importantKey,
+    this.appearanceKey,
+    this.chatsKey,
+    this.emailKey,
+  });
+
+  final GlobalKey? importantKey;
+  final GlobalKey? appearanceKey;
+  final GlobalKey? chatsKey;
+  final GlobalKey? emailKey;
+}
+
 class SettingsControls extends StatelessWidget {
-  const SettingsControls({super.key, this.showDivider = false});
+  const SettingsControls({
+    super.key,
+    this.showDivider = false,
+    this.anchors,
+  });
 
   final bool showDivider;
+  final SettingsSectionAnchors? anchors;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final emailSectionLabel = l10n.settingsSectionEmail;
+    final anchorTargets = anchors;
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
         return Column(
@@ -47,10 +67,18 @@ class SettingsControls extends StatelessWidget {
             const EmailForwardingGuideTile(),
             const EmailContactImportTile(),
             if (context.read<Capability>().canForegroundService) ...[
-              _SettingsSectionHeader(
-                label: l10n.settingsSectionImportant,
-                showDivider: showDivider,
-              ),
+              anchorTargets?.importantKey == null
+                  ? _SettingsSectionHeader(
+                      label: l10n.settingsSectionImportant,
+                      showDivider: showDivider,
+                    )
+                  : KeyedSubtree(
+                      key: anchorTargets?.importantKey,
+                      child: _SettingsSectionHeader(
+                        label: l10n.settingsSectionImportant,
+                        showDivider: showDivider,
+                      ),
+                    ),
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: NotificationRequest(
@@ -59,7 +87,14 @@ class SettingsControls extends StatelessWidget {
                 ),
               ),
             ],
-            _SettingsSectionHeader(label: l10n.settingsSectionAppearance),
+            anchorTargets?.appearanceKey == null
+                ? _SettingsSectionHeader(label: l10n.settingsSectionAppearance)
+                : KeyedSubtree(
+                    key: anchorTargets?.appearanceKey,
+                    child: _SettingsSectionHeader(
+                      label: l10n.settingsSectionAppearance,
+                    ),
+                  ),
             ListItemPadding(
               child: AxiListTile(
                 title: l10n.settingsLanguage,
@@ -146,7 +181,14 @@ class SettingsControls extends StatelessWidget {
                     context.read<SettingsCubit>().toggleLowMotion(lowMotion),
               ),
             ),
-            _SettingsSectionHeader(label: l10n.settingsSectionChats),
+            anchorTargets?.chatsKey == null
+                ? _SettingsSectionHeader(label: l10n.settingsSectionChats)
+                : KeyedSubtree(
+                    key: anchorTargets?.chatsKey,
+                    child: _SettingsSectionHeader(
+                      label: l10n.settingsSectionChats,
+                    ),
+                  ),
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: MessageStorageTile(state: state),
@@ -238,7 +280,12 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoDownloadArchives(enabled),
               ),
             ),
-            _SettingsSectionHeader(label: emailSectionLabel),
+            anchorTargets?.emailKey == null
+                ? _SettingsSectionHeader(label: emailSectionLabel)
+                : KeyedSubtree(
+                    key: anchorTargets?.emailKey,
+                    child: _SettingsSectionHeader(label: emailSectionLabel),
+                  ),
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
@@ -281,7 +328,11 @@ class SettingsControls extends StatelessWidget {
 }
 
 class _SettingsSectionHeader extends StatelessWidget {
-  const _SettingsSectionHeader({required this.label, this.showDivider = true});
+  const _SettingsSectionHeader({
+    super.key,
+    required this.label,
+    this.showDivider = true,
+  });
 
   final String label;
   final bool showDivider;

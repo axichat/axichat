@@ -259,21 +259,31 @@ class Invites extends Table {
   Set<Column<Object>>? get primaryKey => {jid};
 }
 
-const int attachmentAutoDownloadDefaultIndex = 0;
-const int notificationPreviewSettingDefaultIndex = 0;
-
 enum ChatType { chat, groupChat, note }
 
 enum AttachmentAutoDownload {
   blocked,
-  allowed;
+  allowed,
+  inherit;
+
+  static const int defaultIndex = 2;
+
+  bool get isInherited => this == inherit;
 
   bool get isBlocked => this == blocked;
 
   bool get isAllowed => this == allowed;
+
+  bool resolveAllowed() => this != blocked;
 }
 
-enum NotificationPreviewSetting { inherit, show, hide }
+enum NotificationPreviewSetting {
+  inherit,
+  show,
+  hide;
+
+  static const int defaultIndex = 0;
+}
 
 extension NotificationPreviewSettingExtensions on NotificationPreviewSetting {
   bool get isInherited => this == NotificationPreviewSetting.inherit;
@@ -315,7 +325,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     DateTime? spamUpdatedAt,
     @Default(true) bool markerResponsive,
     @Default(true) bool shareSignatureEnabled,
-    @Default(AttachmentAutoDownload.blocked)
+    @Default(AttachmentAutoDownload.inherit)
     AttachmentAutoDownload attachmentAutoDownload,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
@@ -470,7 +480,7 @@ class Chats extends Table {
 
   IntColumn get notificationPreviewSetting =>
       intEnum<NotificationPreviewSetting>().withDefault(
-        const Constant(notificationPreviewSettingDefaultIndex),
+        const Constant(NotificationPreviewSetting.defaultIndex),
       )();
 
   BoolColumn get favorited => boolean().withDefault(const Constant(false))();
@@ -490,7 +500,7 @@ class Chats extends Table {
       boolean().withDefault(const Constant(true))();
 
   IntColumn get attachmentAutoDownload => intEnum<AttachmentAutoDownload>()
-      .withDefault(const Constant(attachmentAutoDownloadDefaultIndex))();
+      .withDefault(const Constant(AttachmentAutoDownload.defaultIndex))();
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(1))();

@@ -28,6 +28,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
@@ -48,7 +49,6 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -555,10 +555,13 @@ class XmppService extends XmppBase
   @override
   bool get autoDownloadImages => _autoDownloadImages;
 
+  @override
   bool get autoDownloadVideos => _autoDownloadVideos;
 
+  @override
   bool get autoDownloadDocuments => _autoDownloadDocuments;
 
+  @override
   bool get autoDownloadArchives => _autoDownloadArchives;
 
   @override
