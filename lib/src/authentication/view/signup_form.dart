@@ -84,7 +84,8 @@ class _SignupFormState extends State<SignupForm>
   var _currentIndex = 0;
   String? _errorText;
   bool? _lastReportedLoading;
-  Future<String>? _captchaSrc;
+  late Future<String> _captchaSrc;
+  bool _captchaSrcInitialized = false;
 
   @override
   void initState() {
@@ -142,11 +143,12 @@ class _SignupFormState extends State<SignupForm>
       text: context.l10n.authUsernameCaseInsensitive,
       style: context.textTheme.small,
     );
-    if (_captchaSrc != null) {
+    if (_captchaSrcInitialized) {
       return;
     }
     _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
     _captchaSrc = _loadCaptchaSrc();
+    _captchaSrcInitialized = true;
   }
 
   void _handleFieldProgressChanged() {
@@ -247,7 +249,7 @@ class _SignupFormState extends State<SignupForm>
     avatarCubit.pauseCarousel();
     final avatarPayload = avatarCubit.selectedAvatarPayload();
     FocusManager.instance.primaryFocus?.unfocus();
-    final captchaSrc = await (_captchaSrc ??= _loadCaptchaSrc());
+    final captchaSrc = await _captchaSrc;
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
       return;
     }
@@ -888,7 +890,7 @@ class _SignupFormState extends State<SignupForm>
                                     padding: fieldSpacing +
                                         const EdgeInsets.only(top: 20),
                                     child: FutureBuilder<String>(
-                                      future: _captchaSrc ?? Future.value(''),
+                                      future: _captchaSrc,
                                       builder: (context, snapshot) {
                                         Widget captchaSurface;
                                         if (snapshot.hasData) {
