@@ -1031,7 +1031,6 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
   final textTheme = context.textTheme;
   return showAdaptiveBottomSheet<CriticalPathPickerResult>(
     context: context,
-    useRootNavigator: true,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     showCloseButton: false,
@@ -1197,7 +1196,6 @@ Future<String?> promptCriticalPathName({
   final result = await showAdaptiveBottomSheet<String>(
     context: context,
     isScrollControlled: true,
-    useRootNavigator: true,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     showCloseButton: false,

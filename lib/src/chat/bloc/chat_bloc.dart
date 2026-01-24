@@ -14,11 +14,11 @@ import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
-import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
-import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/event_transform.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -2155,7 +2155,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         !hasQueuedAttachments &&
         !hasSubject &&
         !hasCalendarTaskIcs) {
-      emit(state.copyWith(composerError: 'Message cannot be empty.'));
+      emit(state.copyWith(composerError: _l10n.chatComposerEmptyMessage));
       return;
     }
     if (state.composerError != null) {
@@ -2229,15 +2229,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
-        state.copyWith(
-          composerError: 'Email sending is unavailable for this chat.',
-        ),
+        state.copyWith(composerError: _l10n.chatComposerEmailUnavailable),
       );
       return;
     }
     if (attachmentsViaXmpp && !state.supportsHttpFileUpload) {
-      const message = 'File upload is not available on this server.';
-      emit(state.copyWith(composerError: message));
+      emit(
+        state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
+      );
       return;
     }
     final invalidEmailRecipients = requiresEmail
@@ -2250,13 +2249,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           })
         : const <ComposerRecipient>[];
     if (requiresEmail && emailRecipients.isEmpty) {
-      emit(state.copyWith(composerError: 'Select at least one recipient.'));
+      emit(state.copyWith(composerError: _l10n.chatComposerSelectRecipient));
       return;
     }
     if (requiresEmail && invalidEmailRecipients.isNotEmpty) {
       emit(
         state.copyWith(
-          composerError: 'Email is unavailable for one or more recipients.',
+          composerError: _l10n.chatComposerEmailRecipientUnavailable,
         ),
       );
       return;
@@ -2979,10 +2978,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state.copyWith(
-            composerError: 'Add an email recipient to send attachments.',
+            composerError: _l10n.chatComposerEmailAttachmentRecipientRequired,
           ),
-          const ChatToast(
-            message: 'Add an email recipient to send attachments.',
+          ChatToast(
+            message: _l10n.chatComposerEmailAttachmentRecipientRequired,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3099,8 +3098,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(
-            message: 'Email is offline. Retry once sync recovers.',
+          ChatToast(
+            message: _l10n.chatEmailOfflineRetryMessage,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3179,8 +3178,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(
-            message: 'Email is offline. Retry once sync recovers.',
+          ChatToast(
+            message: _l10n.chatEmailOfflineRetryMessage,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3578,8 +3577,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     if (!state.supportsHttpFileUpload) {
-      const message = 'File upload is not available on this server.';
-      emit(state.copyWith(composerError: message));
+      emit(
+        state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
+      );
       return false;
     }
     final orderedAttachments = attachments.toList(growable: false);
@@ -3673,7 +3673,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return false;
       } on XmppUploadNotSupportedException catch (_) {
-        const message = 'File upload is not available on this server.';
+        final message = _l10n.chatComposerFileUploadUnavailable;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -4333,9 +4333,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to send fan-out message', error, stackTrace);
       emit(
-        state.copyWith(
-          composerError: 'Unable to send message. Please try again.',
-        ),
+        state.copyWith(composerError: _l10n.chatComposerSendFailed),
       );
       return false;
     }

@@ -36,6 +36,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -105,6 +106,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
+  bool _calendarCanHandlePop = false;
+  bool _chatCanHandlePop = false;
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
@@ -130,6 +133,26 @@ class _HomeScreenState extends State<HomeScreen> {
   void deactivate() {
     context.read<XmppService?>()?.clearChatCalendarSyncCallback();
     super.deactivate();
+  }
+
+  bool _handleCalendarNavigationNotification(
+    NavigationNotification notification,
+  ) {
+    if (_calendarCanHandlePop == notification.canHandlePop) {
+      return false;
+    }
+    setState(() => _calendarCanHandlePop = notification.canHandlePop);
+    return false;
+  }
+
+  bool _handleChatNavigationNotification(
+    NavigationNotification notification,
+  ) {
+    if (_chatCanHandlePop == notification.canHandlePop) {
+      return false;
+    }
+    setState(() => _chatCanHandlePop = notification.canHandlePop);
+    return false;
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -294,7 +317,14 @@ class _HomeScreenState extends State<HomeScreen> {
             Align(alignment: Alignment.topLeft, child: child);
         return PopScope(
           canPop: false,
-          onPopInvokedWithResult: (_, __) {
+          onPopInvokedWithResult: (didPop, __) {
+            if (didPop) {
+              return;
+            }
+            if (FocusManager.instance.isTextInputFocused) {
+              FocusManager.instance.primaryFocus?.unfocus();
+              return;
+            }
             final navigator = Navigator.of(context);
             if (navigator.canPop()) {
               navigator.pop();
@@ -308,6 +338,12 @@ class _HomeScreenState extends State<HomeScreen> {
             final chatsCubit = context.read<ChatsCubit?>();
             final chatsState = chatsCubit?.state;
             if (chatsState == null) return;
+            if (chatsState.openCalendar && _calendarCanHandlePop) {
+              return;
+            }
+            if (!chatsState.openCalendar && _chatCanHandlePop) {
+              return;
+            }
             final chatFocused = context.read<ChatBloc?>()?.state.focused;
             if (chatFocused != null) {
               chatsCubit?.setOpenChatRoute(route: ChatRouteIndex.main);
@@ -423,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       final EdgeInsets secondaryPanePadding = showChatCalendar
                           ? EdgeInsets.zero
                           : const EdgeInsets.only(left: _secondaryPaneGutter);
-                      return Row(
+                      final Widget content = Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (navRail != null) navRail,
@@ -454,15 +490,25 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       );
+                      return NotificationListener<NavigationNotification>(
+                        onNotification: _handleChatNavigationNotification,
+                        child: content,
+                      );
                     }
 
-                    Widget calendarLayout() => Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (navRail != null) navRail,
-                            const Expanded(child: CalendarWidget()),
-                          ],
-                        );
+                    Widget calendarLayout() {
+                      final Widget content = Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (navRail != null) navRail,
+                          const Expanded(child: CalendarWidget()),
+                        ],
+                      );
+                      return NotificationListener<NavigationNotification>(
+                        onNotification: _handleCalendarNavigationNotification,
+                        child: content,
+                      );
+                    }
 
                     final bool demoOffline =
                         context.read<XmppService?>()?.demoOfflineMode ?? false;

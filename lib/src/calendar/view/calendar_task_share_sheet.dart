@@ -34,8 +34,6 @@ const double _taskShareHeaderIconSize = 18.0;
 const double _taskShareProgressStrokeWidth = 2.0;
 const EdgeInsets _taskShareContentPadding =
     EdgeInsets.symmetric(horizontal: 16);
-const String _taskShareEditLabel = 'Let recipients edit';
-
 const String _taskShareIcsMimeType = 'text/calendar';
 const bool _taskShareReadOnlyDefault = true;
 
@@ -55,7 +53,6 @@ Future<void> showCalendarTaskShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    useRootNavigator: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,
@@ -157,9 +154,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           Padding(
             padding: _taskShareContentPadding,
             child: _TaskShareEditAccessToggle(
-              value: isReadOnly,
+              canEdit: !isReadOnly,
               hint: readOnlyHint,
-              onChanged: _handleReadOnlyChanged,
+              onChanged: _handleEditAccessChanged,
             ),
           ),
           const SizedBox(height: _taskShareSectionSpacing),
@@ -210,10 +207,10 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     });
   }
 
-  void _handleReadOnlyChanged(bool value) {
+  void _handleEditAccessChanged(bool canEdit) {
     if (!mounted) return;
     setState(() {
-      _isReadOnly = value;
+      _isReadOnly = !canEdit;
     });
   }
 
@@ -362,17 +359,21 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
 
 class _TaskShareEditAccessToggle extends StatelessWidget {
   const _TaskShareEditAccessToggle({
-    required this.value,
+    required this.canEdit,
     required this.hint,
     required this.onChanged,
   });
 
-  final bool value;
+  final bool canEdit;
   final String hint;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final sublabel = canEdit
+        ? l10n.calendarTaskShareEditableLabel
+        : l10n.calendarTaskShareReadOnlyLabel;
     final TextStyle hintStyle = context.textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
     );
@@ -380,9 +381,9 @@ class _TaskShareEditAccessToggle extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ShadSwitch(
-          label: Text(context.l10n.calendarTaskShareEditAccess),
-          sublabel: const Text(_taskShareEditLabel),
-          value: value,
+          label: Text(l10n.calendarTaskShareEditAccess),
+          sublabel: Text(sublabel),
+          value: canEdit,
           onChanged: onChanged,
         ),
         const SizedBox(height: _taskShareSectionGap),

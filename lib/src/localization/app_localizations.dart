@@ -723,6 +723,78 @@ abstract class AppLocalizations {
   /// **'Sending from {address}'**
   String chatComposerFromHint(Object address);
 
+  /// No description provided for @chatComposerEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message cannot be empty.'**
+  String get chatComposerEmptyMessage;
+
+  /// No description provided for @chatComposerEmailUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sending is unavailable for this chat.'**
+  String get chatComposerEmailUnavailable;
+
+  /// No description provided for @chatComposerFileUploadUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'File upload is not available on this server.'**
+  String get chatComposerFileUploadUnavailable;
+
+  /// No description provided for @chatComposerSelectRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one recipient.'**
+  String get chatComposerSelectRecipient;
+
+  /// No description provided for @chatComposerEmailRecipientUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Email is unavailable for one or more recipients.'**
+  String get chatComposerEmailRecipientUnavailable;
+
+  /// No description provided for @chatComposerEmailAttachmentRecipientRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an email recipient to send attachments.'**
+  String get chatComposerEmailAttachmentRecipientRequired;
+
+  /// No description provided for @chatComposerDraftRecipientsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to resolve recipients for this draft.'**
+  String get chatComposerDraftRecipientsUnavailable;
+
+  /// No description provided for @chatComposerSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to send message. Please try again.'**
+  String get chatComposerSendFailed;
+
+  /// No description provided for @chatEmailOfflineRetryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Email is offline. Retry once sync recovers.'**
+  String get chatEmailOfflineRetryMessage;
+
+  /// No description provided for @chatEmailOfflineDraftsFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Email is offline. Messages will be saved to Drafts until the connection returns.'**
+  String get chatEmailOfflineDraftsFallback;
+
+  /// No description provided for @chatEmailSyncRefreshing.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sync is refreshing...'**
+  String get chatEmailSyncRefreshing;
+
+  /// No description provided for @chatEmailSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sync failed. Please try again.'**
+  String get chatEmailSyncFailed;
+
   /// No description provided for @chatReadOnly.
   ///
   /// In en, this message translates to:
@@ -2845,6 +2917,12 @@ abstract class AppLocalizations {
   /// **'Enter text. Use Tab to move forward or Escape to go back or close the menu.'**
   String get accessibilityTextFieldHint;
 
+  /// No description provided for @accessibilityLoadingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get accessibilityLoadingLabel;
+
   /// No description provided for @accessibilityComposerPlaceholder.
   ///
   /// In en, this message translates to:
@@ -4598,6 +4676,24 @@ abstract class AppLocalizations {
   /// **'Create group chat'**
   String get chatsCreateGroupChatTooltip;
 
+  /// No description provided for @chatsCreateGroupSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Group chat created.'**
+  String get chatsCreateGroupSuccess;
+
+  /// No description provided for @chatsCreateGroupFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create group chat.'**
+  String get chatsCreateGroupFailure;
+
+  /// No description provided for @chatsRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync failed.'**
+  String get chatsRefreshFailed;
+
   /// No description provided for @chatsRoomLabel.
   ///
   /// In en, this message translates to:
@@ -4807,6 +4903,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Syncing'**
   String get sessionCapabilityStatusSyncing;
+
+  /// No description provided for @emailSyncMessageSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing email...'**
+  String get emailSyncMessageSyncing;
+
+  /// No description provided for @emailSyncMessageConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to email servers...'**
+  String get emailSyncMessageConnecting;
+
+  /// No description provided for @emailSyncMessageDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected from email servers.'**
+  String get emailSyncMessageDisconnected;
+
+  /// No description provided for @emailSyncMessageGroupMembershipChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Email group membership changed. Try reopening the chat.'**
+  String get emailSyncMessageGroupMembershipChanged;
+
+  /// No description provided for @emailSyncMessageHistorySyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing email history...'**
+  String get emailSyncMessageHistorySyncing;
+
+  /// No description provided for @emailSyncMessageRetrying.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sync will retry shortly...'**
+  String get emailSyncMessageRetrying;
 
   /// No description provided for @authChangePasswordPending.
   ///
@@ -7443,6 +7575,12 @@ abstract class AppLocalizations {
   /// **'Read only'**
   String get calendarTaskShareReadOnlyLabel;
 
+  /// No description provided for @calendarTaskShareEditableLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Editable'**
+  String get calendarTaskShareEditableLabel;
+
   /// No description provided for @calendarTaskShareReadOnlyHint.
   ///
   /// In en, this message translates to:
@@ -7916,6 +8054,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requested time'**
   String get calendarAvailabilityRequestTitleFallback;
+
+  /// No description provided for @calendarAvailabilityShareFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared availability'**
+  String get calendarAvailabilityShareFallback;
+
+  /// No description provided for @calendarAvailabilityRequestFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability request'**
+  String get calendarAvailabilityRequestFallback;
+
+  /// No description provided for @calendarAvailabilityResponseAcceptedFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability accepted'**
+  String get calendarAvailabilityResponseAcceptedFallback;
+
+  /// No description provided for @calendarAvailabilityResponseDeclinedFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability declined'**
+  String get calendarAvailabilityResponseDeclinedFallback;
 
   /// No description provided for @calendarFreeBusyFree.
   ///
