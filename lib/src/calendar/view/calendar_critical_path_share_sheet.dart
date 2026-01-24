@@ -14,6 +14,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -97,7 +98,13 @@ class _CalendarCriticalPathShareSheetState
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
     if (initialChat != null) {
       _recipients = <ComposerRecipient>[
-        ComposerRecipient(target: FanOutTarget.chat(initialChat)),
+        ComposerRecipient(
+          target: FanOutTarget.chat(
+            chat: initialChat,
+            shareSignatureEnabled: initialChat.shareSignatureEnabled ??
+                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+          ),
+        ),
       ];
     }
   }

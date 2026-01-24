@@ -264,10 +264,23 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(ChatComposerRecipientAdded(FanOutTarget.chat(extraChat)));
-    await _pumpBloc();
-
-    bloc.add(const ChatMessageSent(text: 'Team status update'));
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(
+      ChatMessageSent(text: 'Team status update', recipients: recipients),
+    );
     await _pumpBloc();
 
     final capturedTargets = verify(
@@ -290,7 +303,7 @@ void main() {
     await bloc.close();
   });
 
-  test('fan-out merges typed recipients regardless of casing', () async {
+  test('fan-out uses normalized address keys', () async {
     final emailService = MockEmailService();
     _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
@@ -345,20 +358,36 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(
-      ChatComposerRecipientAdded(
-        FanOutTarget.address(address: 'Carol@Example.com'),
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
       ),
-    );
+      ComposerRecipient(
+        target: FanOutTarget.address(
+          address: 'Carol@Example.com',
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(ChatMessageSent(text: 'Hello world', recipients: recipients));
     await _pumpBloc();
 
-    bloc.add(const ChatMessageSent(text: 'Hello world'));
-    await _pumpBloc();
-
-    final mergedRecipient = bloc.state.recipients.firstWhere(
-      (recipient) => recipient.target.chat?.jid == typedChat.jid,
-    );
-    expect(mergedRecipient.target.chat, typedChat);
+    final capturedTargets = verify(
+      () => emailService.fanOutSend(
+        targets: captureAny(named: 'targets'),
+        body: 'Hello world',
+        attachment: any(named: 'attachment'),
+        shareId: any(named: 'shareId'),
+        useSubjectToken: any(named: 'useSubjectToken'),
+      ),
+    ).captured.single as List<FanOutTarget>;
+    expect(capturedTargets.map((target) => target.key).toSet(), {
+      emailChat.jid,
+      'carol@example.com',
+    });
 
     await bloc.close();
   });
@@ -385,11 +414,7 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    final pinnedKey = bloc.state.recipients.first.key;
-    bloc.add(ChatComposerRecipientToggled(pinnedKey));
-    await _pumpBloc();
-
-    bloc.add(const ChatMessageSent(text: 'Hello world'));
+    bloc.add(const ChatMessageSent(text: 'Hello world', recipients: []));
     await _pumpBloc();
 
     expect(bloc.state.composerError, 'Select at least one recipient.');
@@ -446,10 +471,21 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(ChatComposerRecipientAdded(FanOutTarget.chat(extraChat)));
-    await _pumpBloc();
-
-    bloc.add(const ChatMessageSent(text: 'Weekly sync'));
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(ChatMessageSent(text: 'Weekly sync', recipients: recipients));
     await _pumpBloc();
 
     expect(bloc.state.composerError, 'Too many recipients.');
@@ -530,10 +566,21 @@ void main() {
     messageStreamController.add(const <Message>[]);
     chatStreamController.add(emailChat);
     await _pumpBloc();
-    bloc.add(ChatComposerRecipientAdded(FanOutTarget.chat(extraChat)));
-    await _pumpBloc();
-
-    bloc.add(const ChatMessageSent(text: 'Initial send'));
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(ChatMessageSent(text: 'Initial send', recipients: recipients));
     await _pumpBloc();
 
     bloc.add(ChatFanOutRetryRequested(failureReport.shareId));
@@ -581,7 +628,16 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(const ChatAttachmentPicked(attachment));
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(
+        ChatAttachmentPicked(attachment: attachment, recipients: recipients));
     await _pumpBloc();
     expect(bloc.state.pendingAttachments, hasLength(1));
     var pending = bloc.state.pendingAttachments.single;
@@ -594,7 +650,7 @@ void main() {
       ),
     );
 
-    bloc.add(const ChatMessageSent(text: 'Hello'));
+    bloc.add(ChatMessageSent(text: 'Hello', recipients: recipients));
     await _pumpBloc();
     pending = bloc.state.pendingAttachments.single;
     expect(pending.status, PendingAttachmentStatus.uploading);
@@ -650,21 +706,35 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(const ChatAttachmentPicked(attachment));
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(
+        ChatAttachmentPicked(attachment: attachment, recipients: recipients));
     await _pumpBloc();
     expect(
       bloc.state.pendingAttachments.single.status,
       PendingAttachmentStatus.queued,
     );
 
-    bloc.add(const ChatMessageSent(text: ''));
+    bloc.add(ChatMessageSent(text: '', recipients: recipients));
     await _pumpBloc();
     final failed = bloc.state.pendingAttachments.single;
     expect(failed.status, PendingAttachmentStatus.failed);
     expect(failed.errorMessage, isNotEmpty);
     expect(attempts, 1);
 
-    bloc.add(ChatAttachmentRetryRequested(failed.id));
+    bloc.add(
+      ChatAttachmentRetryRequested(
+        attachmentId: failed.id,
+        recipients: recipients,
+      ),
+    );
     await _pumpBloc();
     expect(bloc.state.pendingAttachments, isEmpty);
     expect(attempts, 2);
@@ -710,7 +780,7 @@ void main() {
     await syncController.close();
   });
 
-  test('saves drafts when email sync is offline', () async {
+  test('offline email send attempts send and does not save drafts', () async {
     final emailService = MockEmailService();
     when(
       () => emailService.syncState,
@@ -718,6 +788,19 @@ void main() {
     when(
       () => emailService.syncStateStream,
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    when(
+      () => emailService.sendMessage(
+        chat: any(named: 'chat'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        htmlBody: any(named: 'htmlBody'),
+      ),
+    ).thenThrow(
+      const DeltaNetworkException(
+        operation: 'send email message',
+        message: 'offline',
+      ),
+    );
     final emailChat = initialChat.copyWith(
       deltaChatId: 4,
       emailAddress: 'ally@example.com',
@@ -737,28 +820,33 @@ void main() {
     messageStreamController.add(const <Message>[]);
     await _pumpBloc();
 
-    bloc.add(const ChatMessageSent(text: 'Offline draft'));
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+    bloc.add(ChatMessageSent(text: 'Offline draft', recipients: recipients));
     await _pumpBloc();
 
-    final verification = verify(
-      () => messageService.saveDraft(
-        id: null,
-        jids: any(named: 'jids'),
-        body: 'Offline draft',
-        attachments: any(named: 'attachments'),
-      ),
-    )..called(1);
-    final capturedAttachments =
-        verification.captured.last as List<EmailAttachment>;
-    expect(capturedAttachments, isEmpty);
-    verifyNever(
+    verify(
       () => emailService.sendMessage(
         chat: any(named: 'chat'),
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        htmlBody: any(named: 'htmlBody'),
+      ),
+    ).called(1);
+    verifyNever(
+      () => messageService.saveDraft(
+        id: null,
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        attachments: any(named: 'attachments'),
       ),
     );
-    expect(bloc.state.toastId, greaterThan(0));
-    expect(bloc.state.toast?.message, contains('Drafts'));
 
     await bloc.close();
   });

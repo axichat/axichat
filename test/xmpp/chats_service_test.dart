@@ -90,7 +90,7 @@ main() {
     test(
       'When chats are added to the database, emits the new chat list in order.',
       () async {
-        final chats = chatJids.map((e) => Chat.fromJid(e)).toList();
+        final chats = chatJids.map(Chat.fromJid).toList();
 
         expectLater(
           xmppService.chatsStream(),

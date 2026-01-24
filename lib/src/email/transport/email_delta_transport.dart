@@ -138,6 +138,18 @@ class EmailDeltaTransport implements ChatTransport {
   bool _ioRunning = false;
   bool _accountsSupported = true;
   final Map<int, _DeltaAccountSession> _accountSessions = {};
+  var _defaultChatAttachmentAutoDownload = AttachmentAutoDownload.blocked;
+
+  void updateDefaultChatAttachmentAutoDownload(
+    AttachmentAutoDownload value,
+  ) {
+    if (_defaultChatAttachmentAutoDownload == value) return;
+    _defaultChatAttachmentAutoDownload = value;
+    for (final session in _accountSessions.values) {
+      session.consumer.updateDefaultChatAttachmentAutoDownload(value);
+    }
+  }
+
   final Map<int, StreamSubscription<DeltaCoreEvent>> _eventSubscriptions = {};
   final Map<int, Future<void>> _accountOpening = {};
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
@@ -818,6 +830,7 @@ class EmailDeltaTransport implements ChatTransport {
       databaseBuilder: _databaseBuilder,
       context: context,
       messageStorageMode: _messageStorageMode,
+      defaultChatAttachmentAutoDownload: _defaultChatAttachmentAutoDownload,
       selfJidProvider: () => _selfJidForAccount(accountId),
       logger: _log,
     );

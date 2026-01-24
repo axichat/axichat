@@ -307,22 +307,32 @@ class DeltaEventConsumer {
     required Future<XmppDatabase> Function() databaseBuilder,
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
+    AttachmentAutoDownload defaultChatAttachmentAutoDownload =
+        AttachmentAutoDownload.blocked,
     String? Function()? selfJidProvider,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
+        _defaultChatAttachmentAutoDownload = defaultChatAttachmentAutoDownload,
         _selfJidProvider = selfJidProvider,
         _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
+  AttachmentAutoDownload _defaultChatAttachmentAutoDownload;
   final String? Function()? _selfJidProvider;
   final Logger _log;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
+  }
+
+  void updateDefaultChatAttachmentAutoDownload(
+    AttachmentAutoDownload value,
+  ) {
+    _defaultChatAttachmentAutoDownload = value;
   }
 
   String get _selfJid =>
@@ -1048,7 +1058,9 @@ class DeltaEventConsumer {
         warning == MessageWarning.emailSpamQuarantined;
     if (!isOutgoing &&
         msg.hasFile &&
-        resolvedChat.attachmentAutoDownload.isAllowed &&
+        (resolvedChat.attachmentAutoDownload ??
+                _defaultChatAttachmentAutoDownload)
+            .isAllowed &&
         !isSpamQuarantined) {
       fireAndForget(
         () => _context.downloadFullMessage(msg.id),

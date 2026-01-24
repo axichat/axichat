@@ -133,6 +133,13 @@ class _ProfileBodyState extends State<_ProfileBody> {
   String? _applicationVersion;
 
   var _profileRoute = _ProfileRoute.main;
+  final ScrollController _settingsScrollController = ScrollController();
+  final SettingsSectionAnchors _settingsAnchors = SettingsSectionAnchors(
+    importantKey: GlobalKey(),
+    appearanceKey: GlobalKey(),
+    chatsKey: GlobalKey(),
+    emailKey: GlobalKey(),
+  );
 
   @override
   void initState() {
@@ -167,12 +174,20 @@ class _ProfileBodyState extends State<_ProfileBody> {
   }
 
   @override
+  void dispose() {
+    _settingsScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
         final l10n = context.l10n;
+        final colors = context.colorScheme;
         final demoOffline =
             context.read<XmppService?>()?.demoOfflineMode ?? false;
+        final profileSidebarColor = colors.card;
         final ConnectionState connectionState = _xmppStateFor(
           state,
           demoOffline: demoOffline,
@@ -180,7 +195,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
-            backgroundColor: context.colorScheme.background,
+            backgroundColor: profileSidebarColor,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
@@ -241,6 +256,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       connectionState: connectionState,
                       demoOffline: demoOffline,
                       applicationVersion: _applicationVersion,
+                      sidebarColor: profileSidebarColor,
+                      settingsAnchors: _settingsAnchors,
+                      settingsScrollController: _settingsScrollController,
                       locate: widget.locate,
                       onNavigate: _setRoute,
                     ),
@@ -263,6 +281,9 @@ class _ProfileMainView extends StatelessWidget {
     required this.connectionState,
     required this.demoOffline,
     required this.applicationVersion,
+    required this.sidebarColor,
+    required this.settingsAnchors,
+    required this.settingsScrollController,
     required this.locate,
     required this.onNavigate,
   });
@@ -271,6 +292,9 @@ class _ProfileMainView extends StatelessWidget {
   final ConnectionState connectionState;
   final bool demoOffline;
   final String? applicationVersion;
+  final Color sidebarColor;
+  final SettingsSectionAnchors settingsAnchors;
+  final ScrollController settingsScrollController;
   final T Function<T>() locate;
   final ValueChanged<_ProfileRoute> onNavigate;
 
@@ -286,76 +310,93 @@ class _ProfileMainView extends StatelessWidget {
     final settings = _SettingsPanel(
       showTopDivider: !isWideLayout,
       applicationVersion: applicationVersion,
+      anchors: settingsAnchors,
     );
     if (!isWideLayout) {
+      const profileSectionPadding = EdgeInsets.symmetric(
+        horizontal: _profileHeaderSpacing,
+        vertical: _profileHeaderSpacing,
+      );
       return SingleChildScrollView(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const _ProfileStatusHeader(),
-                card,
-                const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: ProfileFingerprint(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ColoredBox(
+              color: sidebarColor,
+              child: Padding(
+                padding: profileSectionPadding,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _ProfileStatusHeader(),
+                        const SizedBox(height: _profileCardSectionSpacing),
+                        card,
+                        const SizedBox(height: _profileCardSectionSpacing),
+                        const ProfileFingerprint(),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                settings,
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: _profileIndicatorSpacing),
+            settings,
+          ],
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.only(left: _profileWideHorizontalPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _ProfileStatusHeader(),
-          const SizedBox(height: _profileWideHeaderSpacing),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: _profileColumnMaxWidth,
-                    minWidth: _profileColumnMinWidth,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      card,
-                      const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: ProfileFingerprint(),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: _profileWideColumnSpacing),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.only(
-                      right: _profileWideHorizontalPadding,
-                    ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        minWidth: _profileSettingsMinWidth,
-                      ),
-                      child: settings,
-                    ),
-                  ),
-                ),
-              ],
+    const sidebarPadding = EdgeInsets.symmetric(
+      horizontal: _profileWideHorizontalPadding,
+      vertical: _profileWideHeaderSpacing,
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: _profileColumnMaxWidth,
+            minWidth: _profileColumnMinWidth,
+          ),
+          child: ColoredBox(
+            color: sidebarColor,
+            child: Padding(
+              padding: sidebarPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _ProfileStatusHeader(),
+                  const SizedBox(height: _profileWideHeaderSpacing),
+                  card,
+                  const SizedBox(height: _profileCardSectionSpacing),
+                  const ProfileFingerprint(),
+                  const SizedBox(height: _profileCardSectionSpacing),
+                  _SettingsJumpMenu(anchors: settingsAnchors),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: _profileWideColumnSpacing),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: settingsScrollController,
+            padding: const EdgeInsets.only(
+              right: _profileWideHorizontalPadding,
+              top: _profileWideHeaderSpacing,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: _profileSettingsMinWidth,
+              ),
+              child: settings,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -378,267 +419,261 @@ class _ProfileCardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: BlocBuilder<ProfileCubit, ProfileState>(
-        builder: (context, profileState) {
-          final exportState = context.watch<ProfileExportCubit>().state;
-          final exportEnabled = !exportState.isBusy;
-          final usernameStyle = context.textTheme.large.copyWith(
-            fontWeight: FontWeight.w700,
-            color: context.colorScheme.foreground,
-          );
-          final subtitleStyle = context.textTheme.muted.copyWith(
-            color: context.colorScheme.mutedForeground,
-          );
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final bool wideCard =
-                  isWideLayout && constraints.maxWidth >= 360.0;
-              final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
-              final actions = <AxiMenuAction>[
-                AxiMenuAction(
-                  label: l10n.profileEditAvatar,
-                  icon: LucideIcons.user,
-                  onPressed: () => context.push(
-                    const AvatarEditorRoute().location,
-                    extra: locate,
-                  ),
-                ),
-                AxiMenuAction(
-                  label: l10n.profileArchives,
-                  icon: LucideIcons.archive,
-                  onPressed: () => context.push(
-                    const ArchivesRoute().location,
-                    extra: locate,
-                  ),
-                ),
-                AxiMenuAction(
-                  label: l10n.profileExportActionLabel(
-                    ProfileExportKind.xmppMessages.label(l10n),
-                  ),
-                  icon: LucideIcons.messagesSquare,
-                  enabled: exportEnabled,
-                  onPressed: exportEnabled
-                      ? () async {
-                          await _handleXmppMessageExport(context);
-                        }
-                      : null,
-                ),
-                AxiMenuAction(
-                  label: l10n.profileExportActionLabel(
-                    ProfileExportKind.xmppContacts.label(l10n),
-                  ),
-                  icon: LucideIcons.users,
-                  enabled: exportEnabled,
-                  onPressed: exportEnabled
-                      ? () async {
-                          await _handleXmppContactsExport(context);
-                        }
-                      : null,
-                ),
-                AxiMenuAction(
-                  label: l10n.profileExportActionLabel(
-                    ProfileExportKind.emailMessages.label(l10n),
-                  ),
-                  icon: LucideIcons.mail,
-                  enabled: exportEnabled,
-                  onPressed: exportEnabled
-                      ? () async {
-                          await _handleEmailMessageExport(context);
-                        }
-                      : null,
-                ),
-                AxiMenuAction(
-                  label: l10n.profileExportActionLabel(
-                    ProfileExportKind.emailContacts.label(l10n),
-                  ),
-                  icon: LucideIcons.userRound,
-                  enabled: exportEnabled,
-                  onPressed: exportEnabled
-                      ? () async {
-                          await _handleEmailContactsExport(context);
-                        }
-                      : null,
-                ),
-                AxiMenuAction(
-                  label: l10n.profileChangePassword,
-                  icon: LucideIcons.keyRound,
-                  onPressed: () => onNavigate(_ProfileRoute.changePassword),
-                ),
-                AxiMenuAction(
-                  label: l10n.profileDeleteAccount,
-                  icon: LucideIcons.trash2,
-                  destructive: true,
-                  onPressed: () => onNavigate(_ProfileRoute.delete),
-                ),
-              ];
-              final attachmentButton = AxiIconButton(
-                iconData: LucideIcons.image,
-                tooltip: l10n.draftAttachmentsLabel,
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, profileState) {
+        final exportState = context.watch<ProfileExportCubit>().state;
+        final exportEnabled = !exportState.isBusy;
+        final usernameStyle = context.textTheme.large.copyWith(
+          fontWeight: FontWeight.w700,
+          color: context.colorScheme.foreground,
+        );
+        final subtitleStyle = context.textTheme.muted.copyWith(
+          color: context.colorScheme.mutedForeground,
+        );
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final bool wideCard = isWideLayout && constraints.maxWidth >= 360.0;
+            final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
+            final actions = <AxiMenuAction>[
+              AxiMenuAction(
+                label: l10n.profileEditAvatar,
+                icon: LucideIcons.user,
                 onPressed: () => context.push(
-                  const AttachmentGalleryRoute().location,
+                  const AvatarEditorRoute().location,
                   extra: locate,
                 ),
-              );
-              final actionButtons = Wrap(
-                alignment: WrapAlignment.center,
-                spacing: _profileActionSpacing,
-                runSpacing: _profileActionSpacing,
-                children: [
-                  const LogoutButton(),
-                  attachmentButton,
-                  AxiMore(actions: actions),
-                ],
-              );
-              final header = Align(
-                alignment: Alignment.center,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: statusFieldMaxWidth),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _EditableAvatarButton(
-                        avatarPath: profileState.avatarPath,
-                        jid: profileState.jid,
-                        status: profileState.status,
-                        onTap: () => context.push(
-                          const AvatarEditorRoute().location,
-                          extra: locate,
-                        ),
+              ),
+              AxiMenuAction(
+                label: l10n.profileArchives,
+                icon: LucideIcons.archive,
+                onPressed: () => context.push(
+                  const ArchivesRoute().location,
+                  extra: locate,
+                ),
+              ),
+              AxiMenuAction(
+                label: l10n.profileExportActionLabel(
+                  ProfileExportKind.xmppMessages.label(l10n),
+                ),
+                icon: LucideIcons.messagesSquare,
+                enabled: exportEnabled,
+                onPressed: exportEnabled
+                    ? () async {
+                        await _handleXmppMessageExport(context);
+                      }
+                    : null,
+              ),
+              AxiMenuAction(
+                label: l10n.profileExportActionLabel(
+                  ProfileExportKind.xmppContacts.label(l10n),
+                ),
+                icon: LucideIcons.users,
+                enabled: exportEnabled,
+                onPressed: exportEnabled
+                    ? () async {
+                        await _handleXmppContactsExport(context);
+                      }
+                    : null,
+              ),
+              AxiMenuAction(
+                label: l10n.profileExportActionLabel(
+                  ProfileExportKind.emailMessages.label(l10n),
+                ),
+                icon: LucideIcons.mail,
+                enabled: exportEnabled,
+                onPressed: exportEnabled
+                    ? () async {
+                        await _handleEmailMessageExport(context);
+                      }
+                    : null,
+              ),
+              AxiMenuAction(
+                label: l10n.profileExportActionLabel(
+                  ProfileExportKind.emailContacts.label(l10n),
+                ),
+                icon: LucideIcons.userRound,
+                enabled: exportEnabled,
+                onPressed: exportEnabled
+                    ? () async {
+                        await _handleEmailContactsExport(context);
+                      }
+                    : null,
+              ),
+              AxiMenuAction(
+                label: l10n.profileChangePassword,
+                icon: LucideIcons.keyRound,
+                onPressed: () => onNavigate(_ProfileRoute.changePassword),
+              ),
+              AxiMenuAction(
+                label: l10n.profileDeleteAccount,
+                icon: LucideIcons.trash2,
+                destructive: true,
+                onPressed: () => onNavigate(_ProfileRoute.delete),
+              ),
+            ];
+            final attachmentButton = AxiIconButton(
+              iconData: LucideIcons.image,
+              tooltip: l10n.draftAttachmentsLabel,
+              onPressed: () => context.push(
+                const AttachmentGalleryRoute().location,
+                extra: locate,
+              ),
+            );
+            final actionButtons = Wrap(
+              alignment: WrapAlignment.center,
+              spacing: _profileActionSpacing,
+              runSpacing: _profileActionSpacing,
+              children: [
+                const LogoutButton(),
+                attachmentButton,
+                AxiMore(actions: actions),
+              ],
+            );
+            final header = Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: statusFieldMaxWidth),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _EditableAvatarButton(
+                      avatarPath: profileState.avatarPath,
+                      jid: profileState.jid,
+                      status: profileState.status,
+                      onTap: () => context.push(
+                        const AvatarEditorRoute().location,
+                        extra: locate,
                       ),
-                      const SizedBox(width: _profileHeaderSpacing),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Hero(
-                              tag: 'title',
-                              child: Material(
-                                color: Colors.transparent,
-                                child: Text(
-                                  profileState.username,
-                                  style: usernameStyle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                    ),
+                    const SizedBox(width: _profileHeaderSpacing),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Hero(
+                            tag: 'title',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: Text(
+                                profileState.username,
+                                style: usernameStyle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(height: _profileHeaderTextSpacing),
-                            SelectionArea(
-                              child: Wrap(
-                                alignment: WrapAlignment.start,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 0,
-                                runSpacing: _profileHeaderWrapSpacing,
-                                children: [
+                          ),
+                          const SizedBox(height: _profileHeaderTextSpacing),
+                          SelectionArea(
+                            child: Wrap(
+                              alignment: WrapAlignment.start,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 0,
+                              runSpacing: _profileHeaderWrapSpacing,
+                              children: [
+                                AxiTooltip(
+                                  builder: (_) => ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 300.0,
+                                    ),
+                                    child: Text(
+                                      l10n.profileJidDescription,
+                                      textAlign: TextAlign.left,
+                                    ),
+                                  ),
+                                  child: Hero(
+                                    tag: 'subtitle',
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: Text(
+                                        profileState.jid,
+                                        style: subtitleStyle,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (profileState.resource.isNotEmpty)
                                   AxiTooltip(
                                     builder: (_) => ConstrainedBox(
                                       constraints: const BoxConstraints(
                                         maxWidth: 300.0,
                                       ),
                                       child: Text(
-                                        l10n.profileJidDescription,
+                                        l10n.profileResourceDescription,
                                         textAlign: TextAlign.left,
                                       ),
                                     ),
-                                    child: Hero(
-                                      tag: 'subtitle',
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: Text(
-                                          profileState.jid,
-                                          style: subtitleStyle,
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 2,
-                                        ),
-                                      ),
+                                    child: Text(
+                                      '/${profileState.resource}',
+                                      style: subtitleStyle,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
                                     ),
                                   ),
-                                  if (profileState.resource.isNotEmpty)
-                                    AxiTooltip(
-                                      builder: (_) => ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 300.0,
-                                        ),
-                                        child: Text(
-                                          l10n.profileResourceDescription,
-                                          textAlign: TextAlign.left,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '/${profileState.resource}',
-                                        style: subtitleStyle,
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-              final Widget profileCard = ShadCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: _profileCardSectionSpacing,
-                  children: [
-                    header,
-                    Align(
-                      alignment: Alignment.center,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: statusFieldMaxWidth,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(
-                            _profileStatusFieldPadding,
                           ),
-                          child: AxiTextFormField(
-                            placeholder: Text(l10n.profileStatusPlaceholder),
-                            initialValue: profileState.status,
-                            onSubmitted: (value) => context
-                                .read<ProfileCubit?>()
-                                ?.updatePresence(status: value),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.center,
-                      child: BlocBuilder<EmailSyncCubit, EmailSyncState>(
-                        builder: (context, emailSyncState) {
-                          final displayedEmailState = demoOffline
-                              ? const EmailSyncState.ready()
-                              : emailSyncState;
-                          return SessionCapabilityIndicators(
-                            xmppState: connectionState,
-                            emailState: displayedEmailState,
-                            emailEnabled: true,
-                            compact: !wideCard,
-                          );
-                        },
-                      ),
-                    ),
-                    Align(alignment: Alignment.center, child: actionButtons),
                   ],
                 ),
-              );
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: _profileCardSectionSpacing,
-                children: [profileCard, const _ProfileLegalLinks()],
-              );
-            },
-          );
-        },
-      ),
+              ),
+            );
+            final Widget profileCard = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: _profileCardSectionSpacing,
+              children: [
+                header,
+                Align(
+                  alignment: Alignment.center,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: statusFieldMaxWidth,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(
+                        _profileStatusFieldPadding,
+                      ),
+                      child: AxiTextFormField(
+                        placeholder: Text(l10n.profileStatusPlaceholder),
+                        initialValue: profileState.status,
+                        onSubmitted: (value) => context
+                            .read<ProfileCubit?>()
+                            ?.updatePresence(status: value),
+                      ),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.center,
+                  child: BlocBuilder<EmailSyncCubit, EmailSyncState>(
+                    builder: (context, emailSyncState) {
+                      final displayedEmailState = demoOffline
+                          ? const EmailSyncState.ready()
+                          : emailSyncState;
+                      return SessionCapabilityIndicators(
+                        xmppState: connectionState,
+                        emailState: displayedEmailState,
+                        emailEnabled: true,
+                        compact: !wideCard,
+                      );
+                    },
+                  ),
+                ),
+                Align(alignment: Alignment.center, child: actionButtons),
+              ],
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: _profileCardSectionSpacing,
+              children: [profileCard, const _ProfileLegalLinks()],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -977,10 +1012,12 @@ class _SettingsPanel extends StatelessWidget {
   const _SettingsPanel({
     required this.showTopDivider,
     required this.applicationVersion,
+    required this.anchors,
   });
 
   final bool showTopDivider;
   final String? applicationVersion;
+  final SettingsSectionAnchors anchors;
 
   @override
   Widget build(BuildContext context) {
@@ -990,7 +1027,7 @@ class _SettingsPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SettingsControls(showDivider: showTopDivider),
+        SettingsControls(showDivider: showTopDivider, anchors: anchors),
         ListItemPadding(
           child: AxiListTile(
             leading: const Icon(LucideIcons.info),
@@ -1006,6 +1043,94 @@ class _SettingsPanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SettingsJumpMenu extends StatelessWidget {
+  const _SettingsJumpMenu({required this.anchors});
+
+  final SettingsSectionAnchors anchors;
+
+  @override
+  Widget build(BuildContext context) {
+    final Duration animationDuration =
+        context.watch<SettingsCubit>().animationDuration;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          context.l10n.settingsButtonLabel,
+          style: context.textTheme.muted,
+        ),
+        const SizedBox(height: _profileHeaderTextSpacing),
+        if (context.read<Capability>().canForegroundService)
+          _SettingsJumpTile(
+            label: context.l10n.settingsSectionImportant,
+            onTap: () async => await _jumpTo(
+              anchors.importantKey,
+              animationDuration,
+            ),
+          ),
+        _SettingsJumpTile(
+          label: context.l10n.settingsSectionAppearance,
+          onTap: () async => await _jumpTo(
+            anchors.appearanceKey,
+            animationDuration,
+          ),
+        ),
+        _SettingsJumpTile(
+          label: context.l10n.settingsSectionChats,
+          onTap: () async => await _jumpTo(
+            anchors.chatsKey,
+            animationDuration,
+          ),
+        ),
+        _SettingsJumpTile(
+          label: context.l10n.settingsSectionEmail,
+          onTap: () async => await _jumpTo(
+            anchors.emailKey,
+            animationDuration,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _jumpTo(
+    GlobalKey? anchor,
+    Duration animationDuration,
+  ) async {
+    final BuildContext? targetContext = anchor?.currentContext;
+    if (targetContext == null) {
+      return;
+    }
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: animationDuration,
+      curve: _profileFadeCurve,
+    );
+  }
+}
+
+class _SettingsJumpTile extends StatelessWidget {
+  const _SettingsJumpTile({
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListItemPadding(
+      child: AxiListTile(
+        title: label,
+        onTap: onTap,
+        minTileHeight: _profileSettingsCompactTileHeight,
+        contentPadding: _profileSettingsCompactTilePadding,
+      ),
     );
   }
 }

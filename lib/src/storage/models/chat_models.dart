@@ -259,9 +259,6 @@ class Invites extends Table {
   Set<Column<Object>>? get primaryKey => {jid};
 }
 
-const int attachmentAutoDownloadDefaultIndex = 0;
-const int notificationPreviewSettingDefaultIndex = 0;
-
 enum ChatType { chat, groupChat, note }
 
 enum AttachmentAutoDownload {
@@ -273,22 +270,29 @@ enum AttachmentAutoDownload {
   bool get isAllowed => this == allowed;
 }
 
-enum NotificationPreviewSetting { inherit, show, hide }
+enum NotificationPreviewSetting {
+  show,
+  hide;
 
-extension NotificationPreviewSettingExtensions on NotificationPreviewSetting {
-  bool get isInherited => this == NotificationPreviewSetting.inherit;
+  bool get isShown => this == show;
 
-  bool get isShown => this == NotificationPreviewSetting.show;
+  bool get isHidden => this == hide;
 
-  bool get isHidden => this == NotificationPreviewSetting.hide;
+  String label({
+    required String showLabel,
+    required String hideLabel,
+  }) =>
+      isShown ? showLabel : hideLabel;
 
-  bool? get previewOverride => switch (this) {
-        NotificationPreviewSetting.inherit => null,
-        NotificationPreviewSetting.show => true,
-        NotificationPreviewSetting.hide => false,
-      };
+  bool resolvePreview(bool globalSetting) => isShown ? true : false;
 
-  bool resolvePreview(bool globalSetting) => previewOverride ?? globalSetting;
+  static bool resolveOverride(
+    NotificationPreviewSetting? setting,
+    bool globalSetting,
+  ) {
+    if (setting == null) return globalSetting;
+    return setting.resolvePreview(globalSetting);
+  }
 }
 
 @Freezed(toJson: false, fromJson: false)
@@ -306,17 +310,15 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(0) int unreadCount,
     @Default(false) bool open,
     @Default(false) bool muted,
-    @Default(NotificationPreviewSetting.inherit)
-    NotificationPreviewSetting notificationPreviewSetting,
+    NotificationPreviewSetting? notificationPreviewSetting,
     @Default(false) bool favorited,
     @Default(false) bool archived,
     @Default(false) bool hidden,
     @Default(false) bool spam,
     DateTime? spamUpdatedAt,
-    @Default(true) bool markerResponsive,
-    @Default(true) bool shareSignatureEnabled,
-    @Default(AttachmentAutoDownload.blocked)
-    AttachmentAutoDownload attachmentAutoDownload,
+    bool? markerResponsive,
+    bool? shareSignatureEnabled,
+    AttachmentAutoDownload? attachmentAutoDownload,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
@@ -342,15 +344,15 @@ class Chat with _$Chat implements Insertable<Chat> {
     required int unreadCount,
     required bool open,
     required bool muted,
-    required NotificationPreviewSetting notificationPreviewSetting,
+    required NotificationPreviewSetting? notificationPreviewSetting,
     required bool favorited,
     required bool archived,
     required bool hidden,
     required bool spam,
     required DateTime? spamUpdatedAt,
-    required bool markerResponsive,
-    required bool shareSignatureEnabled,
-    required AttachmentAutoDownload attachmentAutoDownload,
+    required bool? markerResponsive,
+    required bool? shareSignatureEnabled,
+    required AttachmentAutoDownload? attachmentAutoDownload,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
     required String? contactDisplayName,
@@ -384,16 +386,20 @@ class Chat with _$Chat implements Insertable<Chat> {
       'unread_count': Variable<int>(unreadCount),
       'open': Variable<bool>(open),
       'muted': Variable<bool>(muted),
-      'notification_preview_setting': Variable<int>(
-        notificationPreviewSetting.index,
-      ),
       'favorited': Variable<bool>(favorited),
       'archived': Variable<bool>(archived),
       'hidden': Variable<bool>(hidden),
       'spam': Variable<bool>(spam),
-      'marker_responsive': Variable<bool>(markerResponsive),
-      'share_signature_enabled': Variable<bool>(shareSignatureEnabled),
-      'attachment_auto_download': Variable<int>(attachmentAutoDownload.index),
+      if (notificationPreviewSetting != null)
+        'notification_preview_setting':
+            Variable<int>(notificationPreviewSetting!.index),
+      if (markerResponsive != null)
+        'marker_responsive': Variable<bool>(markerResponsive!),
+      if (shareSignatureEnabled != null)
+        'share_signature_enabled': Variable<bool>(shareSignatureEnabled!),
+      if (attachmentAutoDownload != null)
+        'attachment_auto_download':
+            Variable<int>(attachmentAutoDownload!.index),
       'encryption_protocol': Variable<int>(encryptionProtocol.index),
     };
     if (myNickname != null) {
@@ -469,9 +475,7 @@ class Chats extends Table {
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
 
   IntColumn get notificationPreviewSetting =>
-      intEnum<NotificationPreviewSetting>().withDefault(
-        const Constant(notificationPreviewSettingDefaultIndex),
-      )();
+      intEnum<NotificationPreviewSetting>().nullable()();
 
   BoolColumn get favorited => boolean().withDefault(const Constant(false))();
 
@@ -483,14 +487,12 @@ class Chats extends Table {
 
   DateTimeColumn get spamUpdatedAt => dateTime().nullable()();
 
-  BoolColumn get markerResponsive =>
-      boolean().withDefault(const Constant(true))();
+  BoolColumn get markerResponsive => boolean().nullable()();
 
-  BoolColumn get shareSignatureEnabled =>
-      boolean().withDefault(const Constant(true))();
+  BoolColumn get shareSignatureEnabled => boolean().nullable()();
 
-  IntColumn get attachmentAutoDownload => intEnum<AttachmentAutoDownload>()
-      .withDefault(const Constant(attachmentAutoDownloadDefaultIndex))();
+  IntColumn get attachmentAutoDownload =>
+      intEnum<AttachmentAutoDownload>().nullable()();
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(1))();

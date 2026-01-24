@@ -339,10 +339,22 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                 AttachmentGalleryEntry(
                               entry: state.entries[index],
                               showChatLabel: widget.showChatLabel,
-                              autoDownloadSettings: context
+                              autoDownloadImages: context
                                   .watch<SettingsCubit>()
                                   .state
-                                  .attachmentAutoDownloadSettings,
+                                  .autoDownloadImages,
+                              autoDownloadVideos: context
+                                  .watch<SettingsCubit>()
+                                  .state
+                                  .autoDownloadVideos,
+                              autoDownloadDocuments: context
+                                  .watch<SettingsCubit>()
+                                  .state
+                                  .autoDownloadDocuments,
+                              autoDownloadArchives: context
+                                  .watch<SettingsCubit>()
+                                  .state
+                                  .autoDownloadArchives,
                               layout: layout,
                               onApproveAttachment: _approveAttachment,
                               metaSeparator:
@@ -396,10 +408,22 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                           child: AttachmentGalleryEntry(
                                             entry: rowItems[index],
                                             showChatLabel: widget.showChatLabel,
-                                            autoDownloadSettings: context
+                                            autoDownloadImages: context
                                                 .watch<SettingsCubit>()
                                                 .state
-                                                .attachmentAutoDownloadSettings,
+                                                .autoDownloadImages,
+                                            autoDownloadVideos: context
+                                                .watch<SettingsCubit>()
+                                                .state
+                                                .autoDownloadVideos,
+                                            autoDownloadDocuments: context
+                                                .watch<SettingsCubit>()
+                                                .state
+                                                .autoDownloadDocuments,
+                                            autoDownloadArchives: context
+                                                .watch<SettingsCubit>()
+                                                .state
+                                                .autoDownloadArchives,
                                             layout: layout,
                                             onApproveAttachment:
                                                 _approveAttachment,
@@ -663,7 +687,10 @@ class AttachmentGalleryEntry extends StatefulWidget {
     super.key,
     required this.showChatLabel,
     required this.entry,
-    required this.autoDownloadSettings,
+    required this.autoDownloadImages,
+    required this.autoDownloadVideos,
+    required this.autoDownloadDocuments,
+    required this.autoDownloadArchives,
     required this.layout,
     required this.onApproveAttachment,
     required this.metaSeparator,
@@ -671,7 +698,10 @@ class AttachmentGalleryEntry extends StatefulWidget {
 
   final bool showChatLabel;
   final AttachmentGalleryEntryData entry;
-  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadImages;
+  final bool autoDownloadVideos;
+  final bool autoDownloadDocuments;
+  final bool autoDownloadArchives;
   final AttachmentGalleryLayout layout;
   final Future<void> Function({
     required Message message,
@@ -754,7 +784,10 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
             metadata: metadata,
             stanzaId: message.stanzaID,
             allowed: allowAttachment,
-            autoDownloadSettings: widget.autoDownloadSettings,
+            autoDownloadImages: widget.autoDownloadImages,
+            autoDownloadVideos: widget.autoDownloadVideos,
+            autoDownloadDocuments: widget.autoDownloadDocuments,
+            autoDownloadArchives: widget.autoDownloadArchives,
             autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: downloadDelegate,
@@ -766,7 +799,10 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
             metadata: metadata,
             stanzaId: message.stanzaID,
             allowed: allowAttachment,
-            autoDownloadSettings: widget.autoDownloadSettings,
+            autoDownloadImages: widget.autoDownloadImages,
+            autoDownloadVideos: widget.autoDownloadVideos,
+            autoDownloadDocuments: widget.autoDownloadDocuments,
+            autoDownloadArchives: widget.autoDownloadArchives,
             autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: downloadDelegate,
@@ -783,7 +819,10 @@ class AttachmentGalleryListItem extends StatelessWidget {
     required this.metadata,
     required this.stanzaId,
     required this.allowed,
-    required this.autoDownloadSettings,
+    required this.autoDownloadImages,
+    required this.autoDownloadVideos,
+    required this.autoDownloadDocuments,
+    required this.autoDownloadArchives,
     required this.autoDownloadAllowed,
     required this.autoDownloadUserInitiated,
     required this.downloadDelegate,
@@ -795,7 +834,10 @@ class AttachmentGalleryListItem extends StatelessWidget {
   final FileMetadataData metadata;
   final String stanzaId;
   final bool allowed;
-  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadImages;
+  final bool autoDownloadVideos;
+  final bool autoDownloadDocuments;
+  final bool autoDownloadArchives;
   final bool autoDownloadAllowed;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
@@ -825,7 +867,10 @@ class AttachmentGalleryListItem extends StatelessWidget {
           metadataStream: metadataStream,
           initialMetadata: metadata,
           allowed: allowed,
-          autoDownloadSettings: autoDownloadSettings,
+          autoDownloadImages: autoDownloadImages,
+          autoDownloadVideos: autoDownloadVideos,
+          autoDownloadDocuments: autoDownloadDocuments,
+          autoDownloadArchives: autoDownloadArchives,
           autoDownloadAllowed: autoDownloadAllowed,
           autoDownloadUserInitiated: autoDownloadUserInitiated,
           downloadDelegate: downloadDelegate,
@@ -844,7 +889,10 @@ class AttachmentGalleryTile extends StatelessWidget {
     required this.metadata,
     required this.stanzaId,
     required this.allowed,
-    required this.autoDownloadSettings,
+    required this.autoDownloadImages,
+    required this.autoDownloadVideos,
+    required this.autoDownloadDocuments,
+    required this.autoDownloadArchives,
     required this.autoDownloadAllowed,
     required this.autoDownloadUserInitiated,
     required this.downloadDelegate,
@@ -856,7 +904,10 @@ class AttachmentGalleryTile extends StatelessWidget {
   final FileMetadataData metadata;
   final String stanzaId;
   final bool allowed;
-  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadImages;
+  final bool autoDownloadVideos;
+  final bool autoDownloadDocuments;
+  final bool autoDownloadArchives;
   final bool autoDownloadAllowed;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
@@ -877,7 +928,10 @@ class AttachmentGalleryTile extends StatelessWidget {
       metadataStream: metadataStream,
       initialMetadata: metadata,
       allowed: allowed,
-      autoDownloadSettings: autoDownloadSettings,
+      autoDownloadImages: autoDownloadImages,
+      autoDownloadVideos: autoDownloadVideos,
+      autoDownloadDocuments: autoDownloadDocuments,
+      autoDownloadArchives: autoDownloadArchives,
       autoDownloadAllowed: autoDownloadAllowed,
       autoDownloadUserInitiated: autoDownloadUserInitiated,
       downloadDelegate: downloadDelegate,
