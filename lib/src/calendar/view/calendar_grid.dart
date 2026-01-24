@@ -37,6 +37,7 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'edit_task_dropdown.dart';
 import 'models/task_context_action.dart';
 import 'layout/calendar_layout.dart'
@@ -1074,8 +1075,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final DateTime initialCandidate = midpoint.isBefore(minSelectable)
         ? minSelectable
         : (midpoint.isAfter(maxSelectable) ? maxSelectable : midpoint);
+    final BuildContext modalContext = context.calendarModalContext;
     final DateTime? picked = await showAdaptiveBottomSheet<DateTime>(
-      context: context,
+      context: modalContext,
       isScrollControlled: true,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
@@ -1355,8 +1357,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         locate<T>().state.model.collection?.method;
 
     try {
+      final BuildContext modalContext = context.calendarModalContext;
       await showAdaptiveBottomSheet<void>(
-        context: context,
+        context: modalContext,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         showCloseButton: false,

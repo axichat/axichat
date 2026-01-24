@@ -18,6 +18,7 @@ import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/edit_task_dropdown.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -168,8 +169,9 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
         if (!context.mounted) {
           return;
         }
+        final BuildContext modalContext = context.calendarModalContext;
         await showAdaptiveBottomSheet<void>(
-          context: context,
+          context: modalContext,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           showCloseButton: false,
@@ -244,8 +246,9 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
     };
   }
 
+  final BuildContext modalContext = context.calendarModalContext;
   await showAdaptiveBottomSheet<void>(
-    context: context,
+    context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 760,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),

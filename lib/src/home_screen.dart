@@ -36,7 +36,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
-import 'package:axichat/src/common/ui/focus_extensions.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -106,8 +106,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
-  bool _calendarCanHandlePop = false;
-  bool _chatCanHandlePop = false;
+  LocalHistoryEntry? _openChatHistoryEntry;
+  LocalHistoryEntry? _openCalendarHistoryEntry;
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
@@ -126,6 +126,8 @@ class _HomeScreenState extends State<HomeScreen> {
       HardwareKeyboard.instance.removeHandler(handler);
     }
     _shortcutFocusNode.dispose();
+    _clearOpenChatHistoryEntry();
+    _clearOpenCalendarHistoryEntry();
     super.dispose();
   }
 
@@ -135,24 +137,101 @@ class _HomeScreenState extends State<HomeScreen> {
     super.deactivate();
   }
 
-  bool _handleCalendarNavigationNotification(
-    NavigationNotification notification,
-  ) {
-    if (_calendarCanHandlePop == notification.canHandlePop) {
-      return false;
+  void _handleOpenChatHistoryRemoved() {
+    if (_openChatHistoryEntry == null) {
+      return;
     }
-    setState(() => _calendarCanHandlePop = notification.canHandlePop);
-    return false;
+    _openChatHistoryEntry = null;
+    if (!mounted) {
+      return;
+    }
+    final chatsCubit = context.read<ChatsCubit?>();
+    final chatsState = chatsCubit?.state;
+    if (chatsCubit == null || chatsState == null) {
+      return;
+    }
+    if (chatsState.openStack.skip(1).isNotEmpty) {
+      chatsCubit.popChat();
+      return;
+    }
+    chatsCubit.closeAllChats();
   }
 
-  bool _handleChatNavigationNotification(
-    NavigationNotification notification,
-  ) {
-    if (_chatCanHandlePop == notification.canHandlePop) {
-      return false;
+  void _clearOpenChatHistoryEntry() {
+    final entry = _openChatHistoryEntry;
+    _openChatHistoryEntry = null;
+    entry?.remove();
+  }
+
+  void _updateOpenChatHistoryEntry(ChatsState state) {
+    final route = ModalRoute.of(context);
+    if (route == null || state.openStack.isEmpty || state.openCalendar) {
+      _clearOpenChatHistoryEntry();
+      return;
     }
-    setState(() => _chatCanHandlePop = notification.canHandlePop);
-    return false;
+    if (_openChatHistoryEntry != null) {
+      return;
+    }
+    final entry = LocalHistoryEntry(onRemove: _handleOpenChatHistoryRemoved);
+    _openChatHistoryEntry = entry;
+    route.addLocalHistoryEntry(entry);
+  }
+
+  void _handleOpenCalendarHistoryRemoved() {
+    if (_openCalendarHistoryEntry == null) {
+      return;
+    }
+    _openCalendarHistoryEntry = null;
+    if (!mounted) {
+      return;
+    }
+    final chatsCubit = context.read<ChatsCubit?>();
+    final chatsState = chatsCubit?.state;
+    if (chatsCubit == null || chatsState == null) {
+      return;
+    }
+    if (!chatsState.openCalendar) {
+      return;
+    }
+    chatsCubit.toggleCalendar();
+  }
+
+  void _clearOpenCalendarHistoryEntry() {
+    final entry = _openCalendarHistoryEntry;
+    _openCalendarHistoryEntry = null;
+    entry?.remove();
+  }
+
+  void _updateOpenCalendarHistoryEntry(ChatsState state) {
+    final route = ModalRoute.of(context);
+    if (route == null || !state.openCalendar) {
+      _clearOpenCalendarHistoryEntry();
+      return;
+    }
+    if (_openCalendarHistoryEntry != null) {
+      return;
+    }
+    final entry =
+        LocalHistoryEntry(onRemove: _handleOpenCalendarHistoryRemoved);
+    _openCalendarHistoryEntry = entry;
+    route.addLocalHistoryEntry(entry);
+  }
+
+  void _syncHomeHistoryEntries(ChatsState state) {
+    _updateOpenChatHistoryEntry(state);
+    _updateOpenCalendarHistoryEntry(state);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final chatsState = context.read<ChatsCubit?>()?.state;
+    if (chatsState == null) {
+      _clearOpenChatHistoryEntry();
+      _clearOpenCalendarHistoryEntry();
+      return;
+    }
+    _syncHomeHistoryEntries(chatsState);
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -315,226 +394,179 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         Widget constrainSecondary(Widget child) =>
             Align(alignment: Alignment.topLeft, child: child);
-        return PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, __) {
-            if (didPop) {
-              return;
-            }
-            if (FocusManager.instance.isTextInputFocused) {
-              FocusManager.instance.primaryFocus?.unfocus();
-              return;
-            }
-            final navigator = Navigator.of(context);
-            if (navigator.canPop()) {
-              navigator.pop();
-              return;
-            }
-            final rootNavigator = Navigator.of(context, rootNavigator: true);
-            if (rootNavigator.canPop()) {
-              rootNavigator.pop();
-              return;
-            }
-            final chatsCubit = context.read<ChatsCubit?>();
-            final chatsState = chatsCubit?.state;
-            if (chatsState == null) return;
-            if (chatsState.openCalendar && _calendarCanHandlePop) {
-              return;
-            }
-            if (!chatsState.openCalendar && _chatCanHandlePop) {
-              return;
-            }
-            final chatFocused = context.read<ChatBloc?>()?.state.focused;
-            if (chatFocused != null) {
-              chatsCubit?.setOpenChatRoute(route: ChatRouteIndex.main);
-              return;
-            }
-            if (!chatsState.openChatRoute.isMain) {
-              chatsCubit?.setOpenChatRoute(route: ChatRouteIndex.main);
-              return;
-            }
-            if (chatsState.openChatCalendar) {
-              chatsCubit?.setChatCalendarOpen(open: false);
-              return;
-            }
-            if (chatsState.openCalendar) {
-              chatsCubit?.toggleCalendar();
-              return;
-            }
-            if (chatsState.openStack.isNotEmpty) {
-              if (chatsState.openStack.skip(1).isNotEmpty) {
-                chatsCubit?.popChat();
-              } else {
-                chatsCubit?.closeAllChats();
-              }
-            }
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const ConnectivityIndicator(),
-              Expanded(
-                child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
-                  builder: (context, state) {
-                    final String? openJid =
-                        context.watch<ChatsCubit?>()?.state.openJid;
-                    final bool openCalendar = hasCalendarBloc &&
-                        (context.watch<ChatsCubit?>()?.state.openCalendar ??
-                            false);
-                    final bool openChatCalendar =
-                        context.watch<ChatsCubit?>()?.state.openChatCalendar ??
-                            false;
-                    final navRail = navPlacement == NavPlacement.rail
-                        ? _HomeNavigationRail(
-                            tabs: tabs,
-                            selectedIndex:
-                                DefaultTabController.maybeOf(context)?.index ??
-                                    0,
-                            collapsed: _railCollapsed,
-                            onDestinationSelected: (index) {
-                              final controller = DefaultTabController.maybeOf(
-                                context,
-                              );
-                              if (controller == null) return;
-                              controller.animateTo(index);
-                            },
-                            calendarAvailable: hasCalendarBloc,
-                            calendarActive: openCalendar || openChatCalendar,
-                            onCalendarSelected: () {
-                              context.read<ChatsCubit?>()?.toggleCalendar();
-                            },
-                            onCollapsedChanged: (collapsed) {
-                              setState(() {
-                                _railCollapsed = collapsed;
-                              });
-                            },
-                          )
-                        : null;
+        return BlocListener<ChatsCubit, ChatsState>(
+          listenWhen: (previous, current) =>
+              previous.openStack != current.openStack ||
+              previous.openCalendar != current.openCalendar,
+          listener: (context, state) => _syncHomeHistoryEntries(state),
+          child: KeyboardPopScope(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ConnectivityIndicator(),
+                Expanded(
+                  child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+                    builder: (context, state) {
+                      final String? openJid =
+                          context.watch<ChatsCubit?>()?.state.openJid;
+                      final bool openCalendar = hasCalendarBloc &&
+                          (context.watch<ChatsCubit?>()?.state.openCalendar ??
+                              false);
+                      final bool openChatCalendar = context
+                              .watch<ChatsCubit?>()
+                              ?.state
+                              .openChatCalendar ??
+                          false;
+                      final navRail = navPlacement == NavPlacement.rail
+                          ? _HomeNavigationRail(
+                              tabs: tabs,
+                              selectedIndex:
+                                  DefaultTabController.maybeOf(context)
+                                          ?.index ??
+                                      0,
+                              collapsed: _railCollapsed,
+                              onDestinationSelected: (index) {
+                                final controller =
+                                    DefaultTabController.maybeOf(context);
+                                if (controller == null) return;
+                                controller.animateTo(index);
+                              },
+                              calendarAvailable: hasCalendarBloc,
+                              calendarActive: openCalendar || openChatCalendar,
+                              onCalendarSelected: () {
+                                context.read<ChatsCubit?>()?.toggleCalendar();
+                              },
+                              onCollapsedChanged: (collapsed) {
+                                setState(() {
+                                  _railCollapsed = collapsed;
+                                });
+                              },
+                            )
+                          : null;
 
-                    final Widget chatPaneContent = openJid == null
-                        ? const chat_view.GuestChat()
-                        : MultiBlocProvider(
-                            providers: [
-                              BlocProvider(
-                                key: Key(openJid),
-                                create: (context) => ChatBloc(
-                                  jid: openJid,
-                                  messageService: context.read<XmppService>(),
-                                  chatsService: context.read<XmppService>(),
-                                  mucService: context.read<XmppService>(),
-                                  notificationService:
-                                      context.read<NotificationService>(),
-                                  emailService: context.read<EmailService>(),
-                                  omemoService: isOmemo
-                                      ? context.read<XmppService>()
-                                          as OmemoService
-                                      : null,
-                                  settingsCubit: context.read<SettingsCubit>(),
-                                ),
-                              ),
-                              BlocProvider(
-                                create: (context) => ChatSearchCubit(
-                                  jid: openJid,
-                                  messageService: context.read<XmppService>(),
-                                  emailService: context.read<EmailService>(),
-                                ),
-                              ),
-                              /* Verification flow temporarily disabled
-                              if (isOmemo)
+                      final Widget chatPaneContent = openJid == null
+                          ? const chat_view.GuestChat()
+                          : MultiBlocProvider(
+                              providers: [
                                 BlocProvider(
-                                  create: (context) => VerificationCubit(
+                                  key: Key(openJid),
+                                  create: (context) => ChatBloc(
                                     jid: openJid,
-                                    omemoService:
-                                        context.read<XmppService>()
-                                            as OmemoService,
+                                    messageService: context.read<XmppService>(),
+                                    chatsService: context.read<XmppService>(),
+                                    mucService: context.read<XmppService>(),
+                                    notificationService:
+                                        context.read<NotificationService>(),
+                                    emailService: context.read<EmailService>(),
+                                    omemoService: isOmemo
+                                        ? context.read<XmppService>()
+                                            as OmemoService
+                                        : null,
+                                    settingsCubit:
+                                        context.read<SettingsCubit>(),
                                   ),
                                 ),
-                              */
-                            ],
-                            child: const chat_view.Chat(),
-                          );
-                    final Widget chatPane = constrainSecondary(chatPaneContent);
+                                BlocProvider(
+                                  create: (context) => ChatSearchCubit(
+                                    jid: openJid,
+                                    messageService: context.read<XmppService>(),
+                                    emailService: context.read<EmailService>(),
+                                  ),
+                                ),
+                                /* Verification flow temporarily disabled
+                                if (isOmemo)
+                                  BlocProvider(
+                                    create: (context) => VerificationCubit(
+                                      jid: openJid,
+                                      omemoService:
+                                          context.read<XmppService>()
+                                              as OmemoService,
+                                    ),
+                                  ),
+                                */
+                              ],
+                              child: const chat_view.Chat(),
+                            );
+                      final Widget chatPane =
+                          constrainSecondary(chatPaneContent);
 
-                    Widget chatLayout({required bool showChatCalendar}) {
-                      final EdgeInsets secondaryPanePadding = showChatCalendar
-                          ? EdgeInsets.zero
-                          : const EdgeInsets.only(left: _secondaryPaneGutter);
-                      final Widget content = Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (navRail != null) navRail,
-                          Expanded(
-                            child: AxiAdaptiveLayout(
-                              invertPriority: openJid != null,
-                              showPrimary: !showChatCalendar,
-                              centerSecondary: false,
-                              centerPrimary: false,
-                              animatePaneChanges: true,
-                              primaryAlignment: Alignment.topLeft,
-                              secondaryAlignment: Alignment.topLeft,
-                              secondaryPadding: secondaryPanePadding,
-                              primaryChild: Nexus(
-                                tabs: tabs,
-                                navPlacement: navPlacement,
-                                showNavigationRail:
-                                    navPlacement != NavPlacement.rail,
-                                navRailCollapsed: _railCollapsed,
-                                onToggleNavRail: () {
-                                  setState(() {
-                                    _railCollapsed = !_railCollapsed;
-                                  });
-                                },
+                      Widget chatLayout({required bool showChatCalendar}) {
+                        final EdgeInsets secondaryPanePadding = showChatCalendar
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.only(
+                                left: _secondaryPaneGutter,
+                              );
+                        final Widget content = Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (navRail != null) navRail,
+                            Expanded(
+                              child: AxiAdaptiveLayout(
+                                invertPriority: openJid != null,
+                                showPrimary: !showChatCalendar,
+                                centerSecondary: false,
+                                centerPrimary: false,
+                                animatePaneChanges: true,
+                                primaryAlignment: Alignment.topLeft,
+                                secondaryAlignment: Alignment.topLeft,
+                                secondaryPadding: secondaryPanePadding,
+                                primaryChild: Nexus(
+                                  tabs: tabs,
+                                  navPlacement: navPlacement,
+                                  showNavigationRail:
+                                      navPlacement != NavPlacement.rail,
+                                  navRailCollapsed: _railCollapsed,
+                                  onToggleNavRail: () {
+                                    setState(() {
+                                      _railCollapsed = !_railCollapsed;
+                                    });
+                                  },
+                                ),
+                                secondaryChild: chatPane,
                               ),
-                              secondaryChild: chatPane,
                             ),
+                          ],
+                        );
+                        return content;
+                      }
+
+                      Widget calendarLayout() {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (navRail != null) navRail,
+                            const Expanded(child: CalendarWidget()),
+                          ],
+                        );
+                      }
+
+                      final bool demoOffline =
+                          context.read<XmppService?>()?.demoOfflineMode ??
+                              false;
+
+                      final bool showChatCalendar =
+                          openChatCalendar && openJid != null;
+                      final Duration animationDuration =
+                          context.watch<SettingsCubit>().animationDuration;
+                      final Duration calendarTransitionDuration =
+                          animationDuration;
+                      return SafeArea(
+                        top: state is ConnectivityConnected || demoOffline,
+                        child: _HomeCalendarViewTransition(
+                          openCalendar: openCalendar,
+                          duration: calendarTransitionDuration,
+                          curve: _homeCalendarFadeCurve,
+                          chatChild: chatLayout(
+                            showChatCalendar: showChatCalendar,
                           ),
-                        ],
-                      );
-                      return NotificationListener<NavigationNotification>(
-                        onNotification: _handleChatNavigationNotification,
-                        child: content,
-                      );
-                    }
-
-                    Widget calendarLayout() {
-                      final Widget content = Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (navRail != null) navRail,
-                          const Expanded(child: CalendarWidget()),
-                        ],
-                      );
-                      return NotificationListener<NavigationNotification>(
-                        onNotification: _handleCalendarNavigationNotification,
-                        child: content,
-                      );
-                    }
-
-                    final bool demoOffline =
-                        context.read<XmppService?>()?.demoOfflineMode ?? false;
-
-                    final bool showChatCalendar =
-                        openChatCalendar && openJid != null;
-                    final Duration animationDuration =
-                        context.watch<SettingsCubit>().animationDuration;
-                    final Duration calendarTransitionDuration =
-                        animationDuration;
-                    return SafeArea(
-                      top: state is ConnectivityConnected || demoOffline,
-                      child: _HomeCalendarViewTransition(
-                        openCalendar: openCalendar,
-                        duration: calendarTransitionDuration,
-                        curve: _homeCalendarFadeCurve,
-                        chatChild: chatLayout(
-                          showChatCalendar: showChatCalendar,
+                          calendarChild: calendarLayout(),
                         ),
-                        calendarChild: calendarLayout(),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

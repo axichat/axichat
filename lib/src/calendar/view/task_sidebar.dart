@@ -47,6 +47,7 @@ import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_critical_path_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'calendar_task_search.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
@@ -2287,8 +2288,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<bool> _confirmCriticalPathDeletion(CalendarCriticalPath path) async {
+    final BuildContext modalContext = context.calendarModalContext;
     final result = await showAdaptiveBottomSheet<bool>(
-      context: context,
+      context: modalContext,
       dialogMaxWidth: 420,
       surfacePadding: const EdgeInsets.all(calendarGutterLg),
       showCloseButton: false,
@@ -2401,8 +2403,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final CalendarMethod? collectionMethod =
         locate<B>().state.model.collection?.method;
     try {
+      final BuildContext modalContext = context.calendarModalContext;
       await showAdaptiveBottomSheet<void>(
-        context: context,
+        context: modalContext,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         showCloseButton: false,
