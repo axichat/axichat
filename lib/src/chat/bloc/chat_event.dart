@@ -313,6 +313,13 @@ final class ChatMessageEditRequested extends ChatEvent {
   List<Object?> get props => const [];
 }
 
+final class ChatComposerErrorCleared extends ChatEvent {
+  const ChatComposerErrorCleared();
+
+  @override
+  List<Object?> get props => const [];
+}
+
 final class ChatAttachmentPicked extends ChatEvent {
   const ChatAttachmentPicked({
     required this.attachment,

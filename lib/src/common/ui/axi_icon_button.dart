@@ -189,6 +189,9 @@ class _AxiIconButtonState extends State<AxiIconButton> {
     );
 
     if (enabled) {
+      const double defaultBounceScale = 0.96;
+      const double compactBounceScale = 0.92;
+      const double compactSizeThreshold = AxiIconButton.kDefaultSize;
       const int pressDurationNumerator = 4;
       const int pressDurationDenominator = 15;
       const int releaseDurationNumerator = 3;
@@ -205,6 +208,9 @@ class _AxiIconButtonState extends State<AxiIconButton> {
       );
       tappable = AxiTapBounce(
         enabled: animationDuration != Duration.zero,
+        scale: resolvedButtonSize < compactSizeThreshold
+            ? compactBounceScale
+            : defaultBounceScale,
         pressDuration: pressDuration,
         releaseDuration: releaseDuration,
         child: tappable,

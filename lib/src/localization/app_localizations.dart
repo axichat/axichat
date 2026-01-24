@@ -9598,6 +9598,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to resend the email.'**
   String get chatEmailResendFailedDetails;
+
+  /// No description provided for @authEnableXmppOrSmtp.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable XMPP or SMTP to continue.'**
+  String get authEnableXmppOrSmtp;
+
+  /// No description provided for @authUsernamePasswordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Username and password have different nullness.'**
+  String get authUsernamePasswordMismatch;
+
+  /// No description provided for @authStoredCredentialsOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored credentials are outdated. Please log in manually.'**
+  String get authStoredCredentialsOutdated;
+
+  /// No description provided for @authMissingDatabaseSecrets.
+  ///
+  /// In en, this message translates to:
+  /// **'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.'**
+  String get authMissingDatabaseSecrets;
+
+  /// No description provided for @authInvalidCredentials.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect username or password'**
+  String get authInvalidCredentials;
+
+  /// No description provided for @authGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error. Please try again later.'**
+  String get authGenericError;
+
+  /// No description provided for @authStorageLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage is locked by another Axichat instance. Close other windows or processes and try again.'**
+  String get authStorageLocked;
+
+  /// No description provided for @authEmailServerUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to reach the email server. Please try again.'**
+  String get authEmailServerUnreachable;
+
+  /// No description provided for @authEmailSetupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email setup failed. Please try again.'**
+  String get authEmailSetupFailed;
+
+  /// No description provided for @authEmailPasswordMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored email password missing. Please log in manually.'**
+  String get authEmailPasswordMissing;
+
+  /// No description provided for @authEmailAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email authentication failed. Please log in again.'**
+  String get authEmailAuthFailed;
+
+  /// No description provided for @signupCleanupInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.'**
+  String get signupCleanupInProgress;
+
+  /// No description provided for @signupFailedTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to register, try again later.'**
+  String get signupFailedTryAgain;
+
+  /// No description provided for @authPasswordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'New passwords do not match.'**
+  String get authPasswordMismatch;
+
+  /// No description provided for @authPasswordChangeDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changes are disabled for this account.'**
+  String get authPasswordChangeDisabled;
+
+  /// No description provided for @authPasswordChangeRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password is incorrect, or the new password does not meet server requirements.'**
+  String get authPasswordChangeRejected;
+
+  /// No description provided for @authPasswordChangeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to change password. Please try again later.'**
+  String get authPasswordChangeFailed;
+
+  /// No description provided for @authPasswordChangeSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed successfully.'**
+  String get authPasswordChangeSuccess;
+
+  /// No description provided for @authPasswordIncorrect.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect password. Please try again.'**
+  String get authPasswordIncorrect;
+
+  /// No description provided for @authAccountNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Account not found.'**
+  String get authAccountNotFound;
+
+  /// No description provided for @authAccountDeletionDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Account deletion is disabled for this account.'**
+  String get authAccountDeletionDisabled;
+
+  /// No description provided for @authAccountDeletionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to delete account. Please try again later.'**
+  String get authAccountDeletionFailed;
+
+  /// No description provided for @authDemoModeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start demo mode. Please try again.'**
+  String get authDemoModeFailed;
+
+  /// No description provided for @authLoginBackoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait {seconds} seconds before trying again.'**
+  String authLoginBackoff(Object seconds);
+
+  /// No description provided for @signupAvatarCropTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop & focus'**
+  String get signupAvatarCropTitle;
+
+  /// No description provided for @signupAvatarCropHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the area inside the circle will appear in the final avatar.'**
+  String get signupAvatarCropHint;
 }
 
 class _AppLocalizationsDelegate

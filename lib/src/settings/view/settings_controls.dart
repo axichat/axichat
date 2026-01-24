@@ -73,6 +73,7 @@ class SettingsControls extends StatelessWidget {
   const SettingsControls({
     super.key,
     this.showDivider = false,
+    this.fullWidthDividers = false,
     this.anchors,
     required this.locate,
     required this.onChangePassword,
@@ -81,6 +82,7 @@ class SettingsControls extends StatelessWidget {
   });
 
   final bool showDivider;
+  final bool fullWidthDividers;
   final SettingsSectionAnchors? anchors;
   final T Function<T>() locate;
   final VoidCallback onChangePassword;
@@ -99,6 +101,8 @@ class SettingsControls extends StatelessWidget {
           horizontal: _compactTilePadding.horizontal,
           vertical: _compactTilePadding.vertical / 2,
         );
+        final double dividerIndent =
+            fullWidthDividers ? 0.0 : _settingsSectionHeaderPadding.horizontal;
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
@@ -108,12 +112,14 @@ class SettingsControls extends StatelessWidget {
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAccount,
                     showDivider: showDivider,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.accountKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAccount,
                       showDivider: showDivider,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             _SettingsActionButton(
@@ -160,11 +166,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.dataKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionData,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.dataKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionData,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             _SettingsActionButton(
@@ -214,11 +222,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.appearanceKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAppearance,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.appearanceKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAppearance,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             ListItemPadding(
@@ -319,11 +329,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.chatPreferencesKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionChats,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.chatPreferencesKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionChats,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             Padding(
@@ -428,11 +440,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.emailPreferencesKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionEmail,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.emailPreferencesKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionEmail,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             Padding(
@@ -474,11 +488,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.aboutKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAbout,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.aboutKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAbout,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             _SettingsActionButton(
@@ -711,20 +727,23 @@ class _SettingsActionButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           foregroundColor: foregroundColor,
           hoverForegroundColor: foregroundColor,
+          gap: iconSpacing,
+          padding: EdgeInsets.symmetric(
+            horizontal: _compactTilePadding.horizontal,
+            vertical: _compactTilePadding.vertical,
+          ),
           onPressed: onPressed,
-          child: Row(
-            children: [
-              if (iconData != null) Icon(iconData, color: foregroundColor),
-              if (iconData != null) SizedBox(width: iconSpacing),
-              Expanded(
-                child: Text(
-                  label,
-                  style: context.textTheme.small.copyWith(
-                    color: foregroundColor,
-                  ),
-                ),
+          leading:
+              iconData == null ? null : Icon(iconData, color: foregroundColor),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              textAlign: TextAlign.start,
+              style: context.textTheme.small.copyWith(
+                color: foregroundColor,
               ),
-            ],
+            ),
           ),
         ).withTapBounce(enabled: onPressed != null),
       ),
@@ -760,10 +779,12 @@ class _SettingsSectionHeader extends StatelessWidget {
   const _SettingsSectionHeader({
     required this.label,
     this.showDivider = true,
+    this.dividerIndent = 0.0,
   });
 
   final String label;
   final bool showDivider;
+  final double dividerIndent;
 
   @override
   Widget build(BuildContext context) {
@@ -776,7 +797,16 @@ class _SettingsSectionHeader extends StatelessWidget {
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [const AxiListDivider(), header],
+      children: [
+        Divider(
+          color: context.colorScheme.border,
+          thickness: 1.0,
+          height: 1.0,
+          indent: dividerIndent,
+          endIndent: dividerIndent,
+        ),
+        header,
+      ],
     );
   }
 }

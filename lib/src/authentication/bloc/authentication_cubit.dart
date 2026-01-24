@@ -18,6 +18,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
@@ -33,6 +34,107 @@ import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'authentication_state.dart';
+
+sealed class AuthMessage extends Equatable {
+  const AuthMessage();
+
+  String resolve(AppLocalizations l10n);
+}
+
+final class AuthKeyMessage extends AuthMessage {
+  const AuthKeyMessage(this.key);
+
+  final AuthMessageKey key;
+
+  @override
+  String resolve(AppLocalizations l10n) => key.resolve(l10n);
+
+  @override
+  List<Object?> get props => [key];
+}
+
+final class AuthBackoffMessage extends AuthMessage {
+  const AuthBackoffMessage(this.remainingSeconds);
+
+  final int remainingSeconds;
+
+  @override
+  String resolve(AppLocalizations l10n) =>
+      l10n.authLoginBackoff(remainingSeconds);
+
+  @override
+  List<Object?> get props => [remainingSeconds];
+}
+
+final class AuthRawMessage extends AuthMessage {
+  const AuthRawMessage(this.text);
+
+  final String text;
+
+  @override
+  String resolve(AppLocalizations l10n) => text;
+
+  @override
+  List<Object?> get props => [text];
+}
+
+enum AuthMessageKey {
+  enableXmppOrSmtp,
+  usernamePasswordMismatch,
+  storedCredentialsOutdated,
+  missingDatabaseSecrets,
+  invalidCredentials,
+  genericError,
+  storageLocked,
+  emailServerUnreachable,
+  emailSetupFailed,
+  emailPasswordMissing,
+  emailAuthFailed,
+  signupCleanupInProgress,
+  signupFailedTryAgain,
+  passwordMismatch,
+  passwordChangeDisabled,
+  passwordChangeRejected,
+  passwordChangeFailed,
+  passwordChangeSuccess,
+  passwordIncorrect,
+  accountNotFound,
+  accountDeletionDisabled,
+  accountDeletionFailed,
+  demoModeFailed;
+}
+
+extension AuthMessageKeyX on AuthMessageKey {
+  String resolve(AppLocalizations l10n) => switch (this) {
+        AuthMessageKey.enableXmppOrSmtp => l10n.authEnableXmppOrSmtp,
+        AuthMessageKey.usernamePasswordMismatch =>
+          l10n.authUsernamePasswordMismatch,
+        AuthMessageKey.storedCredentialsOutdated =>
+          l10n.authStoredCredentialsOutdated,
+        AuthMessageKey.missingDatabaseSecrets => l10n.authMissingDatabaseSecrets,
+        AuthMessageKey.invalidCredentials => l10n.authInvalidCredentials,
+        AuthMessageKey.genericError => l10n.authGenericError,
+        AuthMessageKey.storageLocked => l10n.authStorageLocked,
+        AuthMessageKey.emailServerUnreachable => l10n.authEmailServerUnreachable,
+        AuthMessageKey.emailSetupFailed => l10n.authEmailSetupFailed,
+        AuthMessageKey.emailPasswordMissing => l10n.authEmailPasswordMissing,
+        AuthMessageKey.emailAuthFailed => l10n.authEmailAuthFailed,
+        AuthMessageKey.signupCleanupInProgress =>
+          l10n.signupCleanupInProgress,
+        AuthMessageKey.signupFailedTryAgain => l10n.signupFailedTryAgain,
+        AuthMessageKey.passwordMismatch => l10n.authPasswordMismatch,
+        AuthMessageKey.passwordChangeDisabled => l10n.authPasswordChangeDisabled,
+        AuthMessageKey.passwordChangeRejected => l10n.authPasswordChangeRejected,
+        AuthMessageKey.passwordChangeFailed => l10n.authPasswordChangeFailed,
+        AuthMessageKey.passwordChangeSuccess => l10n.authPasswordChangeSuccess,
+        AuthMessageKey.passwordIncorrect => l10n.authPasswordIncorrect,
+        AuthMessageKey.accountNotFound => l10n.authAccountNotFound,
+        AuthMessageKey.accountDeletionDisabled =>
+          l10n.authAccountDeletionDisabled,
+        AuthMessageKey.accountDeletionFailed => l10n.authAccountDeletionFailed,
+        AuthMessageKey.demoModeFailed => l10n.authDemoModeFailed,
+      };
+}
 
 enum LogoutSeverity {
   auto,
@@ -74,15 +176,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               xmppService: xmppService,
               emailService: emailService,
             ),
+        _ownedHttpClient = httpClient == null ? http.Client() : null,
+        _httpClient = httpClient ?? _ownedHttpClient!,
+        _emailProvisioningClientOverride = emailProvisioningClient,
+        _emailProvisioningClient = emailProvisioningClient ??
+            provisioning.EmailProvisioningClient.fromEnvironment(
+              httpClient: httpClient ?? _ownedHttpClient!,
+            ),
         _endpointResolver = endpointResolver,
         super(initialState ?? const AuthenticationNone()) {
-    _ownsHttpClient = httpClient == null;
-    _httpClient = httpClient ?? http.Client();
-    _emailProvisioningClientInjected = emailProvisioningClient != null;
-    _emailProvisioningClient = emailProvisioningClient ??
-        provisioning.EmailProvisioningClient.fromEnvironment(
-          httpClient: _httpClient,
-        );
     final initialConfig = initialState?.config ?? initialEndpointConfig;
     if (initialConfig != null) {
       _endpointConfigCubit.overrideEphemeral(initialConfig);
@@ -145,7 +247,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     ) async {
       if (connectionState == ConnectionState.connected) {
         await _triggerEmailReconnect();
-        await _publishPendingAvatar();
+        await _flushPendingAccountDeletions();
+        _publishPendingAvatar();
         if (_authenticatedJid != null) {
           await _homeRefreshSyncService.syncOnLogin();
         }
@@ -223,13 +326,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
-  late final bool _ownsHttpClient;
-  late final http.Client _httpClient;
-  late final bool _emailProvisioningClientInjected;
-  late provisioning.EmailProvisioningClient _emailProvisioningClient;
+  final http.Client? _ownedHttpClient;
+  final http.Client _httpClient;
+  final provisioning.EmailProvisioningClient? _emailProvisioningClientOverride;
+  provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
-  bool _emailProvisioningRetryInFlight = false;
   DateTime? _lastEmailProvisioningRetryAt;
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
@@ -241,22 +343,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
   AvatarUploadPayload? _signupAvatarDraft;
-  var _signupAvatarPublishInFlight = false;
   Timer? _signupAvatarPublishRetryTimer;
   var _signupAvatarPublishRetryAttempts = 0;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
   late final Future<void> _endpointConfigRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
-  bool _loginInFlight = false;
   int _failedLoginAttempts = 0;
   DateTime? _nextLoginAllowedAt;
-  bool _demoLoginInProgress = false;
-  bool _demoSessionReady = false;
 
   late final AppLifecycleListener _lifecycleListener;
 
   EndpointConfig get endpointConfig => _endpointConfigCubit.state;
+
+  Duration get _authRequestTimeout {
+    const seconds = 12;
+    return const Duration(seconds: seconds);
+  }
 
   Future<void> updateEndpointConfig(EndpointConfig config) =>
       _endpointConfigCubit.updateConfig(config);
@@ -288,7 +391,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _rebuildEmailProvisioningClient(EndpointConfig config) {
-    if (_emailProvisioningClientInjected) {
+    if (_emailProvisioningClientOverride != null) {
       return;
     }
     final baseUrlOverride =
@@ -378,7 +481,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     Uri? fallback,
     required Map<String, String> body,
   }) async {
-    final response = await _httpClient.post(primary, body: body);
+    final response = await _httpClient
+        .post(primary, body: body)
+        .timeout(_authRequestTimeout);
     if (fallback == null) {
       return response;
     }
@@ -386,7 +491,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return response;
     }
 
-    final fallbackResponse = await _httpClient.post(fallback, body: body);
+    final fallbackResponse = await _httpClient
+        .post(fallback, body: body)
+        .timeout(_authRequestTimeout);
     if (fallbackResponse.statusCode != 404) {
       return fallbackResponse;
     }
@@ -420,7 +527,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _resetLoginBackoff();
       return;
     }
-    if (_loginInFlight && nextState is AuthenticationFailure) {
+    if (state is AuthenticationLogInInProgress &&
+        nextState is AuthenticationFailure) {
       _recordLoginFailure();
     }
   }
@@ -453,16 +561,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return Duration(seconds: clampedSeconds);
   }
 
-  String _loginBackoffMessage(Duration remaining) {
+  AuthMessage _loginBackoffMessage(Duration remaining) {
     const minSeconds = 1;
-    const prefix = 'Too many attempts. Wait ';
-    const suffix = ' seconds before trying again.';
     final seconds = remaining.inSeconds;
     final normalizedSeconds = seconds < minSeconds ? minSeconds : seconds;
-    return '$prefix$normalizedSeconds$suffix';
+    return AuthBackoffMessage(normalizedSeconds);
   }
 
-  String? _activeLoginBackoffMessage(DateTime now) {
+  AuthMessage? _activeLoginBackoffMessage(DateTime now) {
     final allowedAt = _nextLoginAllowedAt;
     if (allowedAt == null || !now.isBefore(allowedAt)) {
       return null;
@@ -626,7 +732,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _loginIfStoredCredentials() async {
-    if (_loginInFlight) {
+    if (state is AuthenticationLogInInProgress) {
       return;
     }
 
@@ -686,7 +792,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleXmppStreamReady(XmppStreamReady _) async {
-    if (!_stickyAuthActive || _loginInFlight) {
+    if (!_stickyAuthActive || state is AuthenticationLogInInProgress) {
       return;
     }
     await _triggerEmailReconnect();
@@ -702,7 +808,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final jid = _authenticatedJid;
-    if (!_loginInFlight && jid != null) {
+    if (state is! AuthenticationLogInInProgress && jid != null) {
       final hasCredentials = await _hasEmailReconnectCredentials(jid);
       if (!hasCredentials) {
         await logout(severity: LogoutSeverity.auto);
@@ -730,9 +836,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!(lastError?.isRecoverable ?? false) &&
         !(lastError == null && syncState.requiresAttention) &&
         emailService.hasActiveSession) {
-      return;
-    }
-    if (_emailProvisioningRetryInFlight) {
       return;
     }
     const retryCooldown = Duration(seconds: 30);
@@ -778,32 +881,27 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final resolvedPassword =
         storedPassword ?? sessionPassword ?? activePassword;
     final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
-    _emailProvisioningRetryInFlight = true;
     _lastEmailProvisioningRetryAt = now;
-    try {
-      final displayName = jid.split('@').first;
-      final rememberMe = await loadRememberMeChoice();
-      await _ensureEmailProvisioned(
-        displayName: displayName,
-        databasePrefix: secrets.prefix!,
-        databasePassphrase: secrets.passphrase!,
-        jid: jid,
-        enforceProvisioning: false,
-        allowOfflineOnRecoverable: true,
-        mode: _EmailProvisioningMode.deferred,
-        emailPassword: resolvedPassword,
-        addressOverride: resolvedAddress,
-        persistCredentials: rememberMe,
-      );
-      final fatalError = _lastEmailProvisioningError;
-      if (fatalError != null &&
-          !fatalError.isRecoverable &&
-          _stickyAuthActive) {
-        await logout(severity: LogoutSeverity.auto);
-        _emit(AuthenticationFailure(fatalError.message));
-      }
-    } finally {
-      _emailProvisioningRetryInFlight = false;
+    final displayName = jid.split('@').first;
+    final rememberMe = await loadRememberMeChoice();
+    await _ensureEmailProvisioned(
+      displayName: displayName,
+      databasePrefix: secrets.prefix!,
+      databasePassphrase: secrets.passphrase!,
+      jid: jid,
+      enforceProvisioning: false,
+      allowOfflineOnRecoverable: true,
+      mode: _EmailProvisioningMode.deferred,
+      emailPassword: resolvedPassword,
+      addressOverride: resolvedAddress,
+      persistCredentials: rememberMe,
+    );
+    final fatalError = _lastEmailProvisioningError;
+    if (fatalError != null &&
+        !fatalError.isRecoverable &&
+        _stickyAuthActive) {
+      await logout(severity: LogoutSeverity.auto);
+      _emit(AuthenticationFailure(AuthRawMessage(fatalError.message)));
     }
   }
 
@@ -1040,18 +1138,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
     }
+    await _homeRefreshSyncService.close();
     await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
     _emailProvisioningClient.close();
-    if (_ownsHttpClient) {
-      _httpClient.close();
-    }
+    final ownedClient = _ownedHttpClient;
+    ownedClient?.close();
     return super.close();
   }
 
   void _scheduleSignupAvatarPublishRetry() {
-    if (_signupAvatarDraft == null || _signupAvatarPublishInFlight) {
+    if (_signupAvatarDraft == null) {
       return;
     }
     if (_signupAvatarPublishRetryTimer != null) {
@@ -1096,11 +1194,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _emit(AuthenticationFailure(backoffMessage));
       return;
     }
-    if (_loginInFlight) {
-      _log.fine('Ignoring login request while another is in flight.');
+    if (state is AuthenticationLogInInProgress) {
+      _log.fine('Ignoring login request while another is running.');
       return;
     }
-    _loginInFlight = true;
     try {
       final currentConfig = endpointConfig;
       _log.info(
@@ -1136,13 +1233,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final bool xmppEnabled = config.enableXmpp;
       final bool smtpEnabled = config.enableSmtp;
       if (!xmppEnabled && !smtpEnabled) {
-        _emit(const AuthenticationFailure('Enable XMPP or SMTP to continue.'));
+        _emit(
+          const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.enableXmppOrSmtp),
+          ),
+        );
         return;
       }
       if ((username == null) != (password == null)) {
         _emit(
           const AuthenticationFailure(
-            'Username and password have different nullness.',
+            AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
           ),
         );
         return;
@@ -1167,9 +1268,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         resolvedPassword = loginFromStore.password!;
         if (!loginFromStore.hasPreHashedFlag) {
           if (!wasAuthenticated) {
+            await persistRememberMeChoice(false);
+            await _credentialStore.delete(key: jidStorageKey);
+            await _clearStoredPassword();
             _emit(
               const AuthenticationFailure(
-                'Stored credentials are outdated. Please log in manually.',
+                AuthKeyMessage(AuthMessageKey.storedCredentialsOutdated),
               ),
             );
             _authenticatedJid = null;
@@ -1195,12 +1299,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           'Stored login credentials found without database secrets; blocking auto-login.',
         );
         if (usingStoredCredentials) {
-          const missingSecretsErrorText =
-              'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
           await persistRememberMeChoice(false);
           _authenticatedJid = null;
           await _xmppService.disconnect();
-          _emit(const AuthenticationFailure(missingSecretsErrorText));
+          _emit(
+            const AuthenticationFailure(
+              AuthKeyMessage(AuthMessageKey.missingDatabaseSecrets),
+            ),
+          );
           return;
         }
       }
@@ -1271,7 +1377,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             );
           } on EndpointResolutionException catch (error) {
             if (!canPreserveSession) {
-              _emit(AuthenticationFailure(error.message, config: config));
+              _emit(
+                AuthenticationFailure(
+                  AuthRawMessage(error.message),
+                  config: config,
+                ),
+              );
               return;
             }
             _log.warning('Endpoint resolution failed: ${error.message}');
@@ -1298,7 +1409,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             credentialDisposition = _CredentialDisposition.wipeLoginCredentials;
             await _updateAuthTransactionCredentialClearance(true);
             _emit(
-              const AuthenticationFailure('Incorrect username or password'),
+              const AuthenticationFailure(
+                AuthKeyMessage(AuthMessageKey.invalidCredentials),
+              ),
             );
             await _xmppService.disconnect();
             _authenticatedJid = null;
@@ -1335,7 +1448,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             await _xmppService.disconnect();
             _authenticatedJid = null;
             _emit(
-              const AuthenticationFailure('Error. Please try again later.'),
+              const AuthenticationFailure(
+                AuthKeyMessage(AuthMessageKey.genericError),
+              ),
             );
             return;
           } on XmppAlreadyConnectedException catch (_) {
@@ -1350,12 +1465,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             }
           } on Exception catch (error) {
             if (_looksLikeStorageLock(error)) {
-              const storageLockedErrorText =
-                  'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
               _log.warning('Storage lock detected during login.', error);
               await _xmppService.disconnect();
               _authenticatedJid = null;
-              _emit(const AuthenticationFailure(storageLockedErrorText));
+              _emit(
+                const AuthenticationFailure(
+                  AuthKeyMessage(AuthMessageKey.storageLocked),
+                ),
+              );
               return;
             }
             final canResumeOffline = usingStoredCredentials &&
@@ -1390,7 +1507,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             await _xmppService.disconnect();
             _authenticatedJid = null;
             _emit(
-              const AuthenticationFailure('Error. Please try again later.'),
+              const AuthenticationFailure(
+                AuthKeyMessage(AuthMessageKey.genericError),
+              ),
             );
             return;
           }
@@ -1466,13 +1585,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _authenticatedJid = null;
           if (state is! AuthenticationFailure &&
               state is! AuthenticationSignupFailure) {
-            final fallbackMessage =
-                provisioningStatus == _ProvisioningStatus.blockedTransient
-                    ? 'Unable to reach the email server. Please try again.'
-                    : 'Email setup failed. Please try again.';
             _emit(
               AuthenticationFailure(
-                _lastEmailProvisioningError?.message ?? fallbackMessage,
+                _lastEmailProvisioningError?.message != null
+                    ? AuthRawMessage(_lastEmailProvisioningError!.message)
+                    : AuthKeyMessage(
+                        provisioningStatus == _ProvisioningStatus.blockedTransient
+                            ? AuthMessageKey.emailServerUnreachable
+                            : AuthMessageKey.emailSetupFailed,
+                      ),
               ),
             );
           }
@@ -1498,17 +1619,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           );
         }
       }
-    } finally {
-      _loginInFlight = false;
     }
   }
 
   Future<void> _loginToDemoMode() async {
-    if (_demoSessionReady || _demoLoginInProgress) {
+    if (state is AuthenticationLogInInProgress ||
+        state is AuthenticationSignUpInProgress) {
       return;
     }
-    _demoLoginInProgress = true;
-    _loginInFlight = true;
+    if (state is AuthenticationComplete &&
+        _authenticatedJid == kDemoSelfJid) {
+      return;
+    }
     try {
       if (state is! AuthenticationInProgress &&
           state is! AuthenticationComplete) {
@@ -1531,19 +1653,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       await _markXmppConnected();
       _authenticatedJid = kDemoSelfJid;
-      _demoSessionReady = true;
       _emit(const AuthenticationComplete());
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to start demo session', error, stackTrace);
       _authenticatedJid = null;
       _emit(
         const AuthenticationFailure(
-          'Failed to start demo mode. Please try again.',
+          AuthKeyMessage(AuthMessageKey.demoModeFailed),
         ),
       );
-    } finally {
-      _demoLoginInProgress = false;
-      _loginInFlight = false;
     }
   }
 
@@ -1728,7 +1846,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (mode.isBlocking && !_stickyAuthActive) {
         _emit(
           const AuthenticationFailure(
-            'Stored email password missing. Please log in manually.',
+            AuthKeyMessage(AuthMessageKey.emailPasswordMissing),
           ),
         );
       } else {
@@ -1777,7 +1895,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
         _lastEmailProvisioningError = error;
         if (mode.isBlocking && !_stickyAuthActive) {
-          _emit(AuthenticationFailure(error.message));
+          _emit(AuthenticationFailure(AuthRawMessage(error.message)));
         } else {
           _log.warning('Email provisioning failed silently: ${error.message}');
         }
@@ -1816,7 +1934,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           return _ProvisioningStatus.pendingRecoverable;
         }
         if (mode.isBlocking && !_stickyAuthActive) {
-          _emit(const AuthenticationFailure('Error. Please try again later.'));
+          _emit(
+            const AuthenticationFailure(
+              AuthKeyMessage(AuthMessageKey.genericError),
+            ),
+          );
         } else {
           _log.warning('Silent re-auth email provisioning deferred.');
         }
@@ -1871,7 +1993,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (_xmppService.connectionState == ConnectionState.connected) {
       await _homeRefreshSyncService.syncOnLogin();
     }
-    await _publishPendingAvatar();
+    _publishPendingAvatar();
   }
 
   Future<void> _persistLoginSecrets({
@@ -1972,32 +2094,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _publishPendingAvatar() async {
     final payload = _signupAvatarDraft;
     if (payload == null) return;
-    if (_signupAvatarPublishInFlight) {
-      return;
-    }
     if (!_xmppService.connected ||
         !_stickyAuthActive ||
         !_xmppService.databasesInitialized) {
       _scheduleSignupAvatarPublishRetry();
       return;
     }
-    _signupAvatarPublishInFlight = true;
+    _signupAvatarDraft = null;
     try {
       await _xmppService.publishAvatar(payload);
-      _signupAvatarDraft = null;
       _signupAvatarPublishRetryAttempts = 0;
       _signupAvatarPublishRetryTimer?.cancel();
       _signupAvatarPublishRetryTimer = null;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
       if (cause is mox.AvatarError) {
-        _signupAvatarDraft = null;
         _signupAvatarPublishRetryAttempts = 0;
         _signupAvatarPublishRetryTimer?.cancel();
         _signupAvatarPublishRetryTimer = null;
         _log.info('Signup avatar publish rejected; skipping.', cause);
         return;
       }
+      _signupAvatarDraft ??= payload;
       if (_looksLikeConnectivityError(error) || !_xmppService.connected) {
         _log.warning(
           'Failed to publish signup avatar; will retry when connected.',
@@ -2010,14 +2128,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Failed to publish signup avatar', error, stackTrace);
       _scheduleSignupAvatarPublishRetry();
     } catch (error, stackTrace) {
+      _signupAvatarDraft ??= payload;
       _log.warning(
         'Unexpected error publishing signup avatar',
         error,
         stackTrace,
       );
       _scheduleSignupAvatarPublishRetry();
-    } finally {
-      _signupAvatarPublishInFlight = false;
     }
   }
 
@@ -2055,9 +2172,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await logout(severity: LogoutSeverity.auto);
-    const emailAuthFailureErrorText =
-        'Email authentication failed. Please log in again.';
-    _emit(const AuthenticationFailure(emailAuthFailureErrorText));
+    _emit(
+      const AuthenticationFailure(
+        AuthKeyMessage(AuthMessageKey.emailAuthFailed),
+      ),
+    );
   }
 
   Future<void> signup({
@@ -2073,8 +2192,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _loginToDemoMode();
       return;
     }
-    const signupCleanupInProgressMessage =
-        'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
     final config = endpointConfig;
     _log.info(
       'Signup requested '
@@ -2091,7 +2208,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!cleanupComplete) {
       _emit(
         const AuthenticationSignupFailure(
-          signupCleanupInProgressMessage,
+          AuthKeyMessage(AuthMessageKey.signupCleanupInProgress),
           isCleanupBlocked: true,
         ),
       );
@@ -2122,20 +2239,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       const captchaKeyKey = 'key';
       const registerKey = 'register';
       const registerValue = 'Register';
-      final response = await _httpClient.post(
-        registrationUrl,
-        body: {
-          _registerBodyKeyUsername: username,
-          _registerBodyKeyHost: host,
-          _registerBodyKeyPassword: password,
-          _registerBodyKeyPassword2: confirmPassword,
-          captchaIdKey: captchaID,
-          captchaKeyKey: captcha,
-          registerKey: registerValue,
-        },
-      );
+      final response = await _httpClient
+          .post(
+            registrationUrl,
+            body: {
+              _registerBodyKeyUsername: username,
+              _registerBodyKeyHost: host,
+              _registerBodyKeyPassword: password,
+              _registerBodyKeyPassword2: confirmPassword,
+              captchaIdKey: captchaID,
+              captchaKeyKey: captcha,
+              registerKey: registerValue,
+            },
+          )
+          .timeout(_authRequestTimeout);
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
-        _emit(AuthenticationSignupFailure(response.body));
+        _emit(AuthenticationSignupFailure(AuthRawMessage(response.body)));
         return;
       }
       await login(
@@ -2152,13 +2271,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      _emit(AuthenticationSignupFailure(error.message));
+      _emit(AuthenticationSignupFailure(AuthRawMessage(error.message)));
       return;
     } on Exception catch (error, stackTrace) {
       _log.warning('Signup failed', error, stackTrace);
       _emit(
         const AuthenticationSignupFailure(
-          'Failed to register, try again later.',
+          AuthKeyMessage(AuthMessageKey.signupFailedTryAgain),
         ),
       );
       return;
@@ -2257,7 +2376,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       final response = await _httpClient.get(
         Uri.parse('https://api.pwnedpasswords.com/range/$subhash'),
-      );
+      ).timeout(_authRequestTimeout);
       if (response.statusCode != 200) {
         return false;
       }
@@ -2268,6 +2387,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return !isBreached;
     } on Exception catch (_) {
       return false;
+    }
+  }
+
+  Future<String> fetchCaptchaHtml() async {
+    try {
+      const okStatus = 200;
+      final response = await _httpClient
+          .get(registrationUrl)
+          .timeout(_authRequestTimeout);
+      if (response.statusCode != okStatus) return '';
+      return response.body;
+    } on Exception catch (_) {
+      return '';
     }
   }
 
@@ -2312,7 +2444,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     _clearSessionEmailCredentials();
     _authenticatedJid = null;
-    _demoSessionReady = false;
     _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
   }
@@ -2327,24 +2458,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (password != password2) {
       _emit(
         const AuthenticationPasswordChangeFailure(
-          'New passwords do not match.',
+          AuthKeyMessage(AuthMessageKey.passwordMismatch),
         ),
       );
       return;
     }
-    const passwordChangeDisabledMessage =
-        'Password changes are disabled for this account.';
-    const passwordChangeRejectedMessage =
-        'Current password is incorrect, or the new password does not meet server requirements.';
-    const passwordChangeFallback =
-        'Unable to change password. Please try again later.';
     _emit(const AuthenticationPasswordChangeInProgress());
     final normalizedUsername = username.trim();
     final configuredHost = endpointConfig.domain.trim();
     final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
     if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
       _emit(
-        const AuthenticationPasswordChangeFailure(passwordChangeFallback),
+        const AuthenticationPasswordChangeFailure(
+          AuthKeyMessage(AuthMessageKey.passwordChangeFailed),
+        ),
       );
       return;
     }
@@ -2362,7 +2489,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         if (!shouldChangeEmailPassword || resolvedEmail == null) {
           _emit(
             const AuthenticationPasswordChangeFailure(
-              passwordChangeDisabledMessage,
+              AuthKeyMessage(AuthMessageKey.passwordChangeDisabled),
             ),
           );
           return;
@@ -2386,7 +2513,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         _emit(
           const AuthenticationPasswordChangeSuccess(
-            'Password changed successfully.',
+            AuthKeyMessage(AuthMessageKey.passwordChangeSuccess),
           ),
         );
         return;
@@ -2436,7 +2563,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         _emit(
           const AuthenticationPasswordChangeSuccess(
-            'Password changed successfully.',
+            AuthKeyMessage(AuthMessageKey.passwordChangeSuccess),
           ),
         );
         return;
@@ -2444,7 +2571,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (response.statusCode == 401 || response.statusCode == 403) {
         _emit(
           const AuthenticationPasswordChangeFailure(
-            'Current password is incorrect.',
+            AuthKeyMessage(AuthMessageKey.passwordIncorrect),
           ),
         );
         return;
@@ -2452,27 +2579,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (response.statusCode == 404) {
         _emit(
           const AuthenticationPasswordChangeFailure(
-            passwordChangeRejectedMessage,
+            AuthKeyMessage(AuthMessageKey.passwordChangeRejected),
           ),
         );
         return;
       }
       final detail = _registerErrorDetail(response);
       _emit(
-        AuthenticationPasswordChangeFailure(
-          detail ?? passwordChangeFallback,
-        ),
+        detail == null
+            ? const AuthenticationPasswordChangeFailure(
+                AuthKeyMessage(AuthMessageKey.passwordChangeFailed),
+              )
+            : AuthenticationPasswordChangeFailure(AuthRawMessage(detail)),
       );
       _log.warning('Password change failed (${response.statusCode}).');
     } on Exception catch (error, stackTrace) {
       _log.warning('Password change failed', error, stackTrace);
       _emit(
-        const AuthenticationPasswordChangeFailure(passwordChangeFallback),
+        const AuthenticationPasswordChangeFailure(
+          AuthKeyMessage(AuthMessageKey.passwordChangeFailed),
+        ),
       );
     }
   }
 
-  Future<String?> _changeProvisionedEmailPassword({
+  Future<AuthMessage?> _changeProvisionedEmailPassword({
     required String email,
     required String oldPassword,
     required String newPassword,
@@ -2487,16 +2618,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
       _log.warning('Email password change failed', error, stackTrace);
       if (error.code == provisioning.EmailProvisioningApiErrorCode.notFound) {
-        return 'Account not found.';
+        return const AuthKeyMessage(AuthMessageKey.accountNotFound);
       }
       if (error.code ==
           provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
-        return 'Current password is incorrect.';
+        return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
       }
-      return error.message;
+      return AuthRawMessage(error.message);
     } on Exception catch (error, stackTrace) {
       _log.warning('Email password change failed', error, stackTrace);
-      return 'Unable to change password. Please try again later.';
+      return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
     }
   }
 
@@ -2554,18 +2685,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
   }) async {
     _emit(const AuthenticationUnregisterInProgress());
-    const accountDeletionDisabledMessage =
-        'Account deletion is disabled for this account.';
-    const incorrectPasswordMessage = 'Incorrect password. Please try again.';
-    const unregisterFallback =
-        'Unable to delete account. Please try again later.';
     final normalizedUsername = username.trim();
     final configuredHost = endpointConfig.domain.trim();
     final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
     if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
       _emit(
         const AuthenticationUnregisterFailure(
-          'Unable to delete account right now. Please try again later.',
+          AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
         ),
       );
       return;
@@ -2574,7 +2700,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final shouldDeleteXmppAccount = endpointConfig.enableXmpp;
     if (!shouldDeleteEmailAccount && !shouldDeleteXmppAccount) {
       _emit(
-        const AuthenticationUnregisterFailure(accountDeletionDisabledMessage),
+        const AuthenticationUnregisterFailure(
+          AuthKeyMessage(AuthMessageKey.accountDeletionDisabled),
+        ),
       );
       return;
     }
@@ -2608,7 +2736,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         logContext: 'during unregister',
       );
       if (response == null) {
-        _emit(const AuthenticationUnregisterFailure(unregisterFallback));
+        _emit(
+          const AuthenticationUnregisterFailure(
+            AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
+          ),
+        );
         return;
       }
       if (response.statusCode == 200) {
@@ -2617,27 +2749,35 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
-        _emit(const AuthenticationUnregisterFailure(incorrectPasswordMessage));
+        _emit(
+          const AuthenticationUnregisterFailure(
+            AuthKeyMessage(AuthMessageKey.passwordIncorrect),
+          ),
+        );
         return;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
         _emit(
-          const AuthenticationUnregisterFailure(incorrectPasswordMessage),
+          const AuthenticationUnregisterFailure(
+            AuthKeyMessage(AuthMessageKey.passwordIncorrect),
+          ),
         );
         return;
       }
       final detail = _registerErrorDetail(response);
       _emit(
-        AuthenticationUnregisterFailure(
-          detail ?? unregisterFallback,
-        ),
+        detail == null
+            ? const AuthenticationUnregisterFailure(
+                AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
+              )
+            : AuthenticationUnregisterFailure(AuthRawMessage(detail)),
       );
       _log.warning('Account deletion failed (${response.statusCode}).');
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to delete account', error, stackTrace);
       _emit(
         const AuthenticationUnregisterFailure(
-          'Unable to delete account. Please try again later.',
+          AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
         ),
       );
     }
@@ -2696,6 +2836,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jid: jid,
         displayName: displayName,
         password: newPassword,
+        persistCredentials: rememberMe,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -2737,12 +2878,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _upsertPendingAccountDeletion(deletion);
   }
 
-  Future<String?> _deleteProvisionedEmailAccount({
+  Future<AuthMessage?> _deleteProvisionedEmailAccount({
     required String email,
     required String password,
     required String logContext,
   }) async {
-    const incorrectPasswordMessage = 'Incorrect password. Please try again.';
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty) {
       return null;
@@ -2764,10 +2904,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       if (error.code ==
           provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
-        return incorrectPasswordMessage;
+        return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
       }
       if (error.isRecoverable) {
-        return error.message;
+        return AuthRawMessage(error.message);
       }
       return null;
     } on Exception catch (error, stackTrace) {
@@ -2776,7 +2916,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      return 'Unable to delete account. Please try again later.';
+      return const AuthKeyMessage(AuthMessageKey.accountDeletionFailed);
     }
   }
 

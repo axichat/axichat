@@ -240,6 +240,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteRequested>(_onChatInviteRequested);
     on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
+    on<ChatComposerErrorCleared>(_onChatComposerErrorCleared);
     on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
@@ -2950,6 +2951,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  void _onChatComposerErrorCleared(
+    ChatComposerErrorCleared event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state.composerError == null) return;
+    emit(state.copyWith(composerError: null));
+  }
+
   Future<void> _onChatAttachmentPicked(
     ChatAttachmentPicked event,
     Emitter<ChatState> emit,
@@ -4350,9 +4359,47 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final service = _emailService;
     if (chat == null || service == null) return;
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
+    final nextHydrationId = ++_composerHydrationSeed;
+    final nextSubject = shareContext?.subject;
+    emit(
+      state.copyWith(
+        pendingAttachments: const <PendingAttachment>[],
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: message.plainText,
+        composerError: message.error.isNotNone
+            ? message.error.label(_l10n)
+            : state.composerError,
+        emailSubject: nextSubject != null && nextSubject != state.emailSubject
+            ? nextSubject
+            : state.emailSubject,
+        emailSubjectHydrationId:
+            nextSubject != null && nextSubject != state.emailSubject
+                ? state.emailSubjectHydrationId + 1
+                : state.emailSubjectHydrationId,
+        emailSubjectHydrationText:
+            nextSubject != null && nextSubject != state.emailSubject
+                ? nextSubject
+                : state.emailSubject,
+        emailSubjectAutofillEligible: false,
+        emailSubjectAutofilled: false,
+      ),
+    );
     shareContext ??= await service.shareContextForMessage(message);
-    final pendingAttachments = <PendingAttachment>[];
+    final updatedSubject = shareContext?.subject;
+    if (updatedSubject != null && updatedSubject != state.emailSubject) {
+      emit(
+        state.copyWith(
+          emailSubject: updatedSubject,
+          emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
+          emailSubjectHydrationText: updatedSubject,
+          emailSubjectAutofillEligible: false,
+          emailSubjectAutofilled: false,
+        ),
+      );
+    }
     final attachments = await _attachmentsForMessage(message);
+    if (attachments.isEmpty) return;
+    final pendingAttachments = <PendingAttachment>[];
     for (final attachment in attachments) {
       pendingAttachments.add(
         PendingAttachment(
@@ -4361,28 +4408,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    final nextHydrationId = ++_composerHydrationSeed;
-    final nextSubject = shareContext?.subject;
-    final shouldHydrateSubject =
-        nextSubject != null && nextSubject != state.emailSubject;
-    emit(
-      state.copyWith(
-        pendingAttachments: pendingAttachments,
-        composerHydrationId: nextHydrationId,
-        composerHydrationText: message.plainText,
-        composerError: message.error.isNotNone
-            ? message.error.label(_l10n)
-            : state.composerError,
-        emailSubject: shouldHydrateSubject ? nextSubject : state.emailSubject,
-        emailSubjectHydrationId: shouldHydrateSubject
-            ? state.emailSubjectHydrationId + 1
-            : state.emailSubjectHydrationId,
-        emailSubjectHydrationText:
-            shouldHydrateSubject ? nextSubject : state.emailSubject,
-        emailSubjectAutofillEligible: false,
-        emailSubjectAutofilled: false,
-      ),
-    );
+    emit(state.copyWith(pendingAttachments: pendingAttachments));
   }
 
   void _replacePendingAttachment(
@@ -4543,8 +4569,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Message message,
     Emitter<ChatState> emit,
   ) async {
-    final pendingAttachments = <PendingAttachment>[];
+    final nextHydrationId = ++_composerHydrationSeed;
+    emit(
+      state.copyWith(
+        pendingAttachments: const <PendingAttachment>[],
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: message.plainText,
+        composerError: message.error.isNotNone
+            ? message.error.label(_l10n)
+            : state.composerError,
+      ),
+    );
     final attachments = await _attachmentsForMessage(message);
+    if (attachments.isEmpty) return;
+    final pendingAttachments = <PendingAttachment>[];
     for (final attachment in attachments) {
       pendingAttachments.add(
         PendingAttachment(
@@ -4553,17 +4591,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    final nextHydrationId = ++_composerHydrationSeed;
-    emit(
-      state.copyWith(
-        composerHydrationId: nextHydrationId,
-        composerHydrationText: message.plainText,
-        composerError: message.error.isNotNone
-            ? message.error.label(_l10n)
-            : state.composerError,
-        pendingAttachments: pendingAttachments,
-      ),
-    );
+    emit(state.copyWith(pendingAttachments: pendingAttachments));
   }
 
   Future<void> _saveXmppDraft({

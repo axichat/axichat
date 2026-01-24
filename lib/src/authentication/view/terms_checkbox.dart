@@ -14,29 +14,31 @@ class TermsCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     return Align(
       alignment: Alignment.centerLeft,
       child: AxiCheckboxFormField(
         enabled: enabled,
         initialValue: false,
-        inputLabel: Text(l10n.termsAcceptLabel),
+        inputLabel: Text(context.l10n.termsAcceptLabel),
         onChanged: (_) {},
         inputSublabel: RichText(
           text: TextSpan(
             style: context.textTheme.muted,
             children: [
-              TextSpan(text: l10n.termsAgreementPrefix),
+              TextSpan(text: context.l10n.termsAgreementPrefix),
               WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
-                child: AxiLink(link: termsUrl, text: l10n.termsAgreementTerms),
+                child: AxiLink(
+                  link: termsUrl,
+                  text: context.l10n.termsAgreementTerms,
+                ),
               ),
-              TextSpan(text: l10n.termsAgreementAnd),
+              TextSpan(text: context.l10n.termsAgreementAnd),
               WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
                 child: AxiLink(
                   link: privacyUrl,
-                  text: l10n.termsAgreementPrivacy,
+                  text: context.l10n.termsAgreementPrivacy,
                 ),
               ),
               const TextSpan(text: '.'),
@@ -45,7 +47,7 @@ class TermsCheckbox extends StatelessWidget {
         ),
         validator: (v) {
           if (v != true) {
-            return l10n.termsAgreementError;
+            return context.l10n.termsAgreementError;
           }
           return null;
         },

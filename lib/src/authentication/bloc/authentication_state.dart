@@ -89,16 +89,16 @@ final class AuthenticationCompleteFromSignup extends AuthenticationComplete {
 }
 
 final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {
-  const AuthenticationPasswordChangeSuccess(this.successText, {super.config});
+  const AuthenticationPasswordChangeSuccess(this.message, {super.config});
 
-  final String successText;
+  final AuthMessage message;
 
   @override
   AuthenticationPasswordChangeSuccess copyWithConfig(EndpointConfig config) =>
-      AuthenticationPasswordChangeSuccess(successText, config: config);
+      AuthenticationPasswordChangeSuccess(message, config: config);
 
   @override
-  List<Object?> get props => [config, successText];
+  List<Object?> get props => [config, message];
 }
 
 final class AuthenticationPasswordChangeInProgress
@@ -116,16 +116,16 @@ final class AuthenticationPasswordChangeInProgress
 }
 
 final class AuthenticationPasswordChangeFailure extends AuthenticationComplete {
-  const AuthenticationPasswordChangeFailure(this.errorText, {super.config});
+  const AuthenticationPasswordChangeFailure(this.message, {super.config});
 
-  final String errorText;
+  final AuthMessage message;
 
   @override
   AuthenticationPasswordChangeFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationPasswordChangeFailure(errorText, config: config);
+      AuthenticationPasswordChangeFailure(message, config: config);
 
   @override
-  List<Object?> get props => [config, errorText];
+  List<Object?> get props => [config, message];
 }
 
 final class AuthenticationUnregisterInProgress extends AuthenticationComplete {
@@ -140,49 +140,49 @@ final class AuthenticationUnregisterInProgress extends AuthenticationComplete {
 }
 
 final class AuthenticationUnregisterFailure extends AuthenticationComplete {
-  const AuthenticationUnregisterFailure(this.errorText, {super.config});
+  const AuthenticationUnregisterFailure(this.message, {super.config});
 
-  final String errorText;
+  final AuthMessage message;
 
   @override
   AuthenticationUnregisterFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationUnregisterFailure(errorText, config: config);
+      AuthenticationUnregisterFailure(message, config: config);
 
   @override
-  List<Object?> get props => [config, errorText];
+  List<Object?> get props => [config, message];
 }
 
 final class AuthenticationFailure extends AuthenticationState {
-  const AuthenticationFailure(this.errorText, {super.config});
+  const AuthenticationFailure(this.message, {super.config});
 
-  final String errorText;
+  final AuthMessage message;
 
   @override
   AuthenticationFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationFailure(errorText, config: config);
+      AuthenticationFailure(message, config: config);
 
   @override
-  List<Object?> get props => [config, errorText];
+  List<Object?> get props => [config, message];
 }
 
 final class AuthenticationSignupFailure extends AuthenticationState {
   const AuthenticationSignupFailure(
-    this.errorText, {
+    this.message, {
     this.isCleanupBlocked = false,
     super.config,
   });
 
-  final String errorText;
+  final AuthMessage message;
   final bool isCleanupBlocked;
 
   @override
   AuthenticationSignupFailure copyWithConfig(EndpointConfig config) =>
       AuthenticationSignupFailure(
-        errorText,
+        message,
         isCleanupBlocked: isCleanupBlocked,
         config: config,
       );
 
   @override
-  List<Object?> get props => [config, errorText, isCleanupBlocked];
+  List<Object?> get props => [config, message, isCleanupBlocked];
 }

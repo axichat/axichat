@@ -291,6 +291,7 @@ class _ProfileMainView extends StatelessWidget {
     );
     final settings = _SettingsPanel(
       showTopDivider: !isWideLayout,
+      isWideLayout: isWideLayout,
       applicationVersion: applicationVersion,
       anchors: settingsAnchors,
       locate: locate,
@@ -312,32 +313,54 @@ class _ProfileMainView extends StatelessWidget {
               children: [
                 ColoredBox(
                   color: sidebarColor,
-                  child: Padding(
-                    padding: profileSectionPadding,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 500.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const _ProfileStatusHeader(),
-                            const SizedBox(height: _profileCardSectionSpacing),
-                            card,
-                            const SizedBox(height: _profileCardSectionSpacing),
-                            const ProfileFingerprint(),
-                            const SizedBox(height: _profileCardSectionSpacing),
-                            KeyedSubtree(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: profileSectionPadding,
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 500.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const _ProfileStatusHeader(),
+                                const SizedBox(
+                                  height: _profileCardSectionSpacing,
+                                ),
+                                card,
+                                const SizedBox(
+                                  height: _profileCardSectionSpacing,
+                                ),
+                                const ProfileFingerprint(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: context.colorScheme.border,
+                      ),
+                      Padding(
+                        padding: profileSectionPadding,
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 500.0),
+                            child: KeyedSubtree(
                               key: jumpMenuKey,
                               child: _SettingsJumpMenu(
                                 anchors: settingsAnchors,
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: _profileIndicatorSpacing),
@@ -418,6 +441,12 @@ class _ProfileMainView extends StatelessWidget {
                   const SizedBox(height: _profileCardSectionSpacing),
                   const ProfileFingerprint(),
                   const SizedBox(height: _profileCardSectionSpacing),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: context.colorScheme.border,
+                  ),
+                  const SizedBox(height: _profileCardSectionSpacing),
                   _SettingsJumpMenu(
                     anchors: settingsAnchors,
                     textAlign: TextAlign.right,
@@ -497,7 +526,7 @@ class _ProfileCardSection extends StatelessWidget {
                         extra: locate,
                       ),
                     ),
-                    const SizedBox(width: _profileHeaderSpacing),
+                    const SizedBox(width: _profileHeaderSpacing + 4),
                     Flexible(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -514,13 +543,15 @@ class _ProfileCardSection extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: _profileHeaderTextSpacing),
+                          const SizedBox(
+                            height: _profileHeaderTextSpacing / 2,
+                          ),
                           SelectionArea(
                             child: Wrap(
                               alignment: WrapAlignment.start,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               spacing: 0,
-                              runSpacing: _profileHeaderWrapSpacing,
+                              runSpacing: _profileHeaderWrapSpacing / 2,
                               children: [
                                 AxiTooltip(
                                   builder: (_) => ConstrainedBox(
@@ -666,7 +697,7 @@ class _EditableAvatarButton extends StatefulWidget {
 
 class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
   bool _hovered = false;
-  static const _size = 74.0;
+  static const _size = 59.2;
 
   @override
   Widget build(BuildContext context) {
@@ -724,6 +755,7 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
 class _SettingsPanel extends StatelessWidget {
   const _SettingsPanel({
     required this.showTopDivider,
+    required this.isWideLayout,
     required this.applicationVersion,
     required this.anchors,
     required this.locate,
@@ -731,6 +763,7 @@ class _SettingsPanel extends StatelessWidget {
   });
 
   final bool showTopDivider;
+  final bool isWideLayout;
   final String? applicationVersion;
   final SettingsSectionAnchors anchors;
   final T Function<T>() locate;
@@ -743,6 +776,7 @@ class _SettingsPanel extends StatelessWidget {
       children: [
         SettingsControls(
           showDivider: showTopDivider,
+          fullWidthDividers: isWideLayout,
           anchors: anchors,
           locate: locate,
           onChangePassword: () => onNavigate(_ProfileRoute.changePassword),
@@ -858,6 +892,7 @@ class _SettingsJumpLink extends StatelessWidget {
       TextAlign.center => MainAxisAlignment.center,
       _ => MainAxisAlignment.start,
     };
+    final jumpColor = colors.mutedForeground;
     return SizedBox(
       width: double.infinity,
       child: ShadButton.ghost(
@@ -865,14 +900,14 @@ class _SettingsJumpLink extends StatelessWidget {
         width: double.infinity,
         expands: true,
         mainAxisAlignment: alignment,
-        foregroundColor: colors.foreground,
-        hoverForegroundColor: colors.foreground,
+        foregroundColor: jumpColor,
+        hoverForegroundColor: jumpColor,
         onPressed: onTap,
         child: Text(
           label,
           textAlign: textAlign,
           style: context.textTheme.small.copyWith(
-            color: colors.foreground,
+            color: jumpColor,
           ),
         ),
       ).withTapBounce(),

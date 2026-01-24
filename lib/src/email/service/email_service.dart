@@ -863,6 +863,7 @@ class EmailService {
     required String jid,
     required String displayName,
     required String password,
+    bool persistCredentials = true,
   }) async {
     await _ensureReady();
     final scope = _scopeForJid(jid);
@@ -874,10 +875,12 @@ class EmailService {
     }
     final deltaAccountId =
         await _ensureEmailAccountSession(createIfMissing: false);
-    await _credentialStore.write(
-      key: _passwordKeyForScope(scope),
-      value: password,
-    );
+    if (persistCredentials) {
+      await _credentialStore.write(
+        key: _passwordKeyForScope(scope),
+        value: password,
+      );
+    }
     final connectionOverrides = _buildConnectionConfig(address);
     await _transport.configureAccount(
       address: address,
@@ -886,10 +889,12 @@ class EmailService {
       additional: connectionOverrides,
       accountId: deltaAccountId,
     );
-    await _credentialStore.write(
-      key: _provisionedKeyForScope(scope),
-      value: _credentialTrueValue,
-    );
+    if (persistCredentials) {
+      await _credentialStore.write(
+        key: _provisionedKeyForScope(scope),
+        value: _credentialTrueValue,
+      );
+    }
     _resetImapCapabilities();
     await _refreshImapCapabilities(force: true);
     await _hydrateAccountAddress(

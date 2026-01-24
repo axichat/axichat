@@ -52,6 +52,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
           password: _newPasswordTextController.value.text,
           password2: _newPassword2TextController.value.text,
         );
+    if (!context.mounted) return;
     _passwordTextController.clear();
     _newPasswordTextController.clear();
     _newPassword2TextController.clear();
@@ -61,7 +62,6 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
-        final l10n = context.l10n;
         final loading = state is AuthenticationPasswordChangeInProgress;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
@@ -74,12 +74,15 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(ChangePasswordForm.title(l10n), style: context.textTheme.h3),
+              Text(
+                ChangePasswordForm.title(context.l10n),
+                style: context.textTheme.h3,
+              ),
               state is AuthenticationPasswordChangeSuccess
                   ? Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: Text(
-                        state.successText,
+                        state.message.resolve(context.l10n),
                         textAlign: TextAlign.center,
                       ),
                     )
@@ -87,7 +90,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                       ? Padding(
                           padding: const EdgeInsets.all(10.0),
                           child: Text(
-                            state.errorText,
+                            state.message.resolve(context.l10n),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: context.colorScheme.destructive,
@@ -98,7 +101,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordCurrentPlaceholder,
+                  placeholder: context.l10n.authPasswordCurrentPlaceholder,
                   enabled: !loading,
                   controller: _passwordTextController,
                 ),
@@ -106,7 +109,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordNewPlaceholder,
+                  placeholder: context.l10n.authPasswordNewPlaceholder,
                   enabled: !loading,
                   controller: _newPasswordTextController,
                 ),
@@ -114,13 +117,15 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordConfirmNewPlaceholder,
+                  placeholder: context.l10n.authPasswordConfirmNewPlaceholder,
                   enabled: !loading,
                   controller: _newPassword2TextController,
                   validator: (value) {
                     final newPassword = _newPasswordTextController.text;
-                    if (newPassword.isNotEmpty && value != newPassword) {
-                      return l10n.authPasswordsMismatch;
+                    if (value != null &&
+                        newPassword.isNotEmpty &&
+                        value != newPassword) {
+                      return context.l10n.authPasswordsMismatch;
                     }
                     return null;
                   },
@@ -132,7 +137,8 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   final spinner = AxiProgressIndicator(
                     dimension: changePasswordSpinnerDimension,
                     color: context.colorScheme.primaryForeground,
-                    semanticsLabel: l10n.authChangePasswordProgressLabel,
+                    semanticsLabel:
+                        context.l10n.authChangePasswordProgressLabel,
                   );
                   final spinnerSlot = ButtonSpinnerSlot(
                     isVisible: loading,
@@ -146,7 +152,10 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     onPressed: () => _onPressed(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: [spinnerSlot, Text(l10n.commonContinue)],
+                      children: [
+                        spinnerSlot,
+                        Text(context.l10n.commonContinue),
+                      ],
                     ),
                   ).withTapBounce(enabled: !loading);
                 },

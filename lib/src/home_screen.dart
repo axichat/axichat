@@ -507,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 showPrimary: !showChatCalendar,
                                 centerSecondary: false,
                                 centerPrimary: false,
-                                animatePaneChanges: !env.isDesktopPlatform,
+                                animatePaneChanges: true,
                                 primaryAlignment: Alignment.topLeft,
                                 secondaryAlignment: Alignment.topLeft,
                                 secondaryPadding: secondaryPanePadding,

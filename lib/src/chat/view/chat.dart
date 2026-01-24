@@ -4982,6 +4982,12 @@ class _ChatState extends State<Chat> {
                                                     _composerHasContent,
                                                 composerError:
                                                     state.composerError,
+                                                onComposerErrorCleared: () =>
+                                                    context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          const ChatComposerErrorCleared(),
+                                                        ),
                                                 showAttachmentWarning:
                                                     showAttachmentWarning,
                                                 retryReport: retryReport,
@@ -10911,12 +10917,14 @@ class _ComposerNotice extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.onDismiss,
   });
 
   final _ComposerNoticeType type;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -10962,6 +10970,23 @@ class _ComposerNotice extends StatelessWidget {
               style: TextButton.styleFrom(foregroundColor: foreground),
               child: Text(actionLabel!),
             ),
+          if (onDismiss != null)
+            Builder(
+              builder: (context) {
+                const double dismissIconSize = 16;
+                const double dismissButtonSize = 28;
+                const double dismissTapTargetSize = 32;
+                return AxiIconButton.ghost(
+                  iconData: LucideIcons.x,
+                  tooltip: context.l10n.commonClose,
+                  onPressed: onDismiss,
+                  color: foreground,
+                  iconSize: dismissIconSize,
+                  buttonSize: dismissButtonSize,
+                  tapTargetSize: dismissTapTargetSize,
+                );
+              },
+            ),
         ],
       ),
     );
@@ -10994,6 +11019,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.buildComposerAccessories,
     required this.onSend,
     this.composerError,
+    this.onComposerErrorCleared,
     this.showAttachmentWarning = false,
     this.retryReport,
     this.retryShareId,
@@ -11026,6 +11052,7 @@ class _ChatComposerSection extends StatelessWidget {
       buildComposerAccessories;
   final VoidCallback onSend;
   final String? composerError;
+  final VoidCallback? onComposerErrorCleared;
   final bool showAttachmentWarning;
   final FanOutSendReport? retryReport;
   final String? retryShareId;
@@ -11135,6 +11162,7 @@ class _ChatComposerSection extends StatelessWidget {
         _ComposerNotice(
           type: _ComposerNoticeType.error,
           message: composerError!,
+          onDismiss: onComposerErrorCleared,
         ),
       );
     }

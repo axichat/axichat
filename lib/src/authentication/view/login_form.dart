@@ -73,7 +73,6 @@ class _LoginFormState extends State<LoginForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
-        final l10n = context.l10n;
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         final animationDuration =
@@ -87,8 +86,9 @@ class _LoginFormState extends State<LoginForm> {
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const errorMessagePadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
-        final errorText =
-            state is AuthenticationFailure ? state.errorText : null;
+        final errorText = state is AuthenticationFailure
+            ? state.message.resolve(context.l10n)
+            : null;
         return Form(
           child: Align(
             alignment: Alignment.topCenter,
@@ -100,7 +100,7 @@ class _LoginFormState extends State<LoginForm> {
                   Padding(
                     padding: errorPadding,
                     child: Text(
-                      l10n.authLogin,
+                      context.l10n.authLogin,
                       style: context.modalHeaderTextStyle,
                     ),
                   ),
@@ -111,7 +111,7 @@ class _LoginFormState extends State<LoginForm> {
                         : Semantics(
                             liveRegion: true,
                             container: true,
-                            label: l10n.signupErrorPrefix(errorText),
+                            label: context.l10n.signupErrorPrefix(errorText),
                             child: Text(
                               errorText,
                               style: TextStyle(
@@ -123,15 +123,15 @@ class _LoginFormState extends State<LoginForm> {
                   Padding(
                     padding: horizontalPadding,
                     child: NotificationRequest(
-                      notificationService: context.read<NotificationService>(),
-                      capability: context.read<Capability>(),
+                      notificationService: context.watch<NotificationService>(),
+                      capability: context.watch<Capability>(),
                     ),
                   ),
                   const SizedBox.square(dimension: 16.0),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
-                      label: l10n.authUsername,
+                      label: context.l10n.authUsername,
                       textField: true,
                       child: AxiTextFormField(
                         key: loginUsernameKey,
@@ -142,13 +142,13 @@ class _LoginFormState extends State<LoginForm> {
                           ),
                         ],
                         keyboardType: TextInputType.emailAddress,
-                        placeholder: Text(l10n.authUsername),
+                        placeholder: Text(context.l10n.authUsername),
                         enabled: !loading,
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
                         validator: (text) {
-                          if (text.isEmpty) {
-                            return l10n.authUsernameRequired;
+                          if (text == null || text.isEmpty) {
+                            return context.l10n.authUsernameRequired;
                           }
                           return null;
                         },
@@ -172,7 +172,7 @@ class _LoginFormState extends State<LoginForm> {
                       key: _rememberMeFieldKey,
                       enabled: !loading,
                       initialValue: rememberMe,
-                      inputLabel: Text(l10n.authRememberMeLabel),
+                      inputLabel: Text(context.l10n.authRememberMeLabel),
                       onChanged: (value) async {
                         setState(() {
                           rememberMe = value;
@@ -191,7 +191,7 @@ class _LoginFormState extends State<LoginForm> {
                         final spinner = AxiProgressIndicator(
                           dimension: loginSpinnerDimension,
                           color: context.colorScheme.primaryForeground,
-                          semanticsLabel: l10n.authLoginPending,
+                          semanticsLabel: context.l10n.authLoginPending,
                         );
                         final spinnerSlot = ButtonSpinnerSlot(
                           isVisible: loading,
@@ -206,7 +206,10 @@ class _LoginFormState extends State<LoginForm> {
                           onPressed: () => _onPressed(context),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: [spinnerSlot, Text(l10n.authLogin)],
+                            children: [
+                              spinnerSlot,
+                              Text(context.l10n.authLogin),
+                            ],
                           ),
                         ).withTapBounce(enabled: !loading);
                         return AxiAnimatedSize(

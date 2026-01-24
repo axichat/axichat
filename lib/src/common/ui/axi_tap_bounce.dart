@@ -37,14 +37,6 @@ class AxiTapBounce extends StatefulWidget {
 class _AxiTapBounceState extends State<AxiTapBounce> {
   bool _pressed = false;
 
-  bool _hasPrimaryButton(TapDownDetails details) {
-    if (details.kind != PointerDeviceKind.mouse &&
-        details.kind != PointerDeviceKind.trackpad) {
-      return true;
-    }
-    return details.buttons == kPrimaryButton;
-  }
-
   void _setPressed(bool value) {
     if (_pressed == value) return;
     if (!mounted) return;
@@ -66,9 +58,6 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
 
   void _handleTapDown(TapDownDetails details) {
     if (!_shouldHandleTapKind(details.kind)) {
-      return;
-    }
-    if (!_hasPrimaryButton(details)) {
       return;
     }
     _setPressed(true);

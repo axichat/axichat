@@ -113,7 +113,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   int _parsePort(String value, int fallback) =>
       int.tryParse(value.trim()) ?? fallback;
 
-  EndpointConfig _buildConfig(EndpointConfig current) {
+  EndpointConfig _resolveConfig(EndpointConfig current) {
     final domain = _domainController.text.trim().isEmpty
         ? current.domain
         : _domainController.text.trim();
@@ -164,7 +164,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   }
 
   Future<void> _save() async {
-    final updated = _buildConfig(
+    final updated = _resolveConfig(
       context.read<EndpointConfigCubit>().state,
     );
     await context.read<EndpointConfigCubit>().updateConfig(updated);
@@ -182,7 +182,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final l10n = context.l10n;
     final placeholderStyle = textTheme.muted.copyWith(
       color: colors.mutedForeground,
     );
@@ -192,8 +191,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     );
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
-        title: Text(l10n.authCustomServerTitle),
-        subtitle: Text(l10n.authCustomServerDescription),
+        title: Text(context.l10n.authCustomServerTitle),
+        subtitle: Text(context.l10n.authCustomServerDescription),
         onClose: () => Navigator.of(context).maybePop(),
         padding: sheetPadding.copyWith(top: 16, bottom: 12),
       ),
@@ -204,7 +203,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           keyboardType: TextInputType.url,
           controller: _domainController,
           placeholder: Text(
-            l10n.authCustomServerDomainOrIp,
+            context.l10n.authCustomServerDomainOrIp,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
@@ -215,7 +214,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           children: [
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerXmppLabel,
+                label: context.l10n.authCustomServerXmppLabel,
                 value: _enableXmpp,
                 onChanged: (value) =>
                     setState(() => _enableXmpp = value ?? _enableXmpp),
@@ -224,7 +223,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerSmtpLabel,
+                label: context.l10n.authCustomServerSmtpLabel,
                 value: _enableSmtp,
                 onChanged: (value) =>
                     setState(() => _enableSmtp = value ?? _enableSmtp),
@@ -237,7 +236,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           children: [
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerUseDns,
+                label: context.l10n.authCustomServerUseDns,
                 value: _useDns,
                 onChanged: (value) => setState(() {
                   _useDns = value ?? _useDns;
@@ -251,7 +250,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerUseSrv,
+                label: context.l10n.authCustomServerUseSrv,
                 value: _useSrv,
                 enabled: _useDns,
                 onChanged: (value) =>
@@ -262,7 +261,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         ),
         const SizedBox(height: 12),
         _ToggleTile(
-          label: l10n.authCustomServerRequireDnssec,
+          label: context.l10n.authCustomServerRequireDnssec,
           value: _requireDnssec,
           enabled: _useDns,
           onChanged: (value) =>
@@ -279,7 +278,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._:-]')),
                 ],
                 placeholder: Text(
-                  l10n.authCustomServerXmppHostPlaceholder,
+                  context.l10n.authCustomServerXmppHostPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -295,7 +294,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
-                  l10n.authCustomServerPortPlaceholder,
+                  context.l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -313,7 +312,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 autocorrect: false,
                 keyboardType: TextInputType.url,
                 placeholder: Text(
-                  l10n.authCustomServerImapHostPlaceholder,
+                  context.l10n.authCustomServerImapHostPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -329,7 +328,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
-                  l10n.authCustomServerPortPlaceholder,
+                  context.l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -347,7 +346,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 autocorrect: false,
                 keyboardType: TextInputType.url,
                 placeholder: Text(
-                  l10n.authCustomServerSmtpHostPlaceholder,
+                  context.l10n.authCustomServerSmtpHostPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -363,7 +362,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
-                  l10n.authCustomServerPortPlaceholder,
+                  context.l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -381,7 +380,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             placeholder: Text(
-              l10n.authCustomServerApiPortPlaceholder,
+              context.l10n.authCustomServerApiPortPlaceholder,
               style: placeholderStyle,
             ),
             placeholderStyle: placeholderStyle,
@@ -394,7 +393,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           autocorrect: false,
           keyboardType: TextInputType.url,
           placeholder: Text(
-            l10n.authCustomServerEmailProvisioningUrlPlaceholder,
+            context.l10n.authCustomServerEmailProvisioningUrlPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
@@ -407,7 +406,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           keyboardType: TextInputType.visiblePassword,
           obscureText: _emailProvisioningTokenObscure,
           placeholder: Text(
-            l10n.authCustomServerEmailPublicTokenPlaceholder,
+            context.l10n.authCustomServerEmailPublicTokenPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
@@ -440,21 +439,21 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             Expanded(
               child: ShadButton.secondary(
                 onPressed: _reset,
-                child: Text(l10n.authCustomServerReset),
+                child: Text(context.l10n.authCustomServerReset),
               ).withTapBounce(),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: ShadButton(
                 onPressed: _save,
-                child: Text(l10n.commonSave),
+                child: Text(context.l10n.commonSave),
               ).withTapBounce(),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Text(
-          l10n.authCustomServerAdvancedHint,
+          context.l10n.authCustomServerAdvancedHint,
           style: textTheme.muted.copyWith(color: colors.mutedForeground),
         ),
       ],
@@ -469,10 +468,9 @@ class EndpointSuffix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     return Semantics(
       button: true,
-      label: l10n.authCustomServerOpenSettings,
+      label: context.l10n.authCustomServerOpenSettings,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => EndpointConfigSheet.show(context),
