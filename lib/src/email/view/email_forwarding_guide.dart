@@ -110,6 +110,7 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    const ghostBackgroundOpacity = 0.6;
     const horizontalInset = _guideItemSpacing * 2;
     const verticalInset = _guideItemSpacing / 2;
     return Padding(
@@ -120,27 +121,33 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
       child: ClipRRect(
         borderRadius: context.radius,
         child: ColoredBox(
-          color: colors.card,
+          color: colors.secondary.withValues(alpha: ghostBackgroundOpacity),
           child: SizedBox(
             width: double.infinity,
             child: ShadButton.ghost(
               size: ShadButtonSize.sm,
               onPressed: () async => await _showGuideDialog(context),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.mail, color: colors.foreground),
-                  const SizedBox(width: _guideItemSpacing),
-                  Expanded(
-                    child: Text(
-                      context.l10n.emailForwardingGuideTitle,
-                      style: context.textTheme.small.copyWith(
-                        color: colors.foreground,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    children: [
+                      Icon(LucideIcons.mail, color: colors.foreground),
+                      const SizedBox(width: _guideItemSpacing),
+                      Expanded(
+                        child: Text(
+                          context.l10n.emailForwardingGuideTitle,
+                          style: context.textTheme.small.copyWith(
+                            color: colors.foreground,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ).withTapBounce(),
           ),
         ),
       ),

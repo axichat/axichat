@@ -787,19 +787,27 @@ class _SettingsJumpLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
-        onPressed: onTap,
-        child: Align(
-          alignment: alignment,
-          child: Text(
-            label,
-            style: context.textTheme.muted.copyWith(
-              color: context.colorScheme.mutedForeground,
+    final colors = context.colorScheme;
+    const ghostBackgroundOpacity = 0.6;
+    return ClipRRect(
+      borderRadius: context.radius,
+      child: ColoredBox(
+        color: colors.secondary.withValues(alpha: ghostBackgroundOpacity),
+        child: SizedBox(
+          width: double.infinity,
+          child: ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: onTap,
+            child: Align(
+              alignment: alignment,
+              child: Text(
+                label,
+                style: context.textTheme.small.copyWith(
+                  color: colors.foreground,
+                ),
+              ),
             ),
-          ),
+          ).withTapBounce(),
         ),
       ),
     );
