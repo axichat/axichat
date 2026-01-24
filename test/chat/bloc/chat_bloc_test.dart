@@ -265,8 +265,18 @@ void main() {
     await _pumpBloc();
 
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
-      ComposerRecipient(target: FanOutTarget.chat(extraChat)),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
     ];
     bloc.add(
       ChatMessageSent(text: 'Team status update', recipients: recipients),
@@ -349,9 +359,17 @@ void main() {
     await _pumpBloc();
 
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
       ComposerRecipient(
-        target: FanOutTarget.address(address: 'Carol@Example.com'),
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.address(
+          address: 'Carol@Example.com',
+          shareSignatureEnabled: true,
+        ),
       ),
     ];
     bloc.add(ChatMessageSent(text: 'Hello world', recipients: recipients));
@@ -454,8 +472,18 @@ void main() {
     await _pumpBloc();
 
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
-      ComposerRecipient(target: FanOutTarget.chat(extraChat)),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
     ];
     bloc.add(ChatMessageSent(text: 'Weekly sync', recipients: recipients));
     await _pumpBloc();
@@ -539,8 +567,18 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
-      ComposerRecipient(target: FanOutTarget.chat(extraChat)),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
     ];
     bloc.add(ChatMessageSent(text: 'Initial send', recipients: recipients));
     await _pumpBloc();
@@ -591,7 +629,12 @@ void main() {
     await _pumpBloc();
 
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
     ];
     bloc.add(
         ChatAttachmentPicked(attachment: attachment, recipients: recipients));
@@ -664,7 +707,12 @@ void main() {
     await _pumpBloc();
 
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
     ];
     bloc.add(
         ChatAttachmentPicked(attachment: attachment, recipients: recipients));
@@ -773,7 +821,12 @@ void main() {
     await _pumpBloc();
 
     final recipients = <ComposerRecipient>[
-      ComposerRecipient(target: FanOutTarget.chat(emailChat)),
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: emailChat,
+          shareSignatureEnabled: true,
+        ),
+      ),
     ];
     bloc.add(ChatMessageSent(text: 'Offline draft', recipients: recipients));
     await _pumpBloc();

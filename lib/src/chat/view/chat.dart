@@ -1066,7 +1066,7 @@ class _ChatState extends State<Chat> {
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
   double _outsideTapDragThreshold() =>
-      MediaQuery.maybeOf(context)?.gestureSettings?.touchSlop ?? kTouchSlop;
+      MediaQuery.maybeOf(context)?.gestureSettings.touchSlop ?? kTouchSlop;
 
   void _armOutsideTapDismiss(PointerDownEvent event) {
     if (_selectedMessageId == null) return;
@@ -2361,7 +2361,10 @@ class _ChatState extends State<Chat> {
     final resolvedChat = chat;
     if (resolvedChat == null) return false;
     return (resolvedChat.attachmentAutoDownload ??
-            context.watch<SettingsCubit>().state.defaultChatAttachmentAutoDownload)
+            context
+                .watch<SettingsCubit>()
+                .state
+                .defaultChatAttachmentAutoDownload)
         .isAllowed;
   }
 
@@ -9504,7 +9507,10 @@ class _PinnedMessageTile extends StatelessWidget {
       final allowAttachment = !attachmentsBlockedForPin &&
           (allowAttachmentByTrust || allowAttachmentOnce);
       final chatAutoDownloadAllowed = (chat.attachmentAutoDownload ??
-              context.watch<SettingsCubit>().state.defaultChatAttachmentAutoDownload)
+              context
+                  .watch<SettingsCubit>()
+                  .state
+                  .defaultChatAttachmentAutoDownload)
           .isAllowed;
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
@@ -12490,7 +12496,10 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final enabled = (chat.attachmentAutoDownload ??
-            context.watch<SettingsCubit>().state.defaultChatAttachmentAutoDownload)
+            context
+                .watch<SettingsCubit>()
+                .state
+                .defaultChatAttachmentAutoDownload)
         .isAllowed;
     final hint = enabled
         ? l10n.chatAttachmentAutoDownloadHintOn

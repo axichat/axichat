@@ -529,13 +529,24 @@ class _DraftFormState extends State<DraftForm> {
             target: FanOutTarget.chat(
               chat: match,
               shareSignatureEnabled: match.shareSignatureEnabled ??
-                  context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+                  context
+                      .read<SettingsCubit>()
+                      .state
+                      .shareTokenSignatureEnabled,
             ),
           ),
         );
       } else {
         recipients.add(
-          ComposerRecipient(target: FanOutTarget.address(address: trimmed)),
+          ComposerRecipient(
+            target: FanOutTarget.address(
+              address: trimmed,
+              shareSignatureEnabled: context
+                  .read<SettingsCubit>()
+                  .state
+                  .shareTokenSignatureEnabled,
+            ),
+          ),
         );
       }
     }

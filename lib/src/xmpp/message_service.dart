@@ -4333,12 +4333,6 @@ mixin MessageService
       const fallback = _PeerCapabilities.empty;
       _capabilityCache[jid] = fallback;
       await _persistCapabilityCache();
-      await _dbOp<XmppDatabase>(
-        (db) => db.markChatMarkerResponsive(
-          jid: jid,
-          responsive: fallback.supportsMarkers,
-        ),
-      );
       return fallback;
     }
 
@@ -4351,13 +4345,6 @@ mixin MessageService
 
     _capabilityCache[jid] = capabilities;
     await _persistCapabilityCache();
-
-    await _dbOp<XmppDatabase>(
-      (db) => db.markChatMarkerResponsive(
-        jid: jid,
-        responsive: capabilities.supportsMarkers,
-      ),
-    );
 
     return capabilities;
   }

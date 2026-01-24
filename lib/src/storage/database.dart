@@ -64,7 +64,7 @@ const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 const int _messageStatusSyncEnvelopeVersion = 1;
 const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeIdKey = 'id';
-const int _pinnedMessagesSchemaVersion = 27;
+const int _pinnedMessagesSchemaVersion = 28;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
@@ -488,15 +488,9 @@ abstract interface class XmppDatabase implements Database {
 
   Future<RosterItem?> getRosterItem(String jid);
 
-  Future<void> saveRosterItem({
-    required RosterItem item,
-    required AttachmentAutoDownload attachmentAutoDownload,
-  });
+  Future<void> saveRosterItem(RosterItem item);
 
-  Future<void> saveRosterItems({
-    required List<RosterItem> items,
-    required AttachmentAutoDownload attachmentAutoDownload,
-  });
+  Future<void> saveRosterItems(List<RosterItem> items);
 
   Future<void> updateRosterItem(RosterItem item);
 
@@ -1518,6 +1512,9 @@ WHERE delta_chat_id IS NOT NULL
         }
         if (from < 27) {
           await m.addColumn(drafts, drafts.quotingStanzaId);
+        }
+        if (from < 28) {
+          await _rebuildChatsTable(m);
         }
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
@@ -4020,37 +4017,21 @@ $limitClause
   }
 
   @override
-  Future<void> saveRosterItem({
-    required RosterItem item,
-    required AttachmentAutoDownload attachmentAutoDownload,
-  }) async {
+  Future<void> saveRosterItem(RosterItem item) async {
     _log.info('Saving roster item');
     await transaction(() async {
-      await createChat(
-        Chat.fromJid(
-          item.jid,
-          attachmentAutoDownload: attachmentAutoDownload,
-        ),
-      );
+      await createChat(Chat.fromJid(item.jid));
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
   }
 
   @override
-  Future<void> saveRosterItems({
-    required List<RosterItem> items,
-    required AttachmentAutoDownload attachmentAutoDownload,
-  }) async {
+  Future<void> saveRosterItems(List<RosterItem> items) async {
     await transaction(() async {
       for (final item in items) {
         _log.info('Saving roster item');
-        await createChat(
-          Chat.fromJid(
-            item.jid,
-            attachmentAutoDownload: attachmentAutoDownload,
-          ),
-        );
+        await createChat(Chat.fromJid(item.jid));
         await rosterAccessor.insertOrUpdateOne(item);
         await invitesAccessor.deleteOne(item.jid);
       }
@@ -4531,6 +4512,84 @@ ON CONFLICT(address) DO UPDATE SET
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
     }
+  }
+
+  Future<void> _rebuildChatsTable(Migrator m) async {
+    const tableName = 'chats';
+    const tempTableName = '${tableName}_old';
+    const columnNames = <String>[
+      'jid',
+      'title',
+      'type',
+      'my_nickname',
+      'avatar_path',
+      'avatar_hash',
+      'last_message',
+      'alert',
+      'last_change_timestamp',
+      'unread_count',
+      'open',
+      'muted',
+      'notification_preview_setting',
+      'favorited',
+      'archived',
+      'hidden',
+      'spam',
+      'spam_updated_at',
+      'marker_responsive',
+      'share_signature_enabled',
+      'attachment_auto_download',
+      'encryption_protocol',
+      'contact_i_d',
+      'contact_display_name',
+      'contact_avatar_path',
+      'contact_avatar_hash',
+      'contact_jid',
+      'chat_state',
+      'delta_chat_id',
+      'email_address',
+      'email_from_address',
+    ];
+    final columns = columnNames.join(', ');
+    await customStatement('ALTER TABLE $tableName RENAME TO $tempTableName');
+    await m.createTable(chats);
+    await customStatement('''
+INSERT INTO $tableName ($columns)
+SELECT
+  jid,
+  title,
+  type,
+  my_nickname,
+  avatar_path,
+  avatar_hash,
+  last_message,
+  alert,
+  last_change_timestamp,
+  unread_count,
+  open,
+  muted,
+  NULL AS notification_preview_setting,
+  favorited,
+  archived,
+  hidden,
+  spam,
+  spam_updated_at,
+  NULL AS marker_responsive,
+  NULL AS share_signature_enabled,
+  NULL AS attachment_auto_download,
+  encryption_protocol,
+  contact_i_d,
+  contact_display_name,
+  contact_avatar_path,
+  contact_avatar_hash,
+  contact_jid,
+  chat_state,
+  delta_chat_id,
+  email_address,
+  email_from_address
+FROM $tempTableName
+''');
+    await customStatement('DROP TABLE $tempTableName');
   }
 
   Future<void> _rebuildMessageCopiesTable(Migrator m) async {

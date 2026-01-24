@@ -546,8 +546,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     required NotificationPreviewSetting? setting,
   }) async {
     await _dbOp<XmppDatabase>(
-      (db) =>
-          db.setChatNotificationPreviewSetting(jid: jid, setting: setting),
+      (db) => db.setChatNotificationPreviewSetting(jid: jid, setting: setting),
     );
   }
 
@@ -758,7 +757,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
               favorited: pinned,
               archived: archived,
               contactJid: peerJid,
-              attachmentAutoDownload: defaultChatAttachmentAutoDownload,
             ),
           );
           continue;

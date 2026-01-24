@@ -38,7 +38,9 @@ void main() {
       type: ChatType.chat,
       lastChangeTimestamp: DateTime.now(),
     );
-    final recipient = ComposerRecipient(target: FanOutTarget.chat(chat));
+    final recipient = ComposerRecipient(
+      target: FanOutTarget.chat(chat: chat, shareSignatureEnabled: true),
+    );
 
     await tester.pumpWidget(
       _wrapWithTheme(
@@ -62,23 +64,25 @@ void main() {
     final recipients = [
       ComposerRecipient(
         target: FanOutTarget.chat(
-          Chat(
+          chat: Chat(
             jid: 'dc-1@delta.chat',
             title: 'Pinned',
             type: ChatType.chat,
             lastChangeTimestamp: DateTime.now(),
           ),
+          shareSignatureEnabled: true,
         ),
         pinned: true,
       ),
       ComposerRecipient(
         target: FanOutTarget.chat(
-          Chat(
+          chat: Chat(
             jid: 'dc-2@delta.chat',
             title: 'Removable',
             type: ChatType.chat,
             lastChangeTimestamp: DateTime.now(),
           ),
+          shareSignatureEnabled: true,
         ),
       ),
     ];
@@ -105,7 +109,10 @@ void main() {
     tester,
   ) async {
     final recipient = ComposerRecipient(
-      target: FanOutTarget.address(address: 'CaseSensitive@Example.com'),
+      target: FanOutTarget.address(
+        address: 'CaseSensitive@Example.com',
+        shareSignatureEnabled: true,
+      ),
     );
     await tester.pumpWidget(
       _wrapWithTheme(

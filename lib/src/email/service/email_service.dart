@@ -380,6 +380,12 @@ class EmailService {
     _transport.updateMessageStorageMode(mode);
   }
 
+  void updateDefaultChatAttachmentAutoDownload(
+    AttachmentAutoDownload value,
+  ) {
+    _transport.updateDefaultChatAttachmentAutoDownload(value);
+  }
+
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
 
@@ -1478,10 +1484,7 @@ class EmailService {
     final String resolvedTitle =
         displayName?.isNotEmpty == true ? displayName! : resolvedAddress;
     final String resolvedDisplayName = resolvedTitle;
-    return Chat.fromJid(
-      resolvedAddress,
-      attachmentAutoDownload: AttachmentAutoDownload.allowed,
-    ).copyWith(
+    return Chat.fromJid(resolvedAddress).copyWith(
       title: resolvedTitle,
       contactDisplayName: resolvedDisplayName,
       emailAddress: resolvedAddress,
