@@ -12,7 +12,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/axi_input.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -92,23 +91,22 @@ class AttachmentGalleryPanel extends StatelessWidget {
     if (chat == null) {
       return const SizedBox.shrink();
     }
-    final Chat resolvedChat = chat!;
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: context.read<XmppService>(),
         emailService: context.read<EmailService>(),
-        chatJid: resolvedChat.jid,
-        chatOverride: resolvedChat,
+        chatJid: chat!.jid,
+        chatOverride: chat!,
         showChatLabel: false,
       ),
       child: AxiSheetScaffold(
         header: AxiSheetHeader(
           title: Text(title),
-          subtitle: Text(resolvedChat.displayName),
+          subtitle: Text(chat!.displayName),
           onClose: onClose,
         ),
         body: AttachmentGalleryView(
-          chatOverride: resolvedChat,
+          chatOverride: chat!,
           showChatLabel: false,
         ),
       ),
@@ -519,26 +517,15 @@ class AttachmentGallerySearchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final trimmedQuery = searchController.text.trim();
     const double controlSpacing = 8.0;
-    const double clearButtonSize = 28.0;
-    const double clearIconSize = 14.0;
     return Row(
       children: [
         Expanded(
-          child: AxiInput(
+          child: SearchInputField(
             controller: searchController,
             placeholder: Text(l10n.commonSearch),
-            trailing: trimmedQuery.isEmpty
-                ? null
-                : AxiIconButton.ghost(
-                    iconData: LucideIcons.x,
-                    tooltip: l10n.commonClear,
-                    buttonSize: clearButtonSize,
-                    tapTargetSize: clearButtonSize,
-                    iconSize: clearIconSize,
-                    onPressed: onClearSearch,
-                  ),
+            clearTooltip: l10n.commonClear,
+            onClear: onClearSearch,
           ),
         ),
         const SizedBox(width: controlSpacing),
@@ -616,19 +603,22 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double minSelectWidth = math.min(180.0, constraints.maxWidth);
+        final double maxSelectWidth = math.min(260.0, constraints.maxWidth);
+        final BoxConstraints selectConstraints = BoxConstraints(
+          minWidth: minSelectWidth,
+          maxWidth: maxSelectWidth,
+        );
         final sortSelect = AttachmentGallerySelect<AttachmentGallerySortOption>(
           value: sortOption,
           onChanged: onSortChanged,
           labelBuilder: (value) => value.label(l10n),
           options: AttachmentGallerySortOption.values,
-          minWidth: minSelectWidth,
         );
         final typeSelect = AttachmentGallerySelect<AttachmentGalleryTypeFilter>(
           value: typeFilter,
           onChanged: onTypeFilterChanged,
           labelBuilder: (value) => value.label(l10n),
           options: AttachmentGalleryTypeFilter.values,
-          minWidth: minSelectWidth,
         );
         final sourceSelect =
             AttachmentGallerySelect<AttachmentGallerySourceFilter>(
@@ -636,12 +626,15 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
           onChanged: onSourceFilterChanged,
           labelBuilder: (value) => value.label(l10n),
           options: AttachmentGallerySourceFilter.values,
-          minWidth: minSelectWidth,
         );
         return Wrap(
           spacing: controlSpacing,
           runSpacing: controlRowSpacing,
-          children: [sortSelect, typeSelect, sourceSelect],
+          children: [
+            ConstrainedBox(constraints: selectConstraints, child: sortSelect),
+            ConstrainedBox(constraints: selectConstraints, child: typeSelect),
+            ConstrainedBox(constraints: selectConstraints, child: sourceSelect),
+          ],
         );
       },
     );
@@ -655,14 +648,12 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
     required this.onChanged,
     required this.options,
     required this.labelBuilder,
-    this.minWidth,
   });
 
   final T value;
   final ValueChanged<T> onChanged;
   final List<T> options;
   final String Function(T) labelBuilder;
-  final double? minWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -672,7 +663,6 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
         if (value == null) return;
         onChanged(value);
       },
-      minWidth: minWidth,
       shrinkWrap: true,
       options: options
           .map(

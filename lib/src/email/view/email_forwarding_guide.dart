@@ -117,32 +117,26 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
         horizontal: horizontalInset,
         vertical: verticalInset,
       ),
-      child: ClipRRect(
-        borderRadius: context.radius,
-        child: ColoredBox(
-          color: colors.card,
-          child: SizedBox(
-            width: double.infinity,
-            child: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: () async => await _showGuideDialog(context),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.mail, color: colors.foreground),
-                  const SizedBox(width: _guideItemSpacing),
-                  Expanded(
-                    child: Text(
-                      context.l10n.emailForwardingGuideTitle,
-                      style: context.textTheme.small.copyWith(
-                        color: colors.foreground,
-                      ),
-                    ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: () async => await _showGuideDialog(context),
+          child: Row(
+            children: [
+              Icon(LucideIcons.mail, color: colors.foreground),
+              const SizedBox(width: _guideItemSpacing),
+              Expanded(
+                child: Text(
+                  context.l10n.emailForwardingGuideTitle,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.foreground,
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ),
+        ).withTapBounce(),
       ),
     );
   }

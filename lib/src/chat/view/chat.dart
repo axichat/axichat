@@ -452,21 +452,13 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
               Row(
                 children: [
                   Expanded(
-                    child: AxiTextInput(
+                    child: SearchInputField(
                       controller: _controller,
                       focusNode: _focusNode,
                       placeholder: Text(l10n.chatSearchMessages),
+                      clearTooltip: l10n.commonClear,
+                      onClear: _controller.clear,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  AxiIconButton(
-                    iconData: LucideIcons.x,
-                    tooltip: l10n.commonClear,
-                    onPressed: _controller.text.isEmpty
-                        ? null
-                        : () {
-                            _controller.clear();
-                          },
                   ),
                   const SizedBox(width: 8),
                   ShadButton.ghost(
@@ -12769,12 +12761,9 @@ class _ReplyingToPreviewText extends StatelessWidget {
       ],
     );
     final quoteSpan = TextSpan(text: quotedPreview, style: baseStyle);
-    final textDirection = Directionality.of(context);
-    final textAlign =
-        textDirection == TextDirection.rtl ? TextAlign.end : TextAlign.start;
-    final crossAxisAlignment = textDirection == TextDirection.rtl
-        ? CrossAxisAlignment.end
-        : CrossAxisAlignment.start;
+    final textAlign = isSelf ? TextAlign.end : TextAlign.start;
+    final crossAxisAlignment =
+        isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScaler =
