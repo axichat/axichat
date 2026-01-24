@@ -103,7 +103,7 @@ class SettingsControls extends StatelessWidget {
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             anchors?.accountKey == null
                 ? _SettingsSectionHeader(
@@ -723,8 +723,11 @@ class _SettingsActionButton extends StatelessWidget {
     final colors = context.colorScheme;
     final foregroundColor =
         destructive ? colors.destructive : colors.foreground;
+    final double fallbackFontSize = context.textTheme.small.fontSize ?? 14;
+    const double iconSizeScale = 1.1;
+    final double iconSize = fallbackFontSize * iconSizeScale;
     final verticalInset = _compactTilePadding.vertical / 2;
-    final iconSpacing = _compactTilePadding.horizontal / 2;
+    final double iconSpacing = _compactTilePadding.horizontal / 2;
     return Padding(
       padding: EdgeInsets.symmetric(vertical: verticalInset),
       child: SizedBox(
@@ -736,20 +739,34 @@ class _SettingsActionButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           foregroundColor: foregroundColor,
           hoverForegroundColor: foregroundColor,
-          gap: iconSpacing,
           padding: EdgeInsets.symmetric(
             horizontal: _settingsSectionHeaderPadding.horizontal,
             vertical: _compactTilePadding.vertical,
           ),
           onPressed: onPressed,
-          leading:
-              iconData == null ? null : Icon(iconData, color: foregroundColor),
-          child: Text(
-            label,
-            textAlign: TextAlign.start,
-            style: context.textTheme.small.copyWith(
-              color: foregroundColor,
-            ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              if (iconData != null)
+                Baseline(
+                  baseline: fallbackFontSize,
+                  baselineType: TextBaseline.alphabetic,
+                  child: Icon(
+                    iconData,
+                    color: foregroundColor,
+                    size: iconSize,
+                  ),
+                ),
+              if (iconData != null) SizedBox(width: iconSpacing),
+              Text(
+                label,
+                textAlign: TextAlign.start,
+                style: context.textTheme.small.copyWith(
+                  color: foregroundColor,
+                ),
+              ),
+            ],
           ),
         ).withTapBounce(enabled: onPressed != null),
       ),

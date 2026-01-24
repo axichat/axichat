@@ -28,6 +28,7 @@ import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -104,9 +105,11 @@ class _ProfileBodyState extends State<_ProfileBody> {
   String? _applicationVersion;
 
   var _profileRoute = _ProfileRoute.main;
+  final GlobalKey _profileHeaderKey = GlobalKey();
   final ScrollController _profileScrollController = ScrollController();
   final ScrollController _settingsScrollController = ScrollController();
-  final GlobalKey _jumpMenuKey = GlobalKey();
+  final ValueNotifier<double> _profileScrollOffset = ValueNotifier<double>(0);
+  final ValueNotifier<double> _settingsScrollOffset = ValueNotifier<double>(0);
   final SettingsSectionAnchors _settingsAnchors = SettingsSectionAnchors(
     accountKey: GlobalKey(),
     dataKey: GlobalKey(),
@@ -152,7 +155,15 @@ class _ProfileBodyState extends State<_ProfileBody> {
   void dispose() {
     _settingsScrollController.dispose();
     _profileScrollController.dispose();
+    _profileScrollOffset.dispose();
+    _settingsScrollOffset.dispose();
     super.dispose();
+  }
+
+  double _resolveSettingsBaseOffset() {
+    final double headerHeight =
+        _profileHeaderKey.currentContext?.size?.height ?? 0;
+    return headerHeight + _profileIndicatorSpacing;
   }
 
   @override
@@ -236,7 +247,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       settingsAnchors: _settingsAnchors,
                       settingsScrollController: _settingsScrollController,
                       profileScrollController: _profileScrollController,
-                      jumpMenuKey: _jumpMenuKey,
+                      profileScrollOffset: _profileScrollOffset,
+                      settingsScrollOffset: _settingsScrollOffset,
+                      profileHeaderKey: _profileHeaderKey,
+                      baseOffsetResolver: _resolveSettingsBaseOffset,
                       locate: widget.locate,
                       onNavigate: _setRoute,
                     ),
@@ -263,7 +277,10 @@ class _ProfileMainView extends StatelessWidget {
     required this.settingsAnchors,
     required this.settingsScrollController,
     required this.profileScrollController,
-    required this.jumpMenuKey,
+    required this.profileScrollOffset,
+    required this.settingsScrollOffset,
+    required this.profileHeaderKey,
+    required this.baseOffsetResolver,
     required this.locate,
     required this.onNavigate,
   });
@@ -276,7 +293,10 @@ class _ProfileMainView extends StatelessWidget {
   final SettingsSectionAnchors settingsAnchors;
   final ScrollController settingsScrollController;
   final ScrollController profileScrollController;
-  final GlobalKey jumpMenuKey;
+  final ValueNotifier<double> profileScrollOffset;
+  final ValueNotifier<double> settingsScrollOffset;
+  final GlobalKey profileHeaderKey;
+  final double Function() baseOffsetResolver;
   final T Function<T>() locate;
   final ValueChanged<_ProfileRoute> onNavigate;
 
@@ -306,88 +326,91 @@ class _ProfileMainView extends StatelessWidget {
       );
       return Stack(
         children: [
-          SingleChildScrollView(
-            controller: profileScrollController,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ColoredBox(
-                  color: sidebarColor,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: profileSectionPadding,
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 500.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const _ProfileStatusHeader(),
-                                const SizedBox(
-                                  height: _profileCardSectionSpacing,
+          NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.axis == Axis.vertical) {
+                profileScrollOffset.value = notification.metrics.pixels;
+              }
+              return false;
+            },
+            child: SingleChildScrollView(
+              controller: profileScrollController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  KeyedSubtree(
+                    key: profileHeaderKey,
+                    child: ColoredBox(
+                      color: sidebarColor,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: profileSectionPadding,
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 500.0),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const _ProfileStatusHeader(),
+                                    const SizedBox(
+                                      height: _profileCardSectionSpacing,
+                                    ),
+                                    card,
+                                    const SizedBox(
+                                      height: _profileCardSectionSpacing,
+                                    ),
+                                    const ProfileFingerprint(),
+                                  ],
                                 ),
-                                card,
-                                const SizedBox(
-                                  height: _profileCardSectionSpacing,
-                                ),
-                                const ProfileFingerprint(),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: context.colorScheme.border,
-                      ),
-                      Padding(
-                        padding: profileSectionPadding,
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 500.0),
-                            child: KeyedSubtree(
-                              key: jumpMenuKey,
-                              child: _SettingsJumpMenu(
-                                anchors: settingsAnchors,
-                                textAlign: TextAlign.center,
                               ),
                             ),
                           ),
-                        ),
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: context.colorScheme.border,
+                          ),
+                          Padding(
+                            padding: profileSectionPadding,
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 500.0),
+                                child: _SettingsJumpMenu(
+                                  anchors: settingsAnchors,
+                                  scrollController: profileScrollController,
+                                  scrollOffsetListenable: profileScrollOffset,
+                                  baseOffsetResolver: baseOffsetResolver,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: _profileIndicatorSpacing),
-                settings,
-              ],
+                  const SizedBox(height: _profileIndicatorSpacing),
+                  settings,
+                ],
+              ),
             ),
           ),
           Positioned.fill(
             child: AnimatedBuilder(
               animation: profileScrollController,
               builder: (context, child) {
-                final RenderBox? jumpMenuBox = jumpMenuKey.currentContext
-                    ?.findRenderObject() as RenderBox?;
-                final RenderAbstractViewport? viewport = jumpMenuBox == null
-                    ? null
-                    : RenderAbstractViewport.of(jumpMenuBox);
-                final double? revealOffset =
-                    jumpMenuBox == null || viewport == null
-                        ? null
-                        : viewport.getOffsetToReveal(jumpMenuBox, 0.0).offset;
-                final double? jumpMenuBottom =
-                    jumpMenuBox == null || revealOffset == null
-                        ? null
-                        : revealOffset + jumpMenuBox.size.height;
-                if (jumpMenuBottom == null ||
+                final double headerHeight =
+                    profileHeaderKey.currentContext?.size?.height ?? 0;
+                if (headerHeight == 0 ||
                     !profileScrollController.hasClients ||
-                    profileScrollController.offset <= jumpMenuBottom) {
+                    profileScrollController.offset <= headerHeight) {
                   return const SizedBox.shrink();
                 }
                 return Align(
@@ -456,6 +479,9 @@ class _ProfileMainView extends StatelessWidget {
                   padding: sidebarPadding,
                   child: _SettingsJumpMenu(
                     anchors: settingsAnchors,
+                    scrollController: settingsScrollController,
+                    scrollOffsetListenable: settingsScrollOffset,
+                    baseOffsetResolver: () => 0,
                     textAlign: TextAlign.right,
                   ),
                 ),
@@ -466,17 +492,25 @@ class _ProfileMainView extends StatelessWidget {
         Container(width: 1, color: context.colorScheme.border),
         const SizedBox(width: _profileWideColumnSpacing),
         Expanded(
-          child: SingleChildScrollView(
-            controller: settingsScrollController,
-            padding: const EdgeInsets.only(
-              right: _profileWideHorizontalPadding,
-              top: _profileWideHeaderSpacing,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: _profileSettingsMinWidth,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.axis == Axis.vertical) {
+                settingsScrollOffset.value = notification.metrics.pixels;
+              }
+              return false;
+            },
+            child: SingleChildScrollView(
+              controller: settingsScrollController,
+              padding: const EdgeInsets.only(
+                right: _profileWideHorizontalPadding,
+                top: _profileWideHeaderSpacing,
               ),
-              child: settings,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: _profileSettingsMinWidth,
+                ),
+                child: settings,
+              ),
             ),
           ),
         ),
@@ -795,72 +829,100 @@ class _SettingsPanel extends StatelessWidget {
   }
 }
 
-class _SettingsJumpMenu extends StatelessWidget {
+class _SettingsJumpMenu extends StatefulWidget {
   const _SettingsJumpMenu({
     required this.anchors,
+    required this.scrollController,
+    required this.scrollOffsetListenable,
+    required this.baseOffsetResolver,
     required this.textAlign,
   });
 
   final SettingsSectionAnchors anchors;
+  final ScrollController scrollController;
+  final ValueListenable<double> scrollOffsetListenable;
+  final double Function() baseOffsetResolver;
   final TextAlign textAlign;
+
+  @override
+  State<_SettingsJumpMenu> createState() => _SettingsJumpMenuState();
+}
+
+class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
+  final List<double> _sectionOffsets = [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshSectionOffsets();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SettingsJumpMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollController != widget.scrollController ||
+        oldWidget.anchors != widget.anchors ||
+        oldWidget.scrollOffsetListenable != widget.scrollOffsetListenable) {
+      _refreshSectionOffsets();
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final Duration animationDuration =
         context.watch<SettingsCubit>().animationDuration;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: _profileHeaderTextSpacing,
-      children: [
-        _SettingsJumpLink(
-          label: context.l10n.settingsSectionAccount,
-          onTap: () async => await _jumpTo(
-            anchors.accountKey,
-            animationDuration,
+    final sectionKeys = [
+      widget.anchors.accountKey,
+      widget.anchors.dataKey,
+      widget.anchors.appearanceKey,
+      widget.anchors.chatPreferencesKey,
+      widget.anchors.emailPreferencesKey,
+      widget.anchors.aboutKey,
+    ];
+    final sectionLabels = [
+      context.l10n.settingsSectionAccount,
+      context.l10n.settingsSectionData,
+      context.l10n.settingsSectionAppearance,
+      context.l10n.settingsSectionChats,
+      context.l10n.settingsSectionEmail,
+      context.l10n.settingsSectionAbout,
+    ];
+    final Alignment menuAlignment = switch (widget.textAlign) {
+      TextAlign.right => Alignment.centerRight,
+      TextAlign.center => Alignment.center,
+      _ => Alignment.centerLeft,
+    };
+    return ValueListenableBuilder<double>(
+      valueListenable: widget.scrollOffsetListenable,
+      builder: (context, scrollOffset, child) {
+        final int selectedIndex = _resolveSelectedIndex(scrollOffset);
+        return Align(
+          alignment: menuAlignment,
+          child: IntrinsicWidth(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: _profileHeaderTextSpacing,
+              children: [
+                for (final entry in sectionLabels.indexed)
+                  _SettingsJumpLink(
+                    label: entry.$2,
+                    onTap: () async => await _jumpTo(
+                      sectionKeys[entry.$1],
+                      animationDuration,
+                    ),
+                    textAlign: widget.textAlign,
+                    isSelected: selectedIndex == entry.$1,
+                  ),
+              ],
+            ),
           ),
-          textAlign: textAlign,
-        ),
-        _SettingsJumpLink(
-          label: context.l10n.settingsSectionData,
-          onTap: () async => await _jumpTo(
-            anchors.dataKey,
-            animationDuration,
-          ),
-          textAlign: textAlign,
-        ),
-        _SettingsJumpLink(
-          label: context.l10n.settingsSectionAppearance,
-          onTap: () async => await _jumpTo(
-            anchors.appearanceKey,
-            animationDuration,
-          ),
-          textAlign: textAlign,
-        ),
-        _SettingsJumpLink(
-          label: context.l10n.settingsSectionChats,
-          onTap: () async => await _jumpTo(
-            anchors.chatPreferencesKey,
-            animationDuration,
-          ),
-          textAlign: textAlign,
-        ),
-        _SettingsJumpLink(
-          label: context.l10n.settingsSectionEmail,
-          onTap: () async => await _jumpTo(
-            anchors.emailPreferencesKey,
-            animationDuration,
-          ),
-          textAlign: textAlign,
-        ),
-        _SettingsJumpLink(
-          label: context.l10n.settingsSectionAbout,
-          onTap: () async => await _jumpTo(
-            anchors.aboutKey,
-            animationDuration,
-          ),
-          textAlign: textAlign,
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -878,6 +940,64 @@ class _SettingsJumpMenu extends StatelessWidget {
       curve: _profileFadeCurve,
     );
   }
+
+  void _refreshSectionOffsets() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final keys = [
+        widget.anchors.accountKey,
+        widget.anchors.dataKey,
+        widget.anchors.appearanceKey,
+        widget.anchors.chatPreferencesKey,
+        widget.anchors.emailPreferencesKey,
+        widget.anchors.aboutKey,
+      ];
+      _sectionOffsets
+        ..clear()
+        ..addAll(_calculateOffsets(keys));
+      setState(() {});
+    });
+  }
+
+  List<double> _calculateOffsets(List<GlobalKey?> keys) {
+    final List<double> offsets = [];
+    for (final key in keys) {
+      final BuildContext? context = key?.currentContext;
+      if (context == null) {
+        offsets.add(0);
+        continue;
+      }
+      final RenderObject? renderObject = context.findRenderObject();
+      if (renderObject is! RenderBox) {
+        offsets.add(0);
+        continue;
+      }
+      final RenderAbstractViewport viewport =
+          RenderAbstractViewport.of(renderObject);
+      final double revealOffset = viewport.getOffsetToReveal(renderObject, 0.0).offset;
+      offsets.add(revealOffset);
+    }
+    return offsets;
+  }
+
+  int _resolveSelectedIndex(double scrollOffset) {
+    if (_sectionOffsets.isEmpty) {
+      return 0;
+    }
+    const double sectionBias = _profileHeaderTextSpacing / 4;
+    final double baseOffset = widget.baseOffsetResolver();
+    final double currentOffset =
+        (scrollOffset - baseOffset + sectionBias).clamp(0, double.infinity);
+    int selectedIndex = 0;
+    for (final entry in _sectionOffsets.indexed) {
+      if (currentOffset >= entry.$2) {
+        selectedIndex = entry.$1;
+      }
+    }
+    return selectedIndex;
+  }
 }
 
 class _SettingsJumpLink extends StatelessWidget {
@@ -885,11 +1005,13 @@ class _SettingsJumpLink extends StatelessWidget {
     required this.label,
     required this.onTap,
     required this.textAlign,
+    required this.isSelected,
   });
 
   final String label;
   final VoidCallback onTap;
   final TextAlign textAlign;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -900,25 +1022,25 @@ class _SettingsJumpLink extends StatelessWidget {
       _ => MainAxisAlignment.start,
     };
     final jumpColor = colors.foreground.withValues(alpha: 0.7);
-    return SizedBox(
-      width: double.infinity,
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
-        width: double.infinity,
-        expands: true,
-        mainAxisAlignment: alignment,
-        foregroundColor: jumpColor,
-        hoverForegroundColor: jumpColor,
-        onPressed: onTap,
-        child: Text(
-          label,
-          textAlign: textAlign,
-          style: context.textTheme.small.copyWith(
-            color: jumpColor,
-          ),
+    const double selectedOpacity = 0.45;
+    final Color selectedBackground =
+        colors.secondary.withValues(alpha: selectedOpacity);
+    return ShadButton.ghost(
+      size: ShadButtonSize.sm,
+      mainAxisAlignment: alignment,
+      foregroundColor: jumpColor,
+      hoverForegroundColor: jumpColor,
+      backgroundColor: isSelected ? selectedBackground : null,
+      hoverBackgroundColor: isSelected ? selectedBackground : null,
+      onPressed: onTap,
+      child: Text(
+        label,
+        textAlign: textAlign,
+        style: context.textTheme.small.copyWith(
+          color: jumpColor,
         ),
-      ).withTapBounce(),
-    );
+      ),
+    ).withTapBounce();
   }
 }
 

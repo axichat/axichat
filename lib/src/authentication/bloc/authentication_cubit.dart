@@ -181,10 +181,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             ),
         _endpointResolver = endpointResolver,
         super(initialState ?? const AuthenticationNone()) {
-    final resolvedHttpClient = httpClient ?? http.Client();
-    _httpClient = resolvedHttpClient;
-    _ownedHttpClient = httpClient == null ? resolvedHttpClient : null;
-    _emailProvisioningClientOverride = emailProvisioningClient;
+    _ownsHttpClient = httpClient == null;
+    _httpClient = httpClient ?? http.Client();
+    _emailProvisioningClientInjected = emailProvisioningClient != null;
     _emailProvisioningClient = emailProvisioningClient ??
         provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
@@ -330,10 +329,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
-  late final http.Client? _ownedHttpClient;
+  late final bool _ownsHttpClient;
   late final http.Client _httpClient;
-  late final provisioning.EmailProvisioningClient?
-      _emailProvisioningClientOverride;
+  late final bool _emailProvisioningClientInjected;
   late provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
@@ -396,7 +394,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _rebuildEmailProvisioningClient(EndpointConfig config) {
-    if (_emailProvisioningClientOverride != null) {
+    if (_emailProvisioningClientInjected) {
       return;
     }
     final baseUrlOverride =
@@ -1146,8 +1144,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
     _emailProvisioningClient.close();
-    final ownedClient = _ownedHttpClient;
-    ownedClient?.close();
+    if (_ownsHttpClient) {
+      _httpClient.close();
+    }
     return super.close();
   }
 
