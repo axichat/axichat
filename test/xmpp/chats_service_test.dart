@@ -90,14 +90,7 @@ main() {
     test(
       'When chats are added to the database, emits the new chat list in order.',
       () async {
-        final chats = chatJids
-            .map(
-              (jid) => Chat.fromJid(
-                jid,
-                attachmentAutoDownload: AttachmentAutoDownload.allowed,
-              ),
-            )
-            .toList();
+        final chats = chatJids.map(Chat.fromJid).toList();
 
         expectLater(
           xmppService.chatsStream(),
@@ -127,12 +120,7 @@ main() {
         await connectSuccessfully(xmppService);
 
         for (final jid in chatJids) {
-          await database.createChat(
-            Chat.fromJid(
-              jid,
-              attachmentAutoDownload: AttachmentAutoDownload.allowed,
-            ),
-          );
+          await database.createChat(Chat.fromJid(jid));
         }
 
         await pumpEventQueue();
@@ -260,12 +248,7 @@ main() {
 
       final existingChatJid = generateRandomJid();
 
-      await database.createChat(
-        Chat.fromJid(
-          existingChatJid,
-          attachmentAutoDownload: AttachmentAutoDownload.allowed,
-        ),
-      );
+      await database.createChat(Chat.fromJid(existingChatJid));
       await database.openChat(existingChatJid);
 
       final beforeOpen = await database.getChat(jid);
@@ -303,12 +286,7 @@ main() {
       ),
     ).thenAnswer((_) async {});
 
-    await database.createChat(
-      Chat.fromJid(
-        jid,
-        attachmentAutoDownload: AttachmentAutoDownload.allowed,
-      ),
-    );
+    await database.createChat(Chat.fromJid(jid));
     await database.openChat(jid);
 
     final beforeClose = await database.getChat(jid);

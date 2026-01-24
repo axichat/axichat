@@ -74,7 +74,7 @@ class FanOutTarget extends Equatable {
   factory FanOutTarget.address({
     required String address,
     String? displayName,
-    bool shareSignatureEnabled = true,
+    required bool shareSignatureEnabled,
   }) {
     final trimmed = address.trim();
     final resolvedDisplayName = displayName?.trim();

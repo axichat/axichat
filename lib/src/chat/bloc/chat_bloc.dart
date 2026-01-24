@@ -449,7 +449,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((message) => message.chatJid == chat.jid)
         .toList(growable: false);
     final selfBare = _bareJid(_chatsService.myJid);
-    final shouldSendChatReadReceipts = _settingsState.chatReadReceipts;
+    final shouldSendChatReadReceipts =
+        chat.markerResponsive ?? _settingsState.chatReadReceipts;
     if (shouldSendChatReadReceipts &&
         _xmppAllowedForChat(chat) &&
         chat.type != ChatType.groupChat) {

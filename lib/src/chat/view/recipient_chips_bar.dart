@@ -443,7 +443,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (_isOwnAddress(value)) {
       return false;
     }
-    _handleRecipientAdded(FanOutTarget.address(address: value));
+    _handleRecipientAdded(
+      FanOutTarget.address(
+        address: value,
+        shareSignatureEnabled:
+            context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+      ),
+    );
     return true;
   }
 
@@ -775,6 +781,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           shareSignatureEnabled: chat.shareSignatureEnabled ??
               context.watch<SettingsCubit>().state.shareTokenSignatureEnabled,
         );
+    FanOutTarget addressTarget(String address) => FanOutTarget.address(
+          address: address,
+          shareSignatureEnabled:
+              context.watch<SettingsCubit>().state.shareTokenSignatureEnabled,
+        );
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
     final results = <FanOutTarget>[];
@@ -796,7 +807,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       }
       if (results.length < _maxAutocompleteSuggestions) {
         for (final address in knownAddresses) {
-          if (addTarget(FanOutTarget.address(address: address))) {
+          if (addTarget(addressTarget(address))) {
             return results;
           }
         }
@@ -814,7 +825,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
     for (final address in knownAddresses) {
       if (address.toLowerCase().startsWith(query) &&
-          addTarget(FanOutTarget.address(address: address))) {
+          addTarget(addressTarget(address))) {
         if (results.length >= _maxAutocompleteSuggestions) {
           return results;
         }
@@ -850,7 +861,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           });
         for (final entry in domainEntries) {
           final suggestion = '$localPart@${entry.domain}';
-          if (addTarget(FanOutTarget.address(address: suggestion))) {
+          if (addTarget(addressTarget(suggestion))) {
             return results;
           }
         }
