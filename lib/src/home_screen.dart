@@ -36,6 +36,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -320,10 +321,8 @@ class _HomeScreenState extends State<HomeScreen> {
             if (didPop) {
               return;
             }
-            final primaryFocus = FocusManager.instance.primaryFocus;
-            final focusedWidget = primaryFocus?.context?.widget;
-            if (focusedWidget is EditableText) {
-              primaryFocus?.unfocus();
+            if (FocusManager.instance.isTextInputFocused) {
+              FocusManager.instance.primaryFocus?.unfocus();
               return;
             }
             final navigator = Navigator.of(context);
