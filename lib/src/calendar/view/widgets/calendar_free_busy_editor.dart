@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/layout/calendar_layout.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
@@ -766,8 +767,9 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   }
 
   Future<void> _openEditSheet(_FreeBusySegment segment) async {
+    final BuildContext modalContext = context.calendarModalContext;
     await showAdaptiveBottomSheet<void>(
-      context: context,
+      context: modalContext,
       isScrollControlled: true,
       builder: (sheetContext) => _FreeBusyEditSheet(
         segment: segment,

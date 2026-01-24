@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -1029,8 +1030,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
 }) {
   final colors = context.colorScheme;
   final textTheme = context.textTheme;
+  final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<CriticalPathPickerResult>(
-    context: context,
+    context: modalContext,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     showCloseButton: false,
@@ -1193,8 +1195,9 @@ Future<String?> promptCriticalPathName({
   final controller = TextEditingController(text: initialValue ?? '');
   final FocusNode focusNode = FocusNode();
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  final BuildContext modalContext = context.calendarModalContext;
   final result = await showAdaptiveBottomSheet<String>(
-    context: context,
+    context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),

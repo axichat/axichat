@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_sheet_header.dart';
@@ -995,8 +996,9 @@ class _DateLabelState extends State<_DateLabel> {
       return;
     }
     setState(() => _isBottomSheetOpen = true);
+    final BuildContext modalContext = context.calendarModalContext;
     await showAdaptiveBottomSheet<void>(
-      context: context,
+      context: modalContext,
       isScrollControlled: true,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
