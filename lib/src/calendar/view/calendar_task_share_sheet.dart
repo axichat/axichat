@@ -1,32 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:io';
+import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
-import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
-import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
-import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _taskShareSectionSpacing = 16.0;
@@ -35,7 +27,6 @@ const double _taskShareHeaderIconSize = 18.0;
 const double _taskShareProgressStrokeWidth = 2.0;
 const EdgeInsets _taskShareContentPadding =
     EdgeInsets.symmetric(horizontal: 16);
-const String _taskShareIcsMimeType = 'text/calendar';
 const bool _taskShareReadOnlyDefault = true;
 
 Future<void> showCalendarTaskShareSheet({
@@ -233,95 +224,48 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     setState(() => _isSending = true);
     final String shareText = _bodyController.text.trim();
     final bool readOnly = _isReadOnly;
-    final XmppService? xmppService = _maybeReadXmppService(context);
-    final EmailService? emailService = RepositoryProvider.of<EmailService?>(
-      context,
-    );
+    final List<FanOutTarget> targets = includedRecipients
+        .map((recipient) => recipient.target)
+        .toList(growable: false);
+    final completer = Completer<CalendarShareResult>();
+    context.read<CalendarBloc>().add(
+          CalendarEvent.taskShareRequested(
+            task: widget.task,
+            recipients: targets,
+            shareText: shareText,
+            readOnly: readOnly,
+            completer: completer,
+          ),
+        );
     try {
-      final List<FanOutTarget> emailTargets = includedRecipients
-          .map((recipient) => recipient.target)
-          .where(
-            (target) =>
-                target.chat == null ||
-                target.chat?.defaultTransport.isEmail == true,
-          )
-          .toList(growable: false);
-      final List<Chat> xmppChats = includedRecipients
-          .map((recipient) => recipient.target.chat)
-          .whereType<Chat>()
-          .where((chat) => !chat.defaultTransport.isEmail)
-          .toList(growable: false);
-      if (emailTargets.isNotEmpty && emailService == null) {
-        FeedbackSystem.showInfo(
-          context,
-          context.l10n.calendarTaskShareServiceUnavailable,
-        );
+      final CalendarShareResult result = await completer.future;
+      if (!mounted) {
         return;
       }
-      if (xmppChats.isNotEmpty && xmppService == null) {
-        FeedbackSystem.showInfo(
-          context,
-          context.l10n.calendarTaskShareServiceUnavailable,
-        );
+      if (result.isSuccess) {
+        Navigator.of(context).pop(true);
         return;
       }
-      if (xmppChats.isNotEmpty) {
-        for (final chat in xmppChats) {
-          final CalendarFragmentShareDecision decision =
-              const CalendarFragmentPolicy().decisionForChat(
-            chat: chat,
-            roomState: xmppService!.roomStateFor(chat.jid),
+      switch (result.failure) {
+        case CalendarShareFailure.serviceUnavailable:
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarTaskShareServiceUnavailable,
           );
-          if (!decision.canWrite) {
-            FeedbackSystem.showInfo(
-              context,
-              context.l10n.calendarTaskShareDenied,
-            );
-            return;
-          }
-        }
-      }
-      if (emailTargets.isNotEmpty) {
-        final EmailAttachment? attachment =
-            await _buildCalendarTaskAttachment(widget.task);
-        if (!mounted) {
-          return;
-        }
-        if (attachment == null) {
+        case CalendarShareFailure.permissionDenied:
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarTaskShareDenied,
+          );
+        case CalendarShareFailure.attachmentFailed:
+        case CalendarShareFailure.sendFailed:
+        case null:
           FeedbackSystem.showError(
             context,
             context.l10n.calendarTaskShareSendFailed,
           );
-          return;
-        }
-        final EmailAttachment resolvedAttachment = attachment.copyWith(
-          caption: shareText,
-        );
-        await emailService!.fanOutSend(
-          targets: emailTargets,
-          attachment: resolvedAttachment,
-        );
       }
-      if (xmppChats.isNotEmpty) {
-        for (final chat in xmppChats) {
-          await xmppService!.sendMessage(
-            jid: chat.jid,
-            text: shareText,
-            encryptionProtocol: chat.encryptionProtocol,
-            calendarTaskIcs: widget.task,
-            calendarTaskIcsReadOnly: readOnly,
-            chatType: chat.type,
-          );
-          if (!readOnly) {
-            await _linkSharedTask(chat);
-          }
-        }
-      }
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop(true);
-    } on Exception {
+    } catch (_) {
       if (mounted) {
         FeedbackSystem.showError(
           context,
@@ -333,29 +277,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         setState(() => _isSending = false);
       }
     }
-  }
-
-  Future<void> _linkSharedTask(Chat chat) async {
-    if (!chat.supportsChatCalendar) {
-      return;
-    }
-    final CalendarBloc? calendarBloc = _maybeReadCalendarBloc(context);
-    if (calendarBloc == null) {
-      return;
-    }
-    final String taskId = widget.task.id.trim();
-    if (taskId.isEmpty) {
-      return;
-    }
-    final String chatStorageId = chatCalendarStorageId(chat.jid);
-    final Set<String> storageIds = <String>{calendarBloc.id, chatStorageId};
-    if (storageIds.length < 2) {
-      return;
-    }
-    await CalendarLinkedTaskRegistry.instance.addLinks(
-      taskId: taskId,
-      storageIds: storageIds,
-    );
   }
 }
 
@@ -463,38 +384,5 @@ class _TaskShareEmptyMessage extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-Future<EmailAttachment?> _buildCalendarTaskAttachment(CalendarTask task) async {
-  try {
-    const CalendarTransferService transferService = CalendarTransferService();
-    final File file = await transferService.exportTaskIcs(task: task);
-    CalendarTransferService.scheduleCleanup(file);
-    final int sizeBytes = await file.length();
-    return EmailAttachment(
-      path: file.path,
-      fileName: p.basename(file.path),
-      sizeBytes: sizeBytes,
-      mimeType: _taskShareIcsMimeType,
-    );
-  } on Exception {
-    return null;
-  }
-}
-
-XmppService? _maybeReadXmppService(BuildContext context) {
-  try {
-    return RepositoryProvider.of<XmppService>(context, listen: false);
-  } on FlutterError {
-    return null;
-  }
-}
-
-CalendarBloc? _maybeReadCalendarBloc(BuildContext context) {
-  try {
-    return context.read<CalendarBloc>();
-  } on FlutterError {
-    return null;
   }
 }

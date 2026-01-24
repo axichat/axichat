@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -16,7 +20,6 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -218,42 +221,47 @@ class _CalendarCriticalPathShareSheetState
       return;
     }
     setState(() => _isSending = true);
-    final XmppService? xmppService = _maybeReadXmppService(context);
     try {
-      if (xmppService == null) {
-        FeedbackSystem.showInfo(
-          context,
-          context.l10n.calendarCriticalPathShareMissingService,
-        );
-        return;
-      }
-      final CalendarFragmentShareDecision decision =
-          const CalendarFragmentPolicy().decisionForChat(
-        chat: selected,
-        roomState: xmppService.roomStateFor(selected.jid),
-      );
-      if (!decision.canWrite) {
-        FeedbackSystem.showInfo(
-          context,
-          context.l10n.calendarCriticalPathShareDenied,
-        );
-        return;
-      }
       final CalendarFragment fragment = _buildFragment();
       final String shareText =
           CalendarFragmentFormatter(context.l10n).describe(fragment).trim();
-      await xmppService.sendMessage(
-        jid: selected.jid,
-        text: shareText,
-        encryptionProtocol: selected.encryptionProtocol,
-        calendarFragment: fragment,
-        chatType: selected.type,
-      );
+      final completer = Completer<CalendarShareResult>();
+      context.read<CalendarBloc>().add(
+            CalendarEvent.criticalPathShareRequested(
+              fragment: fragment,
+              recipient: selected,
+              shareText: shareText,
+              completer: completer,
+            ),
+          );
+      final result = await completer.future;
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
-    } on Exception {
+      if (result.isSuccess) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      switch (result.failure) {
+        case CalendarShareFailure.serviceUnavailable:
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarCriticalPathShareMissingService,
+          );
+        case CalendarShareFailure.permissionDenied:
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.calendarCriticalPathShareDenied,
+          );
+        case CalendarShareFailure.attachmentFailed:
+        case CalendarShareFailure.sendFailed:
+        case null:
+          FeedbackSystem.showError(
+            context,
+            context.l10n.calendarCriticalPathShareFailed,
+          );
+      }
+    } catch (_) {
       if (mounted) {
         FeedbackSystem.showError(
           context,
@@ -367,13 +375,5 @@ class _CriticalPathShareEmptyMessage extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-XmppService? _maybeReadXmppService(BuildContext context) {
-  try {
-    return RepositoryProvider.of<XmppService>(context, listen: false);
-  } on FlutterError {
-    return null;
   }
 }

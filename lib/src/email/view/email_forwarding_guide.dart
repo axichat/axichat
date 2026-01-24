@@ -87,6 +87,67 @@ class EmailForwardingGuideTile extends StatelessWidget {
   }
 }
 
+class EmailForwardingGuideActionButton extends StatelessWidget {
+  const EmailForwardingGuideActionButton({super.key});
+
+  Future<void> _showGuideDialog(BuildContext context) async {
+    final forwardingAddress = _resolveForwardingAddress(context);
+    await showFadeScaleDialog<void>(
+      context: context,
+      builder: (dialogContext) => EmailForwardingGuideDialog(
+        title: context.l10n.emailForwardingGuideTitle,
+        forwardingAddress: forwardingAddress,
+        notificationService: context.read<NotificationService>(),
+        capability: context.read<Capability>(),
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    context.read<SettingsCubit>().markEmailForwardingGuideSeen();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    const horizontalInset = _guideItemSpacing * 2;
+    const verticalInset = _guideItemSpacing / 2;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: verticalInset,
+      ),
+      child: ClipRRect(
+        borderRadius: context.radius,
+        child: ColoredBox(
+          color: colors.card,
+          child: SizedBox(
+            width: double.infinity,
+            child: ShadButton.ghost(
+              size: ShadButtonSize.sm,
+              onPressed: () async => await _showGuideDialog(context),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.mail, color: colors.foreground),
+                  const SizedBox(width: _guideItemSpacing),
+                  Expanded(
+                    child: Text(
+                      context.l10n.emailForwardingGuideTitle,
+                      style: context.textTheme.small.copyWith(
+                        color: colors.foreground,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class EmailForwardingGuideDialog extends StatelessWidget {
   const EmailForwardingGuideDialog({
     super.key,
