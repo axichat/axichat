@@ -95,6 +95,10 @@ class SettingsControls extends StatelessWidget {
         final selectTextStyle = context.textTheme.small.copyWith(
           color: context.colorScheme.foreground,
         );
+        final actionButtonPadding = EdgeInsets.symmetric(
+          horizontal: _compactTilePadding.horizontal,
+          vertical: _compactTilePadding.vertical / 2,
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
@@ -120,8 +124,12 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            const EmailForwardingGuideActionButton(),
-            const EmailContactImportActionButton(),
+            EmailForwardingGuideActionButton(
+              padding: actionButtonPadding,
+            ),
+            EmailContactImportActionButton(
+              padding: actionButtonPadding,
+            ),
             _SettingsActionButton(
               iconData: LucideIcons.image,
               label: context.l10n.draftAttachmentsLabel,
@@ -699,20 +707,19 @@ class _SettingsActionButton extends StatelessWidget {
         child: ShadButton.ghost(
           size: ShadButtonSize.sm,
           onPressed: onPressed,
-          child: IconTheme.merge(
-            data: IconThemeData(color: foregroundColor),
-            child: DefaultTextStyle.merge(
-              style: context.textTheme.small.copyWith(
-                color: foregroundColor,
+          child: Row(
+            children: [
+              if (iconData != null) Icon(iconData, color: foregroundColor),
+              if (iconData != null) SizedBox(width: iconSpacing),
+              Expanded(
+                child: Text(
+                  label,
+                  style: context.textTheme.small.copyWith(
+                    color: foregroundColor,
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  if (iconData != null) Icon(iconData),
-                  if (iconData != null) SizedBox(width: iconSpacing),
-                  Expanded(child: Text(label)),
-                ],
-              ),
-            ),
+            ],
           ),
         ).withTapBounce(enabled: onPressed != null),
       ),

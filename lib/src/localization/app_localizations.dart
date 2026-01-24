@@ -3038,6 +3038,12 @@ abstract class AppLocalizations {
   /// **'Profile'**
   String get profileTitle;
 
+  /// No description provided for @profileJumpToTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to top'**
+  String get profileJumpToTop;
+
   /// No description provided for @profileJidDescription.
   ///
   /// In en, this message translates to:

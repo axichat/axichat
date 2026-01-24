@@ -29,6 +29,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -103,7 +104,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
   String? _applicationVersion;
 
   var _profileRoute = _ProfileRoute.main;
+  final ScrollController _profileScrollController = ScrollController();
   final ScrollController _settingsScrollController = ScrollController();
+  final GlobalKey _jumpMenuKey = GlobalKey();
   final SettingsSectionAnchors _settingsAnchors = SettingsSectionAnchors(
     accountKey: GlobalKey(),
     dataKey: GlobalKey(),
@@ -148,6 +151,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
   @override
   void dispose() {
     _settingsScrollController.dispose();
+    _profileScrollController.dispose();
     super.dispose();
   }
 
@@ -231,6 +235,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       sidebarColor: profileSidebarColor,
                       settingsAnchors: _settingsAnchors,
                       settingsScrollController: _settingsScrollController,
+                      profileScrollController: _profileScrollController,
+                      jumpMenuKey: _jumpMenuKey,
                       locate: widget.locate,
                       onNavigate: _setRoute,
                     ),
@@ -256,6 +262,8 @@ class _ProfileMainView extends StatelessWidget {
     required this.sidebarColor,
     required this.settingsAnchors,
     required this.settingsScrollController,
+    required this.profileScrollController,
+    required this.jumpMenuKey,
     required this.locate,
     required this.onNavigate,
   });
@@ -267,6 +275,8 @@ class _ProfileMainView extends StatelessWidget {
   final Color sidebarColor;
   final SettingsSectionAnchors settingsAnchors;
   final ScrollController settingsScrollController;
+  final ScrollController profileScrollController;
+  final GlobalKey jumpMenuKey;
   final T Function<T>() locate;
   final ValueChanged<_ProfileRoute> onNavigate;
 
@@ -287,45 +297,100 @@ class _ProfileMainView extends StatelessWidget {
       onNavigate: onNavigate,
     );
     if (!isWideLayout) {
+      final Duration animationDuration =
+          context.watch<SettingsCubit>().animationDuration;
       const profileSectionPadding = EdgeInsets.symmetric(
         horizontal: _profileHeaderSpacing,
         vertical: _profileHeaderSpacing,
       );
-      return SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ColoredBox(
-              color: sidebarColor,
-              child: Padding(
-                padding: profileSectionPadding,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 500.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const _ProfileStatusHeader(),
-                        const SizedBox(height: _profileCardSectionSpacing),
-                        card,
-                        const SizedBox(height: _profileCardSectionSpacing),
-                        const ProfileFingerprint(),
-                        const SizedBox(height: _profileCardSectionSpacing),
-                        _SettingsJumpMenu(
-                          anchors: settingsAnchors,
-                          alignment: Alignment.center,
+      return Stack(
+        children: [
+          SingleChildScrollView(
+            controller: profileScrollController,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ColoredBox(
+                  color: sidebarColor,
+                  child: Padding(
+                    padding: profileSectionPadding,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 500.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const _ProfileStatusHeader(),
+                            const SizedBox(height: _profileCardSectionSpacing),
+                            card,
+                            const SizedBox(height: _profileCardSectionSpacing),
+                            const ProfileFingerprint(),
+                            const SizedBox(height: _profileCardSectionSpacing),
+                            KeyedSubtree(
+                              key: jumpMenuKey,
+                              child: _SettingsJumpMenu(
+                                anchors: settingsAnchors,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(height: _profileIndicatorSpacing),
+                settings,
+              ],
             ),
-            const SizedBox(height: _profileIndicatorSpacing),
-            settings,
-          ],
-        ),
+          ),
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: profileScrollController,
+              builder: (context, child) {
+                final RenderBox? jumpMenuBox = jumpMenuKey.currentContext
+                    ?.findRenderObject() as RenderBox?;
+                final RenderAbstractViewport? viewport = jumpMenuBox == null
+                    ? null
+                    : RenderAbstractViewport.of(jumpMenuBox);
+                final double? revealOffset =
+                    jumpMenuBox == null || viewport == null
+                        ? null
+                        : viewport.getOffsetToReveal(jumpMenuBox, 0.0).offset;
+                final double? jumpMenuBottom =
+                    jumpMenuBox == null || revealOffset == null
+                        ? null
+                        : revealOffset + jumpMenuBox.size.height;
+                if (jumpMenuBottom == null ||
+                    !profileScrollController.hasClients ||
+                    profileScrollController.offset <= jumpMenuBottom) {
+                  return const SizedBox.shrink();
+                }
+                return Align(
+                  alignment: Alignment.bottomRight,
+                  child: SafeArea(
+                    minimum: const EdgeInsets.all(16),
+                    child: AxiFab(
+                      text: context.l10n.profileJumpToTop,
+                      iconData: LucideIcons.arrowUp,
+                      onPressed: () async {
+                        if (!profileScrollController.hasClients) {
+                          return;
+                        }
+                        await profileScrollController.animateTo(
+                          0,
+                          duration: animationDuration,
+                          curve: _profileFadeCurve,
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       );
     }
     const sidebarPadding = EdgeInsets.symmetric(
@@ -355,7 +420,7 @@ class _ProfileMainView extends StatelessWidget {
                   const SizedBox(height: _profileCardSectionSpacing),
                   _SettingsJumpMenu(
                     anchors: settingsAnchors,
-                    alignment: Alignment.centerRight,
+                    textAlign: TextAlign.right,
                   ),
                 ],
               ),
@@ -692,11 +757,11 @@ class _SettingsPanel extends StatelessWidget {
 class _SettingsJumpMenu extends StatelessWidget {
   const _SettingsJumpMenu({
     required this.anchors,
-    required this.alignment,
+    required this.textAlign,
   });
 
   final SettingsSectionAnchors anchors;
-  final Alignment alignment;
+  final TextAlign textAlign;
 
   @override
   Widget build(BuildContext context) {
@@ -712,7 +777,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.accountKey,
             animationDuration,
           ),
-          alignment: alignment,
+          textAlign: textAlign,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionData,
@@ -720,7 +785,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.dataKey,
             animationDuration,
           ),
-          alignment: alignment,
+          textAlign: textAlign,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionAppearance,
@@ -728,7 +793,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.appearanceKey,
             animationDuration,
           ),
-          alignment: alignment,
+          textAlign: textAlign,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionChats,
@@ -736,7 +801,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.chatPreferencesKey,
             animationDuration,
           ),
-          alignment: alignment,
+          textAlign: textAlign,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionEmail,
@@ -744,7 +809,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.emailPreferencesKey,
             animationDuration,
           ),
-          alignment: alignment,
+          textAlign: textAlign,
         ),
         _SettingsJumpLink(
           label: context.l10n.settingsSectionAbout,
@@ -752,7 +817,7 @@ class _SettingsJumpMenu extends StatelessWidget {
             anchors.aboutKey,
             animationDuration,
           ),
-          alignment: alignment,
+          textAlign: textAlign,
         ),
       ],
     );
@@ -778,12 +843,12 @@ class _SettingsJumpLink extends StatelessWidget {
   const _SettingsJumpLink({
     required this.label,
     required this.onTap,
-    required this.alignment,
+    required this.textAlign,
   });
 
   final String label;
   final VoidCallback onTap;
-  final Alignment alignment;
+  final TextAlign textAlign;
 
   @override
   Widget build(BuildContext context) {
@@ -793,18 +858,15 @@ class _SettingsJumpLink extends StatelessWidget {
       child: ShadButton.ghost(
         size: ShadButtonSize.sm,
         onPressed: onTap,
-        child: Row(
-          mainAxisAlignment: alignment == Alignment.centerRight
-              ? MainAxisAlignment.end
-              : MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: context.textTheme.small.copyWith(
-                color: colors.foreground,
-              ),
+        child: SizedBox(
+          width: double.infinity,
+          child: Text(
+            label,
+            textAlign: textAlign,
+            style: context.textTheme.small.copyWith(
+              color: colors.foreground,
             ),
-          ],
+          ),
         ),
       ).withTapBounce(),
     );

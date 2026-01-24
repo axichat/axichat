@@ -88,7 +88,12 @@ class EmailForwardingGuideTile extends StatelessWidget {
 }
 
 class EmailForwardingGuideActionButton extends StatelessWidget {
-  const EmailForwardingGuideActionButton({super.key});
+  const EmailForwardingGuideActionButton({
+    super.key,
+    this.padding,
+  });
+
+  final EdgeInsetsGeometry? padding;
 
   Future<void> _showGuideDialog(BuildContext context) async {
     final forwardingAddress = _resolveForwardingAddress(context);
@@ -110,13 +115,12 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const horizontalInset = _guideItemSpacing * 2;
-    const verticalInset = _guideItemSpacing / 2;
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: horizontalInset,
-        vertical: verticalInset,
-      ),
+      padding: padding ??
+          const EdgeInsets.symmetric(
+            horizontal: _guideItemSpacing * 2,
+            vertical: _guideItemSpacing / 2,
+          ),
       child: SizedBox(
         width: double.infinity,
         child: ShadButton.ghost(
