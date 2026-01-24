@@ -179,7 +179,7 @@ class _AxiSheetChrome extends StatelessWidget {
 
     final colors = ShadTheme.of(context).colorScheme;
     final Widget closeButton = ModalCloseButton(
-      onPressed: onClose,
+      onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
       color: colors.mutedForeground,
       backgroundColor: Colors.transparent,
       borderColor: Colors.transparent,
