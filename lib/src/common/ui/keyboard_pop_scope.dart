@@ -35,3 +35,20 @@ class KeyboardPopScope extends StatelessWidget {
     );
   }
 }
+
+Future<void> closeSheetWithKeyboardDismiss(
+  BuildContext context,
+  VoidCallback onClose,
+) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  for (var i = 0; i < 3; i++) {
+    if (!context.mounted) return;
+    if (MediaQuery.viewInsetsOf(context).bottom == 0) {
+      onClose();
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+  }
+  if (!context.mounted) return;
+  onClose();
+}
