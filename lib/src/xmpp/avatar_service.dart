@@ -6,8 +6,6 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 String _base64EncodeAvatarPublishPayload(Uint8List bytes) =>
     base64Encode(bytes);
 
-const String _avatarSelfRefreshOperationName =
-    'AvatarService.refreshSelfAvatarOnNegotiations';
 const String _avatarRosterRefreshOperationName =
     'AvatarService.refreshRosterAvatarsOnNegotiations';
 
@@ -34,6 +32,68 @@ class AvatarUploadResult {
 
   final String path;
   final String hash;
+}
+
+final class _PendingSelfAvatarPublish {
+  const _PendingSelfAvatarPublish({
+    required this.path,
+    required this.hash,
+    required this.mimeType,
+    required this.width,
+    required this.height,
+    required this.public,
+    this.jid,
+  });
+
+  final String path;
+  final String hash;
+  final String mimeType;
+  final int width;
+  final int height;
+  final bool public;
+  final String? jid;
+
+  static _PendingSelfAvatarPublish? fromJson(Map<String, dynamic> json) {
+    final path = json[_pathKey] as String?;
+    final hash = json[_hashKey] as String?;
+    final mimeType = json[_mimeKey] as String?;
+    final width = json[_widthKey] as int?;
+    final height = json[_heightKey] as int?;
+    if (path == null ||
+        hash == null ||
+        mimeType == null ||
+        width == null ||
+        height == null) {
+      return null;
+    }
+    return _PendingSelfAvatarPublish(
+      path: path,
+      hash: hash,
+      mimeType: mimeType,
+      width: width,
+      height: height,
+      public: (json[_publicKey] as bool?) ?? true,
+      jid: json[_jidKey] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        _pathKey: path,
+        _hashKey: hash,
+        _mimeKey: mimeType,
+        _widthKey: width,
+        _heightKey: height,
+        _publicKey: public,
+        _jidKey: jid,
+      };
+
+  static const _pathKey = 'path';
+  static const _hashKey = 'hash';
+  static const _mimeKey = 'mime';
+  static const _widthKey = 'width';
+  static const _heightKey = 'height';
+  static const _publicKey = 'public';
+  static const _jidKey = 'jid';
 }
 
 sealed class _AvatarMetadataLoadResult {
@@ -300,9 +360,10 @@ mixin AvatarService on XmppBase, MucService {
           fireAndForget(
             () async {
               await _notifyCachedSelfAvatarIfAvailable();
+              await _publishPendingSelfAvatarIfAvailable();
               await refreshSelfAvatarIfNeeded();
             },
-            operationName: _avatarSelfRefreshOperationName,
+            operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
           );
         }
         if (event.resumed) return;
@@ -323,6 +384,11 @@ mixin AvatarService on XmppBase, MucService {
     try {
       final path = await _writeAvatarFile(bytes: payload.bytes);
       await _persistOwnAvatar(path, payload.hash);
+      await _persistPendingSelfAvatarPublish(
+        path: path,
+        payload: payload,
+        public: true,
+      );
       owner._notifySelfAvatarUpdated(
         StoredAvatar(path: path, hash: payload.hash),
       );
@@ -1124,6 +1190,9 @@ mixin AvatarService on XmppBase, MucService {
         public: public,
       );
       _markPubSubAvatarPreferred(targetJid);
+      if (_isSelfAvatarTarget(targetJid)) {
+        await _clearPendingSelfAvatarPublish();
+      }
       _avatarLog.fine('Avatar publish completed.');
       return result;
     } on XmppAvatarException catch (error, stackTrace) {
@@ -1619,6 +1688,119 @@ mixin AvatarService on XmppBase, MucService {
         await file.delete();
       } catch (_) {}
       return null;
+    }
+  }
+
+  bool _isSelfAvatarTarget(String targetJid) =>
+      _avatarSafeBareJid(targetJid) == _myJid?.toBare().toString();
+
+  Future<void> _persistPendingSelfAvatarPublish({
+    required String path,
+    required AvatarUploadPayload payload,
+    required bool public,
+  }) async {
+    if (!isStateStoreReady || avatarEncryptionKey == null) return;
+    final pending = _PendingSelfAvatarPublish(
+      path: path,
+      hash: payload.hash,
+      mimeType: payload.mimeType,
+      width: payload.width,
+      height: payload.height,
+      public: public,
+      jid: payload.jid,
+    );
+    try {
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.write(
+          key: selfAvatarPendingPublishKey,
+          value: jsonEncode(pending.toJson()),
+        ),
+        awaitDatabase: true,
+      );
+    } on XmppAbortedException {
+      return;
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Failed to persist pending self avatar publish.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<_PendingSelfAvatarPublish?> _readPendingSelfAvatarPublish() async {
+    if (!isStateStoreReady) return null;
+    try {
+      final raw = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) async => ss.read(key: selfAvatarPendingPublishKey) as String?,
+      );
+      if (raw == null || raw.trim().isEmpty) return null;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return _PendingSelfAvatarPublish.fromJson(decoded);
+    } on XmppAbortedException {
+      return null;
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Failed to read pending self avatar publish.',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _clearPendingSelfAvatarPublish() async {
+    if (!isStateStoreReady) return;
+    try {
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.write(
+          key: selfAvatarPendingPublishKey,
+          value: null,
+        ),
+        awaitDatabase: true,
+      );
+    } on XmppAbortedException {
+      return;
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Failed to clear pending self avatar publish.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _publishPendingSelfAvatarIfAvailable() async {
+    final pending = await _readPendingSelfAvatarPublish();
+    if (pending == null) return;
+    final myBareJid = _myJid?.toBare().toString();
+    if (myBareJid == null || myBareJid.isEmpty) return;
+    final targetJid = _avatarSafeBareJid(pending.jid ?? myBareJid);
+    if (targetJid == null || targetJid != myBareJid) {
+      await _clearPendingSelfAvatarPublish();
+      return;
+    }
+    final bytes = await loadAvatarBytes(pending.path);
+    if (bytes == null || bytes.isEmpty) {
+      await _clearPendingSelfAvatarPublish();
+      return;
+    }
+    final payload = AvatarUploadPayload(
+      bytes: bytes,
+      mimeType: pending.mimeType,
+      width: pending.width,
+      height: pending.height,
+      hash: pending.hash,
+      jid: pending.jid,
+    );
+    try {
+      await publishAvatar(payload, public: pending.public);
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Pending self avatar publish failed.',
+        error,
+        stackTrace,
+      );
     }
   }
 

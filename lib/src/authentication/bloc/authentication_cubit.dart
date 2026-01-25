@@ -31,7 +31,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
-import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'authentication_state.dart';
 
@@ -248,7 +247,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (connectionState == ConnectionState.connected) {
         await _triggerEmailReconnect();
         await _flushPendingAccountDeletions();
-        await _publishPendingAvatar();
         if (_authenticatedJid != null) {
           await _homeRefreshSyncService.syncOnLogin();
         }
@@ -779,7 +777,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!_stickyAuthActive || state is AuthenticationLogInInProgress) {
       return;
     }
-    await _publishPendingAvatar();
     await _triggerEmailReconnect();
   }
 
@@ -1916,6 +1913,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final pendingAvatar = _signupAvatarDraft;
     if (_activeSignupCredentialKey != null && pendingAvatar != null) {
       await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
+      _signupAvatarDraft = null;
     }
     final bool fromSignup = _activeSignupCredentialKey != null;
     final AuthenticationState completedState = fromSignup
@@ -1929,7 +1927,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (_xmppService.connectionState == ConnectionState.connected) {
       await _homeRefreshSyncService.syncOnLogin();
     }
-    _publishPendingAvatar();
   }
 
   Future<void> _persistLoginSecrets({
@@ -2025,43 +2022,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       key: passwordPreHashedStorageKey,
       value: true.toString(),
     );
-  }
-
-  Future<void> _publishPendingAvatar() async {
-    final payload = _signupAvatarDraft;
-    if (payload == null) return;
-    if (!_xmppService.connected ||
-        !_stickyAuthActive ||
-        !_xmppService.databasesInitialized) {
-      return;
-    }
-    _signupAvatarDraft = null;
-    try {
-      await _xmppService.publishAvatar(payload);
-    } on XmppAvatarException catch (error, stackTrace) {
-      final cause = error.wrapped;
-      if (cause is mox.AvatarError) {
-        _log.info('Signup avatar publish rejected; skipping.', cause);
-        return;
-      }
-      _signupAvatarDraft ??= payload;
-      if (_looksLikeConnectivityError(error) || !_xmppService.connected) {
-        _log.warning(
-          'Failed to publish signup avatar; will retry when connected.',
-          error,
-          stackTrace,
-        );
-        return;
-      }
-      _log.warning('Failed to publish signup avatar', error, stackTrace);
-    } catch (error, stackTrace) {
-      _signupAvatarDraft ??= payload;
-      _log.warning(
-        'Unexpected error publishing signup avatar',
-        error,
-        stackTrace,
-      );
-    }
   }
 
   bool _looksLikeConnectivityError(Object error) {

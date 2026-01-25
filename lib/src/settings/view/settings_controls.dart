@@ -8,9 +8,9 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
-import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
@@ -540,7 +540,7 @@ class SettingsControls extends StatelessWidget {
               link: mastodonUrl,
               iconData: LucideIcons.link,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 300),
           ],
         );
       },
@@ -739,6 +739,8 @@ class _SettingsActionButton extends StatelessWidget {
     return ShadButton.ghost(
       onPressed: onPressed,
       leading: iconData == null ? null : Icon(iconData),
+      mainAxisAlignment: MainAxisAlignment.start,
+      foregroundColor: context.colorScheme.foreground,
       child: Text(label),
     ).withTapBounce(enabled: onPressed != null);
   }

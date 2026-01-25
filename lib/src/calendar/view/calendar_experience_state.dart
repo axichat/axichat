@@ -5,7 +5,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
@@ -142,10 +141,9 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         final double keyboardInset = mediaQuery.viewInsets.bottom;
         final double bottomInset =
             keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
-        final bool showMobileTabBar =
-            spec.sizeClass == CalendarSizeClass.compact;
-        final Widget tabSwitcher = showMobileTabBar
-            ? buildDragAwareTabBar(
+        final Widget tabSwitcher = usesDesktopLayout
+            ? const SizedBox.shrink()
+            : buildDragAwareTabBar(
                 context: context,
                 bottomInset: bottomInset,
                 scheduleTabLabel: buildScheduleTabLabel(context),
@@ -154,21 +152,20 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
                   highlightTasksTab,
                   _tasksTabPulse,
                 ),
-              )
-            : const SizedBox.shrink();
-        final Widget cancelBucket = showMobileTabBar
-            ? buildDragCancelBucket(
+              );
+        final Widget cancelBucket = usesDesktopLayout
+            ? const SizedBox.shrink()
+            : buildDragCancelBucket(
                 context: context,
                 bottomInset: bottomInset,
-              )
-            : const SizedBox.shrink();
-        final Widget mobileTabShell = showMobileTabBar
-            ? buildMobileTabShell(
+              );
+        final Widget mobileTabShell = usesDesktopLayout
+            ? const SizedBox.shrink()
+            : buildMobileTabShell(
                 context,
                 tabSwitcher,
                 cancelBucket,
-              )
-            : const SizedBox.shrink();
+              );
         final Widget layout = _buildLayout(
           usesDesktopLayout: usesDesktopLayout,
           navigation: navigation,
@@ -382,6 +379,16 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     final Widget base = CalendarNavigation(
       state: state,
       sidebarVisible: usesDesktopLayout,
+      leadingActions: buildNavigationLeadingActions(
+        context,
+        state,
+        usesDesktopLayout,
+      ),
+      trailingActions: buildNavigationTrailingActions(
+        context,
+        state,
+        usesDesktopLayout,
+      ),
       onDateSelected: (date) =>
           calendarBloc.add(CalendarEvent.dateSelected(date: date)),
       onViewChanged: (view) =>
@@ -392,10 +399,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       onRedo: () => calendarBloc.add(const CalendarEvent.redoRequested()),
       canUndo: state.canUndo,
       canRedo: state.canRedo,
-      hideCompletedScheduled:
-          context.watch<SettingsCubit>().state.hideCompletedScheduled,
-      onToggleHideCompletedScheduled: (hide) =>
-          context.read<SettingsCubit>().toggleHideCompletedScheduled(hide),
       onSearchRequested: searchAction,
       chatAcl: chatAcl,
       chatTitle: chatTitle,
@@ -420,6 +423,22 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   @protected
   String? buildNavigationChatTitle(CalendarState state) => null;
+
+  @protected
+  Widget? buildNavigationLeadingActions(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) =>
+      null;
+
+  @protected
+  Widget? buildNavigationTrailingActions(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) =>
+      null;
 
   @protected
   VoidCallback? buildNavigationSearchAction(
@@ -455,8 +474,10 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   /// Builds the tab label for the schedule pane. Subclasses can override to
   /// customize text/style.
-  Widget buildScheduleTabLabel(BuildContext context) =>
-      Text(context.l10n.calendarScheduleLabel);
+  Widget buildScheduleTabLabel(BuildContext context) => Text(
+        context.l10n.calendarScheduleLabel,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      );
 
   /// Builds the tasks tab label so guests can tint it differently.
   Widget buildTasksTabLabel(

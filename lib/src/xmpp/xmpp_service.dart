@@ -341,6 +341,8 @@ abstract interface class XmppBase {
 
   RegisteredStateKey get selfAvatarHashKey;
 
+  RegisteredStateKey get selfAvatarPendingPublishKey;
+
   SecretKey? get avatarEncryptionKey;
 
   Stream<StoredAvatar?> get selfAvatarStream;
@@ -633,6 +635,9 @@ class XmppService extends XmppBase
   final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
   @override
   final selfAvatarHashKey = XmppStateStore.registerKey('self_avatar_hash');
+  @override
+  final selfAvatarPendingPublishKey =
+      XmppStateStore.registerKey('self_avatar_pending_publish_v1');
   final avatarEncryptionSaltKey = XmppStateStore.registerKey(
     'avatar_encryption_salt',
   );

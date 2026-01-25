@@ -63,11 +63,13 @@ class CalendarTransferMenu extends StatefulWidget {
   const CalendarTransferMenu({
     super.key,
     required this.state,
+    this.additionalActions,
     this.ghost = _defaultTransferMenuGhost,
     this.usePrimary = _defaultTransferMenuUsePrimary,
   });
 
   final CalendarState state;
+  final List<AxiMenuAction>? additionalActions;
   final bool ghost;
   final bool usePrimary;
 
@@ -89,6 +91,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       hasCalendarData: hasCalendarData,
       onExport: _handleExportAll,
       onImport: _handleImportCalendar,
+      additionalActions: widget.additionalActions,
       busy: disabled,
       ghost: widget.ghost,
       usePrimary: widget.usePrimary,
@@ -363,6 +366,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
     required this.hasCalendarData,
     required this.onExport,
     required this.onImport,
+    this.additionalActions,
     this.busy = false,
     this.ghost = _defaultTransferMenuGhost,
     this.usePrimary = _defaultTransferMenuUsePrimary,
@@ -371,6 +375,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
   final bool hasCalendarData;
   final VoidCallback onExport;
   final VoidCallback onImport;
+  final List<AxiMenuAction>? additionalActions;
   final bool busy;
   final bool ghost;
   final bool usePrimary;
@@ -394,6 +399,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
           enabled: canImport,
           onPressed: canImport ? onImport : null,
         ),
+        ...?additionalActions,
       ],
       ghost: ghost,
       usePrimary: usePrimary,
