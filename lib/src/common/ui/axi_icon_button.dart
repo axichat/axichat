@@ -31,7 +31,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.ghost = false,
     this.outline = false,
-  }) : resolvedIconSize = iconSize ?? axiIconSize;
+  });
 
   const AxiIconButton.ghost({
     super.key,
@@ -49,8 +49,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
-  })  : resolvedIconSize = iconSize ?? axiIconSize,
-        borderWidth = null,
+  })  : borderWidth = null,
         ghost = true,
         outline = false;
 
@@ -68,8 +67,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.usePrimary = false,
-  })  : resolvedIconSize = iconSize ?? axiIconSize,
-        backgroundColor = null,
+  })  : backgroundColor = null,
         borderColor = null,
         borderWidth = null,
         ghost = false,
@@ -85,7 +83,6 @@ class AxiIconButton extends StatefulWidget {
   final Color? backgroundColor;
   final Color? borderColor;
   final double? iconSize;
-  final double resolvedIconSize;
   final double? buttonSize;
   final double? tapTargetSize;
   final double? cornerRadius;
@@ -108,6 +105,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
       (cubit) => cubit.animationDuration,
     );
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final env = EnvScope.maybeOf(context);
     final isDesktop = env?.isDesktopPlatform ?? false;
     final bool isGhost = widget.ghost;
@@ -123,15 +121,12 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             ? Colors.transparent
             : (isGhost ? colors.secondary : colors.card));
     final bool enabled = widget.onPressed != null || widget.onLongPress != null;
-    final double resolvedIconSize = widget.resolvedIconSize;
-    final double resolvedButtonSize =
-        widget.buttonSize ?? AxiIconButton.kDefaultSize;
-    final double resolvedTapTargetSize =
-        widget.tapTargetSize ?? AxiIconButton.kTapTargetSize;
-    final double resolvedCornerRadius =
-        widget.cornerRadius ?? axiSquircleRadius;
+    final double resolvedIconSize = widget.iconSize ?? spacing.m;
+    final double resolvedButtonSize = widget.buttonSize ?? spacing.l;
+    final double resolvedTapTargetSize = widget.tapTargetSize ?? spacing.xl;
+    final double resolvedCornerRadius = widget.cornerRadius ?? spacing.m;
     final double resolvedBorderWidth = widget.borderWidth ??
-        (isOutline ? axiSpaceXxs : (isGhost ? 0 : axiSpaceXxs));
+        (isOutline ? spacing.xxs : (isGhost ? 0 : spacing.xxs));
     final paintShape = SquircleBorder(
       cornerRadius: resolvedCornerRadius,
       side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),

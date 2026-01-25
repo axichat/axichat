@@ -194,21 +194,44 @@ class CalendarNavigation extends StatelessWidget {
             ),
             child: DefaultTextStyle.merge(
               style: TextStyle(fontSize: 12, color: colors.mutedForeground),
-              child: stackNavigation
-                  ? Wrap(
-                      spacing: navSpacing,
-                      runSpacing: navSpacing,
-                      alignment: WrapAlignment.spaceBetween,
-                      runAlignment: WrapAlignment.start,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (leadingActions != null) leadingActions!,
-                        navRow,
-                        trailingRow,
-                        if (trailingActions != null) trailingActions!,
-                      ],
-                    )
-                  : Row(
+                child: stackNavigation
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (leadingActions != null) ...[
+                                leadingActions!,
+                                SizedBox(width: navSpacing),
+                              ],
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: navRow,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: navSpacing),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: trailingRow,
+                                ),
+                              ),
+                              if (trailingActions != null) ...[
+                                SizedBox(width: navSpacing),
+                                trailingActions!,
+                              ],
+                            ],
+                          ),
+                        ],
+                      )
+                    : Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         if (leadingActions != null) ...[
