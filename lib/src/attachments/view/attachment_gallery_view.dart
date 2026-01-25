@@ -205,17 +205,10 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final horizontalPadding = spacing.m;
-    final topPadding = spacing.s;
-    final bottomPadding = spacing.m;
-    final itemSpacing = spacing.m;
-    final gridSpacing = spacing.s;
-    final gridMinTileWidth = spacing.xxl * 2;
     const gridMinColumns = 2;
     const gridMaxColumns = 4;
     const gridMinAvailableWidth = 0.0;
-    final gridHorizontalPadding = horizontalPadding * 2;
+    final gridHorizontalPadding = context.spacing.m * 2;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) => previous.items != current.items,
       listener: (context, state) {
@@ -264,9 +257,9 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  topPadding,
-                  horizontalPadding,
+                  context.spacing.m,
+                  context.spacing.s,
+                  context.spacing.m,
                   0,
                 ),
                 child: AttachmentGalleryControls(
@@ -296,7 +289,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                   onClearSearch: _searchController.clear,
                 ),
               ),
-              SizedBox(height: itemSpacing),
+              SizedBox(height: context.spacing.m),
               Expanded(
                 child: state.entries.isEmpty
                     ? Center(
@@ -315,14 +308,14 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                     : layout == AttachmentGalleryLayout.list
                         ? ListView.separated(
                             padding: EdgeInsets.fromLTRB(
-                              horizontalPadding,
+                              context.spacing.m,
                               0,
-                              horizontalPadding,
-                              bottomPadding,
+                              context.spacing.m,
+                              context.spacing.m,
                             ),
                             itemCount: state.entries.length,
                             separatorBuilder: (_, __) =>
-                                SizedBox(height: itemSpacing),
+                                SizedBox(height: context.spacing.m),
                             itemBuilder: (context, index) =>
                                 AttachmentGalleryEntry(
                               entry: state.entries[index],
@@ -354,8 +347,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                               final gridMetrics = _resolveGridMetrics(
                                 maxWidth: constraints.maxWidth,
                                 horizontalPadding: gridHorizontalPadding,
-                                minTileWidth: gridMinTileWidth,
-                                gridSpacing: gridSpacing,
+                                minTileWidth: context.spacing.xxl * 2,
+                                gridSpacing: context.spacing.s,
                                 minColumns: gridMinColumns,
                                 maxColumns: gridMaxColumns,
                                 minAvailableWidth: gridMinAvailableWidth,
@@ -365,14 +358,14 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                   .ceil();
                               return ListView.separated(
                                 padding: EdgeInsets.fromLTRB(
-                                  horizontalPadding,
+                                  context.spacing.m,
                                   0,
-                                  horizontalPadding,
-                                  bottomPadding,
+                                  context.spacing.m,
+                                  context.spacing.m,
                                 ),
                                 itemCount: rowCount,
                                 separatorBuilder: (_, __) =>
-                                    SizedBox(height: gridSpacing),
+                                    SizedBox(height: context.spacing.s),
                                 itemBuilder: (context, rowIndex) {
                                   final rowStart =
                                       rowIndex * gridMetrics.crossAxisCount;
@@ -420,7 +413,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                           ),
                                         ),
                                         if (index < rowItems.length - 1)
-                                          SizedBox(width: gridSpacing),
+                                          SizedBox(width: context.spacing.s),
                                       ],
                                     ],
                                   );
@@ -465,11 +458,9 @@ class AttachmentGalleryControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final controlsSpacing = spacing.s;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: controlsSpacing,
+      spacing: context.spacing.s,
       children: [
         AttachmentGallerySearchRow(
           searchController: searchController,
@@ -506,7 +497,6 @@ class AttachmentGallerySearchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controlSpacing = context.spacing.s;
     return Row(
       children: [
         Expanded(
@@ -517,7 +507,7 @@ class AttachmentGallerySearchRow extends StatelessWidget {
             onClear: onClearSearch,
           ),
         ),
-        SizedBox(width: controlSpacing),
+        SizedBox(width: context.spacing.s),
         AttachmentGalleryLayoutToggle(
           layout: layout,
           onChanged: onLayoutChanged,
@@ -539,7 +529,6 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controlSpacing = context.spacing.s;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -551,7 +540,7 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
               ? null
               : () => onChanged(AttachmentGalleryLayout.grid),
         ),
-        SizedBox(width: controlSpacing),
+        SizedBox(width: context.spacing.s),
         AxiIconButton.ghost(
           iconData: LucideIcons.list,
           tooltip: context.l10n.attachmentGalleryLayoutListLabel,
@@ -586,8 +575,6 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final controlRowSpacing = spacing.m;
-    final controlSpacing = spacing.s;
     return LayoutBuilder(
       builder: (context, constraints) {
         final double minSelectWidth =
@@ -618,8 +605,8 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
           options: AttachmentGallerySourceFilter.values,
         );
         return Wrap(
-          spacing: controlSpacing,
-          runSpacing: controlRowSpacing,
+          spacing: spacing.s,
+          runSpacing: spacing.m,
           children: [
             ConstrainedBox(constraints: selectConstraints, child: sortSelect),
             ConstrainedBox(constraints: selectConstraints, child: typeSelect),

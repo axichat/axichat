@@ -66,11 +66,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
-        final changePasswordSpinnerDimension = spacing.m;
-        final changePasswordSpinnerPadding = spacing.xxs;
-        final changePasswordSpinnerSlotSize =
-            changePasswordSpinnerDimension + (changePasswordSpinnerPadding * 2);
-        final changePasswordSpinnerGap = spacing.s;
+        final changePasswordSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -134,7 +130,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(
-                    dimension: changePasswordSpinnerDimension,
+                    dimension: spacing.m,
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel:
                         context.l10n.authChangePasswordProgressLabel,
@@ -143,7 +139,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     isVisible: loading,
                     spinner: spinner,
                     slotSize: changePasswordSpinnerSlotSize,
-                    gap: changePasswordSpinnerGap,
+                    gap: spacing.s,
                     duration: animationDuration,
                   );
                   return ShadButton(

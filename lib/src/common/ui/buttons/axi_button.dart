@@ -134,11 +134,11 @@ enum AxiButtonSize {
     };
   }
 
-  double minHeight(AxiSpacing spacing) {
+  double minHeight(AxiSizing sizing) {
     return switch (this) {
-      AxiButtonSize.sm => spacing.l,
-      AxiButtonSize.regular => spacing.l,
-      AxiButtonSize.lg => spacing.xl,
+      AxiButtonSize.sm => sizing.buttonHeightSm,
+      AxiButtonSize.regular => sizing.buttonHeightRegular,
+      AxiButtonSize.lg => sizing.buttonHeightLg,
     };
   }
 
@@ -149,6 +149,11 @@ enum AxiButtonSize {
       AxiButtonSize.lg => spacing.m,
     };
   }
+}
+
+enum AxiButtonWidth {
+  fit,
+  expand;
 }
 
 class AxiButton extends StatefulWidget {
@@ -163,6 +168,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   });
 
@@ -176,6 +183,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.primary;
 
@@ -189,6 +198,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.secondary;
 
@@ -202,6 +213,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.outline;
 
@@ -215,6 +228,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.ghost;
 
@@ -228,6 +243,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.link;
 
@@ -241,6 +258,8 @@ class AxiButton extends StatefulWidget {
     this.onLongPress,
     this.loading = false,
     this.loadingIndicator,
+    this.widthBehavior = AxiButtonWidth.fit,
+    this.width,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.destructive;
 
@@ -253,6 +272,8 @@ class AxiButton extends StatefulWidget {
   final VoidCallback? onLongPress;
   final bool loading;
   final Widget? loadingIndicator;
+  final AxiButtonWidth widthBehavior;
+  final double? width;
   final String? semanticLabel;
 
   @override
@@ -292,6 +313,7 @@ class _AxiButtonState extends State<AxiButton> {
         final colors = context.colorScheme;
         final textTheme = context.textTheme;
         final spacing = context.spacing;
+        final sizing = context.sizing;
         final env = EnvScope.maybeOf(context);
         final isDesktop = env?.isDesktopPlatform ?? false;
         final bool enabled =
@@ -354,11 +376,14 @@ class _AxiButtonState extends State<AxiButton> {
 
         Widget content = ConstrainedBox(
           constraints:
-              BoxConstraints(minHeight: widget.size.minHeight(spacing)),
+              BoxConstraints(minHeight: widget.size.minHeight(sizing)),
           child: Padding(
             padding: widget.size.padding(spacing),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: widget.widthBehavior == AxiButtonWidth.expand ||
+                      widget.width != null
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: rowChildren,
@@ -374,6 +399,17 @@ class _AxiButtonState extends State<AxiButton> {
             child: content,
           ),
         );
+
+        if (widget.width != null) {
+          content = SizedBox(width: widget.width, child: content);
+        } else if (widget.widthBehavior == AxiButtonWidth.expand) {
+          content = LayoutBuilder(
+            builder: (context, constraints) => SizedBox(
+              width: constraints.maxWidth,
+              child: content,
+            ),
+          );
+        }
 
         Widget button = Material(
           color: background,

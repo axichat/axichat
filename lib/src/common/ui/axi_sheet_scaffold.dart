@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -12,7 +11,7 @@ class AxiSheetHeader extends StatelessWidget {
     required this.onClose,
     this.subtitle,
     this.leading,
-    this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 12),
+    this.padding,
     super.key,
   });
 
@@ -20,11 +19,19 @@ class AxiSheetHeader extends StatelessWidget {
   final Widget? subtitle;
   final Widget? leading;
   final VoidCallback onClose;
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final EdgeInsetsGeometry resolvedPadding = padding ??
+        EdgeInsets.fromLTRB(
+          spacing.m,
+          spacing.m,
+          spacing.m,
+          spacing.s,
+        );
     final Widget titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -34,7 +41,7 @@ class AxiSheetHeader extends StatelessWidget {
           child: title,
         ),
         if (subtitle != null) ...[
-          const SizedBox(height: 4),
+          SizedBox(height: spacing.xs),
           DefaultTextStyle.merge(
             style: context.textTheme.muted.copyWith(
               color: colors.mutedForeground,
@@ -46,10 +53,13 @@ class AxiSheetHeader extends StatelessWidget {
     );
 
     return Padding(
-      padding: padding,
+      padding: resolvedPadding,
       child: Row(
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 10)],
+          if (leading != null) ...[
+            leading!,
+            SizedBox(width: spacing.s),
+          ],
           Expanded(child: titleBlock),
           ModalCloseButton(
             onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
@@ -78,7 +88,7 @@ class AxiSheetScaffold extends StatelessWidget {
     required this.header,
     required List<Widget> children,
     this.footer,
-    this.bodyPadding = const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    this.bodyPadding,
     this.scrollPhysics,
     super.key,
   })  : body = null,
@@ -171,11 +181,13 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
   @override
   Widget build(BuildContext context) {
     _scheduleExtentSync();
-    final EdgeInsets resolvedPadding = widget.bodyPadding ?? EdgeInsets.zero;
+    final spacing = context.spacing;
+    final EdgeInsets resolvedPadding = widget.bodyPadding ??
+        EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m);
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double scrollExtent = _scrollExtent;
     const double scrollExtentThreshold = 0;
-    const double footerSpacing = 12;
+    final double footerSpacing = spacing.s;
 
     if (scrollExtent > scrollExtentThreshold) {
       final double bottomPadding = resolvedPadding.bottom + keyboardInset;
@@ -194,7 +206,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
           children: [
             ...widget.children,
             if (widget.footer != null) ...[
-              const SizedBox(height: footerSpacing),
+              SizedBox(height: footerSpacing),
               widget.footer!,
             ],
           ],
@@ -223,7 +235,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         list,
-        const SizedBox(height: footerSpacing),
+        SizedBox(height: footerSpacing),
         Padding(
           padding: EdgeInsets.only(bottom: keyboardInset),
           child: footer,

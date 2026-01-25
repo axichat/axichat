@@ -489,6 +489,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 ),
                 chatTokens,
                 axiSpacing,
+                axiSizing,
               ],
             );
           },
@@ -823,6 +824,8 @@ extension ThemeExtension on BuildContext {
 
   AxiSpacing get spacing =>
       Theme.of(this).extension<AxiSpacing>() ?? axiSpacing;
+
+  AxiSizing get sizing => Theme.of(this).extension<AxiSizing>() ?? axiSizing;
 }
 
 extension TargetPlatformExtension on TargetPlatform {

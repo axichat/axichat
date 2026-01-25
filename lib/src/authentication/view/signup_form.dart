@@ -558,16 +558,24 @@ class _SignupFormState extends State<SignupForm>
             final loading = _isLoadingForState(state);
             final cleanupBlocked =
                 state is AuthenticationSignupFailure && state.isCleanupBlocked;
-            const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
-            const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
-            const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
-            const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
-            const captchaSize = Size(180, 70);
-            const signupSpinnerDimension = 16.0;
-            const signupSpinnerPadding = 1.0;
-            const signupSpinnerSlotSize =
-                signupSpinnerDimension + (signupSpinnerPadding * 2);
-            const signupSpinnerGap = 8.0;
+            final spacing = context.spacing;
+            final horizontalPadding =
+                EdgeInsets.symmetric(horizontal: spacing.s);
+            final errorPadding = EdgeInsets.fromLTRB(
+              spacing.s,
+              spacing.m,
+              spacing.s,
+              spacing.s,
+            );
+            final globalErrorPadding = EdgeInsets.fromLTRB(
+              spacing.s,
+              spacing.s,
+              spacing.s,
+              spacing.m,
+            );
+            final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
+            final captchaSize = Size(spacing.xxl * 2, spacing.l * 2);
+            final signupSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
             const defaultDescriptionHeight = 0.0;
@@ -616,9 +624,7 @@ class _SignupFormState extends State<SignupForm>
                                   key: const ValueKey(
                                     'signup-global-error-text',
                                   ),
-                                  style: TextStyle(
-                                    color: context.colorScheme.destructive,
-                                  ),
+                                  style: context.textTheme.small,
                                 ),
                               )
                             : const SizedBox(
@@ -634,7 +640,7 @@ class _SignupFormState extends State<SignupForm>
                         capability: context.watch<Capability>(),
                       ),
                     ),
-                    const SizedBox.square(dimension: 16.0),
+                    SizedBox.square(dimension: spacing.m),
                     Padding(
                       padding: horizontalPadding,
                       child: AxiAnimatedSize(
@@ -656,7 +662,7 @@ class _SignupFormState extends State<SignupForm>
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
-                                  spacing: 10.0,
+                                  spacing: spacing.s,
                                   children: [
                                     Row(
                                       crossAxisAlignment:
@@ -674,7 +680,7 @@ class _SignupFormState extends State<SignupForm>
                                             onTap: _openAvatarEditor,
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
+                                        SizedBox(width: spacing.s),
                                         Expanded(
                                           child: AxiTextFormField(
                                             autocorrect: false,
@@ -685,9 +691,8 @@ class _SignupFormState extends State<SignupForm>
                                             ],
                                             keyboardType: TextInputType.name,
                                             description: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 6.0,
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: spacing.xs,
                                               ),
                                               child: Text(
                                                 context.l10n
@@ -722,17 +727,12 @@ class _SignupFormState extends State<SignupForm>
                                     if (avatarErrorText != null)
                                       Text(
                                         avatarErrorText,
-                                        style: TextStyle(
-                                          color:
-                                              context.colorScheme.destructive,
-                                          fontSize: 12,
-                                        ),
+                                        style: context.textTheme.small,
                                       ),
                                     if (_showAvatarEditor)
                                       Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 12.0,
-                                        ),
+                                        padding:
+                                            EdgeInsets.only(top: spacing.s),
                                         child: Center(
                                           child: ConstrainedBox(
                                             constraints: BoxConstraints(
@@ -888,7 +888,7 @@ class _SignupFormState extends State<SignupForm>
                                 children: [
                                   Padding(
                                     padding: fieldSpacing +
-                                        const EdgeInsets.only(top: 20),
+                                        EdgeInsets.only(top: spacing.m),
                                     child: FutureBuilder<String>(
                                       future: _captchaSrc,
                                       builder: (context, snapshot) {
@@ -926,7 +926,7 @@ class _SignupFormState extends State<SignupForm>
                                                     size: captchaSize,
                                                     child: captchaSurface,
                                                   )),
-                                              const SizedBox(width: 12),
+                                              SizedBox(width: spacing.s),
                                               Semantics(
                                                 button: true,
                                                 enabled: !loading,
@@ -1002,7 +1002,7 @@ class _SignupFormState extends State<SignupForm>
                         ),
                       ),
                     ),
-                    const SizedBox.square(dimension: 16.0),
+                    SizedBox.square(dimension: spacing.m),
                     Padding(
                       padding: horizontalPadding,
                       child: Builder(
@@ -1021,7 +1021,7 @@ class _SignupFormState extends State<SignupForm>
                             alignment: Alignment.centerLeft,
                             child: showBackButton
                                 ? Padding(
-                                    padding: const EdgeInsets.only(right: 8),
+                                    padding: EdgeInsets.only(right: spacing.s),
                                     child: ShadButton.secondary(
                                       enabled: !loading && !isCheckingPwned,
                                       onPressed: () {
@@ -1047,7 +1047,7 @@ class _SignupFormState extends State<SignupForm>
                           final continueButton = showNextButton
                               ? Padding(
                                   padding: EdgeInsets.only(
-                                    right: showSubmitButton ? 8 : 0,
+                                    right: showSubmitButton ? spacing.s : 0,
                                   ),
                                   child: ShadButton(
                                     enabled: !loading &&
@@ -1062,14 +1062,14 @@ class _SignupFormState extends State<SignupForm>
                                         ButtonSpinnerSlot(
                                           isVisible: isCheckingPwned,
                                           spinner: AxiProgressIndicator(
-                                            dimension: signupSpinnerDimension,
+                                            dimension: spacing.m,
                                             color: context
                                                 .colorScheme.primaryForeground,
                                             semanticsLabel: context
                                                 .l10n.authPasswordPending,
                                           ),
                                           slotSize: signupSpinnerSlotSize,
-                                          gap: signupSpinnerGap,
+                                          gap: spacing.s,
                                           duration: animationDuration,
                                         ),
                                         Text(context.l10n.signupContinue),
@@ -1095,14 +1095,14 @@ class _SignupFormState extends State<SignupForm>
                                       ButtonSpinnerSlot(
                                         isVisible: loading,
                                         spinner: AxiProgressIndicator(
-                                          dimension: signupSpinnerDimension,
+                                          dimension: spacing.m,
                                           color: context
                                               .colorScheme.primaryForeground,
                                           semanticsLabel:
                                               context.l10n.authSignupPending,
                                         ),
                                         slotSize: signupSpinnerSlotSize,
-                                        gap: signupSpinnerGap,
+                                        gap: spacing.s,
                                         duration: animationDuration,
                                       ),
                                       Text(context.l10n.authSignUp),

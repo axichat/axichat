@@ -22,8 +22,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final leadingInset = spacing.s;
-    final leadingWidth = AxiIconButton.kDefaultSize + (leadingInset * 2);
+    final leadingWidth = AxiIconButton.kDefaultSize + (spacing.s * 2);
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: locate<XmppService>(),
@@ -49,7 +48,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
           leadingWidth: leadingWidth,
           leading: Padding(
             padding: EdgeInsets.only(
-              left: leadingInset,
+              left: spacing.s,
             ),
             child: Align(
               alignment: Alignment.centerLeft,

@@ -66,20 +66,12 @@ class _UnregisterFormState extends State<UnregisterForm> {
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
-        final unregisterErrorPaddingValue = spacing.s;
-        final unregisterFieldPaddingValue = spacing.s;
-        final unregisterSpacerHeight = spacing.l;
-        final unregisterButtonGap = spacing.m;
-        final unregisterSpinnerDimension = spacing.m;
-        final unregisterSpinnerPadding = spacing.xxs;
-        final unregisterSpinnerSlotSize =
-            unregisterSpinnerDimension + (unregisterSpinnerPadding * 2);
-        final unregisterSpinnerGap = spacing.s;
+        final unregisterSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
         final unregisterErrorPadding = EdgeInsets.all(
-          unregisterErrorPaddingValue,
+          spacing.s,
         );
         final unregisterFieldPadding = EdgeInsets.all(
-          unregisterFieldPaddingValue,
+          spacing.s,
         );
         return Form(
           child: Column(
@@ -98,7 +90,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                         style: context.textTheme.small,
                       ),
                     )
-                  : SizedBox(height: unregisterSpacerHeight),
+                  : SizedBox(height: spacing.l),
               Padding(
                 padding: unregisterFieldPadding,
                 child: PasswordInput(
@@ -107,11 +99,11 @@ class _UnregisterFormState extends State<UnregisterForm> {
                   controller: _passwordTextController,
                 ),
               ),
-              SizedBox.square(dimension: unregisterButtonGap),
+              SizedBox.square(dimension: spacing.m),
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(
-                    dimension: unregisterSpinnerDimension,
+                    dimension: spacing.m,
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel: context.l10n.authUnregisterProgressLabel,
                   );
@@ -119,7 +111,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                     isVisible: loading,
                     spinner: spinner,
                     slotSize: unregisterSpinnerSlotSize,
-                    gap: unregisterSpinnerGap,
+                    gap: spacing.s,
                     duration: animationDuration,
                   );
                   return ShadButton.destructive(

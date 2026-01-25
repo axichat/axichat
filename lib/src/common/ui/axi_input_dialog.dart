@@ -8,13 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _inputDialogSpinnerDimension = 16.0;
-const double _inputDialogSpinnerPadding = 1.0;
-const double _inputDialogSpinnerSlotSize =
-    _inputDialogSpinnerDimension + (_inputDialogSpinnerPadding * 2);
-const double _inputDialogSpinnerGap = 8.0;
-const Duration _inputDialogLoadingAnimation = Duration(milliseconds: 200);
-
 class AxiInputDialog extends StatelessWidget {
   const AxiInputDialog({
     super.key,
@@ -37,63 +30,46 @@ class AxiInputDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
     final loadingSemanticsLabel = context.l10n.accessibilityLoadingLabel;
+    final spacing = context.spacing;
     final spinner = AxiProgressIndicator(
-      dimension: _inputDialogSpinnerDimension,
+      dimension: spacing.s,
       color: context.colorScheme.primaryForeground,
       semanticsLabel: loadingSemanticsLabel,
     );
-    final spinnerSlot = ButtonSpinnerSlot(
-      isVisible: loading,
-      spinner: spinner,
-      slotSize: _inputDialogSpinnerSlotSize,
-      gap: _inputDialogSpinnerGap,
-      duration: _inputDialogLoadingAnimation,
+    final EdgeInsets dialogInsets = EdgeInsets.symmetric(
+      horizontal: spacing.l,
+      vertical: spacing.l,
     );
-    const double headerTopPadding = 16.0;
-    const double headerHorizontalPadding = 20.0;
-    const double headerRightPadding = 12.0;
-    const double headerBottomPadding = 12.0;
-    const double bodyHorizontalPadding = 20.0;
-    const double bodyBottomPadding = 16.0;
-    const double actionsHorizontalPadding = 20.0;
-    const double actionsBottomPadding = 20.0;
-    const double actionSpacing = 8.0;
-    const EdgeInsets dialogInsets = EdgeInsets.symmetric(
-      horizontal: 24,
-      vertical: 24,
+    final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
+      spacing.m,
+      spacing.m,
+      spacing.s,
+      spacing.s,
     );
-    const EdgeInsets headerPadding = EdgeInsets.fromLTRB(
-      headerHorizontalPadding,
-      headerTopPadding,
-      headerRightPadding,
-      headerBottomPadding,
-    );
-    const EdgeInsets bodyPadding = EdgeInsets.fromLTRB(
-      bodyHorizontalPadding,
+    final EdgeInsets bodyPadding = EdgeInsets.fromLTRB(
+      spacing.m,
       0,
-      bodyHorizontalPadding,
-      bodyBottomPadding,
+      spacing.m,
+      spacing.m,
     );
-    const EdgeInsets actionsPadding = EdgeInsets.fromLTRB(
-      actionsHorizontalPadding,
+    final EdgeInsets actionsPadding = EdgeInsets.fromLTRB(
+      spacing.m,
       0,
-      actionsHorizontalPadding,
-      actionsBottomPadding,
+      spacing.m,
+      spacing.m,
     );
     final actionButtons = <Widget>[
-      ShadButton.outline(
+      AxiButton.outline(
         onPressed: () => context.pop(),
         child: Text(context.l10n.commonCancel),
-      ).withTapBounce(),
+      ),
       ...actions,
-      ShadButton(
-        enabled: callback != null && !loading,
+      AxiButton(
         onPressed: loading ? null : callback,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [spinnerSlot, Text(resolvedCallbackText)],
-        ),
-      ).withTapBounce(enabled: callback != null && !loading),
+        loading: loading,
+        loadingIndicator: spinner,
+        child: Text(resolvedCallbackText),
+      ),
     ];
     return Dialog(
       insetPadding: dialogInsets,
@@ -116,8 +92,8 @@ class AxiInputDialog extends StatelessWidget {
               padding: actionsPadding,
               child: Wrap(
                 alignment: WrapAlignment.end,
-                spacing: actionSpacing,
-                runSpacing: actionSpacing,
+                spacing: spacing.s,
+                runSpacing: spacing.s,
                 children: actionButtons,
               ),
             ),

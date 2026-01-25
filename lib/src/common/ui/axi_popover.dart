@@ -3,7 +3,9 @@
 
 import 'dart:ui';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/fade_scale_effect.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -44,17 +46,33 @@ class AxiPopover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effects = fadeScaleEffectsFor(context);
+    final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final bool shouldWrapSurface =
+        padding == null && decoration == null && shadows == null;
+    Widget resolvedPopoverBuilder(BuildContext popoverContext) {
+      final Widget built = popover(popoverContext);
+      if (!shouldWrapSurface) {
+        return built;
+      }
+      return AxiModalSurface(
+        backgroundColor: colors.card,
+        borderColor: colors.border,
+        padding: EdgeInsets.all(spacing.m),
+        child: built,
+      );
+    }
     return ShadPopover(
-      popover: popover,
+      popover: resolvedPopoverBuilder,
       controller: controller,
       visible: visible,
       closeOnTapOutside: closeOnTapOutside,
       focusNode: focusNode,
       anchor: anchor,
       effects: effects,
-      shadows: shadows,
-      padding: padding,
-      decoration: decoration,
+      shadows: shouldWrapSurface ? const <BoxShadow>[] : shadows,
+      padding: shouldWrapSurface ? EdgeInsets.zero : padding,
+      decoration: shouldWrapSurface ? const ShadDecoration() : decoration,
       filter: filter,
       groupId: groupId,
       areaGroupId: areaGroupId,

@@ -28,10 +28,13 @@ Future<T?> showAdaptiveBottomSheet<T>({
   EdgeInsets? dialogInsetPadding,
   double dialogMaxWidth = 640,
   double dialogMaxHeightFraction = 0.9,
-  EdgeInsetsGeometry surfacePadding = const EdgeInsets.all(16),
+  EdgeInsetsGeometry? surfacePadding,
 }) {
   final commandSurface = resolveCommandSurface(context);
   final scheme = ShadTheme.of(context).colorScheme;
+  final spacing = context.spacing;
+  final EdgeInsetsGeometry resolvedSurfacePadding =
+      surfacePadding ?? EdgeInsets.all(spacing.m);
 
   if (commandSurface == CommandSurface.sheet) {
     return showModalBottomSheet<T>(
@@ -50,8 +53,8 @@ Future<T?> showAdaptiveBottomSheet<T>({
         );
         final Color resolvedBackground = backgroundColor ?? scheme.card;
         final bool transparentSurface = resolvedBackground.a == 0;
-        const BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
-          top: Radius.circular(18),
+        final BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
+          top: Radius.circular(spacing.m),
         );
         const double zeroInset = 0;
         final double topInset =
@@ -67,7 +70,8 @@ Future<T?> showAdaptiveBottomSheet<T>({
           child: AxiModalSurface(
             backgroundColor: resolvedBackground,
             borderColor: Colors.transparent,
-            padding: transparentSurface ? EdgeInsets.zero : surfacePadding,
+            padding:
+                transparentSurface ? EdgeInsets.zero : resolvedSurfacePadding,
             borderRadius: sheetRadius,
             shadows: transparentSurface ? const <BoxShadow>[] : null,
             child: child,
@@ -99,7 +103,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   final Color resolvedBackground =
       backgroundColor ?? ShadTheme.of(context).colorScheme.card;
   final EdgeInsets resolvedInsets = dialogInsetPadding ??
-      const EdgeInsets.symmetric(horizontal: 24, vertical: 24);
+      EdgeInsets.symmetric(horizontal: spacing.l, vertical: spacing.l);
 
   return showFadeScaleDialog<T>(
     context: context,
@@ -140,7 +144,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         child: AxiModalSurface(
           backgroundColor: resolvedBackground,
           borderColor: scheme.border,
-          padding: surfacePadding,
+          padding: resolvedSurfacePadding,
           child: wrappedChild,
         ),
       );
@@ -156,16 +160,6 @@ class _AxiSheetChrome extends StatelessWidget {
     required this.showDragHandle,
   });
 
-  static const EdgeInsets _dragHandlePadding =
-      EdgeInsets.only(top: 12, bottom: 8);
-  static const double _dragHandleWidth = 34;
-  static const double _dragHandleHeight = 4;
-  static const EdgeInsets _closeButtonPadding = EdgeInsets.only(
-    top: 4,
-    right: 4,
-    bottom: 8,
-  );
-
   final Widget child;
   final VoidCallback onClose;
   final bool showCloseButton;
@@ -178,6 +172,16 @@ class _AxiSheetChrome extends StatelessWidget {
     }
 
     final colors = ShadTheme.of(context).colorScheme;
+    final spacing = context.spacing;
+    final EdgeInsets dragHandlePadding =
+        EdgeInsets.only(top: spacing.s, bottom: spacing.xs);
+    final double dragHandleWidth = spacing.l;
+    final double dragHandleHeight = spacing.xxs;
+    final EdgeInsets closeButtonPadding = EdgeInsets.only(
+      top: spacing.xs,
+      right: spacing.xs,
+      bottom: spacing.s,
+    );
     final Widget closeButton = ModalCloseButton(
       onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
       color: colors.mutedForeground,
@@ -186,11 +190,11 @@ class _AxiSheetChrome extends StatelessWidget {
     );
     final dragHandle = Center(
       child: Container(
-        width: _dragHandleWidth,
-        height: _dragHandleHeight,
+        width: dragHandleWidth,
+        height: dragHandleHeight,
         decoration: BoxDecoration(
           color: colors.border.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(spacing.xxl),
         ),
       ),
     );
@@ -200,10 +204,10 @@ class _AxiSheetChrome extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showDragHandle)
-          Padding(padding: _dragHandlePadding, child: dragHandle),
+          Padding(padding: dragHandlePadding, child: dragHandle),
         if (showCloseButton)
           Padding(
-            padding: _closeButtonPadding,
+            padding: closeButtonPadding,
             child: Align(alignment: Alignment.centerRight, child: closeButton),
           ),
         Flexible(fit: FlexFit.loose, child: child),
@@ -218,7 +222,7 @@ class AxiModalSurface extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.backgroundColor,
     this.borderColor,
-    this.cornerRadius = 18,
+    this.cornerRadius,
     this.borderRadius,
     this.shadows,
     super.key,
@@ -228,15 +232,16 @@ class AxiModalSurface extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final Color? backgroundColor;
   final Color? borderColor;
-  final double cornerRadius;
+  final double? cornerRadius;
   final BorderRadiusGeometry? borderRadius;
   final List<BoxShadow>? shadows;
 
   @override
   Widget build(BuildContext context) {
     final scheme = ShadTheme.of(context).colorScheme;
+    final spacing = context.spacing;
     final shape = SquircleBorder(
-      cornerRadius: cornerRadius,
+      cornerRadius: cornerRadius ?? spacing.m,
       borderRadius: borderRadius,
       side: BorderSide(color: borderColor ?? scheme.border),
     );
@@ -248,11 +253,11 @@ class AxiModalSurface extends StatelessWidget {
           color: backgroundColor ?? scheme.card,
           shape: shape,
           shadows: shadows ??
-              const [
+              [
                 BoxShadow(
-                  color: Color(0x1A000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 10),
+                  color: Theme.of(context).shadowColor,
+                  blurRadius: spacing.l,
+                  offset: Offset(0, spacing.s),
                 ),
               ],
         ),

@@ -79,11 +79,7 @@ class _LoginFormState extends State<LoginForm> {
             context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
         final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
-        final loginSpinnerDimension = spacing.m;
-        final loginSpinnerPadding = spacing.xxs;
-        final loginSpinnerSlotSize =
-            loginSpinnerDimension + (loginSpinnerPadding * 2);
-        final loginSpinnerGap = spacing.s;
+        final loginSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
         final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
         final errorPadding = EdgeInsets.fromLTRB(
           spacing.s,
@@ -198,7 +194,7 @@ class _LoginFormState extends State<LoginForm> {
                     child: Builder(
                       builder: (context) {
                         final spinner = AxiProgressIndicator(
-                          dimension: loginSpinnerDimension,
+                          dimension: spacing.m,
                           color: context.colorScheme.primaryForeground,
                           semanticsLabel: context.l10n.authLoginPending,
                         );
@@ -206,7 +202,7 @@ class _LoginFormState extends State<LoginForm> {
                           isVisible: loading,
                           spinner: spinner,
                           slotSize: loginSpinnerSlotSize,
-                          gap: loginSpinnerGap,
+                          gap: spacing.s,
                           duration: animationDuration,
                         );
                         final button = ShadButton(
