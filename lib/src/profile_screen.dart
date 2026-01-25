@@ -850,6 +850,7 @@ class _SettingsJumpMenu extends StatefulWidget {
 
 class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
   final List<double> _sectionOffsets = [];
+  final List<double> _sectionHeights = [];
 
   @override
   void didChangeDependencies() {
@@ -956,22 +957,25 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
       ];
       _sectionOffsets
         ..clear()
-        ..addAll(_calculateOffsets(keys));
+        ..addAll(_calculateSectionMetrics(keys));
       setState(() {});
     });
   }
 
-  List<double> _calculateOffsets(List<GlobalKey?> keys) {
+  List<double> _calculateSectionMetrics(List<GlobalKey?> keys) {
     final List<double> offsets = [];
+    _sectionHeights.clear();
     for (final key in keys) {
       final BuildContext? context = key?.currentContext;
       if (context == null) {
         offsets.add(0);
+        _sectionHeights.add(0);
         continue;
       }
       final RenderObject? renderObject = context.findRenderObject();
       if (renderObject is! RenderBox) {
         offsets.add(0);
+        _sectionHeights.add(0);
         continue;
       }
       final RenderAbstractViewport viewport =
@@ -979,22 +983,31 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
       final double revealOffset =
           viewport.getOffsetToReveal(renderObject, 0.0).offset;
       offsets.add(revealOffset);
+      _sectionHeights.add(renderObject.size.height);
     }
     return offsets;
   }
 
   int _resolveSelectedIndex(double scrollOffset) {
-    if (_sectionOffsets.isEmpty) {
+    if (_sectionOffsets.isEmpty ||
+        _sectionOffsets.length != _sectionHeights.length) {
       return 0;
     }
-    const double sectionBias = _profileHeaderTextSpacing / 4;
     final double baseOffset = widget.baseOffsetResolver();
     final double currentOffset =
-        (scrollOffset - baseOffset + sectionBias).clamp(0, double.infinity);
+        (scrollOffset - baseOffset).clamp(0, double.infinity);
+    const double sectionThreshold = 2 / 3;
     int selectedIndex = 0;
     for (final entry in _sectionOffsets.indexed) {
-      if (currentOffset >= entry.$2) {
-        selectedIndex = entry.$1;
+      if (entry.$1 >= _sectionOffsets.length - 1) {
+        break;
+      }
+      final double thresholdOffset =
+          entry.$2 + (_sectionHeights[entry.$1] * sectionThreshold);
+      if (currentOffset >= thresholdOffset) {
+        selectedIndex = entry.$1 + 1;
+      } else {
+        break;
       }
     }
     return selectedIndex;

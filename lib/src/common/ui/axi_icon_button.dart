@@ -169,10 +169,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             child: InkResponse(
               onTap: widget.onPressed,
               onLongPress: widget.onLongPress,
-              onTapDown: enabled ? _bounceController.handleTapDown : null,
-              onTapUp: enabled ? _bounceController.handleTapUp : null,
+              onHighlightChanged: enabled ? _bounceController.setPressed : null,
               onTapCancel: enabled ? _bounceController.handleTapCancel : null,
-              onLongPressUp: enabled ? _bounceController.handleTapCancel : null,
               containedInkWell: true,
               highlightShape: BoxShape.rectangle,
               customBorder: paintShape,

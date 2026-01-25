@@ -540,7 +540,7 @@ class SettingsControls extends StatelessWidget {
               link: mastodonUrl,
               iconData: LucideIcons.link,
             ),
-            const SizedBox(height: 300),
+            const SizedBox(height: 160),
           ],
         );
       },
@@ -736,13 +736,21 @@ class _SettingsActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton.ghost(
-      onPressed: onPressed,
-      leading: iconData == null ? null : Icon(iconData),
-      mainAxisAlignment: MainAxisAlignment.start,
-      foregroundColor: context.colorScheme.foreground,
-      child: Text(label),
-    ).withTapBounce(enabled: onPressed != null);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: SizedBox(
+        width: double.infinity,
+        child: ShadButton.ghost(
+          onPressed: onPressed,
+          mainAxisAlignment: MainAxisAlignment.start,
+          leading: iconData == null ? null : Icon(iconData),
+          child: Text(
+            label,
+            style: context.textTheme.small,
+          ),
+        ).withTapBounce(enabled: onPressed != null),
+      ),
+    );
   }
 }
 

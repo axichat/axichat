@@ -152,6 +152,8 @@ class AxiTapBounceController {
 
   void handleTapCancel() =>
       (_state?._handleTapCancel ?? _fallbackCancel)?.call();
+
+  void setPressed(bool value) => _state?._setPressed(value);
 }
 
 extension AxiTapBounceExtension on Widget {
