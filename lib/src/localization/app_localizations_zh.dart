@@ -1616,6 +1616,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileJumpToTop => 'Back to top';
 
   @override
+  String get settingsWebsiteLabel => 'Website';
+
+  @override
+  String get settingsDonateLabel => 'Donate';
+
+  @override
+  String get settingsMastodonLabel => 'Mastodon';
+
+  @override
   String get profileJidDescription =>
       '这是你的 Jabber ID，由用户名和域名组成，是你在 XMPP 网络中的唯一地址。';
 
@@ -7041,6 +7050,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get profileJumpToTop => 'Back to top';
+
+  @override
+  String get settingsWebsiteLabel => 'Website';
+
+  @override
+  String get settingsDonateLabel => 'Donate';
+
+  @override
+  String get settingsMastodonLabel => 'Mastodon';
 
   @override
   String get profileJidDescription =>

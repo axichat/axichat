@@ -976,7 +976,8 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
       }
       final RenderAbstractViewport viewport =
           RenderAbstractViewport.of(renderObject);
-      final double revealOffset = viewport.getOffsetToReveal(renderObject, 0.0).offset;
+      final double revealOffset =
+          viewport.getOffsetToReveal(renderObject, 0.0).offset;
       offsets.add(revealOffset);
     }
     return offsets;
@@ -1033,11 +1034,13 @@ class _SettingsJumpLink extends StatelessWidget {
       backgroundColor: isSelected ? selectedBackground : null,
       hoverBackgroundColor: isSelected ? selectedBackground : null,
       onPressed: onTap,
-      child: Text(
-        label,
-        textAlign: textAlign,
+      child: DefaultTextStyle.merge(
         style: context.textTheme.small.copyWith(
           color: jumpColor,
+        ),
+        child: Text(
+          label,
+          textAlign: textAlign,
         ),
       ),
     ).withTapBounce();

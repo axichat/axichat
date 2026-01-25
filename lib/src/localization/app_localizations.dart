@@ -3044,6 +3044,24 @@ abstract class AppLocalizations {
   /// **'Back to top'**
   String get profileJumpToTop;
 
+  /// No description provided for @settingsWebsiteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Website'**
+  String get settingsWebsiteLabel;
+
+  /// No description provided for @settingsDonateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Donate'**
+  String get settingsDonateLabel;
+
+  /// No description provided for @settingsMastodonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Mastodon'**
+  String get settingsMastodonLabel;
+
   /// No description provided for @profileJidDescription.
   ///
   /// In en, this message translates to:

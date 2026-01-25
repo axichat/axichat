@@ -1700,6 +1700,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get profileJumpToTop => 'Back to top';
 
   @override
+  String get settingsWebsiteLabel => 'Website';
+
+  @override
+  String get settingsDonateLabel => 'Donate';
+
+  @override
+  String get settingsMastodonLabel => 'Mastodon';
+
+  @override
   String get profileJidDescription =>
       'Este es tu Jabber ID. Consta de tu nombre de usuario y dominio; es una dirección única que te representa en la red XMPP.';
 

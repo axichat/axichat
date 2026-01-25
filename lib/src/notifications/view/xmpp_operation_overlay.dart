@@ -96,15 +96,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     for (final entry in _entries) {
       final XmppOperation? updated = incoming.remove(entry.operation.id);
       if (updated == null) {
-        if (entry.operation.status == XmppOperationStatus.inProgress) {
-          entry.operation = entry.operation.copyWith(
-            status: XmppOperationStatus.failure,
-          );
-          shouldRebuild = true;
-          _ensureExitScheduled(entry.operation.id);
-        } else {
-          _ensureExitScheduled(entry.operation.id);
-        }
+        // Ignore transient gaps so existing toasts only change on explicit
+        // completion updates.
         continue;
       }
       if (updated.status != entry.operation.status ||

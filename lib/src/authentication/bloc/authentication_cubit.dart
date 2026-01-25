@@ -196,8 +196,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is AuthenticationComplete) {
       _homeRefreshSyncService.start();
     }
-    _authRecoveryFuture = _recoverAuthTransaction();
-    _endpointConfigRecoveryFuture = _endpointConfigCubit.restore();
     _endpointConfigSubscription = _endpointConfigCubit.stream.listen(
       _handleEndpointConfigUpdated,
     );
@@ -245,13 +243,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       },
     );
-    _connectivitySubscription = xmppService.connectivityStream.listen((
-      connectionState,
-    ) async {
+    _connectivitySubscription =
+        xmppService.connectivityStream.asyncMap((connectionState) async {
       if (connectionState == ConnectionState.connected) {
         await _triggerEmailReconnect();
         await _flushPendingAccountDeletions();
-        _publishPendingAvatar();
+        await _publishPendingAvatar();
         if (_authenticatedJid != null) {
           await _homeRefreshSyncService.syncOnLogin();
         }
@@ -264,7 +261,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           await logout(severity: LogoutSeverity.auto);
         }
       }
-    });
+      return connectionState;
+    }).listen((_) {});
     _xmppStreamReadySubscription = _xmppService.streamReadyStream.listen(
       _handleXmppStreamReady,
     );
@@ -275,9 +273,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _handleEmailAuthFailure,
       );
     }
-    Future<void>(() async {
-      await _flushPendingAccountDeletions();
-    });
     Future<void>(() async {
       await _purgeLegacySignupDraft();
     });
@@ -335,25 +330,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   late provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
-  DateTime? _lastEmailProvisioningRetryAt;
   _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
   StreamSubscription<EndpointConfig>? _endpointConfigSubscription;
   VoidCallback? _foregroundListener;
-  Future<void>? _pendingAccountDeletionFlush;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
   AvatarUploadPayload? _signupAvatarDraft;
-  Timer? _signupAvatarPublishRetryTimer;
-  var _signupAvatarPublishRetryAttempts = 0;
   _AuthTransaction? _authTransaction;
-  late final Future<void> _authRecoveryFuture;
-  late final Future<void> _endpointConfigRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
   int _failedLoginAttempts = 0;
-  DateTime? _nextLoginAllowedAt;
+  Duration? _loginBackoffDelayPending;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -539,13 +528,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _recordLoginFailure() {
     const attemptIncrement = 1;
     _failedLoginAttempts += attemptIncrement;
-    final delay = _loginBackoffDelay(_failedLoginAttempts);
-    _nextLoginAllowedAt = DateTime.now().add(delay);
+    _loginBackoffDelayPending = _loginBackoffDelay(_failedLoginAttempts);
   }
 
   void _resetLoginBackoff() {
     _failedLoginAttempts = 0;
-    _nextLoginAllowedAt = null;
+    _loginBackoffDelayPending = null;
   }
 
   Duration _loginBackoffDelay(int attempt) {
@@ -564,20 +552,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return Duration(seconds: clampedSeconds);
   }
 
-  AuthMessage _loginBackoffMessage(Duration remaining) {
-    const minSeconds = 1;
-    final seconds = remaining.inSeconds;
-    final normalizedSeconds = seconds < minSeconds ? minSeconds : seconds;
-    return AuthBackoffMessage(normalizedSeconds);
-  }
-
-  AuthMessage? _activeLoginBackoffMessage(DateTime now) {
-    final allowedAt = _nextLoginAllowedAt;
-    if (allowedAt == null || !now.isBefore(allowedAt)) {
-      return null;
+  Future<void> _awaitLoginBackoff() async {
+    final delay = _loginBackoffDelayPending;
+    if (delay == null) {
+      return;
     }
-    final remaining = allowedAt.difference(now);
-    return _loginBackoffMessage(remaining);
+    _loginBackoffDelayPending = null;
+    await Future.delayed(delay);
   }
 
   Future<void> _recoverAuthTransaction() async {
@@ -798,6 +779,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!_stickyAuthActive || state is AuthenticationLogInInProgress) {
       return;
     }
+    await _publishPendingAvatar();
     await _triggerEmailReconnect();
   }
 
@@ -841,12 +823,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         emailService.hasActiveSession) {
       return;
     }
-    const retryCooldown = Duration(seconds: 30);
-    final now = DateTime.timestamp();
-    final lastAttempt = _lastEmailProvisioningRetryAt;
-    if (lastAttempt != null && now.difference(lastAttempt) < retryCooldown) {
-      return;
-    }
     final jid = _authenticatedJid;
     if (jid == null || jid.trim().isEmpty) {
       return;
@@ -884,7 +860,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final resolvedPassword =
         storedPassword ?? sessionPassword ?? activePassword;
     final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
-    _lastEmailProvisioningRetryAt = now;
     final displayName = jid.split('@').first;
     final rememberMe = await loadRememberMeChoice();
     await _ensureEmailProvisioned(
@@ -1133,8 +1108,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _xmppStreamReadySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
     await _endpointConfigSubscription?.cancel();
-    _signupAvatarPublishRetryTimer?.cancel();
-    _signupAvatarPublishRetryTimer = null;
     if (_foregroundListener != null) {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
@@ -1150,35 +1123,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return super.close();
   }
 
-  void _scheduleSignupAvatarPublishRetry() {
-    if (_signupAvatarDraft == null) {
-      return;
-    }
-    if (_signupAvatarPublishRetryTimer != null) {
-      return;
-    }
-    const maxRetryAttempts = 10;
-    const initialDelay = Duration(milliseconds: 250);
-    const maxDelay = Duration(seconds: 3);
-    final int clampedAttempts = (_signupAvatarPublishRetryAttempts + 1).clamp(
-      1,
-      maxRetryAttempts,
-    );
-    _signupAvatarPublishRetryAttempts = clampedAttempts;
-    final int delayMillis =
-        (initialDelay.inMilliseconds * clampedAttempts).clamp(
-      initialDelay.inMilliseconds,
-      maxDelay.inMilliseconds,
-    );
-    _signupAvatarPublishRetryTimer = Timer(
-      Duration(milliseconds: delayMillis),
-      () async {
-        _signupAvatarPublishRetryTimer = null;
-        await _publishPendingAvatar();
-      },
-    );
-  }
-
   Future<void> login({
     String? username,
     String? password,
@@ -1190,16 +1134,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _loginToDemoMode();
       return;
     }
-    final now = DateTime.now();
-    final backoffMessage = _activeLoginBackoffMessage(now);
-    if (backoffMessage != null) {
-      _emit(AuthenticationFailure(backoffMessage));
-      return;
-    }
     if (state is AuthenticationLogInInProgress) {
       _log.fine('Ignoring login request while another is running.');
       return;
     }
+    final usingStoredCredentials = username == null && password == null;
     final currentConfig = endpointConfig;
     _log.info(
       'Login requested '
@@ -1209,7 +1148,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
     _lastEmailProvisioningError = null;
     final AuthenticationState previousState = state;
-    final usingStoredCredentials = username == null && password == null;
     final wasAuthenticated = previousState is AuthenticationComplete;
     final configBeforeRecovery = currentConfig;
     final loginState = _activeSignupCredentialKey != null
@@ -1222,8 +1160,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         previousState is! AuthenticationLogInInProgress) {
       _emit(loginState);
     }
-    await _authRecoveryFuture;
-    await _endpointConfigRecoveryFuture;
+    await _awaitLoginBackoff();
+    await _recoverAuthTransaction();
+    await _endpointConfigCubit.restore();
     final EndpointConfig config = endpointConfig;
     final bool shouldSkipLogin = previousState is AuthenticationComplete &&
         _xmppService.connected &&
@@ -1633,7 +1572,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           state is! AuthenticationComplete) {
         _emit(AuthenticationLogInInProgress(config: endpointConfig));
       }
-      await _authRecoveryFuture;
+      await _recoverAuthTransaction();
       final demoDomain = kDemoSelfJid.split('@').last;
       final demoConfig = EndpointConfig(
         domain: demoDomain,
@@ -2094,21 +2033,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!_xmppService.connected ||
         !_stickyAuthActive ||
         !_xmppService.databasesInitialized) {
-      _scheduleSignupAvatarPublishRetry();
       return;
     }
     _signupAvatarDraft = null;
     try {
       await _xmppService.publishAvatar(payload);
-      _signupAvatarPublishRetryAttempts = 0;
-      _signupAvatarPublishRetryTimer?.cancel();
-      _signupAvatarPublishRetryTimer = null;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
       if (cause is mox.AvatarError) {
-        _signupAvatarPublishRetryAttempts = 0;
-        _signupAvatarPublishRetryTimer?.cancel();
-        _signupAvatarPublishRetryTimer = null;
         _log.info('Signup avatar publish rejected; skipping.', cause);
         return;
       }
@@ -2119,11 +2051,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           error,
           stackTrace,
         );
-        _scheduleSignupAvatarPublishRetry();
         return;
       }
       _log.warning('Failed to publish signup avatar', error, stackTrace);
-      _scheduleSignupAvatarPublishRetry();
     } catch (error, stackTrace) {
       _signupAvatarDraft ??= payload;
       _log.warning(
@@ -2131,7 +2061,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      _scheduleSignupAvatarPublishRetry();
     }
   }
 
@@ -2931,18 +2860,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return deletionError == null;
   }
 
-  Future<void> _flushPendingAccountDeletions() {
-    final pendingFlush = _pendingAccountDeletionFlush;
-    if (pendingFlush != null) {
-      return pendingFlush;
-    }
-    final future = _processPendingAccountDeletions();
-    _pendingAccountDeletionFlush = future;
-    return future.whenComplete(() {
-      if (identical(_pendingAccountDeletionFlush, future)) {
-        _pendingAccountDeletionFlush = null;
-      }
-    });
+  Future<void> _flushPendingAccountDeletions() async {
+    await _processPendingAccountDeletions();
   }
 
   Future<void> _processPendingAccountDeletions() async {

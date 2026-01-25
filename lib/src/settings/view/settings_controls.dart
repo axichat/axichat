@@ -511,20 +511,36 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             _SettingsLinkButton(
+              label: context.l10n.settingsWebsiteLabel,
+              link: websiteUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
               label: context.l10n.settingsTermsLabel,
               link: termsUrl,
-              iconData: LucideIcons.fileText,
+              iconData: LucideIcons.link,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsPrivacyLabel,
               link: privacyUrl,
-              iconData: LucideIcons.shieldCheck,
+              iconData: LucideIcons.link,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsLicenseAgpl,
               link: licenseUrl,
-              iconData: LucideIcons.fileText,
+              iconData: LucideIcons.link,
             ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsDonateLabel,
+              link: donateUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsMastodonLabel,
+              link: mastodonUrl,
+              iconData: LucideIcons.link,
+            ),
+            const SizedBox(height: 32),
           ],
         );
       },
@@ -720,57 +736,11 @@ class _SettingsActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final foregroundColor =
-        destructive ? colors.destructive : colors.foreground;
-    final double fallbackFontSize = context.textTheme.small.fontSize ?? 14;
-    const double iconSizeScale = 1.1;
-    final double iconSize = fallbackFontSize * iconSizeScale;
-    final verticalInset = _compactTilePadding.vertical / 2;
-    final double iconSpacing = _compactTilePadding.horizontal / 2;
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: verticalInset),
-      child: SizedBox(
-        width: double.infinity,
-        child: ShadButton.ghost(
-          size: ShadButtonSize.sm,
-          width: double.infinity,
-          expands: true,
-          mainAxisAlignment: MainAxisAlignment.start,
-          foregroundColor: foregroundColor,
-          hoverForegroundColor: foregroundColor,
-          padding: EdgeInsets.symmetric(
-            horizontal: _settingsSectionHeaderPadding.horizontal,
-            vertical: _compactTilePadding.vertical,
-          ),
-          onPressed: onPressed,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              if (iconData != null)
-                Baseline(
-                  baseline: fallbackFontSize,
-                  baselineType: TextBaseline.alphabetic,
-                  child: Icon(
-                    iconData,
-                    color: foregroundColor,
-                    size: iconSize,
-                  ),
-                ),
-              if (iconData != null) SizedBox(width: iconSpacing),
-              Text(
-                label,
-                textAlign: TextAlign.start,
-                style: context.textTheme.small.copyWith(
-                  color: foregroundColor,
-                ),
-              ),
-            ],
-          ),
-        ).withTapBounce(enabled: onPressed != null),
-      ),
-    );
+    return ShadButton.ghost(
+      onPressed: onPressed,
+      leading: iconData == null ? null : Icon(iconData),
+      child: Text(label),
+    ).withTapBounce(enabled: onPressed != null);
   }
 }
 
