@@ -65,19 +65,20 @@ class _UnregisterFormState extends State<UnregisterForm> {
         final loading = state is AuthenticationUnregisterInProgress;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
-        const unregisterErrorPaddingValue = 10.0;
-        const unregisterFieldPaddingValue = 8.0;
-        const unregisterSpacerHeight = 40.0;
-        const unregisterButtonGap = 16.0;
-        const unregisterSpinnerDimension = 16.0;
-        const unregisterSpinnerPadding = 1.0;
-        const unregisterSpinnerSlotSize =
+        final spacing = context.spacing;
+        final unregisterErrorPaddingValue = spacing.s;
+        final unregisterFieldPaddingValue = spacing.s;
+        final unregisterSpacerHeight = spacing.l;
+        final unregisterButtonGap = spacing.m;
+        final unregisterSpinnerDimension = spacing.m;
+        final unregisterSpinnerPadding = spacing.xxs;
+        final unregisterSpinnerSlotSize =
             unregisterSpinnerDimension + (unregisterSpinnerPadding * 2);
-        const unregisterSpinnerGap = 8.0;
-        const unregisterErrorPadding = EdgeInsets.all(
+        final unregisterSpinnerGap = spacing.s;
+        final unregisterErrorPadding = EdgeInsets.all(
           unregisterErrorPaddingValue,
         );
-        const unregisterFieldPadding = EdgeInsets.all(
+        final unregisterFieldPadding = EdgeInsets.all(
           unregisterFieldPaddingValue,
         );
         return Form(
@@ -94,12 +95,10 @@ class _UnregisterFormState extends State<UnregisterForm> {
                       child: Text(
                         state.message.resolve(context.l10n),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.colorScheme.destructive,
-                        ),
+                        style: context.textTheme.small,
                       ),
                     )
-                  : const SizedBox(height: unregisterSpacerHeight),
+                  : SizedBox(height: unregisterSpacerHeight),
               Padding(
                 padding: unregisterFieldPadding,
                 child: PasswordInput(
@@ -108,7 +107,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                   controller: _passwordTextController,
                 ),
               ),
-              const SizedBox.square(dimension: unregisterButtonGap),
+              SizedBox.square(dimension: unregisterButtonGap),
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(

@@ -107,12 +107,23 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
         );
       return animationChild;
     }
-    return GestureDetector(
-      excludeFromSemantics: true,
+    return Listener(
       behavior: HitTestBehavior.translucent,
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
+      onPointerDown: (event) => _handleTapDown(
+        TapDownDetails(
+          kind: event.kind,
+          globalPosition: event.position,
+          localPosition: event.localPosition,
+        ),
+      ),
+      onPointerUp: (event) => _handleTapUp(
+        TapUpDetails(
+          kind: event.kind,
+          globalPosition: event.position,
+          localPosition: event.localPosition,
+        ),
+      ),
+      onPointerCancel: (_) => _handleTapCancel(),
       child: animationChild,
     );
   }

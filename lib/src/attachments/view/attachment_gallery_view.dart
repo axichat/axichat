@@ -156,7 +156,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     required bool isSelf,
   }) async {
     if (!mounted) return;
-    final l10n = context.l10n;
     final senderEmail = chat?.emailAddress;
     final displaySender =
         senderEmail?.trim().isNotEmpty == true ? senderEmail! : senderJid;
@@ -165,13 +164,13 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
       barrierDismissible: true,
       builder: (dialogContext) {
         return AttachmentApprovalDialog(
-          title: l10n.chatAttachmentConfirmTitle,
-          message: l10n.chatAttachmentConfirmMessage(displaySender),
-          confirmLabel: l10n.chatAttachmentConfirmButton,
-          cancelLabel: l10n.commonCancel,
+          title: context.l10n.chatAttachmentConfirmTitle,
+          message: context.l10n.chatAttachmentConfirmMessage(displaySender),
+          confirmLabel: context.l10n.chatAttachmentConfirmButton,
+          cancelLabel: context.l10n.commonCancel,
           showAutoTrustToggle: !isSelf && chat != null,
-          autoTrustLabel: l10n.attachmentGalleryChatTrustLabel,
-          autoTrustHint: l10n.attachmentGalleryChatTrustHint,
+          autoTrustLabel: context.l10n.attachmentGalleryChatTrustLabel,
+          autoTrustHint: context.l10n.attachmentGalleryChatTrustHint,
         );
       },
     );
@@ -199,16 +198,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    context.read<AttachmentGalleryBloc>().add(
-          AttachmentGalleryChatsUpdated(
-            items: context.read<ChatsCubit>().state.items ?? const <Chat>[],
-          ),
-        );
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -216,17 +205,17 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    const horizontalPadding = 16.0;
-    const topPadding = 12.0;
-    const bottomPadding = 16.0;
-    const itemSpacing = 16.0;
-    const gridSpacing = 12.0;
-    const gridMinTileWidth = 200.0;
+    final spacing = context.spacing;
+    final horizontalPadding = spacing.m;
+    final topPadding = spacing.s;
+    final bottomPadding = spacing.m;
+    final itemSpacing = spacing.m;
+    final gridSpacing = spacing.s;
+    final gridMinTileWidth = spacing.xxl * 2;
     const gridMinColumns = 2;
     const gridMaxColumns = 4;
     const gridMinAvailableWidth = 0.0;
-    const gridHorizontalPadding = horizontalPadding * 2;
-    final l10n = context.l10n;
+    final gridHorizontalPadding = horizontalPadding * 2;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) => previous.items != current.items,
       listener: (context, state) {
@@ -249,7 +238,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
             if (state.status.isFailure) {
               return Center(
                 child: Text(
-                  l10n.attachmentGalleryErrorMessage,
+                  context.l10n.attachmentGalleryErrorMessage,
                   style: context.textTheme.muted,
                   textAlign: TextAlign.center,
                 ),
@@ -274,7 +263,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
                   topPadding,
                   horizontalPadding,
@@ -307,7 +296,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                   onClearSearch: _searchController.clear,
                 ),
               ),
-              const SizedBox(height: itemSpacing),
+              SizedBox(height: itemSpacing),
               Expanded(
                 child: state.entries.isEmpty
                     ? Center(
@@ -325,7 +314,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                       )
                     : layout == AttachmentGalleryLayout.list
                         ? ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(
+                            padding: EdgeInsets.fromLTRB(
                               horizontalPadding,
                               0,
                               horizontalPadding,
@@ -333,7 +322,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                             ),
                             itemCount: state.entries.length,
                             separatorBuilder: (_, __) =>
-                                const SizedBox(height: itemSpacing),
+                                SizedBox(height: itemSpacing),
                             itemBuilder: (context, index) =>
                                 AttachmentGalleryEntry(
                               entry: state.entries[index],
@@ -357,7 +346,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                               layout: layout,
                               onApproveAttachment: _approveAttachment,
                               metaSeparator:
-                                  l10n.attachmentGalleryMetaSeparator,
+                                  context.l10n.attachmentGalleryMetaSeparator,
                             ),
                           )
                         : LayoutBuilder(
@@ -375,7 +364,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                       gridMetrics.crossAxisCount)
                                   .ceil();
                               return ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(
+                                padding: EdgeInsets.fromLTRB(
                                   horizontalPadding,
                                   0,
                                   horizontalPadding,
@@ -383,7 +372,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                 ),
                                 itemCount: rowCount,
                                 separatorBuilder: (_, __) =>
-                                    const SizedBox(height: gridSpacing),
+                                    SizedBox(height: gridSpacing),
                                 itemBuilder: (context, rowIndex) {
                                   final rowStart =
                                       rowIndex * gridMetrics.crossAxisCount;
@@ -426,12 +415,12 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                             layout: layout,
                                             onApproveAttachment:
                                                 _approveAttachment,
-                                            metaSeparator: l10n
+                                            metaSeparator: context.l10n
                                                 .attachmentGalleryMetaSeparator,
                                           ),
                                         ),
                                         if (index < rowItems.length - 1)
-                                          const SizedBox(width: gridSpacing),
+                                          SizedBox(width: gridSpacing),
                                       ],
                                     ],
                                   );
@@ -476,7 +465,8 @@ class AttachmentGalleryControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double controlsSpacing = 12.0;
+    final spacing = context.spacing;
+    final controlsSpacing = spacing.s;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: controlsSpacing,
@@ -516,19 +506,18 @@ class AttachmentGallerySearchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    const double controlSpacing = 8.0;
+    final controlSpacing = context.spacing.s;
     return Row(
       children: [
         Expanded(
           child: SearchInputField(
             controller: searchController,
-            placeholder: Text(l10n.commonSearch),
-            clearTooltip: l10n.commonClear,
+            placeholder: Text(context.l10n.commonSearch),
+            clearTooltip: context.l10n.commonClear,
             onClear: onClearSearch,
           ),
         ),
-        const SizedBox(width: controlSpacing),
+        SizedBox(width: controlSpacing),
         AttachmentGalleryLayoutToggle(
           layout: layout,
           onChanged: onLayoutChanged,
@@ -550,23 +539,22 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double controlSpacing = 8.0;
-    final l10n = context.l10n;
+    final controlSpacing = context.spacing.s;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiIconButton.ghost(
           iconData: LucideIcons.layoutGrid,
-          tooltip: l10n.attachmentGalleryLayoutGridLabel,
+          tooltip: context.l10n.attachmentGalleryLayoutGridLabel,
           usePrimary: layout == AttachmentGalleryLayout.grid,
           onPressed: layout == AttachmentGalleryLayout.grid
               ? null
               : () => onChanged(AttachmentGalleryLayout.grid),
         ),
-        const SizedBox(width: controlSpacing),
+        SizedBox(width: controlSpacing),
         AxiIconButton.ghost(
           iconData: LucideIcons.list,
-          tooltip: l10n.attachmentGalleryLayoutListLabel,
+          tooltip: context.l10n.attachmentGalleryLayoutListLabel,
           usePrimary: layout == AttachmentGalleryLayout.list,
           onPressed: layout == AttachmentGalleryLayout.list
               ? null
@@ -597,13 +585,15 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    const double controlRowSpacing = 12.0;
-    const double controlSpacing = 8.0;
+    final spacing = context.spacing;
+    final controlRowSpacing = spacing.m;
+    final controlSpacing = spacing.s;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double minSelectWidth = math.min(180.0, constraints.maxWidth);
-        final double maxSelectWidth = math.min(260.0, constraints.maxWidth);
+        final double minSelectWidth =
+            math.min(spacing.xxl * 2, constraints.maxWidth);
+        final double maxSelectWidth =
+            math.min(spacing.xxl * 3, constraints.maxWidth);
         final BoxConstraints selectConstraints = BoxConstraints(
           minWidth: minSelectWidth,
           maxWidth: maxSelectWidth,
@@ -611,20 +601,20 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
         final sortSelect = AttachmentGallerySelect<AttachmentGallerySortOption>(
           value: sortOption,
           onChanged: onSortChanged,
-          labelBuilder: (value) => value.label(l10n),
+          labelBuilder: (value) => value.label(context.l10n),
           options: AttachmentGallerySortOption.values,
         );
         final typeSelect = AttachmentGallerySelect<AttachmentGalleryTypeFilter>(
           value: typeFilter,
           onChanged: onTypeFilterChanged,
-          labelBuilder: (value) => value.label(l10n),
+          labelBuilder: (value) => value.label(context.l10n),
           options: AttachmentGalleryTypeFilter.values,
         );
         final sourceSelect =
             AttachmentGallerySelect<AttachmentGallerySourceFilter>(
           value: sourceFilter,
           onChanged: onSourceFilterChanged,
-          labelBuilder: (value) => value.label(l10n),
+          labelBuilder: (value) => value.label(context.l10n),
           options: AttachmentGallerySourceFilter.values,
         );
         return Wrap(

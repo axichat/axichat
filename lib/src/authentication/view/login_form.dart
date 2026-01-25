@@ -77,15 +77,26 @@ class _LoginFormState extends State<LoginForm> {
             state is AuthenticationComplete;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
+        final spacing = context.spacing;
         final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
-        const loginSpinnerDimension = 16.0;
-        const loginSpinnerPadding = 1.0;
-        const loginSpinnerSlotSize =
+        final loginSpinnerDimension = spacing.m;
+        final loginSpinnerPadding = spacing.xxs;
+        final loginSpinnerSlotSize =
             loginSpinnerDimension + (loginSpinnerPadding * 2);
-        const loginSpinnerGap = 8.0;
-        const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
-        const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
-        const errorMessagePadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
+        final loginSpinnerGap = spacing.s;
+        final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
+        final errorPadding = EdgeInsets.fromLTRB(
+          spacing.s,
+          spacing.m,
+          spacing.s,
+          spacing.s,
+        );
+        final errorMessagePadding = EdgeInsets.fromLTRB(
+          spacing.s,
+          spacing.s,
+          spacing.s,
+          spacing.m,
+        );
         final errorText = state is AuthenticationFailure
             ? state.message.resolve(context.l10n)
             : null;
@@ -114,9 +125,7 @@ class _LoginFormState extends State<LoginForm> {
                             label: context.l10n.signupErrorPrefix(errorText),
                             child: Text(
                               errorText,
-                              style: TextStyle(
-                                color: context.colorScheme.destructive,
-                              ),
+                              style: context.textTheme.small,
                             ),
                           ),
                   ),
@@ -127,7 +136,7 @@ class _LoginFormState extends State<LoginForm> {
                       capability: context.watch<Capability>(),
                     ),
                   ),
-                  const SizedBox.square(dimension: 16.0),
+                  SizedBox.square(dimension: spacing.m),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
@@ -155,7 +164,7 @@ class _LoginFormState extends State<LoginForm> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: spacing.s),
                   Padding(
                     padding: horizontalPadding,
                     child: PasswordInput(
@@ -166,7 +175,7 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   Padding(
                     padding: horizontalPadding.add(
-                      const EdgeInsets.only(top: 12, bottom: 4),
+                      EdgeInsets.only(top: spacing.s, bottom: spacing.xs),
                     ),
                     child: AxiCheckboxFormField(
                       key: _rememberMeFieldKey,
@@ -183,7 +192,7 @@ class _LoginFormState extends State<LoginForm> {
                       },
                     ),
                   ),
-                  const SizedBox.square(dimension: 20.0),
+                  SizedBox.square(dimension: spacing.m),
                   Padding(
                     padding: horizontalPadding,
                     child: Builder(

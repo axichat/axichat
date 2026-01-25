@@ -65,11 +65,12 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
         final loading = state is AuthenticationPasswordChangeInProgress;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
-        const changePasswordSpinnerDimension = 16.0;
-        const changePasswordSpinnerPadding = 1.0;
-        const changePasswordSpinnerSlotSize =
+        final spacing = context.spacing;
+        final changePasswordSpinnerDimension = spacing.m;
+        final changePasswordSpinnerPadding = spacing.xxs;
+        final changePasswordSpinnerSlotSize =
             changePasswordSpinnerDimension + (changePasswordSpinnerPadding * 2);
-        const changePasswordSpinnerGap = 8.0;
+        final changePasswordSpinnerGap = spacing.s;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -80,7 +81,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               ),
               state is AuthenticationPasswordChangeSuccess
                   ? Padding(
-                      padding: const EdgeInsets.all(10.0),
+                      padding: EdgeInsets.all(spacing.s),
                       child: Text(
                         state.message.resolve(context.l10n),
                         textAlign: TextAlign.center,
@@ -88,18 +89,16 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     )
                   : state is AuthenticationPasswordChangeFailure
                       ? Padding(
-                          padding: const EdgeInsets.all(10.0),
+                          padding: EdgeInsets.all(spacing.s),
                           child: Text(
                             state.message.resolve(context.l10n),
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: context.colorScheme.destructive,
-                            ),
+                            style: context.textTheme.small,
                           ),
                         )
-                      : const SizedBox(height: 40),
+                      : SizedBox(height: spacing.l),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
                   placeholder: context.l10n.authPasswordCurrentPlaceholder,
                   enabled: !loading,
@@ -107,7 +106,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
                   placeholder: context.l10n.authPasswordNewPlaceholder,
                   enabled: !loading,
@@ -115,7 +114,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
                   placeholder: context.l10n.authPasswordConfirmNewPlaceholder,
                   enabled: !loading,
@@ -131,7 +130,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   },
                 ),
               ),
-              const SizedBox.square(dimension: 16.0),
+              SizedBox.square(dimension: spacing.m),
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(

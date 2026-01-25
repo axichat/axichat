@@ -161,6 +161,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   });
 
@@ -172,6 +174,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.primary;
 
@@ -183,6 +187,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.secondary;
 
@@ -194,6 +200,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.outline;
 
@@ -205,6 +213,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.ghost;
 
@@ -216,6 +226,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.link;
 
@@ -227,6 +239,8 @@ class AxiButton extends StatefulWidget {
     this.trailing,
     this.onPressed,
     this.onLongPress,
+    this.loading = false,
+    this.loadingIndicator,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.destructive;
 
@@ -237,6 +251,8 @@ class AxiButton extends StatefulWidget {
   final Widget? trailing;
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
+  final bool loading;
+  final Widget? loadingIndicator;
   final String? semanticLabel;
 
   @override
@@ -309,9 +325,26 @@ class _AxiButtonState extends State<AxiButton> {
           decorationColor: foreground,
         );
 
+        final Widget loadingSpinner = widget.loadingIndicator ??
+            AxiProgressIndicator(
+              dimension: spacing.s,
+              color: foreground,
+            );
+        final bool replacesLeading = widget.leading != null && widget.loading;
+        final Widget? leading =
+            replacesLeading ? loadingSpinner : widget.leading;
+
         final List<Widget> rowChildren = <Widget>[
-          if (widget.leading != null) widget.leading!,
-          if (widget.leading != null && widget.child != null)
+          if (widget.leading == null)
+            ButtonSpinnerSlot(
+              isVisible: widget.loading,
+              spinner: loadingSpinner,
+              slotSize: spacing.s,
+              gap: widget.size.gap(spacing),
+              duration: animationDuration,
+            ),
+          if (leading != null) leading,
+          if (leading != null && widget.child != null)
             SizedBox(width: widget.size.gap(spacing)),
           if (widget.child != null) widget.child!,
           if (widget.trailing != null && widget.child != null)
@@ -350,13 +383,20 @@ class _AxiButtonState extends State<AxiButton> {
             onTap: widget.onPressed,
             onLongPress: widget.onLongPress,
             onHighlightChanged: enabled
-                ? (value) => _updateState(WidgetState.pressed, value)
+                ? (value) {
+                    _updateState(WidgetState.pressed, value);
+                    _bounceController.setPressed(value);
+                  }
                 : null,
             onHover: enabled
                 ? (value) => _updateState(WidgetState.hovered, value)
                 : null,
-            onTapCancel:
-                enabled ? () => _updateState(WidgetState.pressed, false) : null,
+            onTapCancel: enabled
+                ? () {
+                    _updateState(WidgetState.pressed, false);
+                    _bounceController.setPressed(false);
+                  }
+                : null,
             containedInkWell: true,
             highlightShape: BoxShape.rectangle,
             customBorder: shape,
