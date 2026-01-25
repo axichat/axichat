@@ -736,6 +736,7 @@ class _SettingsActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: SizedBox(
@@ -743,6 +744,8 @@ class _SettingsActionButton extends StatelessWidget {
         child: ShadButton.ghost(
           onPressed: onPressed,
           mainAxisAlignment: MainAxisAlignment.start,
+          foregroundColor: colors.foreground,
+          hoverForegroundColor: colors.primary,
           leading: iconData == null ? null : Icon(iconData),
           child: Text(
             label,

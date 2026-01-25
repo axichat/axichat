@@ -8,11 +8,9 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-const double _defaultIconScale = 0.6;
-
 class AxiIconButton extends StatefulWidget {
-  static const double kDefaultSize = 36.0;
-  static const double kTapTargetSize = 48.0;
+  static const double kDefaultSize = axiSpaceL;
+  static const double kTapTargetSize = axiSpaceXl;
 
   const AxiIconButton({
     super.key,
@@ -33,8 +31,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.ghost = false,
     this.outline = false,
-  }) : resolvedIconSize =
-            iconSize ?? AxiIconButton.kDefaultSize * _defaultIconScale;
+  }) : resolvedIconSize = iconSize ?? axiIconSize;
 
   const AxiIconButton.ghost({
     super.key,
@@ -52,8 +49,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
-  })  : resolvedIconSize =
-            iconSize ?? AxiIconButton.kDefaultSize * _defaultIconScale,
+  })  : resolvedIconSize = iconSize ?? axiIconSize,
         borderWidth = null,
         ghost = true,
         outline = false;
@@ -72,8 +68,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.usePrimary = false,
-  })  : resolvedIconSize =
-            iconSize ?? AxiIconButton.kDefaultSize * _defaultIconScale,
+  })  : resolvedIconSize = iconSize ?? axiIconSize,
         backgroundColor = null,
         borderColor = null,
         borderWidth = null,
@@ -133,9 +128,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         widget.buttonSize ?? AxiIconButton.kDefaultSize;
     final double resolvedTapTargetSize =
         widget.tapTargetSize ?? AxiIconButton.kTapTargetSize;
-    final double resolvedCornerRadius = widget.cornerRadius ?? 18;
-    final double resolvedBorderWidth =
-        widget.borderWidth ?? (isOutline ? 1.0 : (isGhost ? 0 : 1.0));
+    final double resolvedCornerRadius =
+        widget.cornerRadius ?? axiSquircleRadius;
+    final double resolvedBorderWidth = widget.borderWidth ??
+        (isOutline ? axiSpaceXxs : (isGhost ? 0 : axiSpaceXxs));
     final paintShape = SquircleBorder(
       cornerRadius: resolvedCornerRadius,
       side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),

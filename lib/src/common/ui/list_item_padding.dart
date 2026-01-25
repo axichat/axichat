@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 class ListItemPadding extends StatelessWidget {
   const ListItemPadding({super.key, required this.child, this.padding});
@@ -12,7 +13,13 @@ class ListItemPadding extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: padding ?? const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: padding ??
+          const EdgeInsets.fromLTRB(
+            axiSpaceM,
+            axiSpaceS,
+            axiSpaceM,
+            axiSpaceS,
+          ),
       child: child,
     );
   }

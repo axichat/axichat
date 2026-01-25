@@ -343,8 +343,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             );
             final materialColors = shadTheme.colorScheme;
             final globalRadius = shadTheme.radius;
-            final buttonShape = ContinuousRectangleBorder(
-              borderRadius: globalRadius,
+            final buttonShape = SquircleBorder(
+              cornerRadius: axiSquircleRadius,
             );
             final listTileShape = buttonShape;
             final outlineInputBorder = OutlineInputBorder(
@@ -390,7 +390,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               fontWeight: appBarTitleFontWeight,
             );
             return theme.copyWith(
-              iconTheme: const IconThemeData(size: 20),
+              iconTheme: const IconThemeData(size: axiIconSize),
               textTheme: textThemeWithEmojiFallback,
               appBarTheme: theme.appBarTheme.copyWith(
                 titleTextStyle: appBarTitleStyle,
@@ -425,8 +425,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 errorBorder: errorBorder,
                 focusedErrorBorder: errorBorder,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                  horizontal: axiSpaceM,
+                  vertical: axiSpaceS,
                 ),
               ),
               filledButtonTheme: FilledButtonThemeData(
@@ -436,8 +436,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   foregroundColor: materialColors.primaryForeground,
                   shape: buttonShape,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                    horizontal: axiSpaceM,
+                    vertical: axiSpaceS,
                   ),
                 ),
               ),
@@ -449,8 +449,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   shape: buttonShape,
                   side: BorderSide(color: materialColors.border),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                    horizontal: axiSpaceM,
+                    vertical: axiSpaceS,
                   ),
                 ),
               ),
@@ -459,19 +459,20 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   foregroundColor: materialColors.foreground,
                   shape: buttonShape,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: axiSpaceS,
+                    vertical: axiSpaceXs,
                   ),
                 ),
               ),
               checkboxTheme: CheckboxThemeData(
-                shape: ContinuousRectangleBorder(borderRadius: globalRadius),
+                shape: buttonShape,
                 materialTapTargetSize: MaterialTapTargetSize.padded,
                 visualDensity: VisualDensity.standard,
-                side: BorderSide(color: materialColors.border, width: 1.2),
+                side: BorderSide(
+                    color: materialColors.border, width: axiSpaceXxs),
               ),
               scrollbarTheme: ScrollbarThemeData(
-                thickness: const WidgetStatePropertyAll<double>(4),
+                thickness: const WidgetStatePropertyAll<double>(axiSpaceXs),
                 radius: const Radius.circular(999),
                 thumbColor: WidgetStateProperty.resolveWith((states) {
                   final hovered = states.contains(WidgetState.hovered) ||
@@ -487,6 +488,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   (extension) => extension is! ChatThemeTokens,
                 ),
                 chatTokens,
+                axiSpacing,
               ],
             );
           },
@@ -818,6 +820,9 @@ extension ThemeExtension on BuildContext {
   ChatThemeTokens get chatTheme =>
       Theme.of(this).extension<ChatThemeTokens>() ??
       AppTheme.tokens(brightness: Theme.of(this).brightness);
+
+  AxiSpacing get spacing =>
+      Theme.of(this).extension<AxiSpacing>() ?? axiSpacing;
 }
 
 extension TargetPlatformExtension on TargetPlatform {

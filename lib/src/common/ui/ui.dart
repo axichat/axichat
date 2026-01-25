@@ -42,6 +42,8 @@ export 'axi_text_input.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
 export 'axi_version.dart';
+export 'axi_spacing.dart';
+export 'buttons/axi_button.dart';
 export 'chips_bar.dart';
 export 'cutout.dart';
 export 'display_fingerprint.dart';

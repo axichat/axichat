@@ -4,11 +4,12 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _kMenuItemHeight = 52;
+const double _kMenuItemHeight = axiSpaceL;
 const double _kMenuMinWidth = 0;
 const double _kMenuMaxWidth = 360;
 const double _kMenuMaxHeight = 320;
@@ -135,7 +136,6 @@ class _AxiMenuState extends State<AxiMenu> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final BorderRadius borderRadius = context.radius;
     final dividerColor = colors.border.withValues(alpha: 0.55);
     final hoverColor = colors.primary.withValues(alpha: 0.26);
     final focusColor = colors.primary.withValues(alpha: 0.32);
@@ -157,8 +157,9 @@ class _AxiMenuState extends State<AxiMenu> {
         textTheme.small.copyWith(fontWeight: FontWeight.w700),
         textDirection,
       );
-      final double iconWidth = action.icon != null ? 28 : 0; // 16 icon + 12 gap
-      final double paddedWidth = 14 * 2 + iconWidth + textWidth;
+      final double iconWidth =
+          action.icon != null ? axiIconSize + axiSpaceS : 0;
+      final double paddedWidth = axiSpaceM * 2 + iconWidth + textWidth;
       return math.max(current, paddedWidth);
     });
 
@@ -167,10 +168,11 @@ class _AxiMenuState extends State<AxiMenu> {
       widget.maxWidth,
     );
 
+    final menuShape = SquircleBorder(cornerRadius: axiSquircleRadius);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        boxShadow: const [
+      decoration: ShapeDecoration(
+        shape: menuShape,
+        shadows: const [
           BoxShadow(
             color: Color(0x1F000000),
             blurRadius: 28,
@@ -191,10 +193,11 @@ class _AxiMenuState extends State<AxiMenu> {
         ),
         child: Material(
           color: colors.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: borderRadius,
+          shape: SquircleBorder(
+            cornerRadius: axiSquircleRadius,
             side: BorderSide(color: colors.border.withValues(alpha: 0.9)),
           ),
+          clipBehavior: Clip.antiAlias,
           child: Focus(
             focusNode: _menuScopeNode,
             autofocus: true,
@@ -309,7 +312,6 @@ class _AxiMenuItem extends StatelessWidget {
         : (enabled
             ? colors.foreground
             : colors.mutedForeground.withValues(alpha: 0.65));
-    final BorderRadius radius = context.radius;
     final WidgetStateProperty<Color?> overlay = WidgetStateProperty.resolveWith(
       (states) {
         if (states.contains(WidgetState.pressed) ||
@@ -330,15 +332,22 @@ class _AxiMenuItem extends StatelessWidget {
         autofocus: false,
         onTap: enabled ? onPressed : null,
         overlayColor: overlay,
-        customBorder: RoundedRectangleBorder(borderRadius: radius),
+        customBorder: SquircleBorder(cornerRadius: axiSquircleRadius),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+            horizontal: axiSpaceM,
+            vertical: axiSpaceS,
+          ),
           child: Row(
             children: [
               if (action.icon != null)
                 Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Icon(action.icon, size: 16, color: foreground),
+                  padding: const EdgeInsets.only(right: axiSpaceS),
+                  child: Icon(
+                    action.icon,
+                    size: axiIconSize,
+                    color: foreground,
+                  ),
                 ),
               Expanded(
                 child: Text(
