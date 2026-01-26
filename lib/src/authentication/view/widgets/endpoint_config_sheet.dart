@@ -20,12 +20,13 @@ class EndpointConfigSheet extends StatefulWidget {
   static Future<void> show(BuildContext context) {
     final commandSurface = resolveCommandSurface(context);
     final bool compact = commandSurface == CommandSurface.sheet;
+    final sizing = context.sizing;
     return showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: compact,
-      dialogMaxWidth: compact ? 560 : 720,
+      dialogMaxWidth: sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
       builder: (_) => EndpointConfigSheet(compact: compact),
     );
@@ -183,6 +184,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final spacing = context.spacing;
+    final sizing = context.sizing;
+    final portFieldWidth = sizing.menuItemHeight * 2;
     final placeholderStyle = textTheme.muted;
     final inputStyle = textTheme.p;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
@@ -287,7 +290,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
             SizedBox(width: spacing.s),
             SizedBox(
-              width: spacing.xxl,
+              width: portFieldWidth,
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
@@ -321,7 +324,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
             SizedBox(width: spacing.s),
             SizedBox(
-              width: spacing.xxl,
+              width: portFieldWidth,
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
@@ -355,7 +358,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
             SizedBox(width: spacing.s),
             SizedBox(
-              width: spacing.xxl,
+              width: portFieldWidth,
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
@@ -373,7 +376,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         ),
         SizedBox(height: spacing.s),
         SizedBox(
-          width: spacing.xxl,
+          width: portFieldWidth,
           child: AxiTextFormField(
             autocorrect: false,
             keyboardType: TextInputType.number,
@@ -414,8 +417,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           trailing: ShadIconButton(
             backgroundColor: colors.muted,
             foregroundColor: colors.mutedForeground,
-            width: spacing.m,
-            height: spacing.m,
+            width: sizing.iconButtonSize,
+            height: sizing.iconButtonSize,
             padding: EdgeInsets.zero,
             decoration: const ShadDecoration(
               secondaryBorder: ShadBorder.none,
@@ -425,7 +428,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               _emailProvisioningTokenObscure
                   ? LucideIcons.eyeOff
                   : LucideIcons.eye,
-              size: spacing.m,
+              size: sizing.iconButtonIconSize,
             ),
             onPressed: () => setState(() {
               _emailProvisioningTokenObscure = !_emailProvisioningTokenObscure;

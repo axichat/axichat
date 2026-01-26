@@ -4,6 +4,7 @@
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,7 +22,7 @@ class AccessibilityFindActionButton extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final spacing = context.spacing;
-    final shortcut = findActionShortcut(Theme.of(context).platform);
+    final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final tooltip = context.l10n.accessibilityActionsShortcutTooltip(
       shortcutText,
@@ -34,7 +35,10 @@ class AccessibilityFindActionButton extends StatelessWidget {
                 const AccessibilityMenuOpened(),
               ),
           padding: EdgeInsets.all(spacing.s),
-          child: Icon(LucideIcons.lifeBuoy, size: spacing.m),
+          child: Icon(
+            LucideIcons.lifeBuoy,
+            size: context.sizing.iconButtonIconSize,
+          ),
         ),
       );
     }
@@ -45,7 +49,10 @@ class AccessibilityFindActionButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.lifeBuoy, size: spacing.m),
+          Icon(
+            LucideIcons.lifeBuoy,
+            size: context.sizing.iconButtonIconSize,
+          ),
           SizedBox(width: spacing.s),
           ShortcutHint(shortcut: shortcut, dense: true),
         ],

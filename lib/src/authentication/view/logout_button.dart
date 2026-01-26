@@ -17,16 +17,16 @@ class LogoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return AxiIconButton(
       iconData: LucideIcons.logOut,
       onPressed: () {
-        final authCubit = context.read<AuthenticationCubit>();
         showFadeScaleDialog(
           context: context,
           builder: (context) {
             var severity = LogoutSeverity.normal;
             return BlocProvider.value(
-              value: authCubit,
+              value: context.read<AuthenticationCubit>(),
               child: StatefulBuilder(
                 builder: (context, setState) {
                   void updateSeverity(LogoutSeverity value) {
@@ -40,7 +40,7 @@ class LogoutButton extends StatelessWidget {
                     content: Material(
                       child: ListTileTheme.merge(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
+                          borderRadius: context.radius,
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -48,15 +48,11 @@ class LogoutButton extends StatelessWidget {
                             CheckboxListTile(
                               title: Text(
                                 context.l10n.authLogoutNormal,
-                                style: TextStyle(
-                                  color: context.colorScheme.cardForeground,
-                                ),
+                                style: context.textTheme.p,
                               ),
                               subtitle: Text(
                                 context.l10n.authLogoutNormalDescription,
-                                style: TextStyle(
-                                  color: context.colorScheme.cardForeground,
-                                ),
+                                style: context.textTheme.small,
                               ),
                               value: severity.isNormal,
                               selected: severity.isNormal,
@@ -64,19 +60,15 @@ class LogoutButton extends StatelessWidget {
                               onChanged: (_) =>
                                   updateSeverity(LogoutSeverity.normal),
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: spacing.s),
                             CheckboxListTile(
                               title: Text(
                                 context.l10n.authLogoutBurn,
-                                style: TextStyle(
-                                  color: context.colorScheme.cardForeground,
-                                ),
+                                style: context.textTheme.p,
                               ),
                               subtitle: Text(
                                 context.l10n.authLogoutBurnDescription,
-                                style: TextStyle(
-                                  color: context.colorScheme.cardForeground,
-                                ),
+                                style: context.textTheme.small,
                               ),
                               isThreeLine: true,
                               value: severity.isBurn,

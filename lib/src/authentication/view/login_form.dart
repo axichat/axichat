@@ -26,12 +26,14 @@ class LoginForm extends StatefulWidget {
   State<LoginForm> createState() => _LoginFormState();
 }
 
+enum _RememberMeChoice { enabled, disabled }
+
 class _LoginFormState extends State<LoginForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
-  bool rememberMe = true;
+  _RememberMeChoice _rememberMeChoice = _RememberMeChoice.enabled;
 
   @override
   void initState() {
@@ -46,7 +48,8 @@ class _LoginFormState extends State<LoginForm> {
         await context.read<AuthenticationCubit>().loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
-      rememberMe = preference;
+      _rememberMeChoice =
+          preference ? _RememberMeChoice.enabled : _RememberMeChoice.disabled;
     });
     _rememberMeFieldKey.currentState?.didChange(preference);
   }
@@ -62,10 +65,10 @@ class _LoginFormState extends State<LoginForm> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     widget.onSubmitStart?.call();
-    context.read<AuthenticationCubit>().login(
+    await context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,
-          rememberMe: rememberMe,
+          rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
         );
   }
 
@@ -78,8 +81,9 @@ class _LoginFormState extends State<LoginForm> {
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
+        final sizing = context.sizing;
         final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
-        final loginSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
+        final loginSpinnerSlotSize = sizing.iconButtonIconSize;
         final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
         final errorPadding = EdgeInsets.fromLTRB(
           spacing.s,
@@ -100,7 +104,7 @@ class _LoginFormState extends State<LoginForm> {
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: BoxConstraints(maxWidth: sizing.dialogMaxWidth),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -151,12 +155,9 @@ class _LoginFormState extends State<LoginForm> {
                         enabled: !loading,
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
-                        validator: (text) {
-                          if (text.isEmpty) {
-                            return context.l10n.authUsernameRequired;
-                          }
-                          return null;
-                        },
+                        validator: (text) => text.isEmpty
+                            ? context.l10n.authUsernameRequired
+                            : null,
                       ),
                     ),
                   ),
@@ -176,15 +177,20 @@ class _LoginFormState extends State<LoginForm> {
                     child: AxiCheckboxFormField(
                       key: _rememberMeFieldKey,
                       enabled: !loading,
-                      initialValue: rememberMe,
+                      initialValue:
+                          _rememberMeChoice == _RememberMeChoice.enabled,
                       inputLabel: Text(context.l10n.authRememberMeLabel),
                       onChanged: (value) async {
                         setState(() {
-                          rememberMe = value;
+                          _rememberMeChoice = value == true
+                              ? _RememberMeChoice.enabled
+                              : _RememberMeChoice.disabled;
                         });
                         await context
                             .read<AuthenticationCubit>()
-                            .persistRememberMeChoice(value);
+                            .persistRememberMeChoice(
+                              _rememberMeChoice == _RememberMeChoice.enabled,
+                            );
                       },
                     ),
                   ),

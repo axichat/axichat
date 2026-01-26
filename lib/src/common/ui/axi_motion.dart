@@ -74,12 +74,12 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
 }
 
 const AxiMotion axiMotion = AxiMotion(
-  buttonBounceScale: 0.98,
-  buttonCompactBounceScale: 0.96,
+  buttonBounceScale: 0.95,
+  buttonCompactBounceScale: 0.93,
   buttonPressDurationFactor: 4 / 15,
   buttonReleaseDurationFactor: 3 / 5,
-  iconButtonBounceScale: 0.96,
-  iconButtonCompactBounceScale: 0.92,
+  iconButtonBounceScale: 0.94,
+  iconButtonCompactBounceScale: 0.9,
   iconButtonPressDurationFactor: 4 / 15,
   iconButtonReleaseDurationFactor: 3 / 5,
   tapSplashAlpha: 0.18,

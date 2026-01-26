@@ -111,9 +111,9 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
 }
 
 const AxiSizing axiSizing = AxiSizing(
-  iconButtonSize: 32,
+  iconButtonSize: 40,
   iconButtonTapTarget: 48,
-  iconButtonIconSize: 24,
+  iconButtonIconSize: 20,
   buttonHeightSm: 32,
   buttonHeightRegular: 40,
   buttonHeightLg: 48,

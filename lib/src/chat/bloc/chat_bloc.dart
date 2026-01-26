@@ -4334,9 +4334,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (service == null || recipients.isEmpty) return false;
     final chat = state.chat;
     if (chat == null) return false;
-    final chatShareSignatureEnabled =
-        chat.shareSignatureEnabled ??
-            _settingsSnapshot.shareTokenSignatureEnabled;
+    final chatShareSignatureEnabled = chat.shareSignatureEnabled ??
+        _settingsSnapshot.shareTokenSignatureEnabled;
     final useSignatureToken = _settingsSnapshot.shareTokenSignatureEnabled &&
         chatShareSignatureEnabled &&
         recipients.every((recipient) => recipient.target.shareSignatureEnabled);

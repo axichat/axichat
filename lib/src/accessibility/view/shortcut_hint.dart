@@ -207,13 +207,15 @@ class _ShortcutKeycaps extends StatelessWidget {
     const double keyTopSheenBlend = 0.08;
     const double keyMidToneBlend = 0.04;
     const double keyShadowBlend = 0.65;
-    const double keyShadowAlpha = 0.35;
-    const double keyShadowOverlayAlpha = 0.45;
-    const double keyBorderAlpha = 0.95;
-    const double keyTopShadowAlpha = 0.3;
-    const double keyOverlayTopAlpha = 0.04;
-    const double keyOverlayMidAlpha = 0.0;
-    const double keyOverlayBottomAlpha = 0.12;
+    final keyShadowAlpha =
+        context.motion.tapFocusAlpha + (context.motion.tapHoverAlpha / 2);
+    final keyShadowOverlayAlpha =
+        context.motion.tapFocusAlpha + context.motion.tapHoverAlpha;
+    final keyTopShadowAlpha = context.motion.tapFocusAlpha;
+    final keyOverlayTopAlpha = context.motion.tapHoverAlpha / 2;
+    final keyOverlayMidAlpha =
+        context.motion.tapHoverAlpha - context.motion.tapHoverAlpha;
+    final keyOverlayBottomAlpha = context.motion.tapSplashAlpha;
     const keyGradientStops = [0.0, 0.45, 1.0];
     const overlayGradientStops = [0.0, 0.5, 1.0];
     final keyBase = context.colorScheme.card;
@@ -229,13 +231,17 @@ class _ShortcutKeycaps extends StatelessWidget {
     )!;
     final keyShadow = Color.lerp(context.colorScheme.background,
         context.colorScheme.foreground, keyShadowBlend)!;
-    final borderWidth = dense ? spacing.xxs : spacing.xs;
+    final borderWidth = dense
+        ? context.sizing.progressIndicatorStrokeWidth
+        : context.sizing.progressIndicatorStrokeWidth * 2;
     final padding = EdgeInsets.symmetric(
       horizontal: dense ? spacing.s : spacing.s,
       vertical: dense ? spacing.xs : spacing.xs,
     );
     final radius = context.radius;
-    final drop = dense ? spacing.xs : spacing.s;
+    final drop = dense
+        ? context.sizing.sheetDragHandleHeight
+        : context.sizing.sheetDragHandleHeight * 2;
 
     Widget keycap(String label) {
       final backplateColor = Color.alphaBlend(
@@ -265,7 +271,8 @@ class _ShortcutKeycaps extends StatelessWidget {
               child: Padding(
                 padding: padding,
                 child: Opacity(
-                  opacity: 0,
+                  opacity: context.motion.tapHoverAlpha -
+                      context.motion.tapHoverAlpha,
                   child: Text(label, style: context.textTheme.small),
                 ),
               ),
@@ -280,17 +287,15 @@ class _ShortcutKeycaps extends StatelessWidget {
                 stops: keyGradientStops,
               ),
               border: Border.all(
-                color: context.colorScheme.border.withValues(
-                  alpha: keyBorderAlpha,
-                ),
+                color: context.colorScheme.border,
                 width: borderWidth,
               ),
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
                   color: keyShadow.withValues(alpha: keyTopShadowAlpha),
-                  offset: Offset(0, spacing.xxs),
-                  blurRadius: spacing.xs,
+                  offset: Offset(0, context.sizing.modalShadowOffsetY / 8),
+                  blurRadius: context.sizing.modalShadowBlur / 8,
                 ),
               ],
             ),

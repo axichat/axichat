@@ -17,7 +17,7 @@ enum AxiIconButtonVariant {
 }
 
 class AxiIconButton extends StatefulWidget {
-  static const double kDefaultSize = 32;
+  static const double kDefaultSize = 40;
   static const double kTapTargetSize = 48;
 
   const AxiIconButton({
@@ -307,7 +307,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                       enabled ? SystemMouseCursors.click : MouseCursor.defer,
                   hoverStrategies: ShadTheme.of(context).hoverStrategies,
                   onHoverChange: enabled
-                      ? (value) => _updateState(WidgetState.hovered, value)
+                      ? (value) {
+                          _updateState(WidgetState.hovered, value);
+                          _bounceController.setHovered(value);
+                        }
                       : null,
                   onTap: enabled ? widget.onPressed : null,
                   onLongPress: enabled ? widget.onLongPress : null,

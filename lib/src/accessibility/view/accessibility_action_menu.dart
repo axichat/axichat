@@ -6,6 +6,7 @@ import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -868,7 +869,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         lastItemActivator: const _LastItemIntent(),
       },
     };
-    final scrimColor = context.colorScheme.foreground.withValues(alpha: 0.45);
+    final scrimColor = context.colorScheme.foreground.withValues(
+      alpha: context.motion.tapFocusAlpha + context.motion.tapHoverAlpha,
+    );
     return Stack(
       children: [
         Positioned.fill(
@@ -955,9 +958,11 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                   builder: (context) {
                     final viewSize = MediaQuery.sizeOf(context);
                     final spacing = context.spacing;
-                    final modalMinHeightValue = spacing.xl * 6 + spacing.l;
-                    final modalMaxWidthValue = spacing.xl * 11 + spacing.m;
-                    final modalVerticalMargin = spacing.xl + spacing.m;
+                    final modalMinHeightValue =
+                        context.sizing.menuItemHeight * 7;
+                    final modalMaxWidthValue = context.sizing.dialogMaxWidth;
+                    final modalVerticalMargin =
+                        context.sizing.menuItemHeight * 2;
                     final modalMinHeight = viewSize.height < modalMinHeightValue
                         ? viewSize.height
                         : modalMinHeightValue;
@@ -1447,8 +1452,8 @@ class _AccessibilityActionContent extends StatelessWidget {
     final hasMessages = messageSections.isNotEmpty;
     final hasSections = actionSections.isNotEmpty;
     final conversationListHeight =
-        _conversationListHeight(viewportHeight, context.spacing);
-    final rootListHeight = _rootListHeight(viewportHeight, context.spacing);
+        _conversationListHeight(viewportHeight, context.sizing);
+    final rootListHeight = _rootListHeight(viewportHeight, context.sizing);
     const headerOrder = NumericFocusOrder(0);
     const statusOrder = NumericFocusOrder(1);
     const legendOrder = NumericFocusOrder(2);
@@ -1508,7 +1513,9 @@ class _AccessibilityActionContent extends StatelessWidget {
             order: statusOrder,
             child: _AccessibilityBanner(
               message: state.errorMessage!,
-              color: context.colorScheme.destructive.withValues(alpha: 0.1),
+              color: context.colorScheme.destructive.withValues(
+                alpha: context.motion.tapHoverAlpha,
+              ),
               foreground: context.colorScheme.destructive,
               icon: Icons.error_outline,
             ),
@@ -1654,19 +1661,19 @@ class _AccessibilityActionContent extends StatelessWidget {
     );
   }
 
-  double _conversationListHeight(double viewportHeight, AxiSpacing spacing) {
-    const heightShare = 0.35;
-    final minHeight = spacing.xl * 3 + spacing.s;
-    final maxHeight = spacing.xl * 5 + spacing.l + spacing.s;
+  double _conversationListHeight(double viewportHeight, AxiSizing sizing) {
+    final heightShare = sizing.dialogMaxHeightFraction / 3;
+    final minHeight = sizing.menuItemHeight * 5;
+    final maxHeight = sizing.menuItemHeight * 8;
     final heightFromViewport = viewportHeight * heightShare;
     final boundedHeight = heightFromViewport.clamp(minHeight, maxHeight);
     return boundedHeight.toDouble();
   }
 
-  double _rootListHeight(double viewportHeight, AxiSpacing spacing) {
-    const heightShare = 0.6;
-    final minHeight = spacing.xxl + spacing.xl + spacing.l + spacing.m;
-    final maxHeight = spacing.xl * 8 + spacing.s;
+  double _rootListHeight(double viewportHeight, AxiSizing sizing) {
+    final heightShare = sizing.dialogMaxHeightFraction / 2;
+    final minHeight = sizing.menuItemHeight * 6;
+    final maxHeight = sizing.menuItemHeight * 12;
     final heightFromViewport = viewportHeight * heightShare;
     final boundedHeight = heightFromViewport.clamp(minHeight, maxHeight);
     return boundedHeight.toDouble();
@@ -1700,7 +1707,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final findShortcut = findActionShortcut(Theme.of(context).platform);
+    final findShortcut = findActionShortcut(EnvScope.of(context).platform);
     final escapeShortcutValue = escapeShortcut();
     final spacing = context.spacing;
     return Row(
@@ -1805,7 +1812,9 @@ class _BreadcrumbChip extends StatelessWidget {
           final borderColor = hasFocus
               ? context.colorScheme.primary
               : context.colorScheme.border;
-          final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
+          final borderWidth = hasFocus
+              ? context.sizing.progressIndicatorStrokeWidth * 2
+              : context.sizing.progressIndicatorStrokeWidth;
           return Semantics(
             button: true,
             focusable: true,
@@ -1877,7 +1886,8 @@ class _AccessibilityBanner extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: foreground, size: spacing.m),
+              Icon(icon,
+                  color: foreground, size: context.sizing.menuItemIconSize),
               SizedBox(width: spacing.s),
               Expanded(
                 child: Text(
@@ -1905,7 +1915,7 @@ class _KeyboardShortcutLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final platformShortcut = findActionShortcut(Theme.of(context).platform);
+    final platformShortcut = findActionShortcut(EnvScope.of(context).platform);
     final escapeShortcutValue = escapeShortcut();
     const nextFocusShortcut = SingleActivator(
       LogicalKeyboardKey.tab,
@@ -1996,7 +2006,9 @@ class _KeyboardShortcutLegend extends StatelessWidget {
               final borderColor = hasFocus
                   ? context.colorScheme.primary
                   : context.colorScheme.border;
-              final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
+              final borderWidth = hasFocus
+                  ? context.sizing.progressIndicatorStrokeWidth * 2
+                  : context.sizing.progressIndicatorStrokeWidth;
               return SizedBox(
                 width: double.infinity,
                 child: AnimatedContainer(
@@ -2060,7 +2072,9 @@ class _ShortcutLegendEntry extends StatelessWidget {
           final borderColor = hasFocus
               ? context.colorScheme.primary
               : context.colorScheme.border;
-          final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
+          final borderWidth = hasFocus
+              ? context.sizing.progressIndicatorStrokeWidth * 2
+              : context.sizing.progressIndicatorStrokeWidth;
           return Semantics(
             label: context.l10n.accessibilityKeyboardShortcutAnnouncement(
               description,
@@ -2072,7 +2086,9 @@ class _ShortcutLegendEntry extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: context.radius,
                 border: Border.all(color: borderColor, width: borderWidth),
-                color: context.colorScheme.muted.withValues(alpha: 0.04),
+                color: context.colorScheme.muted.withValues(
+                  alpha: context.motion.tapHoverAlpha / 2,
+                ),
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -2212,9 +2228,11 @@ class _ActionButtonsGroup extends StatelessWidget {
             final borderColor = hasFocus
                 ? context.colorScheme.primary
                 : context.colorScheme.border;
-            final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
-            final isNarrow =
-                MediaQuery.sizeOf(context).width < (spacing.xl * 7 + spacing.m);
+            final borderWidth = hasFocus
+                ? context.sizing.progressIndicatorStrokeWidth * 2
+                : context.sizing.progressIndicatorStrokeWidth;
+            final isNarrow = MediaQuery.sizeOf(context).width <
+                context.sizing.dialogMaxWidth;
             final saveButton = ShadButton.outline(
               onPressed: saveEnabled ? onSave : null,
               child: Text(context.l10n.draftSave),
@@ -2317,7 +2335,9 @@ class _NewContactSection extends StatelessWidget {
                 final borderColor = hasFocus
                     ? context.colorScheme.primary
                     : context.colorScheme.border;
-                final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
+                final borderWidth = hasFocus
+                    ? context.sizing.progressIndicatorStrokeWidth * 2
+                    : context.sizing.progressIndicatorStrokeWidth;
                 return Semantics(
                   container: true,
                   button: true,
@@ -2484,7 +2504,9 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
                 color: hasFocus
                     ? context.colorScheme.primary
                     : context.colorScheme.border,
-                width: hasFocus ? spacing.xs : spacing.xxs,
+                width: hasFocus
+                    ? context.sizing.progressIndicatorStrokeWidth * 2
+                    : context.sizing.progressIndicatorStrokeWidth,
               ),
             ),
             padding: EdgeInsets.all(spacing.xxs),
@@ -2663,14 +2685,18 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         : null;
     final borderColor =
         hasFocus ? context.colorScheme.primary : context.colorScheme.border;
-    final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
+    final borderWidth = hasFocus
+        ? context.sizing.progressIndicatorStrokeWidth * 2
+        : context.sizing.progressIndicatorStrokeWidth;
     final borderRadius = context.radius;
     final shadows = hasFocus
         ? [
             BoxShadow(
-              color: context.colorScheme.primary.withValues(alpha: 0.18),
-              blurRadius: spacing.m,
-              offset: Offset(0, spacing.xs),
+              color: context.colorScheme.primary.withValues(
+                alpha: context.motion.tapSplashAlpha,
+              ),
+              blurRadius: context.sizing.modalShadowBlur / 2,
+              offset: Offset(0, context.sizing.modalShadowOffsetY / 4),
             ),
           ]
         : const <BoxShadow>[];
@@ -2690,7 +2716,10 @@ class _MessageCarouselState extends State<_MessageCarousel> {
             padding: EdgeInsets.all(spacing.s),
             decoration: BoxDecoration(
               color: hasFocus
-                  ? context.colorScheme.primary.withValues(alpha: 0.06)
+                  ? context.colorScheme.primary.withValues(
+                      alpha: context.motion.tapHoverAlpha -
+                          (context.motion.tapHoverAlpha / 4),
+                    )
                   : context.colorScheme.card,
               borderRadius: borderRadius,
               border: Border.all(color: borderColor, width: borderWidth),
@@ -2925,7 +2954,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         final borderColor = _hasFocusedItem
             ? context.colorScheme.primary
             : context.colorScheme.border;
-        final borderWidth = _hasFocusedItem ? spacing.xs : spacing.xxs;
+        final borderWidth = _hasFocusedItem
+            ? context.sizing.progressIndicatorStrokeWidth * 2
+            : context.sizing.progressIndicatorStrokeWidth;
         return Semantics(
           container: true,
           label: context.l10n.accessibilityActionListLabel(_itemNodes.length),
@@ -3111,7 +3142,9 @@ class _AccessibilityActionTile extends StatelessWidget {
     final spacing = context.spacing;
     final isReadOnly = item.kind == AccessibilityMenuItemKind.readOnly;
     final tileColor = item.highlight
-        ? context.colorScheme.primary.withValues(alpha: 0.08)
+        ? context.colorScheme.primary.withValues(
+            alpha: context.motion.tapHoverAlpha,
+          )
         : context.colorScheme.card;
     final foreground = item.destructive
         ? context.colorScheme.destructive
@@ -3142,7 +3175,9 @@ class _AccessibilityActionTile extends StatelessWidget {
           final borderColor = hasFocus
               ? context.colorScheme.primary
               : context.colorScheme.border;
-          final borderWidth = hasFocus ? spacing.xs : spacing.xxs;
+          final borderWidth = hasFocus
+              ? context.sizing.progressIndicatorStrokeWidth * 2
+              : context.sizing.progressIndicatorStrokeWidth;
           final isEnabled = isReadOnly ? true : !item.disabled;
           return Semantics(
             button: !isReadOnly,
@@ -3165,9 +3200,12 @@ class _AccessibilityActionTile extends StatelessWidget {
                 boxShadow: [
                   if (hasFocus)
                     BoxShadow(
-                      color: context.colorScheme.primary.withValues(alpha: 0.2),
-                      blurRadius: spacing.s,
-                      offset: Offset(0, spacing.xs),
+                      color: context.colorScheme.primary.withValues(
+                        alpha: context.motion.tapSplashAlpha +
+                            (context.motion.tapHoverAlpha / 4),
+                      ),
+                      blurRadius: context.sizing.modalShadowBlur / 4,
+                      offset: Offset(0, context.sizing.modalShadowOffsetY / 8),
                     ),
                 ],
               ),
@@ -3177,8 +3215,10 @@ class _AccessibilityActionTile extends StatelessWidget {
                 child: InkWell(
                   onTap: isReadOnly || item.disabled ? null : onTap,
                   borderRadius: context.radius,
-                  focusColor:
-                      context.colorScheme.primary.withValues(alpha: 0.1),
+                  focusColor: context.colorScheme.primary.withValues(
+                    alpha: context.motion.tapHoverAlpha +
+                        (context.motion.tapHoverAlpha / 4),
+                  ),
                   child: Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: spacing.m,
@@ -3210,8 +3250,10 @@ class _AccessibilityActionTile extends StatelessWidget {
                         if (item.badge != null)
                           Container(
                             decoration: BoxDecoration(
-                              color: context.colorScheme.secondary
-                                  .withValues(alpha: 0.2),
+                              color: context.colorScheme.secondary.withValues(
+                                alpha: context.motion.tapSplashAlpha +
+                                    (context.motion.tapHoverAlpha / 4),
+                              ),
                               borderRadius: context.radius,
                             ),
                             padding: EdgeInsets.symmetric(

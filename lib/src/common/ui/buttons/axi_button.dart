@@ -413,7 +413,10 @@ class _AxiButtonState extends State<AxiButton> {
                   ShadTheme.of(context).hoverStrategies,
               longPressDuration: buttonTheme.longPressDuration,
               onHoverChange: enabled
-                  ? (value) => _updateState(WidgetState.hovered, value)
+                  ? (value) {
+                      _updateState(WidgetState.hovered, value);
+                      _bounceController.setHovered(value);
+                    }
                   : null,
               onTap: enabled ? widget.onPressed : null,
               onLongPress: enabled ? widget.onLongPress : null,

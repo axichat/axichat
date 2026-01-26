@@ -66,7 +66,8 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
-        final changePasswordSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
+        final sizing = context.sizing;
+        final changePasswordSpinnerSlotSize = sizing.iconButtonIconSize;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

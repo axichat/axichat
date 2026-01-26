@@ -347,7 +347,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                               final gridMetrics = _resolveGridMetrics(
                                 maxWidth: constraints.maxWidth,
                                 horizontalPadding: gridHorizontalPadding,
-                                minTileWidth: context.spacing.xxl * 2,
+                                minTileWidth: context.sizing.menuItemHeight * 3,
                                 gridSpacing: context.spacing.s,
                                 minColumns: gridMinColumns,
                                 maxColumns: gridMaxColumns,
@@ -578,9 +578,9 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double minSelectWidth =
-            math.min(spacing.xxl * 2, constraints.maxWidth);
+            math.min(context.sizing.menuMaxWidth / 2, constraints.maxWidth);
         final double maxSelectWidth =
-            math.min(spacing.xxl * 3, constraints.maxWidth);
+            math.min(context.sizing.menuMaxWidth, constraints.maxWidth);
         final BoxConstraints selectConstraints = BoxConstraints(
           minWidth: minSelectWidth,
           maxWidth: maxSelectWidth,

@@ -13,8 +13,8 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
@@ -28,21 +28,22 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
-import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
+import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/routes.dart';
-import 'package:axichat/src/share/share_intent_cubit.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/share/share_intent_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -55,7 +56,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'package:axichat/src/storage/hive_extensions.dart';
+import 'common/endpoint_config.dart';
 import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
@@ -593,10 +594,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               child: Stack(
                 children: [
                   child ?? const SizedBox.shrink(),
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: Material(
                       type: MaterialType.transparency,
-                      child: ComposeWindowOverlay(),
+                      child: Overlay(
+                        initialEntries: [
+                          OverlayEntry(
+                            builder: (_) => const ComposeWindowOverlay(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const Positioned.fill(
