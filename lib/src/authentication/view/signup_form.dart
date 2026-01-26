@@ -640,7 +640,7 @@ class _SignupFormState extends State<SignupForm>
                         capability: context.watch<Capability>(),
                       ),
                     ),
-                    SizedBox.square(dimension: spacing.m),
+                    const SizedBox.square(),
                     Padding(
                       padding: horizontalPadding,
                       child: AxiAnimatedSize(
@@ -1002,7 +1002,7 @@ class _SignupFormState extends State<SignupForm>
                         ),
                       ),
                     ),
-                    SizedBox.square(dimension: spacing.m),
+                    const SizedBox.square(),
                     Padding(
                       padding: horizontalPadding,
                       child: Builder(
@@ -1062,7 +1062,6 @@ class _SignupFormState extends State<SignupForm>
                                         ButtonSpinnerSlot(
                                           isVisible: isCheckingPwned,
                                           spinner: AxiProgressIndicator(
-                                            dimension: spacing.m,
                                             color: context
                                                 .colorScheme.primaryForeground,
                                             semanticsLabel: context
@@ -1095,7 +1094,6 @@ class _SignupFormState extends State<SignupForm>
                                       ButtonSpinnerSlot(
                                         isVisible: loading,
                                         spinner: AxiProgressIndicator(
-                                          dimension: spacing.m,
                                           color: context
                                               .colorScheme.primaryForeground,
                                           semanticsLabel:
@@ -1399,7 +1397,6 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
                   ButtonSpinnerSlot(
                     isVisible: _shuffling,
                     spinner: SizedBox.square(
-                      dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -1436,7 +1433,6 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
                   ButtonSpinnerSlot(
                     isVisible: _shufflingBackground,
                     spinner: SizedBox.square(
-                      dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -1549,7 +1545,6 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
           alignment: Alignment.center,
           children: [
             SizedBox.square(
-              dimension: _size,
               child: PageTransitionSwitcher(
                 duration: const Duration(milliseconds: 220),
                 transitionBuilder:

@@ -126,11 +126,10 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   },
                 ),
               ),
-              SizedBox.square(dimension: spacing.m),
+              const SizedBox.square(),
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(
-                    dimension: spacing.m,
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel:
                         context.l10n.authChangePasswordProgressLabel,

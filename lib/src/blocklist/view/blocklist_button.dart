@@ -78,7 +78,6 @@ class BlocklistUnblockAllButton extends StatelessWidget {
       selector: (state) => state is BlocklistLoading && state.jid == null,
       builder: (context, disabled) {
         final spinner = AxiProgressIndicator(
-          dimension: _blocklistSpinnerDimension,
           color: context.colorScheme.foreground,
           semanticsLabel: context.l10n.blocklistWaitingForUnblock,
         );

@@ -6,7 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiInputDialog extends StatelessWidget {
   const AxiInputDialog({
@@ -29,34 +28,25 @@ class AxiInputDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
-    final loadingSemanticsLabel = context.l10n.accessibilityLoadingLabel;
-    final spacing = context.spacing;
-    final spinner = AxiProgressIndicator(
-      dimension: spacing.s,
-      color: context.colorScheme.primaryForeground,
-      semanticsLabel: loadingSemanticsLabel,
-    );
     final EdgeInsets dialogInsets = EdgeInsets.symmetric(
-      horizontal: spacing.l,
-      vertical: spacing.l,
+      horizontal: context.spacing.l,
+      vertical: context.spacing.l,
     );
     final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      spacing.m,
-      spacing.s,
-      spacing.s,
+      context.spacing.m,
+      context.spacing.m,
+      context.spacing.s,
+      context.spacing.s,
     );
-    final EdgeInsets bodyPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      0,
-      spacing.m,
-      spacing.m,
+    final EdgeInsets bodyPadding = EdgeInsets.only(
+      left: context.spacing.m,
+      right: context.spacing.m,
+      bottom: context.spacing.m,
     );
-    final EdgeInsets actionsPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      0,
-      spacing.m,
-      spacing.m,
+    final EdgeInsets actionsPadding = EdgeInsets.only(
+      left: context.spacing.m,
+      right: context.spacing.m,
+      bottom: context.spacing.m,
     );
     final actionButtons = <Widget>[
       AxiButton.outline(
@@ -64,10 +54,9 @@ class AxiInputDialog extends StatelessWidget {
         child: Text(context.l10n.commonCancel),
       ),
       ...actions,
-      AxiButton(
+      AxiButton.primary(
         onPressed: loading ? null : callback,
         loading: loading,
-        loadingIndicator: spinner,
         child: Text(resolvedCallbackText),
       ),
     ];
@@ -92,8 +81,8 @@ class AxiInputDialog extends StatelessWidget {
               padding: actionsPadding,
               child: Wrap(
                 alignment: WrapAlignment.end,
-                spacing: spacing.s,
-                runSpacing: spacing.s,
+                spacing: context.spacing.s,
+                runSpacing: context.spacing.s,
                 children: actionButtons,
               ),
             ),

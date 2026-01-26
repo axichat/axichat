@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -23,14 +24,12 @@ class AxiSheetHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final spacing = context.spacing;
     final EdgeInsetsGeometry resolvedPadding = padding ??
         EdgeInsets.fromLTRB(
-          spacing.m,
-          spacing.m,
-          spacing.m,
-          spacing.s,
+          context.spacing.m,
+          context.spacing.m,
+          context.spacing.m,
+          context.spacing.s,
         );
     final Widget titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,10 +40,10 @@ class AxiSheetHeader extends StatelessWidget {
           child: title,
         ),
         if (subtitle != null) ...[
-          SizedBox(height: spacing.xs),
+          SizedBox(height: context.spacing.xs),
           DefaultTextStyle.merge(
             style: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground,
+              color: context.colorScheme.mutedForeground,
             ),
             child: subtitle!,
           ),
@@ -58,7 +57,7 @@ class AxiSheetHeader extends StatelessWidget {
         children: [
           if (leading != null) ...[
             leading!,
-            SizedBox(width: spacing.s),
+            SizedBox(width: context.spacing.s),
           ],
           Expanded(child: titleBlock),
           ModalCloseButton(
@@ -66,7 +65,7 @@ class AxiSheetHeader extends StatelessWidget {
             tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             backgroundColor: Colors.transparent,
             borderColor: Colors.transparent,
-            color: colors.mutedForeground,
+            color: context.colorScheme.mutedForeground,
           ),
         ],
       ),
@@ -181,13 +180,16 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
   @override
   Widget build(BuildContext context) {
     _scheduleExtentSync();
-    final spacing = context.spacing;
     final EdgeInsets resolvedPadding = widget.bodyPadding ??
-        EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m);
+        EdgeInsets.only(
+          left: context.spacing.m,
+          right: context.spacing.m,
+          bottom: context.spacing.m,
+        );
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double scrollExtent = _scrollExtent;
     const double scrollExtentThreshold = 0;
-    final double footerSpacing = spacing.s;
+    final double footerSpacing = context.spacing.s;
 
     if (scrollExtent > scrollExtentThreshold) {
       final double bottomPadding = resolvedPadding.bottom + keyboardInset;

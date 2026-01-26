@@ -1,30 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 class AxiProgressIndicator extends StatelessWidget {
   const AxiProgressIndicator({
     super.key,
-    this.dimension = 16.0,
     this.color,
     this.semanticsLabel,
   });
 
-  final double dimension;
   final Color? color;
   final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(1),
+      padding: EdgeInsets.all(context.spacing.xxs),
       child: SizedBox.square(
-        dimension: dimension,
+        dimension: context.sizing.progressIndicatorSize,
         child: CircularProgressIndicator(
-          color: color,
+          color: color ?? context.colorScheme.foreground,
           semanticsLabel: semanticsLabel,
-          strokeWidth: 2.0,
+          strokeWidth: context.sizing.progressIndicatorStrokeWidth,
         ),
       ),
     );

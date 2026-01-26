@@ -276,7 +276,6 @@ class ChatsList extends StatelessWidget {
                   ? const SizedBox.shrink()
                   : controller.isLoading
                       ? AxiProgressIndicator(
-                          dimension: refreshSpinnerDimension,
                           color: context.colorScheme.primary,
                         )
                       : AnimatedRotation(
@@ -952,7 +951,7 @@ class _ChatListTileState extends State<ChatListTile> {
                       l10n.chatsDeleteConfirmMessage(chat.displayName),
                       style: context.textTheme.small,
                     ),
-                    const SizedBox.square(dimension: 10.0),
+                    const SizedBox.square(),
                     ShadGestureDetector(
                       cursor: SystemMouseCursors.click,
                       hoverStrategies: mobileHoverStrategies,

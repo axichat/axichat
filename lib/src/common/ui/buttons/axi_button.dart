@@ -9,13 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _defaultBounceScale = 0.98;
-const double _splashAlpha = 0.18;
-const int _pressDurationNumerator = 4;
-const int _pressDurationDenominator = 15;
-const int _releaseDurationNumerator = 3;
-const int _releaseDurationDenominator = 5;
-
 enum AxiButtonVariant {
   primary,
   secondary,
@@ -167,7 +160,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -182,7 +174,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -197,7 +188,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -212,7 +202,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -227,7 +216,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -242,7 +230,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -257,7 +244,6 @@ class AxiButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
-    this.loadingIndicator,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
     this.semanticLabel,
@@ -271,7 +257,6 @@ class AxiButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
   final bool loading;
-  final Widget? loadingIndicator;
   final AxiButtonWidth widthBehavior;
   final double? width;
   final String? semanticLabel;
@@ -309,76 +294,74 @@ class _AxiButtonState extends State<AxiButton> {
     return ValueListenableBuilder<Set<WidgetState>>(
       valueListenable: _states,
       builder: (context, states, _) {
-        final theme = ShadTheme.of(context);
-        final colors = context.colorScheme;
-        final textTheme = context.textTheme;
-        final spacing = context.spacing;
-        final sizing = context.sizing;
-        final env = EnvScope.maybeOf(context);
-        final isDesktop = env?.isDesktopPlatform ?? false;
+        final isDesktop = EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
         final bool enabled =
             widget.onPressed != null || widget.onLongPress != null;
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
-        final ShadButtonTheme buttonTheme = widget.variant.themeFor(theme);
+        final ShadButtonTheme buttonTheme =
+            widget.variant.themeFor(ShadTheme.of(context));
         final Color background = widget.variant.backgroundColor(
           theme: buttonTheme,
-          colors: colors,
+          colors: context.colorScheme,
           hovered: hovered,
           pressed: pressed,
         );
         final Color foreground = widget.variant.foregroundColor(
           theme: buttonTheme,
-          colors: colors,
+          colors: context.colorScheme,
           hovered: hovered,
           pressed: pressed,
         );
-        final Color borderColor = widget.variant.borderColor(colors);
-        final shape = SquircleBorder(
-          cornerRadius: axiSquircleRadius,
+        final Color borderColor =
+            widget.variant.borderColor(context.colorScheme);
+        final shape = RoundedSuperellipseBorder(
+          borderRadius: context.radius,
           side: BorderSide(
-            color: borderColor,
-            width: widget.variant == AxiButtonVariant.outline ? spacing.xxs : 0,
+            color: widget.variant == AxiButtonVariant.outline
+                ? (ShadTheme.of(context).decoration.border?.top?.color ??
+                    borderColor)
+                : Colors.transparent,
+            width: widget.variant == AxiButtonVariant.outline
+                ? (ShadTheme.of(context).decoration.border?.top?.width ?? 0)
+                : 0,
           ),
         );
-        final textStyle = textTheme.small.copyWith(
+        final textStyle = context.textTheme.small.copyWith(
           color: foreground,
           decoration: widget.variant.textDecoration(),
           decorationColor: foreground,
         );
 
-        final Widget loadingSpinner = widget.loadingIndicator ??
-            AxiProgressIndicator(
-              dimension: spacing.s,
-              color: foreground,
-            );
         final bool replacesLeading = widget.leading != null && widget.loading;
-        final Widget? leading =
-            replacesLeading ? loadingSpinner : widget.leading;
 
         final List<Widget> rowChildren = <Widget>[
           if (widget.leading == null)
             ButtonSpinnerSlot(
               isVisible: widget.loading,
-              spinner: loadingSpinner,
-              slotSize: spacing.s,
-              gap: widget.size.gap(spacing),
+              spinner: AxiProgressIndicator(color: foreground),
+              slotSize: context.sizing.progressIndicatorSize,
+              gap: widget.size.gap(context.spacing),
               duration: animationDuration,
             ),
-          if (leading != null) leading,
-          if (leading != null && widget.child != null)
-            SizedBox(width: widget.size.gap(spacing)),
+          if (widget.leading != null)
+            replacesLeading
+                ? AxiProgressIndicator(color: foreground)
+                : widget.leading!,
+          if (widget.leading != null && widget.child != null)
+            SizedBox(width: widget.size.gap(context.spacing)),
           if (widget.child != null) widget.child!,
           if (widget.trailing != null && widget.child != null)
-            SizedBox(width: widget.size.gap(spacing)),
+            SizedBox(width: widget.size.gap(context.spacing)),
           if (widget.trailing != null) widget.trailing!,
         ];
 
         Widget content = ConstrainedBox(
-          constraints:
-              BoxConstraints(minHeight: widget.size.minHeight(sizing)),
+          constraints: BoxConstraints(
+            minHeight: widget.size.minHeight(context.sizing),
+          ),
           child: Padding(
-            padding: widget.size.padding(spacing),
+            padding: widget.size.padding(context.spacing),
             child: Row(
               mainAxisSize: widget.widthBehavior == AxiButtonWidth.expand ||
                       widget.width != null
@@ -439,30 +422,36 @@ class _AxiButtonState extends State<AxiButton> {
             splashFactory:
                 isDesktop ? NoSplash.splashFactory : InkRipple.splashFactory,
             splashColor: enabled
-                ? colors.primary.withValues(alpha: _splashAlpha)
+                ? context.colorScheme.primary
+                    .withValues(alpha: context.motion.tapSplashAlpha)
                 : Colors.transparent,
             hoverColor: Colors.transparent,
             highlightColor: Colors.transparent,
-            focusColor: Colors.transparent,
+            focusColor: enabled
+                ? context.colorScheme.primary
+                    .withValues(alpha: context.motion.tapFocusAlpha)
+                : Colors.transparent,
             child: content,
           ),
         );
 
         if (enabled) {
           final Duration pressDuration = Duration(
-            milliseconds:
-                (animationDuration.inMilliseconds * _pressDurationNumerator) ~/
-                    _pressDurationDenominator,
+            milliseconds: (animationDuration.inMilliseconds *
+                    context.motion.buttonPressDurationFactor)
+                .round(),
           );
           final Duration releaseDuration = Duration(
             milliseconds: (animationDuration.inMilliseconds *
-                    _releaseDurationNumerator) ~/
-                _releaseDurationDenominator,
+                    context.motion.buttonReleaseDurationFactor)
+                .round(),
           );
           button = AxiTapBounce(
             controller: _bounceController,
             enabled: animationDuration != Duration.zero,
-            scale: _defaultBounceScale,
+            scale: widget.size == AxiButtonSize.sm
+                ? context.motion.buttonCompactBounceScale
+                : context.motion.buttonBounceScale,
             pressDuration: pressDuration,
             releaseDuration: releaseDuration,
             child: button,
@@ -470,7 +459,7 @@ class _AxiButtonState extends State<AxiButton> {
         }
 
         button = Opacity(
-          opacity: enabled ? 1 : theme.disabledOpacity,
+          opacity: enabled ? 1 : ShadTheme.of(context).disabledOpacity,
           child: button,
         );
 

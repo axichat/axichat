@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/fade_scale_dialog.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/modal_close_button.dart';
-import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -26,15 +26,13 @@ Future<T?> showAdaptiveBottomSheet<T>({
   Color? backgroundColor,
   Color? barrierColor,
   EdgeInsets? dialogInsetPadding,
-  double dialogMaxWidth = 640,
-  double dialogMaxHeightFraction = 0.9,
+  double? dialogMaxWidth,
+  double? dialogMaxHeightFraction,
   EdgeInsetsGeometry? surfacePadding,
 }) {
   final commandSurface = resolveCommandSurface(context);
-  final scheme = ShadTheme.of(context).colorScheme;
-  final spacing = context.spacing;
   final EdgeInsetsGeometry resolvedSurfacePadding =
-      surfacePadding ?? EdgeInsets.all(spacing.m);
+      surfacePadding ?? EdgeInsets.all(context.spacing.m);
 
   if (commandSurface == CommandSurface.sheet) {
     return showModalBottomSheet<T>(
@@ -51,10 +49,11 @@ Future<T?> showAdaptiveBottomSheet<T>({
         final MediaQueryData windowMediaQuery = MediaQueryData.fromView(
           View.of(sheetContext),
         );
-        final Color resolvedBackground = backgroundColor ?? scheme.card;
+        final Color resolvedBackground =
+            backgroundColor ?? ShadTheme.of(context).colorScheme.card;
         final bool transparentSurface = resolvedBackground.a == 0;
         final BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
-          top: Radius.circular(spacing.m),
+          top: Radius.circular(context.sizing.containerRadius),
         );
         const double zeroInset = 0;
         final double topInset =
@@ -103,7 +102,10 @@ Future<T?> showAdaptiveBottomSheet<T>({
   final Color resolvedBackground =
       backgroundColor ?? ShadTheme.of(context).colorScheme.card;
   final EdgeInsets resolvedInsets = dialogInsetPadding ??
-      EdgeInsets.symmetric(horizontal: spacing.l, vertical: spacing.l);
+      EdgeInsets.symmetric(
+        horizontal: context.spacing.l,
+        vertical: context.spacing.l,
+      );
 
   return showFadeScaleDialog<T>(
     context: context,
@@ -129,8 +131,10 @@ Future<T?> showAdaptiveBottomSheet<T>({
       );
       final Widget constrainedChild = ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: dialogMaxWidth,
-          maxHeight: size.height * dialogMaxHeightFraction,
+          maxWidth: dialogMaxWidth ?? context.sizing.dialogMaxWidth,
+          maxHeight: size.height *
+              (dialogMaxHeightFraction ??
+                  context.sizing.dialogMaxHeightFraction),
         ),
         child: child,
       );
@@ -143,7 +147,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         shadowColor: Colors.transparent,
         child: AxiModalSurface(
           backgroundColor: resolvedBackground,
-          borderColor: scheme.border,
+          borderColor: ShadTheme.of(context).colorScheme.border,
           padding: resolvedSurfacePadding,
           child: wrappedChild,
         ),
@@ -171,30 +175,26 @@ class _AxiSheetChrome extends StatelessWidget {
       return child;
     }
 
-    final colors = ShadTheme.of(context).colorScheme;
-    final spacing = context.spacing;
     final EdgeInsets dragHandlePadding =
-        EdgeInsets.only(top: spacing.s, bottom: spacing.xs);
-    final double dragHandleWidth = spacing.l;
-    final double dragHandleHeight = spacing.xxs;
+        EdgeInsets.only(top: context.spacing.s, bottom: context.spacing.xs);
     final EdgeInsets closeButtonPadding = EdgeInsets.only(
-      top: spacing.xs,
-      right: spacing.xs,
-      bottom: spacing.s,
+      top: context.spacing.xs,
+      right: context.spacing.xs,
+      bottom: context.spacing.s,
     );
     final Widget closeButton = ModalCloseButton(
       onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
-      color: colors.mutedForeground,
+      color: ShadTheme.of(context).colorScheme.mutedForeground,
       backgroundColor: Colors.transparent,
       borderColor: Colors.transparent,
     );
     final dragHandle = Center(
       child: Container(
-        width: dragHandleWidth,
-        height: dragHandleHeight,
+        width: context.sizing.sheetDragHandleWidth,
+        height: context.sizing.sheetDragHandleHeight,
         decoration: BoxDecoration(
-          color: colors.border.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(spacing.xxl),
+          color: ShadTheme.of(context).colorScheme.border,
+          borderRadius: BorderRadius.circular(context.spacing.xxl),
         ),
       ),
     );
@@ -238,32 +238,33 @@ class AxiModalSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = ShadTheme.of(context).colorScheme;
-    final spacing = context.spacing;
-    final shape = SquircleBorder(
-      cornerRadius: cornerRadius ?? spacing.m,
-      borderRadius: borderRadius,
-      side: BorderSide(color: borderColor ?? scheme.border),
-    );
+    final BorderRadiusGeometry resolvedRadius =
+        borderRadius ?? BorderRadius.circular(context.sizing.containerRadius);
     final Widget paddedChild = Padding(padding: padding, child: child);
-    return ClipPath(
-      clipper: ShapeBorderClipper(shape: shape),
+    return ClipRRect(
+      borderRadius: resolvedRadius,
       child: DecoratedBox(
-        decoration: ShapeDecoration(
-          color: backgroundColor ?? scheme.card,
-          shape: shape,
-          shadows: shadows ??
+        decoration: BoxDecoration(
+          color: backgroundColor ?? ShadTheme.of(context).colorScheme.card,
+          border: Border.all(
+            color: borderColor ??
+                (ShadTheme.of(context).decoration.border?.top?.color ??
+                    ShadTheme.of(context).colorScheme.border),
+            width: ShadTheme.of(context).decoration.border?.top?.width ?? 0,
+          ),
+          borderRadius: resolvedRadius,
+          boxShadow: shadows ??
               [
                 BoxShadow(
                   color: Theme.of(context).shadowColor,
-                  blurRadius: spacing.l,
-                  offset: Offset(0, spacing.s),
+                  blurRadius: context.sizing.modalShadowBlur,
+                  offset: Offset(0, context.sizing.modalShadowOffsetY),
                 ),
               ],
         ),
         child: Material(
           type: MaterialType.transparency,
-          shape: shape,
+          shape: RoundedRectangleBorder(borderRadius: resolvedRadius),
           clipBehavior: Clip.antiAlias,
           child: paddedChild,
         ),

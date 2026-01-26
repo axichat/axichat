@@ -132,7 +132,7 @@ class _LoginFormState extends State<LoginForm> {
                       capability: context.watch<Capability>(),
                     ),
                   ),
-                  SizedBox.square(dimension: spacing.m),
+                  const SizedBox.square(),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
@@ -188,13 +188,12 @@ class _LoginFormState extends State<LoginForm> {
                       },
                     ),
                   ),
-                  SizedBox.square(dimension: spacing.m),
+                  const SizedBox.square(),
                   Padding(
                     padding: horizontalPadding,
                     child: Builder(
                       builder: (context) {
                         final spinner = AxiProgressIndicator(
-                          dimension: spacing.m,
                           color: context.colorScheme.primaryForeground,
                           semanticsLabel: context.l10n.authLoginPending,
                         );

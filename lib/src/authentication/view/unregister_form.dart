@@ -99,11 +99,10 @@ class _UnregisterFormState extends State<UnregisterForm> {
                   controller: _passwordTextController,
                 ),
               ),
-              SizedBox.square(dimension: spacing.m),
+              const SizedBox.square(),
               Builder(
                 builder: (context) {
                   final spinner = AxiProgressIndicator(
-                    dimension: spacing.m,
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel: context.l10n.authUnregisterProgressLabel,
                   );

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 class AxiSpacing extends ThemeExtension<AxiSpacing> {
@@ -48,15 +46,7 @@ class AxiSpacing extends ThemeExtension<AxiSpacing> {
   @override
   AxiSpacing lerp(AxiSpacing? other, double t) {
     if (other == null) return this;
-    return AxiSpacing(
-      xxs: lerpDouble(xxs, other.xxs, t) ?? xxs,
-      xs: lerpDouble(xs, other.xs, t) ?? xs,
-      s: lerpDouble(s, other.s, t) ?? s,
-      m: lerpDouble(m, other.m, t) ?? m,
-      l: lerpDouble(l, other.l, t) ?? l,
-      xl: lerpDouble(xl, other.xl, t) ?? xl,
-      xxl: lerpDouble(xxl, other.xxl, t) ?? xxl,
-    );
+    return t < 0.5 ? this : other;
   }
 }
 

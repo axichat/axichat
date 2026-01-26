@@ -46,8 +46,6 @@ class AxiPopover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effects = fadeScaleEffectsFor(context);
-    final spacing = context.spacing;
-    final colors = context.colorScheme;
     final bool shouldWrapSurface =
         padding == null && decoration == null && shadows == null;
     Widget resolvedPopoverBuilder(BuildContext popoverContext) {
@@ -56,12 +54,13 @@ class AxiPopover extends StatelessWidget {
         return built;
       }
       return AxiModalSurface(
-        backgroundColor: colors.card,
-        borderColor: colors.border,
-        padding: EdgeInsets.all(spacing.m),
+        backgroundColor: context.colorScheme.popover,
+        borderColor: context.colorScheme.border,
+        padding: EdgeInsets.all(context.spacing.m),
         child: built,
       );
     }
+
     return ShadPopover(
       popover: resolvedPopoverBuilder,
       controller: controller,

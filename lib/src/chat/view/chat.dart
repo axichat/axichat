@@ -184,7 +184,6 @@ const _chatSettingsFieldSpacing = 8.0;
 const _chatSettingsLabelSpacing = 4.0;
 const _chatSettingsItemPadding = EdgeInsets.all(12.0);
 const _messageActionIconSize = 16.0;
-const _pinnedListLoadingIndicatorSize = 28.0;
 const int _pinnedBadgeHiddenCount = 0;
 const int _pinnedBadgeMaxDisplayCount = 99;
 const double _pinnedBadgeIconScale = 0.6;
@@ -958,7 +957,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AxiProgressIndicator(
-                    dimension: 24,
                     color: colors.foreground,
                     semanticsLabel: l10n.chatMembersLoading,
                   ),
@@ -9010,7 +9008,6 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AxiProgressIndicator(
-                  dimension: _pinnedListLoadingIndicatorSize,
                   color: colors.mutedForeground,
                 ),
               ],
@@ -9338,7 +9335,6 @@ class _PinnedMessageTile extends StatelessWidget {
         ? Align(
             alignment: Alignment.centerLeft,
             child: AxiProgressIndicator(
-              dimension: _messageActionIconSize,
               color: colors.mutedForeground,
             ),
           )
@@ -11714,7 +11710,6 @@ class _MessageActionBar extends StatelessWidget {
       ContextActionButton(
         icon: shareStatus.isLoading
             ? AxiProgressIndicator(
-                dimension: _messageActionIconSize,
                 color: context.colorScheme.foreground,
               )
             : const Icon(LucideIcons.share2, size: _messageActionIconSize),
@@ -11908,7 +11903,6 @@ class _MessageSelectionToolbar extends StatelessWidget {
               ContextActionButton(
                 icon: shareStatus.isLoading
                     ? AxiProgressIndicator(
-                        dimension: 16,
                         color: context.colorScheme.foreground,
                       )
                     : const Icon(LucideIcons.share2, size: 16),
@@ -13428,7 +13422,6 @@ class _GuestChatAppIconAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     const String guestChatAppIconAssetPath = 'assets/icons/app_icon_source.png';
     return SizedBox.square(
-      dimension: size,
       child: ClipOval(
         clipBehavior: Clip.antiAlias,
         child: Image.asset(

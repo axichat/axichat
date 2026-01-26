@@ -826,6 +826,8 @@ extension ThemeExtension on BuildContext {
       Theme.of(this).extension<AxiSpacing>() ?? axiSpacing;
 
   AxiSizing get sizing => Theme.of(this).extension<AxiSizing>() ?? axiSizing;
+
+  AxiMotion get motion => Theme.of(this).extension<AxiMotion>() ?? axiMotion;
 }
 
 extension TargetPlatformExtension on TargetPlatform {
