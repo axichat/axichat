@@ -3,13 +3,17 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiMenuAction {
   const AxiMenuAction({
     required this.label,
     this.icon,
+    this.trailing,
     this.onPressed,
     this.destructive = false,
     this.enabled = true,
@@ -17,6 +21,7 @@ class AxiMenuAction {
 
   final String label;
   final IconData? icon;
+  final Widget? trailing;
   final VoidCallback? onPressed;
   final bool destructive;
   final bool enabled;
@@ -181,29 +186,9 @@ class _AxiMenuState extends State<AxiMenu> {
                           for (int index = 0;
                               index < widget.actions.length;
                               index++)
-                            SizedBox(
-                              height: context.sizing.menuItemHeight,
-                              child: AxiListButton(
-                                focusNode: _focusNodes[index],
-                                variant: AxiButtonVariant.ghost,
-                                leading: widget.actions[index].icon == null
-                                    ? null
-                                    : Icon(
-                                        widget.actions[index].icon,
-                                        size: context.sizing.menuItemIconSize,
-                                      ),
-                                foregroundColor:
-                                    widget.actions[index].destructive
-                                        ? context.colorScheme.destructive
-                                        : null,
-                                semanticLabel: widget.actions[index].label,
-                                onPressed: widget.actions[index].enabled
-                                    ? () {
-                                        widget.actions[index].onPressed?.call();
-                                      }
-                                    : null,
-                                child: Text(widget.actions[index].label),
-                              ),
+                            _AxiMenuItem(
+                              action: widget.actions[index],
+                              focusNode: _focusNodes[index],
                             ),
                         ],
                       ),
@@ -215,6 +200,182 @@ class _AxiMenuState extends State<AxiMenu> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AxiMenuItem extends StatefulWidget {
+  const _AxiMenuItem({
+    required this.action,
+    required this.focusNode,
+  });
+
+  final AxiMenuAction action;
+  final FocusNode focusNode;
+
+  @override
+  State<_AxiMenuItem> createState() => _AxiMenuItemState();
+}
+
+class _AxiMenuItemState extends State<_AxiMenuItem> {
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
+  final ValueNotifier<Set<WidgetState>> _states =
+      ValueNotifier<Set<WidgetState>>(<WidgetState>{});
+
+  void _updateState(WidgetState state, bool enabled) {
+    final next = Set<WidgetState>.from(_states.value);
+    if (enabled) {
+      next.add(state);
+    } else {
+      next.remove(state);
+    }
+    _states.value = next;
+  }
+
+  @override
+  void dispose() {
+    _states.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Duration animationDuration = context.select<SettingsCubit, Duration>(
+      (cubit) => cubit.animationDuration,
+    );
+    final Duration pressDuration = Duration(
+      milliseconds: (animationDuration.inMilliseconds *
+              context.motion.buttonPressDurationFactor)
+          .round(),
+    );
+    final Duration releaseDuration = Duration(
+      milliseconds: (animationDuration.inMilliseconds *
+              context.motion.buttonReleaseDurationFactor)
+          .round(),
+    );
+    return ValueListenableBuilder<Set<WidgetState>>(
+      valueListenable: _states,
+      builder: (context, states, _) {
+        final bool enabled =
+            widget.action.enabled && widget.action.onPressed != null;
+        final bool hovered = states.contains(WidgetState.hovered);
+        final bool pressed = states.contains(WidgetState.pressed);
+        final bool focused = states.contains(WidgetState.focused);
+        final bool selected = hovered || pressed || focused;
+        final Color baseForeground = widget.action.destructive
+            ? context.colorScheme.destructive
+            : context.colorScheme.foreground;
+        final Color foreground =
+            selected ? context.colorScheme.accentForeground : baseForeground;
+        final Color background = selected
+            ? context.colorScheme.accent
+            : context.colorScheme.background.withValues(alpha: 0);
+        final textStyle = context.textTheme.small.copyWith(color: foreground);
+        final Widget leadingIcon = widget.action.icon == null
+            ? const SizedBox.shrink()
+            : Padding(
+                padding: EdgeInsets.only(right: context.spacing.s),
+                child: Icon(
+                  widget.action.icon,
+                  size: context.sizing.menuItemIconSize,
+                  color: foreground,
+                ),
+              );
+        final Widget trailing = widget.action.trailing == null
+            ? const SizedBox.shrink()
+            : Padding(
+                padding: EdgeInsets.only(left: context.spacing.s),
+                child: DefaultTextStyle(
+                  style: context.textTheme.muted.copyWith(color: foreground),
+                  child: widget.action.trailing!,
+                ),
+              );
+
+        Widget content = SizedBox(
+          height: context.sizing.menuItemHeight,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: context.spacing.s),
+            child: Row(
+              children: [
+                if (widget.action.icon != null) leadingIcon,
+                Expanded(
+                  child: DefaultTextStyle(
+                    style: textStyle,
+                    child: Text(widget.action.label),
+                  ),
+                ),
+                if (widget.action.trailing != null) trailing,
+              ],
+            ),
+          ),
+        );
+
+        content = Material(
+          color: background,
+          shape: RoundedSuperellipseBorder(borderRadius: context.radius),
+          clipBehavior: Clip.antiAlias,
+          child: ShadFocusable(
+            focusNode: widget.focusNode,
+            canRequestFocus: enabled,
+            onFocusChange: enabled
+                ? (value) => _updateState(WidgetState.focused, value)
+                : null,
+            builder: (context, focused, child) =>
+                child ?? const SizedBox.shrink(),
+            child: ShadGestureDetector(
+              cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+              hoverStrategies: ShadTheme.of(context).hoverStrategies,
+              onHoverChange: enabled
+                  ? (value) => _updateState(WidgetState.hovered, value)
+                  : null,
+              onTap: enabled ? widget.action.onPressed : null,
+              onTapDown: enabled
+                  ? (details) {
+                      _updateState(WidgetState.pressed, true);
+                      _bounceController.handleTapDown(details);
+                    }
+                  : null,
+              onTapUp: enabled
+                  ? (details) {
+                      _updateState(WidgetState.pressed, false);
+                      _bounceController.handleTapUp(details);
+                    }
+                  : null,
+              onTapCancel: enabled
+                  ? () {
+                      _updateState(WidgetState.pressed, false);
+                      _bounceController.handleTapCancel();
+                    }
+                  : null,
+              child: content,
+            ),
+          ),
+        );
+
+        if (enabled) {
+          content = AxiTapBounce(
+            controller: _bounceController,
+            enabled: animationDuration != Duration.zero,
+            scale: context.motion.buttonBounceScale,
+            pressDuration: pressDuration,
+            releaseDuration: releaseDuration,
+            child: content,
+          );
+        }
+
+        content = Opacity(
+          opacity: enabled ? 1 : ShadTheme.of(context).disabledOpacity,
+          child: content,
+        );
+
+        return Semantics(
+          button: true,
+          enabled: enabled,
+          label: widget.action.label,
+          onTap: widget.action.onPressed,
+          child: content,
+        );
+      },
     );
   }
 }

@@ -147,12 +147,6 @@ enum LogoutSeverity {
   bool get isNormal => this == normal;
 
   bool get isBurn => this == burn;
-
-  String get displayText => switch (this) {
-        auto => 'Auto',
-        normal => 'Normal',
-        burn => 'Burn',
-      };
 }
 
 class AuthenticationCubit extends Cubit<AuthenticationState> {

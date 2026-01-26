@@ -7,6 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -15,7 +16,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key, this.onSubmitStart});
@@ -65,11 +65,16 @@ class _LoginFormState extends State<LoginForm> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     widget.onSubmitStart?.call();
-    await context.read<AuthenticationCubit>().login(
-          username: _jidTextController.value.text,
-          password: _passwordTextController.value.text,
-          rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
-        );
+    final endpointConfigCubit = context.read<EndpointConfigCubit>();
+    final authCubit = context.read<AuthenticationCubit>();
+    await endpointConfigCubit.restore();
+    if (!mounted) return;
+    await authCubit.updateEndpointConfig(endpointConfigCubit.state);
+    await authCubit.login(
+      username: _jidTextController.value.text,
+      password: _passwordTextController.value.text,
+      rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
+    );
   }
 
   @override
@@ -83,7 +88,6 @@ class _LoginFormState extends State<LoginForm> {
         final spacing = context.spacing;
         final sizing = context.sizing;
         final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
-        final loginSpinnerSlotSize = sizing.iconButtonIconSize;
         final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
         final errorPadding = EdgeInsets.fromLTRB(
           spacing.s,
@@ -197,42 +201,20 @@ class _LoginFormState extends State<LoginForm> {
                   const SizedBox.square(),
                   Padding(
                     padding: horizontalPadding,
-                    child: Builder(
-                      builder: (context) {
-                        final spinner = AxiProgressIndicator(
-                          color: context.colorScheme.primaryForeground,
-                          semanticsLabel: context.l10n.authLoginPending,
-                        );
-                        final spinnerSlot = ButtonSpinnerSlot(
-                          isVisible: loading,
-                          spinner: spinner,
-                          slotSize: loginSpinnerSlotSize,
-                          gap: spacing.s,
-                          duration: animationDuration,
-                        );
-                        final button = ShadButton(
+                    child: AxiAnimatedSize(
+                      duration: animationDuration,
+                      curve: Curves.easeInOut,
+                      alignment: Alignment.centerLeft,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: 1,
+                        child: AxiButton.primary(
                           key: loginSubmitKey,
-                          enabled: !loading,
-                          onPressed: () => _onPressed(context),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              spinnerSlot,
-                              Text(context.l10n.authLogin),
-                            ],
-                          ),
-                        ).withTapBounce(enabled: !loading);
-                        return AxiAnimatedSize(
-                          duration: animationDuration,
-                          curve: Curves.easeInOut,
-                          alignment: Alignment.centerLeft,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: 1,
-                            child: button,
-                          ),
-                        );
-                      },
+                          loading: loading,
+                          onPressed: loading ? null : () => _onPressed(context),
+                          child: Text(context.l10n.authLogin),
+                        ),
+                      ),
                     ),
                   ),
                 ],

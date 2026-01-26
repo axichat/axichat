@@ -20,6 +20,7 @@ import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -70,7 +71,20 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _operationProgressController = OperationProgressController(vsync: this);
+    final animationDuration = context.read<SettingsCubit>().animationDuration;
+    _operationProgressController = OperationProgressController(
+      vsync: this,
+      rampDuration: _scaledDuration(animationDuration, 16),
+      reachDuration: _scaledDuration(animationDuration, 1.5),
+      completeDuration: _scaledDuration(animationDuration, 2),
+      failDuration: _scaledDuration(animationDuration, 2 / 3),
+    );
+  }
+
+  Duration _scaledDuration(Duration base, double factor) {
+    return Duration(
+      milliseconds: (base.inMilliseconds * factor).round(),
+    );
   }
 
   @override
@@ -80,14 +94,25 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_initialAuthModeResolved) {
       _initialAuthModeResolved = true;
       _login = bootstrap.hasStoredLoginCredentials;
-    }
-    if (bootstrap.hasStoredLoginCredentials &&
-        context.read<AuthenticationCubit>().state is AuthenticationNone) {
-      context.read<AuthenticationCubit>().login();
+      if (bootstrap.hasStoredLoginCredentials &&
+          context.read<AuthenticationCubit>().state is AuthenticationNone) {
+        _loginWithRestoredConfig();
+      }
     }
     if (_handledInitialAuthState) return;
     _handledInitialAuthState = true;
     _handleAuthState(context.read<AuthenticationCubit>().state);
+  }
+
+  Future<void> _loginWithRestoredConfig() async {
+    final endpointConfigCubit = context.read<EndpointConfigCubit>();
+    await endpointConfigCubit.restore();
+    if (!mounted) return;
+    await context
+        .read<AuthenticationCubit>()
+        .updateEndpointConfig(endpointConfigCubit.state);
+    if (!mounted) return;
+    await context.read<AuthenticationCubit>().login();
   }
 
   void _handleSubmissionRequested(_AuthFlow flow, {required String label}) {

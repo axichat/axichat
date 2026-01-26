@@ -414,42 +414,34 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           placeholderStyle: placeholderStyle,
           controller: _emailProvisioningPublicTokenController,
           style: inputStyle,
-          trailing: ShadIconButton(
+          trailing: AxiIconButton.ghost(
+            iconData: _emailProvisioningTokenObscure
+                ? LucideIcons.eyeOff
+                : LucideIcons.eye,
+            iconSize: sizing.iconButtonIconSize,
+            buttonSize: sizing.iconButtonSize,
+            color: colors.mutedForeground,
             backgroundColor: colors.muted,
-            foregroundColor: colors.mutedForeground,
-            width: sizing.iconButtonSize,
-            height: sizing.iconButtonSize,
-            padding: EdgeInsets.zero,
-            decoration: const ShadDecoration(
-              secondaryBorder: ShadBorder.none,
-              secondaryFocusedBorder: ShadBorder.none,
-            ),
-            icon: Icon(
-              _emailProvisioningTokenObscure
-                  ? LucideIcons.eyeOff
-                  : LucideIcons.eye,
-              size: sizing.iconButtonIconSize,
-            ),
             onPressed: () => setState(() {
               _emailProvisioningTokenObscure = !_emailProvisioningTokenObscure;
             }),
-          ).withTapBounce(),
+          ),
         ),
         SizedBox(height: spacing.m),
         Row(
           children: [
             Expanded(
-              child: ShadButton.secondary(
+              child: AxiButton.secondary(
                 onPressed: _reset,
                 child: Text(context.l10n.authCustomServerReset),
-              ).withTapBounce(),
+              ),
             ),
             SizedBox(width: spacing.s),
             Expanded(
-              child: ShadButton(
+              child: AxiButton.primary(
                 onPressed: _save,
                 child: Text(context.l10n.commonSave),
-              ).withTapBounce(),
+              ),
             ),
           ],
         ),

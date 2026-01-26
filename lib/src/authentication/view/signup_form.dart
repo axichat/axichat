@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -44,6 +43,8 @@ enum _PasswordStrengthLevel { empty, weak, medium, stronger }
 
 enum _InsecurePasswordReason { weak, breached }
 
+enum _RememberMeChoice { enabled, disabled }
+
 class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
   late TextEditingController _jidTextController;
@@ -67,7 +68,7 @@ class _SignupFormState extends State<SignupForm>
   ];
 
   bool allowInsecurePassword = false;
-  bool rememberMe = true;
+  _RememberMeChoice _rememberMeChoice = _RememberMeChoice.enabled;
   bool _passwordBreached = false;
   String? _lastBreachedPassword;
   bool _pwnedCheckInProgress = false;
@@ -76,7 +77,7 @@ class _SignupFormState extends State<SignupForm>
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
   bool _captchaHasLoadedOnce = false;
-  Timer? _captchaRetryTimer;
+  int _captchaRetryToken = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -106,7 +107,8 @@ class _SignupFormState extends State<SignupForm>
         await context.read<AuthenticationCubit>().loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
-      rememberMe = preference;
+      _rememberMeChoice =
+          preference ? _RememberMeChoice.enabled : _RememberMeChoice.disabled;
     });
     _rememberMeFieldKey.currentState?.didChange(preference);
   }
@@ -125,7 +127,6 @@ class _SignupFormState extends State<SignupForm>
     _captchaTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
-    _captchaRetryTimer?.cancel();
     widget.onLoadingChanged?.call(false);
     _lastReportedLoading = null;
     super.dispose();
@@ -267,7 +268,7 @@ class _SignupFormState extends State<SignupForm>
           confirmPassword: _password2TextController.value.text,
           captchaID: captchaId,
           captcha: _captchaTextController.value.text,
-          rememberMe: rememberMe,
+          rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
           avatar: avatarPayload,
         );
   }
@@ -306,8 +307,7 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha({bool resetFirstLoad = false}) {
-    _captchaRetryTimer?.cancel();
-    _captchaRetryTimer = null;
+    _captchaRetryToken++;
     if (resetFirstLoad) {
       _captchaHasLoadedOnce = false;
     }
@@ -318,19 +318,20 @@ class _SignupFormState extends State<SignupForm>
     });
   }
 
-  void _scheduleInitialCaptchaRetry() {
-    if (_captchaHasLoadedOnce || _captchaRetryTimer != null) {
+  Future<void> _scheduleInitialCaptchaRetry() async {
+    if (_captchaHasLoadedOnce) {
       return;
     }
-    _captchaRetryTimer = Timer(const Duration(milliseconds: 900), () {
-      if (!mounted || _captchaHasLoadedOnce) {
-        _captchaRetryTimer?.cancel();
-        _captchaRetryTimer = null;
-        return;
-      }
-      _captchaRetryTimer = null;
-      _reloadCaptcha(resetFirstLoad: true);
-    });
+    final retryToken = ++_captchaRetryToken;
+    final baseDuration = context.read<SettingsCubit>().animationDuration;
+    final delay = Duration(
+      milliseconds: (baseDuration.inMilliseconds * 3).round(),
+    );
+    await Future<void>.delayed(delay);
+    if (!mounted || _captchaHasLoadedOnce || retryToken != _captchaRetryToken) {
+      return;
+    }
+    _reloadCaptcha(resetFirstLoad: true);
   }
 
   void _openAvatarEditor() {
@@ -342,8 +343,7 @@ class _SignupFormState extends State<SignupForm>
 
   void _markCaptchaLoaded() {
     if (_captchaHasLoadedOnce) return;
-    _captchaRetryTimer?.cancel();
-    _captchaRetryTimer = null;
+    _captchaRetryToken++;
     if (!mounted) return;
     setState(() {
       _captchaHasLoadedOnce = true;
@@ -559,6 +559,7 @@ class _SignupFormState extends State<SignupForm>
             final cleanupBlocked =
                 state is AuthenticationSignupFailure && state.isCleanupBlocked;
             final spacing = context.spacing;
+            final sizing = context.sizing;
             final horizontalPadding =
                 EdgeInsets.symmetric(horizontal: spacing.s);
             final errorPadding = EdgeInsets.fromLTRB(
@@ -574,8 +575,10 @@ class _SignupFormState extends State<SignupForm>
               spacing.m,
             );
             final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
-            final captchaSize = Size(spacing.xxl * 2, spacing.l * 2);
-            final signupSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
+            final captchaSize = Size(
+              sizing.menuItemHeight * 5,
+              sizing.menuItemHeight * 2,
+            );
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
             const defaultDescriptionHeight = 0.0;
@@ -585,7 +588,7 @@ class _SignupFormState extends State<SignupForm>
             return Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
+                constraints: BoxConstraints(maxWidth: sizing.dialogMaxWidth),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -708,13 +711,12 @@ class _SignupFormState extends State<SignupForm>
                                               server: state.server,
                                             ),
                                             validator: (text) {
-                                              final value = text;
-                                              if (value.isEmpty) {
+                                              if (text.isEmpty) {
                                                 return context
                                                     .l10n.authUsernameRequired;
                                               }
                                               if (!_usernamePattern
-                                                  .hasMatch(value)) {
+                                                  .hasMatch(text)) {
                                                 return context
                                                     .l10n.authUsernameRules;
                                               }
@@ -740,7 +742,7 @@ class _SignupFormState extends State<SignupForm>
                                                 MediaQuery.sizeOf(
                                                   context,
                                                 ).width,
-                                                960,
+                                                sizing.dialogMaxWidth,
                                               ),
                                             ),
                                             child: Stack(
@@ -793,8 +795,8 @@ class _SignupFormState extends State<SignupForm>
                                                       : null,
                                                 ),
                                                 Positioned(
-                                                  top: 6,
-                                                  right: 6,
+                                                  top: spacing.xs,
+                                                  right: spacing.xs,
                                                   child: AxiIconButton(
                                                     iconData: LucideIcons.x,
                                                     tooltip: context
@@ -896,18 +898,22 @@ class _SignupFormState extends State<SignupForm>
                                         if (snapshot.hasData) {
                                           captchaSurface = _CaptchaImage(
                                             url: snapshot.requireData,
+                                            animationDuration:
+                                                animationDuration,
                                             showErrorMessageOnError:
                                                 _captchaHasLoadedOnce,
                                             onLoaded: _markCaptchaLoaded,
-                                            onInitialError:
-                                                _scheduleInitialCaptchaRetry,
+                                            onInitialError: () =>
+                                                _scheduleInitialCaptchaRetry(),
                                           );
                                         } else if (snapshot.hasError) {
                                           captchaSurface =
                                               const _CaptchaErrorMessage();
                                         } else {
-                                          captchaSurface =
-                                              const _CaptchaSkeleton();
+                                          captchaSurface = _CaptchaSkeleton(
+                                            animationDuration:
+                                                animationDuration,
+                                          );
                                         }
                                         return Align(
                                           alignment: Alignment.centerLeft,
@@ -962,13 +968,10 @@ class _SignupFormState extends State<SignupForm>
                                         ),
                                         enabled: !loading,
                                         controller: _captchaTextController,
-                                        validator: (text) {
-                                          if (text.isEmpty) {
-                                            return context
-                                                .l10n.signupCaptchaValidation;
-                                          }
-                                          return null;
-                                        },
+                                        validator: (text) => text.isEmpty
+                                            ? context
+                                                .l10n.signupCaptchaValidation
+                                            : null,
                                       ),
                                     ),
                                   ),
@@ -981,17 +984,23 @@ class _SignupFormState extends State<SignupForm>
                                     child: AxiCheckboxFormField(
                                       key: _rememberMeFieldKey,
                                       enabled: !loading,
-                                      initialValue: rememberMe,
+                                      initialValue: _rememberMeChoice ==
+                                          _RememberMeChoice.enabled,
                                       inputLabel: Text(
                                         context.l10n.authRememberMeLabel,
                                       ),
                                       onChanged: (value) async {
                                         setState(() {
-                                          rememberMe = value;
+                                          _rememberMeChoice = value == true
+                                              ? _RememberMeChoice.enabled
+                                              : _RememberMeChoice.disabled;
                                         });
                                         await context
                                             .read<AuthenticationCubit>()
-                                            .persistRememberMeChoice(value);
+                                            .persistRememberMeChoice(
+                                              _rememberMeChoice ==
+                                                  _RememberMeChoice.enabled,
+                                            );
                                       },
                                     ),
                                   ),
@@ -1022,23 +1031,23 @@ class _SignupFormState extends State<SignupForm>
                             child: showBackButton
                                 ? Padding(
                                     padding: EdgeInsets.only(right: spacing.s),
-                                    child: ShadButton.secondary(
-                                      enabled: !loading && !isCheckingPwned,
-                                      onPressed: () {
-                                        setState(() {
-                                          _currentIndex--;
-                                        });
-                                        _notifyLoadingChanged(
-                                          _isLoadingForState(
-                                            context
-                                                .read<AuthenticationCubit>()
-                                                .state,
-                                          ),
-                                        );
-                                      },
+                                    child: AxiButton.secondary(
+                                      onPressed: loading || isCheckingPwned
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _currentIndex--;
+                                              });
+                                              _notifyLoadingChanged(
+                                                _isLoadingForState(
+                                                  context
+                                                      .read<
+                                                          AuthenticationCubit>()
+                                                      .state,
+                                                ),
+                                              );
+                                            },
                                       child: Text(context.l10n.commonBack),
-                                    ).withTapBounce(
-                                      enabled: !loading && !isCheckingPwned,
                                     ),
                                   )
                                 : const SizedBox.shrink(),
@@ -1049,71 +1058,37 @@ class _SignupFormState extends State<SignupForm>
                                   padding: EdgeInsets.only(
                                     right: showSubmitButton ? spacing.s : 0,
                                   ),
-                                  child: ShadButton(
-                                    enabled: !loading &&
-                                        !isCheckingPwned &&
-                                        !avatarState.processing,
-                                    onPressed: () async {
-                                      await _handleContinuePressed(context);
-                                    },
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        ButtonSpinnerSlot(
-                                          isVisible: isCheckingPwned,
-                                          spinner: AxiProgressIndicator(
-                                            color: context
-                                                .colorScheme.primaryForeground,
-                                            semanticsLabel: context
-                                                .l10n.authPasswordPending,
-                                          ),
-                                          slotSize: signupSpinnerSlotSize,
-                                          gap: spacing.s,
-                                          duration: animationDuration,
-                                        ),
-                                        Text(context.l10n.signupContinue),
-                                      ],
-                                    ),
-                                  ).withTapBounce(
-                                    enabled: !loading && !isCheckingPwned,
+                                  child: AxiButton.primary(
+                                    loading: isCheckingPwned,
+                                    onPressed: loading ||
+                                            isCheckingPwned ||
+                                            avatarState.processing
+                                        ? null
+                                        : () async {
+                                            await _handleContinuePressed(
+                                              context,
+                                            );
+                                          },
+                                    child: Text(context.l10n.signupContinue),
                                   ),
                                 )
                               : const SizedBox.shrink();
 
                           final submitButton = showSubmitButton
-                              ? ShadButton(
-                                  enabled: !loading &&
-                                      !cleanupBlocked &&
-                                      !avatarState.processing,
-                                  onPressed: cleanupBlocked
+                              ? AxiButton.primary(
+                                  loading: loading,
+                                  onPressed: loading ||
+                                          cleanupBlocked ||
+                                          avatarState.processing
                                       ? null
                                       : () => _onPressed(context),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ButtonSpinnerSlot(
-                                        isVisible: loading,
-                                        spinner: AxiProgressIndicator(
-                                          color: context
-                                              .colorScheme.primaryForeground,
-                                          semanticsLabel:
-                                              context.l10n.authSignupPending,
-                                        ),
-                                        slotSize: signupSpinnerSlotSize,
-                                        gap: spacing.s,
-                                        duration: animationDuration,
-                                      ),
-                                      Text(context.l10n.authSignUp),
-                                    ],
-                                  ),
-                                ).withTapBounce(
-                                  enabled: !loading && !cleanupBlocked,
+                                  child: Text(context.l10n.authSignUp),
                                 )
                               : const SizedBox.shrink();
 
                           return Wrap(
                             spacing: 0,
-                            runSpacing: 8,
+                            runSpacing: spacing.s,
                             children: [
                               backButton,
                               if (showNextButton) continueButton,
@@ -1266,8 +1241,13 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const avatarActionSpacing = 8.0;
-    const avatarActionIconSize = 20.0;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final animationDuration =
+        context.watch<SettingsCubit>().animationDuration;
+    final avatarActionSpacing = spacing.s;
+    final avatarActionIconSize = sizing.iconButtonIconSize;
+    final avatarPreviewSize = sizing.buttonHeightLg * 2;
     final mode = widget.mode;
     final showCrop = mode == _AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
@@ -1299,20 +1279,18 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
       final double safeImageHeight = imageHeight;
       cropper = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 12.0,
+        spacing: spacing.s,
         children: [
           Text(
             context.l10n.signupAvatarCropTitle,
-            style: context.textTheme.small.copyWith(color: colors.foreground),
+            style: context.textTheme.small,
           ),
           Text(
-            'Drag or resize the square to frame your avatar. Reset to center the selection.',
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
-            ),
+            context.l10n.signupAvatarCropHint,
+            style: context.textTheme.small,
           ),
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: EdgeInsets.all(spacing.s),
             child: Center(
               child: AvatarCropper(
                 bytes: safeBytes,
@@ -1335,9 +1313,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
           ),
           Text(
             context.l10n.signupAvatarCropHint,
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
-            ),
+            style: context.textTheme.small,
           ),
         ],
       );
@@ -1349,7 +1325,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
     Widget preview = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
-      spacing: 12.0,
+      spacing: spacing.s,
       children: [
         ValueListenableBuilder<Uint8List?>(
           valueListenable: widget.avatarBytesListenable,
@@ -1360,7 +1336,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
             }
             final previewKey = ValueKey(_previewVersion);
             return AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
+              duration: animationDuration,
               switchInCurve: Curves.easeIn,
               switchOutCurve: Curves.easeOut,
               transitionBuilder: (child, animation) => FadeTransition(
@@ -1370,7 +1346,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
               child: AxiAvatar(
                 key: previewKey,
                 jid: 'avatar@axichat',
-                size: 96,
+                size: avatarPreviewSize,
                 subscription: Subscription.none,
                 presence: null,
                 avatarBytes: bytes,
@@ -1380,8 +1356,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
         ),
         Text(
           context.l10n.signupAvatarMenuDescription,
-          style:
-              context.textTheme.small.copyWith(color: colors.mutedForeground),
+          style: context.textTheme.small,
           textAlign: TextAlign.center,
         ),
         Wrap(
@@ -1389,89 +1364,40 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
           spacing: avatarActionSpacing,
           runSpacing: avatarActionSpacing,
           children: [
-            ShadButton(
+            AxiButton.primary(
+              loading: _shuffling,
               onPressed: busy ? null : _handleShuffle,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ButtonSpinnerSlot(
-                    isVisible: _shuffling,
-                    spinner: SizedBox.square(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colors.primaryForeground,
-                        ),
-                        backgroundColor:
-                            colors.primaryForeground.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    slotSize: avatarActionIconSize,
-                    gap: avatarActionSpacing,
-                    duration: baseAnimationDuration,
-                  ),
-                  if (!_shuffling) ...[
-                    const Icon(
-                      LucideIcons.refreshCw,
-                      size: avatarActionIconSize,
-                    ),
-                    const SizedBox(width: avatarActionSpacing),
-                  ],
-                  Text(context.l10n.signupAvatarShuffle),
-                ],
+              leading: Icon(
+                LucideIcons.refreshCw,
+                size: avatarActionIconSize,
               ),
-            ).withTapBounce(),
-            ShadButton.secondary(
+              child: Text(context.l10n.signupAvatarShuffle),
+            ),
+            AxiButton.secondary(
+              loading: _shufflingBackground,
               onPressed: busy || !allowBackgroundShuffle
                   ? null
                   : () async {
                       await _handleShuffleBackground();
                     },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ButtonSpinnerSlot(
-                    isVisible: _shufflingBackground,
-                    spinner: SizedBox.square(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colors.secondaryForeground,
-                        ),
-                        backgroundColor:
-                            colors.secondaryForeground.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    slotSize: avatarActionIconSize,
-                    gap: avatarActionSpacing,
-                    duration: baseAnimationDuration,
-                  ),
-                  if (!_shufflingBackground) ...[
-                    const Icon(
-                      LucideIcons.palette,
-                      size: avatarActionIconSize,
-                    ),
-                    const SizedBox(width: avatarActionSpacing),
-                  ],
-                  Text(context.l10n.signupAvatarBackgroundColor),
-                ],
+              leading: Icon(
+                LucideIcons.palette,
+                size: avatarActionIconSize,
               ),
-            ).withTapBounce(),
-            ShadButton.outline(
+              child: Text(context.l10n.signupAvatarBackgroundColor),
+            ),
+            AxiButton.outline(
               onPressed: busy
                   ? null
                   : () async {
                       await widget.onUpload();
                     },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(LucideIcons.upload),
-                  const SizedBox(width: avatarActionSpacing),
-                  Text(context.l10n.signupAvatarUploadImage),
-                ],
+              leading: Icon(
+                LucideIcons.upload,
+                size: avatarActionIconSize,
               ),
-            ).withTapBounce(),
+              child: Text(context.l10n.signupAvatarUploadImage),
+            ),
           ],
         ),
       ],
@@ -1480,7 +1406,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
     final previewAndCrop = showCrop && cropper != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12.0,
+            spacing: spacing.s,
             children: [
               preview,
               cropper,
@@ -1489,7 +1415,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
         : preview;
 
     return ShadCard(
-      padding: const EdgeInsets.all(12.0),
+      padding: EdgeInsets.all(spacing.m),
       child: previewAndCrop,
     );
   }
@@ -1513,8 +1439,7 @@ class _SignupAvatarSelector extends StatefulWidget {
 }
 
 class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
-  static const _size = 56.0;
-  bool _hovered = false;
+  _HoverState _hoverState = _HoverState.idle;
   int _previewVersion = 0;
 
   @override
@@ -1528,25 +1453,32 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final sizing = context.sizing;
+    final animationDuration =
+        context.watch<SettingsCubit>().animationDuration;
+    final avatarSize = sizing.iconButtonTapTarget;
     final displayJid = widget.username.isEmpty
         ? 'avatar@axichat'
         : '${widget.username}@preview';
-    final overlayVisible = _hovered || widget.processing;
+    final overlayVisible =
+        _hoverState == _HoverState.hovered || widget.processing;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => setState(() => _hoverState = _HoverState.hovered),
+      onExit: (_) => setState(() => _hoverState = _HoverState.idle),
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _hovered = true),
-        onTapUp: (_) => setState(() => _hovered = false),
-        onTapCancel: () => setState(() => _hovered = false),
+        onTapDown: (_) => setState(() => _hoverState = _HoverState.hovered),
+        onTapUp: (_) => setState(() => _hoverState = _HoverState.idle),
+        onTapCancel: () => setState(() => _hoverState = _HoverState.idle),
         onTap: widget.onTap,
         child: Stack(
           alignment: Alignment.center,
           children: [
             SizedBox.square(
+              dimension: avatarSize,
               child: PageTransitionSwitcher(
-                duration: const Duration(milliseconds: 220),
+                duration: animationDuration,
                 transitionBuilder:
                     (child, primaryAnimation, secondaryAnimation) =>
                         SharedAxisTransition(
@@ -1558,7 +1490,7 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
                 child: AxiAvatar(
                   key: ValueKey(_previewVersion),
                   jid: displayJid,
-                  size: _size,
+                  size: avatarSize,
                   subscription: Subscription.none,
                   presence: null,
                   avatarBytes: widget.bytes,
@@ -1566,23 +1498,25 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
               ),
             ),
             AnimatedOpacity(
-              opacity: overlayVisible ? 0.8 : 0.0,
-              duration: const Duration(milliseconds: 150),
+              opacity: overlayVisible ? motion.tapFocusAlpha : 0.0,
+              duration: animationDuration,
               child: Container(
-                width: _size,
-                height: _size,
+                width: avatarSize,
+                height: avatarSize,
                 decoration: BoxDecoration(
-                  color: colors.background.withAlpha((0.45 * 255).round()),
+                  color: colors.background.withValues(
+                    alpha: motion.tapFocusAlpha,
+                  ),
                   shape: BoxShape.circle,
                   border: Border.all(color: colors.border),
                 ),
                 child: widget.processing
                     ? Center(
                         child: SizedBox(
-                          width: 22,
-                          height: 22,
+                          width: sizing.progressIndicatorSize,
+                          height: sizing.progressIndicatorSize,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: sizing.progressIndicatorStrokeWidth,
                             color: colors.foreground,
                           ),
                         ),
@@ -1590,7 +1524,7 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
                     : Icon(
                         LucideIcons.pencil,
                         color: colors.foreground,
-                        size: 22,
+                        size: sizing.iconButtonIconSize,
                       ),
               ),
             ),
@@ -1600,6 +1534,8 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
     );
   }
 }
+
+enum _HoverState { idle, hovered }
 
 */
 class _SignupProgressMeter extends StatelessWidget {
@@ -1620,6 +1556,9 @@ class _SignupProgressMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final targetPercent = (progressValue * 100).clamp(0.0, 100.0);
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(end: targetPercent),
@@ -1630,6 +1569,10 @@ class _SignupProgressMeter extends StatelessWidget {
         final fillFraction = (clampedPercent / 100).clamp(0.0, 1.0);
         final currentStepNumber =
             (currentStepIndex + 1).clamp(1, totalSteps).toInt();
+        final percentLabel =
+            context.l10n.commonPercentLabel(clampedPercent.round());
+        final barHeight = sizing.progressIndicatorStrokeWidth * 4;
+        final barRadius = BorderRadius.circular(sizing.containerRadius);
         return Semantics(
           label: context.l10n.signupProgressLabel,
           value: context.l10n.signupProgressValue(
@@ -1649,37 +1592,36 @@ class _SignupProgressMeter extends StatelessWidget {
                     style: context.textTheme.muted,
                   ),
                   Text(
-                    '${clampedPercent.round()}%',
-                    style: context.textTheme.muted.copyWith(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    percentLabel,
+                    style: context.textTheme.muted,
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: spacing.s),
               Stack(
                 children: [
                   Container(
-                    height: 8,
+                    height: barHeight,
                     decoration: BoxDecoration(
-                      color: colors.muted.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(999),
+                      color: colors.muted.withValues(
+                        alpha: motion.tapHoverAlpha,
+                      ),
+                      borderRadius: barRadius,
                     ),
                   ),
                   FractionallySizedBox(
                     widthFactor: fillFraction,
                     child: Container(
-                      height: 8,
+                      height: barHeight,
                       decoration: BoxDecoration(
                         color: colors.primary,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: barRadius,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: spacing.m),
             ],
           ),
         );
@@ -1706,6 +1648,9 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final targetBits = entropyBits.clamp(0.0, maxEntropyBits);
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: targetBits),
@@ -1714,6 +1659,8 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
       builder: (context, animatedBits, child) {
         final normalized = (animatedBits / maxEntropyBits).clamp(0.0, 1.0);
         final fillColor = _colorForLevel(strengthLevel, colors);
+        final barHeight = sizing.progressIndicatorStrokeWidth * 4;
+        final barRadius = BorderRadius.circular(sizing.containerRadius);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1726,30 +1673,29 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
                 ),
                 Text(
                   _labelForLevel(strengthLevel, context.l10n),
-                  style: context.textTheme.muted.copyWith(
-                    color: fillColor,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: context.textTheme.muted,
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: spacing.s),
             Stack(
               children: [
                 Container(
-                  height: 8,
+                  height: barHeight,
                   decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(999),
+                    color: colors.muted.withValues(
+                      alpha: motion.tapHoverAlpha,
+                    ),
+                    borderRadius: barRadius,
                   ),
                 ),
                 FractionallySizedBox(
                   widthFactor: normalized,
                   child: Container(
-                    height: 8,
+                    height: barHeight,
                     decoration: BoxDecoration(
                       color: fillColor,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: barRadius,
                     ),
                   ),
                 ),
@@ -1760,13 +1706,10 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
               child: showBreachWarning
                   ? Padding(
                       key: const ValueKey('breach-warning'),
-                      padding: const EdgeInsets.only(top: 8),
+                      padding: EdgeInsets.only(top: spacing.s),
                       child: Text(
                         context.l10n.signupPasswordBreached,
-                        style: context.textTheme.muted.copyWith(
-                          color: colors.destructive,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: context.textTheme.muted,
                       ),
                     )
                   : const SizedBox.shrink(),
@@ -1832,6 +1775,7 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return AnimatedSwitcher(
       duration: animationDuration,
       switchInCurve: Curves.easeIn,
@@ -1856,13 +1800,13 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
                       showAllowInsecureError && !allowInsecurePassword ? 1 : 0,
                   duration: animationDuration,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 4),
+                    padding: EdgeInsets.only(
+                      left: spacing.xs,
+                      top: spacing.xs,
+                    ),
                     child: Text(
                       context.l10n.signupRiskError,
-                      style: TextStyle(
-                        color: context.colorScheme.destructive,
-                        fontSize: 12,
-                      ),
+                      style: context.textTheme.small,
                     ),
                   ),
                 ),
@@ -1891,7 +1835,7 @@ class _CaptchaFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final radius = BorderRadius.circular(14);
+    final radius = BorderRadius.circular(context.sizing.containerRadius);
     return Container(
       width: size.width,
       height: size.height,
@@ -1911,12 +1855,14 @@ class _CaptchaFrame extends StatelessWidget {
 class _CaptchaImage extends StatefulWidget {
   const _CaptchaImage({
     required this.url,
+    required this.animationDuration,
     required this.onLoaded,
     required this.onInitialError,
     required this.showErrorMessageOnError,
   });
 
   final String url;
+  final Duration animationDuration;
   final VoidCallback onLoaded;
   final VoidCallback onInitialError;
   final bool showErrorMessageOnError;
@@ -1973,7 +1919,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
           return const _CaptchaErrorMessage();
         }
         widget.onInitialError();
-        return const _CaptchaSkeleton();
+        return _CaptchaSkeleton(animationDuration: widget.animationDuration);
       },
     );
 
@@ -1982,12 +1928,12 @@ class _CaptchaImageState extends State<_CaptchaImage> {
       children: [
         AnimatedOpacity(
           opacity: _isReady ? 0 : 1,
-          duration: const Duration(milliseconds: 220),
-          child: const _CaptchaSkeleton(),
+          duration: widget.animationDuration,
+          child: _CaptchaSkeleton(animationDuration: widget.animationDuration),
         ),
         AnimatedOpacity(
           opacity: _isReady ? 1 : 0,
-          duration: const Duration(milliseconds: 220),
+          duration: widget.animationDuration,
           child: image,
         ),
       ],
@@ -1996,7 +1942,9 @@ class _CaptchaImageState extends State<_CaptchaImage> {
 }
 
 class _CaptchaSkeleton extends StatefulWidget {
-  const _CaptchaSkeleton();
+  const _CaptchaSkeleton({required this.animationDuration});
+
+  final Duration animationDuration;
 
   @override
   State<_CaptchaSkeleton> createState() => _CaptchaSkeletonState();
@@ -2006,8 +1954,31 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat();
+    duration: widget.animationDuration,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animationDuration != Duration.zero) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _CaptchaSkeleton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animationDuration == widget.animationDuration) {
+      return;
+    }
+    _controller.duration = widget.animationDuration;
+    if (widget.animationDuration == Duration.zero) {
+      _controller.stop();
+      _controller.value = 0;
+    } else {
+      _controller.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -2017,8 +1988,11 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
 
   @override
   Widget build(BuildContext context) {
-    final base = context.colorScheme.border.withValues(alpha: 0.35);
-    final highlight = context.colorScheme.card.withValues(alpha: 0.8);
+    final motion = context.motion;
+    final base =
+        context.colorScheme.border.withValues(alpha: motion.tapHoverAlpha);
+    final highlight =
+        context.colorScheme.card.withValues(alpha: motion.tapFocusAlpha);
     return ExcludeSemantics(
       child: AnimatedBuilder(
         animation: _controller,
@@ -2055,10 +2029,7 @@ class _CaptchaErrorMessage extends StatelessWidget {
         child: Text(
           context.l10n.signupCaptchaErrorMessage,
           textAlign: TextAlign.center,
-          style: context.textTheme.muted.copyWith(
-            color: context.colorScheme.destructive,
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.textTheme.muted,
         ),
       ),
     );

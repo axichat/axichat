@@ -117,7 +117,7 @@ const AxiSizing axiSizing = AxiSizing(
   buttonHeightSm: 32,
   buttonHeightRegular: 40,
   buttonHeightLg: 48,
-  menuItemHeight: 48,
+  menuItemHeight: 32,
   menuItemIconSize: 16,
   menuMinWidth: 0,
   menuMaxWidth: 320,

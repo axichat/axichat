@@ -2,95 +2,112 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class OperationProgressController {
-  OperationProgressController({required TickerProvider vsync})
-      : _controller = AnimationController(
+  OperationProgressController({
+    required TickerProvider vsync,
+    required Duration rampDuration,
+    required Duration reachDuration,
+    required Duration completeDuration,
+    required Duration failDuration,
+  })  : _rampDuration = rampDuration,
+        _reachDuration = reachDuration,
+        _completeDuration = completeDuration,
+        _failDuration = failDuration,
+        _controller = AnimationController(
           vsync: vsync,
           lowerBound: 0,
           upperBound: 1,
         );
 
   static const double _maxDuringOperation = 0.8;
-  static const Duration _defaultRamp = Duration(seconds: 5);
   final AnimationController _controller;
-  bool _active = false;
+  final Duration _rampDuration;
+  final Duration _reachDuration;
+  final Duration _completeDuration;
+  final Duration _failDuration;
+  _OperationProgressStatus _status = _OperationProgressStatus.idle;
 
   Animation<double> get animation => _controller.view;
 
-  bool get isActive => _active;
+  bool get isActive => _status == _OperationProgressStatus.active;
 
   void start() {
-    _active = true;
+    _status = _OperationProgressStatus.active;
     _controller
       ..stop()
       ..value = 0;
     _controller.animateTo(
       _maxDuringOperation,
-      duration: _defaultRamp,
+      duration: _rampDuration,
       curve: Curves.easeOutCubic,
     );
   }
 
   Future<void> reach(
     double target, {
-    Duration duration = const Duration(milliseconds: 450),
+    Duration? duration,
   }) {
-    if (!_active) return Future.value();
+    if (_status != _OperationProgressStatus.active) return Future.value();
     final clamped = target.clamp(0.0, _maxDuringOperation);
     if (clamped <= _controller.value) return Future.value();
     return _controller.animateTo(
       clamped,
-      duration: duration,
+      duration: duration ?? _reachDuration,
       curve: Curves.easeOutCubic,
     );
   }
 
   Future<void> complete({
-    Duration duration = const Duration(milliseconds: 600),
+    Duration? duration,
   }) async {
-    if (!_active) {
+    if (_status != _OperationProgressStatus.active) {
       final seededValue = _controller.value < _maxDuringOperation
           ? _maxDuringOperation
           : _controller.value;
       _controller
         ..stop()
         ..value = seededValue;
-      _active = true;
+      _status = _OperationProgressStatus.active;
     }
     await _controller.animateTo(
       1.0,
-      duration: duration,
+      duration: duration ?? _completeDuration,
       curve: Curves.easeInOutCubic,
     );
-    _active = false;
+    _status = _OperationProgressStatus.idle;
   }
 
   Future<void> fail() async {
-    if (!_active) {
+    if (_status != _OperationProgressStatus.active) {
       reset();
       return;
     }
     await _controller.animateTo(
       0,
-      duration: const Duration(milliseconds: 200),
+      duration: _failDuration,
       curve: Curves.easeIn,
     );
-    _active = false;
+    _status = _OperationProgressStatus.idle;
   }
 
   void reset() {
     _controller
       ..stop()
       ..value = 0;
-    _active = false;
+    _status = _OperationProgressStatus.idle;
   }
 
   void dispose() {
     _controller.dispose();
   }
 }
+
+enum _OperationProgressStatus { idle, active }
 
 class OperationProgressBar extends StatelessWidget {
   const OperationProgressBar({
@@ -108,10 +125,14 @@ class OperationProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    const progressCornerRadius = 999.0;
-    final borderRadius = BorderRadius.circular(progressCornerRadius);
+    final motion = context.motion;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final barHeight = sizing.progressIndicatorStrokeWidth * 4;
+    final borderRadius = BorderRadius.circular(sizing.containerRadius);
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
+      duration: animationDuration,
       child: !visible
           ? const SizedBox.shrink()
           : AnimatedBuilder(
@@ -126,18 +147,18 @@ class OperationProgressBar extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: textTheme.muted,
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: spacing.xs),
                     Semantics(
                       label: label,
-                      value: '$percent percent complete',
+                      value: context.l10n.commonPercentLabel(percent),
                       child: ClipRRect(
                         borderRadius: borderRadius,
                         child: SizedBox(
-                          height: 6,
+                          height: barHeight,
                           child: LinearProgressIndicator(
                             value: animation.value.clamp(0.0, 1.0),
                             backgroundColor: colors.muted.withValues(
-                              alpha: 0.24,
+                              alpha: motion.tapHoverAlpha,
                             ),
                             valueColor: AlwaysStoppedAnimation<Color>(
                               colors.primary,

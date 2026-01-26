@@ -6,12 +6,10 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class UnregisterForm extends StatefulWidget {
   const UnregisterForm({super.key});
@@ -63,10 +61,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         final loading = state is AuthenticationUnregisterInProgress;
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
-        final unregisterSpinnerSlotSize = spacing.m + (spacing.xxs * 2);
         final unregisterErrorPadding = EdgeInsets.all(
           spacing.s,
         );
@@ -100,31 +95,10 @@ class _UnregisterFormState extends State<UnregisterForm> {
                 ),
               ),
               const SizedBox.square(),
-              Builder(
-                builder: (context) {
-                  final spinner = AxiProgressIndicator(
-                    color: context.colorScheme.primaryForeground,
-                    semanticsLabel: context.l10n.authUnregisterProgressLabel,
-                  );
-                  final spinnerSlot = ButtonSpinnerSlot(
-                    isVisible: loading,
-                    spinner: spinner,
-                    slotSize: unregisterSpinnerSlotSize,
-                    gap: spacing.s,
-                    duration: animationDuration,
-                  );
-                  return ShadButton.destructive(
-                    enabled: !loading,
-                    onPressed: () => _onPressed(context),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        spinnerSlot,
-                        Text(context.l10n.commonContinue),
-                      ],
-                    ),
-                  ).withTapBounce(enabled: !loading);
-                },
+              AxiButton.destructive(
+                loading: loading,
+                onPressed: loading ? null : () => _onPressed(context),
+                child: Text(context.l10n.commonContinue),
               ),
             ],
           ),

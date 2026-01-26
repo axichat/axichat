@@ -6,12 +6,10 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChangePasswordForm extends StatefulWidget {
   const ChangePasswordForm({super.key});
@@ -63,11 +61,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         final loading = state is AuthenticationPasswordChangeInProgress;
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
-        final sizing = context.sizing;
-        final changePasswordSpinnerSlotSize = sizing.iconButtonIconSize;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -128,32 +122,10 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                 ),
               ),
               const SizedBox.square(),
-              Builder(
-                builder: (context) {
-                  final spinner = AxiProgressIndicator(
-                    color: context.colorScheme.primaryForeground,
-                    semanticsLabel:
-                        context.l10n.authChangePasswordProgressLabel,
-                  );
-                  final spinnerSlot = ButtonSpinnerSlot(
-                    isVisible: loading,
-                    spinner: spinner,
-                    slotSize: changePasswordSpinnerSlotSize,
-                    gap: spacing.s,
-                    duration: animationDuration,
-                  );
-                  return ShadButton(
-                    enabled: !loading,
-                    onPressed: () => _onPressed(context),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        spinnerSlot,
-                        Text(context.l10n.commonContinue),
-                      ],
-                    ),
-                  ).withTapBounce(enabled: !loading);
-                },
+              AxiButton.primary(
+                loading: loading,
+                onPressed: loading ? null : () => _onPressed(context),
+                child: Text(context.l10n.commonContinue),
               ),
             ],
           ),
