@@ -64,7 +64,7 @@ void main() {
 
     final cubit = AuthenticationCubit(
       credentialStore: credentialStore,
-      endpointConfigCubit: endpointConfigCubit,
+      initialEndpointConfig: endpointConfigCubit.state,
       xmppService: xmppService,
       httpClient: httpClient,
       emailProvisioningClient: provisioningClient,
@@ -95,7 +95,7 @@ void main() {
 
     final cubit = AuthenticationCubit(
       credentialStore: credentialStore,
-      endpointConfigCubit: endpointConfigCubit,
+      initialEndpointConfig: endpointConfigCubit.state,
       xmppService: xmppService,
       httpClient: httpClient,
       emailProvisioningClient: provisioningClient,

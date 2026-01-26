@@ -50,21 +50,18 @@ class _PasswordInputState extends State<PasswordInput> {
         enabled: widget.enabled,
         obscureText: obscure,
         controller: widget.controller,
-        trailing: ShadIconButton(
+        trailing: AxiIconButton.ghost(
           backgroundColor: context.colorScheme.muted,
-          foregroundColor: context.colorScheme.mutedForeground,
-          width: 24,
-          height: 24,
-          padding: EdgeInsets.zero,
-          decoration: const ShadDecoration(
-            secondaryBorder: ShadBorder.none,
-            secondaryFocusedBorder: ShadBorder.none,
-          ),
-          icon: Icon(obscure ? LucideIcons.eyeOff : LucideIcons.eye, size: 16),
+          color: context.colorScheme.mutedForeground,
+          borderColor: Colors.transparent,
+          iconData: obscure ? LucideIcons.eyeOff : LucideIcons.eye,
+          iconSize: 16,
+          buttonSize: 24,
+          tapTargetSize: 24,
           onPressed: () {
             setState(() => obscure = !obscure);
           },
-        ).withTapBounce(),
+        ),
         validator: (text) {
           final localizations = context.l10n;
           final confirmationValidator = widget.confirmValidator ??

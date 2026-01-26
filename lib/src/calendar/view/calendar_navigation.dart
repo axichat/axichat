@@ -409,10 +409,9 @@ class CalendarNavigationLeadingActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: calendarGutterSm,
-      runSpacing: calendarGutterSm,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (showBackButton)
           AxiIconButton.ghost(
@@ -420,6 +419,7 @@ class CalendarNavigationLeadingActions extends StatelessWidget {
             tooltip: backTooltip,
             onPressed: onBackPressed,
           ),
+        if (showBackButton) const SizedBox(width: calendarGutterSm),
         SyncControls(
           state: state,
           compact: true,

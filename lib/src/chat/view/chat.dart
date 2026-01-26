@@ -1056,6 +1056,14 @@ class _ChatState extends State<Chat> {
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
+  ChatSettingsSnapshot _settingsSnapshotFromState(SettingsState settings) =>
+      ChatSettingsSnapshot(
+        language: settings.language,
+        chatReadReceipts: settings.chatReadReceipts,
+        emailReadReceipts: settings.emailReadReceipts,
+        shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+      );
+
   double _outsideTapDragThreshold() =>
       MediaQuery.maybeOf(context)?.gestureSettings.touchSlop ?? kTouchSlop;
 
@@ -3431,19 +3439,23 @@ class _ChatState extends State<Chat> {
     _subjectController.addListener(_handleSubjectChanged);
     final chat = context.read<ChatBloc>().state.chat;
     _recipientsChatJid = chat?.jid;
+    final settings = context.read<SettingsCubit>().state;
     if (chat != null) {
       _recipients = [
         ComposerRecipient(
           target: FanOutTarget.chat(
             chat: chat,
             shareSignatureEnabled: chat.shareSignatureEnabled ??
-                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+                settings.shareTokenSignatureEnabled,
           ),
           included: true,
           pinned: true,
         ),
       ];
     }
+    context
+        .read<ChatBloc>()
+        .add(ChatSettingsUpdated(_settingsSnapshotFromState(settings)));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _captureBaseSelectionHeadroom();
     });
@@ -3502,6 +3514,21 @@ class _ChatState extends State<Chat> {
         final showToast = ShadToaster.maybeOf(context)?.show;
         return MultiBlocListener(
           listeners: [
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.language != current.language ||
+                  previous.chatReadReceipts != current.chatReadReceipts ||
+                  previous.emailReadReceipts != current.emailReadReceipts ||
+                  previous.shareTokenSignatureEnabled !=
+                      current.shareTokenSignatureEnabled,
+              listener: (context, settings) {
+                context
+                    .read<ChatBloc>()
+                    .add(ChatSettingsUpdated(_settingsSnapshotFromState(
+                      settings,
+                    )));
+              },
+            ),
             BlocListener<ChatSearchCubit, ChatSearchState>(
               listenWhen: (previous, current) =>
                   previous.active != current.active,

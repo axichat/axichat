@@ -341,7 +341,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
           cursor: SystemMouseCursors.click,
           onTap: popoverController.toggle,
           child: child,
-        ),
+        ).withTapBounce(),
       );
     }
     final sizedChild = SizedBox.square(dimension: widget.size, child: child);

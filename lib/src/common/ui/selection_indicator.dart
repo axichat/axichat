@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/axi_tap_bounce.dart';
-import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -36,9 +35,12 @@ class SelectionIndicator extends StatelessWidget {
     Widget child = DecoratedBox(
       decoration: ShapeDecoration(
         color: background,
-        shape: SquircleBorder(
-          cornerRadius: _cornerRadius,
-          side: BorderSide(color: borderColor, width: selected ? 1.6 : 1.2),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(_cornerRadius),
+          side: BorderSide(
+            color: borderColor,
+            width: ShadTheme.of(context).decoration.border?.top?.width ?? 0,
+          ),
         ),
       ),
       child: Center(
@@ -50,14 +52,12 @@ class SelectionIndicator extends StatelessWidget {
       ),
     );
     if (onPressed != null) {
-      child = MouseRegion(
+      child = ShadGestureDetector(
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onPressed,
-          child: child,
-        ).withTapBounce(),
-      );
+        hoverStrategies: ShadTheme.of(context).hoverStrategies,
+        onTap: onPressed,
+        child: child,
+      ).withTapBounce();
     }
     return AnimatedOpacity(
       duration: _animationDuration,

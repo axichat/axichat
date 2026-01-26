@@ -2,9 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/axi_tap_bounce.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ContextActionButton extends StatelessWidget {
   const ContextActionButton({
@@ -33,7 +32,7 @@ class ContextActionButton extends StatelessWidget {
       button: true,
       enabled: onPressed != null,
       label: label,
-      child: ShadButton.outline(
+      child: AxiButton.outline(
         onPressed: onPressed,
         child: IconTheme.merge(
           data: IconThemeData(color: destructiveColor),
@@ -56,7 +55,7 @@ class ContextActionButton extends StatelessWidget {
             ),
           ),
         ),
-      ).withTapBounce(enabled: onPressed != null),
+      ),
     );
   }
 }

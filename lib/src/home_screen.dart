@@ -448,21 +448,34 @@ class _HomeScreenState extends State<HomeScreen> {
                               providers: [
                                 BlocProvider(
                                   key: Key(openJid),
-                                  create: (context) => ChatBloc(
-                                    jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    chatsService: context.read<XmppService>(),
-                                    mucService: context.read<XmppService>(),
-                                    notificationService:
-                                        context.read<NotificationService>(),
-                                    emailService: context.read<EmailService>(),
-                                    omemoService: isOmemo
-                                        ? context.read<XmppService>()
-                                            as OmemoService
-                                        : null,
-                                    settingsCubit:
-                                        context.read<SettingsCubit>(),
-                                  ),
+                                  create: (context) {
+                                    final settings =
+                                        context.read<SettingsCubit>().state;
+                                    return ChatBloc(
+                                      jid: openJid,
+                                      messageService:
+                                          context.read<XmppService>(),
+                                      chatsService: context.read<XmppService>(),
+                                      mucService: context.read<XmppService>(),
+                                      notificationService:
+                                          context.read<NotificationService>(),
+                                      emailService:
+                                          context.read<EmailService>(),
+                                      omemoService: isOmemo
+                                          ? context.read<XmppService>()
+                                              as OmemoService
+                                          : null,
+                                      settings: ChatSettingsSnapshot(
+                                        language: settings.language,
+                                        chatReadReceipts:
+                                            settings.chatReadReceipts,
+                                        emailReadReceipts:
+                                            settings.emailReadReceipts,
+                                        shareTokenSignatureEnabled:
+                                            settings.shareTokenSignatureEnabled,
+                                      ),
+                                    );
+                                  },
                                 ),
                                 BlocProvider(
                                   create: (context) => ChatSearchCubit(

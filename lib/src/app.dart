@@ -195,7 +195,7 @@ class _AxichatState extends State<Axichat> {
           BlocProvider(
             create: (context) => AuthenticationCubit(
               credentialStore: context.read<CredentialStore>(),
-              endpointConfigCubit: context.read<EndpointConfigCubit>(),
+              initialEndpointConfig: context.read<EndpointConfigCubit>().state,
               xmppService: context.read<XmppService>(),
               emailService: context.read<EmailService>(),
               homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
@@ -219,7 +219,10 @@ class _AxichatState extends State<Axichat> {
             create: (context) => DraftCubit(
               messageService: context.read<MessageService>(),
               emailService: context.read<EmailService>(),
-              settingsCubit: context.read<SettingsCubit>(),
+              shareTokenSignatureEnabled: context
+                  .read<SettingsCubit>()
+                  .state
+                  .shareTokenSignatureEnabled,
             ),
           ),
           BlocProvider(create: (context) => ComposeWindowCubit()),
@@ -232,7 +235,28 @@ class _AxichatState extends State<Axichat> {
               key: const Key('guest_calendar_bloc'),
             ),
         ],
-        child: const MaterialAxichat(),
+        child: MultiBlocListener(
+          listeners: [
+            BlocListener<EndpointConfigCubit, EndpointConfig>(
+              listener: (context, config) {
+                context
+                    .read<AuthenticationCubit>()
+                    .updateEndpointConfig(config);
+              },
+            ),
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.shareTokenSignatureEnabled !=
+                  current.shareTokenSignatureEnabled,
+              listener: (context, settings) {
+                context.read<DraftCubit>().updateShareTokenSignatureEnabled(
+                      settings.shareTokenSignatureEnabled,
+                    );
+              },
+            ),
+          ],
+          child: const MaterialAxichat(),
+        ),
       ),
     );
   }

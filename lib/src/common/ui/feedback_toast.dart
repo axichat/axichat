@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -154,8 +155,8 @@ class FeedbackToast extends ShadToast {
       return null;
     }
     return Builder(
-      builder: (context) => ShadButton.link(
-        size: ShadButtonSize.sm,
+      builder: (context) => AxiButton.link(
+        size: AxiButtonSize.sm,
         child: Text(label),
         onPressed: () {
           ShadToaster.of(context).hide();

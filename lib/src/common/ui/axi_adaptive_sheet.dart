@@ -253,14 +253,7 @@ class AxiModalSurface extends StatelessWidget {
             width: ShadTheme.of(context).decoration.border?.top?.width ?? 0,
           ),
           borderRadius: resolvedRadius,
-          boxShadow: shadows ??
-              [
-                BoxShadow(
-                  color: Theme.of(context).shadowColor,
-                  blurRadius: context.sizing.modalShadowBlur,
-                  offset: Offset(0, context.sizing.modalShadowOffsetY),
-                ),
-              ],
+          boxShadow: shadows ?? const <BoxShadow>[],
         ),
         child: Material(
           type: MaterialType.transparency,

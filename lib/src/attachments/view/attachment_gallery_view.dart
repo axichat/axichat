@@ -817,7 +817,6 @@ class AttachmentGalleryListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const metaMaxLines = 1;
-    const metaSpacing = 4.0;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
     return Column(
@@ -830,7 +829,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
             maxLines: metaMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: metaSpacing),
+          SizedBox(height: context.spacing.xs),
         ],
         ChatAttachmentPreview(
           stanzaId: stanzaId,
@@ -886,10 +885,8 @@ class AttachmentGalleryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const footerSpacing = 8.0;
     const filenameMaxLines = 2;
     const metaMaxLines = 1;
-    const metaSpacing = 4.0;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
     final showFilename = metadata.mediaKind != FileMetadataMediaKind.file;
@@ -913,13 +910,11 @@ class AttachmentGalleryTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         preview,
-        const SizedBox(height: footerSpacing),
+        SizedBox(height: context.spacing.s),
         if (showFilename)
           Text(
             metadata.filename,
-            style: context.textTheme.small.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: context.textTheme.small,
             maxLines: filenameMaxLines,
             overflow: TextOverflow.ellipsis,
           ),
@@ -931,7 +926,7 @@ class AttachmentGalleryTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         if (!showFilename && metaLabel == null)
-          const SizedBox(height: metaSpacing),
+          SizedBox(height: context.spacing.xs),
       ],
     );
   }

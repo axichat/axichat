@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -88,20 +87,22 @@ class _AxiListButtonState extends State<AxiListButton> {
             widget.onPressed != null || widget.onLongPress != null;
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
+        final bool focused = states.contains(WidgetState.focused);
+        final bool hoverOrFocus = hovered || focused;
         final ShadButtonTheme buttonTheme =
             widget.variant.themeFor(ShadTheme.of(context));
         final Color background = widget.backgroundColor ??
             widget.variant.backgroundColor(
               theme: buttonTheme,
               colors: context.colorScheme,
-              hovered: hovered,
+              hovered: hoverOrFocus,
               pressed: pressed,
             );
         final Color foreground = widget.foregroundColor ??
             widget.variant.foregroundColor(
               theme: buttonTheme,
               colors: context.colorScheme,
-              hovered: hovered,
+              hovered: hoverOrFocus,
               pressed: pressed,
             );
         final Color borderColor =
@@ -175,44 +176,58 @@ class _AxiListButtonState extends State<AxiListButton> {
           color: background,
           shape: shape,
           clipBehavior: Clip.antiAlias,
-          child: InkResponse(
+          child: ShadFocusable(
             focusNode: widget.focusNode,
             canRequestFocus: enabled,
-            onTap: widget.onPressed,
-            onLongPress: widget.onLongPress,
-            onHighlightChanged: enabled
-                ? (value) {
-                    _updateState(WidgetState.pressed, value);
-                    _bounceController.setPressed(value);
-                  }
+            onFocusChange: enabled
+                ? (value) => _updateState(WidgetState.focused, value)
                 : null,
-            onHover: enabled
-                ? (value) => _updateState(WidgetState.hovered, value)
-                : null,
-            onTapCancel: enabled
-                ? () {
-                    _updateState(WidgetState.pressed, false);
-                    _bounceController.setPressed(false);
-                  }
-                : null,
-            containedInkWell: true,
-            highlightShape: BoxShape.rectangle,
-            customBorder: shape,
-            splashFactory:
-                (EnvScope.maybeOf(context)?.isDesktopPlatform ?? false)
-                    ? NoSplash.splashFactory
-                    : InkRipple.splashFactory,
-            splashColor: enabled
-                ? context.colorScheme.primary
-                    .withValues(alpha: context.motion.tapSplashAlpha)
-                : Colors.transparent,
-            hoverColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            focusColor: enabled
-                ? context.colorScheme.primary
-                    .withValues(alpha: context.motion.tapFocusAlpha)
-                : Colors.transparent,
-            child: content,
+            builder: (context, focused, child) =>
+                child ?? const SizedBox.shrink(),
+            child: ShadGestureDetector(
+              cursor: enabled
+                  ? (buttonTheme.cursor ?? SystemMouseCursors.click)
+                  : MouseCursor.defer,
+              hoverStrategies: buttonTheme.hoverStrategies ??
+                  ShadTheme.of(context).hoverStrategies,
+              longPressDuration: buttonTheme.longPressDuration,
+              onHoverChange: enabled
+                  ? (value) => _updateState(WidgetState.hovered, value)
+                  : null,
+              onTap: enabled ? widget.onPressed : null,
+              onLongPress: enabled ? widget.onLongPress : null,
+              onTapDown: enabled
+                  ? (details) {
+                      _updateState(WidgetState.pressed, true);
+                      _bounceController.handleTapDown(details);
+                    }
+                  : null,
+              onTapUp: enabled
+                  ? (details) {
+                      _updateState(WidgetState.pressed, false);
+                      _bounceController.handleTapUp(details);
+                    }
+                  : null,
+              onTapCancel: enabled
+                  ? () {
+                      _updateState(WidgetState.pressed, false);
+                      _bounceController.handleTapCancel();
+                    }
+                  : null,
+              onLongPressStart: enabled
+                  ? (_) {
+                      _updateState(WidgetState.pressed, true);
+                      _bounceController.setPressed(true);
+                    }
+                  : null,
+              onLongPressEnd: enabled
+                  ? (_) {
+                      _updateState(WidgetState.pressed, false);
+                      _bounceController.setPressed(false);
+                    }
+                  : null,
+              child: content,
+            ),
           ),
         );
 
@@ -246,11 +261,7 @@ class _AxiListButtonState extends State<AxiListButton> {
           label: widget.semanticLabel,
           onTap: widget.onPressed,
           onLongPress: widget.onLongPress,
-          child: MouseRegion(
-            cursor:
-                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-            child: button,
-          ),
+          child: button,
         );
       },
     );

@@ -37,22 +37,22 @@ Future<bool?> confirm(
     builder: (dialogContext) {
       final pop = Navigator.of(dialogContext).pop;
       final Widget confirmButton = destructiveConfirm
-          ? ShadButton.destructive(
+          ? AxiButton.destructive(
               onPressed: () => pop(true),
               child: Text(resolvedConfirmLabel),
             )
-          : ShadButton(
+          : AxiButton.primary(
               onPressed: () => pop(true),
               child: Text(resolvedConfirmLabel),
             );
       return ShadDialog(
         title: Text(resolvedTitle, style: context.modalHeaderTextStyle),
         actions: [
-          ShadButton.outline(
+          AxiButton.outline(
             onPressed: () => pop(false),
             child: Text(resolvedCancelLabel),
-          ).withTapBounce(),
-          confirmButton.withTapBounce(),
+          ),
+          confirmButton,
         ],
         child: dialogBody,
       );

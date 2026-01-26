@@ -37,7 +37,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/app_language.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -177,6 +176,42 @@ class ChatToast extends Equatable {
   List<Object?> get props => [message, variant, action, actionDraftId];
 }
 
+class ChatSettingsSnapshot extends Equatable {
+  const ChatSettingsSnapshot({
+    required this.language,
+    required this.chatReadReceipts,
+    required this.emailReadReceipts,
+    required this.shareTokenSignatureEnabled,
+  });
+
+  final AppLanguage language;
+  final bool chatReadReceipts;
+  final bool emailReadReceipts;
+  final bool shareTokenSignatureEnabled;
+
+  ChatSettingsSnapshot copyWith({
+    AppLanguage? language,
+    bool? chatReadReceipts,
+    bool? emailReadReceipts,
+    bool? shareTokenSignatureEnabled,
+  }) =>
+      ChatSettingsSnapshot(
+        language: language ?? this.language,
+        chatReadReceipts: chatReadReceipts ?? this.chatReadReceipts,
+        emailReadReceipts: emailReadReceipts ?? this.emailReadReceipts,
+        shareTokenSignatureEnabled:
+            shareTokenSignatureEnabled ?? this.shareTokenSignatureEnabled,
+      );
+
+  @override
+  List<Object?> get props => [
+        language,
+        chatReadReceipts,
+        emailReadReceipts,
+        shareTokenSignatureEnabled,
+      ];
+}
+
 enum MamPageDirection { before, after }
 
 const String _availabilitySendFailureLog =
@@ -191,7 +226,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required ChatsService chatsService,
     required NotificationService notificationService,
     required MucService mucService,
-    required SettingsCubit settingsCubit,
+    required ChatSettingsSnapshot settings,
     EmailService? emailService,
     OmemoService? omemoService,
   })  : _messageService = messageService,
@@ -200,8 +235,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _emailService = emailService,
         _omemoService = omemoService,
         _mucService = mucService,
-        _settingsCubit = settingsCubit,
-        _settingsState = settingsCubit.state,
+        _settingsSnapshot = settings,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -215,6 +249,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
+    on<ChatSettingsUpdated>(_onChatSettingsUpdated);
     on<ChatMessageSent>(
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
@@ -316,9 +351,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       add(_HttpUploadSupportUpdated(xmppService.httpUploadSupport.supported));
     }
-    _settingsSubscription = _settingsCubit.stream.listen((state) {
-      _settingsState = state;
-    });
     _lifecycleListener = AppLifecycleListener(
       onResume: () async {
         await _handleLifecycleResumed();
@@ -366,11 +398,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final EmailService? _emailService;
   final OmemoService? _omemoService;
   final MucService _mucService;
-  final SettingsCubit _settingsCubit;
-  SettingsState _settingsState;
+  ChatSettingsSnapshot _settingsSnapshot;
 
   AppLocalizations get _l10n {
-    final locale = _settingsState.language.locale ?? const Locale('en');
+    final locale = _settingsSnapshot.language.locale ?? const Locale('en');
     return lookupAppLocalizations(locale);
   }
 
@@ -388,7 +419,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
-  StreamSubscription<SettingsState>? _settingsSubscription;
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   String? _emailSyncComposerMessage;
@@ -451,7 +481,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .toList(growable: false);
     final selfBare = _bareJid(_chatsService.myJid);
     final shouldSendChatReadReceipts =
-        chat.markerResponsive ?? _settingsState.chatReadReceipts;
+        chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
     if (shouldSendChatReadReceipts &&
         _xmppAllowedForChat(chat) &&
         chat.type != ChatType.groupChat) {
@@ -479,7 +509,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (seenCandidates.isEmpty) {
       return;
     }
-    final shouldSendEmailReadReceipts = _settingsState.emailReadReceipts;
+    final shouldSendEmailReadReceipts = _settingsSnapshot.emailReadReceipts;
     if (shouldSendEmailReadReceipts) {
       await emailService.markSeenMessages(seenCandidates);
     } else {
@@ -975,7 +1005,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
-    await _settingsSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     _lifecycleListener?.dispose();
@@ -1950,6 +1979,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     if (state.supportsHttpFileUpload == event.supported) return;
     emit(state.copyWith(supportsHttpFileUpload: event.supported));
+  }
+
+  void _onChatSettingsUpdated(
+    ChatSettingsUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _settingsSnapshot = event.settings;
   }
 
   Future<void> _onChatMessageFocused(
@@ -3208,7 +3244,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             target: FanOutTarget.chat(
               chat: status.chat,
               shareSignatureEnabled: status.chat.shareSignatureEnabled ??
-                  _settingsState.shareTokenSignatureEnabled,
+                  _settingsSnapshot.shareTokenSignatureEnabled,
             ),
             included: true,
           ),
@@ -4299,8 +4335,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return false;
     final chatShareSignatureEnabled =
-        chat.shareSignatureEnabled ?? _settingsState.shareTokenSignatureEnabled;
-    final useSignatureToken = _settingsState.shareTokenSignatureEnabled &&
+        chat.shareSignatureEnabled ??
+            _settingsSnapshot.shareTokenSignatureEnabled;
+    final useSignatureToken = _settingsSnapshot.shareTokenSignatureEnabled &&
         chatShareSignatureEnabled &&
         recipients.every((recipient) => recipient.target.shareSignatureEnabled);
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();

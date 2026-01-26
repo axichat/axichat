@@ -9,7 +9,6 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
@@ -159,7 +158,6 @@ enum LogoutSeverity {
 class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
-    required EndpointConfigCubit endpointConfigCubit,
     required XmppService xmppService,
     EmailService? emailService,
     HomeRefreshSyncService? homeRefreshSyncService,
@@ -170,7 +168,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EndpointConfig? initialEndpointConfig,
     EndpointResolver endpointResolver = const EndpointResolver(),
   })  : _credentialStore = credentialStore,
-        _endpointConfigCubit = endpointConfigCubit,
         _xmppService = xmppService,
         _emailService = emailService,
         _homeRefreshSyncService = homeRefreshSyncService ??
@@ -187,18 +184,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
         );
-    final initialConfig = initialState?.config ?? initialEndpointConfig;
-    if (initialConfig != null) {
-      _endpointConfigCubit.overrideEphemeral(initialConfig);
-    }
-    _emailService?.updateEndpointConfig(endpointConfig);
+    final initialConfig =
+        initialState?.config ?? initialEndpointConfig ?? const EndpointConfig();
+    _handleEndpointConfigUpdated(initialConfig);
     if (state is AuthenticationComplete) {
       _homeRefreshSyncService.start();
     }
-    _endpointConfigSubscription = _endpointConfigCubit.stream.listen(
-      _handleEndpointConfigUpdated,
-    );
-    _handleEndpointConfigUpdated(_endpointConfigCubit.state);
     _lifecycleListener = AppLifecycleListener(
       onResume: _loginIfStoredCredentials,
       onShow: _loginIfStoredCredentials,
@@ -317,7 +308,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   );
 
   final CredentialStore _credentialStore;
-  final EndpointConfigCubit _endpointConfigCubit;
   final XmppService _xmppService;
   final EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
@@ -332,7 +322,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
-  StreamSubscription<EndpointConfig>? _endpointConfigSubscription;
   VoidCallback? _foregroundListener;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
@@ -344,17 +333,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   late final AppLifecycleListener _lifecycleListener;
 
-  EndpointConfig get endpointConfig => _endpointConfigCubit.state;
+  EndpointConfig get endpointConfig => state.config;
 
   Duration get _authRequestTimeout {
     const seconds = 12;
     return const Duration(seconds: seconds);
   }
 
-  Future<void> updateEndpointConfig(EndpointConfig config) =>
-      _endpointConfigCubit.updateConfig(config);
+  Future<void> updateEndpointConfig(EndpointConfig config) async {
+    _handleEndpointConfigUpdated(config);
+  }
 
-  Future<void> resetEndpointConfig() => _endpointConfigCubit.reset();
+  Future<void> resetEndpointConfig() async {
+    _handleEndpointConfigUpdated(const EndpointConfig());
+  }
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {
     _rebuildEmailProvisioningClient(config);
@@ -1104,7 +1096,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _connectivitySubscription?.cancel();
     await _xmppStreamReadySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
-    await _endpointConfigSubscription?.cancel();
     if (_foregroundListener != null) {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
@@ -1159,7 +1150,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     await _awaitLoginBackoff();
     await _recoverAuthTransaction();
-    await _endpointConfigCubit.restore();
     final EndpointConfig config = endpointConfig;
     final bool shouldSkipLogin = previousState is AuthenticationComplete &&
         _xmppService.connected &&
@@ -1577,7 +1567,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         enableSmtp: false,
       );
       if (endpointConfig != demoConfig) {
-        _endpointConfigCubit.overrideEphemeral(demoConfig);
+        _handleEndpointConfigUpdated(demoConfig);
       }
       await _xmppService.resumeOfflineSession(
         jid: kDemoSelfJid,

@@ -12,7 +12,6 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -34,29 +33,23 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   DraftCubit({
     required MessageService messageService,
     EmailService? emailService,
-    required SettingsCubit settingsCubit,
+    required bool shareTokenSignatureEnabled,
   })  : _messageService = messageService,
-        _settingsCubit = settingsCubit,
-        _settingsState = settingsCubit.state,
+        _shareTokenSignatureEnabled = shareTokenSignatureEnabled,
         _emailService = emailService,
         super(const DraftsAvailable(items: null)) {
     _draftsSubscription = _messageService.draftsStream().listen((items) {
       _items = items;
       emit(DraftsAvailable(items: items));
     });
-    _settingsSubscription = _settingsCubit.stream.listen((state) {
-      _settingsState = state;
-    });
   }
 
   final MessageService _messageService;
   final EmailService? _emailService;
-  final SettingsCubit _settingsCubit;
-  SettingsState _settingsState;
+  bool _shareTokenSignatureEnabled;
   List<Draft>? _items;
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
-  StreamSubscription<SettingsState>? _settingsSubscription;
 
   @override
   void onChange(Change<DraftState> change) {
@@ -71,8 +64,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   @override
   Future<void> close() async {
     await _draftsSubscription.cancel();
-    await _settingsSubscription?.cancel();
     return super.close();
+  }
+
+  void updateShareTokenSignatureEnabled(bool enabled) {
+    _shareTokenSignatureEnabled = enabled;
   }
 
   Future<bool> sendDraft({
@@ -293,7 +289,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final htmlBody = trimmedBody.isNotEmpty
         ? HtmlContentCodec.fromPlainText(trimmedBody)
         : null;
-    final includeSignatureToken = _settingsState.shareTokenSignatureEnabled &&
+    final includeSignatureToken = _shareTokenSignatureEnabled &&
         targets.every((target) => target.shareSignatureEnabled);
     final shareId = ShareTokenCodec.generateShareId();
     final shouldSendBodyOnly =

@@ -188,7 +188,7 @@ void main() {
   test('Remember me choice defaults to true and persists updates', () async {
     final localBloc = AuthenticationCubit(
       credentialStore: mockCredentialStore,
-      endpointConfigCubit: endpointConfigCubit,
+      initialEndpointConfig: endpointConfigCubit.state,
       xmppService: mockXmppService,
       httpClient: mockHttpClient,
       emailProvisioningClient: mockProvisioningClient,
@@ -205,7 +205,7 @@ void main() {
     setUp(() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -474,7 +474,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -558,7 +558,7 @@ void main() {
       'Persisting with rememberMe true writes SMTP credentials atomically after success.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -599,7 +599,7 @@ void main() {
       'Persisting with rememberMe false keeps SMTP session only in memory and stores only DB secrets.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -708,7 +708,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -745,7 +745,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -811,7 +811,7 @@ void main() {
       'Rolls back the account if login fails after registration.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -853,7 +853,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -908,7 +908,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -958,7 +958,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1002,7 +1002,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1065,7 +1065,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -1115,7 +1115,7 @@ void main() {
       });
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1159,7 +1159,7 @@ void main() {
       'If authentication is not complete, does nothing.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1179,7 +1179,7 @@ void main() {
       'Automatic logout disconnects the xmpp service without forgetting credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1200,7 +1200,7 @@ void main() {
       'User initiated logout disconnects the xmpp service, forgets credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
@@ -1230,7 +1230,7 @@ void main() {
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
@@ -1254,7 +1254,7 @@ void main() {
       'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1273,7 +1273,7 @@ void main() {
       'Burn logout clears email storage when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,

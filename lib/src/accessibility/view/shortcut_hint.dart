@@ -203,51 +203,39 @@ class _ShortcutKeycaps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final textStyle = context.textTheme.small;
+    final spacing = context.spacing;
     const double keyTopSheenBlend = 0.08;
     const double keyMidToneBlend = 0.04;
     const double keyShadowBlend = 0.65;
-    const double denseBorderWidth = 1.0;
-    const double regularBorderWidth = 1.2;
-    const double densePaddingHorizontal = 7.0;
-    const double densePaddingVertical = 4.0;
-    const double regularPaddingHorizontal = 9.0;
-    const double regularPaddingVertical = 5.0;
-    const double denseDrop = 3.0;
-    const double regularDrop = 4.2;
     const double keyShadowAlpha = 0.35;
     const double keyShadowOverlayAlpha = 0.45;
     const double keyBorderAlpha = 0.95;
     const double keyTopShadowAlpha = 0.3;
-    const double keyTopShadowOffset = 1.2;
-    const double keyTopShadowBlur = 3.2;
     const double keyOverlayTopAlpha = 0.04;
     const double keyOverlayMidAlpha = 0.0;
     const double keyOverlayBottomAlpha = 0.12;
     const keyGradientStops = [0.0, 0.45, 1.0];
     const overlayGradientStops = [0.0, 0.5, 1.0];
-    final keyBase = colors.card;
-    final topSheen = Color.lerp(keyBase, colors.foreground, keyTopSheenBlend)!;
-    final midTone = Color.lerp(keyBase, colors.foreground, keyMidToneBlend)!;
-    final keyShadow =
-        Color.lerp(colors.background, colors.foreground, keyShadowBlend)!;
-    final borderWidth = dense ? denseBorderWidth : regularBorderWidth;
+    final keyBase = context.colorScheme.card;
+    final topSheen = Color.lerp(
+      keyBase,
+      context.colorScheme.foreground,
+      keyTopSheenBlend,
+    )!;
+    final midTone = Color.lerp(
+      keyBase,
+      context.colorScheme.foreground,
+      keyMidToneBlend,
+    )!;
+    final keyShadow = Color.lerp(context.colorScheme.background,
+        context.colorScheme.foreground, keyShadowBlend)!;
+    final borderWidth = dense ? spacing.xxs : spacing.xs;
     final padding = EdgeInsets.symmetric(
-      horizontal: dense ? densePaddingHorizontal : regularPaddingHorizontal,
-      vertical: dense ? densePaddingVertical : regularPaddingVertical,
+      horizontal: dense ? spacing.s : spacing.s,
+      vertical: dense ? spacing.xs : spacing.xs,
     );
     final radius = context.radius;
-    final drop = dense ? denseDrop : regularDrop;
-    final keyStyle = textStyle.copyWith(
-      color: colors.foreground,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.2,
-    );
-    final connectorStyle = textStyle.copyWith(
-      color: colors.mutedForeground,
-      fontWeight: FontWeight.w600,
-    );
+    final drop = dense ? spacing.xs : spacing.s;
 
     Widget keycap(String label) {
       final backplateColor = Color.alphaBlend(
@@ -269,14 +257,17 @@ class _ShortcutKeycaps extends StatelessWidget {
                   BoxShadow(
                     color: keyShadow.withValues(alpha: keyShadowOverlayAlpha),
                     offset: Offset(0, drop / 2),
-                    blurRadius: drop * 1.6,
+                    blurRadius: drop * 2,
                     spreadRadius: 0.0,
                   ),
                 ],
               ),
               child: Padding(
                 padding: padding,
-                child: Opacity(opacity: 0, child: Text(label, style: keyStyle)),
+                child: Opacity(
+                  opacity: 0,
+                  child: Text(label, style: context.textTheme.small),
+                ),
               ),
             ),
           ),
@@ -285,19 +276,21 @@ class _ShortcutKeycaps extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [topSheen, midTone, colors.card],
+                colors: [topSheen, midTone, context.colorScheme.card],
                 stops: keyGradientStops,
               ),
               border: Border.all(
-                color: colors.border.withValues(alpha: keyBorderAlpha),
+                color: context.colorScheme.border.withValues(
+                  alpha: keyBorderAlpha,
+                ),
                 width: borderWidth,
               ),
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
                   color: keyShadow.withValues(alpha: keyTopShadowAlpha),
-                  offset: const Offset(0, keyTopShadowOffset),
-                  blurRadius: keyTopShadowBlur,
+                  offset: Offset(0, spacing.xxs),
+                  blurRadius: spacing.xs,
                 ),
               ],
             ),
@@ -307,7 +300,7 @@ class _ShortcutKeycaps extends StatelessWidget {
                 children: [
                   Padding(
                     padding: padding,
-                    child: Text(label, style: keyStyle),
+                    child: Text(label, style: context.textTheme.small),
                   ),
                   Positioned.fill(
                     child: DecoratedBox(
@@ -317,9 +310,9 @@ class _ShortcutKeycaps extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            colors.foreground
+                            context.colorScheme.foreground
                                 .withValues(alpha: keyOverlayTopAlpha),
-                            colors.background
+                            context.colorScheme.background
                                 .withValues(alpha: keyOverlayMidAlpha),
                             keyShadow.withValues(alpha: keyOverlayBottomAlpha),
                           ],
@@ -341,14 +334,12 @@ class _ShortcutKeycaps extends StatelessWidget {
       widgets.add(keycap(parts[i]));
       final hasNext = i < parts.length - 1;
       if (hasNext) {
-        widgets.add(Text('+', style: connectorStyle));
+        widgets.add(Text('+', style: context.textTheme.muted));
       }
     }
-    const spacing = 8.0;
-    const runSpacing = 6.0;
     return Wrap(
-      spacing: spacing,
-      runSpacing: runSpacing,
+      spacing: spacing.s,
+      runSpacing: spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: widgets,
     );

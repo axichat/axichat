@@ -36,7 +36,6 @@ class AvatarEditorScreen extends StatelessWidget {
           create: (context) => AvatarEditorCubit(
             xmppService: locate<XmppService>(),
             templates: templates,
-            profileCubit: locate<ProfileCubit>(),
           )..initialize(ShadTheme.of(context, listen: false).colorScheme),
         ),
       ],
