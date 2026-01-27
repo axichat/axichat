@@ -6,7 +6,6 @@ import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -384,7 +383,7 @@ class _CropCard extends StatelessWidget {
             imageWidth == null ||
             imageHeight == null)
         ? (imageWidth != null && imageHeight != null
-            ? AvatarCropper.fallbackCropRect(
+            ? AxiImageCropper.fallbackCropRect(
                 imageWidth: imageWidth,
                 imageHeight: imageHeight,
                 minCropSide: AvatarEditorCubit.minCropSide,
@@ -438,7 +437,7 @@ class _CropCard extends StatelessWidget {
               spacing: 12.0,
               children: [
                 Center(
-                  child: AvatarCropper(
+                  child: AxiImageCropper(
                     bytes: sourceBytes,
                     imageWidth: imageWidth,
                     imageHeight: imageHeight,
@@ -446,8 +445,6 @@ class _CropCard extends StatelessWidget {
                     onCropChanged:
                         context.read<AvatarEditorCubit>().updateCropRect,
                     onCropReset: context.read<AvatarEditorCubit>().resetCrop,
-                    colors: colors,
-                    borderRadius: context.radius,
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
                 ),

@@ -823,11 +823,11 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     await context.read<AvatarEditorCubit>().seedFromBytes(bytes);
   }
 
-  void _handleSave() {
+  Future<void> _handleSave() async {
     final cubit = context.read<AvatarEditorCubit>();
     if (cubit.state.isBusy) return;
     cubit.pauseCarousel();
-    final payload = cubit.selectedAvatarPayload();
+    final payload = await cubit.buildSelectedAvatarPayload();
     if (payload == null) return;
     widget.onSave(payload);
   }
@@ -840,8 +840,9 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
         final errorText = avatarState.errorType?.resolve(l10n);
-        final saveEnabled = !avatarState.isBusy &&
-            context.read<AvatarEditorCubit>().selectedAvatarPayload() != null;
+        final hasAvatar = avatarState.draftAvatar != null ||
+            avatarState.carouselAvatar != null;
+        final saveEnabled = !avatarState.isBusy && hasAvatar;
         final useActionEnabled = avatarState.canUseCarouselAvatar;
         final Widget actions = Row(
           mainAxisAlignment: MainAxisAlignment.end,

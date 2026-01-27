@@ -24,6 +24,7 @@ export 'axi_fab.dart';
 export 'modal_close_button.dart';
 export 'axi_fade_indexed_stack.dart';
 export 'axi_fade_page_route.dart';
+export 'axi_image_cropper.dart';
 export 'axi_input_dialog.dart';
 export 'axi_link.dart';
 export 'axi_list_divider.dart';

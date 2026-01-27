@@ -26,6 +26,7 @@ class AxiTapBounce extends StatefulWidget {
     this.controller,
     this.scale = 0.96,
     this.enabled = true,
+    this.inset = _hoverInset,
     this.pressDuration = const Duration(milliseconds: 80),
     this.releaseDuration = const Duration(milliseconds: 180),
     this.pressCurve = Curves.easeOutCubic,
@@ -36,6 +37,7 @@ class AxiTapBounce extends StatefulWidget {
   final AxiTapBounceController? controller;
   final double scale;
   final bool enabled;
+  final double inset;
   final Duration pressDuration;
   final Duration releaseDuration;
   final Curve pressCurve;
@@ -145,7 +147,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
       child: widget.child,
     );
     final Widget elevatedChild = _TapBounceInset(
-      inset: _hoverInset,
+      inset: widget.inset,
       child: animationChild,
     );
     final controller = widget.controller;
@@ -191,46 +193,6 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
   }
 }
 
-class AxiTapBounceController {
-  _AxiTapBounceState? _state;
-  void Function(TapDownDetails details)? _fallbackDown;
-  void Function(TapUpDetails details)? _fallbackUp;
-  VoidCallback? _fallbackCancel;
-
-  void _attach(_AxiTapBounceState state) {
-    if (_state == state) return;
-    _state = state;
-  }
-
-  void _detach(_AxiTapBounceState state) {
-    if (_state != state) return;
-    _state = null;
-  }
-
-  void _setFallbackHandlers({
-    required void Function(TapDownDetails details) onDown,
-    required void Function(TapUpDetails details) onUp,
-    required VoidCallback onCancel,
-  }) {
-    _fallbackDown = onDown;
-    _fallbackUp = onUp;
-    _fallbackCancel = onCancel;
-  }
-
-  void handleTapDown(TapDownDetails details) =>
-      (_state?._handleTapDown ?? _fallbackDown)?.call(details);
-
-  void handleTapUp(TapUpDetails details) =>
-      (_state?._handleTapUp ?? _fallbackUp)?.call(details);
-
-  void handleTapCancel() =>
-      (_state?._handleTapCancel ?? _fallbackCancel)?.call();
-
-  void setPressed(bool value) => _state?._setPressed(value);
-
-  void setHovered(bool value) => _state?._setHovered(value);
-}
-
 class _TapBounceInset extends StatelessWidget {
   const _TapBounceInset({required this.inset, required this.child});
 
@@ -270,6 +232,46 @@ class _TapBounceInset extends StatelessWidget {
       },
     );
   }
+}
+
+class AxiTapBounceController {
+  _AxiTapBounceState? _state;
+  void Function(TapDownDetails details)? _fallbackDown;
+  void Function(TapUpDetails details)? _fallbackUp;
+  VoidCallback? _fallbackCancel;
+
+  void _attach(_AxiTapBounceState state) {
+    if (_state == state) return;
+    _state = state;
+  }
+
+  void _detach(_AxiTapBounceState state) {
+    if (_state != state) return;
+    _state = null;
+  }
+
+  void _setFallbackHandlers({
+    required void Function(TapDownDetails details) onDown,
+    required void Function(TapUpDetails details) onUp,
+    required VoidCallback onCancel,
+  }) {
+    _fallbackDown = onDown;
+    _fallbackUp = onUp;
+    _fallbackCancel = onCancel;
+  }
+
+  void handleTapDown(TapDownDetails details) =>
+      (_state?._handleTapDown ?? _fallbackDown)?.call(details);
+
+  void handleTapUp(TapUpDetails details) =>
+      (_state?._handleTapUp ?? _fallbackUp)?.call(details);
+
+  void handleTapCancel() =>
+      (_state?._handleTapCancel ?? _fallbackCancel)?.call();
+
+  void setPressed(bool value) => _state?._setPressed(value);
+
+  void setHovered(bool value) => _state?._setHovered(value);
 }
 
 extension AxiTapBounceExtension on Widget {

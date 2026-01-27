@@ -7,7 +7,6 @@ import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
-import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -186,21 +185,19 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Center(
-              child: AvatarCropper(
+              child: AxiImageCropper(
                 bytes: safeBytes,
                 imageWidth: safeImageWidth,
                 imageHeight: safeImageHeight,
                 cropRect: _localCropRect ??
                     widget.cropRect ??
-                    AvatarCropper.fallbackCropRect(
+                    AxiImageCropper.fallbackCropRect(
                       imageWidth: safeImageWidth,
                       imageHeight: safeImageHeight,
                       minCropSide: AvatarEditorCubit.minCropSide,
                     ),
                 onCropChanged: _scheduleCropChange,
                 onCropReset: _handleCropReset,
-                colors: colors,
-                borderRadius: context.radius,
                 minCropSide: AvatarEditorCubit.minCropSide,
               ),
             ),

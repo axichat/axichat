@@ -208,7 +208,7 @@ class _SignupFormState extends State<SignupForm>
     }
     return errorType.resolve(
       l10n,
-      hasSourceBytes: avatarState.sourceBytes != null,
+      hasSourceBytes: avatarState.avatar?.sourceBytes != null,
       maxKilobytes: avatarState.errorMaxKilobytes,
       fallbackMaxKilobytes: SignupAvatarCubit.avatarMaxKilobytes,
     );
@@ -218,7 +218,7 @@ class _SignupFormState extends State<SignupForm>
     if (context.read<SignupAvatarCubit>().state.processing) return;
     context.read<SignupAvatarCubit>().pauseCarousel();
     final avatarPayload =
-        context.read<SignupAvatarCubit>().selectedAvatarPayload();
+        await context.read<SignupAvatarCubit>().buildSelectedAvatarPayload();
     FocusManager.instance.primaryFocus?.unfocus();
     final captchaSrc = await _captchaSrc;
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -698,14 +698,16 @@ class _SignupFormState extends State<SignupForm>
                                                   mode: avatarState.editorMode,
                                                   avatarBytes: avatarState
                                                       .displayedBytes,
-                                                  cropBytes:
-                                                      avatarState.sourceBytes,
-                                                  cropRect:
-                                                      avatarState.cropRect,
-                                                  imageWidth:
-                                                      avatarState.imageWidth,
-                                                  imageHeight:
-                                                      avatarState.imageHeight,
+                                                  cropBytes: avatarState
+                                                      .avatar?.sourceBytes,
+                                                  cropRect: avatarState
+                                                      .avatar?.cropRect,
+                                                  imageWidth: avatarState
+                                                      .avatar?.sourceWidth
+                                                      ?.toDouble(),
+                                                  imageHeight: avatarState
+                                                      .avatar?.sourceHeight
+                                                      ?.toDouble(),
                                                   onCropChanged: (rect) => context
                                                       .read<SignupAvatarCubit>()
                                                       .updateCropRect(rect),
@@ -1221,21 +1223,19 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
           Padding(
             padding: EdgeInsets.all(spacing.s),
             child: Center(
-              child: AvatarCropper(
+              child: AxiImageCropper(
                 bytes: safeBytes,
                 imageWidth: safeImageWidth,
                 imageHeight: safeImageHeight,
                 cropRect: _localCropRect ??
                     widget.cropRectProvider?.call() ??
-                    AvatarCropper.fallbackCropRect(
+                    AxiImageCropper.fallbackCropRect(
                       imageWidth: safeImageWidth,
                       imageHeight: safeImageHeight,
                       minCropSide: AvatarEditorCubit.minCropSide,
                     ),
                 onCropChanged: _scheduleCropChange,
                 onCropReset: _handleCropReset,
-                colors: colors,
-                borderRadius: context.radius,
                 minCropSide: AvatarEditorCubit.minCropSide,
               ),
             ),
@@ -1867,7 +1867,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
         );
       },
       errorBuilder: (context, error, stackTrace) {
-        const maxAttempts = 3;
+        const maxAttempts = 1;
         if (_retryCount < maxAttempts - 1) {
           _retryCount++;
           imageCache.evict(NetworkImage(widget.url));

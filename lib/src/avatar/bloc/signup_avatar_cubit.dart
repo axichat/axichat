@@ -7,8 +7,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
-import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/models/avatar_models.dart';
+import 'package:axichat/src/common/avatar_background.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
@@ -71,9 +72,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const int avatarMaxKilobytes = avatarMaxBytes ~/ 1024;
   static const int avatarMinJpegQuality = 35;
   static const int avatarQualityStep = 5;
-  static const int _sourceMaxDimension = 768;
   static const int _sourceMaxBytes = 8 * 1024 * 1024;
-  static const int _sourceJpegQuality = 86;
   static const double avatarInsetFraction = 0.10;
   static const double avatarTransparentInsetFraction = 0.10;
   static const double minCropSide = 48.0;
@@ -81,20 +80,16 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const _avatarCarouselInitialBuffer = 4;
   static const _avatarCarouselSustainBuffer = 3;
   static const _avatarCarouselHistoryLimit = 12;
-  static const _rebuildDelay = Duration(milliseconds: 140);
+  static const _avatarCarouselCropSide = 100000.0;
   static const _abstractWarmupDuration = Duration(seconds: 3);
-  static const _randomBackgroundSaturationMin = 0.75;
-  static const _randomBackgroundSaturationRange = 0.25;
-  static const _randomBackgroundLightnessMin = 0.38;
-  static const _randomBackgroundLightnessRange = 0.17;
 
   final List<AvatarTemplate> _templates;
   late final List<AvatarTemplate> _abstractTemplates;
   late final List<AvatarTemplate> _nonAbstractTemplates;
   final math.Random _random = math.Random();
 
-  final List<_CarouselAvatar> _carouselBuffer = <_CarouselAvatar>[];
-  final List<String> _recentCarouselAvatarIds = <String>[];
+  final List<Avatar> _carouselBuffer = <Avatar>[];
+  final List<String> _recentTemplateKeys = <String>[];
   final List<AvatarTemplate> _abstractCarouselBag = <AvatarTemplate>[];
   final List<AvatarTemplate> _nonAbstractCarouselBag = <AvatarTemplate>[];
   Timer? _avatarCarouselTimer;
@@ -104,15 +99,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   _CarouselVisibility _carouselVisibility = _CarouselVisibility.visible;
   ShadColorScheme? _colors;
   DateTime? _abstractOnlyUntil;
-
-  Timer? _rebuildTimer;
-  img.Image? _sourceImage;
-  _CarouselAvatar? _currentCarouselAvatar;
+  Avatar? _currentCarouselAvatar;
 
   @override
   Future<void> close() async {
     _avatarCarouselTimer?.cancel();
-    _rebuildTimer?.cancel();
     return super.close();
   }
 
@@ -149,29 +140,31 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   AvatarUploadPayload? selectedAvatarPayload() =>
-      state.avatar ?? _currentCarouselAvatar?.payload;
+      state.avatar?.payload ?? _currentCarouselAvatar?.payload;
+
+  Future<AvatarUploadPayload?> buildSelectedAvatarPayload() async {
+    final draftAvatar = state.avatar;
+    if (draftAvatar == null) {
+      return _currentCarouselAvatar?.payload;
+    }
+    final refreshed = await _refreshAvatarPayload(draftAvatar);
+    return refreshed?.payload;
+  }
 
   Future<void> shuffleCarousel(ShadColorScheme colors) async {
     _colors = colors;
     _carouselVisibility = _CarouselVisibility.visible;
     if (state.processing) return;
-    if (state.hasUserSelectedAvatar ||
-        state.sourceBytes != null ||
-        state.activeTemplate != null ||
-        state.activeCategory != null) {
+    if (state.hasUserSelectedAvatar) {
       _carouselBuffer.clear();
       _currentCarouselAvatar = null;
       _stopAvatarCarousel();
       emit(
         state.copyWith(
           avatar: null,
-          avatarPreviewBytes: null,
-          carouselPreviewBytes: null,
-          activeTemplate: null,
-          activeCategory: null,
+          carouselAvatar: null,
           backgroundLocked: false,
           lockedBackgroundColor: null,
-          clearCrop: true,
           clearError: true,
         ),
       );
@@ -202,10 +195,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (current == null || template == null) return;
     if (template.category == AvatarTemplateCategory.abstract) return;
     if (!template.hasAlphaBackground) return;
-    final background = _randomAvatarBackgroundColor(colors);
+    final background = _randomAvatarBackgroundColor();
     emit(state.copyWith(processing: true, clearError: true));
     try {
-      final payload = await _buildAvatarPayloadFromTemplate(
+      final updated = await _buildAvatarFromTemplate(
         template: template,
         background: background,
         colors: colors,
@@ -213,19 +206,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       if (state.hasUserSelectedAvatar || !_isCarouselVisible) {
         return;
       }
-      final updated = _CarouselAvatar(
-        payload: payload,
-        template: template,
-        category: template.category,
-        background: background,
-      );
       _currentCarouselAvatar = updated;
       emit(
         state.copyWith(
           processing: false,
-          carouselPreviewBytes: payload.bytes,
-          activeTemplate: template,
-          activeCategory: template.category,
+          carouselAvatar: updated,
           backgroundColor: background,
           clearError: true,
         ),
@@ -248,8 +233,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     emit(
       state.copyWith(
         avatar: null,
-        avatarPreviewBytes: null,
-        carouselPreviewBytes: null,
+        carouselAvatar: null,
         processing: true,
         clearError: true,
       ),
@@ -259,7 +243,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> shuffleTemplate(ShadColorScheme colors) async {
     _colors = colors;
-    final selection = _pickAvatarSelection(colors);
+    final selection = _pickAvatarSelection();
     if (selection == null) return;
     await selectTemplate(
       selection.template,
@@ -273,11 +257,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (state.processing || !state.canShuffleBackground) {
       return;
     }
-    final template = state.activeTemplate;
+    final template = state.avatar?.template;
     if (template == null) {
       return;
     }
-    final background = _randomAvatarBackgroundColor(colors);
+    final background = _randomAvatarBackgroundColor();
     emit(
       state.copyWith(backgroundLocked: true, lockedBackgroundColor: background),
     );
@@ -295,16 +279,12 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _stopAvatarCarousel();
     _carouselBuffer.clear();
     _currentCarouselAvatar = null;
-    _sourceImage = null;
 
     emit(
       state.copyWith(
         processing: true,
         clearError: true,
-        carouselPreviewBytes: null,
-        activeTemplate: template,
-        activeCategory: template.category,
-        clearCrop: true,
+        carouselAvatar: null,
       ),
     );
 
@@ -315,20 +295,19 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
 
     try {
-      final payload = await _buildAvatarPayloadFromTemplate(
+      final avatar = await _buildAvatarFromTemplate(
         template: template,
         background: resolvedBackground,
         colors: colors,
       );
-      _pushRecentCarouselAvatar(template.id);
+      _pushRecentTemplateKey(_templateKey(template));
       if (!_nonAbstractReady &&
           template.category != AvatarTemplateCategory.abstract) {
         _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
       }
       emit(
         state.copyWith(
-          avatar: payload,
-          avatarPreviewBytes: payload.bytes,
+          avatar: avatar,
           processing: false,
           clearError: true,
           backgroundColor: template.hasAlphaBackground
@@ -354,7 +333,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     emit(
       state.copyWith(
         processing: true,
-        carouselPreviewBytes: null,
+        carouselAvatar: null,
         clearError: true,
       ),
     );
@@ -415,74 +394,51 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   void updateCropRect(Rect rect) {
-    final image = _sourceImage;
-    if (image == null) return;
-    final constrained = _constrainCropRect(rect, image);
-    if (state.cropRect == constrained) return;
+    final avatar = state.avatar;
+    if (avatar == null || avatar.source != AvatarSource.upload) return;
+    final constrained =
+        avatar.constrainCropRect(rect: rect, minCropSide: minCropSide);
+    if (avatar.cropRect == constrained) return;
     emit(
-      state.copyWith(cropRect: constrained, processing: true, clearError: true),
+      state.copyWith(
+        avatar: avatar.copyWith(cropRect: constrained),
+        clearError: true,
+      ),
     );
-    _scheduleRebuild();
   }
 
   void resetCrop() {
-    final image = _sourceImage;
-    if (image == null) return;
-    final reset = _fallbackCropRect(
-      imageWidth: image.width.toDouble(),
-      imageHeight: image.height.toDouble(),
-    );
-    emit(state.copyWith(cropRect: reset, processing: true, clearError: true));
-    _scheduleRebuild();
-  }
-
-  void _scheduleRebuild() {
-    _rebuildTimer?.cancel();
-    _rebuildTimer = Timer(
-      _rebuildDelay,
-      () async {
-        await _rebuildAvatar();
-      },
+    final avatar = state.avatar;
+    if (avatar == null || avatar.source != AvatarSource.upload) return;
+    final reset = avatar.resolveCropRect(minCropSide: minCropSide);
+    if (reset == null) return;
+    emit(
+      state.copyWith(
+        avatar: avatar.copyWith(cropRect: reset),
+        clearError: true,
+      ),
     );
   }
 
   Future<void> _applyAvatarFromBytes(Uint8List bytes) async {
     try {
-      final prepared = await prepareAvatarSource(
-        AvatarSourcePrepareRequest(
-          bytes: bytes,
-          maxDimension: _sourceMaxDimension,
-          jpegQuality: _sourceJpegQuality,
-        ),
+      final avatar = await Avatar.fromUploadBytes(
+        bytes: bytes,
+        maxDimension: avatarTargetSize,
+        jpegQuality: 90,
+        targetSize: avatarTargetSize,
+        maxBytes: avatarMaxBytes,
+        minJpegQuality: avatarMinJpegQuality,
+        qualityStep: avatarQualityStep,
       );
-      final preparedBytes = prepared.bytes;
-      final decoded = await decodeImageBytes(preparedBytes);
-      if (decoded == null) {
-        emit(
-          state.copyWith(
-            processing: false,
-            errorType: SignupAvatarErrorType.invalidImage,
-          ),
-        );
-        _resumeAvatarCarouselIfNeeded();
-        return;
-      }
-      _sourceImage = decoded;
-      final width = prepared.width.toDouble();
-      final height = prepared.height.toDouble();
       emit(
         state.copyWith(
-          sourceBytes: preparedBytes,
-          imageWidth: width,
-          imageHeight: height,
-          cropRect: _fallbackCropRect(imageWidth: width, imageHeight: height),
-          activeTemplate: null,
-          activeCategory: null,
+          avatar: avatar,
+          processing: false,
           backgroundColor: Colors.transparent,
           clearError: true,
         ),
       );
-      await _rebuildAvatar();
     } on FormatException {
       emit(
         state.copyWith(
@@ -524,39 +480,35 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return data.isEmpty ? null : data;
   }
 
-  Future<void> _rebuildAvatar() async {
-    _rebuildTimer?.cancel();
-    final image = _sourceImage;
-    final sourceBytes = state.sourceBytes;
-    if (image == null || sourceBytes == null || sourceBytes.isEmpty) {
-      emit(state.copyWith(processing: false));
-      _resumeAvatarCarouselIfNeeded();
-      return;
+  Future<Avatar?> _refreshAvatarPayload(Avatar avatar) async {
+    if (avatar.source != AvatarSource.upload) {
+      return avatar;
     }
-    await Future<void>.delayed(Duration.zero);
+    final cropRect =
+        avatar.resolveCropRect(minCropSide: minCropSide) ?? avatar.cropRect;
+    if (cropRect == null || cropRect.width <= 0 || cropRect.height <= 0) {
+      return avatar;
+    }
+    emit(state.copyWith(processing: true, clearError: true));
     try {
-      final payload = await _processSignupImage(
-        image: image,
-        bytes: sourceBytes,
+      final updated = await avatar.rebuildUploadPayload(
+        cropRect: cropRect,
+        targetSize: avatarTargetSize,
+        maxBytes: avatarMaxBytes,
+        insetFraction: 0,
+        minJpegQuality: avatarMinJpegQuality,
+        qualityStep: avatarQualityStep,
+        backgroundColor: Colors.transparent,
       );
       emit(
         state.copyWith(
-          avatar: payload,
-          avatarPreviewBytes: payload.bytes,
+          avatar: updated,
           processing: false,
           clearError: true,
         ),
       );
       _stopAvatarCarousel();
-    } on _AvatarSizeException {
-      emit(
-        state.copyWith(
-          processing: false,
-          errorType: SignupAvatarErrorType.sizeExceeded,
-          errorMaxKilobytes: avatarMaxKilobytes,
-        ),
-      );
-      _resumeAvatarCarouselIfNeeded();
+      return updated;
     } on FormatException {
       emit(
         state.copyWith(
@@ -565,52 +517,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         ),
       );
       _resumeAvatarCarouselIfNeeded();
+      return null;
     }
   }
 
-  Future<AvatarUploadPayload> _processSignupImage({
-    required img.Image image,
-    required Uint8List bytes,
-  }) async {
-    final baseCrop = state.cropRect ??
-        _fallbackCropRect(
-          imageWidth: image.width.toDouble(),
-          imageHeight: image.height.toDouble(),
-        );
-    final safeCrop = _constrainCropRect(baseCrop, image);
-    final hasAlpha = image.hasAlpha || image.numChannels == 4;
-    final background = state.backgroundColor;
-    final shouldFlatten = background.a > 0 && hasAlpha;
-    final processed = await processAvatar(
-      AvatarProcessRequest(
-        bytes: bytes,
-        cropLeft: safeCrop.left,
-        cropTop: safeCrop.top,
-        cropSide: safeCrop.width,
-        targetSize: avatarTargetSize,
-        maxBytes: avatarMaxBytes,
-        insetFraction: 0,
-        shouldInset: false,
-        backgroundColor: background.toARGB32(),
-        flattenBackground: shouldFlatten,
-        minJpegQuality: avatarMinJpegQuality,
-        qualityStep: avatarQualityStep,
-      ),
-    );
-    if (processed.bytes.length > avatarMaxBytes) {
-      throw const _AvatarSizeException();
-    }
-    final hash = sha1.convert(processed.bytes).toString();
-    return AvatarUploadPayload(
-      bytes: processed.bytes,
-      mimeType: processed.mimeType,
-      width: processed.width,
-      height: processed.height,
-      hash: hash,
-    );
-  }
-
-  Future<AvatarUploadPayload> _buildAvatarPayloadFromTemplate({
+  Future<Avatar> _buildAvatarFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,
@@ -619,23 +530,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final bytes = (rawBytes != null && rawBytes.isNotEmpty)
         ? rawBytes
         : (await template.generator(background, colors)).bytes;
-    return _processTemplateBytes(
-      bytes: bytes,
-      template: template,
-      background: template.hasAlphaBackground
-          ? background
-          : state.backgroundColor == Colors.transparent
-              ? colors.accent
-              : state.backgroundColor,
-    );
-  }
-
-  Future<AvatarUploadPayload> _processTemplateBytes({
-    required Uint8List bytes,
-    required AvatarTemplate template,
-    required Color background,
-  }) async {
-    const cropSide = 100000.0;
+    final resolvedBackground = template.hasAlphaBackground
+        ? background
+        : state.backgroundColor == Colors.transparent
+            ? colors.accent
+            : state.backgroundColor;
     final useTemplateInset =
         template.category != AvatarTemplateCategory.abstract;
     final padAlphaTemplate = template.hasAlphaBackground && useTemplateInset;
@@ -644,32 +543,16 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
             ? avatarTransparentInsetFraction
             : avatarInsetFraction)
         : 0.0;
-    final shouldInset = insetFraction > 0;
-    final shouldFlatten =
-        shouldInset || template.hasAlphaBackground || background.a > 0;
-    final processed = await processAvatar(
-      AvatarProcessRequest(
-        bytes: bytes,
-        cropLeft: 0,
-        cropTop: 0,
-        cropSide: cropSide,
-        targetSize: avatarTargetSize,
-        maxBytes: avatarMaxBytes,
-        insetFraction: insetFraction,
-        shouldInset: shouldInset,
-        backgroundColor: background.toARGB32(),
-        flattenBackground: shouldFlatten,
-        minJpegQuality: avatarMinJpegQuality,
-        qualityStep: avatarQualityStep,
-      ),
-    );
-    final hash = sha1.convert(processed.bytes).toString();
-    return AvatarUploadPayload(
-      bytes: processed.bytes,
-      mimeType: processed.mimeType,
-      width: processed.width,
-      height: processed.height,
-      hash: hash,
+    return Avatar.fromTemplateBytes(
+      bytes: bytes,
+      template: template,
+      background: resolvedBackground,
+      targetSize: avatarTargetSize,
+      maxBytes: avatarMaxBytes,
+      insetFraction: insetFraction,
+      minJpegQuality: avatarMinJpegQuality,
+      qualityStep: avatarQualityStep,
+      cropSide: _avatarCarouselCropSide,
     );
   }
 
@@ -680,7 +563,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final colors = _colors;
     if (colors == null) return;
 
-    if (state.carouselPreviewBytes == null && _currentCarouselAvatar == null) {
+    if (state.carouselAvatar == null && _currentCarouselAvatar == null) {
       await _prefillCarousel(targetSize: 1, preferAbstract: true);
       if (state.hasUserSelectedAvatar ||
           state.processing ||
@@ -737,18 +620,15 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         background: fallbackBackground,
         accent: colors.primary,
       );
-      final entry = _CarouselAvatar(
+      final entry = Avatar(
+        source: AvatarSource.template,
         payload: fallback,
-        template: null,
-        category: AvatarTemplateCategory.abstract,
-        background: fallbackBackground,
+        backgroundColor: fallbackBackground,
       );
       _currentCarouselAvatar = entry;
       emit(
         state.copyWith(
-          carouselPreviewBytes: fallback.bytes,
-          activeTemplate: null,
-          activeCategory: AvatarTemplateCategory.abstract,
+          carouselAvatar: entry,
           clearError: true,
         ),
       );
@@ -757,17 +637,17 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
     final entry = _carouselBuffer.removeAt(0);
     _currentCarouselAvatar = entry;
+    final entryCategory =
+        entry.template?.category ?? AvatarTemplateCategory.abstract;
     if (!_nonAbstractReady &&
-        entry.category != AvatarTemplateCategory.abstract) {
+        entryCategory != AvatarTemplateCategory.abstract) {
       _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
     }
     emit(
       state.copyWith(
-        carouselPreviewBytes: entry.payload.bytes,
-        activeTemplate: entry.template,
-        activeCategory: entry.category,
+        carouselAvatar: entry,
         backgroundColor: entry.template?.hasAlphaBackground == true
-            ? entry.background
+            ? entry.backgroundColor ?? state.backgroundColor
             : state.backgroundColor,
         clearError: true,
       ),
@@ -834,23 +714,16 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         template ??= _pickCarouselTemplate();
         if (template == null) break;
         attempts++;
-        _pushRecentCarouselAvatar(template.id);
+        _pushRecentTemplateKey(_templateKey(template));
         final background = template.hasAlphaBackground
-            ? _randomAvatarBackgroundColor(colors)
+            ? _randomAvatarBackgroundColor()
             : state.backgroundColor;
-        final payload = await _buildAvatarPayloadFromTemplate(
+        final avatar = await _buildAvatarFromTemplate(
           template: template,
           background: background,
           colors: colors,
         );
-        _carouselBuffer.add(
-          _CarouselAvatar(
-            payload: payload,
-            template: template,
-            category: template.category,
-            background: background,
-          ),
-        );
+        _carouselBuffer.add(avatar);
         if (!_nonAbstractReady &&
             template.category != AvatarTemplateCategory.abstract) {
           _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
@@ -869,11 +742,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
           accent: colors.primary,
         );
         _carouselBuffer.add(
-          _CarouselAvatar(
+          Avatar(
+            source: AvatarSource.template,
             payload: fallback,
-            template: null,
-            category: AvatarTemplateCategory.abstract,
-            background: fallbackBackground,
+            backgroundColor: fallbackBackground,
           ),
         );
         return true;
@@ -891,25 +763,18 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         bag: _nonAbstractCarouselBag,
       );
       if (template == null) return;
-      _pushRecentCarouselAvatar(template.id);
+      _pushRecentTemplateKey(_templateKey(template));
       final background = template.hasAlphaBackground
-          ? _randomAvatarBackgroundColor(colors)
+          ? _randomAvatarBackgroundColor()
           : state.backgroundColor;
-      final payload = await _buildAvatarPayloadFromTemplate(
+      final avatar = await _buildAvatarFromTemplate(
         template: template,
         background: background,
         colors: colors,
       );
       if (!_isCarouselVisible) return;
       _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
-      _carouselBuffer.add(
-        _CarouselAvatar(
-          payload: payload,
-          template: template,
-          category: template.category,
-          background: background,
-        ),
-      );
+      _carouselBuffer.add(avatar);
     } on FormatException {
       // Ignore warmup failures; fallback handled by buffer.
     } finally {
@@ -951,7 +816,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final recycled = <AvatarTemplate>[];
     while (bag.isNotEmpty) {
       final candidate = bag.removeAt(0);
-      if (_recentCarouselAvatarIds.contains(candidate.id)) {
+      if (_recentTemplateKeys.contains(_templateKey(candidate))) {
         recycled.add(candidate);
         continue;
       }
@@ -964,19 +829,26 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return selection;
   }
 
-  void _pushRecentCarouselAvatar(String id) {
-    _recentCarouselAvatarIds.add(id);
-    if (_recentCarouselAvatarIds.length > _avatarCarouselHistoryLimit) {
-      _recentCarouselAvatarIds.removeAt(0);
+  String _templateKey(AvatarTemplate template) {
+    final path = template.assetPath;
+    if (path == null || path.isEmpty) return template.id;
+    final segments = path.split('/');
+    return segments.isNotEmpty ? segments.last : template.id;
+  }
+
+  void _pushRecentTemplateKey(String key) {
+    _recentTemplateKeys.add(key);
+    if (_recentTemplateKeys.length > _avatarCarouselHistoryLimit) {
+      _recentTemplateKeys.removeAt(0);
     }
   }
 
-  _AvatarSelection? _pickAvatarSelection(ShadColorScheme colors) {
+  _AvatarSelection? _pickAvatarSelection() {
     final template = _pickCarouselTemplate();
     if (template == null) return null;
     final background = state.backgroundLocked
         ? (state.lockedBackgroundColor ?? state.backgroundColor)
-        : _randomAvatarBackgroundColor(colors);
+        : _randomAvatarBackgroundColor();
     return _AvatarSelection(template: template, background: background);
   }
 
@@ -990,17 +862,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (state.backgroundLocked) {
       return state.lockedBackgroundColor ?? state.backgroundColor;
     }
-    return _randomAvatarBackgroundColor(colors);
+    return _randomAvatarBackgroundColor();
   }
 
-  Color _randomAvatarBackgroundColor(ShadColorScheme colors) {
-    final hue = _random.nextDouble() * 360.0;
-    final saturation = _randomBackgroundSaturationMin +
-        _random.nextDouble() * _randomBackgroundSaturationRange;
-    final lightness = _randomBackgroundLightnessMin +
-        _random.nextDouble() * _randomBackgroundLightnessRange;
-    return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
-  }
+  Color _randomAvatarBackgroundColor() => generateAvatarBackground(_random);
 
   AvatarUploadPayload _fallbackAvatarPayload({
     required Color background,
@@ -1045,47 +910,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final g = (argb >> 8) & 0xFF;
     final b = argb & 0xFF;
     return img.ColorRgba8(r, g, b, a);
-  }
-
-  Rect _fallbackCropRect({
-    required double imageWidth,
-    required double imageHeight,
-  }) {
-    if (!imageWidth.isFinite ||
-        !imageHeight.isFinite ||
-        imageWidth <= 0 ||
-        imageHeight <= 0) {
-      return Rect.zero;
-    }
-    final minSide = math.min(imageWidth, imageHeight);
-    final effectiveMinSide = math.min(minCropSide, minSide);
-    final targetSide = minSide * 0.72;
-    final safeSide = targetSide.clamp(effectiveMinSide, minSide);
-    final left = (imageWidth - safeSide) / 2;
-    final top = (imageHeight - safeSide) / 2;
-    return Rect.fromLTWH(left, top, safeSide, safeSide);
-  }
-
-  Rect _constrainCropRect(Rect rect, img.Image image) {
-    final width = image.width.toDouble();
-    final height = image.height.toDouble();
-    if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
-      return Rect.zero;
-    }
-    final maxSide = math.min(width, height);
-    final safeMinSide = math.min(minCropSide, maxSide);
-    final fallback = _fallbackCropRect(imageWidth: width, imageHeight: height);
-    if (!rect.isFinite || rect.width <= 0 || rect.height <= 0) {
-      return fallback;
-    }
-    final desiredSide =
-        math.min(rect.width, rect.height).clamp(safeMinSide, maxSide);
-    final maxLeft = width - desiredSide;
-    final maxTop = height - desiredSide;
-    final left =
-        rect.left.isFinite ? rect.left.clamp(0.0, maxLeft) : fallback.left;
-    final top = rect.top.isFinite ? rect.top.clamp(0.0, maxTop) : fallback.top;
-    return Rect.fromLTWH(left, top, desiredSide, desiredSide);
   }
 
   void _scheduleCarouselTick() {
@@ -1135,28 +959,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       _isCarouselVisible && !state.hasUserSelectedAvatar && !state.processing;
 }
 
-class _AvatarSizeException implements Exception {
-  const _AvatarSizeException();
-}
-
 class _AvatarSelection {
   const _AvatarSelection({required this.template, required this.background});
 
   final AvatarTemplate template;
-  final Color background;
-}
-
-class _CarouselAvatar {
-  const _CarouselAvatar({
-    required this.payload,
-    required this.background,
-    this.template,
-    this.category,
-  });
-
-  final AvatarUploadPayload payload;
-  final AvatarTemplate? template;
-  final AvatarTemplateCategory? category;
   final Color background;
 }
 

@@ -1688,7 +1688,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     provisioning.EmailProvisioningCredentials? emailCredentials,
     bool persistCredentials = true,
   }) async {
-    const maxAttempts = 3;
+    const maxAttempts = 2;
     const maxDuration = Duration(seconds: 20);
     const initialDelay = Duration(seconds: 2);
     const maxDelay = Duration(seconds: 8);

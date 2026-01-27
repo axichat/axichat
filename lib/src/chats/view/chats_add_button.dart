@@ -92,7 +92,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
         );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final l10n = context.l10n;
     final trimmed = _title.trim();
     if (trimmed.isEmpty) {
@@ -116,9 +116,12 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
       _validationError = null;
     });
     context.read<AvatarEditorCubit>().pauseCarousel();
+    final avatarPayload =
+        await context.read<AvatarEditorCubit>().buildSelectedAvatarPayload();
+    if (!mounted) return;
     context.read<ChatsCubit>().createChatRoom(
           title: trimmed,
-          avatar: context.read<AvatarEditorCubit>().selectedAvatarPayload(),
+          avatar: avatarPayload,
         );
   }
 
