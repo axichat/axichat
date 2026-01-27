@@ -7,6 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -15,7 +16,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key, this.onSubmitStart});
@@ -26,12 +26,14 @@ class LoginForm extends StatefulWidget {
   State<LoginForm> createState() => _LoginFormState();
 }
 
+enum _RememberMeChoice { enabled, disabled }
+
 class _LoginFormState extends State<LoginForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
-  bool rememberMe = true;
+  _RememberMeChoice _rememberMeChoice = _RememberMeChoice.enabled;
 
   @override
   void initState() {
@@ -46,7 +48,8 @@ class _LoginFormState extends State<LoginForm> {
         await context.read<AuthenticationCubit>().loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
-      rememberMe = preference;
+      _rememberMeChoice =
+          preference ? _RememberMeChoice.enabled : _RememberMeChoice.disabled;
     });
     _rememberMeFieldKey.currentState?.didChange(preference);
   }
@@ -62,45 +65,57 @@ class _LoginFormState extends State<LoginForm> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     widget.onSubmitStart?.call();
-    context.read<AuthenticationCubit>().login(
-          username: _jidTextController.value.text,
-          password: _passwordTextController.value.text,
-          rememberMe: rememberMe,
-        );
+    final endpointConfigCubit = context.read<EndpointConfigCubit>();
+    final authCubit = context.read<AuthenticationCubit>();
+    await endpointConfigCubit.restore();
+    if (!mounted) return;
+    await authCubit.updateEndpointConfig(endpointConfigCubit.state);
+    await authCubit.login(
+      username: _jidTextController.value.text,
+      password: _passwordTextController.value.text,
+      rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
-        final l10n = context.l10n;
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
+        final spacing = context.spacing;
+        final sizing = context.sizing;
         final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
-        const loginSpinnerDimension = 16.0;
-        const loginSpinnerPadding = 1.0;
-        const loginSpinnerSlotSize =
-            loginSpinnerDimension + (loginSpinnerPadding * 2);
-        const loginSpinnerGap = 8.0;
-        const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
-        const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
-        const errorMessagePadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
-        final errorText =
-            state is AuthenticationFailure ? state.errorText : null;
+        final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
+        final errorPadding = EdgeInsets.fromLTRB(
+          spacing.s,
+          spacing.m,
+          spacing.s,
+          spacing.s,
+        );
+        final errorMessagePadding = EdgeInsets.fromLTRB(
+          spacing.s,
+          spacing.s,
+          spacing.s,
+          spacing.m,
+        );
+        final errorText = state is AuthenticationFailure
+            ? state.message.resolve(context.l10n)
+            : null;
         return Form(
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: BoxConstraints(maxWidth: sizing.dialogMaxWidth),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
                     padding: errorPadding,
                     child: Text(
-                      l10n.authLogin,
+                      context.l10n.authLogin,
                       style: context.modalHeaderTextStyle,
                     ),
                   ),
@@ -111,27 +126,25 @@ class _LoginFormState extends State<LoginForm> {
                         : Semantics(
                             liveRegion: true,
                             container: true,
-                            label: l10n.signupErrorPrefix(errorText),
+                            label: context.l10n.signupErrorPrefix(errorText),
                             child: Text(
                               errorText,
-                              style: TextStyle(
-                                color: context.colorScheme.destructive,
-                              ),
+                              style: context.textTheme.small,
                             ),
                           ),
                   ),
                   Padding(
                     padding: horizontalPadding,
                     child: NotificationRequest(
-                      notificationService: context.read<NotificationService>(),
-                      capability: context.read<Capability>(),
+                      notificationService: context.watch<NotificationService>(),
+                      capability: context.watch<Capability>(),
                     ),
                   ),
-                  const SizedBox.square(dimension: 16.0),
+                  const SizedBox.square(),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
-                      label: l10n.authUsername,
+                      label: context.l10n.authUsername,
                       textField: true,
                       child: AxiTextFormField(
                         key: loginUsernameKey,
@@ -142,20 +155,17 @@ class _LoginFormState extends State<LoginForm> {
                           ),
                         ],
                         keyboardType: TextInputType.emailAddress,
-                        placeholder: Text(l10n.authUsername),
+                        placeholder: Text(context.l10n.authUsername),
                         enabled: !loading,
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
-                        validator: (text) {
-                          if (text.isEmpty) {
-                            return l10n.authUsernameRequired;
-                          }
-                          return null;
-                        },
+                        validator: (text) => text.isEmpty
+                            ? context.l10n.authUsernameRequired
+                            : null,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: spacing.s),
                   Padding(
                     padding: horizontalPadding,
                     child: PasswordInput(
@@ -166,60 +176,45 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   Padding(
                     padding: horizontalPadding.add(
-                      const EdgeInsets.only(top: 12, bottom: 4),
+                      EdgeInsets.only(top: spacing.s, bottom: spacing.xs),
                     ),
                     child: AxiCheckboxFormField(
                       key: _rememberMeFieldKey,
                       enabled: !loading,
-                      initialValue: rememberMe,
-                      inputLabel: Text(l10n.authRememberMeLabel),
+                      initialValue:
+                          _rememberMeChoice == _RememberMeChoice.enabled,
+                      inputLabel: Text(context.l10n.authRememberMeLabel),
                       onChanged: (value) async {
                         setState(() {
-                          rememberMe = value;
+                          _rememberMeChoice = value == true
+                              ? _RememberMeChoice.enabled
+                              : _RememberMeChoice.disabled;
                         });
                         await context
                             .read<AuthenticationCubit>()
-                            .persistRememberMeChoice(value);
+                            .persistRememberMeChoice(
+                              _rememberMeChoice == _RememberMeChoice.enabled,
+                            );
                       },
                     ),
                   ),
-                  const SizedBox.square(dimension: 20.0),
+                  const SizedBox.square(),
                   Padding(
                     padding: horizontalPadding,
-                    child: Builder(
-                      builder: (context) {
-                        final spinner = AxiProgressIndicator(
-                          dimension: loginSpinnerDimension,
-                          color: context.colorScheme.primaryForeground,
-                          semanticsLabel: l10n.authLoginPending,
-                        );
-                        final spinnerSlot = ButtonSpinnerSlot(
-                          isVisible: loading,
-                          spinner: spinner,
-                          slotSize: loginSpinnerSlotSize,
-                          gap: loginSpinnerGap,
-                          duration: animationDuration,
-                        );
-                        final button = ShadButton(
+                    child: AxiAnimatedSize(
+                      duration: animationDuration,
+                      curve: Curves.easeInOut,
+                      alignment: Alignment.centerLeft,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: 1,
+                        child: AxiButton.primary(
                           key: loginSubmitKey,
-                          enabled: !loading,
-                          onPressed: () => _onPressed(context),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [spinnerSlot, Text(l10n.authLogin)],
-                          ),
-                        ).withTapBounce(enabled: !loading);
-                        return AxiAnimatedSize(
-                          duration: animationDuration,
-                          curve: Curves.easeInOut,
-                          alignment: Alignment.centerLeft,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: 1,
-                            child: button,
-                          ),
-                        );
-                      },
+                          loading: loading,
+                          onPressed: loading ? null : () => _onPressed(context),
+                          child: Text(context.l10n.authLogin),
+                        ),
+                      ),
                     ),
                   ),
                 ],

@@ -67,7 +67,13 @@ class ArchivedChatScreen extends StatelessWidget {
             notificationService: notificationService,
             emailService: emailService,
             omemoService: omemoService,
-            settingsCubit: settingsCubit,
+            settings: ChatSettingsSnapshot(
+              language: settingsCubit.state.language,
+              chatReadReceipts: settingsCubit.state.chatReadReceipts,
+              emailReadReceipts: settingsCubit.state.emailReadReceipts,
+              shareTokenSignatureEnabled:
+                  settingsCubit.state.shareTokenSignatureEnabled,
+            ),
           ),
         ),
         BlocProvider(

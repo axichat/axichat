@@ -35,14 +35,12 @@ class ComposeWindowOverlay extends StatelessWidget {
         return Stack(
           children: [
             for (var index = 0; index < state.windows.length; index++)
-              InBoundsFadeScale(
+              _ComposeWindowShell(
                 key: ValueKey(state.windows[index].id),
-                child: _ComposeWindowShell(
-                  entry: state.windows[index],
-                  index: index,
-                  viewportSize: mediaSize,
-                  viewPadding: viewPadding,
-                ),
+                entry: state.windows[index],
+                index: index,
+                viewportSize: mediaSize,
+                viewPadding: viewPadding,
               ),
           ],
         );
@@ -220,6 +218,7 @@ class _ComposeWindowBody extends StatelessWidget {
 
 class _ComposeWindowShell extends StatefulWidget {
   const _ComposeWindowShell({
+    super.key,
     required this.entry,
     required this.index,
     required this.viewportSize,
@@ -293,54 +292,57 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       top: resolvedOffset.dy + collapseOffset,
       width: targetWidth,
       height: targetHeight,
-      child: Material(
-        type: MaterialType.transparency,
-        child: DecoratedBox(
-          decoration: ShapeDecoration(
-            color: colors.card,
-            shadows: calendarMediumShadow,
-            shape: ContinuousRectangleBorder(
-              borderRadius: cardRadius,
-              side: BorderSide(color: colors.border),
-            ),
-          ),
-          child: Column(
-            children: [
-              _ComposeWindowHeader(
-                id: entry.id,
-                seed: entry.seed,
-                minimized: isMinimized,
-                expanded: isExpanded,
-                onMinimize: () => isMinimized
-                    ? context.read<ComposeWindowCubit>().restore(entry.id)
-                    : context.read<ComposeWindowCubit>().minimize(entry.id),
-                onToggleExpanded: () =>
-                    context.read<ComposeWindowCubit>().toggleExpanded(entry.id),
-                onClose: () =>
-                    context.read<ComposeWindowCubit>().closeWindow(entry.id),
-                onDragStart: (details) =>
-                    _handleDragStart(details, resolvedOffset),
-                onDragUpdate: (details) =>
-                    _handleDragUpdate(details, targetWidth, normalHeight),
-                onDragEnd: _handleDragEnd,
+      child: InBoundsFadeScale(
+        child: Material(
+          type: MaterialType.transparency,
+          child: DecoratedBox(
+            decoration: ShapeDecoration(
+              color: colors.card,
+              shadows: calendarMediumShadow,
+              shape: ContinuousRectangleBorder(
+                borderRadius: cardRadius,
+                side: BorderSide(color: colors.border),
               ),
-              Expanded(
-                child: Offstage(
-                  offstage: isMinimized,
-                  child: AnimatedOpacity(
-                    opacity: isMinimized ? 0 : 1,
-                    duration: baseAnimationDuration,
-                    curve: Curves.easeInOut,
-                    child: _ComposeWindowBody(
-                      key: ValueKey(entry.session),
-                      id: entry.id,
-                      seed: entry.seed,
-                      availableHeight: bodyHeight,
+            ),
+            child: Column(
+              children: [
+                _ComposeWindowHeader(
+                  id: entry.id,
+                  seed: entry.seed,
+                  minimized: isMinimized,
+                  expanded: isExpanded,
+                  onMinimize: () => isMinimized
+                      ? context.read<ComposeWindowCubit>().restore(entry.id)
+                      : context.read<ComposeWindowCubit>().minimize(entry.id),
+                  onToggleExpanded: () => context
+                      .read<ComposeWindowCubit>()
+                      .toggleExpanded(entry.id),
+                  onClose: () =>
+                      context.read<ComposeWindowCubit>().closeWindow(entry.id),
+                  onDragStart: (details) =>
+                      _handleDragStart(details, resolvedOffset),
+                  onDragUpdate: (details) =>
+                      _handleDragUpdate(details, targetWidth, normalHeight),
+                  onDragEnd: _handleDragEnd,
+                ),
+                Expanded(
+                  child: Offstage(
+                    offstage: isMinimized,
+                    child: AnimatedOpacity(
+                      opacity: isMinimized ? 0 : 1,
+                      duration: baseAnimationDuration,
+                      curve: Curves.easeInOut,
+                      child: _ComposeWindowBody(
+                        key: ValueKey(entry.session),
+                        id: entry.id,
+                        seed: entry.seed,
+                        availableHeight: bodyHeight,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

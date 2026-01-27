@@ -735,6 +735,9 @@
   "accessibilityNeedsAttention": "Needs attention",
   "profileTitle": "Profile",
   "profileJumpToTop": "Back to top",
+  "settingsWebsiteLabel": "Website",
+  "settingsDonateLabel": "Donate",
+  "settingsMastodonLabel": "Mastodon",
   "profileJidDescription": "This is your Jabber ID. Comprised of your username and domain, it's a unique address that represents you on the XMPP network.",
   "profileResourceDescription": "This is your XMPP resource. Every device you use has a different one, which is why your phone can have a different presence to your desktop.",
   "profileStatusPlaceholder": "Status message",
@@ -2815,5 +2818,43 @@
   "messageErrorEmailAuthenticationFailed": "Email authentication failed",
   "messageErrorEmailBounced": "Email bounced",
   "messageErrorEmailThrottled": "Email throttled",
-  "chatEmailResendFailedDetails": "Unable to resend the email."
+  "chatEmailResendFailedDetails": "Unable to resend the email.",
+  "authEnableXmppOrSmtp": "Enable XMPP or SMTP to continue.",
+  "authUsernamePasswordMismatch": "Username and password have different nullness.",
+  "authStoredCredentialsOutdated":
+      "Stored credentials are outdated. Please log in manually.",
+  "authMissingDatabaseSecrets":
+      "Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.",
+  "authInvalidCredentials": "Incorrect username or password",
+  "authGenericError": "Error. Please try again later.",
+  "authStorageLocked":
+      "Storage is locked by another Axichat instance. Close other windows or processes and try again.",
+  "authEmailServerUnreachable":
+      "Unable to reach the email server. Please try again.",
+  "authEmailSetupFailed": "Email setup failed. Please try again.",
+  "authEmailPasswordMissing":
+      "Stored email password missing. Please log in manually.",
+  "authEmailAuthFailed":
+      "Email authentication failed. Please log in again.",
+  "signupCleanupInProgress":
+      "Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.",
+  "signupFailedTryAgain": "Failed to register, try again later.",
+  "authPasswordMismatch": "New passwords do not match.",
+  "authPasswordChangeDisabled":
+      "Password changes are disabled for this account.",
+  "authPasswordChangeRejected":
+      "Current password is incorrect, or the new password does not meet server requirements.",
+  "authPasswordChangeFailed": "Unable to change password. Please try again later.",
+  "authPasswordChangeSuccess": "Password changed successfully.",
+  "authPasswordIncorrect": "Incorrect password. Please try again.",
+  "authAccountNotFound": "Account not found.",
+  "authAccountDeletionDisabled":
+      "Account deletion is disabled for this account.",
+  "authAccountDeletionFailed": "Unable to delete account. Please try again later.",
+  "authDemoModeFailed": "Failed to start demo mode. Please try again.",
+  "authLoginBackoff":
+      "Too many attempts. Wait {seconds} seconds before trying again.",
+  "signupAvatarCropTitle": "Crop & focus",
+  "signupAvatarCropHint":
+      "Only the area inside the circle will appear in the final avatar."
 }

@@ -83,7 +83,7 @@ class AxiVersion extends StatelessWidget {
               ),
             ],
           ),
-        );
+        ).withTapBounce();
       },
     );
   }

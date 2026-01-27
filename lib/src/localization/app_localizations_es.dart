@@ -1700,6 +1700,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get profileJumpToTop => 'Back to top';
 
   @override
+  String get settingsWebsiteLabel => 'Website';
+
+  @override
+  String get settingsDonateLabel => 'Donate';
+
+  @override
+  String get settingsMastodonLabel => 'Mastodon';
+
+  @override
   String get profileJidDescription =>
       'Este es tu Jabber ID. Consta de tu nombre de usuario y dominio; es una dirección única que te representa en la red XMPP.';
 
@@ -5615,4 +5624,99 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatEmailResendFailedDetails => 'No se pudo reenviar el correo.';
+
+  @override
+  String get authEnableXmppOrSmtp => 'Enable XMPP or SMTP to continue.';
+
+  @override
+  String get authUsernamePasswordMismatch =>
+      'Username and password have different nullness.';
+
+  @override
+  String get authStoredCredentialsOutdated =>
+      'Stored credentials are outdated. Please log in manually.';
+
+  @override
+  String get authMissingDatabaseSecrets =>
+      'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
+
+  @override
+  String get authInvalidCredentials => 'Incorrect username or password';
+
+  @override
+  String get authGenericError => 'Error. Please try again later.';
+
+  @override
+  String get authStorageLocked =>
+      'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
+
+  @override
+  String get authEmailServerUnreachable =>
+      'Unable to reach the email server. Please try again.';
+
+  @override
+  String get authEmailSetupFailed => 'Email setup failed. Please try again.';
+
+  @override
+  String get authEmailPasswordMissing =>
+      'Stored email password missing. Please log in manually.';
+
+  @override
+  String get authEmailAuthFailed =>
+      'Email authentication failed. Please log in again.';
+
+  @override
+  String get signupCleanupInProgress =>
+      'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.';
+
+  @override
+  String get signupFailedTryAgain => 'Failed to register, try again later.';
+
+  @override
+  String get authPasswordMismatch => 'New passwords do not match.';
+
+  @override
+  String get authPasswordChangeDisabled =>
+      'Password changes are disabled for this account.';
+
+  @override
+  String get authPasswordChangeRejected =>
+      'Current password is incorrect, or the new password does not meet server requirements.';
+
+  @override
+  String get authPasswordChangeFailed =>
+      'Unable to change password. Please try again later.';
+
+  @override
+  String get authPasswordChangeSuccess => 'Password changed successfully.';
+
+  @override
+  String get authPasswordIncorrect => 'Incorrect password. Please try again.';
+
+  @override
+  String get authAccountNotFound => 'Account not found.';
+
+  @override
+  String get authAccountDeletionDisabled =>
+      'Account deletion is disabled for this account.';
+
+  @override
+  String get authAccountDeletionFailed =>
+      'Unable to delete account. Please try again later.';
+
+  @override
+  String get authDemoModeFailed =>
+      'Failed to start demo mode. Please try again.';
+
+  @override
+  String authLoginBackoff(Object seconds) {
+    return 'Too many attempts. Wait $seconds seconds before trying again.';
+  }
+
+  @override
+  String get signupAvatarCropTitle => 'Crop & focus';
+
+  @override
+  String get signupAvatarCropHint =>
+      'Only the area inside the circle will appear in the final avatar.';
 }

@@ -92,6 +92,15 @@ final class _HttpUploadSupportUpdated extends ChatEvent {
   List<Object?> get props => [supported];
 }
 
+final class ChatSettingsUpdated extends ChatEvent {
+  const ChatSettingsUpdated(this.settings);
+
+  final ChatSettingsSnapshot settings;
+
+  @override
+  List<Object?> get props => [settings];
+}
+
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 
@@ -308,6 +317,13 @@ final class ChatMessageEditRequested extends ChatEvent {
   const ChatMessageEditRequested(this.message);
 
   final Message message;
+
+  @override
+  List<Object?> get props => const [];
+}
+
+final class ChatComposerErrorCleared extends ChatEvent {
+  const ChatComposerErrorCleared();
 
   @override
   List<Object?> get props => const [];

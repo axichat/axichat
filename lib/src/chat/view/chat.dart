@@ -184,7 +184,6 @@ const _chatSettingsFieldSpacing = 8.0;
 const _chatSettingsLabelSpacing = 4.0;
 const _chatSettingsItemPadding = EdgeInsets.all(12.0);
 const _messageActionIconSize = 16.0;
-const _pinnedListLoadingIndicatorSize = 28.0;
 const int _pinnedBadgeHiddenCount = 0;
 const int _pinnedBadgeMaxDisplayCount = 99;
 const double _pinnedBadgeIconScale = 0.6;
@@ -958,7 +957,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AxiProgressIndicator(
-                    dimension: 24,
                     color: colors.foreground,
                     semanticsLabel: l10n.chatMembersLoading,
                   ),
@@ -1057,6 +1055,14 @@ class _ChatState extends State<Chat> {
   String? _pendingCalendarSeedText;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
+
+  ChatSettingsSnapshot _settingsSnapshotFromState(SettingsState settings) =>
+      ChatSettingsSnapshot(
+        language: settings.language,
+        chatReadReceipts: settings.chatReadReceipts,
+        emailReadReceipts: settings.emailReadReceipts,
+        shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+      );
 
   double _outsideTapDragThreshold() =>
       MediaQuery.maybeOf(context)?.gestureSettings.touchSlop ?? kTouchSlop;
@@ -3433,19 +3439,23 @@ class _ChatState extends State<Chat> {
     _subjectController.addListener(_handleSubjectChanged);
     final chat = context.read<ChatBloc>().state.chat;
     _recipientsChatJid = chat?.jid;
+    final settings = context.read<SettingsCubit>().state;
     if (chat != null) {
       _recipients = [
         ComposerRecipient(
           target: FanOutTarget.chat(
             chat: chat,
             shareSignatureEnabled: chat.shareSignatureEnabled ??
-                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+                settings.shareTokenSignatureEnabled,
           ),
           included: true,
           pinned: true,
         ),
       ];
     }
+    context
+        .read<ChatBloc>()
+        .add(ChatSettingsUpdated(_settingsSnapshotFromState(settings)));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _captureBaseSelectionHeadroom();
     });
@@ -3504,6 +3514,21 @@ class _ChatState extends State<Chat> {
         final showToast = ShadToaster.maybeOf(context)?.show;
         return MultiBlocListener(
           listeners: [
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.language != current.language ||
+                  previous.chatReadReceipts != current.chatReadReceipts ||
+                  previous.emailReadReceipts != current.emailReadReceipts ||
+                  previous.shareTokenSignatureEnabled !=
+                      current.shareTokenSignatureEnabled,
+              listener: (context, settings) {
+                context
+                    .read<ChatBloc>()
+                    .add(ChatSettingsUpdated(_settingsSnapshotFromState(
+                      settings,
+                    )));
+              },
+            ),
             BlocListener<ChatSearchCubit, ChatSearchState>(
               listenWhen: (previous, current) =>
                   previous.active != current.active,
@@ -3857,22 +3882,6 @@ class _ChatState extends State<Chat> {
               );
               final bool chatCalendarAvailable =
                   chatCalendarEnabled && chatCalendarBloc != null;
-              final List<String> chatCalendarParticipants = supportsChatCalendar
-                  ? _resolveChatCalendarParticipants(
-                      chat: chatEntity,
-                      roomState: state.roomState,
-                      currentUserId: currentUserId,
-                    )
-                  : const <String>[];
-              final chatCalendarAvatarPaths = <String, String>{};
-              for (final participant in chatCalendarParticipants) {
-                final path = avatarPathForTypingParticipant(participant);
-                if (path == null || path.isEmpty) {
-                  continue;
-                }
-                chatCalendarAvatarPaths[participant] = path;
-              }
-
               final retryEntry = _lastReportEntryWhere(
                 fanOutReports.entries,
                 (entry) => entry.value.hasFailures,
@@ -3967,6 +3976,9 @@ class _ChatState extends State<Chat> {
               final scaffold = LayoutBuilder(
                 builder: (context, constraints) {
                   final double appBarWidth = constraints.maxWidth;
+                  const double avatarTitleSpacingOffset = 4.0;
+                  const double avatarTitleSpacing =
+                      _chatAppBarAvatarSpacing + avatarTitleSpacingOffset;
                   final double leadingWidthExpanded = leadingActionCount == 0
                       ? _chatAppBarCollapsedLeadingWidth
                       : _chatAppBarLeadingInset +
@@ -3979,7 +3991,7 @@ class _ChatState extends State<Chat> {
                           (_chatHeaderActionSpacing *
                               math.max(0, chatActionCount - 1));
                   const double titleReserveWidth = _chatAppBarAvatarSize +
-                      _chatAppBarAvatarSpacing +
+                      avatarTitleSpacing +
                       _chatAppBarTitleMinWidth;
                   const double actionsPaddingWidth =
                       _chatAppBarActionsPadding * 2;
@@ -4100,13 +4112,15 @@ class _ChatState extends State<Chat> {
                                 final titleStyle = baseTitleStyle.copyWith(
                                   fontSize: context.textTheme.large.fontSize,
                                 );
+                                const double subtitleLineHeight = 1.05;
+                                final TextStyle subtitleStyle = context
+                                    .textTheme.muted
+                                    .copyWith(height: subtitleLineHeight);
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     avatar,
-                                    const SizedBox(
-                                      width: _chatAppBarAvatarSpacing,
-                                    ),
+                                    const SizedBox(width: avatarTitleSpacing),
                                     Flexible(
                                       fit: FlexFit.loose,
                                       child: ConstrainedBox(
@@ -4174,7 +4188,7 @@ class _ChatState extends State<Chat> {
                                               SelectableText(
                                                 secondaryLabel,
                                                 maxLines: 1,
-                                                style: context.textTheme.muted,
+                                                style: subtitleStyle,
                                               ),
                                           ],
                                         ),
@@ -4977,6 +4991,12 @@ class _ChatState extends State<Chat> {
                                                     _composerHasContent,
                                                 composerError:
                                                     state.composerError,
+                                                onComposerErrorCleared: () =>
+                                                    context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          const ChatComposerErrorCleared(),
+                                                        ),
                                                 showAttachmentWarning:
                                                     showAttachmentWarning,
                                                 retryReport: retryReport,
@@ -7997,8 +8017,6 @@ class _ChatState extends State<Chat> {
                           ),
                           chat: chatEntity,
                           calendarAvailable: chatCalendarAvailable,
-                          participants: chatCalendarParticipants,
-                          avatarPaths: chatCalendarAvatarPaths,
                           calendarBloc: chatCalendarBloc,
                         );
                         final Widget overlayChild = switch (_chatRoute) {
@@ -8034,8 +8052,11 @@ class _ChatState extends State<Chat> {
                             !_chatRoute.isMain && !_previousChatRoute.isMain;
                         final bool isCalendarEnter = _chatRoute.isCalendar;
                         final Key chatRouteKey = ValueKey(_chatRoute);
-                        final Duration overlayDuration =
-                            context.watch<SettingsCubit>().animationDuration;
+                        final Duration overlayDuration = isDesktopPlatform &&
+                                (_chatRoute.isCalendar ||
+                                    _previousChatRoute.isCalendar)
+                            ? Duration.zero
+                            : context.watch<SettingsCubit>().animationDuration;
                         final Widget overlayStack = PageTransitionSwitcher(
                           reverse: isLeavingToMain,
                           duration: overlayDuration,
@@ -8777,53 +8798,6 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  List<String> _resolveChatCalendarParticipants({
-    required chat_models.Chat? chat,
-    required RoomState? roomState,
-    required String? currentUserId,
-  }) {
-    if (chat == null) {
-      return const <String>[];
-    }
-    final participants = <String>[];
-    final seen = <String>{};
-    void addParticipant(String? value) {
-      final trimmed = value?.trim();
-      if (trimmed == null || trimmed.isEmpty) {
-        return;
-      }
-      final normalized = trimmed.toLowerCase();
-      if (seen.contains(normalized)) {
-        return;
-      }
-      seen.add(normalized);
-      participants.add(trimmed);
-    }
-
-    if (chat.type == ChatType.groupChat) {
-      final room = roomState;
-      if (room != null) {
-        final eligible = <Occupant>[
-          ...room.owners,
-          ...room.admins,
-          ...room.members,
-        ];
-        for (final occupant in eligible) {
-          final realJid = occupant.realJid?.trim();
-          addParticipant(
-            realJid?.isNotEmpty == true ? realJid : occupant.occupantId,
-          );
-        }
-      }
-      addParticipant(currentUserId);
-      return participants;
-    }
-
-    addParticipant(currentUserId);
-    addParticipant(chat.remoteJid);
-    return participants;
-  }
-
   Future<chat_models.Chat?> _selectForwardTarget() async {
     if (!mounted) return null;
     final options =
@@ -9061,7 +9035,6 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AxiProgressIndicator(
-                  dimension: _pinnedListLoadingIndicatorSize,
                   color: colors.mutedForeground,
                 ),
               ],
@@ -9389,7 +9362,6 @@ class _PinnedMessageTile extends StatelessWidget {
         ? Align(
             alignment: Alignment.centerLeft,
             child: AxiProgressIndicator(
-              dimension: _messageActionIconSize,
               color: colors.mutedForeground,
             ),
           )
@@ -9568,15 +9540,11 @@ class _ChatCalendarPanel extends StatelessWidget {
   const _ChatCalendarPanel({
     required this.chat,
     required this.calendarAvailable,
-    required this.participants,
-    required this.avatarPaths,
     required this.calendarBloc,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
-  final List<String> participants;
-  final Map<String, String> avatarPaths;
   final ChatCalendarBloc? calendarBloc;
 
   @override
@@ -9593,8 +9561,6 @@ class _ChatCalendarPanel extends StatelessWidget {
       ],
       child: ChatCalendarWidget(
         chat: resolvedChat,
-        participants: participants,
-        avatarPaths: avatarPaths,
         showHeader: true,
         showBackButton: false,
       ),
@@ -9712,15 +9678,11 @@ class _ChatCalendarOverlay extends StatelessWidget {
     super.key,
     required this.chat,
     required this.calendarAvailable,
-    required this.participants,
-    required this.avatarPaths,
     required this.calendarBloc,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
-  final List<String> participants;
-  final Map<String, String> avatarPaths;
   final ChatCalendarBloc? calendarBloc;
 
   @override
@@ -9737,8 +9699,6 @@ class _ChatCalendarOverlay extends StatelessWidget {
         child: _ChatCalendarPanel(
           chat: resolvedChat,
           calendarAvailable: calendarAvailable,
-          participants: participants,
-          avatarPaths: avatarPaths,
           calendarBloc: resolvedBloc,
         ),
       ),
@@ -10903,12 +10863,14 @@ class _ComposerNotice extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.onDismiss,
   });
 
   final _ComposerNoticeType type;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -10954,6 +10916,23 @@ class _ComposerNotice extends StatelessWidget {
               style: TextButton.styleFrom(foregroundColor: foreground),
               child: Text(actionLabel!),
             ),
+          if (onDismiss != null)
+            Builder(
+              builder: (context) {
+                const double dismissIconSize = 16;
+                const double dismissButtonSize = 28;
+                const double dismissTapTargetSize = 32;
+                return AxiIconButton.ghost(
+                  iconData: LucideIcons.x,
+                  tooltip: context.l10n.commonClose,
+                  onPressed: onDismiss,
+                  color: foreground,
+                  iconSize: dismissIconSize,
+                  buttonSize: dismissButtonSize,
+                  tapTargetSize: dismissTapTargetSize,
+                );
+              },
+            ),
         ],
       ),
     );
@@ -10986,6 +10965,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.buildComposerAccessories,
     required this.onSend,
     this.composerError,
+    this.onComposerErrorCleared,
     this.showAttachmentWarning = false,
     this.retryReport,
     this.retryShareId,
@@ -11018,6 +10998,7 @@ class _ChatComposerSection extends StatelessWidget {
       buildComposerAccessories;
   final VoidCallback onSend;
   final String? composerError;
+  final VoidCallback? onComposerErrorCleared;
   final bool showAttachmentWarning;
   final FanOutSendReport? retryReport;
   final String? retryShareId;
@@ -11127,6 +11108,7 @@ class _ChatComposerSection extends StatelessWidget {
         _ComposerNotice(
           type: _ComposerNoticeType.error,
           message: composerError!,
+          onDismiss: onComposerErrorCleared,
         ),
       );
     }
@@ -11755,7 +11737,6 @@ class _MessageActionBar extends StatelessWidget {
       ContextActionButton(
         icon: shareStatus.isLoading
             ? AxiProgressIndicator(
-                dimension: _messageActionIconSize,
                 color: context.colorScheme.foreground,
               )
             : const Icon(LucideIcons.share2, size: _messageActionIconSize),
@@ -11949,7 +11930,6 @@ class _MessageSelectionToolbar extends StatelessWidget {
               ContextActionButton(
                 icon: shareStatus.isLoading
                     ? AxiProgressIndicator(
-                        dimension: 16,
                         color: context.colorScheme.foreground,
                       )
                     : const Icon(LucideIcons.share2, size: 16),
@@ -13469,7 +13449,6 @@ class _GuestChatAppIconAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     const String guestChatAppIconAssetPath = 'assets/icons/app_icon_source.png';
     return SizedBox.square(
-      dimension: size,
       child: ClipOval(
         clipBehavior: Clip.antiAlias,
         child: Image.asset(

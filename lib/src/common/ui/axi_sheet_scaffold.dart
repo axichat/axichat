@@ -12,7 +12,7 @@ class AxiSheetHeader extends StatelessWidget {
     required this.onClose,
     this.subtitle,
     this.leading,
-    this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 12),
+    this.padding,
     super.key,
   });
 
@@ -20,11 +20,17 @@ class AxiSheetHeader extends StatelessWidget {
   final Widget? subtitle;
   final Widget? leading;
   final VoidCallback onClose;
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final EdgeInsetsGeometry resolvedPadding = padding ??
+        EdgeInsets.fromLTRB(
+          context.spacing.m,
+          context.spacing.m,
+          context.spacing.m,
+          context.spacing.s,
+        );
     final Widget titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -34,10 +40,10 @@ class AxiSheetHeader extends StatelessWidget {
           child: title,
         ),
         if (subtitle != null) ...[
-          const SizedBox(height: 4),
+          SizedBox(height: context.spacing.xs),
           DefaultTextStyle.merge(
             style: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground,
+              color: context.colorScheme.mutedForeground,
             ),
             child: subtitle!,
           ),
@@ -46,17 +52,20 @@ class AxiSheetHeader extends StatelessWidget {
     );
 
     return Padding(
-      padding: padding,
+      padding: resolvedPadding,
       child: Row(
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 10)],
+          if (leading != null) ...[
+            leading!,
+            SizedBox(width: context.spacing.s),
+          ],
           Expanded(child: titleBlock),
           ModalCloseButton(
             onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
             tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             backgroundColor: Colors.transparent,
             borderColor: Colors.transparent,
-            color: colors.mutedForeground,
+            color: context.colorScheme.mutedForeground,
           ),
         ],
       ),
@@ -78,7 +87,7 @@ class AxiSheetScaffold extends StatelessWidget {
     required this.header,
     required List<Widget> children,
     this.footer,
-    this.bodyPadding = const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    this.bodyPadding,
     this.scrollPhysics,
     super.key,
   })  : body = null,
@@ -171,11 +180,16 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
   @override
   Widget build(BuildContext context) {
     _scheduleExtentSync();
-    final EdgeInsets resolvedPadding = widget.bodyPadding ?? EdgeInsets.zero;
+    final EdgeInsets resolvedPadding = widget.bodyPadding ??
+        EdgeInsets.only(
+          left: context.spacing.m,
+          right: context.spacing.m,
+          bottom: context.spacing.m,
+        );
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double scrollExtent = _scrollExtent;
     const double scrollExtentThreshold = 0;
-    const double footerSpacing = 12;
+    final double footerSpacing = context.spacing.s;
 
     if (scrollExtent > scrollExtentThreshold) {
       final double bottomPadding = resolvedPadding.bottom + keyboardInset;
@@ -194,7 +208,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
           children: [
             ...widget.children,
             if (widget.footer != null) ...[
-              const SizedBox(height: footerSpacing),
+              SizedBox(height: footerSpacing),
               widget.footer!,
             ],
           ],
@@ -223,7 +237,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         list,
-        const SizedBox(height: footerSpacing),
+        SizedBox(height: footerSpacing),
         Padding(
           padding: EdgeInsets.only(bottom: keyboardInset),
           child: footer,

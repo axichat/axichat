@@ -125,6 +125,11 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
         width: double.infinity,
         child: ShadButton.ghost(
           size: ShadButtonSize.sm,
+          width: double.infinity,
+          expands: true,
+          mainAxisAlignment: MainAxisAlignment.start,
+          foregroundColor: colors.foreground,
+          hoverForegroundColor: colors.foreground,
           onPressed: () async => await _showGuideDialog(context),
           child: Row(
             children: [
@@ -492,4 +497,21 @@ class _EmailForwardingWelcomeGateState
 String _resolveForwardingAddress(BuildContext context) {
   final String? jid = context.read<XmppService>().myJid;
   return (jid ?? _emptyForwardingAddress).bareJid.trim();
+}
+
+Future<void> showEmailForwardingGuideDialog(BuildContext context) async {
+  final forwardingAddress = _resolveForwardingAddress(context);
+  await showFadeScaleDialog<void>(
+    context: context,
+    builder: (dialogContext) => EmailForwardingGuideDialog(
+      title: context.l10n.emailForwardingGuideTitle,
+      forwardingAddress: forwardingAddress,
+      notificationService: context.read<NotificationService>(),
+      capability: context.read<Capability>(),
+    ),
+  );
+  if (!context.mounted) {
+    return;
+  }
+  context.read<SettingsCubit>().markEmailForwardingGuideSeen();
 }

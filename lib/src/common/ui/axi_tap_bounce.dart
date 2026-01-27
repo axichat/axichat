@@ -10,11 +10,21 @@ const Set<PointerDeviceKind> _tapBouncePointerKinds = <PointerDeviceKind>{
   PointerDeviceKind.invertedStylus,
 };
 
+const double _defaultHoverScale = 1.02;
+
+enum _TapBouncePressState { idle, pressed }
+
+enum _TapBounceHoverState { idle, hovering }
+
+enum _TapBounceVisualState { idle, hover, pressed }
+
 class AxiTapBounce extends StatefulWidget {
   const AxiTapBounce({
     super.key,
     required this.child,
+    this.controller,
     this.scale = 0.96,
+    this.hoverScale = _defaultHoverScale,
     this.enabled = true,
     this.pressDuration = const Duration(milliseconds: 80),
     this.releaseDuration = const Duration(milliseconds: 180),
@@ -23,7 +33,9 @@ class AxiTapBounce extends StatefulWidget {
   });
 
   final Widget child;
+  final AxiTapBounceController? controller;
   final double scale;
+  final double hoverScale;
   final bool enabled;
   final Duration pressDuration;
   final Duration releaseDuration;
@@ -35,13 +47,36 @@ class AxiTapBounce extends StatefulWidget {
 }
 
 class _AxiTapBounceState extends State<AxiTapBounce> {
-  bool _pressed = false;
+  _TapBouncePressState _pressState = _TapBouncePressState.idle;
+  _TapBounceHoverState _hoverState = _TapBounceHoverState.idle;
+
+  _TapBounceVisualState get _visualState {
+    if (_pressState == _TapBouncePressState.pressed) {
+      return _TapBounceVisualState.pressed;
+    }
+    if (_hoverState == _TapBounceHoverState.hovering) {
+      return _TapBounceVisualState.hover;
+    }
+    return _TapBounceVisualState.idle;
+  }
 
   void _setPressed(bool value) {
-    if (_pressed == value) return;
+    final nextState =
+        value ? _TapBouncePressState.pressed : _TapBouncePressState.idle;
+    if (_pressState == nextState) return;
     if (!mounted) return;
     setState(() {
-      _pressed = value;
+      _pressState = nextState;
+    });
+  }
+
+  void _setHovered(bool value) {
+    final nextState =
+        value ? _TapBounceHoverState.hovering : _TapBounceHoverState.idle;
+    if (_hoverState == nextState) return;
+    if (!mounted) return;
+    setState(() {
+      _hoverState = nextState;
     });
   }
 
@@ -52,6 +87,11 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     if (_tapBouncePointerKinds.contains(kind)) {
       return true;
     }
+    return kind == PointerDeviceKind.mouse ||
+        kind == PointerDeviceKind.trackpad;
+  }
+
+  bool _shouldHandleHoverKind(PointerDeviceKind? kind) {
     return kind == PointerDeviceKind.mouse ||
         kind == PointerDeviceKind.trackpad;
   }
@@ -72,30 +112,120 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     super.didUpdateWidget(oldWidget);
     if (!widget.enabled) {
       _setPressed(false);
+      _setHovered(false);
     }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?._detach(this);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
-    final targetScale = _pressed ? widget.scale : 1.0;
-    final duration = _pressed ? widget.pressDuration : widget.releaseDuration;
-    final curve = _pressed ? widget.pressCurve : widget.releaseCurve;
-    return GestureDetector(
-      excludeFromSemantics: true,
-      behavior: HitTestBehavior.translucent,
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
-      child: AnimatedScale(
-        scale: targetScale,
-        duration: duration,
-        curve: curve,
-        alignment: Alignment.center,
-        child: widget.child,
+    final targetScale = switch (_visualState) {
+      _TapBounceVisualState.pressed => widget.scale,
+      _TapBounceVisualState.hover => widget.hoverScale,
+      _ => 1.0,
+    };
+    final duration = switch (_visualState) {
+      _TapBounceVisualState.idle => widget.releaseDuration,
+      _ => widget.pressDuration,
+    };
+    final curve = switch (_visualState) {
+      _TapBounceVisualState.idle => widget.releaseCurve,
+      _ => widget.pressCurve,
+    };
+    final animationChild = AnimatedScale(
+      scale: targetScale,
+      duration: duration,
+      curve: curve,
+      alignment: Alignment.center,
+      child: widget.child,
+    );
+    final controller = widget.controller;
+    if (controller != null) {
+      controller
+        .._attach(this)
+        .._setFallbackHandlers(
+          onDown: _handleTapDown,
+          onUp: _handleTapUp,
+          onCancel: _handleTapCancel,
+        );
+      return animationChild;
+    }
+    return MouseRegion(
+      onEnter: (event) {
+        if (!_shouldHandleHoverKind(event.kind)) return;
+        _setHovered(true);
+      },
+      onExit: (event) {
+        if (!_shouldHandleHoverKind(event.kind)) return;
+        _setHovered(false);
+      },
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) => _handleTapDown(
+          TapDownDetails(
+            kind: event.kind,
+            globalPosition: event.position,
+            localPosition: event.localPosition,
+          ),
+        ),
+        onPointerUp: (event) => _handleTapUp(
+          TapUpDetails(
+            kind: event.kind,
+            globalPosition: event.position,
+            localPosition: event.localPosition,
+          ),
+        ),
+        onPointerCancel: (_) => _handleTapCancel(),
+        child: animationChild,
       ),
     );
   }
+}
+
+class AxiTapBounceController {
+  _AxiTapBounceState? _state;
+  void Function(TapDownDetails details)? _fallbackDown;
+  void Function(TapUpDetails details)? _fallbackUp;
+  VoidCallback? _fallbackCancel;
+
+  void _attach(_AxiTapBounceState state) {
+    if (_state == state) return;
+    _state = state;
+  }
+
+  void _detach(_AxiTapBounceState state) {
+    if (_state != state) return;
+    _state = null;
+  }
+
+  void _setFallbackHandlers({
+    required void Function(TapDownDetails details) onDown,
+    required void Function(TapUpDetails details) onUp,
+    required VoidCallback onCancel,
+  }) {
+    _fallbackDown = onDown;
+    _fallbackUp = onUp;
+    _fallbackCancel = onCancel;
+  }
+
+  void handleTapDown(TapDownDetails details) =>
+      (_state?._handleTapDown ?? _fallbackDown)?.call(details);
+
+  void handleTapUp(TapUpDetails details) =>
+      (_state?._handleTapUp ?? _fallbackUp)?.call(details);
+
+  void handleTapCancel() =>
+      (_state?._handleTapCancel ?? _fallbackCancel)?.call();
+
+  void setPressed(bool value) => _state?._setPressed(value);
+
+  void setHovered(bool value) => _state?._setHovered(value);
 }
 
 extension AxiTapBounceExtension on Widget {

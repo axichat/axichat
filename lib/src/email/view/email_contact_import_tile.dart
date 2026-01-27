@@ -77,6 +77,11 @@ class EmailContactImportActionButton extends StatelessWidget {
             width: double.infinity,
             child: ShadButton.ghost(
               size: ShadButtonSize.sm,
+              width: double.infinity,
+              expands: true,
+              mainAxisAlignment: MainAxisAlignment.start,
+              foregroundColor: colors.foreground,
+              hoverForegroundColor: colors.foreground,
               onPressed: loading
                   ? null
                   : () {

@@ -13,8 +13,8 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
@@ -28,21 +28,22 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
-import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
+import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/routes.dart';
-import 'package:axichat/src/share/share_intent_cubit.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/share/share_intent_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -55,7 +56,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'package:axichat/src/storage/hive_extensions.dart';
+import 'common/endpoint_config.dart';
 import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
@@ -96,10 +97,49 @@ class _AxichatState extends State<Axichat> {
       CalendarReminderController(
     notificationService: widget._notificationService,
   );
+  late final XmppService _xmppService;
+  late final XmppActivityCubit _xmppActivityCubit;
+
+  @override
+  void initState() {
+    super.initState();
+    _xmppService = widget._xmppService ??
+        XmppService(
+          buildConnection: () => withForeground && foregroundServiceActive.value
+              ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
+              : XmppConnection(),
+          buildStateStore: (prefix, passphrase) async {
+            final Logger logger = Logger('XmppStateStore');
+            await Hive.initFlutter(prefix);
+            if (!Hive.isAdapterRegistered(1)) {
+              Hive.registerAdapter(PresenceAdapter());
+            }
+            await Hive.openBoxWithRetry(
+              XmppStateStore.boxName,
+              encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+              logger: logger,
+            );
+            await widget._storageManager.ensureAuthStorage(
+              passphrase: passphrase,
+            );
+            return XmppStateStore();
+          },
+          buildDatabase: (prefix, passphrase) async {
+            return XmppDrift(
+              file: await dbFileFor(prefix),
+              passphrase: passphrase,
+            );
+          },
+          notificationService: widget._notificationService,
+          capability: widget._capability,
+        );
+    _xmppActivityCubit = XmppActivityCubit(xmppBase: _xmppService);
+  }
 
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
+    _xmppActivityCubit.close();
     Future<void>(() async {
       await _reminderController.clearAll();
     });
@@ -113,41 +153,7 @@ class _AxichatState extends State<Axichat> {
         ChangeNotifierProvider<CalendarStorageManager>(
           create: (context) => widget._storageManager,
         ),
-        if (widget._xmppService == null)
-          RepositoryProvider<XmppService>(
-            create: (context) => XmppService(
-              buildConnection: () =>
-                  withForeground && foregroundServiceActive.value
-                      ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
-                      : XmppConnection(),
-              buildStateStore: (prefix, passphrase) async {
-                final Logger logger = Logger('XmppStateStore');
-                await Hive.initFlutter(prefix);
-                if (!Hive.isAdapterRegistered(1)) {
-                  Hive.registerAdapter(PresenceAdapter());
-                }
-                await Hive.openBoxWithRetry(
-                  XmppStateStore.boxName,
-                  encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
-                  logger: logger,
-                );
-                await widget._storageManager.ensureAuthStorage(
-                  passphrase: passphrase,
-                );
-                return XmppStateStore();
-              },
-              buildDatabase: (prefix, passphrase) async {
-                return XmppDrift(
-                  file: await dbFileFor(prefix),
-                  passphrase: passphrase,
-                );
-              },
-              notificationService: widget._notificationService,
-              capability: widget._capability,
-            ),
-          )
-        else
-          RepositoryProvider<XmppService>.value(value: widget._xmppService!),
+        RepositoryProvider<XmppService>.value(value: _xmppService),
         RepositoryProvider<MessageService>(
           create: (context) => context.read<XmppService>(),
         ),
@@ -190,7 +196,7 @@ class _AxichatState extends State<Axichat> {
           BlocProvider(
             create: (context) => AuthenticationCubit(
               credentialStore: context.read<CredentialStore>(),
-              endpointConfigCubit: context.read<EndpointConfigCubit>(),
+              initialEndpointConfig: context.read<EndpointConfigCubit>().state,
               xmppService: context.read<XmppService>(),
               emailService: context.read<EmailService>(),
               homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
@@ -201,10 +207,7 @@ class _AxichatState extends State<Axichat> {
             create: (context) =>
                 OmemoActivityCubit(xmppBase: context.read<XmppService>()),
           ),
-          BlocProvider(
-            create: (context) =>
-                XmppActivityCubit(xmppBase: context.read<XmppService>()),
-          ),
+          BlocProvider.value(value: _xmppActivityCubit),
           BlocProvider(create: (context) => ShareIntentCubit()..initialize()),
           BlocProvider(
             create: (context) => ChatsCubit(
@@ -217,7 +220,10 @@ class _AxichatState extends State<Axichat> {
             create: (context) => DraftCubit(
               messageService: context.read<MessageService>(),
               emailService: context.read<EmailService>(),
-              settingsCubit: context.read<SettingsCubit>(),
+              shareTokenSignatureEnabled: context
+                  .read<SettingsCubit>()
+                  .state
+                  .shareTokenSignatureEnabled,
             ),
           ),
           BlocProvider(create: (context) => ComposeWindowCubit()),
@@ -230,7 +236,28 @@ class _AxichatState extends State<Axichat> {
               key: const Key('guest_calendar_bloc'),
             ),
         ],
-        child: const MaterialAxichat(),
+        child: MultiBlocListener(
+          listeners: [
+            BlocListener<EndpointConfigCubit, EndpointConfig>(
+              listener: (context, config) {
+                context
+                    .read<AuthenticationCubit>()
+                    .updateEndpointConfig(config);
+              },
+            ),
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.shareTokenSignatureEnabled !=
+                  current.shareTokenSignatureEnabled,
+              listener: (context, settings) {
+                context.read<DraftCubit>().updateShareTokenSignatureEnabled(
+                      settings.shareTokenSignatureEnabled,
+                    );
+              },
+            ),
+          ],
+          child: const MaterialAxichat(),
+        ),
       ),
     );
   }
@@ -341,8 +368,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             );
             final materialColors = shadTheme.colorScheme;
             final globalRadius = shadTheme.radius;
-            final buttonShape = ContinuousRectangleBorder(
-              borderRadius: globalRadius,
+            final buttonShape = SquircleBorder(
+              cornerRadius: axiSquircleRadius,
             );
             final listTileShape = buttonShape;
             final outlineInputBorder = OutlineInputBorder(
@@ -388,7 +415,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               fontWeight: appBarTitleFontWeight,
             );
             return theme.copyWith(
-              iconTheme: const IconThemeData(size: 20),
+              iconTheme: const IconThemeData(size: axiIconSize),
               textTheme: textThemeWithEmojiFallback,
               appBarTheme: theme.appBarTheme.copyWith(
                 titleTextStyle: appBarTitleStyle,
@@ -423,8 +450,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 errorBorder: errorBorder,
                 focusedErrorBorder: errorBorder,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                  horizontal: axiSpaceM,
+                  vertical: axiSpaceS,
                 ),
               ),
               filledButtonTheme: FilledButtonThemeData(
@@ -434,8 +461,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   foregroundColor: materialColors.primaryForeground,
                   shape: buttonShape,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                    horizontal: axiSpaceM,
+                    vertical: axiSpaceS,
                   ),
                 ),
               ),
@@ -447,8 +474,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   shape: buttonShape,
                   side: BorderSide(color: materialColors.border),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                    horizontal: axiSpaceM,
+                    vertical: axiSpaceS,
                   ),
                 ),
               ),
@@ -457,19 +484,20 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   foregroundColor: materialColors.foreground,
                   shape: buttonShape,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: axiSpaceS,
+                    vertical: axiSpaceXs,
                   ),
                 ),
               ),
               checkboxTheme: CheckboxThemeData(
-                shape: ContinuousRectangleBorder(borderRadius: globalRadius),
+                shape: buttonShape,
                 materialTapTargetSize: MaterialTapTargetSize.padded,
                 visualDensity: VisualDensity.standard,
-                side: BorderSide(color: materialColors.border, width: 1.2),
+                side: BorderSide(
+                    color: materialColors.border, width: axiSpaceXxs),
               ),
               scrollbarTheme: ScrollbarThemeData(
-                thickness: const WidgetStatePropertyAll<double>(4),
+                thickness: const WidgetStatePropertyAll<double>(axiSpaceXs),
                 radius: const Radius.circular(999),
                 thumbColor: WidgetStateProperty.resolveWith((states) {
                   final hovered = states.contains(WidgetState.hovered) ||
@@ -485,6 +513,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   (extension) => extension is! ChatThemeTokens,
                 ),
                 chatTokens,
+                axiSpacing,
+                axiSizing,
               ],
             );
           },
@@ -563,31 +593,30 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               ],
               child: Stack(
                 children: [
-                  if (child != null) child else const SizedBox.shrink(),
-                  Overlay(
-                    initialEntries: [
-                      OverlayEntry(
-                        maintainState: true,
-                        builder: (context) => const Material(
-                          type: MaterialType.transparency,
-                          child: ComposeWindowOverlay(),
-                        ),
+                  child ?? const SizedBox.shrink(),
+                  Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: Overlay(
+                        initialEntries: [
+                          OverlayEntry(
+                            builder: (_) => const ComposeWindowOverlay(),
+                          ),
+                        ],
                       ),
-                      OverlayEntry(
-                        maintainState: true,
-                        builder: (context) => const Material(
-                          type: MaterialType.transparency,
-                          child: OmemoOperationOverlay(),
-                        ),
-                      ),
-                      OverlayEntry(
-                        maintainState: true,
-                        builder: (context) => const Material(
-                          type: MaterialType.transparency,
-                          child: XmppOperationOverlay(),
-                        ),
-                      ),
-                    ],
+                    ),
+                  ),
+                  const Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: OmemoOperationOverlay(),
+                    ),
+                  ),
+                  const Positioned.fill(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: XmppOperationOverlay(),
+                    ),
                   ),
                 ],
               ),
@@ -823,6 +852,13 @@ extension ThemeExtension on BuildContext {
   ChatThemeTokens get chatTheme =>
       Theme.of(this).extension<ChatThemeTokens>() ??
       AppTheme.tokens(brightness: Theme.of(this).brightness);
+
+  AxiSpacing get spacing =>
+      Theme.of(this).extension<AxiSpacing>() ?? axiSpacing;
+
+  AxiSizing get sizing => Theme.of(this).extension<AxiSizing>() ?? axiSizing;
+
+  AxiMotion get motion => Theme.of(this).extension<AxiMotion>() ?? axiMotion;
 }
 
 extension TargetPlatformExtension on TargetPlatform {

@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'axi_icon_button.dart';
+import 'package:axichat/src/common/ui/buttons/axi_icon_button.dart';
 import 'axi_input.dart';
 
 class SearchInputField extends StatelessWidget {

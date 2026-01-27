@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -13,14 +14,11 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
-import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/calendar/view/calendar_navigation.dart';
 import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
 import 'feedback_system.dart';
@@ -58,11 +56,6 @@ class CalendarNavSurface extends StatelessWidget {
   }
 }
 
-const double _calendarShareActionSpacing = 8.0;
-const bool _calendarAvailabilityShareVisible = false;
-const bool _calendarActionShowTransferMenu = false;
-const bool _calendarActionMenuGhost = true;
-const bool _calendarActionUsePrimary = true;
 const String _calendarSurfacePageId = 'calendar-surface';
 const ValueKey<String> _calendarSurfacePageKey = ValueKey<String>(
   _calendarSurfacePageId,
@@ -75,16 +68,6 @@ bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
         _calendarSurfacePopEnabledDefault;
   } on FlutterError {
     return _calendarSurfacePopEnabledDefault;
-  }
-}
-
-CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
-  BuildContext context,
-) {
-  try {
-    return context.read<CalendarAvailabilityShareCoordinator>();
-  } on FlutterError {
-    return null;
   }
 }
 
@@ -212,26 +195,9 @@ class _CalendarWidgetState
     Widget layout,
   ) {
     final Widget tintedLayout = CalendarNavSurface(child: layout);
-    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
-      context,
-    );
     final Widget calendarBody = CalendarHoverTitleScope(
       controller: _hoverTitleController,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _CalendarAppBar(
-            state: state,
-            onBackPressed: _handleCalendarBackPressed,
-            onShareAvailability: availabilityCoordinator == null
-                ? null
-                : () => _openAvailabilityShareSheet(
-                      state,
-                    ),
-          ),
-          Expanded(child: tintedLayout),
-        ],
-      ),
+      child: tintedLayout,
     );
     return CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
@@ -248,6 +214,46 @@ class _CalendarWidgetState
   ) {
     final locate = context.read;
     return () => _openTaskSearch(locate<CalendarBloc>(), locate: locate);
+  }
+
+  @override
+  Widget? buildNavigationLeadingActions(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) {
+    return CalendarNavigationLeadingActions(
+      state: state,
+      backTooltip: context.l10n.calendarBackToChats,
+      onBackPressed: _handleCalendarBackPressed,
+    );
+  }
+
+  @override
+  Widget? buildNavigationTrailingActions(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) {
+    return CalendarTransferMenu(
+      state: state,
+      ghost: true,
+      usePrimary: true,
+      additionalActions: [
+        AxiMenuAction(
+          icon: context.watch<SettingsCubit>().state.hideCompletedScheduled
+              ? Icons.visibility
+              : Icons.visibility_off,
+          label: context.watch<SettingsCubit>().state.hideCompletedScheduled
+              ? context.l10n.calendarShowCompleted
+              : context.l10n.calendarHideCompleted,
+          onPressed: () =>
+              context.read<SettingsCubit>().toggleHideCompletedScheduled(
+                    !context.read<SettingsCubit>().state.hideCompletedScheduled,
+                  ),
+        ),
+      ],
+    );
   }
 
   Future<void> _openTaskSearch(
@@ -279,27 +285,6 @@ class _CalendarWidgetState
                 onDragStart: onDragStart,
                 allowContextMenu: allowContextMenu,
               ),
-    );
-  }
-
-  Future<void> _openAvailabilityShareSheet(
-    CalendarState state,
-  ) async {
-    final l10n = context.l10n;
-    final xmpp = context.read<XmppService>();
-    final ownerJid = xmpp.myJid?.trim();
-    if (ownerJid == null || ownerJid.isEmpty) {
-      FeedbackSystem.showError(
-        context,
-        l10n.calendarShareUnavailable,
-      );
-      return;
-    }
-    await showCalendarAvailabilityShareSheet(
-      context: context,
-      source: const CalendarAvailabilityShareSource.personal(),
-      model: state.model,
-      ownerJid: ownerJid,
     );
   }
 
@@ -339,89 +324,6 @@ class _CalendarWidgetState
       return;
     }
     router.go('/');
-  }
-}
-
-class _CalendarAppBar extends StatelessWidget {
-  const _CalendarAppBar({
-    required this.state,
-    required this.onBackPressed,
-    this.onShareAvailability,
-  });
-
-  final CalendarState state;
-  final VoidCallback onBackPressed;
-  final VoidCallback? onShareAvailability;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color background = CalendarNavSurface.backgroundColor(context);
-    final Color border = context.colorScheme.border;
-    final EdgeInsets toolbarPadding = calendarMarginLarge.copyWith(
-      top: 0,
-      bottom: 0,
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        border: Border(bottom: BorderSide(color: border)),
-      ),
-      child: SizedBox(
-        height: kToolbarHeight,
-        child: Padding(
-          padding: toolbarPadding,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              AxiIconButton.ghost(
-                iconData: LucideIcons.arrowLeft,
-                tooltip: context.l10n.calendarBackToChats,
-                onPressed: onBackPressed,
-              ),
-              const Spacer(),
-              _CalendarActionRow(
-                state: state,
-                onShareAvailability: onShareAvailability,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CalendarActionRow extends StatelessWidget {
-  const _CalendarActionRow({required this.state, this.onShareAvailability});
-
-  final CalendarState state;
-  final VoidCallback? onShareAvailability;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: _calendarShareActionSpacing,
-      runSpacing: _calendarShareActionSpacing,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SyncControls(
-          state: state,
-          showTransferMenu: _calendarActionShowTransferMenu,
-        ),
-        if (onShareAvailability != null && _calendarAvailabilityShareVisible)
-          AxiIconButton.ghost(
-            iconData: LucideIcons.send,
-            tooltip: context.l10n.calendarShareAvailability,
-            onPressed: onShareAvailability,
-            usePrimary: _calendarActionUsePrimary,
-          ),
-        CalendarTransferMenu(
-          state: state,
-          ghost: _calendarActionMenuGhost,
-          usePrimary: _calendarActionUsePrimary,
-        ),
-      ],
-    );
   }
 }
 

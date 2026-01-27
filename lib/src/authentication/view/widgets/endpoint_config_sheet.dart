@@ -20,12 +20,13 @@ class EndpointConfigSheet extends StatefulWidget {
   static Future<void> show(BuildContext context) {
     final commandSurface = resolveCommandSurface(context);
     final bool compact = commandSurface == CommandSurface.sheet;
+    final sizing = context.sizing;
     return showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: compact,
-      dialogMaxWidth: compact ? 560 : 720,
+      dialogMaxWidth: sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
       builder: (_) => EndpointConfigSheet(compact: compact),
     );
@@ -113,7 +114,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   int _parsePort(String value, int fallback) =>
       int.tryParse(value.trim()) ?? fallback;
 
-  EndpointConfig _buildConfig(EndpointConfig current) {
+  EndpointConfig _resolveConfig(EndpointConfig current) {
     final domain = _domainController.text.trim().isEmpty
         ? current.domain
         : _domainController.text.trim();
@@ -164,7 +165,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   }
 
   Future<void> _save() async {
-    final updated = _buildConfig(
+    final updated = _resolveConfig(
       context.read<EndpointConfigCubit>().state,
     );
     await context.read<EndpointConfigCubit>().updateConfig(updated);
@@ -182,49 +183,49 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final l10n = context.l10n;
-    final placeholderStyle = textTheme.muted.copyWith(
-      color: colors.mutedForeground,
-    );
-    final inputStyle = TextStyle(color: colors.foreground);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final portFieldWidth = sizing.menuItemHeight * 2;
+    final placeholderStyle = textTheme.muted;
+    final inputStyle = textTheme.p;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
-      horizontal: widget.compact ? 12 : 24,
+      horizontal: widget.compact ? spacing.m : spacing.l,
     );
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
-        title: Text(l10n.authCustomServerTitle),
-        subtitle: Text(l10n.authCustomServerDescription),
+        title: Text(context.l10n.authCustomServerTitle),
+        subtitle: Text(context.l10n.authCustomServerDescription),
         onClose: () => Navigator.of(context).maybePop(),
-        padding: sheetPadding.copyWith(top: 16, bottom: 12),
+        padding: sheetPadding.copyWith(top: spacing.m, bottom: spacing.s),
       ),
-      bodyPadding: sheetPadding.copyWith(bottom: 16),
+      bodyPadding: sheetPadding.copyWith(bottom: spacing.m),
       children: [
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.url,
           controller: _domainController,
           placeholder: Text(
-            l10n.authCustomServerDomainOrIp,
+            context.l10n.authCustomServerDomainOrIp,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
           style: inputStyle,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         Row(
           children: [
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerXmppLabel,
+                label: context.l10n.authCustomServerXmppLabel,
                 value: _enableXmpp,
                 onChanged: (value) =>
                     setState(() => _enableXmpp = value ?? _enableXmpp),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: spacing.s),
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerSmtpLabel,
+                label: context.l10n.authCustomServerSmtpLabel,
                 value: _enableSmtp,
                 onChanged: (value) =>
                     setState(() => _enableSmtp = value ?? _enableSmtp),
@@ -232,12 +233,12 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         Row(
           children: [
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerUseDns,
+                label: context.l10n.authCustomServerUseDns,
                 value: _useDns,
                 onChanged: (value) => setState(() {
                   _useDns = value ?? _useDns;
@@ -248,10 +249,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 }),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: spacing.s),
             Expanded(
               child: _ToggleTile(
-                label: l10n.authCustomServerUseSrv,
+                label: context.l10n.authCustomServerUseSrv,
                 value: _useSrv,
                 enabled: _useDns,
                 onChanged: (value) =>
@@ -260,15 +261,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         _ToggleTile(
-          label: l10n.authCustomServerRequireDnssec,
+          label: context.l10n.authCustomServerRequireDnssec,
           value: _requireDnssec,
           enabled: _useDns,
           onChanged: (value) =>
               setState(() => _requireDnssec = value ?? _requireDnssec),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         Row(
           children: [
             Expanded(
@@ -279,7 +280,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._:-]')),
                 ],
                 placeholder: Text(
-                  l10n.authCustomServerXmppHostPlaceholder,
+                  context.l10n.authCustomServerXmppHostPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -287,15 +288,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 style: inputStyle,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: spacing.s),
             SizedBox(
-              width: 96,
+              width: portFieldWidth,
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
-                  l10n.authCustomServerPortPlaceholder,
+                  context.l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -305,7 +306,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         Row(
           children: [
             Expanded(
@@ -313,7 +314,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 autocorrect: false,
                 keyboardType: TextInputType.url,
                 placeholder: Text(
-                  l10n.authCustomServerImapHostPlaceholder,
+                  context.l10n.authCustomServerImapHostPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -321,15 +322,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 style: inputStyle,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: spacing.s),
             SizedBox(
-              width: 96,
+              width: portFieldWidth,
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
-                  l10n.authCustomServerPortPlaceholder,
+                  context.l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -339,7 +340,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         Row(
           children: [
             Expanded(
@@ -347,7 +348,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 autocorrect: false,
                 keyboardType: TextInputType.url,
                 placeholder: Text(
-                  l10n.authCustomServerSmtpHostPlaceholder,
+                  context.l10n.authCustomServerSmtpHostPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -355,15 +356,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 style: inputStyle,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: spacing.s),
             SizedBox(
-              width: 96,
+              width: portFieldWidth,
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 placeholder: Text(
-                  l10n.authCustomServerPortPlaceholder,
+                  context.l10n.authCustomServerPortPlaceholder,
                   style: placeholderStyle,
                 ),
                 placeholderStyle: placeholderStyle,
@@ -373,15 +374,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         SizedBox(
-          width: 120,
+          width: portFieldWidth,
           child: AxiTextFormField(
             autocorrect: false,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             placeholder: Text(
-              l10n.authCustomServerApiPortPlaceholder,
+              context.l10n.authCustomServerApiPortPlaceholder,
               style: placeholderStyle,
             ),
             placeholderStyle: placeholderStyle,
@@ -389,73 +390,65 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             style: inputStyle,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.url,
           placeholder: Text(
-            l10n.authCustomServerEmailProvisioningUrlPlaceholder,
+            context.l10n.authCustomServerEmailProvisioningUrlPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
           controller: _emailProvisioningBaseUrlController,
           style: inputStyle,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.visiblePassword,
           obscureText: _emailProvisioningTokenObscure,
           placeholder: Text(
-            l10n.authCustomServerEmailPublicTokenPlaceholder,
+            context.l10n.authCustomServerEmailPublicTokenPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
           controller: _emailProvisioningPublicTokenController,
           style: inputStyle,
-          trailing: ShadIconButton(
+          trailing: AxiIconButton.ghost(
+            iconData: _emailProvisioningTokenObscure
+                ? LucideIcons.eyeOff
+                : LucideIcons.eye,
+            iconSize: sizing.iconButtonIconSize,
+            buttonSize: sizing.iconButtonSize,
+            color: colors.mutedForeground,
             backgroundColor: colors.muted,
-            foregroundColor: colors.mutedForeground,
-            width: 24,
-            height: 24,
-            padding: EdgeInsets.zero,
-            decoration: const ShadDecoration(
-              secondaryBorder: ShadBorder.none,
-              secondaryFocusedBorder: ShadBorder.none,
-            ),
-            icon: Icon(
-              _emailProvisioningTokenObscure
-                  ? LucideIcons.eyeOff
-                  : LucideIcons.eye,
-              size: 16,
-            ),
             onPressed: () => setState(() {
               _emailProvisioningTokenObscure = !_emailProvisioningTokenObscure;
             }),
-          ).withTapBounce(),
+          ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing.m),
         Row(
           children: [
             Expanded(
-              child: ShadButton.secondary(
+              child: AxiButton.secondary(
                 onPressed: _reset,
-                child: Text(l10n.authCustomServerReset),
-              ).withTapBounce(),
+                child: Text(context.l10n.authCustomServerReset),
+              ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: spacing.s),
             Expanded(
-              child: ShadButton(
+              child: AxiButton.primary(
                 onPressed: _save,
-                child: Text(l10n.commonSave),
-              ).withTapBounce(),
+                child: Text(context.l10n.commonSave),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: spacing.s),
         Text(
-          l10n.authCustomServerAdvancedHint,
-          style: textTheme.muted.copyWith(color: colors.mutedForeground),
+          context.l10n.authCustomServerAdvancedHint,
+          style: textTheme.muted,
         ),
       ],
     );
@@ -469,18 +462,15 @@ class EndpointSuffix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     return Semantics(
       button: true,
-      label: l10n.authCustomServerOpenSettings,
+      label: context.l10n.authCustomServerOpenSettings,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => EndpointConfigSheet.show(context),
         child: Text(
           '@$server',
-          style: context.textTheme.p.copyWith(
-            color: context.colorScheme.foreground,
-          ),
+          style: context.textTheme.p,
         ),
       ),
     );
@@ -504,21 +494,22 @@ class _ToggleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final textStyle = textTheme.p.copyWith(
-      color: enabled ? colors.foreground : colors.mutedForeground,
-    );
+    final spacing = context.spacing;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.card,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: context.radius,
         border: Border.all(color: colors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.m,
+          vertical: spacing.s,
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: textStyle),
+            Text(label, style: textTheme.p),
             ShadSwitch(value: value, onChanged: enabled ? onChanged : null),
           ],
         ),

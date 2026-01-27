@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/sync_controls.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_sheet_header.dart';
@@ -64,12 +65,12 @@ class CalendarNavigation extends StatelessWidget {
     required this.onViewChanged,
     required this.onErrorCleared,
     this.sidebarVisible = true,
+    this.leadingActions,
+    this.trailingActions,
     this.onUndo,
     this.onRedo,
     this.canUndo = false,
     this.canRedo = false,
-    this.hideCompletedScheduled = false,
-    this.onToggleHideCompletedScheduled,
     this.onSearchRequested,
     this.chatAcl,
     this.chatTitle,
@@ -80,12 +81,12 @@ class CalendarNavigation extends StatelessWidget {
   final void Function(CalendarView view) onViewChanged;
   final VoidCallback onErrorCleared;
   final bool sidebarVisible;
+  final Widget? leadingActions;
+  final Widget? trailingActions;
   final VoidCallback? onUndo;
   final VoidCallback? onRedo;
   final bool canUndo;
   final bool canRedo;
-  final bool hideCompletedScheduled;
-  final ValueChanged<bool>? onToggleHideCompletedScheduled;
   final VoidCallback? onSearchRequested;
   final CalendarChatAcl? chatAcl;
   final String? chatTitle;
@@ -164,13 +165,13 @@ class CalendarNavigation extends StatelessWidget {
           isCompact: isCompact,
           hasUndoRedo: hasUndoRedo,
           undoRedoGroup: undoRedoGroup,
-          hideCompletedScheduled: hideCompletedScheduled,
-          onToggleHideCompletedScheduled: onToggleHideCompletedScheduled,
           onSearchRequested: onSearchRequested,
           onViewChanged: onViewChanged,
         );
 
-        const Border? border = null;
+        final Border border = Border(
+          bottom: BorderSide(color: colors.border),
+        );
         const List<BoxShadow> navShadows = [];
         final brightness = ShadTheme.of(context).brightness;
         final Color navBackground = brightness == Brightness.dark
@@ -194,17 +195,49 @@ class CalendarNavigation extends StatelessWidget {
             child: DefaultTextStyle.merge(
               style: TextStyle(fontSize: 12, color: colors.mutedForeground),
               child: stackNavigation
-                  ? Wrap(
-                      spacing: navSpacing,
-                      runSpacing: navSpacing,
-                      alignment: WrapAlignment.spaceBetween,
-                      runAlignment: WrapAlignment.start,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [navRow, trailingRow],
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (leadingActions != null) ...[
+                              leadingActions!,
+                              SizedBox(width: navSpacing),
+                            ],
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: navRow,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: navSpacing),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: trailingRow,
+                              ),
+                            ),
+                            if (trailingActions != null) ...[
+                              SizedBox(width: navSpacing),
+                              trailingActions!,
+                            ],
+                          ],
+                        ),
+                      ],
                     )
                   : Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        if (leadingActions != null) ...[
+                          leadingActions!,
+                          SizedBox(width: navSpacing),
+                        ],
                         Expanded(
                           child: Align(
                             alignment: Alignment.centerLeft,
@@ -219,6 +252,10 @@ class CalendarNavigation extends StatelessWidget {
                             child: trailingRow,
                           ),
                         ),
+                        if (trailingActions != null) ...[
+                          SizedBox(width: navSpacing),
+                          trailingActions!,
+                        ],
                       ],
                     ),
             ),
@@ -356,6 +393,43 @@ class CalendarNavigation extends StatelessWidget {
   }
 }
 
+class CalendarNavigationLeadingActions extends StatelessWidget {
+  const CalendarNavigationLeadingActions({
+    super.key,
+    required this.state,
+    required this.backTooltip,
+    this.onBackPressed,
+    this.showBackButton = true,
+  });
+
+  final CalendarState state;
+  final String backTooltip;
+  final VoidCallback? onBackPressed;
+  final bool showBackButton;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (showBackButton)
+          AxiIconButton.ghost(
+            iconData: LucideIcons.arrowLeft,
+            tooltip: backTooltip,
+            onPressed: onBackPressed,
+          ),
+        if (showBackButton) const SizedBox(width: calendarGutterSm),
+        SyncControls(
+          state: state,
+          compact: true,
+          showTransferMenu: false,
+        ),
+      ],
+    );
+  }
+}
+
 typedef _IconControlBuilder = Widget Function({
   required BuildContext context,
   required IconData icon,
@@ -443,8 +517,6 @@ class _TrailingControls extends StatelessWidget {
     required this.isCompact,
     required this.hasUndoRedo,
     required this.undoRedoGroup,
-    required this.hideCompletedScheduled,
-    required this.onToggleHideCompletedScheduled,
     required this.onViewChanged,
     this.onSearchRequested,
   });
@@ -455,8 +527,6 @@ class _TrailingControls extends StatelessWidget {
   final bool isCompact;
   final bool hasUndoRedo;
   final Widget undoRedoGroup;
-  final bool hideCompletedScheduled;
-  final ValueChanged<bool>? onToggleHideCompletedScheduled;
   final ValueChanged<CalendarView> onViewChanged;
   final VoidCallback? onSearchRequested;
 
@@ -466,13 +536,6 @@ class _TrailingControls extends StatelessWidget {
     final double maxDateLabelWidth =
         isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
 
-    final Widget? hideToggle = onToggleHideCompletedScheduled == null
-        ? null
-        : _HideCompletedButton(
-            value: hideCompletedScheduled,
-            onChanged: onToggleHideCompletedScheduled!,
-            compact: isCompact,
-          );
     final bool showViewToggle = !isCompact;
 
     final trailingChildren = <Widget>[
@@ -485,14 +548,13 @@ class _TrailingControls extends StatelessWidget {
         ),
       ),
       if (showViewToggle)
-        _ViewModeToggle(
+        CalendarViewModeToggle(
           selectedView: state.viewMode,
           onChanged: onViewChanged,
           compact: isCompact,
         ),
       if (onSearchRequested != null)
         _SearchButton(onPressed: onSearchRequested!, compact: isCompact),
-      if (hideToggle != null) hideToggle,
       if (hasUndoRedo) undoRedoGroup,
     ];
 
@@ -506,8 +568,16 @@ class _TrailingControls extends StatelessWidget {
   }
 }
 
-class _ViewModeToggle extends StatelessWidget {
-  const _ViewModeToggle({
+class CalendarSegmentedOption<T> {
+  const CalendarSegmentedOption({required this.value, required this.label});
+
+  final T value;
+  final Widget label;
+}
+
+class CalendarViewModeToggle extends StatelessWidget {
+  const CalendarViewModeToggle({
+    super.key,
     required this.selectedView,
     required this.onChanged,
     required this.compact,
@@ -520,10 +590,10 @@ class _ViewModeToggle extends StatelessWidget {
   static const double _labelFontSize = 10;
   static const double _minWidthExpanded = 180;
   static const double _preferredWidthExpanded = 204;
-  static const double _minWidthRegular = 168;
-  static const double _preferredWidthRegular = 192;
+  static const double _minWidthRegular = 120;
+  static const double _preferredWidthRegular = 144;
   static const double _widthScaleExpanded = 0.42;
-  static const double _widthScaleRegular = 0.56;
+  static const double _widthScaleRegular = 0.38;
 
   @override
   Widget build(BuildContext context) {
@@ -564,17 +634,76 @@ class _ViewModeToggle extends StatelessWidget {
       color: secondaryButtonTheme.backgroundColor ?? colors.secondary,
     );
 
+    final options = _viewOrder
+        .map(
+          (view) => CalendarSegmentedOption<CalendarView>(
+            value: view,
+            label: Text(
+              useShortLabels ? _shortLabel(view, l10n) : _viewLabel(view, l10n),
+              style: textStyle,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        )
+        .toList(growable: false);
+    return CalendarSegmentedToggle<CalendarView>(
+      options: options,
+      selected: selectedView,
+      onChanged: onChanged,
+      minHeight: minHeight,
+      controlWidth: controlWidth,
+      padding: padding,
+      outerDecoration: outerDecoration,
+      activeBackground: activeBackground,
+      hoverBackground: hoverBackground,
+      dividerColor: dividerColor,
+    );
+  }
+}
+
+class CalendarSegmentedToggle<T> extends StatelessWidget {
+  const CalendarSegmentedToggle({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    required this.minHeight,
+    required this.controlWidth,
+    required this.padding,
+    required this.outerDecoration,
+    required this.activeBackground,
+    required this.hoverBackground,
+    required this.dividerColor,
+  });
+
+  final List<CalendarSegmentedOption<T>> options;
+  final T selected;
+  final ValueChanged<T> onChanged;
+  final double minHeight;
+  final double controlWidth;
+  final EdgeInsets padding;
+  final ShadDecoration outerDecoration;
+  final Color activeBackground;
+  final Color hoverBackground;
+  final Color dividerColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final double cornerRadius = context.radius.topLeft.x;
+    final ShadColorScheme colors = context.colorScheme;
     return ShadDecorator(
       decoration: outerDecoration,
       child: ClipRRect(
-        borderRadius: shadTheme.radius,
+        borderRadius: context.radius,
         child: SizedBox(
           height: minHeight,
           width: controlWidth,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (int index = 0; index < _viewOrder.length; index++) ...[
+              for (int index = 0; index < options.length; index++) ...[
                 if (index > 0)
                   Container(
                     width: 1,
@@ -582,20 +711,19 @@ class _ViewModeToggle extends StatelessWidget {
                     color: dividerColor,
                   ),
                 Expanded(
-                  child: _ViewModeToggleItem(
-                    view: _viewOrder[index],
-                    label: useShortLabels
-                        ? _shortLabel(_viewOrder[index], l10n)
-                        : _viewLabel(_viewOrder[index], l10n),
-                    selected: _viewOrder[index] == selectedView,
+                  child: _SegmentedToggleItem(
+                    isFirst: index == 0,
+                    isLast: index == options.length - 1,
+                    selected: options[index].value == selected,
+                    cornerRadius: cornerRadius,
                     padding: padding,
-                    textStyle: textStyle,
+                    minHeight: minHeight,
                     activeBackground: activeBackground,
                     hoverBackground: hoverBackground,
-                    onSelected: onChanged,
-                    minHeight: minHeight,
-                    isLast: index == _viewOrder.length - 1,
-                    isFirst: index == 0,
+                    onSelected: () => onChanged(options[index].value),
+                    activeTextColor: colors.primary,
+                    inactiveTextColor: colors.mutedForeground,
+                    child: options[index].label,
                   ),
                 ),
               ],
@@ -607,37 +735,37 @@ class _ViewModeToggle extends StatelessWidget {
   }
 }
 
-class _ViewModeToggleItem extends StatelessWidget {
-  const _ViewModeToggleItem({
-    required this.view,
-    required this.label,
+class _SegmentedToggleItem extends StatelessWidget {
+  const _SegmentedToggleItem({
+    required this.isFirst,
+    required this.isLast,
     required this.selected,
+    required this.cornerRadius,
     required this.padding,
-    required this.textStyle,
+    required this.minHeight,
     required this.activeBackground,
     required this.hoverBackground,
     required this.onSelected,
-    required this.minHeight,
-    required this.isLast,
-    required this.isFirst,
+    required this.child,
+    required this.activeTextColor,
+    required this.inactiveTextColor,
   });
 
-  final CalendarView view;
-  final String label;
+  final bool isFirst;
+  final bool isLast;
   final bool selected;
+  final double cornerRadius;
   final EdgeInsets padding;
-  final TextStyle textStyle;
+  final double minHeight;
   final Color activeBackground;
   final Color hoverBackground;
-  final ValueChanged<CalendarView> onSelected;
-  final double minHeight;
-  final bool isLast;
-  final bool isFirst;
+  final VoidCallback onSelected;
+  final Widget child;
+  final Color activeTextColor;
+  final Color inactiveTextColor;
 
   @override
   Widget build(BuildContext context) {
-    final ShadColorScheme colors = context.colorScheme;
-    final double cornerRadius = context.radius.topLeft.x;
     final BorderRadius radius = BorderRadius.horizontal(
       left: isFirst ? Radius.circular(cornerRadius) : Radius.zero,
       right: isLast ? Radius.circular(cornerRadius) : Radius.zero,
@@ -654,11 +782,21 @@ class _ViewModeToggleItem extends StatelessWidget {
         return Colors.transparent;
       },
     );
-
+    final Widget styledChild = IconTheme.merge(
+      data: IconThemeData(
+        color: selected ? activeTextColor : inactiveTextColor,
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(
+          color: selected ? activeTextColor : inactiveTextColor,
+        ),
+        child: child,
+      ),
+    );
     return MouseRegion(
       cursor: selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: InkWell(
-        onTap: selected ? null : () => onSelected(view),
+        onTap: selected ? null : onSelected,
         customBorder: ContinuousRectangleBorder(borderRadius: radius),
         overlayColor: overlay,
         child: AnimatedContainer(
@@ -671,15 +809,7 @@ class _ViewModeToggleItem extends StatelessWidget {
             color: selected ? activeBackground : Colors.transparent,
             shape: ContinuousRectangleBorder(borderRadius: radius),
           ),
-          child: Text(
-            label,
-            style: textStyle.copyWith(
-              color: selected ? colors.primary : colors.mutedForeground,
-            ),
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: styledChild,
         ),
       ).withTapBounce(enabled: !selected),
     );
@@ -705,67 +835,6 @@ String _shortLabel(CalendarView view, AppLocalizations l10n) {
       return l10n.calendarViewWeekShort;
     case CalendarView.month:
       return l10n.calendarViewMonthShort;
-  }
-}
-
-class _HideCompletedButton extends StatelessWidget {
-  const _HideCompletedButton({
-    required this.value,
-    required this.onChanged,
-    required this.compact,
-  });
-
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final l10n = context.l10n;
-    final bool hiding = value;
-    final Color foreground = hiding ? colors.primary : colors.mutedForeground;
-    final Widget icon = Icon(
-      hiding ? Icons.visibility_off : Icons.visibility,
-      size: 16,
-      color: foreground,
-    );
-    if (compact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: calendarInsetSm),
-        child: AxiTooltip(
-          builder: (_) => Text(
-            hiding ? l10n.calendarShowCompleted : l10n.calendarHideCompleted,
-          ),
-          child: ShadButton.ghost(
-            size: ShadButtonSize.sm,
-            onPressed: () => onChanged(!value),
-            child: icon,
-          ).withTapBounce(),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
-        onPressed: () => onChanged(!value),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            icon,
-            const SizedBox(width: calendarInsetMd),
-            Text(
-              l10n.calendarStatusCompleted,
-              style: context.textTheme.small.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ).withTapBounce(),
-    );
   }
 }
 

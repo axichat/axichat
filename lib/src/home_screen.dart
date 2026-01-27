@@ -288,7 +288,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // ignore: unnecessary_type_check
     final isBlocking = xmppService is BlockingService;
     final isOmemo = xmppService is OmemoService;
-    final navPlacement = EnvScope.of(context).navPlacement;
+    final env = EnvScope.of(context);
+    final navPlacement = env.navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
@@ -412,11 +413,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       final bool openCalendar = hasCalendarBloc &&
                           (context.watch<ChatsCubit?>()?.state.openCalendar ??
                               false);
-                      final bool openChatCalendar = context
-                              .watch<ChatsCubit?>()
-                              ?.state
-                              .openChatCalendar ??
-                          false;
+                      final chatRoute =
+                          context.watch<ChatsCubit?>()?.state.openChatRoute;
                       final navRail = navPlacement == NavPlacement.rail
                           ? _HomeNavigationRail(
                               tabs: tabs,
@@ -432,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 controller.animateTo(index);
                               },
                               calendarAvailable: hasCalendarBloc,
-                              calendarActive: openCalendar || openChatCalendar,
+                              calendarActive: openCalendar,
                               onCalendarSelected: () {
                                 context.read<ChatsCubit?>()?.toggleCalendar();
                               },
@@ -450,21 +448,34 @@ class _HomeScreenState extends State<HomeScreen> {
                               providers: [
                                 BlocProvider(
                                   key: Key(openJid),
-                                  create: (context) => ChatBloc(
-                                    jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    chatsService: context.read<XmppService>(),
-                                    mucService: context.read<XmppService>(),
-                                    notificationService:
-                                        context.read<NotificationService>(),
-                                    emailService: context.read<EmailService>(),
-                                    omemoService: isOmemo
-                                        ? context.read<XmppService>()
-                                            as OmemoService
-                                        : null,
-                                    settingsCubit:
-                                        context.read<SettingsCubit>(),
-                                  ),
+                                  create: (context) {
+                                    final settings =
+                                        context.read<SettingsCubit>().state;
+                                    return ChatBloc(
+                                      jid: openJid,
+                                      messageService:
+                                          context.read<XmppService>(),
+                                      chatsService: context.read<XmppService>(),
+                                      mucService: context.read<XmppService>(),
+                                      notificationService:
+                                          context.read<NotificationService>(),
+                                      emailService:
+                                          context.read<EmailService>(),
+                                      omemoService: isOmemo
+                                          ? context.read<XmppService>()
+                                              as OmemoService
+                                          : null,
+                                      settings: ChatSettingsSnapshot(
+                                        language: settings.language,
+                                        chatReadReceipts:
+                                            settings.chatReadReceipts,
+                                        emailReadReceipts:
+                                            settings.emailReadReceipts,
+                                        shareTokenSignatureEnabled:
+                                            settings.shareTokenSignatureEnabled,
+                                      ),
+                                    );
+                                  },
                                 ),
                                 BlocProvider(
                                   create: (context) => ChatSearchCubit(
@@ -545,11 +556,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               false;
 
                       final bool showChatCalendar =
-                          openChatCalendar && openJid != null;
+                          openJid != null && (chatRoute?.isCalendar ?? false);
                       final Duration animationDuration =
                           context.watch<SettingsCubit>().animationDuration;
                       final Duration calendarTransitionDuration =
-                          animationDuration;
+                          env.isDesktopPlatform
+                              ? Duration.zero
+                              : animationDuration;
                       return SafeArea(
                         top: state is ConnectivityConnected || demoOffline,
                         child: _HomeCalendarViewTransition(

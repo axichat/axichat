@@ -6,12 +6,10 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class UnregisterForm extends StatefulWidget {
   const UnregisterForm({super.key});
@@ -40,13 +38,12 @@ class _UnregisterFormState extends State<UnregisterForm> {
   void _onPressed(BuildContext context) async {
     final form = Form.of(context);
     if (!form.validate()) return;
-    final l10n = context.l10n;
     final approved = await confirm(
       context,
-      title: l10n.authUnregisterConfirmTitle,
-      message: l10n.authUnregisterConfirmMessage,
-      confirmLabel: l10n.authUnregisterConfirmAction,
-      cancelLabel: l10n.commonCancel,
+      title: context.l10n.authUnregisterConfirmTitle,
+      message: context.l10n.authUnregisterConfirmMessage,
+      confirmLabel: context.l10n.authUnregisterConfirmAction,
+      cancelLabel: context.l10n.commonCancel,
       destructiveConfirm: true,
     );
     if (!context.mounted || approved != true) return;
@@ -55,6 +52,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
           host: context.read<EndpointConfigCubit>().state.domain,
           password: _passwordTextController.value.text,
         );
+    if (!context.mounted) return;
     _passwordTextController.clear();
   }
 
@@ -62,74 +60,45 @@ class _UnregisterFormState extends State<UnregisterForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
-        final l10n = context.l10n;
         final loading = state is AuthenticationUnregisterInProgress;
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
-        const unregisterErrorPaddingValue = 10.0;
-        const unregisterFieldPaddingValue = 8.0;
-        const unregisterSpacerHeight = 40.0;
-        const unregisterButtonGap = 16.0;
-        const unregisterSpinnerDimension = 16.0;
-        const unregisterSpinnerPadding = 1.0;
-        const unregisterSpinnerSlotSize =
-            unregisterSpinnerDimension + (unregisterSpinnerPadding * 2);
-        const unregisterSpinnerGap = 8.0;
-        const unregisterErrorPadding = EdgeInsets.all(
-          unregisterErrorPaddingValue,
+        final spacing = context.spacing;
+        final unregisterErrorPadding = EdgeInsets.all(
+          spacing.s,
         );
-        const unregisterFieldPadding = EdgeInsets.all(
-          unregisterFieldPaddingValue,
+        final unregisterFieldPadding = EdgeInsets.all(
+          spacing.s,
         );
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(UnregisterForm.title(l10n), style: context.textTheme.h3),
+              Text(
+                UnregisterForm.title(context.l10n),
+                style: context.textTheme.h3,
+              ),
               state is AuthenticationUnregisterFailure
                   ? Padding(
                       padding: unregisterErrorPadding,
                       child: Text(
-                        state.errorText,
+                        state.message.resolve(context.l10n),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.colorScheme.destructive,
-                        ),
+                        style: context.textTheme.small,
                       ),
                     )
-                  : const SizedBox(height: unregisterSpacerHeight),
+                  : SizedBox(height: spacing.l),
               Padding(
                 padding: unregisterFieldPadding,
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordPlaceholder,
+                  placeholder: context.l10n.authPasswordPlaceholder,
                   enabled: !loading,
                   controller: _passwordTextController,
                 ),
               ),
-              const SizedBox.square(dimension: unregisterButtonGap),
-              Builder(
-                builder: (context) {
-                  final spinner = AxiProgressIndicator(
-                    dimension: unregisterSpinnerDimension,
-                    color: context.colorScheme.primaryForeground,
-                    semanticsLabel: l10n.authUnregisterProgressLabel,
-                  );
-                  final spinnerSlot = ButtonSpinnerSlot(
-                    isVisible: loading,
-                    spinner: spinner,
-                    slotSize: unregisterSpinnerSlotSize,
-                    gap: unregisterSpinnerGap,
-                    duration: animationDuration,
-                  );
-                  return ShadButton.destructive(
-                    enabled: !loading,
-                    onPressed: () => _onPressed(context),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [spinnerSlot, Text(l10n.commonContinue)],
-                    ),
-                  ).withTapBounce(enabled: !loading);
-                },
+              const SizedBox.square(),
+              AxiButton.destructive(
+                loading: loading,
+                onPressed: loading ? null : () => _onPressed(context),
+                child: Text(context.l10n.commonContinue),
               ),
             ],
           ),

@@ -23,18 +23,18 @@ Future<LinkAction?> showLinkActionDialog(
       return ShadDialog(
         title: Text(title, style: context.modalHeaderTextStyle),
         actions: [
-          ShadButton.outline(
+          AxiButton.outline(
             onPressed: () => pop(null),
             child: Text(cancelLabel),
-          ).withTapBounce(),
-          ShadButton.secondary(
+          ),
+          AxiButton.secondary(
             onPressed: () => pop(LinkAction.copy),
             child: Text(copyLabel),
-          ).withTapBounce(),
-          ShadButton(
+          ),
+          AxiButton.primary(
             onPressed: () => pop(LinkAction.open),
             child: Text(openLabel),
-          ).withTapBounce(),
+          ),
         ],
         child: SelectableText(
           message,

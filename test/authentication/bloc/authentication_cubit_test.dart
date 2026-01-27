@@ -28,9 +28,6 @@ const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 const bool clearEmailCredentialsOnLogout = true;
 
-const missingDatabaseSecretsErrorText =
-    'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
-
 Uri _registrationMatcher() =>
     any<Uri>(that: predicate((Uri uri) => uri.path.contains('/register/new/')));
 
@@ -191,7 +188,7 @@ void main() {
   test('Remember me choice defaults to true and persists updates', () async {
     final localBloc = AuthenticationCubit(
       credentialStore: mockCredentialStore,
-      endpointConfigCubit: endpointConfigCubit,
+      initialEndpointConfig: endpointConfigCubit.state,
       xmppService: mockXmppService,
       httpClient: mockHttpClient,
       emailProvisioningClient: mockProvisioningClient,
@@ -208,7 +205,7 @@ void main() {
     setUp(() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -308,7 +305,8 @@ void main() {
           bloc.login(username: invalidUsername, password: invalidPassword),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -333,7 +331,8 @@ void main() {
           bloc.login(username: invalidUsername, password: validPassword),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -358,7 +357,8 @@ void main() {
           bloc.login(username: validUsername, password: invalidPassword),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -400,7 +400,7 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-          'Username and password have different nullness.',
+          AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
       ],
       verify: (bloc) {
@@ -426,7 +426,7 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-          'Username and password have different nullness.',
+          AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
       ],
       verify: (bloc) {
@@ -474,7 +474,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -483,7 +483,9 @@ void main() {
       act: (bloc) => bloc.login(),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure(missingDatabaseSecretsErrorText),
+        const AuthenticationFailure(
+          AuthKeyMessage(AuthMessageKey.missingDatabaseSecrets),
+        ),
       ],
       verify: (bloc) {
         expect(
@@ -539,7 +541,8 @@ void main() {
           bloc.login(username: invalidUsername, password: invalidPassword),
       expect: () => const [
         AuthenticationLogInInProgress(),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (_) {
         expect(
@@ -555,7 +558,7 @@ void main() {
       'Persisting with rememberMe true writes SMTP credentials atomically after success.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -596,7 +599,7 @@ void main() {
       'Persisting with rememberMe false keeps SMTP session only in memory and stores only DB secrets.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -647,7 +650,8 @@ void main() {
       act: (bloc) => bloc.login(),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure('Incorrect username or password'),
+        const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verifyNever(
@@ -704,7 +708,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -741,7 +745,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -760,7 +764,7 @@ void main() {
       expect: () => [
         const AuthenticationNone(),
         const AuthenticationFailure(
-          'Email authentication failed. Please log in again.',
+          AuthKeyMessage(AuthMessageKey.emailAuthFailed),
         ),
       ],
       verify: (bloc) {
@@ -807,7 +811,7 @@ void main() {
       'Rolls back the account if login fails after registration.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -823,7 +827,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verify(
@@ -848,7 +853,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -864,7 +869,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         verify(
@@ -902,7 +908,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -918,7 +924,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (_) {
         verifyNever(
@@ -951,7 +958,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -964,17 +971,13 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
       ),
-      expect: () {
-        const signupCleanupMessage =
-            'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
-        return [
-          const AuthenticationSignUpInProgress(),
-          const AuthenticationSignupFailure(
-            signupCleanupMessage,
-            isCleanupBlocked: true,
-          ),
-        ];
-      },
+      expect: () => [
+        const AuthenticationSignUpInProgress(),
+        const AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.signupCleanupInProgress),
+          isCleanupBlocked: true,
+        ),
+      ],
       verify: (bloc) {
         verifyNever(
           () => mockHttpClient.post(
@@ -999,7 +1002,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1015,7 +1018,8 @@ void main() {
       expect: () => const [
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationFailure('Incorrect username or password'),
+        AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
       ],
       verify: (bloc) {
         final payload = credentialStorage['pending_signup_rollbacks'];
@@ -1061,7 +1065,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -1111,7 +1115,7 @@ void main() {
       });
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1155,7 +1159,7 @@ void main() {
       'If authentication is not complete, does nothing.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1175,7 +1179,7 @@ void main() {
       'Automatic logout disconnects the xmpp service without forgetting credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1196,7 +1200,7 @@ void main() {
       'User initiated logout disconnects the xmpp service, forgets credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
@@ -1226,7 +1230,7 @@ void main() {
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
@@ -1250,7 +1254,7 @@ void main() {
       'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1269,7 +1273,7 @@ void main() {
       'Burn logout clears email storage when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        endpointConfigCubit: endpointConfigCubit,
+        initialEndpointConfig: endpointConfigCubit.state,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,

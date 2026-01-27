@@ -8,6 +8,7 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -73,6 +74,7 @@ class SettingsControls extends StatelessWidget {
   const SettingsControls({
     super.key,
     this.showDivider = false,
+    this.fullWidthDividers = false,
     this.anchors,
     required this.locate,
     required this.onChangePassword,
@@ -81,6 +83,7 @@ class SettingsControls extends StatelessWidget {
   });
 
   final bool showDivider;
+  final bool fullWidthDividers;
   final SettingsSectionAnchors? anchors;
   final T Function<T>() locate;
   final VoidCallback onChangePassword;
@@ -95,25 +98,25 @@ class SettingsControls extends StatelessWidget {
         final selectTextStyle = context.textTheme.small.copyWith(
           color: context.colorScheme.foreground,
         );
-        final actionButtonPadding = EdgeInsets.symmetric(
-          horizontal: _compactTilePadding.horizontal,
-          vertical: _compactTilePadding.vertical / 2,
-        );
+        final double dividerIndent =
+            fullWidthDividers ? 0.0 : _settingsSectionHeaderPadding.horizontal;
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             anchors?.accountKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAccount,
                     showDivider: showDivider,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.accountKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAccount,
                       showDivider: showDivider,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             _SettingsActionButton(
@@ -124,11 +127,17 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            EmailForwardingGuideActionButton(
-              padding: actionButtonPadding,
+            _SettingsActionButton(
+              iconData: LucideIcons.mail,
+              label: context.l10n.emailForwardingGuideTitle,
+              onPressed: () async =>
+                  await showEmailForwardingGuideDialog(context),
             ),
-            EmailContactImportActionButton(
-              padding: actionButtonPadding,
+            _SettingsActionButton(
+              iconData: LucideIcons.userRoundPlus,
+              label: context.l10n.emailContactsImportTitle,
+              onPressed: () async =>
+                  await _showEmailContactImportDialog(context),
             ),
             _SettingsActionButton(
               iconData: LucideIcons.image,
@@ -160,11 +169,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.dataKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionData,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.dataKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionData,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             _SettingsActionButton(
@@ -214,11 +225,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.appearanceKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAppearance,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.appearanceKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAppearance,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             ListItemPadding(
@@ -319,11 +332,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.chatPreferencesKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionChats,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.chatPreferencesKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionChats,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             Padding(
@@ -428,11 +443,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.emailPreferencesKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionEmail,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.emailPreferencesKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionEmail,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             Padding(
@@ -474,11 +491,13 @@ class SettingsControls extends StatelessWidget {
             anchors?.aboutKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAbout,
+                    dividerIndent: dividerIndent,
                   )
                 : KeyedSubtree(
                     key: anchors?.aboutKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAbout,
+                      dividerIndent: dividerIndent,
                     ),
                   ),
             _SettingsActionButton(
@@ -492,20 +511,36 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             _SettingsLinkButton(
+              label: context.l10n.settingsWebsiteLabel,
+              link: websiteUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
               label: context.l10n.settingsTermsLabel,
               link: termsUrl,
-              iconData: LucideIcons.fileText,
+              iconData: LucideIcons.link,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsPrivacyLabel,
               link: privacyUrl,
-              iconData: LucideIcons.shieldCheck,
+              iconData: LucideIcons.link,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsLicenseAgpl,
               link: licenseUrl,
-              iconData: LucideIcons.fileText,
+              iconData: LucideIcons.link,
             ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsDonateLabel,
+              link: donateUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsMastodonLabel,
+              link: mastodonUrl,
+              iconData: LucideIcons.link,
+            ),
+            const SizedBox(height: 160),
           ],
         );
       },
@@ -675,6 +710,15 @@ class SettingsControls extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _showEmailContactImportDialog(BuildContext context) async {
+    await showFadeScaleDialog<void>(
+      context: context,
+      builder: (dialogContext) => EmailContactImportDialog(
+        cubit: context.read<EmailContactImportCubit>()..reset(),
+      ),
+    );
+  }
 }
 
 class _SettingsActionButton extends StatelessWidget {
@@ -693,33 +737,19 @@ class _SettingsActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final foregroundColor =
-        destructive ? colors.destructive : colors.foreground;
-    final verticalInset = _compactTilePadding.vertical / 2;
-    final iconSpacing = _compactTilePadding.horizontal / 2;
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: _compactTilePadding.horizontal,
-        vertical: verticalInset,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: SizedBox(
         width: double.infinity,
         child: ShadButton.ghost(
-          size: ShadButtonSize.sm,
           onPressed: onPressed,
-          child: Row(
-            children: [
-              if (iconData != null) Icon(iconData, color: foregroundColor),
-              if (iconData != null) SizedBox(width: iconSpacing),
-              Expanded(
-                child: Text(
-                  label,
-                  style: context.textTheme.small.copyWith(
-                    color: foregroundColor,
-                  ),
-                ),
-              ),
-            ],
+          mainAxisAlignment: MainAxisAlignment.start,
+          foregroundColor: colors.foreground,
+          hoverForegroundColor: colors.primary,
+          leading: iconData == null ? null : Icon(iconData),
+          child: Text(
+            label,
+            style: context.textTheme.small,
           ),
         ).withTapBounce(enabled: onPressed != null),
       ),
@@ -755,10 +785,12 @@ class _SettingsSectionHeader extends StatelessWidget {
   const _SettingsSectionHeader({
     required this.label,
     this.showDivider = true,
+    this.dividerIndent = 0.0,
   });
 
   final String label;
   final bool showDivider;
+  final double dividerIndent;
 
   @override
   Widget build(BuildContext context) {
@@ -771,7 +803,16 @@ class _SettingsSectionHeader extends StatelessWidget {
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [const AxiListDivider(), header],
+      children: [
+        Divider(
+          color: context.colorScheme.border,
+          thickness: 1.0,
+          height: 1.0,
+          indent: dividerIndent,
+          endIndent: dividerIndent,
+        ),
+        header,
+      ],
     );
   }
 }

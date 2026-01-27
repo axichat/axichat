@@ -41,12 +41,14 @@ class ProfileTile extends StatelessWidget {
             return BlocBuilder<ProfileCubit, ProfileState>(
               builder: (context, state) {
                 final colors = context.colorScheme;
+                const double subtitleLineHeight = 1.05;
                 final usernameStyle = context.textTheme.large.copyWith(
                   fontWeight: FontWeight.w800,
                   color: colors.foreground,
                 );
                 final subtitleStyle = context.textTheme.muted.copyWith(
                   color: colors.mutedForeground,
+                  height: subtitleLineHeight,
                 );
                 return LayoutBuilder(
                   builder: (context, constraints) {

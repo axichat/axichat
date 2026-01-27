@@ -247,30 +247,7 @@ class ChatsList extends StatelessWidget {
             );
           }
 
-          final animated = AnimatedSwitcher(
-            duration: context.watch<SettingsCubit>().animationDuration,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (widget, animation) {
-              final offsetAnimation = Tween<Offset>(
-                begin: const Offset(0, 0.08),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              );
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: offsetAnimation,
-                  child: widget,
-                ),
-              );
-            },
-            child: child,
-          );
+          final animated = child;
           final env = EnvScope.of(context);
           final enableRefresh = env.navPlacement == NavPlacement.bottom;
           if (!enableRefresh) return animated;
@@ -299,7 +276,6 @@ class ChatsList extends StatelessWidget {
                   ? const SizedBox.shrink()
                   : controller.isLoading
                       ? AxiProgressIndicator(
-                          dimension: refreshSpinnerDimension,
                           color: context.colorScheme.primary,
                         )
                       : AnimatedRotation(
@@ -975,7 +951,7 @@ class _ChatListTileState extends State<ChatListTile> {
                       l10n.chatsDeleteConfirmMessage(chat.displayName),
                       style: context.textTheme.small,
                     ),
-                    const SizedBox.square(dimension: 10.0),
+                    const SizedBox.square(),
                     ShadGestureDetector(
                       cursor: SystemMouseCursors.click,
                       hoverStrategies: mobileHoverStrategies,

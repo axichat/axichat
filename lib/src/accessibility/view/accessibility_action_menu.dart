@@ -6,6 +6,7 @@ import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -868,7 +869,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         lastItemActivator: const _LastItemIntent(),
       },
     };
-    final scrimColor = context.colorScheme.foreground.withValues(alpha: 0.45);
+    final scrimColor = context.colorScheme.foreground.withValues(
+      alpha: context.motion.tapFocusAlpha + context.motion.tapHoverAlpha,
+    );
     return Stack(
       children: [
         Positioned.fill(
@@ -954,9 +957,12 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                 child: Builder(
                   builder: (context) {
                     final viewSize = MediaQuery.sizeOf(context);
-                    const modalMinHeightValue = 420.0;
-                    const modalMaxWidthValue = 720.0;
-                    const modalVerticalMargin = 80.0;
+                    final spacing = context.spacing;
+                    final modalMinHeightValue =
+                        context.sizing.menuItemHeight * 7;
+                    final modalMaxWidthValue = context.sizing.dialogMaxWidth;
+                    final modalVerticalMargin =
+                        context.sizing.menuItemHeight * 2;
                     final modalMinHeight = viewSize.height < modalMinHeightValue
                         ? viewSize.height
                         : modalMinHeightValue;
@@ -966,13 +972,13 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                         .clamp(modalMinHeight, viewSize.height)
                         .toDouble();
                     return ConstrainedBox(
-                      constraints: const BoxConstraints(
+                      constraints: BoxConstraints(
                         maxWidth: modalMaxWidthValue,
                       ),
                       child: SizedBox(
                         height: modalHeight,
                         child: AxiModalSurface(
-                          padding: const EdgeInsets.all(20),
+                          padding: EdgeInsets.all(spacing.m),
                           child: Material(
                             type: MaterialType.transparency,
                             child: LayoutBuilder(
@@ -989,8 +995,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                     child: SingleChildScrollView(
                                       controller: _scrollController,
                                       physics: const ClampingScrollPhysics(),
-                                      padding: const EdgeInsets.only(
-                                        bottom: 16,
+                                      padding: EdgeInsets.only(
+                                        bottom: spacing.m,
                                       ),
                                       clipBehavior: Clip.hardEdge,
                                       child: ConstrainedBox(
@@ -1389,6 +1395,7 @@ class _AccessibilityActionContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final breadcrumbLabels = _breadcrumbLabels(state, context);
     final currentRecipients = state.currentEntry.recipients;
     final headerTitle = breadcrumbLabels.isNotEmpty
@@ -1444,8 +1451,9 @@ class _AccessibilityActionContent extends StatelessWidget {
         : sections.where((section) => section.id != 'chat-messages').toList();
     final hasMessages = messageSections.isNotEmpty;
     final hasSections = actionSections.isNotEmpty;
-    final conversationListHeight = _conversationListHeight(viewportHeight);
-    final rootListHeight = _rootListHeight(viewportHeight);
+    final conversationListHeight =
+        _conversationListHeight(viewportHeight, context.sizing);
+    final rootListHeight = _rootListHeight(viewportHeight, context.sizing);
     const headerOrder = NumericFocusOrder(0);
     const statusOrder = NumericFocusOrder(1);
     const legendOrder = NumericFocusOrder(2);
@@ -1478,7 +1486,7 @@ class _AccessibilityActionContent extends StatelessWidget {
                 ),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         FocusTraversalOrder(
           order: legendOrder,
           child: _AccessibilityGroupMarker(
@@ -1489,7 +1497,7 @@ class _AccessibilityActionContent extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.s),
         if (state.statusMessage != null)
           FocusTraversalOrder(
             order: statusOrder,
@@ -1505,13 +1513,15 @@ class _AccessibilityActionContent extends StatelessWidget {
             order: statusOrder,
             child: _AccessibilityBanner(
               message: state.errorMessage!,
-              color: context.colorScheme.destructive.withValues(alpha: 0.1),
+              color: context.colorScheme.destructive.withValues(
+                alpha: context.motion.tapHoverAlpha,
+              ),
               foreground: context.colorScheme.destructive,
               icon: Icons.error_outline,
             ),
           ),
         if (state.statusMessage != null || state.errorMessage != null)
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.s),
         if (messageSection != null)
           FocusTraversalOrder(
             order: messagesOrder,
@@ -1528,7 +1538,7 @@ class _AccessibilityActionContent extends StatelessWidget {
               ),
             ),
           ),
-        if (hasMessages) const SizedBox(height: 10),
+        if (hasMessages) SizedBox(height: spacing.s),
         if (hasComposer)
           FocusTraversalOrder(
             order: composerOrder,
@@ -1593,7 +1603,7 @@ class _AccessibilityActionContent extends StatelessWidget {
               ),
             ),
           ),
-        if (isConversation && hasSections) const SizedBox(height: 10),
+        if (isConversation && hasSections) SizedBox(height: spacing.s),
         if (isConversation && hasSections)
           SizedBox(
             height: conversationListHeight,
@@ -1651,19 +1661,19 @@ class _AccessibilityActionContent extends StatelessWidget {
     );
   }
 
-  double _conversationListHeight(double viewportHeight) {
-    const heightShare = 0.35;
-    const minHeight = 200.0;
-    const maxHeight = 360.0;
+  double _conversationListHeight(double viewportHeight, AxiSizing sizing) {
+    final heightShare = sizing.dialogMaxHeightFraction / 3;
+    final minHeight = sizing.menuItemHeight * 5;
+    final maxHeight = sizing.menuItemHeight * 8;
     final heightFromViewport = viewportHeight * heightShare;
     final boundedHeight = heightFromViewport.clamp(minHeight, maxHeight);
     return boundedHeight.toDouble();
   }
 
-  double _rootListHeight(double viewportHeight) {
-    const heightShare = 0.6;
-    const minHeight = 240.0;
-    const maxHeight = 520.0;
+  double _rootListHeight(double viewportHeight, AxiSizing sizing) {
+    final heightShare = sizing.dialogMaxHeightFraction / 2;
+    final minHeight = sizing.menuItemHeight * 6;
+    final maxHeight = sizing.menuItemHeight * 12;
     final heightFromViewport = viewportHeight * heightShare;
     final boundedHeight = heightFromViewport.clamp(minHeight, maxHeight);
     return boundedHeight.toDouble();
@@ -1697,8 +1707,9 @@ class _AccessibilityMenuHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final findShortcut = findActionShortcut(Theme.of(context).platform);
+    final findShortcut = findActionShortcut(EnvScope.of(context).platform);
     final escapeShortcutValue = escapeShortcut();
+    final spacing = context.spacing;
     return Row(
       children: [
         if (onBack != null)
@@ -1706,7 +1717,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
             onPressed: onBack,
             child: const Icon(Icons.arrow_back),
           ),
-        if (onBack != null) const SizedBox(width: 8),
+        if (onBack != null) SizedBox(width: spacing.s),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1715,18 +1726,18 @@ class _AccessibilityMenuHeader extends StatelessWidget {
                 header: true,
                 child: Text(breadcrumb, style: context.textTheme.h3),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: spacing.xs),
               if (breadcrumbs.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+                  padding: EdgeInsets.only(bottom: spacing.xs),
                   child: _BreadcrumbChain(
                     labels: breadcrumbs,
                     onSelected: onCrumbSelected,
                   ),
                 ),
               Wrap(
-                spacing: 8,
-                runSpacing: 4,
+                spacing: spacing.s,
+                runSpacing: spacing.xs,
                 children: [ShortcutHint(shortcut: findShortcut, dense: true)],
               ),
             ],
@@ -1738,7 +1749,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.close),
-              const SizedBox(width: 6),
+              SizedBox(width: spacing.xs),
               ShortcutHint(shortcut: escapeShortcutValue, dense: true),
             ],
           ),
@@ -1757,13 +1768,11 @@ class _BreadcrumbChain extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (labels.isEmpty) return const SizedBox.shrink();
-    final connectorStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-      fontWeight: FontWeight.w700,
-    );
+    final connectorStyle = context.textTheme.muted;
+    final spacing = context.spacing;
     return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+      spacing: spacing.xs,
+      runSpacing: spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         for (var i = 0; i < labels.length; i++) ...[
@@ -1795,14 +1804,17 @@ class _BreadcrumbChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final radius = context.radius;
+    final spacing = context.spacing;
     return Focus(
       child: Builder(
         builder: (context) {
           final hasFocus = Focus.of(context).hasFocus;
-          final borderColor = hasFocus ? colors.primary : colors.border;
-          final borderWidth = hasFocus ? 2.5 : 1.25;
+          final borderColor = hasFocus
+              ? context.colorScheme.primary
+              : context.colorScheme.border;
+          final borderWidth = hasFocus
+              ? context.sizing.progressIndicatorStrokeWidth * 2
+              : context.sizing.progressIndicatorStrokeWidth;
           return Semantics(
             button: true,
             focusable: true,
@@ -1814,26 +1826,24 @@ class _BreadcrumbChip extends StatelessWidget {
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
-                color: colors.card,
-                borderRadius: radius,
+                color: context.colorScheme.card,
+                borderRadius: context.radius,
                 border: Border.all(color: borderColor, width: borderWidth),
               ),
               child: Material(
                 type: MaterialType.transparency,
-                borderRadius: radius,
+                borderRadius: context.radius,
                 child: InkWell(
-                  borderRadius: radius,
+                  borderRadius: context.radius,
                   onTap: onSelected == null ? null : () => onSelected!(index),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.s,
+                      vertical: spacing.xs,
                     ),
                     child: Text(
                       label,
-                      style: context.textTheme.small.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: context.textTheme.small,
                     ),
                   ),
                 ),
@@ -1861,23 +1871,28 @@ class _AccessibilityBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Semantics(
       liveRegion: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: context.radius,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.s,
+            vertical: spacing.s,
+          ),
           child: Row(
             children: [
-              Icon(icon, color: foreground, size: 20),
-              const SizedBox(width: 8),
+              Icon(icon,
+                  color: foreground, size: context.sizing.menuItemIconSize),
+              SizedBox(width: spacing.s),
               Expanded(
                 child: Text(
                   message,
-                  style: context.textTheme.small.copyWith(color: foreground),
+                  style: context.textTheme.small,
                 ),
               ),
             ],
@@ -1900,7 +1915,7 @@ class _KeyboardShortcutLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final platformShortcut = findActionShortcut(Theme.of(context).platform);
+    final platformShortcut = findActionShortcut(EnvScope.of(context).platform);
     final escapeShortcutValue = escapeShortcut();
     const nextFocusShortcut = SingleActivator(
       LogicalKeyboardKey.tab,
@@ -1987,18 +2002,22 @@ class _KeyboardShortcutLegend extends StatelessWidget {
           child: Builder(
             builder: (context) {
               final hasFocus = FocusScope.of(context).hasFocus;
-              final colors = context.colorScheme;
-              final borderColor = hasFocus ? colors.primary : colors.border;
-              final borderWidth = hasFocus ? 2.5 : 1.0;
+              final spacing = context.spacing;
+              final borderColor = hasFocus
+                  ? context.colorScheme.primary
+                  : context.colorScheme.border;
+              final borderWidth = hasFocus
+                  ? context.sizing.progressIndicatorStrokeWidth * 2
+                  : context.sizing.progressIndicatorStrokeWidth;
               return SizedBox(
                 width: double.infinity,
                 child: AnimatedContainer(
                   duration: baseAnimationDuration,
-                  padding: const EdgeInsets.all(5),
+                  padding: EdgeInsets.all(spacing.xs),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: context.radius,
                     border: Border.all(color: borderColor, width: borderWidth),
-                    color: colors.card,
+                    color: context.colorScheme.card,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2007,15 +2026,13 @@ class _KeyboardShortcutLegend extends StatelessWidget {
                         header: true,
                         child: Text(
                           l10n.accessibilityKeyboardShortcutsTitle,
-                          style: context.textTheme.small.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: context.textTheme.small,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: spacing.xxs),
                       Wrap(
-                        spacing: 2,
-                        runSpacing: 1,
+                        spacing: spacing.xxs,
+                        runSpacing: spacing.xxs,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: entries,
                       ),
@@ -2044,19 +2061,20 @@ class _ShortcutLegendEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final textStyle = context.textTheme.small.copyWith(
-      color: colors.mutedForeground,
-      fontWeight: FontWeight.w600,
-    );
+    final spacing = context.spacing;
+    final textStyle = context.textTheme.muted;
     final description = '$label, ${shortcutLabel(context, shortcut)}';
     return Focus(
       focusNode: focusNode,
       child: Builder(
         builder: (context) {
           final hasFocus = Focus.of(context).hasFocus;
-          final borderColor = hasFocus ? colors.primary : colors.border;
-          final borderWidth = hasFocus ? 2.5 : 1.0;
+          final borderColor = hasFocus
+              ? context.colorScheme.primary
+              : context.colorScheme.border;
+          final borderWidth = hasFocus
+              ? context.sizing.progressIndicatorStrokeWidth * 2
+              : context.sizing.progressIndicatorStrokeWidth;
           return Semantics(
             label: context.l10n.accessibilityKeyboardShortcutAnnouncement(
               description,
@@ -2066,15 +2084,20 @@ class _ShortcutLegendEntry extends StatelessWidget {
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: context.radius,
                 border: Border.all(color: borderColor, width: borderWidth),
-                color: colors.muted.withValues(alpha: 0.04),
+                color: context.colorScheme.muted.withValues(
+                  alpha: context.motion.tapHoverAlpha / 2,
+                ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: EdgeInsets.symmetric(
+                  horizontal: spacing.xs,
+                  vertical: spacing.xxs,
+                ),
                 child: Wrap(
-                  spacing: 6,
-                  runSpacing: 2,
+                  spacing: spacing.xs,
+                  runSpacing: spacing.xxs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(label, style: textStyle),
@@ -2108,11 +2131,12 @@ class _ComposerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recipients = state.currentEntry.recipients;
+    final spacing = context.spacing;
     return FocusTraversalGroup(
       key: groupKey,
       policy: OrderedTraversalPolicy(),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: EdgeInsets.only(bottom: spacing.s),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2134,14 +2158,14 @@ class _ComposerSection extends StatelessWidget {
                 previousGroupActivator: previousGroupActivator,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: spacing.s),
             FocusTraversalOrder(
               order: const NumericFocusOrder(1),
               child: Material(
                 type: MaterialType.transparency,
                 child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: spacing.s,
+                  runSpacing: spacing.s,
                   children: recipients
                       .map(
                         (recipient) => Semantics(
@@ -2192,7 +2216,7 @@ class _ActionButtonsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final spacing = context.spacing;
     return FocusTraversalGroup(
       key: groupKey,
       policy: OrderedTraversalPolicy(),
@@ -2201,9 +2225,14 @@ class _ActionButtonsGroup extends StatelessWidget {
         child: Builder(
           builder: (context) {
             final hasFocus = Focus.of(context).hasFocus;
-            final borderColor = hasFocus ? colors.primary : colors.border;
-            final borderWidth = hasFocus ? 3.0 : 1.2;
-            final isNarrow = MediaQuery.sizeOf(context).width < 460;
+            final borderColor = hasFocus
+                ? context.colorScheme.primary
+                : context.colorScheme.border;
+            final borderWidth = hasFocus
+                ? context.sizing.progressIndicatorStrokeWidth * 2
+                : context.sizing.progressIndicatorStrokeWidth;
+            final isNarrow = MediaQuery.sizeOf(context).width <
+                context.sizing.dialogMaxWidth;
             final saveButton = ShadButton.outline(
               onPressed: saveEnabled ? onSave : null,
               child: Text(context.l10n.draftSave),
@@ -2214,7 +2243,7 @@ class _ActionButtonsGroup extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(context.l10n.commonSend),
-                  const SizedBox(width: 8),
+                  SizedBox(width: spacing.s),
                   ShortcutHint(shortcut: activateShortcut, dense: true),
                 ],
               ),
@@ -2224,14 +2253,14 @@ class _ActionButtonsGroup extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       saveButton,
-                      const SizedBox(height: 8),
+                      SizedBox(height: spacing.s),
                       sendButton,
                     ],
                   )
                 : Row(
                     children: [
                       Expanded(child: saveButton),
-                      const SizedBox(width: 12),
+                      SizedBox(width: spacing.s),
                       Expanded(child: sendButton),
                     ],
                   );
@@ -2241,10 +2270,10 @@ class _ActionButtonsGroup extends StatelessWidget {
               hint: context.l10n.accessibilityMessageActionsHint,
               child: AnimatedContainer(
                 duration: baseAnimationDuration,
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(spacing.s),
                 decoration: BoxDecoration(
-                  color: colors.card,
-                  borderRadius: BorderRadius.circular(14),
+                  color: context.colorScheme.card,
+                  borderRadius: context.radius,
                   border: Border.all(color: borderColor, width: borderWidth),
                 ),
                 child: buttons,
@@ -2274,8 +2303,7 @@ class _NewContactSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final radius = BorderRadius.circular(14);
+    final spacing = context.spacing;
     final canSubmit = state.newContactInput.trim().isValidJid;
     final locate = context.read;
     return FocusTraversalGroup(
@@ -2285,7 +2313,7 @@ class _NewContactSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: EdgeInsets.only(bottom: spacing.s),
             child: _AccessibilityTextField(
               label: context.l10n.accessibilityNewContactLabel,
               text: state.newContactInput,
@@ -2304,8 +2332,12 @@ class _NewContactSection extends StatelessWidget {
             child: Builder(
               builder: (context) {
                 final hasFocus = Focus.of(context).hasFocus;
-                final borderColor = hasFocus ? colors.primary : colors.border;
-                final borderWidth = hasFocus ? 3.0 : 1.2;
+                final borderColor = hasFocus
+                    ? context.colorScheme.primary
+                    : context.colorScheme.border;
+                final borderWidth = hasFocus
+                    ? context.sizing.progressIndicatorStrokeWidth * 2
+                    : context.sizing.progressIndicatorStrokeWidth;
                 return Semantics(
                   container: true,
                   button: true,
@@ -2314,10 +2346,10 @@ class _NewContactSection extends StatelessWidget {
                   hint: context.l10n.accessibilityStartChatHint,
                   child: AnimatedContainer(
                     duration: baseAnimationDuration,
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(spacing.s),
                     decoration: BoxDecoration(
-                      color: colors.card,
-                      borderRadius: radius,
+                      color: context.colorScheme.card,
+                      borderRadius: context.radius,
                       border: Border.all(
                         color: borderColor,
                         width: borderWidth,
@@ -2395,11 +2427,15 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   void initState() {
     super.initState();
     _focusNode.addListener(_onFocusChanged);
+    _maybeRequestAutofocus();
   }
 
   @override
   void didUpdateWidget(covariant _AccessibilityTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.autofocus != widget.autofocus) {
+      _maybeRequestAutofocus();
+    }
     if (oldWidget.focusNode != widget.focusNode && widget.focusNode != null) {
       _focusNode.removeListener(_onFocusChanged);
       if (_ownsFocusNode) {
@@ -2430,19 +2466,23 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
 
   void _onFocusChanged() => setState(() {});
 
+  void _maybeRequestAutofocus() {
+    if (!widget.autofocus || _focusNode.hasFocus || _didAutofocus) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_focusNode.canRequestFocus) {
+        _focusNode.requestFocus();
+        _didAutofocus = true;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final spacing = context.spacing;
     final hasFocus = _focusNode.hasFocus;
-    if (widget.autofocus && !_focusNode.hasFocus && !_didAutofocus) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_focusNode.canRequestFocus) {
-          _focusNode.requestFocus();
-          _didAutofocus = true;
-        }
-      });
-    }
     final navigationShortcuts = <ShortcutActivator, Intent>{
       widget.nextGroupActivator: const _NextGroupIntent(),
       widget.previousGroupActivator: const _PreviousGroupIntent(),
@@ -2451,7 +2491,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(widget.label, style: context.textTheme.small),
-        const SizedBox(height: 6),
+        SizedBox(height: spacing.xs),
         Semantics(
           textField: true,
           label: widget.label,
@@ -2461,11 +2501,15 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
             decoration: BoxDecoration(
               borderRadius: context.radius,
               border: Border.all(
-                color: hasFocus ? colors.primary : colors.border,
-                width: hasFocus ? 3 : 1,
+                color: hasFocus
+                    ? context.colorScheme.primary
+                    : context.colorScheme.border,
+                width: hasFocus
+                    ? context.sizing.progressIndicatorStrokeWidth * 2
+                    : context.sizing.progressIndicatorStrokeWidth,
               ),
             ),
-            padding: const EdgeInsets.all(2),
+            padding: EdgeInsets.all(spacing.xxs),
             child: Shortcuts(
               shortcuts: navigationShortcuts,
               child: AxiTextInput(
@@ -2609,8 +2653,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
   @override
   Widget build(BuildContext context) {
     final items = _items;
-    final scheme = context.colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final spacing = context.spacing;
     final hasFocus = widget.focusNode.hasFocus;
     final hasItems = items.isNotEmpty;
     final clampedIndex = _currentIndex.clamp(
@@ -2640,15 +2683,20 @@ class _MessageCarouselState extends State<_MessageCarousel> {
               )
             : context.l10n.accessibilityMessageFrom(senderLabel))
         : null;
-    final borderColor = hasFocus ? scheme.primary : scheme.border;
-    final borderWidth = hasFocus ? 3.0 : 1.0;
-    final borderRadius = BorderRadius.circular(16);
+    final borderColor =
+        hasFocus ? context.colorScheme.primary : context.colorScheme.border;
+    final borderWidth = hasFocus
+        ? context.sizing.progressIndicatorStrokeWidth * 2
+        : context.sizing.progressIndicatorStrokeWidth;
+    final borderRadius = context.radius;
     final shadows = hasFocus
         ? [
             BoxShadow(
-              color: scheme.primary.withValues(alpha: 0.18),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
+              color: context.colorScheme.primary.withValues(
+                alpha: context.motion.tapSplashAlpha,
+              ),
+              blurRadius: context.sizing.modalShadowBlur / 2,
+              offset: Offset(0, context.sizing.modalShadowOffsetY / 4),
             ),
           ]
         : const <BoxShadow>[];
@@ -2665,11 +2713,14 @@ class _MessageCarouselState extends State<_MessageCarousel> {
           borderRadius: borderRadius,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(spacing.s),
             decoration: BoxDecoration(
               color: hasFocus
-                  ? scheme.primary.withValues(alpha: 0.06)
-                  : scheme.card,
+                  ? context.colorScheme.primary.withValues(
+                      alpha: context.motion.tapHoverAlpha -
+                          (context.motion.tapHoverAlpha / 4),
+                    )
+                  : context.colorScheme.card,
               borderRadius: borderRadius,
               border: Border.all(color: borderColor, width: borderWidth),
               boxShadow: shadows,
@@ -2684,32 +2735,24 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                 children: [
                   Text(
                     positionLabel,
-                    style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
-                      color: scheme.mutedForeground,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: context.textTheme.muted,
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: spacing.s),
                   if (showMetadata && senderLabel.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
+                      padding: EdgeInsets.only(bottom: spacing.xs),
                       child: Text(
                         metadataValue ??
                             context.l10n.accessibilityMessageFrom(senderLabel),
-                        style: (textTheme.bodySmall ?? const TextStyle())
-                            .copyWith(color: scheme.mutedForeground),
+                        style: context.textTheme.muted,
                       ),
                     ),
                   if (rawBody.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
+                      padding: EdgeInsets.only(bottom: spacing.xs),
                       child: Text(
                         rawBody,
-                        style: (textTheme.bodyMedium ?? const TextStyle())
-                            .copyWith(
-                          color: scheme.foreground,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: context.textTheme.p,
                       ),
                     ),
                   if (attachment != null)
@@ -2744,19 +2787,14 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                   else if (attachmentLabel != null && rawBody.isEmpty)
                     Text(
                       attachmentLabel,
-                      style:
-                          (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                        color: scheme.foreground,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: context.textTheme.p,
                     ),
                   if (rawBody.isEmpty &&
                       attachment == null &&
                       (attachmentLabel == null || attachmentLabel.isEmpty))
                     Text(
                       context.l10n.accessibilityMessageNoContent,
-                      style: (textTheme.bodyMedium ?? const TextStyle())
-                          .copyWith(color: scheme.mutedForeground),
+                      style: context.textTheme.muted,
                     ),
                 ],
               ),
@@ -2843,7 +2881,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
   Widget build(BuildContext context) {
     final children = <Widget>[];
     var nodeIndex = 0;
-    final colors = context.colorScheme;
+    final spacing = context.spacing;
     for (var sectionIndex = 0;
         sectionIndex < widget.sections.length;
         sectionIndex++) {
@@ -2861,15 +2899,12 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
           ),
           child: section.title != null && !isDuplicateTitle
               ? Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: EdgeInsets.only(bottom: spacing.s),
                   child: Semantics(
                     header: true,
                     child: Text(
                       section.title!,
-                      style: context.textTheme.small.copyWith(
-                        color: context.colorScheme.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: context.textTheme.muted,
                     ),
                   ),
                 )
@@ -2881,7 +2916,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
             nodeIndex < _itemNodes.length ? _itemNodes[nodeIndex] : null;
         children.add(
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.only(bottom: spacing.s),
             child: _AccessibilityActionTile(
               item: item,
               index: nodeIndex,
@@ -2911,13 +2946,17 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
       }
       final hasMoreSections = sectionIndex < widget.sections.length - 1;
       if (hasMoreSections) {
-        children.add(const SizedBox(height: 12));
+        children.add(SizedBox(height: spacing.s));
       }
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final borderColor = _hasFocusedItem ? colors.primary : colors.border;
-        final borderWidth = _hasFocusedItem ? 3.0 : 1.0;
+        final borderColor = _hasFocusedItem
+            ? context.colorScheme.primary
+            : context.colorScheme.border;
+        final borderWidth = _hasFocusedItem
+            ? context.sizing.progressIndicatorStrokeWidth * 2
+            : context.sizing.progressIndicatorStrokeWidth;
         return Semantics(
           container: true,
           label: context.l10n.accessibilityActionListLabel(_itemNodes.length),
@@ -2925,9 +2964,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
           explicitChildNodes: true,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
-            padding: const EdgeInsets.all(4),
+            padding: EdgeInsets.all(spacing.xs),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: context.radius,
               border: Border.all(color: borderColor, width: borderWidth),
             ),
             child: ListView.builder(
@@ -3100,13 +3139,16 @@ class _AccessibilityActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = context.colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final spacing = context.spacing;
     final isReadOnly = item.kind == AccessibilityMenuItemKind.readOnly;
-    final tileColor =
-        item.highlight ? scheme.primary.withValues(alpha: 0.08) : scheme.card;
-    final foreground =
-        item.destructive ? scheme.destructive : scheme.foreground;
+    final tileColor = item.highlight
+        ? context.colorScheme.primary.withValues(
+            alpha: context.motion.tapHoverAlpha,
+          )
+        : context.colorScheme.card;
+    final foreground = item.destructive
+        ? context.colorScheme.destructive
+        : context.colorScheme.foreground;
     final positionLabel = context.l10n.accessibilityActionItemPosition(
       index + 1,
       totalCount,
@@ -3130,8 +3172,12 @@ class _AccessibilityActionTile extends StatelessWidget {
       child: Builder(
         builder: (context) {
           final hasFocus = Focus.of(context).hasFocus;
-          final borderColor = hasFocus ? scheme.primary : scheme.border;
-          final borderWidth = hasFocus ? 3.0 : 1.2;
+          final borderColor = hasFocus
+              ? context.colorScheme.primary
+              : context.colorScheme.border;
+          final borderWidth = hasFocus
+              ? context.sizing.progressIndicatorStrokeWidth * 2
+              : context.sizing.progressIndicatorStrokeWidth;
           final isEnabled = isReadOnly ? true : !item.disabled;
           return Semantics(
             button: !isReadOnly,
@@ -3149,34 +3195,40 @@ class _AccessibilityActionTile extends StatelessWidget {
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
                 color: tileColor,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: context.radius,
                 border: Border.all(color: borderColor, width: borderWidth),
                 boxShadow: [
                   if (hasFocus)
                     BoxShadow(
-                      color: scheme.primary.withValues(alpha: 0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
+                      color: context.colorScheme.primary.withValues(
+                        alpha: context.motion.tapSplashAlpha +
+                            (context.motion.tapHoverAlpha / 4),
+                      ),
+                      blurRadius: context.sizing.modalShadowBlur / 4,
+                      offset: Offset(0, context.sizing.modalShadowOffsetY / 8),
                     ),
                 ],
               ),
               child: Material(
                 type: MaterialType.transparency,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: context.radius,
                 child: InkWell(
                   onTap: isReadOnly || item.disabled ? null : onTap,
-                  borderRadius: BorderRadius.circular(14),
-                  focusColor: scheme.primary.withValues(alpha: 0.1),
+                  borderRadius: context.radius,
+                  focusColor: context.colorScheme.primary.withValues(
+                    alpha: context.motion.tapHoverAlpha +
+                        (context.motion.tapHoverAlpha / 4),
+                  ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.m,
+                      vertical: spacing.s,
                     ),
                     child: Row(
                       children: [
                         if (item.icon != null)
                           Padding(
-                            padding: const EdgeInsets.only(right: 12),
+                            padding: EdgeInsets.only(right: spacing.s),
                             child: Icon(item.icon, color: foreground),
                           ),
                         Expanded(
@@ -3185,19 +3237,12 @@ class _AccessibilityActionTile extends StatelessWidget {
                             children: [
                               Text(
                                 item.label,
-                                style:
-                                    (textTheme.bodyMedium ?? const TextStyle())
-                                        .copyWith(
-                                  color: foreground,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: context.textTheme.p,
                               ),
                               if (item.description != null)
                                 Text(
                                   item.description!,
-                                  style: context.textTheme.small.copyWith(
-                                    color: scheme.mutedForeground,
-                                  ),
+                                  style: context.textTheme.muted,
                                 ),
                             ],
                           ),
@@ -3205,23 +3250,23 @@ class _AccessibilityActionTile extends StatelessWidget {
                         if (item.badge != null)
                           Container(
                             decoration: BoxDecoration(
-                              color: scheme.secondary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(999),
+                              color: context.colorScheme.secondary.withValues(
+                                alpha: context.motion.tapSplashAlpha +
+                                    (context.motion.tapHoverAlpha / 4),
+                              ),
+                              borderRadius: context.radius,
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: spacing.s,
+                              vertical: spacing.xs,
                             ),
                             child: Text(
                               item.badge!,
-                              style: context.textTheme.small.copyWith(
-                                color: scheme.secondaryForeground,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: context.textTheme.small,
                             ),
                           ),
                         if (onDismiss != null) ...[
-                          const SizedBox(width: 8),
+                          SizedBox(width: spacing.s),
                           AxiTooltip(
                             builder: (_) => Text(context.l10n.commonDismiss),
                             child: Semantics(

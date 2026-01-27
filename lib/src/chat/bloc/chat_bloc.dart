@@ -37,7 +37,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/app_language.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -177,6 +176,42 @@ class ChatToast extends Equatable {
   List<Object?> get props => [message, variant, action, actionDraftId];
 }
 
+class ChatSettingsSnapshot extends Equatable {
+  const ChatSettingsSnapshot({
+    required this.language,
+    required this.chatReadReceipts,
+    required this.emailReadReceipts,
+    required this.shareTokenSignatureEnabled,
+  });
+
+  final AppLanguage language;
+  final bool chatReadReceipts;
+  final bool emailReadReceipts;
+  final bool shareTokenSignatureEnabled;
+
+  ChatSettingsSnapshot copyWith({
+    AppLanguage? language,
+    bool? chatReadReceipts,
+    bool? emailReadReceipts,
+    bool? shareTokenSignatureEnabled,
+  }) =>
+      ChatSettingsSnapshot(
+        language: language ?? this.language,
+        chatReadReceipts: chatReadReceipts ?? this.chatReadReceipts,
+        emailReadReceipts: emailReadReceipts ?? this.emailReadReceipts,
+        shareTokenSignatureEnabled:
+            shareTokenSignatureEnabled ?? this.shareTokenSignatureEnabled,
+      );
+
+  @override
+  List<Object?> get props => [
+        language,
+        chatReadReceipts,
+        emailReadReceipts,
+        shareTokenSignatureEnabled,
+      ];
+}
+
 enum MamPageDirection { before, after }
 
 const String _availabilitySendFailureLog =
@@ -191,7 +226,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required ChatsService chatsService,
     required NotificationService notificationService,
     required MucService mucService,
-    required SettingsCubit settingsCubit,
+    required ChatSettingsSnapshot settings,
     EmailService? emailService,
     OmemoService? omemoService,
   })  : _messageService = messageService,
@@ -200,8 +235,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _emailService = emailService,
         _omemoService = omemoService,
         _mucService = mucService,
-        _settingsCubit = settingsCubit,
-        _settingsState = settingsCubit.state,
+        _settingsSnapshot = settings,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -215,6 +249,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
+    on<ChatSettingsUpdated>(_onChatSettingsUpdated);
     on<ChatMessageSent>(
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
@@ -240,6 +275,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteRequested>(_onChatInviteRequested);
     on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
+    on<ChatComposerErrorCleared>(_onChatComposerErrorCleared);
     on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
@@ -315,9 +351,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       add(_HttpUploadSupportUpdated(xmppService.httpUploadSupport.supported));
     }
-    _settingsSubscription = _settingsCubit.stream.listen((state) {
-      _settingsState = state;
-    });
     _lifecycleListener = AppLifecycleListener(
       onResume: () async {
         await _handleLifecycleResumed();
@@ -365,11 +398,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final EmailService? _emailService;
   final OmemoService? _omemoService;
   final MucService _mucService;
-  final SettingsCubit _settingsCubit;
-  SettingsState _settingsState;
+  ChatSettingsSnapshot _settingsSnapshot;
 
   AppLocalizations get _l10n {
-    final locale = _settingsState.language.locale ?? const Locale('en');
+    final locale = _settingsSnapshot.language.locale ?? const Locale('en');
     return lookupAppLocalizations(locale);
   }
 
@@ -387,7 +419,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
-  StreamSubscription<SettingsState>? _settingsSubscription;
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   String? _emailSyncComposerMessage;
@@ -450,7 +481,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .toList(growable: false);
     final selfBare = _bareJid(_chatsService.myJid);
     final shouldSendChatReadReceipts =
-        chat.markerResponsive ?? _settingsState.chatReadReceipts;
+        chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
     if (shouldSendChatReadReceipts &&
         _xmppAllowedForChat(chat) &&
         chat.type != ChatType.groupChat) {
@@ -478,7 +509,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (seenCandidates.isEmpty) {
       return;
     }
-    final shouldSendEmailReadReceipts = _settingsState.emailReadReceipts;
+    final shouldSendEmailReadReceipts = _settingsSnapshot.emailReadReceipts;
     if (shouldSendEmailReadReceipts) {
       await emailService.markSeenMessages(seenCandidates);
     } else {
@@ -974,7 +1005,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
-    await _settingsSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     _lifecycleListener?.dispose();
@@ -1949,6 +1979,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     if (state.supportsHttpFileUpload == event.supported) return;
     emit(state.copyWith(supportsHttpFileUpload: event.supported));
+  }
+
+  void _onChatSettingsUpdated(
+    ChatSettingsUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _settingsSnapshot = event.settings;
   }
 
   Future<void> _onChatMessageFocused(
@@ -2950,6 +2987,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  void _onChatComposerErrorCleared(
+    ChatComposerErrorCleared event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state.composerError == null) return;
+    emit(state.copyWith(composerError: null));
+  }
+
   Future<void> _onChatAttachmentPicked(
     ChatAttachmentPicked event,
     Emitter<ChatState> emit,
@@ -3199,7 +3244,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             target: FanOutTarget.chat(
               chat: status.chat,
               shareSignatureEnabled: status.chat.shareSignatureEnabled ??
-                  _settingsState.shareTokenSignatureEnabled,
+                  _settingsSnapshot.shareTokenSignatureEnabled,
             ),
             included: true,
           ),
@@ -4289,9 +4334,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (service == null || recipients.isEmpty) return false;
     final chat = state.chat;
     if (chat == null) return false;
-    final chatShareSignatureEnabled =
-        chat.shareSignatureEnabled ?? _settingsState.shareTokenSignatureEnabled;
-    final useSignatureToken = _settingsState.shareTokenSignatureEnabled &&
+    final chatShareSignatureEnabled = chat.shareSignatureEnabled ??
+        _settingsSnapshot.shareTokenSignatureEnabled;
+    final useSignatureToken = _settingsSnapshot.shareTokenSignatureEnabled &&
         chatShareSignatureEnabled &&
         recipients.every((recipient) => recipient.target.shareSignatureEnabled);
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
@@ -4350,9 +4395,47 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final service = _emailService;
     if (chat == null || service == null) return;
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
+    final nextHydrationId = ++_composerHydrationSeed;
+    final nextSubject = shareContext?.subject;
+    emit(
+      state.copyWith(
+        pendingAttachments: const <PendingAttachment>[],
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: message.plainText,
+        composerError: message.error.isNotNone
+            ? message.error.label(_l10n)
+            : state.composerError,
+        emailSubject: nextSubject != null && nextSubject != state.emailSubject
+            ? nextSubject
+            : state.emailSubject,
+        emailSubjectHydrationId:
+            nextSubject != null && nextSubject != state.emailSubject
+                ? state.emailSubjectHydrationId + 1
+                : state.emailSubjectHydrationId,
+        emailSubjectHydrationText:
+            nextSubject != null && nextSubject != state.emailSubject
+                ? nextSubject
+                : state.emailSubject,
+        emailSubjectAutofillEligible: false,
+        emailSubjectAutofilled: false,
+      ),
+    );
     shareContext ??= await service.shareContextForMessage(message);
-    final pendingAttachments = <PendingAttachment>[];
+    final updatedSubject = shareContext?.subject;
+    if (updatedSubject != null && updatedSubject != state.emailSubject) {
+      emit(
+        state.copyWith(
+          emailSubject: updatedSubject,
+          emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
+          emailSubjectHydrationText: updatedSubject,
+          emailSubjectAutofillEligible: false,
+          emailSubjectAutofilled: false,
+        ),
+      );
+    }
     final attachments = await _attachmentsForMessage(message);
+    if (attachments.isEmpty) return;
+    final pendingAttachments = <PendingAttachment>[];
     for (final attachment in attachments) {
       pendingAttachments.add(
         PendingAttachment(
@@ -4361,28 +4444,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    final nextHydrationId = ++_composerHydrationSeed;
-    final nextSubject = shareContext?.subject;
-    final shouldHydrateSubject =
-        nextSubject != null && nextSubject != state.emailSubject;
-    emit(
-      state.copyWith(
-        pendingAttachments: pendingAttachments,
-        composerHydrationId: nextHydrationId,
-        composerHydrationText: message.plainText,
-        composerError: message.error.isNotNone
-            ? message.error.label(_l10n)
-            : state.composerError,
-        emailSubject: shouldHydrateSubject ? nextSubject : state.emailSubject,
-        emailSubjectHydrationId: shouldHydrateSubject
-            ? state.emailSubjectHydrationId + 1
-            : state.emailSubjectHydrationId,
-        emailSubjectHydrationText:
-            shouldHydrateSubject ? nextSubject : state.emailSubject,
-        emailSubjectAutofillEligible: false,
-        emailSubjectAutofilled: false,
-      ),
-    );
+    emit(state.copyWith(pendingAttachments: pendingAttachments));
   }
 
   void _replacePendingAttachment(
@@ -4543,8 +4605,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Message message,
     Emitter<ChatState> emit,
   ) async {
-    final pendingAttachments = <PendingAttachment>[];
+    final nextHydrationId = ++_composerHydrationSeed;
+    emit(
+      state.copyWith(
+        pendingAttachments: const <PendingAttachment>[],
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: message.plainText,
+        composerError: message.error.isNotNone
+            ? message.error.label(_l10n)
+            : state.composerError,
+      ),
+    );
     final attachments = await _attachmentsForMessage(message);
+    if (attachments.isEmpty) return;
+    final pendingAttachments = <PendingAttachment>[];
     for (final attachment in attachments) {
       pendingAttachments.add(
         PendingAttachment(
@@ -4553,17 +4627,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    final nextHydrationId = ++_composerHydrationSeed;
-    emit(
-      state.copyWith(
-        composerHydrationId: nextHydrationId,
-        composerHydrationText: message.plainText,
-        composerError: message.error.isNotNone
-            ? message.error.label(_l10n)
-            : state.composerError,
-        pendingAttachments: pendingAttachments,
-      ),
-    );
+    emit(state.copyWith(pendingAttachments: pendingAttachments));
   }
 
   Future<void> _saveXmppDraft({

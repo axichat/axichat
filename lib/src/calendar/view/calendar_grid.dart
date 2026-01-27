@@ -24,6 +24,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
@@ -277,6 +278,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   bool _isTaskSelected(CalendarTask task) {
     return _selectedTaskIds.contains(task.id);
+  }
+
+  bool _isChatCalendar(BuildContext context) {
+    try {
+      context.read<ChatCalendarBloc>();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Map<LogicalKeySet, Intent> get _zoomShortcuts => {
@@ -3182,16 +3192,20 @@ class _CalendarWeekView extends StatelessWidget {
                       enableHorizontalScroll || needsScroll;
                 }
 
+                final Border border = gridState._isChatCalendar(context) &&
+                        responsive.sizeClass != CalendarSizeClass.expanded
+                    ? const Border()
+                    : Border(
+                        left: BorderSide(
+                          color: calendarBorderColor,
+                          width: calendarBorderStroke,
+                        ),
+                      );
                 final Widget content = Container(
                   decoration: BoxDecoration(
                     color: calendarBackgroundColor,
                     borderRadius: BorderRadius.zero,
-                    border: Border(
-                      left: BorderSide(
-                        color: calendarBorderColor,
-                        width: calendarBorderStroke,
-                      ),
-                    ),
+                    border: border,
                   ),
                   child: Column(
                     children: [
@@ -3848,6 +3862,76 @@ class _CalendarDayHeaderRow extends StatelessWidget {
           )
         : null;
 
+    final Widget headerRow = Row(
+      children: [
+        Container(
+          width: gridState._timeColumnWidth,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            color: calendarBackgroundColor,
+            border: Border(
+              right: BorderSide(
+                color: calendarBorderDarkColor,
+                width: calendarBorderStroke,
+              ),
+            ),
+          ),
+          child: leadingNav,
+        ),
+        if (useScrollableWeekHeader)
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              controller: horizontalScrollController,
+              child: Row(
+                children: weekDates.asMap().entries.map((entry) {
+                  final date = entry.value;
+                  return SizedBox(
+                    width: compactWeekDayWidth,
+                    child: _CalendarDayHeader(
+                      gridState: gridState,
+                      date: date,
+                      devicePixelRatio: devicePixelRatio,
+                      showRightDivider:
+                          entry.key != weekDates.length - 1 || !isWeekView,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: Row(
+              children: weekDates.asMap().entries.map((entry) {
+                final date = entry.value;
+                return Expanded(
+                  child: _CalendarDayHeader(
+                    gridState: gridState,
+                    date: date,
+                    devicePixelRatio: devicePixelRatio,
+                    showRightDivider:
+                        entry.key != weekDates.length - 1 || !isWeekView,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
+    final Widget rowContent = trailingNav == null
+        ? headerRow
+        : Stack(
+            children: [
+              Positioned.fill(child: headerRow),
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: trailingNav,
+              ),
+            ],
+          );
     return Container(
       height: calendarWeekHeaderHeight,
       decoration: BoxDecoration(
@@ -3860,64 +3944,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
         ),
         borderRadius: BorderRadius.zero,
       ),
-      child: Row(
-        children: [
-          Container(
-            width: gridState._timeColumnWidth,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: calendarBackgroundColor,
-              border: Border(
-                right: BorderSide(
-                  color: calendarBorderDarkColor,
-                  width: calendarBorderStroke,
-                ),
-              ),
-            ),
-            child: leadingNav,
-          ),
-          if (useScrollableWeekHeader)
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                controller: horizontalScrollController,
-                child: Row(
-                  children: weekDates.asMap().entries.map((entry) {
-                    final date = entry.value;
-                    return SizedBox(
-                      width: compactWeekDayWidth,
-                      child: _CalendarDayHeader(
-                        gridState: gridState,
-                        date: date,
-                        devicePixelRatio: devicePixelRatio,
-                        showRightDivider:
-                            entry.key != weekDates.length - 1 || !isWeekView,
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: Row(
-                children: weekDates.asMap().entries.map((entry) {
-                  final date = entry.value;
-                  return Expanded(
-                    child: _CalendarDayHeader(
-                      gridState: gridState,
-                      date: date,
-                      devicePixelRatio: devicePixelRatio,
-                      showRightDivider:
-                          entry.key != weekDates.length - 1 || !isWeekView,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          if (trailingNav != null) trailingNav,
-        ],
-      ),
+      child: rowContent,
     );
   }
 }

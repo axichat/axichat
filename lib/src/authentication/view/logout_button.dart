@@ -17,82 +17,80 @@ class LogoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
+    final spacing = context.spacing;
     return AxiIconButton(
       iconData: LucideIcons.logOut,
-      onPressed: () => showFadeScaleDialog(
-        context: context,
-        builder: (context) {
-          var severity = LogoutSeverity.normal;
-          return BlocProvider.value(
-            value: context.read<AuthenticationCubit>(),
-            child: StatefulBuilder(
-              builder: (context, setState) {
-                void updateSeverity(LogoutSeverity value) {
-                  setState(() {
-                    severity = value;
-                  });
-                }
+      onPressed: () {
+        showFadeScaleDialog(
+          context: context,
+          builder: (context) {
+            var severity = LogoutSeverity.normal;
+            return BlocProvider.value(
+              value: context.read<AuthenticationCubit>(),
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  void updateSeverity(LogoutSeverity value) {
+                    setState(() {
+                      severity = value;
+                    });
+                  }
 
-                return AxiInputDialog(
-                  title: Text(title(l10n)),
-                  content: Material(
-                    child: ListTileTheme.merge(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CheckboxListTile(
-                            title: Text(
-                              l10n.authLogoutNormal,
-                              style: TextStyle(
-                                  color: context.colorScheme.cardForeground),
+                  return AxiInputDialog(
+                    title: Text(title(context.l10n)),
+                    content: Material(
+                      child: ListTileTheme.merge(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: context.radius,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CheckboxListTile(
+                              title: Text(
+                                context.l10n.authLogoutNormal,
+                                style: context.textTheme.p,
+                              ),
+                              subtitle: Text(
+                                context.l10n.authLogoutNormalDescription,
+                                style: context.textTheme.small,
+                              ),
+                              value: severity.isNormal,
+                              selected: severity.isNormal,
+                              tileColor: context.colorScheme.card,
+                              onChanged: (_) =>
+                                  updateSeverity(LogoutSeverity.normal),
                             ),
-                            subtitle: Text(
-                              l10n.authLogoutNormalDescription,
-                              style: TextStyle(
-                                  color: context.colorScheme.cardForeground),
+                            SizedBox(height: spacing.s),
+                            CheckboxListTile(
+                              title: Text(
+                                context.l10n.authLogoutBurn,
+                                style: context.textTheme.p,
+                              ),
+                              subtitle: Text(
+                                context.l10n.authLogoutBurnDescription,
+                                style: context.textTheme.small,
+                              ),
+                              isThreeLine: true,
+                              value: severity.isBurn,
+                              selected: severity.isBurn,
+                              tileColor: context.colorScheme.card,
+                              onChanged: (_) =>
+                                  updateSeverity(LogoutSeverity.burn),
                             ),
-                            value: severity.isNormal,
-                            selected: severity.isNormal,
-                            tileColor: context.colorScheme.card,
-                            onChanged: (_) =>
-                                updateSeverity(LogoutSeverity.normal),
-                          ),
-                          const SizedBox(height: 12),
-                          CheckboxListTile(
-                            title: Text(
-                              l10n.authLogoutBurn,
-                              style: TextStyle(
-                                  color: context.colorScheme.cardForeground),
-                            ),
-                            subtitle: Text(
-                              l10n.authLogoutBurnDescription,
-                              style: TextStyle(
-                                  color: context.colorScheme.cardForeground),
-                            ),
-                            isThreeLine: true,
-                            value: severity.isBurn,
-                            selected: severity.isBurn,
-                            tileColor: context.colorScheme.card,
-                            onChanged: (_) =>
-                                updateSeverity(LogoutSeverity.burn),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  callback: () => context.read<AuthenticationCubit>().logout(
-                        severity: severity,
-                      ),
-                );
-              },
-            ),
-          );
-        },
-      ),
+                    callback: () => context.read<AuthenticationCubit>().logout(
+                          severity: severity,
+                        ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

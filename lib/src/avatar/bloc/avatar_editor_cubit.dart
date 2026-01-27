@@ -8,7 +8,6 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -165,10 +164,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   AvatarEditorCubit({
     required XmppService xmppService,
     required List<AvatarTemplate> templates,
-    ProfileCubit? profileCubit,
   })  : _xmppService = xmppService,
         _templates = templates,
-        _profileCubit = profileCubit,
         super(const AvatarEditorState(backgroundColor: Colors.transparent));
 
   void _emitIfOpen(AvatarEditorState next) {
@@ -198,7 +195,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _avatarCarouselCropSide = 100000.0;
 
   final XmppService _xmppService;
-  final ProfileCubit? _profileCubit;
   final List<AvatarTemplate> _templates;
   late final List<AvatarTemplate> _abstractTemplates = _templates
       .where((template) => template.category == AvatarTemplateCategory.abstract)
@@ -326,7 +322,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> _loadInitialAvatar() async {
-    final avatarPath = _profileCubit?.state.avatarPath?.trim();
+    final cached = _xmppService.cachedSelfAvatar;
+    final stored = cached ?? await _xmppService.getOwnAvatar();
+    final avatarPath = stored?.path?.trim();
     if (avatarPath == null || avatarPath.isEmpty) {
       return;
     }
@@ -654,7 +652,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (isClosed) return;
     try {
       final result = await _xmppService.publishAvatar(draft);
-      _profileCubit?.updateAvatar(path: result.path, hash: result.hash);
       _emitIfOpen(
         state.copyWith(
           publishing: false,

@@ -3,6 +3,10 @@
 
 import 'package:axichat/src/common/ui/ui.dart'
     show
+        axiBorderRadius,
+        axiMotion,
+        axiSizing,
+        axiSpacing,
         gabaritoFontFallback,
         gabaritoFontFamily,
         inputSubtextInsets,
@@ -136,42 +140,49 @@ class AppTheme {
         ? _lightScheme(baseScheme, neutrals)
         : _darkScheme(baseScheme, neutrals);
     final baseTextTheme = ShadTextTheme();
-    TextStyle inter(TextStyle style, {FontWeight? weight}) {
+    TextStyle inter(TextStyle style) {
       return style.copyWith(
         fontFamily: interFontFamily,
         fontFamilyFallback: interFontFallback,
-        fontWeight: weight ?? style.fontWeight ?? FontWeight.w600,
       );
     }
 
-    TextStyle gabarito(TextStyle style, {FontWeight? weight}) {
+    TextStyle gabarito(TextStyle style) {
       return style.copyWith(
         fontFamily: gabaritoFontFamily,
         fontFamilyFallback: gabaritoFontFallback,
-        fontWeight: weight ?? style.fontWeight ?? FontWeight.w700,
-        letterSpacing: -0.2,
       );
     }
 
     final textTheme = baseTextTheme.copyWith(
-      h1Large: inter(baseTextTheme.h1Large, weight: FontWeight.w700),
-      h1: inter(baseTextTheme.h1, weight: FontWeight.w700),
-      h2: inter(baseTextTheme.h2, weight: FontWeight.w600),
+      h1Large: gabarito(baseTextTheme.h1Large),
+      h1: gabarito(baseTextTheme.h1),
+      h2: gabarito(baseTextTheme.h2),
       h3: gabarito(baseTextTheme.h3),
       h4: gabarito(baseTextTheme.h4),
-      lead: inter(baseTextTheme.lead, weight: FontWeight.w600),
-      large: inter(baseTextTheme.large, weight: FontWeight.w600),
-      small: inter(baseTextTheme.small, weight: FontWeight.w500),
-      p: inter(baseTextTheme.p, weight: FontWeight.w400),
-      muted: inter(baseTextTheme.muted, weight: FontWeight.w400),
+      lead: inter(baseTextTheme.lead),
+      large: inter(baseTextTheme.large),
+      small: inter(baseTextTheme.small),
+      p: inter(baseTextTheme.p),
+      blockquote: inter(baseTextTheme.blockquote),
+      table: inter(baseTextTheme.table),
+      list: inter(baseTextTheme.list),
+      muted: inter(baseTextTheme.muted),
     );
 
     return ShadThemeData(
       brightness: brightness,
       colorScheme: patchedScheme,
       textTheme: textTheme,
-      decoration: const ShadDecoration(errorPadding: inputSubtextInsets),
-      radius: const BorderRadius.all(Radius.circular(12)),
+      extensions: const [axiSpacing, axiSizing, axiMotion],
+      decoration: ShadDecoration(
+        errorPadding: inputSubtextInsets,
+        border: ShadBorder.all(
+          color: patchedScheme.border,
+          width: axiSpacing.xxs,
+        ),
+      ),
+      radius: axiBorderRadius,
     );
   }
 

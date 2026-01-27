@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiFab extends StatelessWidget {
   const AxiFab({
@@ -21,11 +20,11 @@ class AxiFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget button = ShadButton(
+    Widget button = AxiButton.primary(
       onPressed: onPressed,
       leading: Icon(iconData),
       child: Text(text),
-    ).withTapBounce(enabled: onPressed != null);
+    );
 
     if (tooltip != null) {
       button = AxiTooltip(builder: (_) => Text(tooltip!), child: button);

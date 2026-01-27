@@ -21,9 +21,8 @@ class AttachmentGalleryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const leadingInset = 12.0;
-    const leadingWidth = AxiIconButton.kDefaultSize + (leadingInset * 2);
-    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final leadingWidth = AxiIconButton.kDefaultSize + (spacing.s * 2);
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: locate<XmppService>(),
@@ -35,7 +34,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: context.colorScheme.background,
         appBar: AppBar(
-          title: Text(l10n.draftAttachmentsLabel),
+          title: Text(context.l10n.draftAttachmentsLabel),
           backgroundColor: context.colorScheme.background,
           surfaceTintColor: context.colorScheme.background,
           elevation: 0,
@@ -43,19 +42,20 @@ class AttachmentGalleryScreen extends StatelessWidget {
           shape: Border(
             bottom: BorderSide(
               color: context.colorScheme.border,
-              width: 1,
+              width: ShadTheme.of(context).decoration.border?.top?.width ??
+                  context.spacing.xxs,
             ),
           ),
           leadingWidth: leadingWidth,
           leading: Padding(
-            padding: const EdgeInsets.only(
-              left: leadingInset,
+            padding: EdgeInsets.only(
+              left: spacing.s,
             ),
             child: Align(
               alignment: Alignment.centerLeft,
               child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
-                tooltip: l10n.commonBack,
+                tooltip: context.l10n.commonBack,
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),

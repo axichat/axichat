@@ -10,7 +10,7 @@ import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +21,13 @@ import '../../mocks.dart';
 Future<void> _pumpBloc() async {
   await Future<void>.delayed(Duration.zero);
 }
+
+ChatSettingsSnapshot _defaultChatSettings() => const ChatSettingsSnapshot(
+      language: AppLanguage.system,
+      chatReadReceipts: true,
+      emailReadReceipts: false,
+      shareTokenSignatureEnabled: true,
+    );
 
 void _mockEmailSync(MockEmailService service) {
   when(() => service.syncState).thenReturn(const EmailSyncState.ready());
@@ -49,7 +56,6 @@ void main() {
   late MockChatsService chatsService;
   late MockNotificationService notificationService;
   late MockMucService mucService;
-  late MockSettingsCubit settingsCubit;
   late StreamController<List<Message>> messageStreamController;
   late StreamController<Chat?> chatStreamController;
 
@@ -78,7 +84,6 @@ void main() {
     chatsService = MockChatsService();
     notificationService = MockNotificationService();
     mucService = MockMucService();
-    settingsCubit = MockSettingsCubit();
     messageStreamController = StreamController<List<Message>>.broadcast();
     chatStreamController = StreamController<Chat?>.broadcast();
 
@@ -132,11 +137,6 @@ void main() {
         role: any(named: 'role'),
       ),
     ).thenAnswer((_) async {});
-    when(() => settingsCubit.state).thenReturn(const SettingsState());
-    when(
-      () => settingsCubit.stream,
-    ).thenAnswer((_) => const Stream<SettingsState>.empty());
-    when(() => settingsCubit.close()).thenAnswer((_) async {});
 
     when(
       () => messageService.messageStreamForChat(
@@ -257,7 +257,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -351,7 +351,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -407,7 +407,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -464,7 +464,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -560,7 +560,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -621,7 +621,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -699,7 +699,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -761,7 +761,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     messageStreamController.add(const <Message>[]);
@@ -813,7 +813,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     chatStreamController.add(emailChat);
@@ -874,7 +874,7 @@ void main() {
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     chatStreamController.add(initialChat);
@@ -943,7 +943,7 @@ void main() {
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     chatStreamController.add(initialChat);
@@ -1034,7 +1034,7 @@ void main() {
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
-      settingsCubit: settingsCubit,
+      settings: _defaultChatSettings(),
     );
 
     chatStreamController.add(initialChat);

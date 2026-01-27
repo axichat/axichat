@@ -6,12 +6,10 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChangePasswordForm extends StatefulWidget {
   const ChangePasswordForm({super.key});
@@ -52,6 +50,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
           password: _newPasswordTextController.value.text,
           password2: _newPassword2TextController.value.text,
         );
+    if (!context.mounted) return;
     _passwordTextController.clear();
     _newPasswordTextController.clear();
     _newPassword2TextController.clear();
@@ -61,95 +60,72 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
-        final l10n = context.l10n;
         final loading = state is AuthenticationPasswordChangeInProgress;
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
-        const changePasswordSpinnerDimension = 16.0;
-        const changePasswordSpinnerPadding = 1.0;
-        const changePasswordSpinnerSlotSize =
-            changePasswordSpinnerDimension + (changePasswordSpinnerPadding * 2);
-        const changePasswordSpinnerGap = 8.0;
+        final spacing = context.spacing;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(ChangePasswordForm.title(l10n), style: context.textTheme.h3),
+              Text(
+                ChangePasswordForm.title(context.l10n),
+                style: context.textTheme.h3,
+              ),
               state is AuthenticationPasswordChangeSuccess
                   ? Padding(
-                      padding: const EdgeInsets.all(10.0),
+                      padding: EdgeInsets.all(spacing.s),
                       child: Text(
-                        state.successText,
+                        state.message.resolve(context.l10n),
                         textAlign: TextAlign.center,
                       ),
                     )
                   : state is AuthenticationPasswordChangeFailure
                       ? Padding(
-                          padding: const EdgeInsets.all(10.0),
+                          padding: EdgeInsets.all(spacing.s),
                           child: Text(
-                            state.errorText,
+                            state.message.resolve(context.l10n),
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: context.colorScheme.destructive,
-                            ),
+                            style: context.textTheme.small,
                           ),
                         )
-                      : const SizedBox(height: 40),
+                      : SizedBox(height: spacing.l),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordCurrentPlaceholder,
+                  placeholder: context.l10n.authPasswordCurrentPlaceholder,
                   enabled: !loading,
                   controller: _passwordTextController,
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordNewPlaceholder,
+                  placeholder: context.l10n.authPasswordNewPlaceholder,
                   enabled: !loading,
                   controller: _newPasswordTextController,
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
-                  placeholder: l10n.authPasswordConfirmNewPlaceholder,
+                  placeholder: context.l10n.authPasswordConfirmNewPlaceholder,
                   enabled: !loading,
                   controller: _newPassword2TextController,
                   validator: (value) {
                     final newPassword = _newPasswordTextController.text;
-                    if (newPassword.isNotEmpty && value != newPassword) {
-                      return l10n.authPasswordsMismatch;
+                    if (value != null &&
+                        newPassword.isNotEmpty &&
+                        value != newPassword) {
+                      return context.l10n.authPasswordsMismatch;
                     }
                     return null;
                   },
                 ),
               ),
-              const SizedBox.square(dimension: 16.0),
-              Builder(
-                builder: (context) {
-                  final spinner = AxiProgressIndicator(
-                    dimension: changePasswordSpinnerDimension,
-                    color: context.colorScheme.primaryForeground,
-                    semanticsLabel: l10n.authChangePasswordProgressLabel,
-                  );
-                  final spinnerSlot = ButtonSpinnerSlot(
-                    isVisible: loading,
-                    spinner: spinner,
-                    slotSize: changePasswordSpinnerSlotSize,
-                    gap: changePasswordSpinnerGap,
-                    duration: animationDuration,
-                  );
-                  return ShadButton(
-                    enabled: !loading,
-                    onPressed: () => _onPressed(context),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [spinnerSlot, Text(l10n.commonContinue)],
-                    ),
-                  ).withTapBounce(enabled: !loading);
-                },
+              const SizedBox.square(),
+              AxiButton.primary(
+                loading: loading,
+                onPressed: loading ? null : () => _onPressed(context),
+                child: Text(context.l10n.commonContinue),
               ),
             ],
           ),

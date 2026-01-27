@@ -6,14 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
-const double _inputDialogSpinnerDimension = 16.0;
-const double _inputDialogSpinnerPadding = 1.0;
-const double _inputDialogSpinnerSlotSize =
-    _inputDialogSpinnerDimension + (_inputDialogSpinnerPadding * 2);
-const double _inputDialogSpinnerGap = 8.0;
-const Duration _inputDialogLoadingAnimation = Duration(milliseconds: 200);
 
 class AxiInputDialog extends StatelessWidget {
   const AxiInputDialog({
@@ -36,64 +28,37 @@ class AxiInputDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
-    final loadingSemanticsLabel = context.l10n.accessibilityLoadingLabel;
-    final spinner = AxiProgressIndicator(
-      dimension: _inputDialogSpinnerDimension,
-      color: context.colorScheme.primaryForeground,
-      semanticsLabel: loadingSemanticsLabel,
+    final EdgeInsets dialogInsets = EdgeInsets.symmetric(
+      horizontal: context.spacing.l,
+      vertical: context.spacing.l,
     );
-    final spinnerSlot = ButtonSpinnerSlot(
-      isVisible: loading,
-      spinner: spinner,
-      slotSize: _inputDialogSpinnerSlotSize,
-      gap: _inputDialogSpinnerGap,
-      duration: _inputDialogLoadingAnimation,
+    final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
+      context.spacing.m,
+      context.spacing.m,
+      context.spacing.s,
+      context.spacing.s,
     );
-    const double headerTopPadding = 16.0;
-    const double headerHorizontalPadding = 20.0;
-    const double headerRightPadding = 12.0;
-    const double headerBottomPadding = 12.0;
-    const double bodyHorizontalPadding = 20.0;
-    const double bodyBottomPadding = 16.0;
-    const double actionsHorizontalPadding = 20.0;
-    const double actionsBottomPadding = 20.0;
-    const double actionSpacing = 8.0;
-    const EdgeInsets dialogInsets = EdgeInsets.symmetric(
-      horizontal: 24,
-      vertical: 24,
+    final EdgeInsets bodyPadding = EdgeInsets.only(
+      left: context.spacing.m,
+      right: context.spacing.m,
+      bottom: context.spacing.m,
     );
-    const EdgeInsets headerPadding = EdgeInsets.fromLTRB(
-      headerHorizontalPadding,
-      headerTopPadding,
-      headerRightPadding,
-      headerBottomPadding,
-    );
-    const EdgeInsets bodyPadding = EdgeInsets.fromLTRB(
-      bodyHorizontalPadding,
-      0,
-      bodyHorizontalPadding,
-      bodyBottomPadding,
-    );
-    const EdgeInsets actionsPadding = EdgeInsets.fromLTRB(
-      actionsHorizontalPadding,
-      0,
-      actionsHorizontalPadding,
-      actionsBottomPadding,
+    final EdgeInsets actionsPadding = EdgeInsets.only(
+      left: context.spacing.m,
+      right: context.spacing.m,
+      bottom: context.spacing.m,
     );
     final actionButtons = <Widget>[
-      ShadButton.outline(
+      AxiButton.outline(
         onPressed: () => context.pop(),
         child: Text(context.l10n.commonCancel),
-      ).withTapBounce(),
+      ),
       ...actions,
-      ShadButton(
-        enabled: callback != null && !loading,
+      AxiButton.primary(
         onPressed: loading ? null : callback,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [spinnerSlot, Text(resolvedCallbackText)],
-        ),
-      ).withTapBounce(enabled: callback != null && !loading),
+        loading: loading,
+        child: Text(resolvedCallbackText),
+      ),
     ];
     return Dialog(
       insetPadding: dialogInsets,
@@ -116,8 +81,8 @@ class AxiInputDialog extends StatelessWidget {
               padding: actionsPadding,
               child: Wrap(
                 alignment: WrapAlignment.end,
-                spacing: actionSpacing,
-                runSpacing: actionSpacing,
+                spacing: context.spacing.s,
+                runSpacing: context.spacing.s,
                 children: actionButtons,
               ),
             ),
