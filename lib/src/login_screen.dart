@@ -65,6 +65,8 @@ class _LoginScreenState extends State<LoginScreen>
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
   bool _initialAuthModeResolved = false;
+  bool _endpointConfigReady = false;
+  bool _pendingAutoLogin = false;
   bool _loginSuccessHandled = false;
   Timer? _authTimeoutTimer;
 
@@ -79,6 +81,16 @@ class _LoginScreenState extends State<LoginScreen>
       completeDuration: _scaledDuration(animationDuration, 2),
       failDuration: _scaledDuration(animationDuration, 2 / 3),
     );
+    _restoreEndpointConfig();
+  }
+
+  Future<void> _restoreEndpointConfig() async {
+    await context.read<EndpointConfigCubit>().restore();
+    if (!mounted) return;
+    setState(() {
+      _endpointConfigReady = true;
+    });
+    _maybeAutoLogin();
   }
 
   Duration _scaledDuration(Duration base, double factor) {
@@ -96,7 +108,11 @@ class _LoginScreenState extends State<LoginScreen>
       _login = bootstrap.hasStoredLoginCredentials;
       if (bootstrap.hasStoredLoginCredentials &&
           context.read<AuthenticationCubit>().state is AuthenticationNone) {
-        _loginWithRestoredConfig();
+        if (_endpointConfigReady) {
+          _maybeAutoLogin();
+        } else {
+          _pendingAutoLogin = true;
+        }
       }
     }
     if (_handledInitialAuthState) return;
@@ -104,15 +120,10 @@ class _LoginScreenState extends State<LoginScreen>
     _handleAuthState(context.read<AuthenticationCubit>().state);
   }
 
-  Future<void> _loginWithRestoredConfig() async {
-    final endpointConfigCubit = context.read<EndpointConfigCubit>();
-    await endpointConfigCubit.restore();
-    if (!mounted) return;
-    await context
-        .read<AuthenticationCubit>()
-        .updateEndpointConfig(endpointConfigCubit.state);
-    if (!mounted) return;
-    await context.read<AuthenticationCubit>().login();
+  void _maybeAutoLogin() {
+    if (!_endpointConfigReady || !_pendingAutoLogin) return;
+    _pendingAutoLogin = false;
+    context.read<AuthenticationCubit>().login();
   }
 
   void _handleSubmissionRequested(_AuthFlow flow, {required String label}) {

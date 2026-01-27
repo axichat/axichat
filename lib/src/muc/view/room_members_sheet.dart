@@ -839,7 +839,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
-        final errorText = avatarState.localizedErrorText(l10n);
+        final errorText = avatarState.errorType?.resolve(l10n);
         final saveEnabled = !avatarState.isBusy &&
             context.read<AvatarEditorCubit>().selectedAvatarPayload() != null;
         final useActionEnabled = avatarState.canUseCarouselAvatar;

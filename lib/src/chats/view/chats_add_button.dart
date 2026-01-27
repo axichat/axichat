@@ -10,7 +10,6 @@ import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -136,7 +135,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
         final loading = state.creationStatus.isLoading;
         return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
           builder: (context, avatarState) {
-            final avatarErrorText = avatarState.localizedErrorText(l10n);
+            final avatarErrorText = avatarState.errorType?.resolve(l10n);
             final canSubmit =
                 _title.trim().isNotEmpty && !avatarState.isBusy && !loading;
             final useActionEnabled = avatarState.canUseCarouselAvatar;

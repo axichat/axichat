@@ -247,10 +247,8 @@ class AxiModalSurface extends StatelessWidget {
         decoration: BoxDecoration(
           color: backgroundColor ?? ShadTheme.of(context).colorScheme.card,
           border: Border.all(
-            color: borderColor ??
-                (ShadTheme.of(context).decoration.border?.top?.color ??
-                    ShadTheme.of(context).colorScheme.border),
-            width: ShadTheme.of(context).decoration.border?.top?.width ?? 0,
+            color: borderColor ?? context.borderSide.color,
+            width: context.borderSide.width,
           ),
           borderRadius: resolvedRadius,
           boxShadow: shadows ?? const <BoxShadow>[],

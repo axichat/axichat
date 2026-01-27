@@ -26,14 +26,13 @@ class LoginForm extends StatefulWidget {
   State<LoginForm> createState() => _LoginFormState();
 }
 
-enum _RememberMeChoice { enabled, disabled }
-
 class _LoginFormState extends State<LoginForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
-  _RememberMeChoice _rememberMeChoice = _RememberMeChoice.enabled;
+  bool rememberMe = true;
+  bool _endpointConfigReady = false;
 
   @override
   void initState() {
@@ -41,6 +40,15 @@ class _LoginFormState extends State<LoginForm> {
     _jidTextController = TextEditingController();
     _passwordTextController = TextEditingController();
     _restoreRememberMePreference();
+    _restoreEndpointConfig();
+  }
+
+  Future<void> _restoreEndpointConfig() async {
+    await context.read<EndpointConfigCubit>().restore();
+    if (!mounted) return;
+    setState(() {
+      _endpointConfigReady = true;
+    });
   }
 
   Future<void> _restoreRememberMePreference() async {
@@ -48,8 +56,7 @@ class _LoginFormState extends State<LoginForm> {
         await context.read<AuthenticationCubit>().loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
-      _rememberMeChoice =
-          preference ? _RememberMeChoice.enabled : _RememberMeChoice.disabled;
+      rememberMe = preference;
     });
     _rememberMeFieldKey.currentState?.didChange(preference);
   }
@@ -64,17 +71,13 @@ class _LoginFormState extends State<LoginForm> {
   void _onPressed(BuildContext context) async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
+    if (!_endpointConfigReady) return;
     widget.onSubmitStart?.call();
-    final endpointConfigCubit = context.read<EndpointConfigCubit>();
-    final authCubit = context.read<AuthenticationCubit>();
-    await endpointConfigCubit.restore();
-    if (!mounted) return;
-    await authCubit.updateEndpointConfig(endpointConfigCubit.state);
-    await authCubit.login(
-      username: _jidTextController.value.text,
-      password: _passwordTextController.value.text,
-      rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
-    );
+    await context.read<AuthenticationCubit>().login(
+          username: _jidTextController.value.text,
+          password: _passwordTextController.value.text,
+          rememberMe: rememberMe,
+        );
   }
 
   @override
@@ -159,9 +162,13 @@ class _LoginFormState extends State<LoginForm> {
                         enabled: !loading,
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
-                        validator: (text) => text.isEmpty
-                            ? context.l10n.authUsernameRequired
-                            : null,
+                        validator: (text) {
+                          final value = text;
+                          if (value.isEmpty) {
+                            return context.l10n.authUsernameRequired;
+                          }
+                          return null;
+                        },
                       ),
                     ),
                   ),
@@ -181,20 +188,15 @@ class _LoginFormState extends State<LoginForm> {
                     child: AxiCheckboxFormField(
                       key: _rememberMeFieldKey,
                       enabled: !loading,
-                      initialValue:
-                          _rememberMeChoice == _RememberMeChoice.enabled,
+                      initialValue: rememberMe,
                       inputLabel: Text(context.l10n.authRememberMeLabel),
                       onChanged: (value) async {
                         setState(() {
-                          _rememberMeChoice = value == true
-                              ? _RememberMeChoice.enabled
-                              : _RememberMeChoice.disabled;
+                          rememberMe = value;
                         });
                         await context
                             .read<AuthenticationCubit>()
-                            .persistRememberMeChoice(
-                              _rememberMeChoice == _RememberMeChoice.enabled,
-                            );
+                            .persistRememberMeChoice(rememberMe);
                       },
                     ),
                   ),

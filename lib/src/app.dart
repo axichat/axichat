@@ -859,6 +859,14 @@ extension ThemeExtension on BuildContext {
   AxiSizing get sizing => Theme.of(this).extension<AxiSizing>() ?? axiSizing;
 
   AxiMotion get motion => Theme.of(this).extension<AxiMotion>() ?? axiMotion;
+
+  AxiBorders get borders =>
+      Theme.of(this).extension<AxiBorders>() ?? axiBorders;
+
+  BorderSide get borderSide => BorderSide(
+        color: colorScheme.border,
+        width: borders.width,
+      );
 }
 
 extension TargetPlatformExtension on TargetPlatform {

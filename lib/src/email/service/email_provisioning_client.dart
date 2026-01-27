@@ -104,6 +104,11 @@ class EmailProvisioningClient {
   final bool _ownsClient;
   final Logger _log;
 
+  Duration get _requestTimeout {
+    const seconds = 12;
+    return const Duration(seconds: seconds);
+  }
+
   bool get _publicTokenConfigured =>
       _publicToken.isNotEmpty && _publicToken != _publicTokenPlaceholder;
 
@@ -158,7 +163,9 @@ class EmailProvisioningClient {
     final headers = _headers();
     http.Response response;
     try {
-      response = await _httpClient.post(uri, headers: headers, body: payload);
+      response = await _httpClient
+          .post(uri, headers: headers, body: payload)
+          .timeout(_requestTimeout);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach email provisioning service',
@@ -244,7 +251,9 @@ class EmailProvisioningClient {
     });
     http.Response response;
     try {
-      response = await _httpClient.delete(uri, headers: headers, body: payload);
+      response = await _httpClient
+          .delete(uri, headers: headers, body: payload)
+          .timeout(_requestTimeout);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach email account deletion service',
@@ -323,7 +332,9 @@ class EmailProvisioningClient {
 
     http.Response response;
     try {
-      response = await _httpClient.post(uri, headers: headers, body: payload);
+      response = await _httpClient
+          .post(uri, headers: headers, body: payload)
+          .timeout(_requestTimeout);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach email password change service',

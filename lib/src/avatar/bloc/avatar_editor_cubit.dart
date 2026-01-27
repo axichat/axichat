@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -11,11 +10,16 @@ import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
-import 'package:equatable/equatable.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:flutter/services.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+
+part 'avatar_editor_cubit.freezed.dart';
+part 'avatar_editor_state.dart';
 
 enum AvatarSource { upload, template }
 
@@ -30,134 +34,24 @@ enum AvatarEditorErrorType {
   publishRejected,
   publishTimeout,
   publishGeneric,
-  publishUnexpected,
-  publishServerMessage,
 }
 
-class AvatarEditorError extends Equatable {
-  const AvatarEditorError(this.type, {this.message});
-
-  final AvatarEditorErrorType type;
-  final String? message;
-
-  @override
-  List<Object?> get props => [type, message];
-}
-
-class AvatarEditorState extends Equatable {
-  const AvatarEditorState({
-    required this.backgroundColor,
-    this.cropRect,
-    this.imageWidth,
-    this.imageHeight,
-    this.source = AvatarSource.template,
-    this.sourceBytes,
-    this.previewBytes,
-    this.carouselPreviewBytes,
-    this.template,
-    this.draft,
-    this.shuffling = false,
-    this.processing = false,
-    this.publishing = false,
-    this.error,
-    this.lastSavedPath,
-    this.lastSavedHash,
-    this.estimatedBytes,
-  });
-
-  final AvatarSource source;
-  final Uint8List? sourceBytes;
-  final Uint8List? previewBytes;
-  final Uint8List? carouselPreviewBytes;
-  final AvatarTemplate? template;
-  final AvatarUploadPayload? draft;
-  final bool shuffling;
-  final bool processing;
-  final bool publishing;
-  final AvatarEditorError? error;
-  final Rect? cropRect;
-  final int? imageWidth;
-  final int? imageHeight;
-  final Color backgroundColor;
-  final String? lastSavedPath;
-  final String? lastSavedHash;
-  final int? estimatedBytes;
-
-  AvatarEditorState copyWith({
-    AvatarSource? source,
-    Uint8List? sourceBytes,
-    Uint8List? previewBytes,
-    Uint8List? carouselPreviewBytes,
-    AvatarTemplate? template,
-    AvatarUploadPayload? draft,
-    bool? shuffling,
-    bool? processing,
-    bool? publishing,
-    AvatarEditorError? error,
-    Rect? cropRect,
-    int? imageWidth,
-    int? imageHeight,
-    Color? backgroundColor,
-    String? lastSavedPath,
-    String? lastSavedHash,
-    int? estimatedBytes,
-    bool clearError = false,
-    bool clearSourceBytes = false,
-    bool clearPreviewBytes = false,
-    bool clearCarouselPreviewBytes = false,
-    bool clearTemplate = false,
-    bool clearDraft = false,
-    bool clearEstimatedBytes = false,
-    bool clearLastSavedPath = false,
-    bool clearLastSavedHash = false,
-  }) {
-    return AvatarEditorState(
-      source: source ?? this.source,
-      sourceBytes: clearSourceBytes ? null : sourceBytes ?? this.sourceBytes,
-      previewBytes:
-          clearPreviewBytes ? null : previewBytes ?? this.previewBytes,
-      carouselPreviewBytes: clearCarouselPreviewBytes
-          ? null
-          : carouselPreviewBytes ?? this.carouselPreviewBytes,
-      template: clearTemplate ? null : template ?? this.template,
-      draft: clearDraft ? null : draft ?? this.draft,
-      shuffling: shuffling ?? this.shuffling,
-      processing: processing ?? this.processing,
-      publishing: publishing ?? this.publishing,
-      error: clearError ? null : error ?? this.error,
-      cropRect: cropRect ?? this.cropRect,
-      imageWidth: imageWidth ?? this.imageWidth,
-      imageHeight: imageHeight ?? this.imageHeight,
-      backgroundColor: backgroundColor ?? this.backgroundColor,
-      lastSavedPath:
-          clearLastSavedPath ? null : lastSavedPath ?? this.lastSavedPath,
-      lastSavedHash:
-          clearLastSavedHash ? null : lastSavedHash ?? this.lastSavedHash,
-      estimatedBytes:
-          clearEstimatedBytes ? null : estimatedBytes ?? this.estimatedBytes,
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-        source,
-        sourceBytes,
-        previewBytes,
-        carouselPreviewBytes,
-        template,
-        draft?.hash,
-        shuffling,
-        processing,
-        publishing,
-        error,
-        cropRect,
-        imageWidth,
-        imageHeight,
-        backgroundColor,
-        lastSavedPath,
-        lastSavedHash,
-        estimatedBytes,
-      ];
+extension AvatarEditorErrorTypeX on AvatarEditorErrorType {
+  String resolve(AppLocalizations l10n) => switch (this) {
+        AvatarEditorErrorType.openFailed => l10n.avatarOpenError,
+        AvatarEditorErrorType.readFailed => l10n.avatarReadError,
+        AvatarEditorErrorType.invalidImage => l10n.avatarInvalidImageError,
+        AvatarEditorErrorType.processingFailed => l10n.avatarProcessError,
+        AvatarEditorErrorType.templateLoadFailed =>
+          l10n.avatarTemplateLoadError,
+        AvatarEditorErrorType.missingDraft => l10n.avatarMissingDraftError,
+        AvatarEditorErrorType.xmppDisconnected =>
+          l10n.avatarXmppDisconnectedError,
+        AvatarEditorErrorType.publishRejected =>
+          l10n.avatarPublishRejectedError,
+        AvatarEditorErrorType.publishTimeout => l10n.avatarPublishTimeoutError,
+        AvatarEditorErrorType.publishGeneric => l10n.avatarPublishGenericError,
+      };
 }
 
 class AvatarEditorCubit extends Cubit<AvatarEditorState> {
@@ -166,17 +60,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     required List<AvatarTemplate> templates,
   })  : _xmppService = xmppService,
         _templates = templates,
-        super(const AvatarEditorState(backgroundColor: Colors.transparent));
-
-  void _emitIfOpen(AvatarEditorState next) {
-    if (isClosed) return;
-    try {
-      emit(next);
-    } on StateError {
-      if (isClosed) return;
-      rethrow;
-    }
-  }
+        super(const AvatarEditorState());
 
   static const minCropSide = 48.0;
   static const avatarInsetFraction = 0.10;
@@ -185,6 +69,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _minQuality = 55;
   static const _qualityStep = 5;
   static const _sourceMaxDimension = 768;
+  static const _sourceMaxBytes = 8 * 1024 * 1024;
   static const _sourceJpegQuality = 86;
   static const _rebuildDelay = Duration(milliseconds: 220);
   static const _avatarCarouselInterval = Duration(seconds: 1);
@@ -233,7 +118,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final initialBackground = state.backgroundColor == Colors.transparent
         ? colors.accent
         : state.backgroundColor;
-    _emitIfOpen(state.copyWith(backgroundColor: initialBackground));
+    emit(state.copyWith(backgroundColor: initialBackground));
     await _loadInitialAvatar();
   }
 
@@ -288,12 +173,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       background: background,
     );
     _currentCarouselAvatar = updated;
-    _emitIfOpen(
+    emit(
       state.copyWith(
         carouselPreviewBytes: payload.bytes,
         template: template,
         backgroundColor: background,
-        clearError: true,
+        errorType: null,
       ),
     );
   }
@@ -333,9 +218,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       if (bytes == null || bytes.isEmpty) {
         return;
       }
-      if (isClosed) return;
       await _loadFromBytes(bytes, buildDraft: false);
-    } catch (_) {}
+    } on FileSystemException {
+      return;
+    }
   }
 
   Future<void> pickImage() async {
@@ -344,26 +230,33 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
-        withData: true,
+        withData: false,
         withReadStream: true,
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
-      final bytes = file.bytes ??
-          (file.path != null ? await File(file.path!).readAsBytes() : null);
-      if (bytes == null || bytes.isEmpty) {
-        _emitIfOpen(
+      if (file.size > _sourceMaxBytes) {
+        emit(
           state.copyWith(
-            error: const AvatarEditorError(AvatarEditorErrorType.readFailed),
+            errorType: AvatarEditorErrorType.readFailed,
+          ),
+        );
+        return;
+      }
+      final bytes = await _loadPickedFileBytes(file);
+      if (bytes == null || bytes.isEmpty) {
+        emit(
+          state.copyWith(
+            errorType: AvatarEditorErrorType.readFailed,
           ),
         );
         return;
       }
       await _loadFromBytes(bytes, buildDraft: true);
-    } catch (_) {
-      _emitIfOpen(
+    } on PlatformException {
+      emit(
         state.copyWith(
-          error: const AvatarEditorError(AvatarEditorErrorType.openFailed),
+          errorType: AvatarEditorErrorType.openFailed,
         ),
       );
     }
@@ -375,17 +268,18 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     Color? background,
   }) async {
     _stopAvatarCarousel();
-    _emitIfOpen(
+    emit(
       state.copyWith(
         processing: true,
         source: AvatarSource.template,
         template: template,
-        clearDraft: true,
-        clearPreviewBytes: true,
-        clearCarouselPreviewBytes: true,
-        clearEstimatedBytes: true,
-        clearLastSavedPath: true,
-        clearError: true,
+        draft: null,
+        previewBytes: null,
+        carouselPreviewBytes: null,
+        estimatedBytes: null,
+        lastSavedPath: null,
+        lastSavedHash: null,
+        errorType: null,
       ),
     );
     try {
@@ -393,8 +287,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       final generatorBackground =
           template.hasAlphaBackground ? Colors.transparent : selectedBackground;
       final generated = await template.generator(generatorBackground, colors);
-      if (isClosed) return;
-      _emitIfOpen(
+      emit(
         state.copyWith(
           sourceBytes: generated.bytes,
           imageWidth: generated.width,
@@ -404,26 +297,23 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             imageHeight: generated.height.toDouble(),
           ),
           backgroundColor: selectedBackground,
-          clearError: true,
+          errorType: null,
         ),
       );
       await _rebuildDraft();
-    } catch (_) {
-      if (isClosed) return;
-      _emitIfOpen(
+    } on FormatException {
+      emit(
         state.copyWith(
           processing: false,
-          clearDraft: true,
-          error: const AvatarEditorError(
-            AvatarEditorErrorType.templateLoadFailed,
-          ),
+          draft: null,
+          errorType: AvatarEditorErrorType.templateLoadFailed,
         ),
       );
     }
   }
 
   Future<void> setBackgroundColor(Color color, ShadColorScheme colors) async {
-    _emitIfOpen(state.copyWith(backgroundColor: color));
+    emit(state.copyWith(backgroundColor: color));
     final template = state.template;
     final shouldRebuild = template != null &&
         template.category != AvatarTemplateCategory.abstract &&
@@ -436,10 +326,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (state.processing || state.publishing || state.shuffling) {
       return;
     }
-    _emitIfOpen(state.copyWith(shuffling: true, clearError: true));
+    emit(state.copyWith(shuffling: true, errorType: null));
     final template = _pickTemplate();
     if (template == null) {
-      _emitIfOpen(state.copyWith(shuffling: false));
+      emit(state.copyWith(shuffling: false));
       return;
     }
     final background = template.hasAlphaBackground
@@ -450,7 +340,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     try {
       await selectTemplate(template, colors, background: background);
     } finally {
-      _emitIfOpen(state.copyWith(shuffling: false));
+      emit(state.copyWith(shuffling: false));
     }
   }
 
@@ -494,7 +384,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
     if (state.carouselPreviewBytes == null && _currentCarouselAvatar == null) {
       await _prefillCarousel(targetSize: 1);
-      if (isClosed || _isCarouselBlocked()) return;
+      if (_isCarouselBlocked()) return;
       _showNextCarouselAvatar();
     }
 
@@ -517,12 +407,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
     final entry = _carouselBuffer.removeAt(0);
     _currentCarouselAvatar = entry;
-    _emitIfOpen(
+    emit(
       state.copyWith(
         carouselPreviewBytes: entry.payload.bytes,
         template: entry.template,
         backgroundColor: entry.background,
-        clearError: true,
+        errorType: null,
       ),
     );
     return true;
@@ -553,35 +443,30 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (colors == null) return false;
     var added = 0;
     var attempts = 0;
-    try {
-      while (!isClosed &&
-          !_isCarouselBlocked() &&
-          _carouselBuffer.length < targetSize &&
-          attempts < _avatarCarouselMaxAttempts) {
-        final template = _pickCarouselTemplate();
-        if (template == null) break;
-        attempts++;
-        _pushRecentCarouselAvatar(template.id);
-        final background = _resolveCarouselBackground(
-          template: template,
-          colors: colors,
-        );
-        final payload = await _buildCarouselPayloadFromTemplate(
-          template: template,
-          background: background,
-          colors: colors,
-        );
-        if (isClosed || _isCarouselBlocked()) {
-          return added > 0;
-        }
-        _carouselBuffer.add(
-          _CarouselAvatar(
-              payload: payload, template: template, background: background),
-        );
-        added++;
+    while (!_isCarouselBlocked() &&
+        _carouselBuffer.length < targetSize &&
+        attempts < _avatarCarouselMaxAttempts) {
+      final template = _pickCarouselTemplate();
+      if (template == null) break;
+      attempts++;
+      _pushRecentCarouselAvatar(template.id);
+      final background = _resolveCarouselBackground(
+        template: template,
+        colors: colors,
+      );
+      final payload = await _buildCarouselPayloadFromTemplate(
+        template: template,
+        background: background,
+        colors: colors,
+      );
+      if (_isCarouselBlocked()) {
+        return added > 0;
       }
-    } catch (_) {
-      return added > 0;
+      _carouselBuffer.add(
+        _CarouselAvatar(
+            payload: payload, template: template, background: background),
+      );
+      added++;
     }
     return added > 0;
   }
@@ -592,7 +477,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (imageWidth == null || imageHeight == null) return;
     final clamped = _constrainRect(rect, imageWidth, imageHeight);
     if (state.cropRect == clamped) return;
-    _emitIfOpen(state.copyWith(cropRect: clamped));
+    emit(state.copyWith(cropRect: clamped));
     _scheduleRebuild();
   }
 
@@ -611,7 +496,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       height: side,
     );
     final constrained = _constrainRect(next, imageWidth, imageHeight);
-    _emitIfOpen(state.copyWith(cropRect: constrained));
+    emit(state.copyWith(cropRect: constrained));
     _scheduleRebuild();
   }
 
@@ -623,79 +508,55 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       imageWidth: imageWidth,
       imageHeight: imageHeight,
     );
-    _emitIfOpen(state.copyWith(cropRect: reset));
+    emit(state.copyWith(cropRect: reset));
     _scheduleRebuild();
   }
 
   Future<void> publish() async {
     final draft = state.draft;
     if (draft == null) {
-      _emitIfOpen(
+      emit(
         state.copyWith(
-          error: const AvatarEditorError(AvatarEditorErrorType.missingDraft),
+          errorType: AvatarEditorErrorType.missingDraft,
         ),
       );
       return;
     }
     if (!_xmppService.connected) {
-      _emitIfOpen(
+      emit(
         state.copyWith(
-          error: const AvatarEditorError(
-            AvatarEditorErrorType.xmppDisconnected,
-          ),
+          errorType: AvatarEditorErrorType.xmppDisconnected,
         ),
       );
       return;
     }
-    _emitIfOpen(state.copyWith(publishing: true, clearError: true));
+    emit(state.copyWith(publishing: true, errorType: null));
     await Future<void>.delayed(Duration.zero);
-    if (isClosed) return;
     try {
       final result = await _xmppService.publishAvatar(draft);
-      _emitIfOpen(
+      emit(
         state.copyWith(
           publishing: false,
           lastSavedPath: result.path,
           lastSavedHash: result.hash,
-          clearError: true,
+          errorType: null,
         ),
       );
     } on XmppAvatarException catch (error) {
       final cause = error.wrapped;
       final errorType = switch (cause) {
         TimeoutException() => AvatarEditorErrorType.publishTimeout,
-        mox.PubSubError() => AvatarEditorErrorType.publishServerMessage,
+        mox.PubSubError() => AvatarEditorErrorType.publishGeneric,
         mox.AvatarError() => AvatarEditorErrorType.publishRejected,
         _ => AvatarEditorErrorType.publishGeneric,
       };
-      final message =
-          cause is mox.PubSubError ? _pubSubErrorMessage(cause) : null;
-      _emitIfOpen(
+      emit(
         state.copyWith(
           publishing: false,
-          error: AvatarEditorError(errorType, message: message),
-        ),
-      );
-    } catch (_) {
-      _emitIfOpen(
-        state.copyWith(
-          publishing: false,
-          error: const AvatarEditorError(
-            AvatarEditorErrorType.publishUnexpected,
-          ),
+          errorType: errorType,
         ),
       );
     }
-  }
-
-  String? _pubSubErrorMessage(mox.PubSubError error) {
-    final message = error.message.trim();
-    final suggestion = error.recoverySuggestion?.trim();
-    if (suggestion == null || suggestion.isEmpty) {
-      return message.isEmpty ? null : message;
-    }
-    if (message.isEmpty) return suggestion;
-    return '$message $suggestion';
   }
 
   void _scheduleRebuild() {
@@ -704,7 +565,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> _rebuildDraft() async {
-    if (isClosed) return;
     if (_draftBuildInProgress) {
       _draftBuildRequested = true;
       return;
@@ -712,7 +572,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _draftBuildInProgress = true;
     try {
       while (true) {
-        if (isClosed) return;
         _draftBuildRequested = false;
         final sourceBytes = state.sourceBytes;
         final imageWidth = state.imageWidth?.toDouble();
@@ -724,7 +583,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             imageWidth <= 0 ||
             imageHeight <= 0) {
           if (state.processing) {
-            _emitIfOpen(state.copyWith(processing: false));
+            emit(state.copyWith(processing: false));
           }
           return;
         }
@@ -747,9 +606,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             applyTint ? state.backgroundColor : Colors.transparent;
         final shouldFlatten = applyTint && paddingColor.a > 0;
 
-        _emitIfOpen(state.copyWith(processing: true, clearError: true));
+        emit(state.copyWith(processing: true, errorType: null));
         await Future<void>.delayed(Duration.zero);
-        if (isClosed) return;
 
         try {
           final processed = await processAvatar(
@@ -768,7 +626,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
               qualityStep: _qualityStep,
             ),
           );
-          if (isClosed) return;
           final hash = sha1.convert(processed.bytes).toString();
           final draft = AvatarUploadPayload(
             bytes: processed.bytes,
@@ -777,26 +634,23 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             height: processed.height,
             hash: hash,
           );
-          _emitIfOpen(
+          emit(
             state.copyWith(
               processing: false,
               draft: draft,
               previewBytes: draft.bytes,
               estimatedBytes: draft.bytes.length,
-              clearCarouselPreviewBytes: true,
-              clearError: true,
+              carouselPreviewBytes: null,
+              errorType: null,
             ),
           );
-        } catch (_) {
-          if (isClosed) return;
-          _emitIfOpen(
+        } on FormatException {
+          emit(
             state.copyWith(
               processing: false,
-              clearDraft: true,
-              clearPreviewBytes: true,
-              error: const AvatarEditorError(
-                AvatarEditorErrorType.processingFailed,
-              ),
+              draft: null,
+              previewBytes: null,
+              errorType: AvatarEditorErrorType.processingFailed,
             ),
           );
         }
@@ -1043,11 +897,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     Uint8List bytes, {
     required bool buildDraft,
   }) async {
-    _emitIfOpen(
+    emit(
       state.copyWith(
         processing: true,
-        clearError: true,
-        clearCarouselPreviewBytes: true,
+        errorType: null,
+        carouselPreviewBytes: null,
       ),
     );
     try {
@@ -1058,10 +912,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           jpegQuality: _sourceJpegQuality,
         ),
       );
-      if (isClosed) return;
       final imageWidth = prepared.width.toDouble();
       final imageHeight = prepared.height.toDouble();
-      _emitIfOpen(
+      emit(
         state.copyWith(
           source: AvatarSource.upload,
           sourceBytes: prepared.bytes,
@@ -1072,30 +925,50 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             imageHeight: imageHeight,
           ),
           previewBytes: buildDraft ? null : prepared.bytes,
-          clearCarouselPreviewBytes: true,
-          clearTemplate: true,
-          clearDraft: true,
-          clearPreviewBytes: buildDraft,
+          carouselPreviewBytes: null,
+          template: null,
+          draft: null,
           estimatedBytes: buildDraft ? null : prepared.bytes.length,
-          clearEstimatedBytes: buildDraft,
-          clearLastSavedPath: true,
-          clearError: true,
+          lastSavedPath: null,
+          lastSavedHash: null,
+          errorType: null,
         ),
       );
       if (!buildDraft) {
-        _emitIfOpen(state.copyWith(processing: false, clearError: true));
+        emit(state.copyWith(processing: false, errorType: null));
         return;
       }
       await _rebuildDraft();
-    } catch (_) {
-      if (isClosed) return;
-      _emitIfOpen(
+    } on FormatException {
+      emit(
         state.copyWith(
           processing: false,
-          error: const AvatarEditorError(AvatarEditorErrorType.invalidImage),
+          errorType: AvatarEditorErrorType.invalidImage,
         ),
       );
     }
+  }
+
+  Future<Uint8List?> _loadPickedFileBytes(PlatformFile file) async {
+    final data = file.bytes;
+    if (data != null && data.isNotEmpty) {
+      return data.length > _sourceMaxBytes ? null : data;
+    }
+    final stream = file.readStream;
+    if (stream == null) {
+      return null;
+    }
+    final builder = BytesBuilder(copy: false);
+    var total = 0;
+    await for (final chunk in stream) {
+      total += chunk.length;
+      if (total > _sourceMaxBytes) {
+        return null;
+      }
+      builder.add(chunk);
+    }
+    final bytes = builder.takeBytes();
+    return bytes.isEmpty ? null : bytes;
   }
 }
 

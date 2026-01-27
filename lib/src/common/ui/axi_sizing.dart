@@ -131,5 +131,5 @@ const AxiSizing axiSizing = AxiSizing(
   modalShadowOffsetY: 16,
   progressIndicatorSize: 16,
   progressIndicatorStrokeWidth: 2,
-  containerRadius: 4,
+  containerRadius: 8,
 );

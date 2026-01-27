@@ -27,7 +27,7 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
 
   final image = img.decodeImage(request.bytes);
   if (image == null) {
-    throw StateError('Invalid image bytes.');
+    throw const FormatException('Invalid image bytes.');
   }
 
   final left = request.cropLeft.round().clamp(
@@ -157,12 +157,12 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
 AvatarPreparedSource _prepareAvatarSource(AvatarSourcePrepareRequest request) {
   final image = img.decodeImage(request.bytes);
   if (image == null) {
-    throw StateError('Invalid image bytes.');
+    throw const FormatException('Invalid image bytes.');
   }
 
   final maxSide = image.width > image.height ? image.width : image.height;
   if (maxSide <= 0) {
-    throw StateError('Decoded image has invalid dimensions.');
+    throw const FormatException('Decoded image has invalid dimensions.');
   }
 
   final maxDimension = request.maxDimension;

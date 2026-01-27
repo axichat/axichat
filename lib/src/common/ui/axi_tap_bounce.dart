@@ -10,7 +10,9 @@ const Set<PointerDeviceKind> _tapBouncePointerKinds = <PointerDeviceKind>{
   PointerDeviceKind.invertedStylus,
 };
 
-const double _defaultHoverScale = 1.02;
+const double _hoverElevationInset = 2.0;
+const double _hoverElevationBlur = 2.0;
+const double _hoverElevationAlpha = 0.16;
 
 enum _TapBouncePressState { idle, pressed }
 
@@ -24,7 +26,6 @@ class AxiTapBounce extends StatefulWidget {
     required this.child,
     this.controller,
     this.scale = 0.96,
-    this.hoverScale = _defaultHoverScale,
     this.enabled = true,
     this.pressDuration = const Duration(milliseconds: 80),
     this.releaseDuration = const Duration(milliseconds: 180),
@@ -35,7 +36,6 @@ class AxiTapBounce extends StatefulWidget {
   final Widget child;
   final AxiTapBounceController? controller;
   final double scale;
-  final double hoverScale;
   final bool enabled;
   final Duration pressDuration;
   final Duration releaseDuration;
@@ -125,11 +125,8 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
-    final targetScale = switch (_visualState) {
-      _TapBounceVisualState.pressed => widget.scale,
-      _TapBounceVisualState.hover => widget.hoverScale,
-      _ => 1.0,
-    };
+    final targetScale =
+        _visualState == _TapBounceVisualState.pressed ? widget.scale : 1.0;
     final duration = switch (_visualState) {
       _TapBounceVisualState.idle => widget.releaseDuration,
       _ => widget.pressDuration,
@@ -145,6 +142,28 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
       alignment: Alignment.center,
       child: widget.child,
     );
+    final hoverShadowColor = Theme.of(context)
+        .colorScheme
+        .shadow
+        .withValues(alpha: _hoverElevationAlpha);
+    final hoverShadow = BoxShadow(
+      color: hoverShadowColor,
+      blurRadius: _hoverElevationBlur,
+      offset: Offset.zero,
+    );
+    final Widget elevatedChild = _TapBounceInset(
+      inset: _hoverElevationInset,
+      child: AnimatedContainer(
+        duration: duration,
+        curve: curve,
+        decoration: BoxDecoration(
+          boxShadow: _hoverState == _TapBounceHoverState.hovering
+              ? <BoxShadow>[hoverShadow]
+              : const <BoxShadow>[],
+        ),
+        child: animationChild,
+      ),
+    );
     final controller = widget.controller;
     if (controller != null) {
       controller
@@ -154,7 +173,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
           onUp: _handleTapUp,
           onCancel: _handleTapCancel,
         );
-      return animationChild;
+      return elevatedChild;
     }
     return MouseRegion(
       onEnter: (event) {
@@ -182,7 +201,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
           ),
         ),
         onPointerCancel: (_) => _handleTapCancel(),
-        child: animationChild,
+        child: elevatedChild,
       ),
     );
   }
@@ -226,6 +245,53 @@ class AxiTapBounceController {
   void setPressed(bool value) => _state?._setPressed(value);
 
   void setHovered(bool value) => _state?._setHovered(value);
+}
+
+class _TapBounceInset extends StatelessWidget {
+  const _TapBounceInset({required this.inset, required this.child});
+
+  final double inset;
+  final Widget child;
+
+  double _clampInset(double value) {
+    if (value.isNaN || value.isInfinite) {
+      return 0;
+    }
+    final double reduced = value - (inset * 2);
+    return reduced < 0 ? 0 : reduced;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedWidth && !constraints.hasBoundedHeight) {
+          return child;
+        }
+        final double? width =
+            constraints.hasBoundedWidth ? constraints.maxWidth : null;
+        final double? height =
+            constraints.hasBoundedHeight ? constraints.maxHeight : null;
+        final double? innerWidth = constraints.hasBoundedWidth
+            ? _clampInset(constraints.maxWidth)
+            : null;
+        final double? innerHeight = constraints.hasBoundedHeight
+            ? _clampInset(constraints.maxHeight)
+            : null;
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Center(
+            child: SizedBox(
+              width: innerWidth,
+              height: innerHeight,
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 extension AxiTapBounceExtension on Widget {

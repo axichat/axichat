@@ -30,14 +30,14 @@ class OperationProgressController {
   final Duration _reachDuration;
   final Duration _completeDuration;
   final Duration _failDuration;
-  _OperationProgressStatus _status = _OperationProgressStatus.idle;
 
   Animation<double> get animation => _controller.view;
 
-  bool get isActive => _status == _OperationProgressStatus.active;
+  bool get isActive =>
+      _controller.isAnimating ||
+      (_controller.value > 0 && _controller.value < 1);
 
   void start() {
-    _status = _OperationProgressStatus.active;
     _controller
       ..stop()
       ..value = 0;
@@ -52,7 +52,7 @@ class OperationProgressController {
     double target, {
     Duration? duration,
   }) {
-    if (_status != _OperationProgressStatus.active) return Future.value();
+    if (!isActive) return Future.value();
     final clamped = target.clamp(0.0, _maxDuringOperation);
     if (clamped <= _controller.value) return Future.value();
     return _controller.animateTo(
@@ -65,25 +65,23 @@ class OperationProgressController {
   Future<void> complete({
     Duration? duration,
   }) async {
-    if (_status != _OperationProgressStatus.active) {
+    if (!isActive) {
       final seededValue = _controller.value < _maxDuringOperation
           ? _maxDuringOperation
           : _controller.value;
       _controller
         ..stop()
         ..value = seededValue;
-      _status = _OperationProgressStatus.active;
     }
     await _controller.animateTo(
       1.0,
       duration: duration ?? _completeDuration,
       curve: Curves.easeInOutCubic,
     );
-    _status = _OperationProgressStatus.idle;
   }
 
   Future<void> fail() async {
-    if (_status != _OperationProgressStatus.active) {
+    if (!isActive) {
       reset();
       return;
     }
@@ -92,22 +90,18 @@ class OperationProgressController {
       duration: _failDuration,
       curve: Curves.easeIn,
     );
-    _status = _OperationProgressStatus.idle;
   }
 
   void reset() {
     _controller
       ..stop()
       ..value = 0;
-    _status = _OperationProgressStatus.idle;
   }
 
   void dispose() {
     _controller.dispose();
   }
 }
-
-enum _OperationProgressStatus { idle, active }
 
 class OperationProgressBar extends StatelessWidget {
   const OperationProgressBar({

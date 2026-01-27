@@ -231,8 +231,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final Color resolvedBorder = widget.borderColor ??
             (widget.variant == AxiIconButtonVariant.ghost
                 ? Colors.transparent
-                : ShadTheme.of(context).decoration.border?.top?.color ??
-                    context.colorScheme.border);
+                : context.borderSide.color);
         final Color resolvedBackground = widget.backgroundColor ??
             switch (widget.variant) {
               AxiIconButtonVariant.outline => Colors.transparent,
@@ -252,7 +251,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             widget.resolvedTapTargetSize ?? context.sizing.iconButtonTapTarget;
         final double resolvedBorderWidth = widget.resolvedBorderWidth ??
             (widget.variant == AxiIconButtonVariant.outline
-                ? (ShadTheme.of(context).decoration.border?.top?.width ?? 0)
+                ? context.borderSide.width
                 : 0);
         final paintShape = RoundedSuperellipseBorder(
           borderRadius: widget.resolvedCornerRadius == null

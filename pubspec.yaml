@@ -106,6 +106,7 @@ dependencies:
 dependency_overrides:
   pinenacl: ^0.6.0
   intl: ^0.20.2
+  analyzer: ^10.0.1
   moxlib:
     git:
       url: https://gitlab.com/axichat/moxlib.git

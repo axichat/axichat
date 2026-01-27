@@ -7,7 +7,6 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
 import 'package:axichat/src/calendar/view/calendar_navigation.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';

@@ -48,13 +48,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   late TextEditingController _emailProvisioningBaseUrlController;
   late TextEditingController _emailProvisioningPublicTokenController;
 
-  late bool _enableXmpp;
-  late bool _enableSmtp;
-  late bool _useDns;
-  late bool _useSrv;
-  late bool _requireDnssec;
+  EndpointConfig? _draftConfig;
   var _emailProvisioningTokenObscure = true;
-  bool _dependenciesInitialized = false;
 
   @override
   void initState() {
@@ -74,13 +69,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_dependenciesInitialized) return;
+    if (_draftConfig != null) return;
     final config = context.read<EndpointConfigCubit>().state;
-    _enableXmpp = config.enableXmpp;
-    _enableSmtp = config.enableSmtp;
-    _useDns = config.useDns;
-    _useSrv = config.useSrv;
-    _requireDnssec = config.requireDnssec;
+    _draftConfig = config;
     _domainController.text = config.domain;
     _xmppHostController.text = config.xmppHost ?? '';
     _imapHostController.text = config.imapHost ?? '';
@@ -93,7 +84,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         config.emailProvisioningBaseUrl ?? '';
     _emailProvisioningPublicTokenController.text =
         config.emailProvisioningPublicToken ?? '';
-    _dependenciesInitialized = true;
   }
 
   @override
@@ -144,11 +134,11 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
     return current.copyWith(
       domain: domain,
-      enableXmpp: _enableXmpp,
-      enableSmtp: _enableSmtp,
-      useDns: _useDns,
-      useSrv: _useSrv,
-      requireDnssec: _requireDnssec,
+      enableXmpp: current.enableXmpp,
+      enableSmtp: current.enableSmtp,
+      useDns: current.useDns,
+      useSrv: current.useSrv,
+      requireDnssec: current.requireDnssec,
       xmppHost: xmppHost.isEmpty ? null : xmppHost,
       imapHost: imapHost.isEmpty ? null : imapHost,
       smtpHost: smtpHost.isEmpty ? null : smtpHost,
@@ -165,9 +155,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   }
 
   Future<void> _save() async {
-    final updated = _resolveConfig(
-      context.read<EndpointConfigCubit>().state,
-    );
+    final baseConfig =
+        _draftConfig ?? context.read<EndpointConfigCubit>().state;
+    final updated = _resolveConfig(baseConfig);
     await context.read<EndpointConfigCubit>().updateConfig(updated);
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -186,6 +176,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final portFieldWidth = sizing.menuItemHeight * 2;
+    final config = _draftConfig ?? context.read<EndpointConfigCubit>().state;
     final placeholderStyle = textTheme.muted;
     final inputStyle = textTheme.p;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
@@ -217,18 +208,22 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             Expanded(
               child: _ToggleTile(
                 label: context.l10n.authCustomServerXmppLabel,
-                value: _enableXmpp,
+                value: config.enableXmpp,
                 onChanged: (value) =>
-                    setState(() => _enableXmpp = value ?? _enableXmpp),
+                    setState(() => _draftConfig = config.copyWith(
+                          enableXmpp: value ?? config.enableXmpp,
+                        )),
               ),
             ),
             SizedBox(width: spacing.s),
             Expanded(
               child: _ToggleTile(
                 label: context.l10n.authCustomServerSmtpLabel,
-                value: _enableSmtp,
+                value: config.enableSmtp,
                 onChanged: (value) =>
-                    setState(() => _enableSmtp = value ?? _enableSmtp),
+                    setState(() => _draftConfig = config.copyWith(
+                          enableSmtp: value ?? config.enableSmtp,
+                        )),
               ),
             ),
           ],
@@ -239,13 +234,14 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             Expanded(
               child: _ToggleTile(
                 label: context.l10n.authCustomServerUseDns,
-                value: _useDns,
+                value: config.useDns,
                 onChanged: (value) => setState(() {
-                  _useDns = value ?? _useDns;
-                  if (!_useDns) {
-                    _useSrv = false;
-                    _requireDnssec = false;
-                  }
+                  final enabled = value ?? config.useDns;
+                  _draftConfig = config.copyWith(
+                    useDns: enabled,
+                    useSrv: enabled ? config.useSrv : false,
+                    requireDnssec: enabled ? config.requireDnssec : false,
+                  );
                 }),
               ),
             ),
@@ -253,10 +249,12 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             Expanded(
               child: _ToggleTile(
                 label: context.l10n.authCustomServerUseSrv,
-                value: _useSrv,
-                enabled: _useDns,
+                value: config.useSrv,
+                enabled: config.useDns,
                 onChanged: (value) =>
-                    setState(() => _useSrv = value ?? _useSrv),
+                    setState(() => _draftConfig = config.copyWith(
+                          useSrv: value ?? config.useSrv,
+                        )),
               ),
             ),
           ],
@@ -264,10 +262,11 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         SizedBox(height: spacing.s),
         _ToggleTile(
           label: context.l10n.authCustomServerRequireDnssec,
-          value: _requireDnssec,
-          enabled: _useDns,
-          onChanged: (value) =>
-              setState(() => _requireDnssec = value ?? _requireDnssec),
+          value: config.requireDnssec,
+          enabled: config.useDns,
+          onChanged: (value) => setState(() => _draftConfig = config.copyWith(
+                requireDnssec: value ?? config.requireDnssec,
+              )),
         ),
         SizedBox(height: spacing.s),
         Row(

@@ -21,7 +21,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:xml/xml.dart';
 
 class SignupForm extends StatefulWidget {
   const SignupForm({
@@ -42,8 +41,6 @@ class SignupForm extends StatefulWidget {
 enum _PasswordStrengthLevel { empty, weak, medium, stronger }
 
 enum _InsecurePasswordReason { weak, breached }
-
-enum _RememberMeChoice { enabled, disabled }
 
 class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
@@ -68,7 +65,7 @@ class _SignupFormState extends State<SignupForm>
   ];
 
   bool allowInsecurePassword = false;
-  _RememberMeChoice _rememberMeChoice = _RememberMeChoice.enabled;
+  bool rememberMe = true;
   bool _passwordBreached = false;
   String? _lastBreachedPassword;
   bool _pwnedCheckInProgress = false;
@@ -77,7 +74,6 @@ class _SignupFormState extends State<SignupForm>
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
   bool _captchaHasLoadedOnce = false;
-  int _captchaRetryToken = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -107,8 +103,7 @@ class _SignupFormState extends State<SignupForm>
         await context.read<AuthenticationCubit>().loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
-      _rememberMeChoice =
-          preference ? _RememberMeChoice.enabled : _RememberMeChoice.disabled;
+      rememberMe = preference;
     });
     _rememberMeFieldKey.currentState?.didChange(preference);
   }
@@ -194,12 +189,10 @@ class _SignupFormState extends State<SignupForm>
     if (callback == null) {
       return;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      callback(loading);
-    });
+    if (!mounted) {
+      return;
+    }
+    callback(loading);
   }
 
   bool _isLoadingForState(AuthenticationState state) {
@@ -227,21 +220,16 @@ class _SignupFormState extends State<SignupForm>
     SignupAvatarState avatarState,
     AppLocalizations l10n,
   ) {
-    final error = avatarState.error;
-    if (error == null) {
+    final errorType = avatarState.errorType;
+    if (errorType == null) {
       return null;
     }
-    return switch (error.type) {
-      SignupAvatarErrorType.openFailed => l10n.signupAvatarOpenError,
-      SignupAvatarErrorType.readFailed => l10n.signupAvatarReadError,
-      SignupAvatarErrorType.invalidImage => l10n.signupAvatarInvalidImage,
-      SignupAvatarErrorType.sizeExceeded => l10n.signupAvatarSizeError(
-          error.maxKilobytes ?? SignupAvatarCubit.avatarMaxKilobytes,
-        ),
-      SignupAvatarErrorType.processingFailed => avatarState.sourceBytes != null
-          ? l10n.signupAvatarProcessError
-          : l10n.signupAvatarRenderError,
-    };
+    return errorType.resolve(
+      l10n,
+      hasSourceBytes: avatarState.sourceBytes != null,
+      maxKilobytes: avatarState.errorMaxKilobytes,
+      fallbackMaxKilobytes: SignupAvatarCubit.avatarMaxKilobytes,
+    );
   }
 
   void _onPressed(BuildContext context) async {
@@ -268,7 +256,7 @@ class _SignupFormState extends State<SignupForm>
           confirmPassword: _password2TextController.value.text,
           captchaID: captchaId,
           captcha: _captchaTextController.value.text,
-          rememberMe: _rememberMeChoice == _RememberMeChoice.enabled,
+          rememberMe: rememberMe,
           avatar: avatarPayload,
         );
   }
@@ -295,43 +283,19 @@ class _SignupFormState extends State<SignupForm>
   Future<String> _loadCaptchaSrc() async {
     try {
       _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
-      final captchaHtml =
-          await context.read<AuthenticationCubit>().fetchCaptchaHtml();
-      if (captchaHtml.isEmpty) return '';
-      final document = XmlDocument.parse(captchaHtml);
-      return document.findAllElements('img').firstOrNull?.getAttribute('src') ??
-          '';
+      return await context.read<AuthenticationCubit>().fetchCaptchaSrc();
     } on Exception catch (_) {
       return '';
     }
   }
 
-  void _reloadCaptcha({bool resetFirstLoad = false}) {
-    _captchaRetryToken++;
-    if (resetFirstLoad) {
-      _captchaHasLoadedOnce = false;
-    }
+  void _reloadCaptcha() {
     _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
+      _captchaHasLoadedOnce = false;
       _captchaSrc = _loadCaptchaSrc();
     });
-  }
-
-  Future<void> _scheduleInitialCaptchaRetry() async {
-    if (_captchaHasLoadedOnce) {
-      return;
-    }
-    final retryToken = ++_captchaRetryToken;
-    final baseDuration = context.read<SettingsCubit>().animationDuration;
-    final delay = Duration(
-      milliseconds: (baseDuration.inMilliseconds * 3).round(),
-    );
-    await Future<void>.delayed(delay);
-    if (!mounted || _captchaHasLoadedOnce || retryToken != _captchaRetryToken) {
-      return;
-    }
-    _reloadCaptcha(resetFirstLoad: true);
   }
 
   void _openAvatarEditor() {
@@ -343,7 +307,6 @@ class _SignupFormState extends State<SignupForm>
 
   void _markCaptchaLoaded() {
     if (_captchaHasLoadedOnce) return;
-    _captchaRetryToken++;
     if (!mounted) return;
     setState(() {
       _captchaHasLoadedOnce = true;
@@ -539,10 +502,10 @@ class _SignupFormState extends State<SignupForm>
         _notifyLoadingChanged(_isLoadingForState(state));
         if (_lastCaptchaServer != state.server) {
           _lastCaptchaServer = state.server;
-          _reloadCaptcha(resetFirstLoad: true);
+          _reloadCaptcha();
         }
         if (state is AuthenticationSignupFailure) {
-          _reloadCaptcha(resetFirstLoad: true);
+          _reloadCaptcha();
           setState(() {
             _errorText = state.message.resolve(context.l10n);
           });
@@ -896,16 +859,17 @@ class _SignupFormState extends State<SignupForm>
                                       builder: (context, snapshot) {
                                         Widget captchaSurface;
                                         if (snapshot.hasData) {
-                                          captchaSurface = _CaptchaImage(
-                                            url: snapshot.requireData,
-                                            animationDuration:
-                                                animationDuration,
-                                            showErrorMessageOnError:
-                                                _captchaHasLoadedOnce,
-                                            onLoaded: _markCaptchaLoaded,
-                                            onInitialError: () =>
-                                                _scheduleInitialCaptchaRetry(),
-                                          );
+                                          final url =
+                                              snapshot.requireData.trim();
+                                          captchaSurface = url.isEmpty
+                                              ? const _CaptchaErrorMessage()
+                                              : _CaptchaImage(
+                                                  url: url,
+                                                  animationDuration:
+                                                      animationDuration,
+                                                  showErrorMessageOnError: true,
+                                                  onLoaded: _markCaptchaLoaded,
+                                                );
                                         } else if (snapshot.hasError) {
                                           captchaSurface =
                                               const _CaptchaErrorMessage();
@@ -968,10 +932,14 @@ class _SignupFormState extends State<SignupForm>
                                         ),
                                         enabled: !loading,
                                         controller: _captchaTextController,
-                                        validator: (text) => text.isEmpty
-                                            ? context
-                                                .l10n.signupCaptchaValidation
-                                            : null,
+                                        validator: (text) {
+                                          final value = text;
+                                          if (value.isEmpty) {
+                                            return context
+                                                .l10n.signupCaptchaValidation;
+                                          }
+                                          return null;
+                                        },
                                       ),
                                     ),
                                   ),
@@ -984,22 +952,18 @@ class _SignupFormState extends State<SignupForm>
                                     child: AxiCheckboxFormField(
                                       key: _rememberMeFieldKey,
                                       enabled: !loading,
-                                      initialValue: _rememberMeChoice ==
-                                          _RememberMeChoice.enabled,
+                                      initialValue: rememberMe,
                                       inputLabel: Text(
                                         context.l10n.authRememberMeLabel,
                                       ),
                                       onChanged: (value) async {
                                         setState(() {
-                                          _rememberMeChoice = value == true
-                                              ? _RememberMeChoice.enabled
-                                              : _RememberMeChoice.disabled;
+                                          rememberMe = value;
                                         });
                                         await context
                                             .read<AuthenticationCubit>()
                                             .persistRememberMeChoice(
-                                              _rememberMeChoice ==
-                                                  _RememberMeChoice.enabled,
+                                              rememberMe,
                                             );
                                       },
                                     ),
@@ -1673,7 +1637,7 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
                 ),
                 Text(
                   _labelForLevel(strengthLevel, context.l10n),
-                  style: context.textTheme.muted,
+                  style: context.textTheme.muted.copyWith(color: fillColor),
                 ),
               ],
             ),
@@ -1709,7 +1673,9 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
                       padding: EdgeInsets.only(top: spacing.s),
                       child: Text(
                         context.l10n.signupPasswordBreached,
-                        style: context.textTheme.muted,
+                        style: context.textTheme.muted.copyWith(
+                          color: colors.destructive,
+                        ),
                       ),
                     )
                   : const SizedBox.shrink(),
@@ -1857,14 +1823,12 @@ class _CaptchaImage extends StatefulWidget {
     required this.url,
     required this.animationDuration,
     required this.onLoaded,
-    required this.onInitialError,
     required this.showErrorMessageOnError,
   });
 
   final String url;
   final Duration animationDuration;
   final VoidCallback onLoaded;
-  final VoidCallback onInitialError;
   final bool showErrorMessageOnError;
 
   @override
@@ -1872,71 +1836,41 @@ class _CaptchaImage extends StatefulWidget {
 }
 
 class _CaptchaImageState extends State<_CaptchaImage> {
-  bool _isReady = false;
   bool _readyNotified = false;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _isReady = false;
       _readyNotified = false;
     }
   }
 
-  void _handleImageReady() {
-    if (_readyNotified) return;
-    _readyNotified = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _isReady = true;
-      });
-      widget.onLoaded();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    Widget image = Image.network(
+    return Image.network(
       widget.url,
       fit: BoxFit.cover,
       excludeFromSemantics: true,
-      frameBuilder: (context, child, frame, _) {
-        if (frame != null) {
-          _handleImageReady();
-        }
-        return child;
-      },
       loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
+        final ready = loadingProgress == null;
+        if (ready && !_readyNotified) {
+          _readyNotified = true;
+          widget.onLoaded();
         }
-        return child;
+        return AnimatedSwitcher(
+          duration: widget.animationDuration,
+          child: ready
+              ? child
+              : _CaptchaSkeleton(animationDuration: widget.animationDuration),
+        );
       },
       errorBuilder: (context, error, stackTrace) {
         if (widget.showErrorMessageOnError) {
           return const _CaptchaErrorMessage();
         }
-        widget.onInitialError();
         return _CaptchaSkeleton(animationDuration: widget.animationDuration);
       },
-    );
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        AnimatedOpacity(
-          opacity: _isReady ? 0 : 1,
-          duration: widget.animationDuration,
-          child: _CaptchaSkeleton(animationDuration: widget.animationDuration),
-        ),
-        AnimatedOpacity(
-          opacity: _isReady ? 1 : 0,
-          duration: widget.animationDuration,
-          child: image,
-        ),
-      ],
     );
   }
 }

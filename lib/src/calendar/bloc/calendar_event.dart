@@ -80,6 +80,9 @@ class CalendarEvent with _$CalendarEvent {
 
   const factory CalendarEvent.syncPushed() = CalendarSyncPushed;
 
+  const factory CalendarEvent.syncTimestampRecorded() =
+      CalendarSyncTimestampRecorded;
+
   const factory CalendarEvent.remoteModelApplied({
     required CalendarModel model,
   }) = CalendarRemoteModelApplied;

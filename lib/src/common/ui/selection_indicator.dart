@@ -39,7 +39,7 @@ class SelectionIndicator extends StatelessWidget {
           borderRadius: BorderRadius.circular(_cornerRadius),
           side: BorderSide(
             color: borderColor,
-            width: ShadTheme.of(context).decoration.border?.top?.width ?? 0,
+            width: context.borderSide.width,
           ),
         ),
       ),

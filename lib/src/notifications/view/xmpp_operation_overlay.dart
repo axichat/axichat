@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -65,7 +66,9 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   @override
   void initState() {
     super.initState();
-    final operations = context.read<XmppActivityCubit>().state.operations;
+    final operations = _coalesceOperations(
+      context.read<XmppActivityCubit>().state.operations,
+    );
     _syncOperations(operations);
   }
 
@@ -248,7 +251,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<XmppActivityCubit, XmppActivityState>(
-      listener: (context, state) => _syncOperations(state.operations),
+      listener: (context, state) =>
+          _syncOperations(_coalesceOperations(state.operations)),
       child: IgnorePointer(
         ignoring: true,
         child: Align(
@@ -291,6 +295,37 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         ),
       ),
     );
+  }
+
+  List<XmppOperation> _coalesceOperations(List<XmppOperation> operations) {
+    XmppOperation? pubSubFetchOperation;
+    final List<XmppOperation> resolved = <XmppOperation>[];
+    for (final operation in operations) {
+      if (operation.kind != XmppOperationKind.pubSubFetch) {
+        resolved.add(operation);
+        continue;
+      }
+      if (pubSubFetchOperation == null) {
+        pubSubFetchOperation = operation;
+        continue;
+      }
+      if (pubSubFetchOperation.status != XmppOperationStatus.inProgress &&
+          operation.status == XmppOperationStatus.inProgress) {
+        pubSubFetchOperation = operation;
+        continue;
+      }
+      if (pubSubFetchOperation.status == XmppOperationStatus.inProgress &&
+          operation.status != XmppOperationStatus.inProgress) {
+        continue;
+      }
+      if (operation.startedAt.isAfter(pubSubFetchOperation.startedAt)) {
+        pubSubFetchOperation = operation;
+      }
+    }
+    if (pubSubFetchOperation != null) {
+      resolved.add(pubSubFetchOperation);
+    }
+    return resolved;
   }
 }
 

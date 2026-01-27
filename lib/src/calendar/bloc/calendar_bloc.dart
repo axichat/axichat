@@ -106,6 +106,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskAdded(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'add');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task addition: $error',
@@ -118,6 +119,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskUpdated(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task update: $error',
@@ -130,6 +132,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskDeleted(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'delete');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task deletion: $error',
@@ -142,6 +145,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskCompleted(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task completion: $error',
@@ -154,6 +158,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onDayEventAdded(DayEvent event) async {
     try {
       await _syncManager.sendDayEventUpdate(event, 'add');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync day event addition: $error',
@@ -166,6 +171,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onDayEventUpdated(DayEvent event) async {
     try {
       await _syncManager.sendDayEventUpdate(event, 'update');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync day event update: $error',
@@ -178,6 +184,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onDayEventDeleted(DayEvent event) async {
     try {
       await _syncManager.sendDayEventUpdate(event, 'delete');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync day event deletion: $error',
@@ -214,6 +221,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onCriticalPathAdded(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'add');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync critical path addition: $error',
@@ -226,6 +234,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onCriticalPathUpdated(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'update');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync critical path update: $error',
@@ -238,6 +247,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onCriticalPathDeleted(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'delete');
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync critical path deletion: $error',
@@ -250,6 +260,7 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onModelImported(CalendarModel model) async {
     try {
       await _syncManager.pushFullSync();
+      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync imported calendar: $error',
@@ -267,6 +278,10 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> close() async {
     _onDispose?.call();
     return super.close();
+  }
+
+  void _recordSyncTimestamp() {
+    add(const CalendarEvent.syncTimestampRecorded());
   }
 
   Future<void> _onCalendarSyncRequested(

@@ -5,7 +5,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiListTile extends StatelessWidget {
   static const EdgeInsets _defaultContentPadding = EdgeInsets.symmetric(
@@ -69,9 +68,8 @@ class AxiListTile extends StatelessWidget {
         RoundedSuperellipseBorder(
           borderRadius: context.radius,
           side: BorderSide(
-            color: ShadTheme.of(context).decoration.border?.top?.color ??
-                colors.border,
-            width: ShadTheme.of(context).decoration.border?.top?.width ?? 0,
+            color: context.borderSide.color,
+            width: context.borderSide.width,
           ),
         );
     final resolvedMinTileHeight = minTileHeight ??

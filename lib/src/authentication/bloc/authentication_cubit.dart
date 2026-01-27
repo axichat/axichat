@@ -30,6 +30,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:xml/xml.dart';
 
 part 'authentication_state.dart';
 
@@ -171,9 +172,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             ),
         _endpointResolver = endpointResolver,
         super(initialState ?? const AuthenticationNone()) {
-    _ownsHttpClient = httpClient == null;
-    _httpClient = httpClient ?? http.Client();
-    _emailProvisioningClientInjected = emailProvisioningClient != null;
+    _ownedHttpClient = httpClient == null ? http.Client() : null;
+    _httpClient = httpClient ?? _ownedHttpClient!;
+    _injectedEmailProvisioningClient = emailProvisioningClient;
     _emailProvisioningClient = emailProvisioningClient ??
         provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
@@ -306,9 +307,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
-  late final bool _ownsHttpClient;
   late final http.Client _httpClient;
-  late final bool _emailProvisioningClientInjected;
+  late final http.Client? _ownedHttpClient;
+  late final provisioning.EmailProvisioningClient?
+      _injectedEmailProvisioningClient;
   late provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
@@ -367,7 +369,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _rebuildEmailProvisioningClient(EndpointConfig config) {
-    if (_emailProvisioningClientInjected) {
+    if (_injectedEmailProvisioningClient != null) {
       return;
     }
     final baseUrlOverride =
@@ -1098,10 +1100,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
-    _emailProvisioningClient.close();
-    if (_ownsHttpClient) {
-      _httpClient.close();
+    if (_injectedEmailProvisioningClient == null) {
+      _emailProvisioningClient.close();
     }
+    _ownedHttpClient?.close();
     return super.close();
   }
 
@@ -2272,6 +2274,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<String> fetchCaptchaSrc() async {
+    final captchaHtml = await fetchCaptchaHtml();
+    if (captchaHtml.isEmpty) {
+      return '';
+    }
+    try {
+      final document = XmlDocument.parse(captchaHtml);
+      final images = document.findAllElements('img');
+      final first = images.isEmpty ? null : images.first;
+      return first?.getAttribute('src')?.trim() ?? '';
+    } on Exception catch (_) {
+      return '';
+    }
+  }
+
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {
     if (state is! AuthenticationComplete) return;
     final currentJid = _authenticatedJid;
@@ -3194,7 +3211,7 @@ class _AuthTransaction {
         return value;
       }
       if (value is String) {
-        return value.toLowerCase().trim() == true.toString();
+        return value.toLowerCase().trim() == 'true';
       }
       if (value is num) {
         return value != 0;
@@ -3290,7 +3307,7 @@ class _PendingAccountDeletion {
     const fallbackHost = EndpointConfig.defaultDomain;
     final rawEmail = json[_emailJsonKey] as String? ?? '';
     final rawCreatedAt = json[_createdAtJsonKey] as String?;
-    final createdAt = rawCreatedAt?.trim().isNotEmpty == true
+    final createdAt = (rawCreatedAt?.trim().isNotEmpty ?? false)
         ? rawCreatedAt!.trim()
         : DateTime.now().toIso8601String();
     final resolvedExpiry = _resolveExpiry(

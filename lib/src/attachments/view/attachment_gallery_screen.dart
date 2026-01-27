@@ -41,9 +41,8 @@ class AttachmentGalleryScreen extends StatelessWidget {
           scrolledUnderElevation: 0,
           shape: Border(
             bottom: BorderSide(
-              color: context.colorScheme.border,
-              width: ShadTheme.of(context).decoration.border?.top?.width ??
-                  context.spacing.xxs,
+              color: context.borderSide.color,
+              width: context.borderSide.width,
             ),
           ),
           leadingWidth: leadingWidth,

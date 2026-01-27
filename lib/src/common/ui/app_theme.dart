@@ -4,6 +4,7 @@
 import 'package:axichat/src/common/ui/ui.dart'
     show
         axiBorderRadius,
+        axiBorders,
         axiMotion,
         axiSizing,
         axiSpacing,
@@ -174,12 +175,14 @@ class AppTheme {
       brightness: brightness,
       colorScheme: patchedScheme,
       textTheme: textTheme,
-      extensions: const [axiSpacing, axiSizing, axiMotion],
+      extensions: const [axiBorders, axiSpacing, axiSizing, axiMotion],
       decoration: ShadDecoration(
         errorPadding: inputSubtextInsets,
-        border: ShadBorder.all(
-          color: patchedScheme.border,
-          width: axiSpacing.xxs,
+        border: ShadBorder.fromBorderSide(
+          ShadBorderSide(
+            color: patchedScheme.border,
+            width: axiBorders.width,
+          ),
         ),
       ),
       radius: axiBorderRadius,

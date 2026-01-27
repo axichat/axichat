@@ -313,17 +313,14 @@ class _AxiButtonState extends State<AxiButton> {
           hovered: hoverOrFocus,
           pressed: pressed,
         );
-        final Color borderColor =
-            widget.variant.borderColor(context.colorScheme);
         final shape = RoundedSuperellipseBorder(
           borderRadius: context.radius,
           side: BorderSide(
             color: widget.variant == AxiButtonVariant.outline
-                ? (ShadTheme.of(context).decoration.border?.top?.color ??
-                    borderColor)
+                ? context.borderSide.color
                 : Colors.transparent,
             width: widget.variant == AxiButtonVariant.outline
-                ? (ShadTheme.of(context).decoration.border?.top?.width ?? 0)
+                ? context.borderSide.width
                 : 0,
           ),
         );
