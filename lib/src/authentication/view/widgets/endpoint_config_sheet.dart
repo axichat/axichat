@@ -484,6 +484,7 @@ class _ToggleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AxiCheckboxFormField(
+      key: ValueKey('$label-$value-$enabled'),
       initialValue: value,
       enabled: enabled,
       inputLabel: Text(label),

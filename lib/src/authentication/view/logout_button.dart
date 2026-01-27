@@ -41,6 +41,7 @@ class LogoutButton extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         AxiCheckboxFormField(
+                          key: ValueKey('logout-normal-${severity.name}'),
                           initialValue: severity.isNormal,
                           inputLabel: Text(context.l10n.authLogoutNormal),
                           inputSublabel: Text(
@@ -51,6 +52,7 @@ class LogoutButton extends StatelessWidget {
                         ),
                         SizedBox(height: spacing.s),
                         AxiCheckboxFormField(
+                          key: ValueKey('logout-burn-${severity.name}'),
                           initialValue: severity.isBurn,
                           inputLabel: Text(context.l10n.authLogoutBurn),
                           inputSublabel: Text(

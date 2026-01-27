@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart'
         axiBorderRadius,
         axiBorders,
         axiMotion,
+        axiRadii,
         axiSizing,
         axiSpacing,
         gabaritoFontFallback,
@@ -175,7 +176,13 @@ class AppTheme {
       brightness: brightness,
       colorScheme: patchedScheme,
       textTheme: textTheme,
-      extensions: const [axiBorders, axiSpacing, axiSizing, axiMotion],
+      extensions: const [
+        axiBorders,
+        axiRadii,
+        axiSpacing,
+        axiSizing,
+        axiMotion
+      ],
       decoration: ShadDecoration(
         errorPadding: inputSubtextInsets,
         border: ShadBorder.fromBorderSide(

@@ -73,6 +73,7 @@ class _SignupFormState extends State<SignupForm>
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
+  int _captchaAutoReloads = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -267,11 +268,29 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha() {
+    _captchaAutoReloads = 0;
     _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
       _captchaSrc = _loadCaptchaSrc();
     });
+  }
+
+  void _reloadCaptchaForAutoRetry() {
+    _captchaTextController.clear();
+    if (!mounted) return;
+    setState(() {
+      _captchaSrc = _loadCaptchaSrc();
+    });
+  }
+
+  void _retryCaptchaAfterImageFailure() {
+    const maxAutoReloads = 4;
+    if (_captchaAutoReloads >= maxAutoReloads) {
+      return;
+    }
+    _captchaAutoReloads++;
+    _reloadCaptchaForAutoRetry();
   }
 
   void _openAvatarEditor() {
@@ -833,7 +852,8 @@ class _SignupFormState extends State<SignupForm>
                                                   animationDuration:
                                                       animationDuration,
                                                   showErrorMessageOnError: true,
-                                                  onRetry: _reloadCaptcha,
+                                                  onRetry:
+                                                      _retryCaptchaAfterImageFailure,
                                                 );
                                         } else if (snapshot.hasError) {
                                           captchaSurface =
@@ -1379,7 +1399,7 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
     return AxiTapBounce(
       enabled: widget.onTap != null,
       child: Material(
-        color: Colors.transparent,
+        color: colors.background.withValues(alpha: 0),
         shape: overlayShape,
         clipBehavior: Clip.antiAlias,
         child: ShadFocusable(

@@ -863,6 +863,8 @@ extension ThemeExtension on BuildContext {
   AxiBorders get borders =>
       Theme.of(this).extension<AxiBorders>() ?? axiBorders;
 
+  AxiRadii get radii => Theme.of(this).extension<AxiRadii>() ?? axiRadii;
+
   BorderSide get borderSide => BorderSide(
         color: colorScheme.border,
         width: borders.width,

@@ -474,7 +474,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       return;
     }
     emit(state.copyWith(publishing: true, errorType: null));
-    await Future<void>.delayed(Duration.zero);
     try {
       final result = await _xmppService.publishAvatar(draftAvatar.payload);
       emit(
@@ -551,7 +550,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         final shouldFlatten = applyTint && paddingColor.a > 0;
 
         emit(state.copyWith(processing: true, errorType: null));
-        await Future<void>.delayed(Duration.zero);
 
         try {
           final processed = await processAvatar(

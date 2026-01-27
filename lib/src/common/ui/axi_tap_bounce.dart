@@ -12,7 +12,8 @@ const Set<PointerDeviceKind> _tapBouncePointerKinds = <PointerDeviceKind>{
 
 const double _hoverElevationInset = 2.0;
 const double _hoverElevationBlur = 2.0;
-const double _hoverElevationAlpha = 0.16;
+const double _hoverElevationAlpha = 0.12;
+const double _hoverElevationSpread = 0.0;
 
 enum _TapBouncePressState { idle, pressed }
 
@@ -26,6 +27,7 @@ class AxiTapBounce extends StatefulWidget {
     required this.child,
     this.controller,
     this.scale = 0.96,
+    this.hoverShape,
     this.enabled = true,
     this.pressDuration = const Duration(milliseconds: 80),
     this.releaseDuration = const Duration(milliseconds: 180),
@@ -36,6 +38,7 @@ class AxiTapBounce extends StatefulWidget {
   final Widget child;
   final AxiTapBounceController? controller;
   final double scale;
+  final ShapeBorder? hoverShape;
   final bool enabled;
   final Duration pressDuration;
   final Duration releaseDuration;
@@ -142,25 +145,37 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
       alignment: Alignment.center,
       child: widget.child,
     );
-    final hoverShadowColor = Theme.of(context)
-        .colorScheme
-        .shadow
-        .withValues(alpha: _hoverElevationAlpha);
-    final hoverShadow = BoxShadow(
-      color: hoverShadowColor,
-      blurRadius: _hoverElevationBlur,
-      offset: Offset.zero,
-    );
+    final hoverShadowColor = Theme.of(context).colorScheme.shadow;
+    final ShapeBorder hoverShape = widget.hoverShape ??
+        const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        );
     final Widget elevatedChild = _TapBounceInset(
       inset: _hoverElevationInset,
-      child: AnimatedContainer(
+      child: TweenAnimationBuilder<double>(
         duration: duration,
         curve: curve,
-        decoration: BoxDecoration(
-          boxShadow: _hoverState == _TapBounceHoverState.hovering
-              ? <BoxShadow>[hoverShadow]
-              : const <BoxShadow>[],
+        tween: Tween<double>(
+          begin: 0,
+          end: _hoverState == _TapBounceHoverState.hovering ? 1 : 0,
         ),
+        builder: (context, t, child) {
+          final hoverShadow = BoxShadow(
+            color: hoverShadowColor.withValues(
+              alpha: _hoverElevationAlpha * t,
+            ),
+            blurRadius: _hoverElevationBlur,
+            spreadRadius: _hoverElevationSpread,
+            offset: Offset.zero,
+          );
+          return DecoratedBox(
+            decoration: ShapeDecoration(
+              shape: hoverShape,
+              shadows: <BoxShadow>[hoverShadow],
+            ),
+            child: child,
+          );
+        },
         child: animationChild,
       ),
     );
@@ -265,19 +280,13 @@ class _TapBounceInset extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (!constraints.hasBoundedWidth && !constraints.hasBoundedHeight) {
+        if (!constraints.isTight) {
           return child;
         }
-        final double? width =
-            constraints.hasBoundedWidth ? constraints.maxWidth : null;
-        final double? height =
-            constraints.hasBoundedHeight ? constraints.maxHeight : null;
-        final double? innerWidth = constraints.hasBoundedWidth
-            ? _clampInset(constraints.maxWidth)
-            : null;
-        final double? innerHeight = constraints.hasBoundedHeight
-            ? _clampInset(constraints.maxHeight)
-            : null;
+        final double width = constraints.maxWidth;
+        final double height = constraints.maxHeight;
+        final double innerWidth = _clampInset(width);
+        final double innerHeight = _clampInset(height);
         return SizedBox(
           width: width,
           height: height,

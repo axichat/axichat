@@ -452,6 +452,15 @@ class _AxiButtonState extends State<AxiButton> {
           ),
         );
 
+        if (widget.widthBehavior == AxiButtonWidth.fit &&
+            widget.width == null) {
+          button = UnconstrainedBox(
+            constrainedAxis: Axis.vertical,
+            alignment: Alignment.centerLeft,
+            child: button,
+          );
+        }
+
         if (enabled) {
           final Duration pressDuration = Duration(
             milliseconds: (animationDuration.inMilliseconds *
@@ -466,6 +475,7 @@ class _AxiButtonState extends State<AxiButton> {
           button = AxiTapBounce(
             controller: _bounceController,
             enabled: animationDuration != Duration.zero,
+            hoverShape: shape,
             scale: widget.size == AxiButtonSize.sm
                 ? context.motion.buttonCompactBounceScale
                 : context.motion.buttonBounceScale,

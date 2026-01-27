@@ -15,16 +15,16 @@ class AxiCutout extends StatelessWidget {
     this.padding,
     this.background,
     this.borderColor,
-    this.borderWidth = 4.0,
-    this.cornerRadius = 14.0,
+    this.borderWidth,
+    this.cornerRadius,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final Color? background;
   final Color? borderColor;
-  final double borderWidth;
-  final double cornerRadius;
+  final double? borderWidth;
+  final double? cornerRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +33,14 @@ class AxiCutout extends StatelessWidget {
     final textScaler = mediaQuery?.textScaler ?? const TextScaler.linear(1);
     double scaled(double value) => textScaler.scale(value);
     final resolvedPadding = padding ??
-        EdgeInsets.symmetric(horizontal: scaled(10), vertical: scaled(4));
-    final resolvedBorderWidth = borderWidth * scaled(1);
-    final resolvedCornerRadius = cornerRadius * scaled(1);
+        EdgeInsets.symmetric(
+          horizontal: scaled(context.spacing.s),
+          vertical: scaled(context.spacing.xs),
+        );
+    final resolvedBorderWidth =
+        (borderWidth ?? context.borderSide.width) * scaled(1);
+    final resolvedCornerRadius =
+        (cornerRadius ?? context.radii.squircle) * scaled(1);
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: background ?? colors.card,

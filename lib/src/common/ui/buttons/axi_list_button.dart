@@ -319,19 +319,18 @@ class _AxiListButtonState extends State<AxiListButton> {
     );
     const collapsedKey = ValueKey('axi_list_button_collapsed');
     const expandedKey = ValueKey('axi_list_button_expanded');
-    const axisAlignment = -1.0;
+    const axisAlignment = 1.0;
     return AnimatedSwitcher(
       duration: animationDuration,
       switchInCurve: Curves.easeInOutCubic,
       switchOutCurve: Curves.easeInOutCubic,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SizeTransition(
-          sizeFactor: animation,
-          axis: Axis.horizontal,
-          axisAlignment: axisAlignment,
-          child: child,
-        ),
+      layoutBuilder: (currentChild, _) =>
+          currentChild ?? const SizedBox.shrink(),
+      transitionBuilder: (child, animation) => SizeTransition(
+        sizeFactor: animation,
+        axis: Axis.horizontal,
+        axisAlignment: axisAlignment,
+        child: child,
       ),
       child: widget.collapsed
           ? SizedBox(key: collapsedKey, child: collapsedButton)
