@@ -20,6 +20,7 @@ class EndpointConfigSheet extends StatefulWidget {
   static Future<void> show(BuildContext context) {
     final commandSurface = resolveCommandSurface(context);
     final bool compact = commandSurface == CommandSurface.sheet;
+    final spacing = context.spacing;
     final sizing = context.sizing;
     return showAdaptiveBottomSheet<void>(
       context: context,
@@ -27,7 +28,7 @@ class EndpointConfigSheet extends StatefulWidget {
       useSafeArea: true,
       showDragHandle: compact,
       dialogMaxWidth: sizing.dialogMaxWidth,
-      surfacePadding: EdgeInsets.zero,
+      surfacePadding: EdgeInsets.all(spacing.xxs),
       builder: (_) => EndpointConfigSheet(compact: compact),
     );
   }
@@ -176,7 +177,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final portFieldWidth = sizing.menuItemHeight * 2;
-    final config = _draftConfig ?? context.read<EndpointConfigCubit>().state;
+    final config = _draftConfig ?? context.watch<EndpointConfigCubit>().state;
     final placeholderStyle = textTheme.muted;
     final inputStyle = textTheme.p;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
@@ -209,10 +210,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               child: _ToggleTile(
                 label: context.l10n.authCustomServerXmppLabel,
                 value: config.enableXmpp,
-                onChanged: (value) =>
-                    setState(() => _draftConfig = config.copyWith(
-                          enableXmpp: value ?? config.enableXmpp,
-                        )),
+                onChanged: (value) => setState(
+                  () => _draftConfig = config.copyWith(enableXmpp: value),
+                ),
               ),
             ),
             SizedBox(width: spacing.s),
@@ -220,10 +220,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               child: _ToggleTile(
                 label: context.l10n.authCustomServerSmtpLabel,
                 value: config.enableSmtp,
-                onChanged: (value) =>
-                    setState(() => _draftConfig = config.copyWith(
-                          enableSmtp: value ?? config.enableSmtp,
-                        )),
+                onChanged: (value) => setState(
+                  () => _draftConfig = config.copyWith(enableSmtp: value),
+                ),
               ),
             ),
           ],
@@ -236,7 +235,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 label: context.l10n.authCustomServerUseDns,
                 value: config.useDns,
                 onChanged: (value) => setState(() {
-                  final enabled = value ?? config.useDns;
+                  final enabled = value;
                   _draftConfig = config.copyWith(
                     useDns: enabled,
                     useSrv: enabled ? config.useSrv : false,
@@ -251,10 +250,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 label: context.l10n.authCustomServerUseSrv,
                 value: config.useSrv,
                 enabled: config.useDns,
-                onChanged: (value) =>
-                    setState(() => _draftConfig = config.copyWith(
-                          useSrv: value ?? config.useSrv,
-                        )),
+                onChanged: (value) => setState(
+                  () => _draftConfig = config.copyWith(useSrv: value),
+                ),
               ),
             ),
           ],
@@ -264,9 +262,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           label: context.l10n.authCustomServerRequireDnssec,
           value: config.requireDnssec,
           enabled: config.useDns,
-          onChanged: (value) => setState(() => _draftConfig = config.copyWith(
-                requireDnssec: value ?? config.requireDnssec,
-              )),
+          onChanged: (value) => setState(
+            () => _draftConfig = config.copyWith(requireDnssec: value),
+          ),
         ),
         SizedBox(height: spacing.s),
         Row(
@@ -461,17 +459,11 @@ class EndpointSuffix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: context.l10n.authCustomServerOpenSettings,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => EndpointConfigSheet.show(context),
-        child: Text(
-          '@$server',
-          style: context.textTheme.p,
-        ),
-      ),
+    return AxiButton.link(
+      size: AxiButtonSize.sm,
+      semanticLabel: context.l10n.authCustomServerOpenSettings,
+      onPressed: () => EndpointConfigSheet.show(context),
+      child: Text('@$server'),
     );
   }
 }
@@ -487,32 +479,15 @@ class _ToggleTile extends StatelessWidget {
   final String label;
   final bool value;
   final bool enabled;
-  final ValueChanged<bool?> onChanged;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
-    final spacing = context.spacing;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: context.radius,
-        border: Border.all(color: colors.border),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.m,
-          vertical: spacing.s,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: textTheme.p),
-            ShadSwitch(value: value, onChanged: enabled ? onChanged : null),
-          ],
-        ),
-      ),
+    return AxiCheckboxFormField(
+      initialValue: value,
+      enabled: enabled,
+      inputLabel: Text(label),
+      onChanged: onChanged,
     );
   }
 }

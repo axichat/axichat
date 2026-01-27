@@ -37,49 +37,28 @@ class LogoutButton extends StatelessWidget {
 
                   return AxiInputDialog(
                     title: Text(title(context.l10n)),
-                    content: Material(
-                      child: ListTileTheme.merge(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: context.radius,
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AxiCheckboxFormField(
+                          initialValue: severity.isNormal,
+                          inputLabel: Text(context.l10n.authLogoutNormal),
+                          inputSublabel: Text(
+                            context.l10n.authLogoutNormalDescription,
+                          ),
+                          onChanged: (_) =>
+                              updateSeverity(LogoutSeverity.normal),
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CheckboxListTile(
-                              title: Text(
-                                context.l10n.authLogoutNormal,
-                                style: context.textTheme.p,
-                              ),
-                              subtitle: Text(
-                                context.l10n.authLogoutNormalDescription,
-                                style: context.textTheme.small,
-                              ),
-                              value: severity.isNormal,
-                              selected: severity.isNormal,
-                              tileColor: context.colorScheme.card,
-                              onChanged: (_) =>
-                                  updateSeverity(LogoutSeverity.normal),
-                            ),
-                            SizedBox(height: spacing.s),
-                            CheckboxListTile(
-                              title: Text(
-                                context.l10n.authLogoutBurn,
-                                style: context.textTheme.p,
-                              ),
-                              subtitle: Text(
-                                context.l10n.authLogoutBurnDescription,
-                                style: context.textTheme.small,
-                              ),
-                              isThreeLine: true,
-                              value: severity.isBurn,
-                              selected: severity.isBurn,
-                              tileColor: context.colorScheme.card,
-                              onChanged: (_) =>
-                                  updateSeverity(LogoutSeverity.burn),
-                            ),
-                          ],
+                        SizedBox(height: spacing.s),
+                        AxiCheckboxFormField(
+                          initialValue: severity.isBurn,
+                          inputLabel: Text(context.l10n.authLogoutBurn),
+                          inputSublabel: Text(
+                            context.l10n.authLogoutBurnDescription,
+                          ),
+                          onChanged: (_) => updateSeverity(LogoutSeverity.burn),
                         ),
-                      ),
+                      ],
                     ),
                     callback: () => context.read<AuthenticationCubit>().logout(
                           severity: severity,

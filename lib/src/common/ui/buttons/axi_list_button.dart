@@ -28,6 +28,7 @@ class AxiListButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
+    this.selected = false,
     this.semanticLabel,
     this.focusNode,
     this.foregroundColor,
@@ -55,6 +56,7 @@ class AxiListButton extends StatefulWidget {
     this.onPressed,
     this.onLongPress,
     this.loading = false,
+    this.selected = false,
     this.semanticLabel,
     this.focusNode,
     this.foregroundColor,
@@ -82,6 +84,7 @@ class AxiListButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
   final bool loading;
+  final bool selected;
   final String? semanticLabel;
   final FocusNode? focusNode;
   final Color? foregroundColor;
@@ -139,7 +142,7 @@ class _AxiListButtonState extends State<AxiListButton> {
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
-        final bool hoverOrFocus = hovered || focused;
+        final bool hoverOrFocus = hovered || focused || widget.selected;
         final ShadButtonTheme buttonTheme =
             widget.variant.themeFor(ShadTheme.of(context));
         final Color background = widget.backgroundColor ??
@@ -306,6 +309,7 @@ class _AxiListButtonState extends State<AxiListButton> {
         return Semantics(
           button: true,
           enabled: enabled,
+          selected: widget.selected,
           label: widget.semanticLabel,
           onTap: widget.onPressed,
           onLongPress: widget.onLongPress,

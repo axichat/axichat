@@ -83,10 +83,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   late final List<AvatarTemplate> _nonAbstractTemplates = _templates
       .where((template) => template.category != AvatarTemplateCategory.abstract)
       .toList(growable: false);
-  final List<String> _recentTemplateIds = <String>[];
-  final List<AvatarTemplate> _abstractShuffleBag = <AvatarTemplate>[];
-  final List<AvatarTemplate> _nonAbstractShuffleBag = <AvatarTemplate>[];
-  static const _shuffleHistoryLimit = 12;
+  late final Map<String, AvatarTemplate> _templateByKey = {
+    for (final template in _templates) _templateKey(template): template,
+  };
+  late final List<String> _abstractTemplateKeys =
+      _abstractTemplates.map(_templateKey).toList(growable: false);
+  late final List<String> _nonAbstractTemplateKeys =
+      _nonAbstractTemplates.map(_templateKey).toList(growable: false);
+  final List<String> _recentTemplateKeys = <String>[];
   final _random = Random();
 
   Timer? _avatarCarouselTimer;
@@ -642,61 +646,38 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   AvatarTemplate? _pickTemplate() {
-    final abstract = _templates
-        .where(
-          (template) => template.category == AvatarTemplateCategory.abstract,
-        )
-        .toList();
-    final nonAbstract = _templates
-        .where(
-          (template) => template.category != AvatarTemplateCategory.abstract,
-        )
-        .toList();
-    final hasAbstract = abstract.isNotEmpty;
-    final hasNonAbstract = nonAbstract.isNotEmpty;
+    final hasAbstract = _abstractTemplates.isNotEmpty;
+    final hasNonAbstract = _nonAbstractTemplates.isNotEmpty;
     if (!hasAbstract && !hasNonAbstract) return null;
     final useAbstract = !hasNonAbstract ||
         (hasAbstract && hasNonAbstract && _random.nextBool());
-    final pool = useAbstract ? abstract : nonAbstract;
-    final selection = _pickFromBag(
-      pool: pool,
-      bag: useAbstract ? _abstractShuffleBag : _nonAbstractShuffleBag,
-    );
-    _pushRecentTemplateId(selection.id);
-    return selection;
-  }
-
-  AvatarTemplate _pickFromBag({
-    required List<AvatarTemplate> pool,
-    required List<AvatarTemplate> bag,
-  }) {
-    if (bag.isEmpty) {
-      bag.addAll(pool);
-      bag.shuffle(_random);
-    }
-    AvatarTemplate? selection;
-    final recycled = <AvatarTemplate>[];
-    while (bag.isNotEmpty) {
-      final candidate = bag.removeAt(0);
-      if (_recentTemplateIds.contains(candidate.id)) {
-        recycled.add(candidate);
-        continue;
-      }
-      selection = candidate;
-      break;
-    }
-    bag.addAll(recycled);
-    selection ??=
-        bag.isNotEmpty ? bag.removeAt(0) : pool[_random.nextInt(pool.length)];
+    final pool = useAbstract ? _abstractTemplates : _nonAbstractTemplates;
+    final keys = useAbstract ? _abstractTemplateKeys : _nonAbstractTemplateKeys;
+    if (keys.isEmpty || pool.isEmpty) return null;
+    final recentKeys = _recentTemplateKeys.toSet();
+    final availableKeys =
+        keys.where((key) => !recentKeys.contains(key)).toList();
+    final pickKeys = availableKeys.isEmpty ? keys : availableKeys;
+    final selectionKey = pickKeys[_random.nextInt(pickKeys.length)];
+    final selection =
+        _templateByKey[selectionKey] ?? pool[_random.nextInt(pool.length)];
+    _pushRecentTemplateKey(selectionKey);
     return selection;
   }
 
   Color _randomAvatarBackgroundColor() => generateAvatarBackground(_random);
 
-  void _pushRecentTemplateId(String id) {
-    _recentTemplateIds.add(id);
-    if (_recentTemplateIds.length > _avatarCarouselHistoryLimit) {
-      _recentTemplateIds.removeAt(0);
+  String _templateKey(AvatarTemplate template) {
+    final path = template.assetPath;
+    if (path == null || path.isEmpty) return template.id;
+    final segments = path.split('/');
+    return segments.isNotEmpty ? segments.last : template.id;
+  }
+
+  void _pushRecentTemplateKey(String key) {
+    _recentTemplateKeys.add(key);
+    if (_recentTemplateKeys.length > _avatarCarouselHistoryLimit) {
+      _recentTemplateKeys.removeAt(0);
     }
   }
 

@@ -36,6 +36,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
+    this.loading = false,
     this.usePrimary = false,
   })  : variant = AxiIconButtonVariant.primary,
         resolvedIconSize = iconSize,
@@ -61,6 +62,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
+    this.loading = false,
     this.usePrimary = false,
   })  : resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -84,6 +86,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
+    this.loading = false,
   })  : variant = AxiIconButtonVariant.ghost,
         borderWidth = null,
         resolvedIconSize = iconSize,
@@ -106,6 +109,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.usePrimary = false,
+    this.loading = false,
   })  : variant = AxiIconButtonVariant.outline,
         backgroundColor = null,
         borderColor = null,
@@ -133,6 +137,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
+    this.loading = false,
   })  : variant = AxiIconButtonVariant.secondary,
         resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -157,6 +162,7 @@ class AxiIconButton extends StatefulWidget {
     this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
+    this.loading = false,
   })  : variant = AxiIconButtonVariant.destructive,
         resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -179,6 +185,7 @@ class AxiIconButton extends StatefulWidget {
   final double? tapTargetSize;
   final double? cornerRadius;
   final double? borderWidth;
+  final bool loading;
   final bool usePrimary;
   final double? resolvedIconSize;
   final double? resolvedButtonSize;
@@ -239,7 +246,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
               _ => context.colorScheme.card,
             };
         final bool enabled =
-            widget.onPressed != null || widget.onLongPress != null;
+            (widget.onPressed != null || widget.onLongPress != null) &&
+                !widget.loading;
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
@@ -259,18 +267,18 @@ class _AxiIconButtonState extends State<AxiIconButton> {
               : BorderRadius.circular(widget.resolvedCornerRadius!),
           side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),
         );
-        final Widget baseIcon = widget.icon ??
-            Icon(
-              widget.iconData,
-              size: resolvedIconSize,
-              color: resolvedForeground,
-            );
-        final Widget iconWidget = widget.icon == null
-            ? baseIcon
-            : IconTheme.merge(
-                data: IconThemeData(size: resolvedIconSize),
-                child: baseIcon,
-              );
+        final Widget iconWidget = widget.loading
+            ? AxiProgressIndicator(color: resolvedForeground)
+            : (widget.icon == null
+                ? Icon(
+                    widget.iconData,
+                    size: resolvedIconSize,
+                    color: resolvedForeground,
+                  )
+                : IconTheme.merge(
+                    data: IconThemeData(size: resolvedIconSize),
+                    child: widget.icon!,
+                  ));
         Color background = resolvedBackground;
         if (pressed) {
           background = Color.alphaBlend(
@@ -390,8 +398,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
           button: true,
           enabled: enabled,
           label: widget.semanticLabel ?? widget.tooltip,
-          onTap: widget.onPressed,
-          onLongPress: widget.onLongPress,
+          onTap: enabled ? widget.onPressed : null,
+          onLongPress: enabled ? widget.onLongPress : null,
           child: tappable,
         );
       },

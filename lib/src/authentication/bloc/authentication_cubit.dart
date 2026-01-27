@@ -2289,6 +2289,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<String> fetchCaptchaSrcWithRetry() async {
+    const retryDelay = Duration(seconds: 1);
+    const maxAttempts = 3;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final src = await fetchCaptchaSrc();
+      if (src.trim().isNotEmpty) {
+        return src;
+      }
+      if (attempt < maxAttempts - 1) {
+        await Future<void>.delayed(retryDelay);
+      }
+    }
+    return '';
+  }
+
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {
     if (state is! AuthenticationComplete) return;
     final currentJid = _authenticatedJid;

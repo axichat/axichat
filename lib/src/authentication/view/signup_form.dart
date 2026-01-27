@@ -73,14 +73,12 @@ class _SignupFormState extends State<SignupForm>
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
-  int _captchaRetryGeneration = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
 
   var _currentIndex = 0;
   String? _errorText;
-  bool? _lastReportedLoading;
   late Future<String> _captchaSrc;
   bool _captchaSrcInitialized = false;
 
@@ -123,7 +121,6 @@ class _SignupFormState extends State<SignupForm>
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
     widget.onLoadingChanged?.call(false);
-    _lastReportedLoading = null;
     super.dispose();
   }
 
@@ -180,29 +177,13 @@ class _SignupFormState extends State<SignupForm>
     return painter.height;
   }
 
-  void _notifyLoadingChanged(bool loading) {
-    if (_lastReportedLoading == loading) {
-      return;
-    }
-    _lastReportedLoading = loading;
-    final callback = widget.onLoadingChanged;
-    if (callback == null) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-    callback(loading);
-  }
-
   bool _isLoadingForState(AuthenticationState state) {
     final isSubmittingLastStep = state is AuthenticationSignUpInProgress &&
         state.fromSubmission &&
         _currentIndex == _formKeys.length - 1;
     final isPostSubmitState = state is AuthenticationLogInInProgress ||
         state is AuthenticationComplete;
-    return isSubmittingLastStep ||
-        ((_lastReportedLoading ?? false) && isPostSubmitState);
+    return isSubmittingLastStep || isPostSubmitState;
   }
 
   @override
@@ -233,10 +214,10 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _onPressed(BuildContext context) async {
-    final avatarCubit = context.read<SignupAvatarCubit>();
-    if (avatarCubit.state.processing) return;
-    avatarCubit.pauseCarousel();
-    final avatarPayload = avatarCubit.selectedAvatarPayload();
+    if (context.read<SignupAvatarCubit>().state.processing) return;
+    context.read<SignupAvatarCubit>().pauseCarousel();
+    final avatarPayload =
+        context.read<SignupAvatarCubit>().selectedAvatarPayload();
     FocusManager.instance.primaryFocus?.unfocus();
     final captchaSrc = await _captchaSrc;
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -281,22 +262,8 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<String> _loadCaptchaSrc() async {
-    const retryDelay = Duration(seconds: 1);
-    const maxAttempts = 3;
     _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final src = await context.read<AuthenticationCubit>().fetchCaptchaSrc();
-        if (src.trim().isNotEmpty) {
-          return src;
-        }
-      } on Exception catch (_) {}
-      if (attempt < maxAttempts - 1) {
-        await Future<void>.delayed(retryDelay);
-      }
-    }
-    await _scheduleCaptchaRetry();
-    return '';
+    return context.read<AuthenticationCubit>().fetchCaptchaSrcWithRetry();
   }
 
   void _reloadCaptcha() {
@@ -312,20 +279,6 @@ class _SignupFormState extends State<SignupForm>
     setState(() {
       _showAvatarEditor = true;
     });
-  }
-
-  void _markCaptchaLoaded() {
-    _captchaRetryGeneration++;
-  }
-
-  Future<void> _scheduleCaptchaRetry() async {
-    final generation = ++_captchaRetryGeneration;
-    const retryDelay = Duration(seconds: 1);
-    await Future<void>.delayed(retryDelay);
-    if (!mounted || generation != _captchaRetryGeneration) {
-      return;
-    }
-    _reloadCaptcha();
   }
 
   String get _currentStepLabel {
@@ -503,9 +456,6 @@ class _SignupFormState extends State<SignupForm>
       _showAllowInsecureError = false;
       _showBreachedError = false;
     });
-    _notifyLoadingChanged(
-      _isLoadingForState(context.read<AuthenticationCubit>().state),
-    );
   }
 
   @override
@@ -514,7 +464,7 @@ class _SignupFormState extends State<SignupForm>
     return BlocConsumer<AuthenticationCubit, AuthenticationState>(
       // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
       listener: (context, state) {
-        _notifyLoadingChanged(_isLoadingForState(state));
+        widget.onLoadingChanged?.call(_isLoadingForState(state));
         if (_lastCaptchaServer != state.server) {
           _lastCaptchaServer = state.server;
           _reloadCaptcha();
@@ -883,9 +833,7 @@ class _SignupFormState extends State<SignupForm>
                                                   animationDuration:
                                                       animationDuration,
                                                   showErrorMessageOnError: true,
-                                                  onLoaded: _markCaptchaLoaded,
-                                                  onRetry:
-                                                      _scheduleCaptchaRetry,
+                                                  onRetry: _reloadCaptcha,
                                                 );
                                         } else if (snapshot.hasError) {
                                           captchaSurface =
@@ -1019,14 +967,6 @@ class _SignupFormState extends State<SignupForm>
                                               setState(() {
                                                 _currentIndex--;
                                               });
-                                              _notifyLoadingChanged(
-                                                _isLoadingForState(
-                                                  context
-                                                      .read<
-                                                          AuthenticationCubit>()
-                                                      .state,
-                                                ),
-                                              );
                                             },
                                       child: Text(context.l10n.commonBack),
                                     ),
@@ -1166,8 +1106,6 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
   Rect? _localCropRect;
   double? _lastImageWidth;
   double? _lastImageHeight;
-  Rect? _pendingCropRect;
-  bool _cropChangeScheduled = false;
 
   Future<void> _handleShuffle() async {
     if (_shuffling) return;
@@ -1197,26 +1135,16 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
   }
 
   void _scheduleCropChange(Rect rect) {
-    _pendingCropRect = rect;
-    if (_cropChangeScheduled) return;
-    _cropChangeScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cropChangeScheduled = false;
-      final next = _pendingCropRect;
-      _pendingCropRect = null;
-      if (!mounted || next == null) return;
-      widget.onCropChanged?.call(next);
-      setState(() => _localCropRect = next);
-    });
+    if (!mounted) return;
+    widget.onCropChanged?.call(rect);
+    setState(() => _localCropRect = rect);
   }
 
   void _handleCropReset() {
     final rect = widget.cropRectProvider?.call();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      widget.onCropReset?.call();
-      setState(() => _localCropRect = rect);
-    });
+    if (!mounted) return;
+    widget.onCropReset?.call();
+    setState(() => _localCropRect = rect);
   }
 
   @override
@@ -1439,77 +1367,117 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
     final animationDuration =
         context.watch<SettingsCubit>().animationDuration;
     final avatarSize = sizing.iconButtonTapTarget;
+    final overlayShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: context.borderSide,
+    );
     final displayJid = widget.username.isEmpty
         ? 'avatar@axichat'
         : '${widget.username}@preview';
     final overlayVisible =
         _hoverState == _HoverState.hovered || widget.processing;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hoverState = _HoverState.hovered),
-      onExit: (_) => setState(() => _hoverState = _HoverState.idle),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _hoverState = _HoverState.hovered),
-        onTapUp: (_) => setState(() => _hoverState = _HoverState.idle),
-        onTapCancel: () => setState(() => _hoverState = _HoverState.idle),
-        onTap: widget.onTap,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox.square(
-              dimension: avatarSize,
-              child: PageTransitionSwitcher(
-                duration: animationDuration,
-                transitionBuilder:
-                    (child, primaryAnimation, secondaryAnimation) =>
-                        SharedAxisTransition(
-                  animation: primaryAnimation,
-                  secondaryAnimation: secondaryAnimation,
-                  transitionType: SharedAxisTransitionType.fade,
-                  child: child,
-                ),
-                child: AxiAvatar(
-                  key: ValueKey(_previewVersion),
-                  jid: displayJid,
-                  size: avatarSize,
-                  subscription: Subscription.none,
-                  presence: null,
-                  avatarBytes: widget.bytes,
-                ),
-              ),
-            ),
-            AnimatedOpacity(
-              opacity: overlayVisible ? motion.tapFocusAlpha : 0.0,
-              duration: animationDuration,
-              child: Container(
-                width: avatarSize,
-                height: avatarSize,
-                decoration: BoxDecoration(
-                  color: colors.background.withValues(
-                    alpha: motion.tapFocusAlpha,
+    return AxiTapBounce(
+      enabled: widget.onTap != null,
+      child: Material(
+        color: Colors.transparent,
+        shape: overlayShape,
+        clipBehavior: Clip.antiAlias,
+        child: ShadFocusable(
+          canRequestFocus: widget.onTap != null,
+          onFocusChange: widget.onTap == null
+              ? null
+              : (focused) {
+                  if (!mounted) return;
+                  setState(
+                    () => _hoverState =
+                        focused ? _HoverState.hovered : _HoverState.idle,
+                  );
+                },
+          builder: (context, focused, child) =>
+              child ?? const SizedBox.shrink(),
+          child: ShadGestureDetector(
+            cursor: widget.onTap != null
+                ? SystemMouseCursors.click
+                : MouseCursor.defer,
+            hoverStrategies: ShadTheme.of(context).hoverStrategies,
+            onHoverChange: widget.onTap == null
+                ? null
+                : (value) => setState(
+                      () => _hoverState =
+                          value ? _HoverState.hovered : _HoverState.idle,
+                    ),
+            onTap: widget.onTap,
+            onTapDown: widget.onTap == null
+                ? null
+                : (_) => setState(() => _hoverState = _HoverState.hovered),
+            onTapUp: widget.onTap == null
+                ? null
+                : (_) => setState(() => _hoverState = _HoverState.idle),
+            onTapCancel: widget.onTap == null
+                ? null
+                : () => setState(() => _hoverState = _HoverState.idle),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox.square(
+                  dimension: avatarSize,
+                  child: PageTransitionSwitcher(
+                    duration: animationDuration,
+                    transitionBuilder:
+                        (child, primaryAnimation, secondaryAnimation) =>
+                            SharedAxisTransition(
+                      animation: primaryAnimation,
+                      secondaryAnimation: secondaryAnimation,
+                      transitionType: SharedAxisTransitionType.fade,
+                      child: child,
+                    ),
+                    child: AxiAvatar(
+                      key: ValueKey(_previewVersion),
+                      jid: displayJid,
+                      size: avatarSize,
+                      shape: AxiAvatarShape.squircle,
+                      subscription: Subscription.none,
+                      presence: null,
+                      avatarBytes: widget.bytes,
+                    ),
                   ),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: colors.border),
                 ),
-                child: widget.processing
-                    ? Center(
-                        child: SizedBox(
-                          width: sizing.progressIndicatorSize,
-                          height: sizing.progressIndicatorSize,
-                          child: CircularProgressIndicator(
-                            strokeWidth: sizing.progressIndicatorStrokeWidth,
-                            color: colors.foreground,
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        LucideIcons.pencil,
-                        color: colors.foreground,
-                        size: sizing.iconButtonIconSize,
+                AnimatedOpacity(
+                  opacity: overlayVisible ? motion.tapFocusAlpha : 0.0,
+                  duration: animationDuration,
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: colors.background.withValues(
+                        alpha: motion.tapFocusAlpha,
                       ),
-              ),
+                      shape: overlayShape,
+                    ),
+                    child: SizedBox(
+                      width: avatarSize,
+                      height: avatarSize,
+                      child: widget.processing
+                          ? Center(
+                              child: SizedBox(
+                                width: sizing.progressIndicatorSize,
+                                height: sizing.progressIndicatorSize,
+                                child: CircularProgressIndicator(
+                                  strokeWidth:
+                                      sizing.progressIndicatorStrokeWidth,
+                                  color: colors.foreground,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              LucideIcons.pencil,
+                              color: colors.foreground,
+                              size: sizing.iconButtonIconSize,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1839,14 +1807,12 @@ class _CaptchaImage extends StatefulWidget {
   const _CaptchaImage({
     required this.url,
     required this.animationDuration,
-    required this.onLoaded,
     required this.onRetry,
     required this.showErrorMessageOnError,
   });
 
   final String url;
   final Duration animationDuration;
-  final VoidCallback onLoaded;
   final VoidCallback onRetry;
   final bool showErrorMessageOnError;
 
@@ -1855,14 +1821,12 @@ class _CaptchaImage extends StatefulWidget {
 }
 
 class _CaptchaImageState extends State<_CaptchaImage> {
-  bool _readyNotified = false;
   String? _lastErrorUrl;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _readyNotified = false;
       _lastErrorUrl = null;
     }
   }
@@ -1875,10 +1839,6 @@ class _CaptchaImageState extends State<_CaptchaImage> {
       excludeFromSemantics: true,
       loadingBuilder: (context, child, loadingProgress) {
         final ready = loadingProgress == null;
-        if (ready && !_readyNotified) {
-          _readyNotified = true;
-          widget.onLoaded();
-        }
         return AnimatedSwitcher(
           duration: widget.animationDuration,
           child: ready
