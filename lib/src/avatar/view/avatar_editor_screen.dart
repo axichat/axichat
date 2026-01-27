@@ -379,6 +379,8 @@ class _CropCard extends StatelessWidget {
     final sourceBytes = draftAvatar?.sourceBytes;
     final imageWidth = draftAvatar?.sourceWidth?.toDouble();
     final imageHeight = draftAvatar?.sourceHeight?.toDouble();
+    final canCommit =
+        draftAvatar?.source == AvatarSource.upload && !state.processing;
     final cropRect = (draftAvatar?.cropRect == null ||
             imageWidth == null ||
             imageHeight == null)
@@ -445,7 +447,19 @@ class _CropCard extends StatelessWidget {
                     onCropChanged:
                         context.read<AvatarEditorCubit>().updateCropRect,
                     onCropReset: context.read<AvatarEditorCubit>().resetCrop,
+                    onCropCommitted: canCommit
+                        ? (_) => context.read<AvatarEditorCubit>().commitCrop()
+                        : null,
                     minCropSide: AvatarEditorCubit.minCropSide,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: AxiButton.secondary(
+                    onPressed: canCommit
+                        ? () => context.read<AvatarEditorCubit>().commitCrop()
+                        : null,
+                    child: Text(l10n.commonDone),
                   ),
                 ),
                 Align(

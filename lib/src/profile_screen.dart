@@ -898,29 +898,34 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
       TextAlign.center => Alignment.center,
       _ => Alignment.centerLeft,
     };
+    final CrossAxisAlignment columnAlignment = switch (widget.textAlign) {
+      TextAlign.right => CrossAxisAlignment.end,
+      TextAlign.center => CrossAxisAlignment.center,
+      _ => CrossAxisAlignment.start,
+    };
     return ValueListenableBuilder<double>(
       valueListenable: widget.scrollOffsetListenable,
       builder: (context, scrollOffset, child) {
         final int selectedIndex = _resolveSelectedIndex(scrollOffset);
         return Align(
           alignment: menuAlignment,
-          child: IntrinsicWidth(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: _profileHeaderTextSpacing,
-              children: [
-                for (final entry in sectionLabels.indexed)
-                  _SettingsJumpLink(
-                    label: entry.$2,
-                    onTap: () async => await _jumpTo(
-                      sectionKeys[entry.$1],
-                      animationDuration,
-                    ),
-                    textAlign: widget.textAlign,
-                    isSelected: selectedIndex == entry.$1,
+          widthFactor: 1.0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: columnAlignment,
+            spacing: _profileHeaderTextSpacing,
+            children: [
+              for (final entry in sectionLabels.indexed)
+                _SettingsJumpLink(
+                  label: entry.$2,
+                  onTap: () async => await _jumpTo(
+                    sectionKeys[entry.$1],
+                    animationDuration,
                   ),
-              ],
-            ),
+                  textAlign: widget.textAlign,
+                  selected: selectedIndex == entry.$1,
+                ),
+            ],
           ),
         );
       },
@@ -1019,13 +1024,13 @@ class _SettingsJumpLink extends StatelessWidget {
     required this.label,
     required this.onTap,
     required this.textAlign,
-    required this.isSelected,
+    required this.selected,
   });
 
   final String label;
   final VoidCallback onTap;
   final TextAlign textAlign;
-  final bool isSelected;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -1044,8 +1049,8 @@ class _SettingsJumpLink extends StatelessWidget {
       mainAxisAlignment: alignment,
       foregroundColor: jumpColor,
       hoverForegroundColor: jumpColor,
-      backgroundColor: isSelected ? selectedBackground : null,
-      hoverBackgroundColor: isSelected ? selectedBackground : null,
+      backgroundColor: selected ? selectedBackground : null,
+      hoverBackgroundColor: selected ? selectedBackground : null,
       onPressed: onTap,
       child: DefaultTextStyle.merge(
         style: context.textTheme.small.copyWith(

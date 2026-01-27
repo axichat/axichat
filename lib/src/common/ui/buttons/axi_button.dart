@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/buttons/axi_hover_band.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -156,6 +157,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -170,6 +172,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -184,6 +187,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -198,6 +202,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -212,6 +217,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -226,6 +232,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -240,6 +247,7 @@ class AxiButton extends StatefulWidget {
     this.child,
     this.leading,
     this.trailing,
+    this.selected = false,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -253,6 +261,7 @@ class AxiButton extends StatefulWidget {
   final Widget? child;
   final Widget? leading;
   final Widget? trailing;
+  final bool selected;
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
   final bool loading;
@@ -298,7 +307,7 @@ class _AxiButtonState extends State<AxiButton> {
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
-        final bool hoverOrFocus = hovered || focused;
+        final bool hoverOrFocus = hovered || focused || widget.selected;
         final ShadButtonTheme buttonTheme =
             widget.variant.themeFor(ShadTheme.of(context));
         final Color background = widget.variant.backgroundColor(
@@ -329,6 +338,17 @@ class _AxiButtonState extends State<AxiButton> {
           decoration: widget.variant.textDecoration(),
           decorationColor: foreground,
         );
+        final double hoverBandHeightFactor =
+            context.motion.hoverBandHeightFactor;
+        final double hoverBandIntensity = context.motion.hoverBandIntensity;
+        const double minAlpha = 0.0;
+        const double maxAlpha = 1.0;
+        final double hoverAlpha =
+            (context.motion.tapHoverAlpha * hoverBandIntensity)
+                .clamp(minAlpha, maxAlpha)
+                .toDouble();
+        final Color hoverTintColor =
+            context.colorScheme.primary.withValues(alpha: hoverAlpha);
 
         final bool replacesLeading = widget.leading != null && widget.loading;
 
@@ -379,6 +399,21 @@ class _AxiButtonState extends State<AxiButton> {
             child: content,
           ),
         );
+        if (hoverOrFocus) {
+          final Widget hoverTintLayer = Positioned.fill(
+            child: IgnorePointer(
+              child: AxiHoverBand(
+                shape: shape,
+                color: hoverTintColor,
+                heightFactor: hoverBandHeightFactor,
+              ),
+            ),
+          );
+          content = Stack(
+            alignment: Alignment.center,
+            children: <Widget>[hoverTintLayer, content],
+          );
+        }
 
         if (widget.width != null) {
           content = SizedBox(width: widget.width, child: content);
@@ -410,10 +445,7 @@ class _AxiButtonState extends State<AxiButton> {
                   ShadTheme.of(context).hoverStrategies,
               longPressDuration: buttonTheme.longPressDuration,
               onHoverChange: enabled
-                  ? (value) {
-                      _updateState(WidgetState.hovered, value);
-                      _bounceController.setHovered(value);
-                    }
+                  ? (value) => _updateState(WidgetState.hovered, value)
                   : null,
               onTap: enabled ? widget.onPressed : null,
               onLongPress: enabled ? widget.onLongPress : null,
@@ -492,6 +524,7 @@ class _AxiButtonState extends State<AxiButton> {
         return Semantics(
           button: true,
           enabled: enabled,
+          selected: widget.selected,
           label: widget.semanticLabel,
           onTap: widget.onPressed,
           onLongPress: widget.onLongPress,

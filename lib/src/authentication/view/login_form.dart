@@ -32,7 +32,6 @@ class _LoginFormState extends State<LoginForm> {
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
   bool rememberMe = true;
-  bool _endpointConfigReady = false;
 
   @override
   void initState() {
@@ -40,15 +39,6 @@ class _LoginFormState extends State<LoginForm> {
     _jidTextController = TextEditingController();
     _passwordTextController = TextEditingController();
     _restoreRememberMePreference();
-    _restoreEndpointConfig();
-  }
-
-  Future<void> _restoreEndpointConfig() async {
-    await context.read<EndpointConfigCubit>().restore();
-    if (!mounted) return;
-    setState(() {
-      _endpointConfigReady = true;
-    });
   }
 
   Future<void> _restoreRememberMePreference() async {
@@ -71,7 +61,8 @@ class _LoginFormState extends State<LoginForm> {
   void _onPressed(BuildContext context) async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    if (!_endpointConfigReady) return;
+    await context.read<EndpointConfigCubit>().restore();
+    if (!context.mounted) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,

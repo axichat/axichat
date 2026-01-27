@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/buttons/axi_hover_band.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,7 @@ class AxiIconButton extends StatefulWidget {
     this.borderWidth,
     this.loading = false,
     this.usePrimary = false,
+    this.selected = false,
   })  : variant = AxiIconButtonVariant.primary,
         resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -64,6 +66,7 @@ class AxiIconButton extends StatefulWidget {
     this.borderWidth,
     this.loading = false,
     this.usePrimary = false,
+    this.selected = false,
   })  : resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
         resolvedTapTargetSize = tapTargetSize,
@@ -87,6 +90,7 @@ class AxiIconButton extends StatefulWidget {
     this.backgroundColor,
     this.borderColor,
     this.loading = false,
+    this.selected = false,
   })  : variant = AxiIconButtonVariant.ghost,
         borderWidth = null,
         resolvedIconSize = iconSize,
@@ -110,6 +114,7 @@ class AxiIconButton extends StatefulWidget {
     this.cornerRadius,
     this.usePrimary = false,
     this.loading = false,
+    this.selected = false,
   })  : variant = AxiIconButtonVariant.outline,
         backgroundColor = null,
         borderColor = null,
@@ -138,6 +143,7 @@ class AxiIconButton extends StatefulWidget {
     this.backgroundColor,
     this.borderColor,
     this.loading = false,
+    this.selected = false,
   })  : variant = AxiIconButtonVariant.secondary,
         resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -163,6 +169,7 @@ class AxiIconButton extends StatefulWidget {
     this.backgroundColor,
     this.borderColor,
     this.loading = false,
+    this.selected = false,
   })  : variant = AxiIconButtonVariant.destructive,
         resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -187,6 +194,7 @@ class AxiIconButton extends StatefulWidget {
   final double? borderWidth;
   final bool loading;
   final bool usePrimary;
+  final bool selected;
   final double? resolvedIconSize;
   final double? resolvedButtonSize;
   final double? resolvedTapTargetSize;
@@ -251,6 +259,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
+        final bool hoverOrFocus = hovered || focused || widget.selected;
         final double resolvedIconSize =
             widget.resolvedIconSize ?? context.sizing.iconButtonIconSize;
         final double resolvedButtonSize =
@@ -261,6 +270,17 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             (widget.variant == AxiIconButtonVariant.outline
                 ? context.borderSide.width
                 : 0);
+        final double hoverBandHeightFactor =
+            context.motion.hoverBandHeightFactor;
+        final double hoverBandIntensity = context.motion.hoverBandIntensity;
+        const double minAlpha = 0.0;
+        const double maxAlpha = 1.0;
+        final double hoverAlpha =
+            (context.motion.tapHoverAlpha * hoverBandIntensity)
+                .clamp(minAlpha, maxAlpha)
+                .toDouble();
+        final Color hoverTintColor =
+            context.colorScheme.primary.withValues(alpha: hoverAlpha);
         final paintShape = RoundedSuperellipseBorder(
           borderRadius: widget.resolvedCornerRadius == null
               ? context.radius
@@ -286,12 +306,6 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 .withValues(alpha: context.motion.tapSplashAlpha),
             background,
           );
-        } else if (hovered || focused) {
-          background = Color.alphaBlend(
-            context.colorScheme.primary
-                .withValues(alpha: context.motion.tapHoverAlpha),
-            background,
-          );
         }
 
         Widget tappable = SizedBox(
@@ -314,10 +328,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                       enabled ? SystemMouseCursors.click : MouseCursor.defer,
                   hoverStrategies: ShadTheme.of(context).hoverStrategies,
                   onHoverChange: enabled
-                      ? (value) {
-                          _updateState(WidgetState.hovered, value);
-                          _bounceController.setHovered(value);
-                        }
+                      ? (value) => _updateState(WidgetState.hovered, value)
                       : null,
                   onTap: enabled ? widget.onPressed : null,
                   onLongPress: enabled ? widget.onLongPress : null,
@@ -351,10 +362,25 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                           _bounceController.setPressed(false);
                         }
                       : null,
-                  child: SizedBox(
-                    width: resolvedButtonSize,
-                    height: resolvedButtonSize,
-                    child: Center(child: iconWidget),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      if (hoverOrFocus)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: AxiHoverBand(
+                              shape: paintShape,
+                              color: hoverTintColor,
+                              heightFactor: hoverBandHeightFactor,
+                            ),
+                          ),
+                        ),
+                      SizedBox(
+                        width: resolvedButtonSize,
+                        height: resolvedButtonSize,
+                        child: Center(child: iconWidget),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -397,6 +423,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         return Semantics(
           button: true,
           enabled: enabled,
+          selected: widget.selected,
           label: widget.semanticLabel ?? widget.tooltip,
           onTap: enabled ? widget.onPressed : null,
           onLongPress: enabled ? widget.onLongPress : null,

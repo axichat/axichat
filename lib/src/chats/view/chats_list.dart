@@ -726,9 +726,6 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
-    final double actionCutoutDepth = context.sizing.iconButtonSize / 2;
-    final double actionCutoutThickness = context.sizing.iconButtonSize;
-    final double cutoutCornerRadius = context.radii.squircle;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
         CutoutSpec(
@@ -736,7 +733,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.84, -1),
           depth: unreadDepth,
           thickness: unreadThickness,
-          cornerRadius: cutoutCornerRadius,
+          cornerRadius: _unreadBadgeCornerRadius,
           child: Transform.translate(
             offset: Offset(0, scaled(_unreadBadgeCutoutChildVerticalOffset)),
             child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
@@ -745,9 +742,9 @@ class _ChatListTileState extends State<ChatListTile> {
       CutoutSpec(
         edge: CutoutEdge.right,
         alignment: const Alignment(1.02, 0),
-        depth: actionCutoutDepth,
-        thickness: actionCutoutThickness,
-        cornerRadius: cutoutCornerRadius,
+        depth: 32,
+        thickness: 46,
+        cornerRadius: 18,
         child: selectionActive
             ? _ChatSelectionCutoutButton(
                 backgroundColor: tileBackgroundColor,
@@ -765,9 +762,9 @@ class _ChatListTileState extends State<ChatListTile> {
         CutoutSpec(
           edge: CutoutEdge.bottom,
           alignment: const Alignment(0.52, 1),
-          depth: context.spacing.m,
+          depth: 16,
           thickness: timestampThickness,
-          cornerRadius: cutoutCornerRadius,
+          cornerRadius: 18,
           child: Transform.translate(
             offset: Offset(0, -scaled(3)),
             child: Text(
@@ -784,14 +781,10 @@ class _ChatListTileState extends State<ChatListTile> {
     final tileSurface = CutoutSurface(
       backgroundColor: tileBackgroundColor,
       borderColor: surfaceBorderColor,
-      borderWidth: context.borderSide.width,
       cutouts: cutouts,
       shape: SquircleBorder(
-        cornerRadius: scaled(cutoutCornerRadius),
-        side: BorderSide(
-          color: surfaceBorderColor,
-          width: context.borderSide.width,
-        ),
+        cornerRadius: scaled(18),
+        side: BorderSide(color: surfaceBorderColor),
       ),
       child: Column(
         children: [

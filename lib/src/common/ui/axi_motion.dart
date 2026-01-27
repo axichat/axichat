@@ -13,6 +13,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.iconButtonCompactBounceScale,
     required this.iconButtonPressDurationFactor,
     required this.iconButtonReleaseDurationFactor,
+    required this.hoverBandHeightFactor,
+    required this.hoverBandIntensity,
     required this.tapSplashAlpha,
     required this.tapHoverAlpha,
     required this.tapFocusAlpha,
@@ -26,6 +28,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final double iconButtonCompactBounceScale;
   final double iconButtonPressDurationFactor;
   final double iconButtonReleaseDurationFactor;
+  final double hoverBandHeightFactor;
+  final double hoverBandIntensity;
   final double tapSplashAlpha;
   final double tapHoverAlpha;
   final double tapFocusAlpha;
@@ -40,6 +44,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     double? iconButtonCompactBounceScale,
     double? iconButtonPressDurationFactor,
     double? iconButtonReleaseDurationFactor,
+    double? hoverBandHeightFactor,
+    double? hoverBandIntensity,
     double? tapSplashAlpha,
     double? tapHoverAlpha,
     double? tapFocusAlpha,
@@ -60,6 +66,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
           iconButtonPressDurationFactor ?? this.iconButtonPressDurationFactor,
       iconButtonReleaseDurationFactor: iconButtonReleaseDurationFactor ??
           this.iconButtonReleaseDurationFactor,
+      hoverBandHeightFactor:
+          hoverBandHeightFactor ?? this.hoverBandHeightFactor,
+      hoverBandIntensity: hoverBandIntensity ?? this.hoverBandIntensity,
       tapSplashAlpha: tapSplashAlpha ?? this.tapSplashAlpha,
       tapHoverAlpha: tapHoverAlpha ?? this.tapHoverAlpha,
       tapFocusAlpha: tapFocusAlpha ?? this.tapFocusAlpha,
@@ -82,6 +91,8 @@ const AxiMotion axiMotion = AxiMotion(
   iconButtonCompactBounceScale: 0.9,
   iconButtonPressDurationFactor: 4 / 15,
   iconButtonReleaseDurationFactor: 3 / 5,
+  hoverBandHeightFactor: 0.32,
+  hoverBandIntensity: 1.8,
   tapSplashAlpha: 0.18,
   tapHoverAlpha: 0.08,
   tapFocusAlpha: 0.32,

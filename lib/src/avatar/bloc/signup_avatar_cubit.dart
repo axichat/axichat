@@ -9,7 +9,7 @@ import 'dart:typed_data';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/common/avatar_background.dart';
+import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
@@ -52,8 +52,14 @@ extension SignupAvatarErrorTypeX on SignupAvatarErrorType {
 }
 
 class SignupAvatarCubit extends Cubit<SignupAvatarState> {
-  SignupAvatarCubit({List<AvatarTemplate>? templates})
-      : _templates = templates ?? buildDefaultAvatarTemplates(),
+  SignupAvatarCubit({
+    List<AvatarTemplate>? templates,
+    AvatarPipeline? pipeline,
+  })  : _templates = templates ?? buildDefaultAvatarTemplates(),
+        _pipeline = pipeline ??
+            AvatarPipeline(
+              config: _defaultPipelineConfig,
+            ),
         super(const SignupAvatarState(backgroundColor: Colors.transparent)) {
     _abstractTemplates = _templates
         .where(
@@ -67,11 +73,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         .toList();
   }
 
-  static const int avatarTargetSize = 256;
-  static const int avatarMaxBytes = 64 * 1024;
-  static const int avatarMaxKilobytes = avatarMaxBytes ~/ 1024;
-  static const int avatarMinJpegQuality = 35;
-  static const int avatarQualityStep = 5;
+  static const AvatarPipelineConfig _defaultPipelineConfig =
+      AvatarPipelineConfig(minJpegQuality: 35, minCropSide: minCropSide);
+  static final int avatarMaxKilobytes = _defaultPipelineConfig.maxBytes ~/ 1024;
   static const int _sourceMaxBytes = 8 * 1024 * 1024;
   static const double avatarInsetFraction = 0.10;
   static const double avatarTransparentInsetFraction = 0.10;
@@ -84,6 +88,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const _abstractWarmupDuration = Duration(seconds: 3);
 
   final List<AvatarTemplate> _templates;
+  final AvatarPipeline _pipeline;
   late final List<AvatarTemplate> _abstractTemplates;
   late final List<AvatarTemplate> _nonAbstractTemplates;
   final math.Random _random = math.Random();
@@ -300,7 +305,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         background: resolvedBackground,
         colors: colors,
       );
-      _pushRecentTemplateKey(_templateKey(template));
+      _pushRecentTemplateKey(_pipeline.templateKey(template));
       if (!_nonAbstractReady &&
           template.category != AvatarTemplateCategory.abstract) {
         _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
@@ -396,8 +401,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   void updateCropRect(Rect rect) {
     final avatar = state.avatar;
     if (avatar == null || avatar.source != AvatarSource.upload) return;
-    final constrained =
-        avatar.constrainCropRect(rect: rect, minCropSide: minCropSide);
+    final constrained = _pipeline.constrainCropRect(avatar: avatar, rect: rect);
     if (avatar.cropRect == constrained) return;
     emit(
       state.copyWith(
@@ -410,7 +414,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   void resetCrop() {
     final avatar = state.avatar;
     if (avatar == null || avatar.source != AvatarSource.upload) return;
-    final reset = avatar.resolveCropRect(minCropSide: minCropSide);
+    final reset = _pipeline.initialCropRect(avatar);
     if (reset == null) return;
     emit(
       state.copyWith(
@@ -420,17 +424,16 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
   }
 
+  Future<void> commitCrop() async {
+    final avatar = state.avatar;
+    if (avatar == null || avatar.source != AvatarSource.upload) return;
+    if (state.processing) return;
+    await _refreshAvatarPayload(avatar);
+  }
+
   Future<void> _applyAvatarFromBytes(Uint8List bytes) async {
     try {
-      final avatar = await Avatar.fromUploadBytes(
-        bytes: bytes,
-        maxDimension: avatarTargetSize,
-        jpegQuality: 90,
-        targetSize: avatarTargetSize,
-        maxBytes: avatarMaxBytes,
-        minJpegQuality: avatarMinJpegQuality,
-        qualityStep: avatarQualityStep,
-      );
+      final avatar = await _pipeline.buildFromUpload(bytes);
       emit(
         state.copyWith(
           avatar: avatar,
@@ -484,20 +487,16 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (avatar.source != AvatarSource.upload) {
       return avatar;
     }
-    final cropRect =
-        avatar.resolveCropRect(minCropSide: minCropSide) ?? avatar.cropRect;
+    final cropRect = _pipeline.resolveCropRect(avatar) ?? avatar.cropRect;
     if (cropRect == null || cropRect.width <= 0 || cropRect.height <= 0) {
       return avatar;
     }
     emit(state.copyWith(processing: true, clearError: true));
     try {
-      final updated = await avatar.rebuildUploadPayload(
+      final updated = await _pipeline.rebuildUploadPayload(
+        avatar: avatar,
         cropRect: cropRect,
-        targetSize: avatarTargetSize,
-        maxBytes: avatarMaxBytes,
         insetFraction: 0,
-        minJpegQuality: avatarMinJpegQuality,
-        qualityStep: avatarQualityStep,
         backgroundColor: Colors.transparent,
       );
       emit(
@@ -526,10 +525,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     required Color background,
     required ShadColorScheme colors,
   }) async {
-    final rawBytes = await template.loadRawBytes();
-    final bytes = (rawBytes != null && rawBytes.isNotEmpty)
-        ? rawBytes
-        : (await template.generator(background, colors)).bytes;
     final resolvedBackground = template.hasAlphaBackground
         ? background
         : state.backgroundColor == Colors.transparent
@@ -543,15 +538,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
             ? avatarTransparentInsetFraction
             : avatarInsetFraction)
         : 0.0;
-    return Avatar.fromTemplateBytes(
-      bytes: bytes,
+    return _pipeline.buildFromTemplate(
       template: template,
       background: resolvedBackground,
-      targetSize: avatarTargetSize,
-      maxBytes: avatarMaxBytes,
+      colors: colors,
       insetFraction: insetFraction,
-      minJpegQuality: avatarMinJpegQuality,
-      qualityStep: avatarQualityStep,
       cropSide: _avatarCarouselCropSide,
     );
   }
@@ -714,7 +705,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         template ??= _pickCarouselTemplate();
         if (template == null) break;
         attempts++;
-        _pushRecentTemplateKey(_templateKey(template));
+        _pushRecentTemplateKey(_pipeline.templateKey(template));
         final background = template.hasAlphaBackground
             ? _randomAvatarBackgroundColor()
             : state.backgroundColor;
@@ -763,7 +754,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         bag: _nonAbstractCarouselBag,
       );
       if (template == null) return;
-      _pushRecentTemplateKey(_templateKey(template));
+      _pushRecentTemplateKey(_pipeline.templateKey(template));
       final background = template.hasAlphaBackground
           ? _randomAvatarBackgroundColor()
           : state.backgroundColor;
@@ -816,7 +807,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final recycled = <AvatarTemplate>[];
     while (bag.isNotEmpty) {
       final candidate = bag.removeAt(0);
-      if (_recentTemplateKeys.contains(_templateKey(candidate))) {
+      if (_recentTemplateKeys.contains(_pipeline.templateKey(candidate))) {
         recycled.add(candidate);
         continue;
       }
@@ -827,13 +818,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     selection ??=
         bag.isNotEmpty ? bag.removeAt(0) : pool[_random.nextInt(pool.length)];
     return selection;
-  }
-
-  String _templateKey(AvatarTemplate template) {
-    final path = template.assetPath;
-    if (path == null || path.isEmpty) return template.id;
-    final segments = path.split('/');
-    return segments.isNotEmpty ? segments.last : template.id;
   }
 
   void _pushRecentTemplateKey(String key) {
@@ -865,7 +849,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return _randomAvatarBackgroundColor();
   }
 
-  Color _randomAvatarBackgroundColor() => generateAvatarBackground(_random);
+  Color _randomAvatarBackgroundColor() => _pipeline.randomBackground(_random);
 
   AvatarUploadPayload _fallbackAvatarPayload({
     required Color background,
@@ -889,7 +873,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     required Color background,
     required Color accent,
   }) {
-    const size = avatarTargetSize;
+    final size = _pipeline.config.targetSize;
     final base = background == Colors.transparent ? accent : background;
     final image = img.Image(width: size, height: size, numChannels: 4);
     img.fill(image, color: _imgColor(base));

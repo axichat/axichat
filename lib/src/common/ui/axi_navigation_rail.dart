@@ -232,30 +232,26 @@ class _AxiNavigationRailItem extends StatelessWidget {
             : Color.alphaBlend(selectionOverlay, surfaceColor))
         : null;
     final Color? foregroundColor = selected ? textColor : null;
-    return Semantics(
+    return AxiListButton(
       selected: selected,
-      button: true,
-      label: destination.label,
-      onTap: onTap,
-      child: AxiListButton(
-        collapsed: isCollapsed,
-        collapsedIconData: destination.icon,
-        collapsedIcon: collapsedIcon,
-        collapsedTooltip: destination.label,
-        collapsedForegroundColor: selected ? iconColor : null,
-        collapsedBackgroundColor: isCollapsed ? backgroundColor : null,
-        variant: AxiButtonVariant.outline,
-        leading: Icon(destination.icon, size: iconSize),
-        trailing: badge,
-        foregroundColor: foregroundColor,
-        backgroundColor: backgroundColor,
-        onPressed: onTap,
-        child: Text(
-          destination.label,
-          style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+      collapsed: isCollapsed,
+      collapsedIconData: destination.icon,
+      collapsedIcon: collapsedIcon,
+      collapsedTooltip: destination.label,
+      collapsedForegroundColor: selected ? iconColor : null,
+      collapsedBackgroundColor: isCollapsed ? backgroundColor : null,
+      variant: AxiButtonVariant.ghost,
+      leading: Icon(destination.icon, size: iconSize),
+      trailing: badge,
+      foregroundColor: foregroundColor,
+      backgroundColor: backgroundColor,
+      onPressed: onTap,
+      semanticLabel: destination.label,
+      child: Text(
+        destination.label,
+        style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

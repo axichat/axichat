@@ -8,7 +8,7 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/common/avatar_background.dart';
+import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:file_picker/file_picker.dart';
@@ -57,16 +57,17 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   AvatarEditorCubit({
     required XmppService xmppService,
     required List<AvatarTemplate> templates,
+    AvatarPipeline? pipeline,
   })  : _xmppService = xmppService,
         _templates = templates,
+        _pipeline = pipeline ??
+            AvatarPipeline(
+              config: const AvatarPipelineConfig(minCropSide: minCropSide),
+            ),
         super(const AvatarEditorState());
 
   static const minCropSide = 48.0;
   static const avatarInsetFraction = 0.10;
-  static const _targetSize = 256;
-  static const _maxBytes = 64 * 1024;
-  static const _minQuality = 55;
-  static const _qualityStep = 5;
   static const _maxUploadBytes = 20 * 1024 * 1024;
   static const _avatarCarouselInterval = Duration(seconds: 1);
   static const _avatarCarouselHistoryLimit = 12;
@@ -74,6 +75,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   final XmppService _xmppService;
   final List<AvatarTemplate> _templates;
+  final AvatarPipeline _pipeline;
   late final List<AvatarTemplate> _abstractTemplates = _templates
       .where((template) => template.category == AvatarTemplateCategory.abstract)
       .toList(growable: false);
@@ -81,12 +83,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       .where((template) => template.category != AvatarTemplateCategory.abstract)
       .toList(growable: false);
   late final Map<String, AvatarTemplate> _templateByKey = {
-    for (final template in _templates) _templateKey(template): template,
+    for (final template in _templates)
+      _pipeline.templateKey(template): template,
   };
   late final List<String> _abstractTemplateKeys =
-      _abstractTemplates.map(_templateKey).toList(growable: false);
+      _abstractTemplates.map(_pipeline.templateKey).toList(growable: false);
   late final List<String> _nonAbstractTemplateKeys =
-      _nonAbstractTemplates.map(_templateKey).toList(growable: false);
+      _nonAbstractTemplates.map(_pipeline.templateKey).toList(growable: false);
   final List<String> _recentTemplateKeys = <String>[];
   final _random = Random();
 
@@ -427,47 +430,57 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void updateCropRect(Rect rect) {
     final draftAvatar = state.draftAvatar;
-    final imageWidth = draftAvatar?.sourceWidth?.toDouble();
-    final imageHeight = draftAvatar?.sourceHeight?.toDouble();
-    if (imageWidth == null || imageHeight == null) return;
-    final clamped = _constrainRect(rect, imageWidth, imageHeight);
-    if (draftAvatar?.cropRect == clamped) return;
-    emit(state.copyWith(draftAvatar: draftAvatar?.copyWith(cropRect: clamped)));
+    if (draftAvatar == null) return;
+    final clamped = _pipeline.constrainCropRect(
+      avatar: draftAvatar,
+      rect: rect,
+    );
+    if (draftAvatar.cropRect == clamped) return;
+    emit(state.copyWith(draftAvatar: draftAvatar.copyWith(cropRect: clamped)));
   }
 
   void resizeCropRect(double factor) {
     final draftAvatar = state.draftAvatar;
     final imageWidth = draftAvatar?.sourceWidth?.toDouble();
     final imageHeight = draftAvatar?.sourceHeight?.toDouble();
-    if (imageWidth == null || imageHeight == null) return;
+    if (draftAvatar == null || imageWidth == null || imageHeight == null) {
+      return;
+    }
     final clampedFactor = factor.clamp(0.0, 1.0);
     final maxSide = min(imageWidth, imageHeight);
     final side = minCropSide + (maxSide - minCropSide) * clampedFactor;
-    final current = draftAvatar?.cropRect ??
-        _initialCropRect(imageWidth: imageWidth, imageHeight: imageHeight);
+    final current = draftAvatar.cropRect ??
+        _pipeline.initialCropRect(draftAvatar) ??
+        Rect.fromLTWH(0, 0, maxSide, maxSide);
     final next = Rect.fromCenter(
       center: current.center,
       width: side,
       height: side,
     );
-    final constrained = _constrainRect(next, imageWidth, imageHeight);
+    final constrained =
+        _pipeline.constrainCropRect(avatar: draftAvatar, rect: next);
     emit(
       state.copyWith(
-        draftAvatar: draftAvatar?.copyWith(cropRect: constrained),
+        draftAvatar: draftAvatar.copyWith(cropRect: constrained),
       ),
     );
   }
 
   void resetCrop() {
     final draftAvatar = state.draftAvatar;
-    final imageWidth = draftAvatar?.sourceWidth?.toDouble();
-    final imageHeight = draftAvatar?.sourceHeight?.toDouble();
-    if (imageWidth == null || imageHeight == null) return;
-    final reset = _initialCropRect(
-      imageWidth: imageWidth,
-      imageHeight: imageHeight,
-    );
-    emit(state.copyWith(draftAvatar: draftAvatar?.copyWith(cropRect: reset)));
+    if (draftAvatar == null) return;
+    final reset = _pipeline.initialCropRect(draftAvatar);
+    if (reset == null) return;
+    emit(state.copyWith(draftAvatar: draftAvatar.copyWith(cropRect: reset)));
+  }
+
+  Future<void> commitCrop() async {
+    final draftAvatar = state.draftAvatar;
+    if (draftAvatar == null || draftAvatar.source != AvatarSource.upload) {
+      return;
+    }
+    if (state.processing) return;
+    await _refreshDraftPayload(draftAvatar);
   }
 
   Future<void> publish() async {
@@ -522,20 +535,17 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (draftAvatar.source != AvatarSource.upload) {
       return draftAvatar;
     }
-    final cropRect = draftAvatar.resolveCropRect(minCropSide: minCropSide) ??
-        draftAvatar.cropRect;
+    final cropRect =
+        _pipeline.resolveCropRect(draftAvatar) ?? draftAvatar.cropRect;
     if (cropRect == null || cropRect.width <= 0 || cropRect.height <= 0) {
       return draftAvatar;
     }
     emit(state.copyWith(processing: true, errorType: null));
     try {
-      final updated = await draftAvatar.rebuildUploadPayload(
+      final updated = await _pipeline.rebuildUploadPayload(
+        avatar: draftAvatar,
         cropRect: cropRect,
-        targetSize: _targetSize,
-        maxBytes: _maxBytes,
         insetFraction: avatarInsetFraction,
-        minJpegQuality: _minQuality,
-        qualityStep: _qualityStep,
         backgroundColor: state.backgroundColor,
       );
       emit(
@@ -559,46 +569,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  Rect _initialCropRect({
-    required double imageWidth,
-    required double imageHeight,
-  }) {
-    final side = min(imageWidth, imageHeight);
-    final left = (imageWidth - side) / 2;
-    final top = (imageHeight - side) / 2;
-    return _constrainRect(
-      Rect.fromLTWH(left, top, side, side),
-      imageWidth,
-      imageHeight,
-    );
-  }
-
-  Rect _constrainRect(Rect rect, double width, double height) {
-    if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
-      return Rect.zero;
-    }
-    final maxSide = min(width, height);
-    final minSide = min(minCropSide, maxSide);
-    final baseSide = rect.isFinite && rect.width > 0 && rect.height > 0
-        ? min(rect.width, rect.height)
-        : maxSide;
-    final desiredSide = baseSide.clamp(minSide, maxSide);
-    final maxLeft = width - desiredSide;
-    final maxTop = height - desiredSide;
-    final left = rect.left.isFinite
-        ? rect.left.clamp(0.0, maxLeft)
-        : (width - desiredSide) / 2;
-    final top = rect.top.isFinite
-        ? rect.top.clamp(0.0, maxTop)
-        : (height - desiredSide) / 2;
-    return Rect.fromLTWH(
-      left.roundToDouble(),
-      top.roundToDouble(),
-      desiredSide.roundToDouble(),
-      desiredSide.roundToDouble(),
-    );
-  }
-
   AvatarTemplate? _pickTemplate() {
     final hasAbstract = _abstractTemplates.isNotEmpty;
     final hasNonAbstract = _nonAbstractTemplates.isNotEmpty;
@@ -619,14 +589,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     return selection;
   }
 
-  Color _randomAvatarBackgroundColor() => generateAvatarBackground(_random);
-
-  String _templateKey(AvatarTemplate template) {
-    final path = template.assetPath;
-    if (path == null || path.isEmpty) return template.id;
-    final segments = path.split('/');
-    return segments.isNotEmpty ? segments.last : template.id;
-  }
+  Color _randomAvatarBackgroundColor() => _pipeline.randomBackground(_random);
 
   void _pushRecentTemplateKey(String key) {
     _recentTemplateKeys.add(key);
@@ -640,10 +603,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     required Color background,
     required ShadColorScheme colors,
   }) async {
-    final rawBytes = await template.loadRawBytes();
-    final bytes = rawBytes != null && rawBytes.isNotEmpty
-        ? rawBytes
-        : (await template.generator(background, colors)).bytes;
     final resolvedBackground = template.hasAlphaBackground
         ? background
         : state.backgroundColor == Colors.transparent
@@ -652,15 +611,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final useTemplateInset =
         template.category != AvatarTemplateCategory.abstract;
     final insetFraction = useTemplateInset ? avatarInsetFraction : 0.0;
-    return Avatar.fromTemplateBytes(
-      bytes: bytes,
+    return _pipeline.buildFromTemplate(
       template: template,
       background: resolvedBackground,
-      targetSize: _targetSize,
-      maxBytes: _maxBytes,
+      colors: colors,
       insetFraction: insetFraction,
-      minJpegQuality: _minQuality,
-      qualityStep: _qualityStep,
       cropSide: _avatarCarouselCropSide,
     );
   }
@@ -677,15 +632,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       ),
     );
     try {
-      final avatar = await Avatar.fromUploadBytes(
-        bytes: bytes,
-        maxDimension: _targetSize,
-        jpegQuality: 90,
-        targetSize: _targetSize,
-        maxBytes: _maxBytes,
-        minJpegQuality: _minQuality,
-        qualityStep: _qualityStep,
-      );
+      final avatar = await _pipeline.buildFromUpload(bytes);
       emit(
         state.copyWith(
           draftAvatar: buildDraft ? avatar : null,

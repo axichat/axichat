@@ -157,6 +157,19 @@ class Avatar {
     return Rect.fromLTWH(left, top, minSide, minSide);
   }
 
+  Rect? initialCropRect({required double minCropSide}) {
+    final width = sourceWidth?.toDouble();
+    final height = sourceHeight?.toDouble();
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    final side = width < height ? width : height;
+    final minSide = minCropSide < side ? minCropSide : side;
+    final left = (width - minSide) / 2;
+    final top = (height - minSide) / 2;
+    return Rect.fromLTWH(left, top, minSide, minSide);
+  }
+
   Rect constrainCropRect({
     required Rect rect,
     required double minCropSide,

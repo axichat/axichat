@@ -33,6 +33,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     this.imageHeight,
     this.onCropChanged,
     this.onCropReset,
+    this.onCropCommitted,
     this.descriptionText,
   });
 
@@ -50,6 +51,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final double? imageHeight;
   final ValueChanged<Rect>? onCropChanged;
   final VoidCallback? onCropReset;
+  final ValueChanged<Rect>? onCropCommitted;
   final String? descriptionText;
 
   @override
@@ -143,6 +145,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     });
   }
 
+  void _handleCropCommit(Rect rect) {
+    widget.onCropCommitted?.call(rect);
+    if (!mounted) return;
+    setState(() => _localCropRect = rect);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -168,6 +176,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
       final Uint8List safeBytes = cropBytes;
       final double safeImageWidth = imageWidth;
       final double safeImageHeight = imageHeight;
+      final onCropCommitted = widget.onCropCommitted;
+      final cropFallback = AxiImageCropper.fallbackCropRect(
+        imageWidth: safeImageWidth,
+        imageHeight: safeImageHeight,
+        minCropSide: AvatarEditorCubit.minCropSide,
+      );
       cropper = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 12.0,
@@ -189,17 +203,24 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                 bytes: safeBytes,
                 imageWidth: safeImageWidth,
                 imageHeight: safeImageHeight,
-                cropRect: _localCropRect ??
-                    widget.cropRect ??
-                    AxiImageCropper.fallbackCropRect(
-                      imageWidth: safeImageWidth,
-                      imageHeight: safeImageHeight,
-                      minCropSide: AvatarEditorCubit.minCropSide,
-                    ),
+                cropRect: _localCropRect ?? widget.cropRect ?? cropFallback,
                 onCropChanged: _scheduleCropChange,
                 onCropReset: _handleCropReset,
+                onCropCommitted:
+                    onCropCommitted == null ? null : _handleCropCommit,
                 minCropSide: AvatarEditorCubit.minCropSide,
               ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: AxiButton.secondary(
+              onPressed: onCropCommitted == null
+                  ? null
+                  : () => _handleCropCommit(
+                        _localCropRect ?? widget.cropRect ?? cropFallback,
+                      ),
+              child: Text(l10n.commonDone),
             ),
           ),
           Text(

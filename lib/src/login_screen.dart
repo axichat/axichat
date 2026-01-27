@@ -887,7 +887,6 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
         final buttonSurface = CutoutSurface(
           backgroundColor: fillColor,
           borderColor: borderColor,
-          borderWidth: borderWidth,
           shadowOpacity: 0.15 * t,
           shadows: [
             BoxShadow(

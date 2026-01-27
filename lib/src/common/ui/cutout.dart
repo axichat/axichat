@@ -14,7 +14,6 @@ class CutoutSurface extends StatelessWidget {
     required this.backgroundColor,
     required this.borderColor,
     required this.shape,
-    required this.borderWidth,
     this.shadows = const [],
     this.shadowOpacity = 0,
   });
@@ -24,7 +23,6 @@ class CutoutSurface extends StatelessWidget {
   final Color backgroundColor;
   final Color borderColor;
   final OutlinedBorder shape;
-  final double borderWidth;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
 
@@ -52,7 +50,6 @@ class CutoutSurface extends StatelessWidget {
             cutouts: resolvedCutouts,
             shadows: shadows,
             shadowOpacity: resolvedShadowOpacity,
-            borderWidth: borderWidth,
           ),
           child: ClipPath(clipper: clipper, child: child),
         ),
@@ -103,7 +100,6 @@ class _CutoutPainter extends CustomPainter {
     required this.cutouts,
     required this.shadows,
     required this.shadowOpacity,
-    required this.borderWidth,
   });
 
   final OutlinedBorder shape;
@@ -112,12 +108,10 @@ class _CutoutPainter extends CustomPainter {
   final List<CutoutSpec> cutouts;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
-  final double borderWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
     final fillPath = _cutoutPath(size, shape, cutouts);
-    final outerPath = shape.getOuterPath(Offset.zero & size);
 
     if (shadowOpacity > 0 && shadows.isNotEmpty) {
       for (final shadow in shadows) {
@@ -149,12 +143,12 @@ class _CutoutPainter extends CustomPainter {
     final strokePaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = borderWidth
+      ..strokeWidth = 1
       ..strokeJoin = StrokeJoin.round;
 
     canvas.drawPath(fillPath, fillPaint);
     if (borderColor.a > 0) {
-      canvas.drawPath(outerPath, strokePaint);
+      canvas.drawPath(fillPath, strokePaint);
     }
   }
 
