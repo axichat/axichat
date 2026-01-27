@@ -9,15 +9,17 @@ import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 
 extension AvatarEditorStateView on AvatarEditorState {
   Uint8List? get displayedBytes =>
-      previewBytes ?? carouselPreviewBytes ?? sourceBytes;
+      draftAvatar?.bytes ?? carouselAvatar?.bytes;
 
-  bool get hasCarouselPreview => carouselPreviewBytes != null;
+  bool get hasCarouselPreview => carouselAvatar != null;
 
   AvatarEditorMode get editorMode {
-    if (source == AvatarSource.upload && sourceBytes != null) {
+    final draftAvatar = this.draftAvatar;
+    if (draftAvatar?.source == AvatarSource.upload &&
+        draftAvatar?.sourceBytes != null) {
       return AvatarEditorMode.cropOnly;
     }
-    final templateValue = template;
+    final templateValue = draftAvatar?.template;
     if (templateValue == null) return AvatarEditorMode.none;
     if (templateValue.category == AvatarTemplateCategory.abstract) {
       return AvatarEditorMode.none;
@@ -26,7 +28,7 @@ extension AvatarEditorStateView on AvatarEditorState {
   }
 
   bool get canShuffleBackground {
-    final templateValue = template;
+    final templateValue = draftAvatar?.template;
     if (templateValue == null) return false;
     if (templateValue.category == AvatarTemplateCategory.abstract) return false;
     return templateValue.hasAlphaBackground;
@@ -34,7 +36,7 @@ extension AvatarEditorStateView on AvatarEditorState {
 
   bool get isBusy => processing || shuffling || publishing;
 
-  bool get hasUserSelectedAvatar => draft != null;
+  bool get hasUserSelectedAvatar => draftAvatar != null;
 
   bool get canUseCarouselAvatar =>
       hasCarouselPreview && !hasUserSelectedAvatar && !isBusy;

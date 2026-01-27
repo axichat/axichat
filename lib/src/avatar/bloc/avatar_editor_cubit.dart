@@ -8,6 +8,8 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/models/avatar_models.dart';
+import 'package:axichat/src/common/avatar_background.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -21,8 +23,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 
 part 'avatar_editor_cubit.freezed.dart';
 part 'avatar_editor_state.dart';
-
-enum AvatarSource { upload, template }
 
 enum AvatarEditorErrorType {
   openFailed,
@@ -69,15 +69,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
   static const _qualityStep = 5;
-  static const _sourceMaxDimension = 768;
-  static const _sourceMaxBytes = 8 * 1024 * 1024;
-  static const _sourceJpegQuality = 86;
+  static const _maxUploadBytes = 20 * 1024 * 1024;
   static const _rebuildDelay = Duration(milliseconds: 220);
   static const _avatarCarouselInterval = Duration(seconds: 1);
-  static const _avatarCarouselInitialBuffer = 4;
-  static const _avatarCarouselSustainBuffer = 3;
   static const _avatarCarouselHistoryLimit = 12;
-  static const _avatarCarouselMaxAttempts = 6;
   static const _avatarCarouselCropSide = 100000.0;
 
   final XmppService _xmppService;
@@ -88,19 +83,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   late final List<AvatarTemplate> _nonAbstractTemplates = _templates
       .where((template) => template.category != AvatarTemplateCategory.abstract)
       .toList(growable: false);
-  final List<String> _recentShuffleIds = <String>[];
+  final List<String> _recentTemplateIds = <String>[];
   final List<AvatarTemplate> _abstractShuffleBag = <AvatarTemplate>[];
   final List<AvatarTemplate> _nonAbstractShuffleBag = <AvatarTemplate>[];
   static const _shuffleHistoryLimit = 12;
   final _random = Random();
 
-  final List<_CarouselAvatar> _carouselBuffer = <_CarouselAvatar>[];
-  final List<String> _recentCarouselAvatarIds = <String>[];
-  final List<AvatarTemplate> _abstractCarouselBag = <AvatarTemplate>[];
-  final List<AvatarTemplate> _nonAbstractCarouselBag = <AvatarTemplate>[];
   Timer? _avatarCarouselTimer;
-  Future<bool>? _prefillCarouselFuture;
-  _CarouselAvatar? _currentCarouselAvatar;
+  Avatar? _nextCarouselAvatar;
   ShadColorScheme? _carouselColors;
   bool _carouselEnabled = false;
 
@@ -139,45 +129,38 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   AvatarUploadPayload? selectedAvatarPayload() =>
-      state.draft ?? _currentCarouselAvatar?.payload;
+      state.draftAvatar?.payload ?? state.carouselAvatar?.payload;
 
   Future<void> shuffleCarousel(ShadColorScheme colors) async {
     _carouselColors = colors;
     _carouselEnabled = true;
     if (_isCarouselBlocked()) return;
-    if (_carouselBuffer.isEmpty) {
-      await _prefillCarousel(targetSize: 1);
+    if (_nextCarouselAvatar == null) {
+      await _warmNextCarouselAvatar();
     }
     if (_isCarouselBlocked()) return;
-    _showNextCarouselAvatar();
-    await _prefillCarousel(targetSize: _avatarCarouselSustainBuffer);
+    await _advanceCarousel();
   }
 
   Future<void> shuffleCarouselBackground(ShadColorScheme colors) async {
     _carouselColors = colors;
     if (_isCarouselBlocked()) return;
-    final current = _currentCarouselAvatar;
+    final current = state.carouselAvatar;
     if (current == null) return;
     final template = current.template;
+    if (template == null) return;
     if (template.category == AvatarTemplateCategory.abstract) return;
     if (!template.hasAlphaBackground) return;
-    final background = _randomAvatarBackgroundColor(colors);
-    final payload = await _buildCarouselPayloadFromTemplate(
+    final background = _randomAvatarBackgroundColor();
+    final updated = await _buildAvatarFromTemplate(
       template: template,
       background: background,
       colors: colors,
     );
     if (_isCarouselBlocked()) return;
-    final updated = _CarouselAvatar(
-      payload: payload,
-      template: template,
-      background: background,
-    );
-    _currentCarouselAvatar = updated;
     emit(
       state.copyWith(
-        carouselPreviewBytes: payload.bytes,
-        template: template,
+        carouselAvatar: updated,
         backgroundColor: background,
         errorType: null,
       ),
@@ -191,16 +174,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> seedRandomTemplate(ShadColorScheme colors) async {
-    if (state.sourceBytes != null ||
-        state.previewBytes != null ||
-        state.draft != null ||
-        state.processing) {
+    if (state.draftAvatar != null || state.processing) {
       return;
     }
     final template = _pickTemplate();
     if (template == null) return;
     final background = template.hasAlphaBackground
-        ? _randomAvatarBackgroundColor(colors)
+        ? _randomAvatarBackgroundColor()
         : state.backgroundColor == Colors.transparent
             ? colors.accent
             : state.backgroundColor;
@@ -272,12 +252,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     emit(
       state.copyWith(
         processing: true,
-        source: AvatarSource.template,
-        template: template,
-        draft: null,
-        previewBytes: null,
-        carouselPreviewBytes: null,
-        estimatedBytes: null,
+        draftAvatar: null,
+        carouselAvatar: null,
         lastSavedPath: null,
         lastSavedHash: null,
         errorType: null,
@@ -285,28 +261,24 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     );
     try {
       final selectedBackground = background ?? state.backgroundColor;
-      final generatorBackground =
-          template.hasAlphaBackground ? Colors.transparent : selectedBackground;
-      final generated = await template.generator(generatorBackground, colors);
+      final avatar = await _buildAvatarFromTemplate(
+        template: template,
+        background: selectedBackground,
+        colors: colors,
+      );
       emit(
         state.copyWith(
-          sourceBytes: generated.bytes,
-          imageWidth: generated.width,
-          imageHeight: generated.height,
-          cropRect: _initialCropRect(
-            imageWidth: generated.width.toDouble(),
-            imageHeight: generated.height.toDouble(),
-          ),
+          draftAvatar: avatar,
           backgroundColor: selectedBackground,
           errorType: null,
+          processing: false,
         ),
       );
-      await _rebuildDraft();
     } on FormatException {
       emit(
         state.copyWith(
           processing: false,
-          draft: null,
+          draftAvatar: null,
           errorType: AvatarEditorErrorType.templateLoadFailed,
         ),
       );

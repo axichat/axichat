@@ -5,32 +5,6 @@ part of 'package:axichat/src/home_screen.dart';
 
 enum _HomeDemoPhase { idle, triggered }
 
-class _HomeCalendarViewTransition extends StatelessWidget {
-  const _HomeCalendarViewTransition({
-    required this.openCalendar,
-    required this.duration,
-    required this.curve,
-    required this.chatChild,
-    required this.calendarChild,
-  });
-
-  final bool openCalendar;
-  final Duration duration;
-  final Curve curve;
-  final Widget chatChild;
-  final Widget calendarChild;
-
-  @override
-  Widget build(BuildContext context) {
-    return AxiFadeIndexedStack(
-      index: openCalendar ? _homeCalendarPageIndex : _homeChatPageIndex,
-      duration: duration,
-      curve: curve,
-      children: [chatChild, calendarChild],
-    );
-  }
-}
-
 class Nexus extends StatefulWidget {
   const Nexus({
     super.key,

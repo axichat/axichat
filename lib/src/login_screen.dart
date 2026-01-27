@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -55,24 +54,21 @@ const double _authProgressSegmentTarget = 0.8;
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _authUiLog = Logger('AuthUi');
-  var _login = false;
-  var _signupFlowLocked = false;
-  var _progressStickyVisible = false;
+  _AuthFlow _selectedFlow = _AuthFlow.login;
   late OperationProgressController _operationProgressController;
   String _operationLabel = '';
   _AuthFlow? _activeFlow;
-  bool _operationAcknowledged = false;
-  bool _signupButtonLoading = false;
-  bool _handledInitialAuthState = false;
-  bool _initialAuthModeResolved = false;
-  bool _endpointConfigReady = false;
-  bool _pendingAutoLogin = false;
-  bool _loginSuccessHandled = false;
-  Timer? _authTimeoutTimer;
+  AuthenticationState? _completionHandledState;
+  int _authTimeoutGeneration = 0;
+  late final Future<void> _bootstrapTask;
 
   @override
   void initState() {
     super.initState();
+    final bootstrap = context.read<AuthBootstrap>();
+    _selectedFlow = bootstrap.hasStoredLoginCredentials
+        ? _AuthFlow.login
+        : _AuthFlow.signup;
     final animationDuration = context.read<SettingsCubit>().animationDuration;
     _operationProgressController = OperationProgressController(
       vsync: this,
@@ -81,16 +77,27 @@ class _LoginScreenState extends State<LoginScreen>
       completeDuration: _scaledDuration(animationDuration, 2),
       failDuration: _scaledDuration(animationDuration, 2 / 3),
     );
-    _restoreEndpointConfig();
+    _bootstrapTask = _bootstrap();
   }
 
-  Future<void> _restoreEndpointConfig() async {
+  Future<void> _bootstrap() async {
     await context.read<EndpointConfigCubit>().restore();
     if (!mounted) return;
-    setState(() {
-      _endpointConfigReady = true;
-    });
-    _maybeAutoLogin();
+    final bootstrap = context.read<AuthBootstrap>();
+    final preferredFlow = bootstrap.hasStoredLoginCredentials
+        ? _AuthFlow.login
+        : _AuthFlow.signup;
+    if (_selectedFlow != preferredFlow) {
+      setState(() {
+        _selectedFlow = preferredFlow;
+      });
+    }
+    if (bootstrap.hasStoredLoginCredentials &&
+        context.read<AuthenticationCubit>().state is AuthenticationNone) {
+      await context.read<AuthenticationCubit>().login();
+      if (!mounted) return;
+    }
+    await _handleAuthState(context.read<AuthenticationCubit>().state);
   }
 
   Duration _scaledDuration(Duration base, double factor) {
@@ -102,28 +109,6 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final bootstrap = context.read<AuthBootstrap>();
-    if (!_initialAuthModeResolved) {
-      _initialAuthModeResolved = true;
-      _login = bootstrap.hasStoredLoginCredentials;
-      if (bootstrap.hasStoredLoginCredentials &&
-          context.read<AuthenticationCubit>().state is AuthenticationNone) {
-        if (_endpointConfigReady) {
-          _maybeAutoLogin();
-        } else {
-          _pendingAutoLogin = true;
-        }
-      }
-    }
-    if (_handledInitialAuthState) return;
-    _handledInitialAuthState = true;
-    _handleAuthState(context.read<AuthenticationCubit>().state);
-  }
-
-  void _maybeAutoLogin() {
-    if (!_endpointConfigReady || !_pendingAutoLogin) return;
-    _pendingAutoLogin = false;
-    context.read<AuthenticationCubit>().login();
   }
 
   void _handleSubmissionRequested(_AuthFlow flow, {required String label}) {
@@ -133,18 +118,8 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() {
       _activeFlow = flow;
       _operationLabel = label;
-      _operationAcknowledged = false;
-      _progressStickyVisible = true;
-      if (flow == _AuthFlow.signup) {
-        _signupFlowLocked = true;
-        _login = false;
-      } else {
-        _login = true;
-        if (_signupFlowLocked) {
-          _signupFlowLocked = false;
-        }
-      }
-      _loginSuccessHandled = false;
+      _selectedFlow = flow;
+      _completionHandledState = null;
     });
     if (shouldRestartProgress) {
       _operationProgressController.start();
@@ -153,13 +128,9 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _handleSignupLoadingChanged(bool isLoading) {
     if (!mounted) return;
-    if (_signupButtonLoading != isLoading ||
-        (isLoading && _operationLabel.isEmpty)) {
+    if (isLoading && _operationLabel.isEmpty) {
       setState(() {
-        _signupButtonLoading = isLoading;
-        if (isLoading && _operationLabel.isEmpty) {
-          _operationLabel = context.l10n.authCreatingAccount;
-        }
+        _operationLabel = context.l10n.authCreatingAccount;
       });
     }
     if (isLoading) {
@@ -173,21 +144,13 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _resetAuthUiState() {
     if (_activeFlow == null &&
-        !_signupButtonLoading &&
-        !_signupFlowLocked &&
         _operationLabel.isEmpty &&
-        !_operationProgressController.isActive &&
-        !_operationAcknowledged) {
+        !_operationProgressController.isActive) {
       return;
     }
     setState(() {
       _activeFlow = null;
       _operationLabel = '';
-      _operationAcknowledged = false;
-      _signupFlowLocked = false;
-      _signupButtonLoading = false;
-      _progressStickyVisible = false;
-      _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
     _clearAuthTimeout();
@@ -200,31 +163,22 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() {
       final wasSignupFlow = _activeFlow == _AuthFlow.signup;
       _activeFlow = null;
-      _operationAcknowledged = false;
-      _progressStickyVisible = false;
-      if (wasSignupFlow && _signupFlowLocked) {
-        _signupFlowLocked = false;
-        _login = false;
+      if (wasSignupFlow) {
+        _selectedFlow = _AuthFlow.signup;
       }
-      _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
   }
 
   Future<void> _completeLoginAnimation() async {
-    if (_loginSuccessHandled) {
-      return;
-    }
-    _loginSuccessHandled = true;
     if (!mounted) return;
     final progressDuration =
         context.read<SettingsCubit>().authCompletionDuration;
-    if (!_progressStickyVisible && !_operationProgressController.isActive) {
+    if (!_operationProgressController.isActive &&
+        _operationLabel.isEmpty &&
+        mounted) {
       setState(() {
-        _progressStickyVisible = true;
-        if (_operationLabel.isEmpty) {
-          _operationLabel = context.l10n.authLoggingIn;
-        }
+        _operationLabel = context.l10n.authLoggingIn;
       });
     }
     final preloadHome = _preloadHomeScreenCache();
@@ -234,9 +188,8 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     setState(() {
-      _signupButtonLoading = false;
       if (_activeFlow != _AuthFlow.signup) {
-        _signupFlowLocked = false;
+        _selectedFlow = _AuthFlow.login;
       }
     });
   }
@@ -245,12 +198,16 @@ class _LoginScreenState extends State<LoginScreen>
     if (kDebugMode) {
       _authUiLog.fine(
         'state=${state.runtimeType} activeFlow=$_activeFlow '
-        'ack=$_operationAcknowledged progressActive=${_operationProgressController.isActive}',
+        'progressActive=${_operationProgressController.isActive}',
       );
     }
 
     if (state is AuthenticationSignUpInProgress && !state.fromSubmission) {
       return;
+    }
+    if (state is AuthenticationLogInInProgress ||
+        state is AuthenticationSignUpInProgress) {
+      _completionHandledState = null;
     }
     if (state is AuthenticationComplete ||
         state is AuthenticationFailure ||
@@ -259,6 +216,7 @@ class _LoginScreenState extends State<LoginScreen>
       _clearAuthTimeout();
     }
     if (state is AuthenticationNone) {
+      _completionHandledState = null;
       if (_activeFlow != null || _operationProgressController.isActive) {
         // Ignore redundant resets while an auth flow is already in progress.
         return;
@@ -275,12 +233,10 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       setState(() {
         _activeFlow = _AuthFlow.signup;
-        _operationAcknowledged = true;
         _operationLabel = signupInProgress
             ? context.l10n.authCreatingAccount
             : context.l10n.authSecuringLogin;
-        _signupFlowLocked = true;
-        _login = false;
+        _selectedFlow = _AuthFlow.signup;
       });
       if (!_operationProgressController.isActive) {
         _operationProgressController.start();
@@ -299,9 +255,8 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       setState(() {
         _activeFlow = _AuthFlow.login;
-        _operationAcknowledged = true;
         _operationLabel = context.l10n.authLoggingIn;
-        _login = true;
+        _selectedFlow = _AuthFlow.login;
       });
       if (!_operationProgressController.isActive) {
         _operationProgressController.start();
@@ -316,10 +271,15 @@ class _LoginScreenState extends State<LoginScreen>
 
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
+      _completionHandledState = null;
       await _failOperation();
       return;
     }
     if (state is AuthenticationComplete) {
+      if (state == _completionHandledState) {
+        return;
+      }
+      _completionHandledState = state;
       await _completeLoginAnimation();
     }
   }
@@ -332,16 +292,20 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _startAuthTimeout(_AuthFlow flow) {
-    _authTimeoutTimer?.cancel();
-    _authTimeoutTimer = Timer(_authOperationTimeout, () async {
-      if (!mounted || _activeFlow != flow) return;
+    _authTimeoutGeneration++;
+    final generation = _authTimeoutGeneration;
+    Future<void>.delayed(_authOperationTimeout).then((_) async {
+      if (!mounted ||
+          _activeFlow != flow ||
+          generation != _authTimeoutGeneration) {
+        return;
+      }
       await _failOperation();
     });
   }
 
   void _clearAuthTimeout() {
-    _authTimeoutTimer?.cancel();
-    _authTimeoutTimer = null;
+    _authTimeoutGeneration++;
   }
 
   Future<void> _preloadSelfAvatarCache() async {
@@ -506,203 +470,227 @@ class _LoginScreenState extends State<LoginScreen>
     final authCardClipShape = SquircleBorder(
       cornerRadius: _authCardCornerRadius,
     );
-    final showProgressBar = _progressStickyVisible ||
-        _activeFlow != null ||
-        _signupButtonLoading ||
-        _operationProgressController.isActive;
+    final showProgressBar =
+        _activeFlow != null || _operationProgressController.isActive;
     final size = MediaQuery.sizeOf(context);
     final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
         size.width >= smallScreen;
     final containerMargin = allowSplitView
         ? EdgeInsets.zero
         : const EdgeInsets.symmetric(horizontal: _unsplitHorizontalMargin);
-    return BlocListener<AuthenticationCubit, AuthenticationState>(
-      listener: (context, state) => _handleAuthState(state),
-      child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              const AxiAppBar(
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LanguageSelector(
-                      compact: true,
-                      labelStyle: LanguageLabelStyle.compact,
+    return FutureBuilder<void>(
+      future: _bootstrapTask,
+      builder: (context, snapshot) {
+        return BlocListener<AuthenticationCubit, AuthenticationState>(
+          listener: (context, state) => _handleAuthState(state),
+          child: Scaffold(
+            body: SafeArea(
+              child: Column(
+                children: [
+                  const AxiAppBar(
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        LanguageSelector(
+                          compact: true,
+                          labelStyle: LanguageLabelStyle.compact,
+                        ),
+                        SizedBox(width: 8),
+                        AxiVersion(),
+                        if (kDebugMode) ...[
+                          SizedBox(width: 8),
+                          DeleteCredentialsButton(),
+                        ],
+                      ],
                     ),
-                    SizedBox(width: 8),
-                    AxiVersion(),
-                    if (kDebugMode) ...[
-                      SizedBox(width: 8),
-                      DeleteCredentialsButton(),
-                    ],
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  margin: containerMargin,
-                  width: double.infinity,
-                  color: colors.background,
-                  child: AxiAdaptiveLayout(
-                    primaryFlex: 4,
-                    secondaryFlex: 6,
-                    primaryPadding: const EdgeInsets.symmetric(
-                      horizontal: _primaryPanePadding,
-                    ),
-                    secondaryPadding: const EdgeInsets.only(
-                      left: _secondaryPaneGutter,
-                    ),
-                    centerSecondary: false,
-                    secondaryAlignment: Alignment.topLeft,
-                    primaryChild: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 480),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const ShorebirdChecker(),
-                              DecoratedBox(
-                                decoration: ShapeDecoration(
-                                  color: colors.card,
-                                  shape: authCardShape,
-                                ),
-                                child: ClipPath(
-                                  clipper: ShapeBorderClipper(
-                                    shape: authCardClipShape,
-                                  ),
-                                  child: AxiAnimatedSize(
-                                    duration: context
-                                        .watch<SettingsCubit>()
-                                        .animationDuration,
-                                    curve: Curves.easeInOut,
-                                    child: AnimatedCrossFade(
-                                      firstCurve: Curves.easeInOut,
-                                      secondCurve: Curves.easeInOut,
-                                      sizeCurve: Curves.easeInOut,
-                                      duration: context
-                                          .watch<SettingsCubit>()
-                                          .animationDuration,
-                                      crossFadeState:
-                                          (!_signupFlowLocked && _login)
+                  ),
+                  Expanded(
+                    child: Container(
+                      margin: containerMargin,
+                      width: double.infinity,
+                      color: colors.background,
+                      child: AxiAdaptiveLayout(
+                        primaryFlex: 4,
+                        secondaryFlex: 6,
+                        primaryPadding: const EdgeInsets.symmetric(
+                          horizontal: _primaryPanePadding,
+                        ),
+                        secondaryPadding: const EdgeInsets.only(
+                          left: _secondaryPaneGutter,
+                        ),
+                        centerSecondary: false,
+                        secondaryAlignment: Alignment.topLeft,
+                        primaryChild: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 480),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const ShorebirdChecker(),
+                                  DecoratedBox(
+                                    decoration: ShapeDecoration(
+                                      color: colors.card,
+                                      shape: authCardShape,
+                                    ),
+                                    child: ClipPath(
+                                      clipper: ShapeBorderClipper(
+                                        shape: authCardClipShape,
+                                      ),
+                                      child: AxiAnimatedSize(
+                                        duration: context
+                                            .watch<SettingsCubit>()
+                                            .animationDuration,
+                                        curve: Curves.easeInOut,
+                                        child: AnimatedCrossFade(
+                                          firstCurve: Curves.easeInOut,
+                                          secondCurve: Curves.easeInOut,
+                                          sizeCurve: Curves.easeInOut,
+                                          duration: context
+                                              .watch<SettingsCubit>()
+                                              .animationDuration,
+                                          crossFadeState: (_activeFlow !=
+                                                      _AuthFlow.signup &&
+                                                  _selectedFlow ==
+                                                      _AuthFlow.login)
                                               ? CrossFadeState.showFirst
                                               : CrossFadeState.showSecond,
-                                      firstChild: IgnorePointer(
-                                        ignoring: _signupFlowLocked || !_login,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(24.0),
-                                          child: LoginForm(
-                                            key: const ValueKey('login-form'),
-                                            onSubmitStart: () =>
-                                                _handleSubmissionRequested(
-                                              _AuthFlow.login,
-                                              label: l10n.authLoggingIn,
+                                          firstChild: IgnorePointer(
+                                            ignoring: _activeFlow ==
+                                                    _AuthFlow.signup ||
+                                                _selectedFlow !=
+                                                    _AuthFlow.login,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.all(24.0),
+                                              child: LoginForm(
+                                                key: const ValueKey(
+                                                    'login-form'),
+                                                onSubmitStart: () =>
+                                                    _handleSubmissionRequested(
+                                                  _AuthFlow.login,
+                                                  label: l10n.authLoggingIn,
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                      secondChild: IgnorePointer(
-                                        ignoring: !_signupFlowLocked && _login,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(24.0),
-                                          child: BlocProvider(
-                                            create: (_) => SignupAvatarCubit(),
-                                            child: SignupForm(
-                                              key: const ValueKey(
-                                                'signup-form',
+                                          secondChild: IgnorePointer(
+                                            ignoring: _activeFlow ==
+                                                    _AuthFlow.login ||
+                                                _selectedFlow !=
+                                                    _AuthFlow.signup,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.all(24.0),
+                                              child: BlocProvider(
+                                                create: (_) =>
+                                                    SignupAvatarCubit(),
+                                                child: SignupForm(
+                                                  key: const ValueKey(
+                                                    'signup-form',
+                                                  ),
+                                                  visible: _activeFlow ==
+                                                          _AuthFlow.signup ||
+                                                      _selectedFlow ==
+                                                          _AuthFlow.signup,
+                                                  onSubmitStart: () =>
+                                                      _handleSubmissionRequested(
+                                                    _AuthFlow.signup,
+                                                    label: l10n
+                                                        .authCreatingAccount,
+                                                  ),
+                                                  onLoadingChanged:
+                                                      _handleSignupLoadingChanged,
+                                                ),
                                               ),
-                                              visible:
-                                                  _signupFlowLocked || !_login,
-                                              onSubmitStart: () =>
-                                                  _handleSubmissionRequested(
-                                                _AuthFlow.signup,
-                                                label: l10n.authCreatingAccount,
-                                              ),
-                                              onLoadingChanged:
-                                                  _handleSignupLoadingChanged,
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              AnimatedSwitcher(
-                                duration: context
-                                    .watch<SettingsCubit>()
-                                    .animationDuration,
-                                child: showProgressBar
-                                    ? Center(
-                                        key: const ValueKey(
-                                          'auth-progress-bar',
-                                        ),
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 480,
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 24,
+                                  const SizedBox(height: 12),
+                                  AnimatedSwitcher(
+                                    duration: context
+                                        .watch<SettingsCubit>()
+                                        .animationDuration,
+                                    child: showProgressBar
+                                        ? Center(
+                                            key: const ValueKey(
+                                              'auth-progress-bar',
                                             ),
-                                            child: OperationProgressBar(
-                                              animation:
-                                                  _operationProgressController
-                                                      .animation,
-                                              visible: showProgressBar,
-                                              label: _operationLabel,
+                                            child: ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                maxWidth: 480,
+                                              ),
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 24,
+                                                ),
+                                                child: OperationProgressBar(
+                                                  animation:
+                                                      _operationProgressController
+                                                          .animation,
+                                                  visible: showProgressBar,
+                                                  label: _operationLabel,
+                                                ),
+                                              ),
                                             ),
+                                          )
+                                        : KeyedSubtree(
+                                            key: const ValueKey(
+                                              'auth-toggle-button',
+                                            ),
+                                            child: ShadButton.ghost(
+                                              onPressed: () {
+                                                final nextLogin =
+                                                    _selectedFlow ==
+                                                            _AuthFlow.login
+                                                        ? _AuthFlow.signup
+                                                        : _AuthFlow.login;
+                                                setState(() {
+                                                  _selectedFlow = nextLogin;
+                                                });
+                                              },
+                                              child: Text(
+                                                _selectedFlow == _AuthFlow.login
+                                                    ? l10n.authToggleSignup
+                                                    : l10n.authToggleLogin,
+                                              ),
+                                            ).withTapBounce(),
                                           ),
-                                        ),
-                                      )
-                                    : KeyedSubtree(
-                                        key: const ValueKey(
-                                          'auth-toggle-button',
-                                        ),
-                                        child: ShadButton.ghost(
-                                          onPressed: () {
-                                            final nextLogin = !_login;
-                                            setState(() {
-                                              _login = nextLogin;
-                                            });
-                                          },
-                                          child: Text(
-                                            _login
-                                                ? l10n.authToggleSignup
-                                                : l10n.authToggleLogin,
-                                          ),
-                                        ).withTapBounce(),
-                                      ),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  ShadButton.outline(
+                                    onPressed: () =>
+                                        context.go('/guest-calendar'),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.calendar_today),
+                                        const SizedBox(width: 8),
+                                        Text(l10n.authGuestCalendarCta),
+                                      ],
+                                    ),
+                                  ).withTapBounce(),
+                                  const SizedBox(height: 18),
+                                ],
                               ),
-                              const SizedBox(height: 18),
-                              ShadButton.outline(
-                                onPressed: () => context.go('/guest-calendar'),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.calendar_today),
-                                    const SizedBox(width: 8),
-                                    Text(l10n.authGuestCalendarCta),
-                                  ],
-                                ),
-                              ).withTapBounce(),
-                              const SizedBox(height: 18),
-                            ],
+                            ),
                           ),
                         ),
+                        secondaryChild: const GuestChat(),
                       ),
                     ),
-                    secondaryChild: const GuestChat(),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -557,18 +557,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       final bool showChatCalendar =
                           openJid != null && (chatRoute?.isCalendar ?? false);
-                      final Duration calendarTransitionDuration = Duration.zero;
                       return SafeArea(
                         top: state is ConnectivityConnected || demoOffline,
-                        child: _HomeCalendarViewTransition(
-                          openCalendar: openCalendar,
-                          duration: calendarTransitionDuration,
-                          curve: _homeCalendarFadeCurve,
-                          chatChild: chatLayout(
-                            showChatCalendar: showChatCalendar,
-                          ),
-                          calendarChild: calendarLayout(),
-                        ),
+                        child: openCalendar
+                            ? calendarLayout()
+                            : chatLayout(
+                                showChatCalendar: showChatCalendar,
+                              ),
                       );
                     },
                   ),

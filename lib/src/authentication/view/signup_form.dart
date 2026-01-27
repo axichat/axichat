@@ -73,7 +73,7 @@ class _SignupFormState extends State<SignupForm>
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
-  bool _captchaHasLoadedOnce = false;
+  int _captchaRetryGeneration = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -281,19 +281,27 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<String> _loadCaptchaSrc() async {
-    try {
-      _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
-      return await context.read<AuthenticationCubit>().fetchCaptchaSrc();
-    } on Exception catch (_) {
-      return '';
+    const retryDelay = Duration(seconds: 1);
+    const maxAttempts = 3;
+    _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final src = await context.read<AuthenticationCubit>().fetchCaptchaSrc();
+        if (src.trim().isNotEmpty) {
+          return src;
+        }
+      } on Exception catch (_) {}
+      if (attempt < maxAttempts - 1) {
+        await Future<void>.delayed(retryDelay);
+      }
     }
+    return '';
   }
 
   void _reloadCaptcha() {
     _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
-      _captchaHasLoadedOnce = false;
       _captchaSrc = _loadCaptchaSrc();
     });
   }
@@ -306,11 +314,17 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _markCaptchaLoaded() {
-    if (_captchaHasLoadedOnce) return;
-    if (!mounted) return;
-    setState(() {
-      _captchaHasLoadedOnce = true;
-    });
+    _captchaRetryGeneration++;
+  }
+
+  Future<void> _scheduleCaptchaRetry() async {
+    final generation = ++_captchaRetryGeneration;
+    const retryDelay = Duration(seconds: 1);
+    await Future<void>.delayed(retryDelay);
+    if (!mounted || generation != _captchaRetryGeneration) {
+      return;
+    }
+    _reloadCaptcha();
   }
 
   String get _currentStepLabel {
@@ -869,6 +883,8 @@ class _SignupFormState extends State<SignupForm>
                                                       animationDuration,
                                                   showErrorMessageOnError: true,
                                                   onLoaded: _markCaptchaLoaded,
+                                                  onRetry:
+                                                      _scheduleCaptchaRetry,
                                                 );
                                         } else if (snapshot.hasError) {
                                           captchaSurface =
@@ -1823,12 +1839,14 @@ class _CaptchaImage extends StatefulWidget {
     required this.url,
     required this.animationDuration,
     required this.onLoaded,
+    required this.onRetry,
     required this.showErrorMessageOnError,
   });
 
   final String url;
   final Duration animationDuration;
   final VoidCallback onLoaded;
+  final VoidCallback onRetry;
   final bool showErrorMessageOnError;
 
   @override
@@ -1837,12 +1855,14 @@ class _CaptchaImage extends StatefulWidget {
 
 class _CaptchaImageState extends State<_CaptchaImage> {
   bool _readyNotified = false;
+  String? _lastErrorUrl;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       _readyNotified = false;
+      _lastErrorUrl = null;
     }
   }
 
@@ -1866,6 +1886,10 @@ class _CaptchaImageState extends State<_CaptchaImage> {
         );
       },
       errorBuilder: (context, error, stackTrace) {
+        if (_lastErrorUrl != widget.url) {
+          _lastErrorUrl = widget.url;
+          widget.onRetry();
+        }
         if (widget.showErrorMessageOnError) {
           return const _CaptchaErrorMessage();
         }
