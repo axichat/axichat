@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -87,9 +86,6 @@ class AxiNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final env = EnvScope.maybeOf(context);
-    final isDesktop = env?.isDesktopPlatform ?? false;
-    final radius = context.radius;
     final brightness = Theme.of(context).brightness;
     final selectionOverlay = colors.primary.withValues(
       alpha: brightness == Brightness.dark ? 0.12 : 0.08,
@@ -175,10 +171,8 @@ class AxiNavigationRail extends StatelessWidget {
               child: _AxiNavigationRailItem(
                 destination: destination,
                 selected: selected,
-                radius: radius,
                 selectionOverlay: selectionOverlay,
                 collapsed: collapsed,
-                isDesktop: isDesktop,
                 onTap: () => onDestinationSelected(index),
                 surfaceColor: surfaceColor,
               ),
@@ -197,132 +191,72 @@ class AxiNavigationRail extends StatelessWidget {
   }
 }
 
-class _AxiNavigationRailItem extends StatefulWidget {
+class _AxiNavigationRailItem extends StatelessWidget {
   const _AxiNavigationRailItem({
     required this.destination,
     required this.selected,
-    required this.radius,
     required this.selectionOverlay,
     required this.collapsed,
-    required this.isDesktop,
     required this.onTap,
     required this.surfaceColor,
   });
 
   final AxiRailDestination destination;
   final bool selected;
-  final BorderRadius radius;
   final Color selectionOverlay;
   final bool collapsed;
-  final bool isDesktop;
   final VoidCallback onTap;
   final Color surfaceColor;
 
   @override
-  State<_AxiNavigationRailItem> createState() => _AxiNavigationRailItemState();
-}
-
-class _AxiNavigationRailItemState extends State<_AxiNavigationRailItem> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final bool isCollapsed = widget.collapsed;
+    final bool isCollapsed = collapsed;
     final Color baseIconColor =
         isCollapsed ? colors.primary : colors.foreground;
-    final Color iconColor = widget.selected ? colors.primary : baseIconColor;
-    final Color textColor =
-        widget.selected ? colors.primary : colors.foreground;
-    final itemShape = SquircleBorder(
-      cornerRadius: widget.radius.topLeft.x,
-      side: BorderSide(
-        color: isCollapsed ? Colors.transparent : colors.border,
-        width: isCollapsed ? 0 : 1,
-      ),
-    );
-    final hoverTint = colors.primary.withValues(alpha: 0.06);
-    final baseBackground = isCollapsed
-        ? (widget.selected ? widget.selectionOverlay : Colors.transparent)
-        : (widget.selected
-            ? Color.alphaBlend(widget.selectionOverlay, widget.surfaceColor)
-            : widget.surfaceColor);
-    final background = _hovered && widget.isDesktop
-        ? Color.alphaBlend(hoverTint, baseBackground)
-        : baseBackground;
-
-    final Widget icon = Icon(
-      widget.destination.icon,
-      color: iconColor,
-      size: 20,
-    );
-    final Widget? badge = widget.destination.badgeCount > 0
-        ? _RailBadge(count: widget.destination.badgeCount)
+    final Color iconColor = selected ? colors.primary : baseIconColor;
+    final Color textColor = selected ? colors.primary : colors.foreground;
+    final Widget? badge = destination.badgeCount > 0
+        ? _RailBadge(count: destination.badgeCount)
         : null;
-
-    final content = Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: widget.collapsed ? 8 : 12,
-        vertical: 12,
-      ),
-      child: widget.collapsed
-          ? Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                icon,
-                if (badge != null) Positioned(top: -6, right: -8, child: badge),
-              ],
-            )
-          : Row(
-              children: [
-                icon,
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.destination.label,
-                    style: context.textTheme.small.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (badge != null) ...[const SizedBox(width: 8), badge],
-              ],
-            ),
+    const iconSize = 20.0;
+    final Widget collapsedIcon = Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        Icon(destination.icon, color: iconColor, size: iconSize),
+        if (badge != null) Positioned(top: -6, right: -8, child: badge),
+      ],
     );
-
-    final child = AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeInOutCubic,
-      decoration: ShapeDecoration(color: background, shape: itemShape),
-      child: widget.isDesktop
-          ? content
-          : InkWell(
-              customBorder: itemShape,
-              onTap: widget.onTap,
-              highlightColor: Colors.transparent,
-              splashColor: colors.primary.withValues(alpha: 0.12),
-              hoverColor: hoverTint,
-              child: content,
-            ),
-    );
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.isDesktop ? widget.onTap : null,
-        child: Semantics(
-          selected: widget.selected,
-          button: true,
-          label: widget.destination.label,
-          onTap: widget.onTap,
-          child: child,
+    final Color? backgroundColor = selected
+        ? (isCollapsed
+            ? selectionOverlay
+            : Color.alphaBlend(selectionOverlay, surfaceColor))
+        : null;
+    final Color? foregroundColor = selected ? textColor : null;
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: destination.label,
+      onTap: onTap,
+      child: AxiListButton(
+        collapsed: isCollapsed,
+        collapsedIconData: destination.icon,
+        collapsedIcon: collapsedIcon,
+        collapsedTooltip: destination.label,
+        collapsedForegroundColor: iconColor,
+        collapsedBackgroundColor: isCollapsed ? backgroundColor : null,
+        variant: AxiButtonVariant.outline,
+        leading: Icon(destination.icon, size: iconSize),
+        trailing: badge,
+        foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor,
+        onPressed: onTap,
+        child: Text(
+          destination.label,
+          style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

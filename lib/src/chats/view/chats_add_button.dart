@@ -228,12 +228,16 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                       child: SignupAvatarEditorPanel(
                                         mode: avatarState.editorMode,
                                         avatarBytes: avatarState.displayedBytes,
-                                        cropBytes: avatarState.sourceBytes,
-                                        cropRect: avatarState.cropRect,
-                                        imageWidth:
-                                            avatarState.imageWidth?.toDouble(),
-                                        imageHeight:
-                                            avatarState.imageHeight?.toDouble(),
+                                        cropBytes: avatarState
+                                            .draftAvatar?.sourceBytes,
+                                        cropRect:
+                                            avatarState.draftAvatar?.cropRect,
+                                        imageWidth: avatarState
+                                            .draftAvatar?.sourceWidth
+                                            ?.toDouble(),
+                                        imageHeight: avatarState
+                                            .draftAvatar?.sourceHeight
+                                            ?.toDouble(),
                                         onCropChanged: (rect) => context
                                             .read<AvatarEditorCubit>()
                                             .updateCropRect(rect),

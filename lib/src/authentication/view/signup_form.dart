@@ -295,6 +295,7 @@ class _SignupFormState extends State<SignupForm>
         await Future<void>.delayed(retryDelay);
       }
     }
+    await _scheduleCaptchaRetry();
     return '';
   }
 

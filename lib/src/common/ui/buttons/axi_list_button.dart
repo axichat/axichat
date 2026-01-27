@@ -15,6 +15,16 @@ class AxiListButton extends StatefulWidget {
     this.variant = AxiButtonVariant.ghost,
     this.leading,
     this.trailing,
+    this.collapsed = false,
+    this.collapsedIconData,
+    this.collapsedIcon,
+    this.collapsedTooltip,
+    this.collapsedSemanticLabel,
+    this.collapsedForegroundColor,
+    this.collapsedBackgroundColor,
+    this.collapsedButtonSize,
+    this.collapsedTapTargetSize,
+    this.collapsedCornerRadius,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -22,13 +32,26 @@ class AxiListButton extends StatefulWidget {
     this.focusNode,
     this.foregroundColor,
     this.backgroundColor,
-  });
+  }) : assert(
+          !collapsed || collapsedIconData != null || collapsedIcon != null,
+          'Collapsed list buttons require an icon.',
+        );
 
   const AxiListButton.destructive({
     super.key,
     required this.child,
     this.leading,
     this.trailing,
+    this.collapsed = false,
+    this.collapsedIconData,
+    this.collapsedIcon,
+    this.collapsedTooltip,
+    this.collapsedSemanticLabel,
+    this.collapsedForegroundColor,
+    this.collapsedBackgroundColor,
+    this.collapsedButtonSize,
+    this.collapsedTapTargetSize,
+    this.collapsedCornerRadius,
     this.onPressed,
     this.onLongPress,
     this.loading = false,
@@ -36,12 +59,26 @@ class AxiListButton extends StatefulWidget {
     this.focusNode,
     this.foregroundColor,
     this.backgroundColor,
-  }) : variant = AxiButtonVariant.destructive;
+  })  : variant = AxiButtonVariant.destructive,
+        assert(
+          !collapsed || collapsedIconData != null || collapsedIcon != null,
+          'Collapsed list buttons require an icon.',
+        );
 
   final Widget child;
   final AxiButtonVariant variant;
   final Widget? leading;
   final Widget? trailing;
+  final bool collapsed;
+  final IconData? collapsedIconData;
+  final Widget? collapsedIcon;
+  final String? collapsedTooltip;
+  final String? collapsedSemanticLabel;
+  final Color? collapsedForegroundColor;
+  final Color? collapsedBackgroundColor;
+  final double? collapsedButtonSize;
+  final double? collapsedTapTargetSize;
+  final double? collapsedCornerRadius;
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
   final bool loading;
@@ -80,7 +117,21 @@ class _AxiListButtonState extends State<AxiListButton> {
     final Duration animationDuration = context.select<SettingsCubit, Duration>(
       (cubit) => cubit.animationDuration,
     );
-    return ValueListenableBuilder<Set<WidgetState>>(
+    final IconData collapsedIconData = widget.collapsedIconData!;
+    final collapsedButton = AxiIconButton.ghost(
+      iconData: collapsedIconData,
+      icon: widget.collapsedIcon,
+      tooltip: widget.collapsedTooltip ?? widget.semanticLabel,
+      semanticLabel: widget.collapsedSemanticLabel ?? widget.semanticLabel,
+      onPressed: widget.onPressed,
+      onLongPress: widget.onLongPress,
+      color: widget.collapsedForegroundColor,
+      backgroundColor: widget.collapsedBackgroundColor,
+      buttonSize: widget.collapsedButtonSize,
+      tapTargetSize: widget.collapsedTapTargetSize,
+      cornerRadius: widget.collapsedCornerRadius,
+    );
+    final expandedButton = ValueListenableBuilder<Set<WidgetState>>(
       valueListenable: _states,
       builder: (context, states, _) {
         final bool enabled =
@@ -261,6 +312,26 @@ class _AxiListButtonState extends State<AxiListButton> {
           child: button,
         );
       },
+    );
+    const collapsedKey = ValueKey('axi_list_button_collapsed');
+    const expandedKey = ValueKey('axi_list_button_expanded');
+    const axisAlignment = -1.0;
+    return AnimatedSwitcher(
+      duration: animationDuration,
+      switchInCurve: Curves.easeInOutCubic,
+      switchOutCurve: Curves.easeInOutCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(
+          sizeFactor: animation,
+          axis: Axis.horizontal,
+          axisAlignment: axisAlignment,
+          child: child,
+        ),
+      ),
+      child: widget.collapsed
+          ? SizedBox(key: collapsedKey, child: collapsedButton)
+          : SizedBox(key: expandedKey, child: expandedButton),
     );
   }
 }

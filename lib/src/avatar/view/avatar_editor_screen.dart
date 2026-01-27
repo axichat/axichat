@@ -3,7 +3,9 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
+import 'package:axichat/src/avatar/models/avatar_models.dart';
 import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -108,11 +110,12 @@ class _AvatarEditorToolsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final template = state.template;
-    final showBackgroundPicker = state.source == AvatarSource.template &&
-        template != null &&
-        template.category != AvatarTemplateCategory.abstract &&
-        template.hasAlphaBackground;
+    final template = state.draftAvatar?.template;
+    final showBackgroundPicker =
+        state.draftAvatar?.source == AvatarSource.template &&
+            template != null &&
+            template.category != AvatarTemplateCategory.abstract &&
+            template.hasAlphaBackground;
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
@@ -176,13 +179,13 @@ class _AvatarSummaryCard extends StatelessWidget {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final size = isWide ? 104.0 : 88.0;
-    final previewBytes = state.previewBytes ?? state.sourceBytes;
+    final previewBytes = state.displayedBytes;
     final errorText = state.errorType?.resolve(l10n);
     final avatarSavedMessage = l10n.avatarSavedMessage;
     final showSuccessMessage = !state.publishing &&
         errorText == null &&
         state.lastSavedHash != null &&
-        state.draft?.hash == state.lastSavedHash;
+        state.draftAvatar?.payload.hash == state.lastSavedHash;
 
     return ShadCard(
       padding: const EdgeInsets.all(12.0),
@@ -216,9 +219,9 @@ class _AvatarSummaryCard extends StatelessWidget {
                       ),
                     ),
                     Text(profile.jid, style: context.textTheme.muted),
-                    if (state.estimatedBytes != null)
+                    if (state.draftAvatar != null)
                       Text(
-                        '${state.estimatedBytes! ~/ 1024} KB • ${state.draft?.mimeType ?? ''}',
+                        '${state.draftAvatar!.payload.bytes.length ~/ 1024} KB • ${state.draftAvatar!.payload.mimeType}',
                         style: context.textTheme.small.copyWith(
                           color: colors.mutedForeground,
                         ),
@@ -287,7 +290,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                   ),
                   ShadButton(
                     size: ShadButtonSize.sm,
-                    onPressed: state.draft == null ||
+                    onPressed: state.draftAvatar == null ||
                             state.processing ||
                             state.publishing
                         ? null
@@ -373,19 +376,21 @@ class _CropCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final sourceBytes = state.sourceBytes;
-    final imageWidth = state.imageWidth?.toDouble();
-    final imageHeight = state.imageHeight?.toDouble();
-    final cropRect =
-        (state.cropRect == null || imageWidth == null || imageHeight == null)
-            ? (imageWidth != null && imageHeight != null
-                ? AvatarCropper.fallbackCropRect(
-                    imageWidth: imageWidth,
-                    imageHeight: imageHeight,
-                    minCropSide: AvatarEditorCubit.minCropSide,
-                  )
-                : null)
-            : state.cropRect;
+    final draftAvatar = state.draftAvatar;
+    final sourceBytes = draftAvatar?.sourceBytes;
+    final imageWidth = draftAvatar?.sourceWidth?.toDouble();
+    final imageHeight = draftAvatar?.sourceHeight?.toDouble();
+    final cropRect = (draftAvatar?.cropRect == null ||
+            imageWidth == null ||
+            imageHeight == null)
+        ? (imageWidth != null && imageHeight != null
+            ? AvatarCropper.fallbackCropRect(
+                imageWidth: imageWidth,
+                imageHeight: imageHeight,
+                minCropSide: AvatarEditorCubit.minCropSide,
+              )
+            : null)
+        : draftAvatar?.cropRect;
     final hasPreview = sourceBytes != null &&
         sourceBytes.isNotEmpty &&
         imageWidth != null &&
@@ -485,7 +490,7 @@ class _BackgroundPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final template = state.template;
+    final template = state.draftAvatar?.template;
     final presets = [
       Colors.transparent,
       colors.accent,
@@ -495,7 +500,7 @@ class _BackgroundPicker extends StatelessWidget {
       colors.background,
       colors.foreground.withAlpha((0.65 * 255).round()),
     ];
-    final needsPicker = state.source == AvatarSource.template &&
+    final needsPicker = state.draftAvatar?.source == AvatarSource.template &&
         template != null &&
         template.category != AvatarTemplateCategory.abstract &&
         template.hasAlphaBackground;
@@ -689,7 +694,7 @@ class _DefaultsSection extends StatelessWidget {
                       child: _CategoryCarouselCard(
                         title: entry.key.label(l10n),
                         templates: entry.value,
-                        selectedId: state.template?.id,
+                        selectedId: state.draftAvatar?.template?.id,
                         onSelect: (template) => context
                             .read<AvatarEditorCubit>()
                             .selectTemplate(template, colors),

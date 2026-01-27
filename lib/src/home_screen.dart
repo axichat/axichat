@@ -83,9 +83,6 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
     ];
 
 const double _secondaryPaneGutter = 0.0;
-const int _homeChatPageIndex = 0;
-const int _homeCalendarPageIndex = 1;
-const Curve _homeCalendarFadeCurve = Curves.easeInOutCubic;
 const double _homeHeaderActionSpacing = 4.0;
 const double _railFooterSpacing = 12.0;
 const double _railFooterItemSpacing = 12.0;
