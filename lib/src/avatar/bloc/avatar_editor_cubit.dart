@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 

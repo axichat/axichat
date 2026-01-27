@@ -26,7 +26,7 @@ import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
-import 'package:axichat/src/chat/view/chat.dart' as chat_view;
+import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_add_button.dart';
@@ -61,7 +61,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
-import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/models.dart' as storage_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -301,7 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 sendMessage: ({
                   required String jid,
                   required CalendarSyncOutbound outbound,
-                  required ChatType chatType,
+                  required storage_models.ChatType chatType,
                 }) async {
                   await xmppService.sendCalendarSyncMessage(
                     jid: jid,
@@ -327,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 sendMessage: ({
                   required String jid,
                   required CalendarAvailabilityMessage message,
-                  required ChatType chatType,
+                  required storage_models.ChatType chatType,
                 }) async {
                   await xmppService.sendAvailabilityMessage(
                     jid: jid,
@@ -443,7 +443,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           : null;
 
                       final Widget chatPaneContent = openJid == null
-                          ? const chat_view.GuestChat()
+                          ? const GuestChat()
                           : MultiBlocProvider(
                               providers: [
                                 BlocProvider(
@@ -496,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 */
                               ],
-                              child: const chat_view.Chat(),
+                              child: const Chat(),
                             );
                       final Widget chatPane =
                           constrainSecondary(chatPaneContent);
@@ -935,9 +935,9 @@ class _NexusState extends State<Nexus> {
     HomeSearchState? searchState() => context.watch<HomeSearchCubit?>()?.state;
     ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
     final searchActive = searchState()?.active ?? false;
-    List<Chat> selectedChats = const <Chat>[];
+    List<storage_models.Chat> selectedChats = const <storage_models.Chat>[];
     if (chatsState()?.selectedJids.isNotEmpty ?? false) {
-      selectedChats = (chatsState()?.items ?? const <Chat>[])
+      selectedChats = (chatsState()?.items ?? const <storage_models.Chat>[])
           .where(
             (chat) => chatsState()?.selectedJids.contains(chat.jid) ?? false,
           )
@@ -946,11 +946,11 @@ class _NexusState extends State<Nexus> {
     final selectionActive = selectedChats.isNotEmpty;
     final badgeCounts = <HomeTab, int>{
       HomeTab.invites: context.watch<RosterCubit?>()?.inviteCount ?? 0,
-      HomeTab.chats: (chatsState()?.items ?? const <Chat>[])
+      HomeTab.chats: (chatsState()?.items ?? const <storage_models.Chat>[])
           .where((chat) => !chat.archived && !chat.spam)
           .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
       HomeTab.drafts: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
-      HomeTab.spam: (chatsState()?.items ?? const <Chat>[])
+      HomeTab.spam: (chatsState()?.items ?? const <storage_models.Chat>[])
           .where((chat) => chat.spam && !chat.archived)
           .length,
     };
@@ -1629,15 +1629,15 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   Map<HomeTab, int> _computeBadgeCounts(int inviteCount) {
     return <HomeTab, int>{
       HomeTab.invites: inviteCount,
-      HomeTab.chats:
-          (context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[])
-              .where((chat) => !chat.archived && !chat.spam)
-              .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
+      HomeTab.chats: (context.watch<ChatsCubit?>()?.state.items ??
+              const <storage_models.Chat>[])
+          .where((chat) => !chat.archived && !chat.spam)
+          .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
       HomeTab.drafts: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
-      HomeTab.spam:
-          (context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[])
-              .where((chat) => chat.spam && !chat.archived)
-              .length,
+      HomeTab.spam: (context.watch<ChatsCubit?>()?.state.items ??
+              const <storage_models.Chat>[])
+          .where((chat) => chat.spam && !chat.archived)
+          .length,
     };
   }
 }

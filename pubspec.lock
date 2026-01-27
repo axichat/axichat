@@ -5,10 +5,10 @@ packages:
     dependency: transitive
     description:
       name: _fe_analyzer_shared
-      sha256: "8d7ff3948166b8ec5da0fbb5962000926b8e02f2ed9b3e51d1738905fbd4c98d"
+      sha256: "0b2f2bd91ba804e53a61d757b986f89f1f9eaed5b11e4b2f5a2468d86d6c9fc7"
       url: "https://pub.dev"
     source: hosted
-    version: "93.0.0"
+    version: "67.0.0"
   adaptive_number:
     dependency: transitive
     description:
@@ -18,13 +18,13 @@ packages:
     source: hosted
     version: "1.0.0"
   analyzer:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
       name: analyzer
-      sha256: de7148ed2fcec579b19f122c1800933dfa028f6d9fd38a152b04b1516cec120b
+      sha256: "37577842a27e4338429a1cbc32679d508836510b056f1eedf0c8d20e39c1383d"
       url: "https://pub.dev"
     source: hosted
-    version: "10.0.1"
+    version: "6.4.1"
   analyzer_plugin:
     dependency: transitive
     description:

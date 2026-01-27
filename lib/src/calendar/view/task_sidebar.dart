@@ -31,6 +31,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
