@@ -66,10 +66,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   @override
   void initState() {
     super.initState();
-    final operations = _coalesceOperations(
-      context.read<XmppActivityCubit>().state.operations,
-    );
-    _syncOperations(operations);
+    _syncOperations(context.read<XmppActivityCubit>().state.operations);
   }
 
   @override
@@ -91,16 +88,23 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   }
 
   void _syncOperations(List<XmppOperation> operations) {
+    final List<XmppOperation> coalesced = _coalesceOperations(operations);
     final Map<String, XmppOperation> incoming = <String, XmppOperation>{
-      for (final operation in operations) operation.id: operation,
+      for (final operation in coalesced) operation.id: operation,
+    };
+    final Set<String> rawOperationIds = {
+      for (final operation in operations) operation.id,
     };
     var shouldRebuild = false;
+    final List<String> removalQueue = <String>[];
 
     for (final entry in _entries) {
       final XmppOperation? updated = incoming.remove(entry.operation.id);
       if (updated == null) {
-        // Ignore transient gaps so existing toasts only change on explicit
-        // completion updates.
+        if (!rawOperationIds.contains(entry.operation.id) ||
+            entry.operation.kind == XmppOperationKind.pubSubFetch) {
+          removalQueue.add(entry.operation.id);
+        }
         continue;
       }
       if (updated.status != entry.operation.status ||
@@ -115,8 +119,12 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       }
     }
 
-    _syncPendingInsertions(operations);
-    for (final operation in operations) {
+    for (final id in removalQueue) {
+      _removeEntry(id);
+    }
+
+    _syncPendingInsertions(coalesced);
+    for (final operation in coalesced) {
       if (incoming.containsKey(operation.id)) {
         _queueInsertion(operation);
       }
@@ -251,8 +259,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<XmppActivityCubit, XmppActivityState>(
-      listener: (context, state) =>
-          _syncOperations(_coalesceOperations(state.operations)),
+      listener: (context, state) => _syncOperations(state.operations),
       child: IgnorePointer(
         ignoring: true,
         child: Align(

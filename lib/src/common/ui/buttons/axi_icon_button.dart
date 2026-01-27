@@ -377,7 +377,6 @@ class _AxiIconButtonState extends State<AxiIconButton> {
           tappable = AxiTapBounce(
             controller: _bounceController,
             enabled: animationDuration != Duration.zero,
-            hoverShape: paintShape,
             scale: resolvedButtonSize < compactSizeThreshold
                 ? context.motion.iconButtonCompactBounceScale
                 : context.motion.iconButtonBounceScale,

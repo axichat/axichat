@@ -212,9 +212,7 @@ class _AxiNavigationRailItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final bool isCollapsed = collapsed;
-    final Color baseIconColor =
-        isCollapsed ? colors.primary : colors.foreground;
-    final Color iconColor = selected ? colors.primary : baseIconColor;
+    final Color iconColor = selected ? colors.primary : colors.foreground;
     final Color textColor = selected ? colors.primary : colors.foreground;
     final Widget? badge = destination.badgeCount > 0
         ? _RailBadge(count: destination.badgeCount)
@@ -244,7 +242,7 @@ class _AxiNavigationRailItem extends StatelessWidget {
         collapsedIconData: destination.icon,
         collapsedIcon: collapsedIcon,
         collapsedTooltip: destination.label,
-        collapsedForegroundColor: iconColor,
+        collapsedForegroundColor: selected ? iconColor : null,
         collapsedBackgroundColor: isCollapsed ? backgroundColor : null,
         variant: AxiButtonVariant.outline,
         leading: Icon(destination.icon, size: iconSize),

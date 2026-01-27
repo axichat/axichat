@@ -475,7 +475,6 @@ class _AxiButtonState extends State<AxiButton> {
           button = AxiTapBounce(
             controller: _bounceController,
             enabled: animationDuration != Duration.zero,
-            hoverShape: shape,
             scale: widget.size == AxiButtonSize.sm
                 ? context.motion.buttonCompactBounceScale
                 : context.motion.buttonBounceScale,

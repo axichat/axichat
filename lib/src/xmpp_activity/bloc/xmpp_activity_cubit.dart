@@ -16,37 +16,32 @@ const Duration _idleCompletionDelay = Duration(milliseconds: 300);
 const int _operationIdLength = 10;
 const String _operationIdSeparator = '-';
 
-const String _pubSubBookmarksStartMessage = 'Syncing bookmarks (PubSub)...';
+const String _pubSubBookmarksStartMessage = 'Syncing bookmarks...';
 const String _pubSubBookmarksSuccessMessage = 'Bookmarks synced';
-const String _pubSubBookmarksFailureMessage = 'Bookmarks PubSub sync failed';
+const String _pubSubBookmarksFailureMessage = 'Bookmarks sync failed';
 
-const String _pubSubConversationsStartMessage =
-    'Syncing conversation index (PubSub)...';
-const String _pubSubConversationsSuccessMessage = 'Conversation index synced';
-const String _pubSubConversationsFailureMessage =
-    'Conversation index PubSub sync failed';
+const String _pubSubConversationsStartMessage = 'Syncing chats list...';
+const String _pubSubConversationsSuccessMessage = 'Chats list synced';
+const String _pubSubConversationsFailureMessage = 'Chats list sync failed';
 
-const String _pubSubDraftsStartMessage = 'Syncing drafts (PubSub)...';
+const String _pubSubDraftsStartMessage = 'Syncing drafts...';
 const String _pubSubDraftsSuccessMessage = 'Drafts synced';
-const String _pubSubDraftsFailureMessage = 'Drafts PubSub sync failed';
+const String _pubSubDraftsFailureMessage = 'Drafts sync failed';
 
-const String _pubSubSpamStartMessage = 'Syncing spam list (PubSub)...';
+const String _pubSubSpamStartMessage = 'Syncing spam list...';
 const String _pubSubSpamSuccessMessage = 'Spam list synced';
-const String _pubSubSpamFailureMessage = 'Spam list PubSub sync failed';
+const String _pubSubSpamFailureMessage = 'Spam list sync failed';
 
-const String _pubSubEmailBlocklistStartMessage =
-    'Syncing email blocklist (PubSub)...';
+const String _pubSubEmailBlocklistStartMessage = 'Syncing email blocklist...';
 const String _pubSubEmailBlocklistSuccessMessage = 'Email blocklist synced';
 const String _pubSubEmailBlocklistFailureMessage =
-    'Email blocklist PubSub sync failed';
-const String _pubSubAvatarMetadataStartMessage =
-    'Syncing avatar metadata (PubSub)...';
-const String _pubSubAvatarMetadataSuccessMessage = 'Avatar metadata synced';
-const String _pubSubAvatarMetadataFailureMessage =
-    'Avatar metadata PubSub sync failed';
-const String _pubSubFetchStartMessage = 'Syncing PubSub service data...';
-const String _pubSubFetchSuccessMessage = 'PubSub service data synced';
-const String _pubSubFetchFailureMessage = 'PubSub service sync failed';
+    'Email blocklist sync failed';
+const String _pubSubAvatarMetadataStartMessage = 'Syncing avatar details...';
+const String _pubSubAvatarMetadataSuccessMessage = 'Avatar details synced';
+const String _pubSubAvatarMetadataFailureMessage = 'Avatar details sync failed';
+const String _pubSubFetchStartMessage = 'Syncing account updates...';
+const String _pubSubFetchSuccessMessage = 'Account updates synced';
+const String _pubSubFetchFailureMessage = 'Account updates sync failed';
 
 const String _mamLoginStartMessage = 'Syncing messages...';
 const String _mamLoginSuccessMessage = 'Messages synced';

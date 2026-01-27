@@ -71,7 +71,14 @@ class CalendarTile extends StatelessWidget {
     return CutoutSurface(
       backgroundColor: colors.card,
       borderColor: colors.border,
-      shape: SquircleBorder(cornerRadius: 18),
+      borderWidth: context.borderSide.width,
+      shape: SquircleBorder(
+        cornerRadius: context.radii.squircle,
+        side: BorderSide(
+          color: colors.border,
+          width: context.borderSide.width,
+        ),
+      ),
       cutouts: cutouts,
       child: tile,
     ).withTapBounce();

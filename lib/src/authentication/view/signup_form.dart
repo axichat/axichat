@@ -73,7 +73,7 @@ class _SignupFormState extends State<SignupForm>
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
-  int _captchaAutoReloads = 0;
+  int _captchaImageFailureReloads = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -268,7 +268,7 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha() {
-    _captchaAutoReloads = 0;
+    _captchaImageFailureReloads = 0;
     _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
@@ -285,11 +285,11 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _retryCaptchaAfterImageFailure() {
-    const maxAutoReloads = 4;
-    if (_captchaAutoReloads >= maxAutoReloads) {
+    const maxAutoReloads = 1;
+    if (_captchaImageFailureReloads >= maxAutoReloads) {
       return;
     }
-    _captchaAutoReloads++;
+    _captchaImageFailureReloads++;
     _reloadCaptchaForAutoRetry();
   }
 
@@ -1841,13 +1841,13 @@ class _CaptchaImage extends StatefulWidget {
 }
 
 class _CaptchaImageState extends State<_CaptchaImage> {
-  String? _lastErrorUrl;
+  int _retryCount = 0;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _lastErrorUrl = null;
+      _retryCount = 0;
     }
   }
 
@@ -1867,8 +1867,14 @@ class _CaptchaImageState extends State<_CaptchaImage> {
         );
       },
       errorBuilder: (context, error, stackTrace) {
-        if (_lastErrorUrl != widget.url) {
-          _lastErrorUrl = widget.url;
+        const maxAttempts = 3;
+        if (_retryCount < maxAttempts - 1) {
+          _retryCount++;
+          imageCache.evict(NetworkImage(widget.url));
+          return _CaptchaSkeleton(animationDuration: widget.animationDuration);
+        }
+        if (_retryCount == maxAttempts - 1) {
+          _retryCount++;
           widget.onRetry();
         }
         if (widget.showErrorMessageOnError) {
