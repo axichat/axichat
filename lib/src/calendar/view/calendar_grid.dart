@@ -2858,7 +2858,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required ShadPopoverController menuController,
   }) {
     return (context, request) {
-      final ThemeData theme = Theme.of(context);
       final List<TaskContextAction> actions = _taskContextActions(
         task: task,
         state: widget.state,
@@ -2868,7 +2867,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             (action) => ShadContextMenuItem(
               leading: Icon(
                 action.icon,
-                color: action.destructive ? theme.colorScheme.error : null,
+                color:
+                    action.destructive ? context.colorScheme.destructive : null,
               ),
               onPressed: () {
                 request.markCloseIntent();

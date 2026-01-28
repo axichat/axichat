@@ -187,18 +187,17 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           dialogContext.l10n.calendarDeleteTaskConfirm(widget.task.title),
         ),
         actions: [
-          TextButton(
+          AxiButton.secondary(
             onPressed: () => Navigator.of(dialogContext).maybePop(),
             child: Text(dialogContext.l10n.commonCancel),
           ),
-          TextButton(
+          AxiButton.destructive(
             onPressed: () {
               locate<T>().add(
                 CalendarEvent.taskDeleted(taskId: widget.task.id),
               );
               Navigator.of(dialogContext).maybePop();
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: Text(dialogContext.l10n.commonDelete),
           ),
         ],
@@ -845,10 +844,10 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,
       popover: (context) => AxiMenu(actions: actions),
-      child: IconButton(
+      child: AxiIconButton.ghost(
+        iconData: Icons.more_vert,
         iconSize: widget.iconSize,
         tooltip: l10n.calendarActions,
-        icon: const Icon(Icons.more_vert),
         onPressed: _controller.toggle,
       ),
     );

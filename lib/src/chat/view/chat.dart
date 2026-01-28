@@ -810,18 +810,21 @@ List<BoxShadow> _scaleShadows(List<BoxShadow> shadows, double factor) => shadows
     )
     .toList();
 
+double _bubbleCornerClearance(BorderRadius baseRadius) =>
+    math.max(baseRadius.topLeft.x, baseRadius.topLeft.y);
+
 BorderRadius _bubbleBorderRadius({
+  required BorderRadius baseRadius,
   required bool isSelf,
   required bool chainedPrevious,
   required bool chainedNext,
   bool isSelected = false,
   bool flattenBottom = false,
 }) {
-  const radius = Radius.circular(_bubbleRadius);
-  var topLeading = radius;
-  var topTrailing = radius;
-  var bottomLeading = radius;
-  var bottomTrailing = radius;
+  var topLeading = baseRadius.topLeft;
+  var topTrailing = baseRadius.topRight;
+  var bottomLeading = baseRadius.bottomLeft;
+  var bottomTrailing = baseRadius.bottomRight;
   if (!isSelected) {
     if (isSelf) {
       if (chainedPrevious) topTrailing = Radius.zero;
@@ -5253,6 +5256,12 @@ class _ChatState extends State<Chat> {
                                                             message,
                                                             next,
                                                           );
+                                                          final bubbleBaseRadius =
+                                                              context.radius;
+                                                          final bubbleCornerClearance =
+                                                              _bubbleCornerClearance(
+                                                            bubbleBaseRadius,
+                                                          );
                                                           final baseTextStyle =
                                                               context.textTheme
                                                                   .small
@@ -5407,6 +5416,16 @@ class _ChatState extends State<Chat> {
                                                                       messageId]);
                                                           if (messageModel ==
                                                               null) {
+                                                            final fallbackBorderRadius =
+                                                                _bubbleBorderRadius(
+                                                              baseRadius:
+                                                                  bubbleBaseRadius,
+                                                              isSelf: self,
+                                                              chainedPrevious:
+                                                                  chainedPrev,
+                                                              chainedNext:
+                                                                  chainedNext,
+                                                            );
                                                             final fallbackText =
                                                                 message.text
                                                                     .trim();
@@ -5435,24 +5454,20 @@ class _ChatState extends State<Chat> {
                                                                   child:
                                                                       DecoratedBox(
                                                                     decoration:
-                                                                        BoxDecoration(
+                                                                        ShapeDecoration(
                                                                       color:
                                                                           bubbleColor,
-                                                                      borderRadius:
-                                                                          _bubbleBorderRadius(
-                                                                        isSelf:
-                                                                            self,
-                                                                        chainedPrevious:
-                                                                            chainedPrev,
-                                                                        chainedNext:
-                                                                            chainedNext,
+                                                                      shape:
+                                                                          SquircleBorder(
+                                                                        borderRadius:
+                                                                            fallbackBorderRadius,
+                                                                        side: borderColor.a ==
+                                                                                0
+                                                                            ? BorderSide.none
+                                                                            : context.borderSide.copyWith(
+                                                                                color: borderColor,
+                                                                              ),
                                                                       ),
-                                                                      border: borderColor ==
-                                                                              Colors.transparent
-                                                                          ? null
-                                                                          : Border.all(
-                                                                              color: borderColor,
-                                                                            ),
                                                                     ),
                                                                     child:
                                                                         Padding(
@@ -6877,6 +6892,8 @@ class _ChatState extends State<Chat> {
                                                                   .isNotEmpty;
                                                           final bubbleBorderRadius =
                                                               _bubbleBorderRadius(
+                                                            baseRadius:
+                                                                bubbleBaseRadius,
                                                             isSelf: self,
                                                             chainedPrevious:
                                                                 chainedPrev,
@@ -7169,7 +7186,7 @@ class _ChatState extends State<Chat> {
                                                                 bubbleWidthFraction:
                                                                     _cutoutMaxWidthFraction,
                                                                 cornerClearance:
-                                                                    _bubbleRadius +
+                                                                    bubbleCornerClearance +
                                                                         _reactionCornerClearance,
                                                                 body: child!,
                                                                 reactionOverlay: showReplyStrip
@@ -13492,6 +13509,8 @@ class _GuestMessageBubble extends StatelessWidget {
     final textColor = isSelf ? colors.primaryForeground : colors.foreground;
     final timestampColor =
         isSelf ? colors.primaryForeground : chatTokens.timestamp;
+    final bubbleBaseRadius = context.radius;
+    final bubbleCornerClearance = _bubbleCornerClearance(bubbleBaseRadius);
     final statusIcon = message.status?.icon;
     final timeLabel =
         '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
@@ -13527,6 +13546,7 @@ class _GuestMessageBubble extends StatelessWidget {
       backgroundColor: backgroundColor,
       borderColor: borderColor,
       borderRadius: _bubbleBorderRadius(
+        baseRadius: bubbleBaseRadius,
         isSelf: isSelf,
         chainedPrevious: chainedPrev,
         chainedNext: chainedNext,
@@ -13534,7 +13554,7 @@ class _GuestMessageBubble extends StatelessWidget {
       shadowOpacity: 0,
       shadows: _selectedBubbleShadows(colors.primary),
       bubbleWidthFraction: _cutoutMaxWidthFraction,
-      cornerClearance: _bubbleRadius,
+      cornerClearance: bubbleCornerClearance,
       body: Padding(padding: _bubblePadding, child: inlineText),
     );
     final showSenderLabel = !chainedPrev;

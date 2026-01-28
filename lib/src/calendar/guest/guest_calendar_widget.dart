@@ -3,12 +3,14 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -87,13 +89,12 @@ class _GuestCalendarWidgetState
     Widget tabSwitcher,
     Widget cancelBucket,
   ) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = context.colorScheme;
     return CalendarMobileTabShell(
       tabBar: tabSwitcher,
       cancelBucket: cancelBucket,
-      backgroundColor: colors.surface,
-      borderColor: theme.dividerColor,
+      backgroundColor: colors.background,
+      borderColor: context.borderSide.color,
     );
   }
 
@@ -214,9 +215,9 @@ class _GuestCalendarWidgetState
   Widget buildLoadingOverlay(BuildContext context) {
     const double guestLoadingScrimAlpha = 0.3;
     return CalendarLoadingOverlay(
-      color: Theme.of(
-        context,
-      ).colorScheme.scrim.withValues(alpha: guestLoadingScrimAlpha),
+      color: context.colorScheme.foreground.withValues(
+        alpha: guestLoadingScrimAlpha,
+      ),
     );
   }
 
@@ -269,9 +270,8 @@ class _GuestCalendarWidgetState
   }
 
   Color _calendarSurfaceColor(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.brightness == Brightness.dark
-        ? theme.colorScheme.surface
+    return ShadTheme.of(context).brightness == Brightness.dark
+        ? context.colorScheme.card
         : calendarSidebarBackgroundColor;
   }
 }
