@@ -703,7 +703,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                   padding: EdgeInsets.zero,
                   backgroundColor: Colors.transparent,
                   borderSide: BorderSide.none,
-                  child: GestureDetector(
+                  child: _AttachmentImageTapTarget(
                     onTap: () => _openImagePreview(
                       context,
                       file: previewFile,
@@ -1327,114 +1327,77 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
-    final maxWidth = (mediaSize.width - 96).clamp(240.0, mediaSize.width);
-    final maxHeight = (mediaSize.height - 160).clamp(240.0, mediaSize.height);
+    final spacing = context.spacing;
+    final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
+    final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
     final intrinsic = _intrinsicSizeFrom(metadata);
     final targetSize = _fitWithinBounds(
       intrinsicSize: intrinsic,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
     );
-    final colors = context.colorScheme;
     final l10n = context.l10n;
-    final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
-    final borderSide = BorderSide(color: colors.border);
-    return ShadDialog(
-      padding: const EdgeInsets.all(12),
-      gap: 12,
-      closeIcon: const SizedBox.shrink(),
-      constraints: BoxConstraints(
-        maxWidth: targetSize.width + 24,
-        maxHeight: targetSize.height + 24,
-      ),
-      child: Stack(
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Center(
-            child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: colors.card,
-                shape: ContinuousRectangleBorder(
-                  borderRadius: radius,
-                  side: borderSide,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: radius,
-                child: SizedBox(
-                  width: targetSize.width,
-                  height: targetSize.height,
-                  child: InteractiveViewer(
-                    maxScale: 4,
-                    child: Image.file(file, fit: BoxFit.contain),
-                  ),
-                ),
-              ),
+          SizedBox(
+            width: targetSize.width,
+            height: targetSize.height,
+            child: InteractiveViewer(
+              maxScale: 4,
+              child: Image.file(file, fit: BoxFit.contain),
             ),
           ),
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () async {
-                    final FileTypeReport report =
-                        typeReport ?? metadata.declaredTypeReport;
-                    final bool allowed = await _confirmExportAllowed(
-                      context,
-                      metadata: metadata,
-                      report: report,
-                      confirmLabel: l10n.chatAttachmentExportConfirm,
-                    );
-                    if (!context.mounted || !allowed) return;
-                    await _saveAttachmentToDevice(
-                      context,
-                      file: file,
-                      filename: metadata.filename,
-                    );
-                  },
-                  child: const Icon(
-                    LucideIcons.save,
-                    size: _attachmentOverlayIconSize,
-                  ),
-                ),
-                const SizedBox(width: _attachmentActionSpacing),
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () async {
-                    final FileTypeReport report =
-                        typeReport ?? metadata.declaredTypeReport;
-                    final bool allowed = await _confirmExportAllowed(
-                      context,
-                      metadata: metadata,
-                      report: report,
-                      confirmLabel: l10n.chatActionShare,
-                    );
-                    if (!context.mounted || !allowed) return;
-                    await _shareAttachmentFromFile(
-                      context,
-                      file: file,
-                      filename: metadata.filename,
-                    );
-                  },
-                  child: const Icon(
-                    LucideIcons.share2,
-                    size: _attachmentOverlayIconSize,
-                  ),
-                ),
-                const SizedBox(width: _attachmentActionSpacing),
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Icon(
-                    LucideIcons.x,
-                    size: _attachmentOverlayIconSize,
-                  ),
-                ),
-              ],
-            ),
+          SizedBox(height: spacing.s),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AxiIconButton.ghost(
+                iconData: LucideIcons.save,
+                onPressed: () async {
+                  final FileTypeReport report =
+                      typeReport ?? metadata.declaredTypeReport;
+                  final bool allowed = await _confirmExportAllowed(
+                    context,
+                    metadata: metadata,
+                    report: report,
+                    confirmLabel: l10n.chatAttachmentExportConfirm,
+                  );
+                  if (!context.mounted || !allowed) return;
+                  await _saveAttachmentToDevice(
+                    context,
+                    file: file,
+                    filename: metadata.filename,
+                  );
+                },
+              ),
+              SizedBox(width: spacing.xs),
+              AxiIconButton.ghost(
+                iconData: LucideIcons.share2,
+                onPressed: () async {
+                  final FileTypeReport report =
+                      typeReport ?? metadata.declaredTypeReport;
+                  final bool allowed = await _confirmExportAllowed(
+                    context,
+                    metadata: metadata,
+                    report: report,
+                    confirmLabel: l10n.chatActionShare,
+                  );
+                  if (!context.mounted || !allowed) return;
+                  await _shareAttachmentFromFile(
+                    context,
+                    file: file,
+                    filename: metadata.filename,
+                  );
+                },
+              ),
+              SizedBox(width: spacing.xs),
+              AxiIconButton.ghost(
+                iconData: LucideIcons.x,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
           ),
         ],
       ),
@@ -2338,6 +2301,44 @@ class _AttachmentSurface extends StatelessWidget {
         clipper: ShapeBorderClipper(shape: baseShape),
         clipBehavior: Clip.antiAlias,
         child: Padding(padding: padding, child: child),
+      ),
+    );
+  }
+}
+
+class _AttachmentImageTapTarget extends StatefulWidget {
+  const _AttachmentImageTapTarget({
+    required this.onTap,
+    required this.child,
+  });
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_AttachmentImageTapTarget> createState() =>
+      _AttachmentImageTapTargetState();
+}
+
+class _AttachmentImageTapTargetState extends State<_AttachmentImageTapTarget> {
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadFocusable(
+      canRequestFocus: true,
+      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+      child: ShadGestureDetector(
+        cursor: SystemMouseCursors.click,
+        hoverStrategies: mobileHoverStrategies,
+        onTap: widget.onTap,
+        onTapDown: _bounceController.handleTapDown,
+        onTapUp: _bounceController.handleTapUp,
+        onTapCancel: _bounceController.handleTapCancel,
+        child: AxiTapBounce(
+          controller: _bounceController,
+          child: widget.child,
+        ),
       ),
     );
   }
