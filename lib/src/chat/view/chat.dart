@@ -4134,16 +4134,35 @@ class _ChatState extends State<Chat> {
                                           children: [
                                             Row(
                                               mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
                                               children: [
                                                 Flexible(
                                                   fit: FlexFit.loose,
-                                                  child: Text(
-                                                    state.chat?.displayName ??
-                                                        '',
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: titleStyle,
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        state.chat
+                                                                ?.displayName ??
+                                                            '',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: titleStyle,
+                                                      ),
+                                                      if (secondaryLabel
+                                                          .isNotEmpty)
+                                                        SelectableText(
+                                                          secondaryLabel,
+                                                          maxLines: 1,
+                                                          style: subtitleStyle,
+                                                        ),
+                                                    ],
                                                   ),
                                                 ),
                                                 if (canRenameContact)
@@ -4184,12 +4203,6 @@ class _ChatState extends State<Chat> {
                                                   ),
                                               ],
                                             ),
-                                            if (secondaryLabel.isNotEmpty)
-                                              SelectableText(
-                                                secondaryLabel,
-                                                maxLines: 1,
-                                                style: subtitleStyle,
-                                              ),
                                           ],
                                         ),
                                       ),

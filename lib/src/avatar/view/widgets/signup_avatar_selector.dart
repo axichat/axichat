@@ -6,8 +6,10 @@ import 'dart:typed_data';
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _fallbackSignupAvatarAssetPath =
@@ -32,8 +34,7 @@ class SignupAvatarSelector extends StatefulWidget {
 }
 
 class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
-  static const _size = 56.0;
-  bool _hovered = false;
+  _HoverState _hoverState = _HoverState.idle;
   int _previewVersion = 0;
   Uint8List? _lastBytes;
   bool _fallbackAvatarPrecached = false;
@@ -61,101 +62,135 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final sizing = context.sizing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final avatarSize = sizing.iconButtonTapTarget;
+    final overlayShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: context.borderSide,
+    );
     final displayJid = widget.username.isEmpty
         ? 'avatar@axichat'
         : '${widget.username}@preview';
-    final overlayVisible = _hovered || widget.processing;
+    final overlayVisible =
+        _hoverState == _HoverState.hovered || widget.processing;
     final resolvedBytes = widget.bytes?.isNotEmpty == true
         ? widget.bytes
         : (_lastBytes?.isNotEmpty == true ? _lastBytes : null);
     final hasBytes = resolvedBytes != null;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _hovered = true),
-        onTapUp: (_) => setState(() => _hovered = false),
-        onTapCancel: () => setState(() => _hovered = false),
-        onTap: widget.onTap,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox.square(
-              dimension: _size,
-              child: ClipOval(
-                child: PageTransitionSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  transitionBuilder:
-                      (child, primaryAnimation, secondaryAnimation) =>
-                          FadeTransition(
-                    opacity: primaryAnimation,
-                    child: FadeTransition(
-                      opacity: ReverseAnimation(secondaryAnimation),
-                      child: child,
+    return AxiTapBounce(
+      enabled: true,
+      child: Material(
+        color: colors.background.withValues(alpha: 0),
+        shape: overlayShape,
+        clipBehavior: Clip.antiAlias,
+        child: ShadFocusable(
+          canRequestFocus: true,
+          onFocusChange: (focused) {
+            if (!mounted) return;
+            setState(
+              () => _hoverState =
+                  focused ? _HoverState.hovered : _HoverState.idle,
+            );
+          },
+          builder: (context, focused, child) =>
+              child ?? const SizedBox.shrink(),
+          child: ShadGestureDetector(
+            cursor: SystemMouseCursors.click,
+            hoverStrategies: ShadTheme.of(context).hoverStrategies,
+            onHoverChange: (value) => setState(
+              () =>
+                  _hoverState = value ? _HoverState.hovered : _HoverState.idle,
+            ),
+            onTap: widget.onTap,
+            onTapDown: (_) => setState(() => _hoverState = _HoverState.hovered),
+            onTapUp: (_) => setState(() => _hoverState = _HoverState.idle),
+            onTapCancel: () => setState(() => _hoverState = _HoverState.idle),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox.square(
+                  dimension: avatarSize,
+                  child: PageTransitionSwitcher(
+                    duration: animationDuration,
+                    transitionBuilder:
+                        (child, primaryAnimation, secondaryAnimation) =>
+                            FadeTransition(
+                      opacity: primaryAnimation,
+                      child: FadeTransition(
+                        opacity: ReverseAnimation(secondaryAnimation),
+                        child: child,
+                      ),
                     ),
-                  ),
-                  child: hasBytes
-                      ? AxiAvatar(
-                          key: ValueKey(_previewVersion),
-                          jid: displayJid,
-                          size: _size,
-                          subscription: Subscription.none,
-                          presence: null,
-                          avatarBytes: resolvedBytes,
-                        )
-                      : SizedBox.square(
-                          key: ValueKey(_previewVersion),
-                          dimension: _size,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colors.card,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: colors.border),
-                            ),
-                            child: ClipOval(
-                              child: Image.asset(
-                                _fallbackSignupAvatarAssetPath,
-                                fit: BoxFit.cover,
+                    child: hasBytes
+                        ? AxiAvatar(
+                            key: ValueKey(_previewVersion),
+                            jid: displayJid,
+                            size: avatarSize,
+                            shape: AxiAvatarShape.squircle,
+                            subscription: Subscription.none,
+                            presence: null,
+                            avatarBytes: resolvedBytes,
+                          )
+                        : SizedBox.square(
+                            key: ValueKey(_previewVersion),
+                            dimension: avatarSize,
+                            child: DecoratedBox(
+                              decoration: ShapeDecoration(
+                                color: colors.card,
+                                shape: overlayShape,
+                              ),
+                              child: ClipPath(
+                                clipper: ShapeBorderClipper(
+                                  shape: overlayShape,
+                                ),
+                                child: Image.asset(
+                                  _fallbackSignupAvatarAssetPath,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                  ),
                 ),
-              ),
-            ),
-            AnimatedOpacity(
-              opacity: overlayVisible ? 0.8 : 0.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                width: _size,
-                height: _size,
-                decoration: BoxDecoration(
-                  color: colors.background.withAlpha((0.45 * 255).round()),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: colors.border),
-                ),
-                child: widget.processing
-                    ? Center(
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.foreground,
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        LucideIcons.pencil,
-                        color: colors.foreground,
-                        size: 22,
+                AnimatedOpacity(
+                  opacity: overlayVisible ? motion.tapFocusAlpha : 0.0,
+                  duration: animationDuration,
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: colors.background.withValues(
+                        alpha: motion.tapFocusAlpha,
                       ),
-              ),
+                      shape: overlayShape,
+                    ),
+                    child: SizedBox(
+                      width: avatarSize,
+                      height: avatarSize,
+                      child: widget.processing
+                          ? Center(
+                              child: SizedBox(
+                                width: sizing.progressIndicatorSize,
+                                height: sizing.progressIndicatorSize,
+                                child: AxiProgressIndicator(
+                                    color: colors.foreground),
+                              ),
+                            )
+                          : Icon(
+                              LucideIcons.pencil,
+                              color: colors.foreground,
+                              size: sizing.iconButtonIconSize,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
+enum _HoverState { idle, hovered }

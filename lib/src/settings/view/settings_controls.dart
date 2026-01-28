@@ -532,14 +532,9 @@ class SettingsControls extends StatelessWidget {
               iconData: LucideIcons.link,
             ),
             _SettingsLinkButton(
-              label: context.l10n.settingsDonateLabel,
-              link: donateUrl,
-              iconData: FontAwesomeIcons.heart,
-            ),
-            _SettingsLinkButton(
-              label: context.l10n.settingsMastodonLabel,
-              link: mastodonUrl,
-              iconData: FontAwesomeIcons.mastodon,
+              label: context.l10n.settingsGitlabLabel,
+              link: gitlabUrl,
+              iconData: FontAwesomeIcons.gitlab,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsGithubLabel,
@@ -547,9 +542,14 @@ class SettingsControls extends StatelessWidget {
               iconData: FontAwesomeIcons.github,
             ),
             _SettingsLinkButton(
-              label: context.l10n.settingsGitlabLabel,
-              link: gitlabUrl,
-              iconData: FontAwesomeIcons.gitlab,
+              label: context.l10n.settingsMastodonLabel,
+              link: mastodonUrl,
+              iconData: FontAwesomeIcons.mastodon,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsDonateLabel,
+              link: donateUrl,
+              iconData: FontAwesomeIcons.heart,
             ),
             const SizedBox(height: 160),
           ],

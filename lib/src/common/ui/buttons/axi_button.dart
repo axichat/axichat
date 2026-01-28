@@ -348,7 +348,7 @@ class _AxiButtonState extends State<AxiButton> {
                 .clamp(minAlpha, maxAlpha)
                 .toDouble();
         final Color hoverTintColor =
-            context.colorScheme.primary.withValues(alpha: hoverAlpha);
+            context.colorScheme.foreground.withValues(alpha: hoverAlpha);
 
         final bool replacesLeading = widget.leading != null && widget.loading;
 

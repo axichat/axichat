@@ -280,7 +280,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 .clamp(minAlpha, maxAlpha)
                 .toDouble();
         final Color hoverTintColor =
-            context.colorScheme.primary.withValues(alpha: hoverAlpha);
+            context.colorScheme.foreground.withValues(alpha: hoverAlpha);
         final paintShape = RoundedSuperellipseBorder(
           borderRadius: widget.resolvedCornerRadius == null
               ? context.radius

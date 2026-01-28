@@ -38,6 +38,7 @@ class CutoutSurface extends StatelessWidget {
             .toList(growable: false);
     final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
     final clipper = _CutoutClipper(shape: shape, cutouts: resolvedCutouts);
+    final borderWidth = shape.side.width;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -47,6 +48,7 @@ class CutoutSurface extends StatelessWidget {
             shape: shape,
             backgroundColor: backgroundColor,
             borderColor: borderColor,
+            borderWidth: borderWidth,
             cutouts: resolvedCutouts,
             shadows: shadows,
             shadowOpacity: resolvedShadowOpacity,
@@ -97,6 +99,7 @@ class _CutoutPainter extends CustomPainter {
     required this.shape,
     required this.backgroundColor,
     required this.borderColor,
+    required this.borderWidth,
     required this.cutouts,
     required this.shadows,
     required this.shadowOpacity,
@@ -105,6 +108,7 @@ class _CutoutPainter extends CustomPainter {
   final OutlinedBorder shape;
   final Color backgroundColor;
   final Color borderColor;
+  final double borderWidth;
   final List<CutoutSpec> cutouts;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
@@ -140,15 +144,13 @@ class _CutoutPainter extends CustomPainter {
     final fillPaint = Paint()
       ..color = backgroundColor
       ..style = PaintingStyle.fill;
-    final strokePaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..strokeJoin = StrokeJoin.round;
-
     canvas.drawPath(fillPath, fillPaint);
-    if (borderColor.a > 0) {
-      canvas.drawPath(fillPath, strokePaint);
+    if (borderColor.a > 0 && borderWidth > 0) {
+      final borderPath = _cutoutBorderPath(size, shape, cutouts, borderWidth);
+      final borderPaint = Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(borderPath, borderPaint);
     }
   }
 
@@ -183,6 +185,56 @@ Path _cutoutPath(Size size, OutlinedBorder shape, List<CutoutSpec> cutouts) {
     fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
   }
   return fillPath;
+}
+
+Path _cutoutBorderPath(
+  Size size,
+  OutlinedBorder shape,
+  List<CutoutSpec> cutouts,
+  double borderWidth,
+) {
+  final outerPath = _cutoutPath(size, shape, cutouts);
+  final maxInset = math.min(size.width, size.height) / 2;
+  final inset = math.min(borderWidth, math.max(0.0, maxInset));
+  final innerWidth = size.width - (inset * 2);
+  final innerHeight = size.height - (inset * 2);
+  if (innerWidth <= 0 || innerHeight <= 0) {
+    return outerPath;
+  }
+  final innerSize = Size(innerWidth, innerHeight);
+  final innerCutouts = _insetCutouts(cutouts, inset);
+  if (innerCutouts.isEmpty) {
+    final innerRect = Offset(inset, inset) & innerSize;
+    final innerPath = shape.getOuterPath(innerRect);
+    return Path.combine(PathOperation.difference, outerPath, innerPath);
+  }
+  final innerPath =
+      _cutoutPath(innerSize, shape, innerCutouts).shift(Offset(inset, inset));
+  return Path.combine(PathOperation.difference, outerPath, innerPath);
+}
+
+List<CutoutSpec> _insetCutouts(List<CutoutSpec> cutouts, double inset) {
+  if (inset <= 0) return cutouts;
+  final adjusted = <CutoutSpec>[];
+  for (final spec in cutouts) {
+    final depth = spec.depth - inset;
+    final thickness = spec.thickness - (inset * 2);
+    final radius = spec.cornerRadius - inset;
+    if (depth <= 0 || thickness <= 0 || radius <= 0) {
+      continue;
+    }
+    adjusted.add(
+      CutoutSpec(
+        edge: spec.edge,
+        alignment: spec.alignment,
+        depth: depth,
+        thickness: thickness,
+        child: spec.child,
+        cornerRadius: radius,
+      ),
+    );
+  }
+  return adjusted;
 }
 
 class _CutoutAttachment extends StatelessWidget {

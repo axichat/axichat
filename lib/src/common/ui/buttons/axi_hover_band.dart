@@ -62,6 +62,8 @@ class _AxiHoverBandPainter extends CustomPainter {
         shape.getOuterPath(innerRect, textDirection: textDirection);
     final Path band = Path.combine(PathOperation.difference, outer, inner);
     final Color transparent = color.withValues(alpha: 0.0);
+    final Color midColor =
+        color.withValues(alpha: (color.a * 0.4).clamp(0.0, 1.0));
     final Paint verticalPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.bottomCenter,
@@ -73,7 +75,7 @@ class _AxiHoverBandPainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: <Color>[color, transparent, color],
+        colors: <Color>[color, midColor, color],
         stops: const <double>[0.0, 0.5, 1.0],
       ).createShader(rect);
     canvas
