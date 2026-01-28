@@ -1684,6 +1684,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsMastodonLabel => 'Mastodon';
 
   @override
+  String get settingsGithubLabel => 'GitHub';
+
+  @override
+  String get settingsGitlabLabel => 'GitLab';
+
+  @override
   String get profileJidDescription =>
       'This is your Jabber ID. Comprised of your username and domain, it\'s a unique address that represents you on the XMPP network.';
 

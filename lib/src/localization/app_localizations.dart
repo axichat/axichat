@@ -3062,6 +3062,18 @@ abstract class AppLocalizations {
   /// **'Mastodon'**
   String get settingsMastodonLabel;
 
+  /// No description provided for @settingsGithubLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub'**
+  String get settingsGithubLabel;
+
+  /// No description provided for @settingsGitlabLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'GitLab'**
+  String get settingsGitlabLabel;
+
   /// No description provided for @profileJidDescription.
   ///
   /// In en, this message translates to:

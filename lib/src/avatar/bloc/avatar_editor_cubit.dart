@@ -76,6 +76,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   final XmppService _xmppService;
   final List<AvatarTemplate> _templates;
   final AvatarPipeline _pipeline;
+  Rect? _pendingCropRect;
   late final List<AvatarTemplate> _abstractTemplates = _templates
       .where((template) => template.category == AvatarTemplateCategory.abstract)
       .toList(growable: false);
@@ -178,6 +179,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> seedFromBytes(Uint8List bytes) async {
     if (bytes.isEmpty) return;
     _stopAvatarCarousel();
+    _pendingCropRect = null;
     await _loadFromBytes(bytes, buildDraft: true);
   }
 
@@ -257,6 +259,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     Color? background,
   }) async {
     _stopAvatarCarousel();
+    _pendingCropRect = null;
     emit(
       state.copyWith(
         processing: true,
@@ -430,7 +433,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void updateCropRect(Rect rect) {
     final draftAvatar = state.draftAvatar;
-    if (state.processing) return;
+    if (state.processing) {
+      _pendingCropRect = rect;
+      return;
+    }
     if (draftAvatar == null) return;
     final clamped = _pipeline.constrainCropRect(
       avatar: draftAvatar,

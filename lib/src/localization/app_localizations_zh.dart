@@ -1625,6 +1625,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsMastodonLabel => 'Mastodon';
 
   @override
+  String get settingsGithubLabel => 'GitHub';
+
+  @override
+  String get settingsGitlabLabel => 'GitLab';
+
+  @override
   String get profileJidDescription =>
       '这是你的 Jabber ID，由用户名和域名组成，是你在 XMPP 网络中的唯一地址。';
 
@@ -7059,6 +7065,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
+
+  @override
+  String get settingsGithubLabel => 'GitHub';
+
+  @override
+  String get settingsGitlabLabel => 'GitLab';
 
   @override
   String get profileJidDescription =>
