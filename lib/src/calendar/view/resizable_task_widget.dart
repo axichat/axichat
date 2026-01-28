@@ -351,6 +351,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final showHoverEffects = enableInteractions &&
         (isPopoverOpen || isHovering || isResizing || isDragging);
     final highlightSelection = isSelectionMode && isSelected;
@@ -395,7 +396,7 @@ class _ResizableTaskBody extends StatelessWidget {
     final availableHeight = (height - 4).clamp(0.0, double.infinity);
     if (availableHeight <= 6) {
       return Container(
-        margin: const EdgeInsets.all(2),
+        margin: EdgeInsets.all(spacing.xxs),
         decoration: decoration,
         child: Stack(
           children: [
@@ -407,13 +408,13 @@ class _ResizableTaskBody extends StatelessWidget {
 
     double padding;
     if (availableHeight >= 96) {
-      padding = 8;
+      padding = spacing.s;
     } else if (availableHeight >= 72) {
-      padding = 6;
+      padding = spacing.xs;
     } else if (availableHeight >= 48) {
-      padding = 4;
+      padding = spacing.xs;
     } else {
-      padding = 2;
+      padding = spacing.xxs;
     }
 
     final innerHeight = (availableHeight - padding * 2).clamp(
@@ -423,7 +424,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
     if (innerHeight <= 10) {
       final Widget compactBody = Container(
-        margin: const EdgeInsets.all(2),
+        margin: EdgeInsets.all(spacing.xxs),
         decoration: decoration,
         child: Stack(
           children: [

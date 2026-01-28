@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -247,33 +248,38 @@ class SyncStatusIndicator extends StatelessWidget {
 
   (String, Widget) _resolveVisual(BuildContext context) {
     final l10n = context.l10n;
+    final sizing = context.sizing;
     if (state.isSyncing) {
       return (
         l10n.calendarSyncStatusSyncing,
-        const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        const AxiProgressIndicator(),
       );
     }
     if (state.syncError != null) {
       return (
         l10n.calendarSyncStatusFailed,
-        const Icon(LucideIcons.cloudAlert, size: 16, color: Colors.red),
+        Icon(
+          LucideIcons.cloudAlert,
+          size: sizing.menuItemIconSize,
+          color: calendarDangerColor,
+        ),
       );
     }
     if (state.lastSyncTime != null) {
       return (
         l10n.calendarSyncStatusSynced,
-        const Icon(LucideIcons.cloudCheck, size: 16, color: Colors.green),
+        Icon(
+          LucideIcons.cloudCheck,
+          size: sizing.menuItemIconSize,
+          color: calendarSuccessColor,
+        ),
       );
     }
-    final Color fallbackColor =
-        Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
+    final Color fallbackColor = context.colorScheme.mutedForeground;
     return (
       l10n.calendarSyncStatusIdle,
-      Icon(LucideIcons.cloud, size: 16, color: fallbackColor),
+      Icon(LucideIcons.cloud,
+          size: sizing.menuItemIconSize, color: fallbackColor),
     );
   }
 }
@@ -287,6 +293,13 @@ class _InlineSyncControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final TextStyle statusStyle = context.textTheme.small.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+    final TextStyle secondaryStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
     final statusText = _statusTextFor(state, l10n);
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);
@@ -297,18 +310,16 @@ class _InlineSyncControls extends StatelessWidget {
         children: [
           Text(
             statusText,
-            style: TextStyle(fontWeight: FontWeight.w600, color: statusColor),
+            style: statusStyle.copyWith(color: statusColor),
           ),
           if (lastSyncTime != null && !state.isSyncing) ...[
-            const SizedBox(width: 6),
+            SizedBox(width: spacing.xs),
             Text(
               TimeFormatter.formatSyncTime(l10n, lastSyncTime),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                  ),
+              style: secondaryStyle,
             ),
           ],
-          const SizedBox(width: 6),
+          SizedBox(width: spacing.xs),
           SyncStatusIndicator(state: state),
         ],
       ),
@@ -353,10 +364,10 @@ String _statusTextFor(CalendarState state, AppLocalizations l10n) {
 }
 
 Color _statusColorFor(BuildContext context, CalendarState state) {
-  if (state.isSyncing) return Colors.orange;
-  if (state.syncError != null) return Colors.red;
-  if (state.lastSyncTime != null) return Colors.green;
-  return Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
+  if (state.isSyncing) return calendarWarningColor;
+  if (state.syncError != null) return calendarDangerColor;
+  if (state.lastSyncTime != null) return calendarSuccessColor;
+  return context.colorScheme.mutedForeground;
 }
 
 class CalendarTransferMenuButton extends StatelessWidget {

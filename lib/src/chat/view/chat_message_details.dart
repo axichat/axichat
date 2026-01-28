@@ -170,14 +170,31 @@ class ChatMessageDetails extends StatelessWidget {
                 ),
               );
             }
+            final spacing = context.spacing;
+            final iconSize = context.sizing.iconButtonIconSize;
+            void handleBack() {
+              context
+                  .read<ChatsCubit>()
+                  .setOpenChatRoute(route: ChatRouteIndex.main);
+            }
+
             return SingleChildScrollView(
               child: Container(
                 width: double.maxFinite,
-                padding: const EdgeInsets.all(16.0),
+                padding: EdgeInsets.all(spacing.m),
                 child: Column(
                   spacing: 24,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: AxiIconButton.ghost(
+                        iconData: LucideIcons.arrowLeft,
+                        tooltip: l10n.commonBack,
+                        iconSize: iconSize,
+                        onPressed: handleBack,
+                      ),
+                    ),
                     if (message.htmlBody != null &&
                         message.htmlBody!.isNotEmpty)
                       Builder(

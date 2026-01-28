@@ -62,10 +62,11 @@ class _CalendarTransferOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final colors = ShadTheme.of(context).colorScheme;
     final iconBackground = colors.muted.withValues(alpha: 0.12);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: EdgeInsets.symmetric(vertical: spacing.xxs),
       child: AxiListTile(
         leading: DecoratedBox(
           decoration: BoxDecoration(
@@ -74,8 +75,12 @@ class _CalendarTransferOption extends StatelessWidget {
             border: Border.all(color: colors.border),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Icon(icon, size: 18, color: colors.primary),
+            padding: EdgeInsets.all(spacing.s),
+            child: Icon(
+              icon,
+              size: context.sizing.menuItemIconSize,
+              color: context.colorScheme.primary,
+            ),
           ),
         ),
         title: label,

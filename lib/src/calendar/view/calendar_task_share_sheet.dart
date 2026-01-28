@@ -21,12 +21,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _taskShareSectionSpacing = 16.0;
-const double _taskShareSectionGap = 8.0;
 const double _taskShareHeaderIconSize = 18.0;
 const double _taskShareProgressStrokeWidth = 2.0;
-const EdgeInsets _taskShareContentPadding =
-    EdgeInsets.symmetric(horizontal: 16);
 const bool _taskShareReadOnlyDefault = true;
 
 Future<void> showCalendarTaskShareSheet({
@@ -103,6 +99,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       vertical: calendarGutterMd,
     );
     final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
+    final spacing = context.spacing;
     final header = AxiSheetHeader(
       title: Text(l10n.calendarTaskShareTitle),
       subtitle: Text(l10n.calendarTaskShareSubtitle),
@@ -114,7 +111,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       children: [
         if (widget.availableChats.isEmpty)
           Padding(
-            padding: _taskShareContentPadding,
+            padding: _taskShareContentPadding(context),
             child: _TaskShareEmptyMessage(
               message: l10n.calendarTaskShareMissingChats,
             ),
@@ -132,9 +129,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             onRecipientRemoved: _handleRecipientRemoved,
             onRecipientToggled: _handleRecipientToggled,
           ),
-          const SizedBox(height: _taskShareSectionSpacing),
+          SizedBox(height: spacing.m),
           Padding(
-            padding: _taskShareContentPadding,
+            padding: _taskShareContentPadding(context),
             child: TaskDescriptionField(
               controller: _bodyController,
               hintText: l10n.calendarDescriptionHint,
@@ -143,25 +140,25 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
               contentPadding: messageContentPadding,
             ),
           ),
-          const SizedBox(height: _taskShareSectionSpacing),
+          SizedBox(height: spacing.m),
           Padding(
-            padding: _taskShareContentPadding,
+            padding: _taskShareContentPadding(context),
             child: _TaskShareEditAccessToggle(
               canEdit: !isReadOnly,
               hint: readOnlyHint,
               onChanged: _handleEditAccessChanged,
             ),
           ),
-          const SizedBox(height: _taskShareSectionSpacing),
+          SizedBox(height: spacing.m),
           Padding(
-            padding: _taskShareContentPadding,
+            padding: _taskShareContentPadding(context),
             child: _TaskShareActionRow(
               isBusy: _isSending,
               onPressed: _handleSharePressed,
               label: l10n.commonSend,
             ),
           ),
-          const SizedBox(height: _taskShareSectionSpacing),
+          SizedBox(height: spacing.m),
         ],
       ],
     );
@@ -309,7 +306,7 @@ class _TaskShareEditAccessToggle extends StatelessWidget {
           value: canEdit,
           onChanged: onChanged,
         ),
-        const SizedBox(height: _taskShareSectionGap),
+        SizedBox(height: context.spacing.s),
         Text(hint, style: hintStyle),
       ],
     );
@@ -329,40 +326,17 @@ class _TaskShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spinnerColor = context.colorScheme.primaryForeground;
-    final spinner = SizedBox(
-      width: _taskShareHeaderIconSize,
-      height: _taskShareHeaderIconSize,
-      child: CircularProgressIndicator(
-        strokeWidth: _taskShareProgressStrokeWidth,
-        valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
-      ),
-    );
-    final Widget leading = SizedBox(
-      width: _taskShareHeaderIconSize,
-      height: _taskShareHeaderIconSize,
-      child: isBusy
-          ? spinner
-          : const Icon(LucideIcons.send, size: _taskShareHeaderIconSize),
-    );
     return Align(
       alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
-        onPressed: () {
-          if (isBusy) {
-            return;
-          }
-          onPressed();
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            leading,
-            const SizedBox(width: _taskShareSectionGap),
-            Text(label),
-          ],
+      child: AxiButton.primary(
+        onPressed: isBusy ? null : onPressed,
+        loading: isBusy,
+        widthBehavior: AxiButtonWidth.fit,
+        leading: Icon(
+          LucideIcons.send,
+          size: context.sizing.iconButtonIconSize,
         ),
+        child: Text(label),
       ),
     );
   }
@@ -376,7 +350,7 @@ class _TaskShareEmptyMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: _taskShareSectionGap),
+      padding: EdgeInsets.symmetric(vertical: context.spacing.s),
       child: Text(
         message,
         style: context.textTheme.small.copyWith(
@@ -386,3 +360,6 @@ class _TaskShareEmptyMessage extends StatelessWidget {
     );
   }
 }
+
+EdgeInsets _taskShareContentPadding(BuildContext context) =>
+    EdgeInsets.symmetric(horizontal: context.spacing.m);

@@ -189,9 +189,7 @@ const int _pinnedBadgeMaxDisplayCount = 99;
 const double _pinnedBadgeIconScale = 0.6;
 const double _pinnedBadgeFallbackIconSize =
     AxiIconButton.kDefaultSize * _pinnedBadgeIconScale;
-const double _pinnedBadgeSizeScale = 0.55;
 const double _pinnedBadgeInsetScale = 0.08;
-const double _pinnedBadgeBorderWidth = 1.0;
 const String _calendarFragmentPropertyKey = 'calendarFragment';
 const String _calendarTaskIcsPropertyKey = 'calendarTaskIcs';
 const String _calendarTaskIcsReadOnlyPropertyKey = 'calendarTaskIcsReadOnly';
@@ -8919,10 +8917,8 @@ class _PinnedBadgeIcon extends StatelessWidget {
     final colors = context.colorScheme;
     final double iconSize =
         context.iconTheme.size ?? _pinnedBadgeFallbackIconSize;
-    final double badgeSize = iconSize * _pinnedBadgeSizeScale;
     final double badgeInset = iconSize * _pinnedBadgeInsetScale;
     final Icon icon = Icon(iconData, size: iconSize, color: iconColor);
-    final Color badgeColor = iconColor;
     if (count <= _pinnedBadgeHiddenCount) {
       return icon;
     }
@@ -8930,26 +8926,13 @@ class _PinnedBadgeIcon extends StatelessWidget {
     final String label = count > _pinnedBadgeMaxDisplayCount
         ? l10n.commonBadgeOverflowLabel
         : count.toString();
-    final Widget badge = DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.card,
-        shape: BoxShape.circle,
-        border: Border.all(color: badgeColor, width: _pinnedBadgeBorderWidth),
-      ),
-      child: SizedBox(
-        width: badgeSize,
-        height: badgeSize,
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              style: context.textTheme.small.copyWith(
-                color: badgeColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+    final Widget badge = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        label,
+        style: context.textTheme.small.copyWith(
+          color: colors.destructive,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -13955,11 +13938,6 @@ class _ChatMessageListState extends State<_ChatMessageList> {
   }
 }
 
-const EdgeInsets _forwardSheetContentPadding =
-    EdgeInsets.symmetric(horizontal: 16);
-const double _forwardSheetSectionSpacing = 16.0;
-const double _forwardSheetActionIconSize = 18.0;
-
 class _ForwardRecipientSheet extends StatefulWidget {
   const _ForwardRecipientSheet({
     required this.availableChats,
@@ -14032,6 +14010,10 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final iconSize = context.sizing.iconButtonIconSize;
+    final sectionSpacing = spacing.m;
+    final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),
       onClose: _handleClose,
@@ -14052,26 +14034,20 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
           onRecipientRemoved: _handleRecipientRemoved,
           onRecipientToggled: _handleRecipientToggled,
         ),
-        const SizedBox(height: _forwardSheetSectionSpacing),
+        SizedBox(height: sectionSpacing),
         Padding(
-          padding: _forwardSheetContentPadding,
+          padding: contentPadding,
           child: Align(
             alignment: Alignment.centerRight,
-            child: ShadButton(
-              size: ShadButtonSize.sm,
+            child: AxiButton.primary(
+              size: AxiButtonSize.sm,
               onPressed: _canSend ? _handleSend : null,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.send, size: _forwardSheetActionIconSize),
-                  const SizedBox(width: 8),
-                  Text(l10n.commonSend),
-                ],
-              ),
+              leading: Icon(LucideIcons.send, size: iconSize),
+              child: Text(l10n.commonSend),
             ),
           ),
         ),
-        const SizedBox(height: _forwardSheetSectionSpacing),
+        SizedBox(height: sectionSpacing),
       ],
     );
   }

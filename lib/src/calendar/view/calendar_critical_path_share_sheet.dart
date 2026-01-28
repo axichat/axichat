@@ -24,13 +24,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _criticalPathShareSectionSpacing = 16.0;
-const double _criticalPathShareTileGap = 12.0;
 const double _criticalPathShareHeaderIconSize = 18.0;
 const double _criticalPathShareProgressStrokeWidth = 2.0;
 const double _criticalPathShareLabelLetterSpacing = 0.4;
-const EdgeInsets _criticalPathShareContentPadding =
-    EdgeInsets.symmetric(horizontal: 16);
 
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
@@ -124,14 +120,14 @@ class _CalendarCriticalPathShareSheetState
       bodyPadding: EdgeInsets.zero,
       children: [
         Padding(
-          padding: _criticalPathShareContentPadding,
+          padding: _criticalPathShareContentPadding(context),
           child: _CriticalPathShareSectionLabel(
             text: context.l10n.calendarCriticalPathShareTargetLabel,
           ),
         ),
         if (widget.availableChats.isEmpty)
           Padding(
-            padding: _criticalPathShareContentPadding,
+            padding: _criticalPathShareContentPadding(context),
             child: _CriticalPathShareEmptyMessage(
               message: context.l10n.calendarCriticalPathShareMissingChats,
             ),
@@ -148,9 +144,9 @@ class _CalendarCriticalPathShareSheetState
             onRecipientRemoved: _handleRecipientRemoved,
             onRecipientToggled: _handleRecipientToggled,
           ),
-        const SizedBox(height: _criticalPathShareSectionSpacing),
+        SizedBox(height: context.spacing.m),
         Padding(
-          padding: _criticalPathShareContentPadding,
+          padding: _criticalPathShareContentPadding(context),
           child: _CriticalPathShareActionRow(
             isBusy: _isSending,
             onPressed: _handleSharePressed,
@@ -296,7 +292,7 @@ class _CriticalPathShareSectionLabel extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: context.textTheme.muted.copyWith(
-        letterSpacing: _criticalPathShareLabelLetterSpacing,
+            letterSpacing: _criticalPathShareLabelLetterSpacing,
       ),
     );
   }
@@ -341,7 +337,7 @@ class _CriticalPathShareActionRow extends StatelessWidget {
               isVisible: isBusy,
               spinner: spinner,
               slotSize: _criticalPathShareHeaderIconSize,
-              gap: _criticalPathShareSectionSpacing,
+              gap: context.spacing.m,
               duration: baseAnimationDuration,
             ),
             if (!isBusy) ...[
@@ -349,7 +345,7 @@ class _CriticalPathShareActionRow extends StatelessWidget {
                 LucideIcons.share2,
                 size: _criticalPathShareHeaderIconSize,
               ),
-              const SizedBox(width: _criticalPathShareSectionSpacing),
+              SizedBox(width: context.spacing.m),
             ],
             Text(label),
           ],
@@ -359,6 +355,9 @@ class _CriticalPathShareActionRow extends StatelessWidget {
   }
 }
 
+EdgeInsets _criticalPathShareContentPadding(BuildContext context) =>
+    EdgeInsets.symmetric(horizontal: context.spacing.m);
+
 class _CriticalPathShareEmptyMessage extends StatelessWidget {
   const _CriticalPathShareEmptyMessage({required this.message});
 
@@ -367,7 +366,7 @@ class _CriticalPathShareEmptyMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: _criticalPathShareTileGap),
+      padding: EdgeInsets.symmetric(vertical: context.spacing.s),
       child: Text(
         message,
         style: context.textTheme.small.copyWith(

@@ -327,6 +327,7 @@ class _ReminderSection extends StatelessWidget {
       fontWeight: FontWeight.w700,
       letterSpacing: 0.4,
     );
+    final spacing = context.spacing;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,12 +336,15 @@ class _ReminderSection extends StatelessWidget {
           children: [
             Text(label.toUpperCase(), style: labelStyle),
             if (mixed)
-              Container(
-                margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: colors.muted.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(10),
+                Container(
+                  margin: EdgeInsets.only(left: spacing.s),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: spacing.s,
+                    vertical: spacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.muted.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   'Mixed',
@@ -353,11 +357,11 @@ class _ReminderSection extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: options
+                SizedBox(height: spacing.xs),
+                Wrap(
+                  spacing: spacing.s,
+                  runSpacing: spacing.s,
+                  children: options
               .map(
                 (Duration option) => _ReminderChip(
                   label: _labelFor(l10n, option),

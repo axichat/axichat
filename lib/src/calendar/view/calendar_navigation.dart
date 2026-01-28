@@ -1327,21 +1327,13 @@ class _CalendarDropdown extends StatelessWidget {
   }) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: OutlinedButton(
-          onPressed: onPressed,
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-            side: BorderSide(color: calendarBorderColor),
-            foregroundColor: calendarSubtitleColor,
-          ),
-          child: Icon(icon, size: 18),
-        ).withTapBounce(),
+      child: AxiIconButton.outline(
+        iconData: icon,
+        onPressed: onPressed,
+        iconSize: context.sizing.iconButtonIconSize,
+        buttonSize: context.sizing.iconButtonSize,
+        tapTargetSize: context.sizing.iconButtonTapTarget,
+        color: calendarSubtitleColor,
       ),
     );
   }

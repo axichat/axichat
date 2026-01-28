@@ -3792,6 +3792,7 @@ class _SelectionTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverTaskId == task.id;
 
@@ -3799,7 +3800,7 @@ class _SelectionTaskTile extends StatelessWidget {
       title: task.title,
       enabled: !isActive,
       child: Container(
-        margin: const EdgeInsets.only(bottom: calendarGutterSm),
+        margin: EdgeInsets.only(bottom: spacing.s),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(calendarBorderRadius),
           child: Material(
@@ -3825,13 +3826,13 @@ class _SelectionTaskTile extends StatelessWidget {
                       onToggleCompletion(task, completed),
                   trailing: AxiTooltip(
                     builder: (_) => Text(context.l10n.calendarSelectionRemove),
-                    child: ShadIconButton.ghost(
+                    child: AxiIconButton.ghost(
+                      iconData: Icons.close,
                       onPressed: () => onRemoveTask(task),
-                      icon: Icon(
-                        Icons.close,
-                        size: 16,
-                        color: calendarSubtitleColor,
-                      ),
+                      iconSize: context.sizing.iconButtonIconSize,
+                      buttonSize: context.sizing.iconButtonTapTarget,
+                      tapTargetSize: context.sizing.iconButtonTapTarget,
+                      color: calendarSubtitleColor,
                     ),
                   ),
                 ),

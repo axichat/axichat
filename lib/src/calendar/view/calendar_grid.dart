@@ -4057,7 +4057,10 @@ class DayEventBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.xs,
+        vertical: context.spacing.xxs,
+      ),
       decoration: BoxDecoration(
         color: calendarPrimaryColor,
         borderRadius: BorderRadius.circular(8),
@@ -4084,9 +4087,8 @@ class _CalendarZoomControls extends StatelessWidget {
     final theme = ShadTheme.of(context);
     final colors = theme.colorScheme;
     const double zoomControlsShadowAlpha = 0.12;
-    final Color zoomControlsShadowColor = Theme.of(
-      context,
-    ).shadowColor.withValues(alpha: zoomControlsShadowAlpha);
+    final Color zoomControlsShadowColor =
+        context.colorScheme.shadow.withValues(alpha: zoomControlsShadowAlpha);
     final labelStyle = calendarZoomLabelTextStyle.copyWith(
       color: colors.foreground,
       fontFamily: theme.textTheme.small.fontFamily,
@@ -4100,11 +4102,13 @@ class _CalendarZoomControls extends StatelessWidget {
       required IconData icon,
       required VoidCallback? onPressed,
     }) {
-      final button = ShadIconButton.ghost(
-        icon: Icon(icon, size: gridState._zoomControlsIconSize),
-        padding: const EdgeInsets.all(8),
+      final button = AxiIconButton.ghost(
+        iconData: icon,
         onPressed: onPressed,
-        enabled: onPressed != null,
+        iconSize: context.sizing.iconButtonIconSize,
+        buttonSize: context.sizing.iconButtonTapTarget,
+        tapTargetSize: context.sizing.iconButtonTapTarget,
+        usePrimary: false,
       );
       return AxiTooltip(builder: (_) => Text(tooltip), child: button);
     }

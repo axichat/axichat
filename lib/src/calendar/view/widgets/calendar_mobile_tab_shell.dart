@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/app.dart';
+
 /// Shared container used by both the authenticated and guest calendar mobile
 /// layouts. Handles painting the background/border shell around the draggable
 /// TabBar + cancel bucket so they stay visually consistent.
@@ -74,10 +76,13 @@ class TasksTabLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final TextStyle resolvedStyle = textStyle ??
+        context.textTheme.small.copyWith(fontWeight: FontWeight.w600);
     if (!highlight || animation == null) {
       return Text(
         text,
-        style: textStyle ?? const TextStyle(fontWeight: FontWeight.w600),
+        style: resolvedStyle,
       );
     }
 
@@ -98,11 +103,13 @@ class TasksTabLabel extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.xs,
+                vertical: spacing.xxs,
+              ),
               child: Text(
                 text,
-                style:
-                    textStyle ?? const TextStyle(fontWeight: FontWeight.w600),
+                style: resolvedStyle,
               ),
             ),
             Positioned(
@@ -128,10 +135,12 @@ class TasksTabLabel extends StatelessWidget {
                     ],
                   ),
                   child: Container(
-                    margin: const EdgeInsets.all(2),
+                    margin: EdgeInsets.all(spacing.xxs),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.25 + (0.15 * t)),
+                      color: colors.background.withValues(
+                        alpha: 0.25 + (0.15 * t),
+                      ),
                     ),
                   ),
                 ),

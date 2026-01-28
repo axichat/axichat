@@ -235,16 +235,29 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 _ => context.colorScheme.foreground,
               };
         final Color resolvedForeground = widget.color ?? fallbackForeground;
-        final Color resolvedBorder = widget.borderColor ??
+        final Color baseBorder = widget.borderColor ??
             (widget.variant == AxiIconButtonVariant.ghost
                 ? Colors.transparent
                 : context.borderSide.color);
-        final Color resolvedBackground = widget.backgroundColor ??
+        final Color baseBackground = widget.backgroundColor ??
             switch (widget.variant) {
               AxiIconButtonVariant.outline => Colors.transparent,
               AxiIconButtonVariant.ghost => context.colorScheme.secondary,
               _ => context.colorScheme.card,
             };
+        final bool isSelected = widget.selected;
+        final Color selectedTint = context.colorScheme.primary.withValues(
+          alpha: context.motion.tapHoverAlpha,
+        );
+        final Color resolvedBorder = (isSelected && widget.borderColor == null)
+            ? (widget.variant == AxiIconButtonVariant.ghost
+                ? Colors.transparent
+                : context.colorScheme.primary)
+            : baseBorder;
+        final Color resolvedBackground =
+            (isSelected && widget.backgroundColor == null)
+                ? Color.alphaBlend(selectedTint, baseBackground)
+                : baseBackground;
         final bool enabled =
             (widget.onPressed != null || widget.onLongPress != null) &&
                 !widget.loading;
