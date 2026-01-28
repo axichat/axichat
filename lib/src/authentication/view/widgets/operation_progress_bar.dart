@@ -123,7 +123,7 @@ class OperationProgressBar extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final barHeight = sizing.progressIndicatorStrokeWidth * 4;
+    final barHeight = sizing.progressIndicatorBarHeight;
     final borderRadius = BorderRadius.circular(sizing.containerRadius);
     return AnimatedSwitcher(
       duration: animationDuration,

@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/buttons/axi_hover_band.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -38,7 +37,6 @@ class AxiIconButton extends StatefulWidget {
     this.cornerRadius,
     this.borderWidth,
     this.loading = false,
-    this.usePrimary = false,
     this.selected = false,
   })  : variant = AxiIconButtonVariant.primary,
         resolvedIconSize = iconSize,
@@ -65,7 +63,6 @@ class AxiIconButton extends StatefulWidget {
     this.cornerRadius,
     this.borderWidth,
     this.loading = false,
-    this.usePrimary = false,
     this.selected = false,
   })  : resolvedIconSize = iconSize,
         resolvedButtonSize = buttonSize,
@@ -86,7 +83,6 @@ class AxiIconButton extends StatefulWidget {
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
-    this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
     this.loading = false,
@@ -112,7 +108,6 @@ class AxiIconButton extends StatefulWidget {
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
-    this.usePrimary = false,
     this.loading = false,
     this.selected = false,
   })  : variant = AxiIconButtonVariant.outline,
@@ -139,7 +134,6 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
-    this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
     this.loading = false,
@@ -165,7 +159,6 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
-    this.usePrimary = false,
     this.backgroundColor,
     this.borderColor,
     this.loading = false,
@@ -193,7 +186,6 @@ class AxiIconButton extends StatefulWidget {
   final double? cornerRadius;
   final double? borderWidth;
   final bool loading;
-  final bool usePrimary;
   final bool selected;
   final double? resolvedIconSize;
   final double? resolvedButtonSize;
@@ -235,7 +227,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
     return ValueListenableBuilder<Set<WidgetState>>(
       valueListenable: _states,
       builder: (context, states, _) {
-        final Color fallbackForeground = widget.usePrimary
+        final Color fallbackForeground = widget.selected
             ? context.colorScheme.primary
             : switch (widget.variant) {
                 AxiIconButtonVariant.destructive =>
@@ -256,10 +248,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final bool enabled =
             (widget.onPressed != null || widget.onLongPress != null) &&
                 !widget.loading;
-        final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
-        final bool focused = states.contains(WidgetState.focused);
-        final bool hoverOrFocus = hovered || focused || widget.selected;
         final double resolvedIconSize =
             widget.resolvedIconSize ?? context.sizing.iconButtonIconSize;
         final double resolvedButtonSize =
@@ -270,18 +259,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             (widget.variant == AxiIconButtonVariant.outline
                 ? context.borderSide.width
                 : 0);
-        final double hoverBandHeightFactor =
-            context.motion.hoverBandHeightFactor;
-        final double hoverBandIntensity = context.motion.hoverBandIntensity;
-        const double minAlpha = 0.0;
-        const double maxAlpha = 1.0;
-        final double hoverAlpha =
-            (context.motion.tapHoverAlpha * hoverBandIntensity)
-                .clamp(minAlpha, maxAlpha)
-                .toDouble();
-        final Color hoverTintColor =
-            context.colorScheme.primary.withValues(alpha: hoverAlpha);
-        final paintShape = RoundedSuperellipseBorder(
+        final paintShape = SquircleBorder(
           borderRadius: widget.resolvedCornerRadius == null
               ? context.radius
               : BorderRadius.circular(widget.resolvedCornerRadius!),
@@ -362,25 +340,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                           _bounceController.setPressed(false);
                         }
                       : null,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: <Widget>[
-                      if (hoverOrFocus)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: AxiHoverBand(
-                              shape: paintShape,
-                              color: hoverTintColor,
-                              heightFactor: hoverBandHeightFactor,
-                            ),
-                          ),
-                        ),
-                      SizedBox(
-                        width: resolvedButtonSize,
-                        height: resolvedButtonSize,
-                        child: Center(child: iconWidget),
-                      ),
-                    ],
+                  child: SizedBox(
+                    width: resolvedButtonSize,
+                    height: resolvedButtonSize,
+                    child: Center(child: iconWidget),
                   ),
                 ),
               ),

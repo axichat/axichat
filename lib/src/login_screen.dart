@@ -46,7 +46,6 @@ enum _AuthFlow { login, signup }
 const double _primaryPanePadding = 12.0;
 const double _secondaryPaneGutter = 0.0;
 const double _unsplitHorizontalMargin = 16.0;
-const double _authCardCornerRadius = 20.0;
 const Duration _authOperationTimeout = Duration(seconds: 45);
 const Duration _authProgressSegmentDuration = Duration(seconds: 4);
 const double _authProgressSegmentTarget = 0.8;
@@ -464,11 +463,11 @@ class _LoginScreenState extends State<LoginScreen>
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final authCardShape = SquircleBorder(
-      cornerRadius: _authCardCornerRadius,
-      side: BorderSide(color: colors.border),
+      cornerRadius: context.sizing.containerRadius,
+      side: context.borderSide,
     );
     final authCardClipShape = SquircleBorder(
-      cornerRadius: _authCardCornerRadius,
+      cornerRadius: context.sizing.containerRadius,
     );
     final showProgressBar =
         _activeFlow != null || _operationProgressController.isActive;

@@ -134,7 +134,7 @@ class _LoginFormState extends State<LoginForm> {
                       capability: context.watch<Capability>(),
                     ),
                   ),
-                  const SizedBox.square(),
+                  SizedBox(height: spacing.s),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
@@ -191,7 +191,7 @@ class _LoginFormState extends State<LoginForm> {
                       },
                     ),
                   ),
-                  const SizedBox.square(),
+                  SizedBox(height: spacing.s),
                   Padding(
                     padding: horizontalPadding,
                     child: AxiAnimatedSize(

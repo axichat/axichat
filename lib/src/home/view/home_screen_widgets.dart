@@ -183,9 +183,7 @@ class _NexusScaffold extends StatelessWidget {
         AppBarActionItem(
           label: context.l10n.accessibilityActionsLabel,
           iconData: LucideIcons.lifeBuoy,
-          inline: _FindActionIconButton(
-            showShortcutHint: navPlacement != NavPlacement.bottom,
-          ),
+          inline: const _FindActionIconButton(),
           onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
                 const AccessibilityMenuOpened(),
               ),
@@ -440,7 +438,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     if (collapsed) {
-      return AxiIconButton.outline(
+      return AxiIconButton.ghost(
         iconData: LucideIcons.lifeBuoy,
         tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
         onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
@@ -450,8 +448,9 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     }
     final colors = context.colorScheme;
     final radius = context.radius;
+    final label = l10n.accessibilityActionsLabel;
     return Semantics(
-      label: l10n.accessibilityActionsLabel,
+      label: label,
       button: true,
       child: Material(
         color: colors.background,
@@ -470,7 +469,16 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
               children: [
                 const Icon(LucideIcons.lifeBuoy, size: _railFooterIconSize),
                 const SizedBox(width: _railFooterItemSpacing),
-                ShortcutHint(shortcut: shortcut, dense: true),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.textTheme.small.copyWith(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
@@ -517,7 +525,6 @@ class _SettingsRailItem extends StatelessWidget {
         iconData: LucideIcons.settings,
         tooltip: label,
         onPressed: () => _openSettings(context),
-        usePrimary: true,
       );
     }
     final colors = context.colorScheme;
@@ -560,9 +567,7 @@ class _SettingsRailItem extends StatelessWidget {
 }
 
 class _FindActionIconButton extends StatelessWidget {
-  const _FindActionIconButton({required this.showShortcutHint});
-
-  final bool showShortcutHint;
+  const _FindActionIconButton();
 
   @override
   Widget build(BuildContext context) {
@@ -572,23 +577,12 @@ class _FindActionIconButton extends StatelessWidget {
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
-    final button = AxiIconButton.outline(
+    return AxiIconButton.outline(
       iconData: LucideIcons.lifeBuoy,
       tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
       onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
             const AccessibilityMenuOpened(),
           ),
-    );
-    if (!showShortcutHint) {
-      return button;
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        button,
-        const SizedBox(width: 10),
-        ShortcutHint(shortcut: shortcut, dense: true),
-      ],
     );
   }
 }
@@ -675,7 +669,6 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
                 color: context.colorScheme.primary,
               ),
             ),
-            usePrimary: true,
           );
         },
       ),

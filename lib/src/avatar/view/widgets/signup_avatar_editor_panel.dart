@@ -9,8 +9,10 @@ import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _fallbackSignupAvatarAssetPath =
@@ -60,15 +62,11 @@ class SignupAvatarEditorPanel extends StatefulWidget {
 }
 
 class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
-  static const _previewTransitionDuration = Duration(milliseconds: 220);
-
   bool _shuffling = false;
   bool _shufflingBackground = false;
   int _previewVersion = 0;
   Uint8List? _lastPreviewBytes;
   Rect? _localCropRect;
-  Rect? _pendingCropRect;
-  bool _cropChangeScheduled = false;
   bool _fallbackAvatarPrecached = false;
 
   @override
@@ -123,26 +121,16 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   }
 
   void _scheduleCropChange(Rect rect) {
-    _pendingCropRect = rect;
-    if (_cropChangeScheduled) return;
-    _cropChangeScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cropChangeScheduled = false;
-      final next = _pendingCropRect;
-      _pendingCropRect = null;
-      if (!mounted || next == null) return;
-      widget.onCropChanged?.call(next);
-      setState(() => _localCropRect = next);
-    });
+    if (!mounted) return;
+    widget.onCropChanged?.call(rect);
+    setState(() => _localCropRect = rect);
   }
 
   void _handleCropReset() {
     final rect = widget.cropRect;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      widget.onCropReset?.call();
-      setState(() => _localCropRect = rect);
-    });
+    if (!mounted) return;
+    widget.onCropReset?.call();
+    setState(() => _localCropRect = rect);
   }
 
   void _handleCropCommit(Rect rect) {
@@ -155,8 +143,11 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
-    const avatarActionSpacing = 8.0;
-    const avatarActionIconSize = 20.0;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final avatarActionSpacing = spacing.s;
+    final avatarActionIconSize = sizing.iconButtonIconSize;
     final showCrop = widget.mode == AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
     final cropBytes = showCrop ? widget.cropBytes ?? _lastPreviewBytes : null;
@@ -184,20 +175,20 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
       );
       cropper = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 12.0,
+        spacing: spacing.s,
         children: [
           Text(
-            'Crop & focus',
+            l10n.signupAvatarCropTitle,
             style: context.textTheme.small.copyWith(color: colors.foreground),
           ),
           Text(
-            'Drag or resize the square to frame your avatar. Reset to center the selection.',
+            l10n.avatarCropDescription,
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: EdgeInsets.all(spacing.s),
             child: Center(
               child: AxiImageCropper(
                 bytes: safeBytes,
@@ -224,7 +215,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
             ),
           ),
           Text(
-            'Only the area inside the circle will appear in the final avatar.',
+            l10n.signupAvatarCropHint,
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),
@@ -247,10 +238,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     Widget preview = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
-      spacing: 12.0,
+      spacing: spacing.s,
       children: [
         PageTransitionSwitcher(
-          duration: _previewTransitionDuration,
+          duration: animationDuration,
           transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
               FadeTransition(
             opacity: primaryAnimation,
@@ -275,7 +266,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                     decoration: BoxDecoration(
                       color: colors.card,
                       shape: BoxShape.circle,
-                      border: Border.all(color: colors.border),
+                      border: Border.fromBorderSide(context.borderSide),
                     ),
                     child: ClipOval(
                       child: Image.asset(
@@ -298,106 +289,49 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           spacing: avatarActionSpacing,
           runSpacing: avatarActionSpacing,
           children: [
-            ShadButton(
+            AxiButton.secondary(
               onPressed: allowUseAction ? widget.onUseCurrent : null,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: avatarActionSpacing,
-                children: [
-                  const Icon(LucideIcons.check, size: avatarActionIconSize),
-                  Text(l10n.avatarUseThis),
-                ],
+              leading: Icon(
+                LucideIcons.check,
+                size: avatarActionIconSize,
               ),
-            ).withTapBounce(enabled: allowUseAction),
-            ShadButton(
+              child: Text(l10n.avatarUseThis),
+            ),
+            AxiButton.primary(
+              loading: _shuffling,
               onPressed: busy ? null : _handleShuffle,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ButtonSpinnerSlot(
-                    isVisible: _shuffling,
-                    spinner: SizedBox.square(
-                      dimension: avatarActionIconSize,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colors.primaryForeground,
-                        ),
-                        backgroundColor: colors.primaryForeground.withValues(
-                          alpha: 0.2,
-                        ),
-                      ),
-                    ),
-                    slotSize: avatarActionIconSize,
-                    gap: avatarActionSpacing,
-                    duration: baseAnimationDuration,
-                  ),
-                  if (!_shuffling) ...[
-                    const Icon(
-                      LucideIcons.refreshCw,
-                      size: avatarActionIconSize,
-                    ),
-                    const SizedBox(width: avatarActionSpacing),
-                  ],
-                  Text(l10n.signupAvatarShuffle),
-                ],
+              leading: Icon(
+                LucideIcons.refreshCw,
+                size: avatarActionIconSize,
               ),
-            ).withTapBounce(),
+              child: Text(l10n.signupAvatarShuffle),
+            ),
             if (showBackgroundShuffle)
-              ShadButton.secondary(
+              AxiButton.secondary(
+                loading: _shufflingBackground,
                 onPressed: busy
                     ? null
                     : () async {
                         await _handleShuffleBackground();
                       },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ButtonSpinnerSlot(
-                      isVisible: _shufflingBackground,
-                      spinner: SizedBox.square(
-                        dimension: avatarActionIconSize,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            colors.secondaryForeground,
-                          ),
-                          backgroundColor:
-                              colors.secondaryForeground.withValues(
-                            alpha: 0.2,
-                          ),
-                        ),
-                      ),
-                      slotSize: avatarActionIconSize,
-                      gap: avatarActionSpacing,
-                      duration: baseAnimationDuration,
-                    ),
-                    if (!_shufflingBackground) ...[
-                      const Icon(
-                        LucideIcons.palette,
-                        size: avatarActionIconSize,
-                      ),
-                      const SizedBox(width: avatarActionSpacing),
-                    ],
-                    Text(l10n.signupAvatarBackgroundColor),
-                  ],
+                leading: Icon(
+                  LucideIcons.palette,
+                  size: avatarActionIconSize,
                 ),
-              ).withTapBounce(),
-            ShadButton.outline(
+                child: Text(l10n.signupAvatarBackgroundColor),
+              ),
+            AxiButton.outline(
               onPressed: busy
                   ? null
                   : () async {
                       await widget.onUpload();
                     },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: avatarActionSpacing,
-                children: [
-                  const Icon(LucideIcons.upload, size: avatarActionIconSize),
-                  Text(l10n.signupAvatarUploadImage),
-                ],
+              leading: Icon(
+                LucideIcons.upload,
+                size: avatarActionIconSize,
               ),
-            ).withTapBounce(),
+              child: Text(l10n.signupAvatarUploadImage),
+            ),
           ],
         ),
       ],
@@ -406,11 +340,14 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final previewAndCrop = showCrop && cropper != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12.0,
+            spacing: spacing.s,
             children: [preview, cropper],
           )
         : preview;
 
-    return ShadCard(padding: const EdgeInsets.all(12.0), child: previewAndCrop);
+    return ShadCard(
+      padding: EdgeInsets.all(spacing.m),
+      child: previewAndCrop,
+    );
   }
 }

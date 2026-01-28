@@ -17,6 +17,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.menuMaxWidth,
     required this.menuMaxHeight,
     required this.listButtonHeight,
+    required this.appBarElevation,
+    required this.appBarScrolledUnderElevation,
     required this.dialogMaxWidth,
     required this.dialogMaxHeightFraction,
     required this.sheetDragHandleWidth,
@@ -25,6 +27,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.modalShadowOffsetY,
     required this.progressIndicatorSize,
     required this.progressIndicatorStrokeWidth,
+    required this.progressIndicatorBarHeight,
     required this.containerRadius,
   });
 
@@ -40,6 +43,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double menuMaxWidth;
   final double menuMaxHeight;
   final double listButtonHeight;
+  final double appBarElevation;
+  final double appBarScrolledUnderElevation;
   final double dialogMaxWidth;
   final double dialogMaxHeightFraction;
   final double sheetDragHandleWidth;
@@ -48,6 +53,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double modalShadowOffsetY;
   final double progressIndicatorSize;
   final double progressIndicatorStrokeWidth;
+  final double progressIndicatorBarHeight;
   final double containerRadius;
 
   @override
@@ -64,6 +70,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? menuMaxWidth,
     double? menuMaxHeight,
     double? listButtonHeight,
+    double? appBarElevation,
+    double? appBarScrolledUnderElevation,
     double? dialogMaxWidth,
     double? dialogMaxHeightFraction,
     double? sheetDragHandleWidth,
@@ -72,6 +80,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? modalShadowOffsetY,
     double? progressIndicatorSize,
     double? progressIndicatorStrokeWidth,
+    double? progressIndicatorBarHeight,
     double? containerRadius,
   }) {
     return AxiSizing(
@@ -87,6 +96,9 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       menuMaxWidth: menuMaxWidth ?? this.menuMaxWidth,
       menuMaxHeight: menuMaxHeight ?? this.menuMaxHeight,
       listButtonHeight: listButtonHeight ?? this.listButtonHeight,
+      appBarElevation: appBarElevation ?? this.appBarElevation,
+      appBarScrolledUnderElevation:
+          appBarScrolledUnderElevation ?? this.appBarScrolledUnderElevation,
       dialogMaxWidth: dialogMaxWidth ?? this.dialogMaxWidth,
       dialogMaxHeightFraction:
           dialogMaxHeightFraction ?? this.dialogMaxHeightFraction,
@@ -99,6 +111,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
           progressIndicatorSize ?? this.progressIndicatorSize,
       progressIndicatorStrokeWidth:
           progressIndicatorStrokeWidth ?? this.progressIndicatorStrokeWidth,
+      progressIndicatorBarHeight:
+          progressIndicatorBarHeight ?? this.progressIndicatorBarHeight,
       containerRadius: containerRadius ?? this.containerRadius,
     );
   }
@@ -123,6 +137,8 @@ const AxiSizing axiSizing = AxiSizing(
   menuMaxWidth: 320,
   menuMaxHeight: 320,
   listButtonHeight: 48,
+  appBarElevation: 0,
+  appBarScrolledUnderElevation: 0,
   dialogMaxWidth: 640,
   dialogMaxHeightFraction: 0.9,
   sheetDragHandleWidth: 32,
@@ -131,5 +147,6 @@ const AxiSizing axiSizing = AxiSizing(
   modalShadowOffsetY: 16,
   progressIndicatorSize: 16,
   progressIndicatorStrokeWidth: 2,
+  progressIndicatorBarHeight: 8,
   containerRadius: 8,
 );

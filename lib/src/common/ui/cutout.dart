@@ -38,6 +38,7 @@ class CutoutSurface extends StatelessWidget {
             .toList(growable: false);
     final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
     final clipper = _CutoutClipper(shape: shape, cutouts: resolvedCutouts);
+    final borderWidth = shape.side.width;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -47,6 +48,7 @@ class CutoutSurface extends StatelessWidget {
             shape: shape,
             backgroundColor: backgroundColor,
             borderColor: borderColor,
+            borderWidth: borderWidth,
             cutouts: resolvedCutouts,
             shadows: shadows,
             shadowOpacity: resolvedShadowOpacity,
@@ -97,6 +99,7 @@ class _CutoutPainter extends CustomPainter {
     required this.shape,
     required this.backgroundColor,
     required this.borderColor,
+    required this.borderWidth,
     required this.cutouts,
     required this.shadows,
     required this.shadowOpacity,
@@ -105,6 +108,7 @@ class _CutoutPainter extends CustomPainter {
   final OutlinedBorder shape;
   final Color backgroundColor;
   final Color borderColor;
+  final double borderWidth;
   final List<CutoutSpec> cutouts;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
@@ -140,15 +144,17 @@ class _CutoutPainter extends CustomPainter {
     final fillPaint = Paint()
       ..color = backgroundColor
       ..style = PaintingStyle.fill;
-    final strokePaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..strokeJoin = StrokeJoin.round;
-
     canvas.drawPath(fillPath, fillPaint);
-    if (borderColor.a > 0) {
-      canvas.drawPath(fillPath, strokePaint);
+    if (borderColor.a > 0 && borderWidth > 0) {
+      final borderPaint = Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth * 2
+        ..strokeJoin = StrokeJoin.round;
+      canvas.save();
+      canvas.clipPath(fillPath);
+      canvas.drawPath(fillPath, borderPaint);
+      canvas.restore();
     }
   }
 

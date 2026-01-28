@@ -420,6 +420,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               appBarTheme: theme.appBarTheme.copyWith(
                 titleTextStyle: appBarTitleStyle,
                 toolbarTextStyle: appBarTitleStyle,
+                elevation: axiSizing.appBarElevation,
+                scrolledUnderElevation: axiSizing.appBarScrolledUnderElevation,
               ),
               scaffoldBackgroundColor: materialColors.background,
               dividerColor: materialColors.border,

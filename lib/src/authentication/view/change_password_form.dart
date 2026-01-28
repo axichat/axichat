@@ -121,7 +121,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   },
                 ),
               ),
-              const SizedBox.square(),
+              SizedBox(height: spacing.s),
               AxiButton.primary(
                 loading: loading,
                 onPressed: loading ? null : () => _onPressed(context),

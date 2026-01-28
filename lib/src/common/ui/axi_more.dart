@@ -14,14 +14,14 @@ class AxiMore extends StatefulWidget {
     this.tooltip = '',
     this.enabled = true,
     this.ghost = false,
-    this.usePrimary = false,
+    this.selected = false,
   });
 
   final List<AxiMenuAction> actions;
   final String tooltip;
   final bool enabled;
   final bool ghost;
-  final bool usePrimary;
+  final bool selected;
 
   @override
   State<AxiMore> createState() => _AxiMoreState();
@@ -128,6 +128,7 @@ class _AxiMoreState extends State<AxiMore> {
         iconData: LucideIcons.ellipsisVertical,
         tooltip: tooltip,
         onPressed: sheetAction,
+        selected: widget.selected,
       );
     }
     return AxiPopover(
@@ -142,11 +143,13 @@ class _AxiMoreState extends State<AxiMore> {
               iconData: LucideIcons.ellipsisVertical,
               tooltip: tooltip,
               onPressed: popoverAction,
+              selected: widget.selected,
             )
           : AxiIconButton.outline(
               iconData: LucideIcons.ellipsisVertical,
               tooltip: tooltip,
               onPressed: popoverAction,
+              selected: widget.selected,
             ),
     );
   }

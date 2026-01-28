@@ -117,10 +117,10 @@ class ChatCutoutComposer extends StatelessWidget {
     final cursorHeight = textStyle.fontSize == null
         ? null
         : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
-    final cutoutGap = context.spacing.xs;
-    final iconButtonTapTarget = context.sizing.iconButtonTapTarget;
-    final defaultCutoutThickness = iconButtonTapTarget + (cutoutGap * 2);
-    final defaultCutoutDepth = (defaultCutoutThickness / 2) + cutoutGap;
+    final cutoutGap = context.spacing.xxs;
+    final iconButtonSize = context.sizing.iconButtonSize;
+    final defaultCutoutThickness = iconButtonSize + (cutoutGap * 2);
+    final defaultCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final defaultCutoutCornerRadius = context.radii.squircle;
 
     return CutoutSurface(

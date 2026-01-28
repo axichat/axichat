@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -40,6 +41,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     PointerDeviceKind.invertedStylus,
   };
   _TapBouncePressState _pressState = _TapBouncePressState.idle;
+  bool _hovered = false;
 
   void _setPressed(bool value) {
     final nextState =
@@ -51,6 +53,14 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     });
   }
 
+  void _setHovered(bool value) {
+    if (_hovered == value) return;
+    if (!mounted) return;
+    setState(() {
+      _hovered = value;
+    });
+  }
+
   bool _shouldHandleTapKind(PointerDeviceKind? kind) {
     if (kind == null) {
       return true;
@@ -58,6 +68,11 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     if (_tapBouncePointerKinds.contains(kind)) {
       return true;
     }
+    return kind == PointerDeviceKind.mouse ||
+        kind == PointerDeviceKind.trackpad;
+  }
+
+  bool _shouldHandleHoverKind(PointerDeviceKind kind) {
     return kind == PointerDeviceKind.mouse ||
         kind == PointerDeviceKind.trackpad;
   }
@@ -78,6 +93,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     super.didUpdateWidget(oldWidget);
     if (!widget.enabled) {
       _setPressed(false);
+      _setHovered(false);
     }
   }
 
@@ -90,14 +106,18 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
-    final targetScale =
-        _pressState == _TapBouncePressState.pressed ? widget.scale : 1.0;
-    final duration = _pressState == _TapBouncePressState.pressed
-        ? widget.pressDuration
-        : widget.releaseDuration;
-    final curve = _pressState == _TapBouncePressState.pressed
-        ? widget.pressCurve
-        : widget.releaseCurve;
+    final double hoverScale = context.motion.tapHoverScale;
+    final bool isPressed = _pressState == _TapBouncePressState.pressed;
+    final bool isHovered = _hovered && !isPressed;
+    final double targetScale = isPressed
+        ? widget.scale
+        : isHovered
+            ? hoverScale
+            : 1.0;
+    final duration =
+        isPressed || isHovered ? widget.pressDuration : widget.releaseDuration;
+    final curve =
+        isPressed || isHovered ? widget.pressCurve : widget.releaseCurve;
     final animationChild = AnimatedScale(
       scale: targetScale,
       duration: duration,
@@ -106,6 +126,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
       child: widget.child,
     );
     final controller = widget.controller;
+    Widget result = animationChild;
     if (controller != null) {
       controller
         .._attach(this)
@@ -114,26 +135,41 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
           onUp: _handleTapUp,
           onCancel: _handleTapCancel,
         );
-      return animationChild;
+    } else {
+      result = Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) => _handleTapDown(
+          TapDownDetails(
+            kind: event.kind,
+            globalPosition: event.position,
+            localPosition: event.localPosition,
+          ),
+        ),
+        onPointerUp: (event) => _handleTapUp(
+          TapUpDetails(
+            kind: event.kind,
+            globalPosition: event.position,
+            localPosition: event.localPosition,
+          ),
+        ),
+        onPointerCancel: (_) => _handleTapCancel(),
+        child: result,
+      );
     }
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) => _handleTapDown(
-        TapDownDetails(
-          kind: event.kind,
-          globalPosition: event.position,
-          localPosition: event.localPosition,
-        ),
-      ),
-      onPointerUp: (event) => _handleTapUp(
-        TapUpDetails(
-          kind: event.kind,
-          globalPosition: event.position,
-          localPosition: event.localPosition,
-        ),
-      ),
-      onPointerCancel: (_) => _handleTapCancel(),
-      child: animationChild,
+    return MouseRegion(
+      onEnter: (event) {
+        if (!_shouldHandleHoverKind(event.kind)) {
+          return;
+        }
+        _setHovered(true);
+      },
+      onExit: (event) {
+        if (!_shouldHandleHoverKind(event.kind)) {
+          return;
+        }
+        _setHovered(false);
+      },
+      child: result,
     );
   }
 }

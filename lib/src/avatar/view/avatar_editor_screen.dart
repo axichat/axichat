@@ -55,6 +55,7 @@ class _AvatarEditorBody extends StatelessWidget {
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, state) {
         final colors = context.colorScheme;
+        final spacing = context.spacing;
         final isWide = MediaQuery.sizeOf(context).width >= largeScreen;
         return Scaffold(
           appBar: AppBar(
@@ -63,9 +64,11 @@ class _AvatarEditorBody extends StatelessWidget {
             backgroundColor: colors.background,
             surfaceTintColor: Colors.transparent,
             scrolledUnderElevation: 0,
-            shape: Border(bottom: BorderSide(color: colors.border)),
+            shape: Border(
+              bottom: context.borderSide.copyWith(color: colors.border),
+            ),
             leading: Padding(
-              padding: const EdgeInsets.only(left: 12.0),
+              padding: EdgeInsets.only(left: spacing.s),
               child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
@@ -75,13 +78,13 @@ class _AvatarEditorBody extends StatelessWidget {
           ),
           body: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(spacing.m),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
+                  constraints: const BoxConstraints(maxWidth: largeScreen),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 10.0,
+                    spacing: spacing.s,
                     children: [
                       _AvatarSummaryCard(
                         state: state,
@@ -110,6 +113,10 @@ class _AvatarEditorToolsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final template = state.draftAvatar?.template;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final toolsSpacing = spacing.s;
+    final maxPanelWidth = sizing.menuMaxWidth;
     final showBackgroundPicker =
         state.draftAvatar?.source == AvatarSource.template &&
             template != null &&
@@ -121,7 +128,7 @@ class _AvatarEditorToolsSection extends StatelessWidget {
         final isCompact = maxWidth < mediumScreen;
         if (isCompact) {
           return Column(
-            spacing: _avatarEditorToolsSpacing,
+            spacing: toolsSpacing,
             children: [
               _CropCard(state: state),
               if (showBackgroundPicker) _BackgroundPicker(state: state),
@@ -131,13 +138,13 @@ class _AvatarEditorToolsSection extends StatelessWidget {
 
         final panelCount = showBackgroundPicker ? 2 : 1;
         final panelWidth = (panelCount == 2
-                ? (maxWidth - _avatarEditorToolsSpacing) / panelCount
+                ? (maxWidth - toolsSpacing) / panelCount
                 : maxWidth)
-            .clamp(0.0, _avatarEditorToolsMaxPanelWidth)
+            .clamp(0.0, maxPanelWidth)
             .toDouble();
         return Wrap(
-          spacing: _avatarEditorToolsSpacing,
-          runSpacing: _avatarEditorToolsSpacing,
+          spacing: toolsSpacing,
+          runSpacing: toolsSpacing,
           alignment: WrapAlignment.center,
           children: [
             SizedBox(
@@ -156,12 +163,6 @@ class _AvatarEditorToolsSection extends StatelessWidget {
   }
 }
 
-const double _avatarEditorToolsSpacing = 12.0;
-const double _avatarEditorToolsMaxPanelWidth = 420.0;
-const double _avatarEditorActionGap = 8.0;
-const double _avatarEditorSecondaryIconSize = 20.0;
-const double _avatarEditorPrimaryIconSize = 18.0;
-
 class _AvatarSummaryCard extends StatelessWidget {
   const _AvatarSummaryCard({
     required this.state,
@@ -177,7 +178,10 @@ class _AvatarSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final size = isWide ? 104.0 : 88.0;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final size =
+        isWide ? sizing.buttonHeightLg * 2 : sizing.buttonHeightLg * 1.5;
     final previewBytes = state.displayedBytes;
     final errorText = state.errorType?.resolve(l10n);
     final avatarSavedMessage = l10n.avatarSavedMessage;
@@ -187,14 +191,14 @@ class _AvatarSummaryCard extends StatelessWidget {
         state.draftAvatar?.payload.hash == state.lastSavedHash;
 
     return ShadCard(
-      padding: const EdgeInsets.all(12.0),
+      padding: EdgeInsets.all(spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 12.0,
+        spacing: spacing.s,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
-            spacing: 12.0,
+            spacing: spacing.s,
             children: [
               Hero(
                 tag: 'avatar',
@@ -209,7 +213,7 @@ class _AvatarSummaryCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 4.0,
+                  spacing: spacing.xs,
                   children: [
                     Text(
                       profile.username,
@@ -218,113 +222,52 @@ class _AvatarSummaryCard extends StatelessWidget {
                       ),
                     ),
                     Text(profile.jid, style: context.textTheme.muted),
-                    if (state.draftAvatar != null)
-                      Text(
-                        '${state.draftAvatar!.payload.bytes.length ~/ 1024} KB • ${state.draftAvatar!.payload.mimeType}',
-                        style: context.textTheme.small.copyWith(
-                          color: colors.mutedForeground,
-                        ),
-                      ),
                   ],
                 ),
               ),
               Column(
                 mainAxisSize: MainAxisSize.min,
-                spacing: _avatarEditorActionGap,
+                spacing: spacing.s,
                 children: [
-                  ShadButton.outline(
-                    size: ShadButtonSize.sm,
+                  AxiButton.outline(
+                    size: AxiButtonSize.sm,
+                    loading: state.shuffling,
                     onPressed:
                         state.processing || state.publishing || state.shuffling
                             ? null
                             : () => context
                                 .read<AvatarEditorCubit>()
                                 .shuffleTemplate(colors),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ButtonSpinnerSlot(
-                          isVisible: state.shuffling,
-                          spinner: SizedBox(
-                            width: _avatarEditorSecondaryIconSize,
-                            height: _avatarEditorSecondaryIconSize,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.4,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                colors.foreground,
-                              ),
-                              backgroundColor: colors.foreground.withValues(
-                                alpha: 0.2,
-                              ),
-                            ),
-                          ),
-                          slotSize: _avatarEditorSecondaryIconSize,
-                          gap: _avatarEditorActionGap,
-                          duration: baseAnimationDuration,
-                        ),
-                        if (!state.shuffling) ...[
-                          const Icon(
-                            LucideIcons.refreshCw,
-                            size: _avatarEditorSecondaryIconSize,
-                          ),
-                          const SizedBox(width: _avatarEditorActionGap),
-                        ],
-                        Text(l10n.signupAvatarShuffle),
-                      ],
+                    leading: Icon(
+                      LucideIcons.refreshCw,
+                      size: sizing.iconButtonIconSize,
                     ),
+                    child: Text(l10n.signupAvatarShuffle),
                   ),
-                  ShadButton.outline(
-                    size: ShadButtonSize.sm,
+                  AxiButton.outline(
+                    size: AxiButtonSize.sm,
                     onPressed: state.processing || state.publishing
                         ? null
                         : context.read<AvatarEditorCubit>().pickImage,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: _avatarEditorActionGap,
-                      children: [
-                        const Icon(LucideIcons.upload),
-                        Text(l10n.signupAvatarUploadImage),
-                      ],
+                    leading: Icon(
+                      LucideIcons.upload,
+                      size: sizing.iconButtonIconSize,
                     ),
+                    child: Text(l10n.signupAvatarUploadImage),
                   ),
-                  ShadButton(
-                    size: ShadButtonSize.sm,
+                  AxiButton.primary(
+                    size: AxiButtonSize.sm,
+                    loading: state.publishing,
                     onPressed: state.draftAvatar == null ||
                             state.processing ||
                             state.publishing
                         ? null
                         : context.read<AvatarEditorCubit>().publish,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ButtonSpinnerSlot(
-                          isVisible: state.publishing,
-                          spinner: SizedBox(
-                            width: _avatarEditorPrimaryIconSize,
-                            height: _avatarEditorPrimaryIconSize,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                colors.primaryForeground,
-                              ),
-                              backgroundColor: colors.primaryForeground
-                                  .withValues(alpha: 0.2),
-                            ),
-                          ),
-                          slotSize: _avatarEditorPrimaryIconSize,
-                          gap: _avatarEditorActionGap,
-                          duration: baseAnimationDuration,
-                        ),
-                        if (!state.publishing) ...[
-                          const Icon(
-                            LucideIcons.save,
-                            size: _avatarEditorPrimaryIconSize,
-                          ),
-                          const SizedBox(width: _avatarEditorActionGap),
-                        ],
-                        Text(l10n.avatarSaveAvatar),
-                      ],
+                    leading: Icon(
+                      LucideIcons.save,
+                      size: sizing.iconButtonIconSize,
                     ),
+                    child: Text(l10n.avatarSaveAvatar),
                   ),
                 ],
               ),
@@ -333,11 +276,13 @@ class _AvatarSummaryCard extends StatelessWidget {
           if (errorText != null)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               decoration: BoxDecoration(
                 color: colors.destructive.withAlpha((0.1 * 255).round()),
                 borderRadius: context.radius,
-                border: Border.all(color: colors.destructive),
+                border: Border.fromBorderSide(
+                  context.borderSide.copyWith(color: colors.destructive),
+                ),
               ),
               child: Text(
                 errorText,
@@ -349,11 +294,13 @@ class _AvatarSummaryCard extends StatelessWidget {
           if (showSuccessMessage)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               decoration: BoxDecoration(
                 color: colors.primary.withValues(alpha: 0.10),
                 borderRadius: context.radius,
-                border: Border.all(color: colors.primary),
+                border: Border.fromBorderSide(
+                  context.borderSide.copyWith(color: colors.primary),
+                ),
               ),
               child: Text(
                 avatarSavedMessage,
@@ -375,6 +322,8 @@ class _CropCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final draftAvatar = state.draftAvatar;
     final sourceBytes = draftAvatar?.sourceBytes;
     final imageWidth = draftAvatar?.sourceWidth?.toDouble();
@@ -402,10 +351,10 @@ class _CropCard extends StatelessWidget {
         cropRect.width > 0 &&
         cropRect.height > 0;
     return ShadCard(
-      padding: const EdgeInsets.all(12.0),
+      padding: EdgeInsets.all(spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 12.0,
+        spacing: spacing.s,
         children: [
           Text(
             l10n.avatarCropTitle,
@@ -419,12 +368,14 @@ class _CropCard extends StatelessWidget {
           ),
           if (!hasPreview)
             Container(
-              height: 180,
+              height: sizing.buttonHeightLg * 4,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: colors.card,
                 borderRadius: context.radius,
-                border: Border.all(color: colors.border),
+                border: Border.fromBorderSide(
+                  context.borderSide.copyWith(color: colors.border),
+                ),
               ),
               child: Text(
                 l10n.avatarCropPlaceholder,
@@ -436,7 +387,7 @@ class _CropCard extends StatelessWidget {
           else
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 12.0,
+              spacing: spacing.s,
               children: [
                 Center(
                   child: AxiImageCropper(
@@ -469,7 +420,7 @@ class _CropCard extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    spacing: 4.0,
+                    spacing: spacing.xs,
                     children: [
                       Text(
                         l10n.avatarCropSizeLabel(cropRect.width.round()),
@@ -504,6 +455,8 @@ class _BackgroundPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final template = state.draftAvatar?.template;
     final presets = [
       Colors.transparent,
@@ -520,10 +473,10 @@ class _BackgroundPicker extends StatelessWidget {
         template.hasAlphaBackground;
     if (!needsPicker) return const SizedBox.shrink();
     return ShadCard(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 12.0,
+        spacing: spacing.s,
         children: [
           Text(
             l10n.avatarBackgroundTitle,
@@ -537,9 +490,7 @@ class _BackgroundPicker extends StatelessWidget {
           ),
           Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: _avatarEditorColorPickerWidth,
-              ),
+              constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
               child: ColorPicker(
                 color: state.backgroundColor,
                 onColorChanged: (color) => context
@@ -554,15 +505,15 @@ class _BackgroundPicker extends StatelessWidget {
                   ColorPickerType.customSecondary: false,
                   ColorPickerType.wheel: true,
                 },
-                width: 40,
-                height: 40,
-                spacing: 8,
-                runSpacing: 8,
+                width: sizing.iconButtonSize,
+                height: sizing.iconButtonSize,
+                spacing: spacing.s,
+                runSpacing: spacing.s,
                 hasBorder: true,
-                borderColor: colors.border,
+                borderColor: context.borderSide.color,
                 borderRadius: context.radius.topLeft.x,
-                wheelDiameter: 220,
-                wheelWidth: 14,
+                wheelDiameter: sizing.menuMaxWidth * 0.7,
+                wheelWidth: spacing.m,
                 showColorCode: true,
                 colorCodeHasColor: true,
                 colorCodeTextStyle: context.textTheme.small.copyWith(
@@ -597,8 +548,8 @@ class _BackgroundPicker extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: ShadButton.outline(
-              size: ShadButtonSize.sm,
+            child: AxiButton.outline(
+              size: AxiButtonSize.sm,
               onPressed: state.backgroundColor == Colors.transparent
                   ? null
                   : () => context.read<AvatarEditorCubit>().setBackgroundColor(
@@ -609,19 +560,19 @@ class _BackgroundPicker extends StatelessWidget {
             ),
           ),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: spacing.s,
+            runSpacing: spacing.s,
             children: [
               for (final preset in presets)
                 ColorIndicator(
                   color: preset,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: sizing.iconButtonSize,
+                  height: sizing.iconButtonSize,
+                  borderRadius: context.radius.topLeft.x,
                   hasBorder: true,
                   borderColor: preset == state.backgroundColor
                       ? colors.primary
-                      : colors.border,
+                      : context.borderSide.color,
                   elevation: preset == state.backgroundColor ? 2 : 0,
                   isSelected: preset == state.backgroundColor,
                   onSelect: () => context
@@ -635,13 +586,13 @@ class _BackgroundPicker extends StatelessWidget {
             children: [
               ColorIndicator(
                 color: state.backgroundColor,
-                width: 44,
-                height: 44,
+                width: sizing.iconButtonTapTarget,
+                height: sizing.iconButtonTapTarget,
                 borderRadius: context.radius.topLeft.x,
                 hasBorder: true,
-                borderColor: colors.border,
+                borderColor: context.borderSide.color,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: spacing.s),
               Expanded(
                 child: Text(
                   l10n.avatarBackgroundPreview,
@@ -658,8 +609,6 @@ class _BackgroundPicker extends StatelessWidget {
   }
 }
 
-const _avatarEditorColorPickerWidth = 340.0;
-
 class _DefaultsSection extends StatelessWidget {
   const _DefaultsSection({required this.templates, required this.state});
 
@@ -670,9 +619,10 @@ class _DefaultsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: _avatarDefaultsSectionSpacing,
+      spacing: spacing.s,
       children: [
         Text(
           l10n.avatarDefaultsTitle,
@@ -688,8 +638,7 @@ class _DefaultsSection extends StatelessWidget {
                     : _avatarDefaultsColumnsNarrow;
             final cardWidth = columns == _avatarDefaultsColumnsNarrow
                 ? maxWidth
-                : (maxWidth - (_avatarDefaultsWrapSpacing * (columns - 1))) /
-                    columns;
+                : (maxWidth - (spacing.s * (columns - 1))) / columns;
             final templatesByCategory =
                 <AvatarTemplateCategory, List<AvatarTemplate>>{
               for (final category in AvatarTemplateCategory.values)
@@ -698,8 +647,8 @@ class _DefaultsSection extends StatelessWidget {
                     .toList(),
             };
             return Wrap(
-              spacing: _avatarDefaultsWrapSpacing,
-              runSpacing: _avatarDefaultsWrapSpacing,
+              spacing: spacing.s,
+              runSpacing: spacing.s,
               children: [
                 for (final entry in templatesByCategory.entries)
                   if (entry.value.isNotEmpty)
@@ -724,22 +673,9 @@ class _DefaultsSection extends StatelessWidget {
   }
 }
 
-const _avatarDefaultsSectionSpacing = 12.0;
-const _avatarDefaultsWrapSpacing = 12.0;
 const _avatarDefaultsColumnsWide = 3;
 const _avatarDefaultsColumnsMedium = 2;
 const _avatarDefaultsColumnsNarrow = 1;
-
-const _avatarDefaultsCarouselCardPadding = EdgeInsets.all(12.0);
-const _avatarDefaultsCarouselCardSpacing = 10.0;
-const _avatarDefaultsCarouselControlSpacing = 6.0;
-const _avatarDefaultsCarouselControlAnimationCurve = Curves.easeOutCubic;
-
-const _avatarTemplateCarouselHeight = 160.0;
-const _avatarTemplateCardWidth = 120.0;
-const _avatarTemplateCardAnimationDuration = Duration(milliseconds: 160);
-const _avatarTemplateCarouselItemSpacing = 12.0;
-const _avatarTemplateCarouselMinViewportFraction = 0.28;
 
 extension _AvatarTemplateCategoryLabel on AvatarTemplateCategory {
   String label(AppLocalizations l10n) => switch (this) {
@@ -871,14 +807,21 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final templates = widget.templates;
     if (templates.isEmpty) return const SizedBox.shrink();
     final canNavigate = templates.length > 1;
+    final cardWidth = sizing.buttonHeightLg * 2.5;
+    final carouselHeight = sizing.buttonHeightLg * 3;
+    final minViewportFraction =
+        (cardWidth / (cardWidth + spacing.s * 2)).clamp(0.2, 1.0).toDouble();
     return ShadCard(
-      padding: _avatarDefaultsCarouselCardPadding,
+      padding: EdgeInsets.all(spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: _avatarDefaultsCarouselCardSpacing,
+        spacing: spacing.s,
         children: [
           Row(
             children: [
@@ -895,19 +838,19 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                 tooltip: l10n.commonPrevious,
                 onPressed: canNavigate
                     ? () => _carouselController.previousPage(
-                          duration: baseAnimationDuration,
-                          curve: _avatarDefaultsCarouselControlAnimationCurve,
+                          duration: animationDuration,
+                          curve: Curves.easeOutCubic,
                         )
                     : null,
               ),
-              const SizedBox(width: _avatarDefaultsCarouselControlSpacing),
+              SizedBox(width: spacing.xs),
               AxiIconButton(
                 iconData: LucideIcons.chevronRight,
                 tooltip: l10n.commonNext,
                 onPressed: canNavigate
                     ? () => _carouselController.nextPage(
-                          duration: baseAnimationDuration,
-                          curve: _avatarDefaultsCarouselControlAnimationCurve,
+                          duration: animationDuration,
+                          curve: Curves.easeOutCubic,
                         )
                     : null,
               ),
@@ -915,9 +858,8 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
           ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final viewportFraction =
-                  (_avatarTemplateCardWidth / constraints.maxWidth).clamp(
-                _avatarTemplateCarouselMinViewportFraction,
+              final viewportFraction = (cardWidth / constraints.maxWidth).clamp(
+                minViewportFraction,
                 1.0,
               );
               return CarouselSlider.builder(
@@ -926,9 +868,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                 itemBuilder: (context, index, _) {
                   final template = templates[index];
                   return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _avatarTemplateCarouselItemSpacing / 2,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: spacing.s / 2),
                     child: _TemplatePreviewCard(
                       template: template,
                       isSelected: template.id == widget.selectedId,
@@ -938,7 +878,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                   );
                 },
                 options: CarouselOptions(
-                  height: _avatarTemplateCarouselHeight,
+                  height: carouselHeight,
                   viewportFraction: viewportFraction,
                   enlargeCenterPage: true,
                 ),
@@ -968,6 +908,9 @@ class _TemplatePreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final previewBackground =
         template.hasAlphaBackground ? colors.card : colors.card;
     final assetPath = template.assetPath;
@@ -977,61 +920,80 @@ class _TemplatePreviewCard extends StatelessWidget {
             fontWeight: FontWeight.w700,
           )
         : context.textTheme.small.copyWith(color: colors.mutedForeground);
-    final border =
-        isSelected ? Border.all(color: colors.primary, width: 2) : null;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: _avatarTemplateCardAnimationDuration,
-          width: _avatarTemplateCardWidth,
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: context.radius,
-            border: border,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 8.0,
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: ClipRRect(
-                    borderRadius: context.radius,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(color: previewBackground),
-                      child: assetPath == null
-                          ? Center(
-                              child: Icon(
-                                LucideIcons.imageOff,
-                                size: 20,
-                                color: colors.mutedForeground,
-                              ),
-                            )
-                          : Image.asset(assetPath, fit: BoxFit.cover),
+    final border = isSelected
+        ? Border.fromBorderSide(
+            context.borderSide.copyWith(color: colors.primary),
+          )
+        : null;
+    final cardWidth = sizing.buttonHeightLg * 2.5;
+    final overlayShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: context.borderSide,
+    );
+    return AxiTapBounce(
+      enabled: true,
+      child: Material(
+        color: Colors.transparent,
+        shape: overlayShape,
+        clipBehavior: Clip.antiAlias,
+        child: ShadFocusable(
+          canRequestFocus: true,
+          builder: (context, focused, child) =>
+              child ?? const SizedBox.shrink(),
+          child: ShadGestureDetector(
+            cursor: SystemMouseCursors.click,
+            hoverStrategies: ShadTheme.of(context).hoverStrategies,
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: animationDuration,
+              width: cardWidth,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: context.radius,
+                border: border,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                spacing: spacing.xs,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.all(spacing.s),
+                      child: ClipRRect(
+                        borderRadius: context.radius,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: previewBackground),
+                          child: assetPath == null
+                              ? Center(
+                                  child: Icon(
+                                    LucideIcons.imageOff,
+                                    size: sizing.iconButtonIconSize,
+                                    color: colors.mutedForeground,
+                                  ),
+                                )
+                              : Image.asset(assetPath, fit: BoxFit.cover),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.s,
+                      vertical: spacing.s,
+                    ),
+                    child: Text(
+                      template.label(l10n),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: labelStyle,
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0,
-                  vertical: 8.0,
-                ),
-                child: Text(
-                  template.label(l10n),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: labelStyle,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      ).withTapBounce(),
+      ),
     );
   }
 }

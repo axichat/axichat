@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/buttons/axi_hover_band.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -338,18 +337,6 @@ class _AxiButtonState extends State<AxiButton> {
           decoration: widget.variant.textDecoration(),
           decorationColor: foreground,
         );
-        final double hoverBandHeightFactor =
-            context.motion.hoverBandHeightFactor;
-        final double hoverBandIntensity = context.motion.hoverBandIntensity;
-        const double minAlpha = 0.0;
-        const double maxAlpha = 1.0;
-        final double hoverAlpha =
-            (context.motion.tapHoverAlpha * hoverBandIntensity)
-                .clamp(minAlpha, maxAlpha)
-                .toDouble();
-        final Color hoverTintColor =
-            context.colorScheme.primary.withValues(alpha: hoverAlpha);
-
         final bool replacesLeading = widget.leading != null && widget.loading;
 
         final List<Widget> rowChildren = <Widget>[
@@ -399,22 +386,6 @@ class _AxiButtonState extends State<AxiButton> {
             child: content,
           ),
         );
-        if (hoverOrFocus) {
-          final Widget hoverTintLayer = Positioned.fill(
-            child: IgnorePointer(
-              child: AxiHoverBand(
-                shape: shape,
-                color: hoverTintColor,
-                heightFactor: hoverBandHeightFactor,
-              ),
-            ),
-          );
-          content = Stack(
-            alignment: Alignment.center,
-            children: <Widget>[hoverTintLayer, content],
-          );
-        }
-
         if (widget.width != null) {
           content = SizedBox(width: widget.width, child: content);
         }

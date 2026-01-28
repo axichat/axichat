@@ -726,10 +726,10 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
-    final cutoutGap = context.spacing.xs;
-    final iconButtonTapTarget = context.sizing.iconButtonTapTarget;
-    final iconCutoutThickness = iconButtonTapTarget + (cutoutGap * 2);
-    final iconCutoutDepth = (iconCutoutThickness / 2) + cutoutGap;
+    final cutoutGap = context.spacing.xxs;
+    final iconButtonSize = context.sizing.iconButtonSize;
+    final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
+    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
@@ -738,7 +738,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.84, -1),
           depth: unreadDepth,
           thickness: unreadThickness,
-          cornerRadius: _unreadBadgeCornerRadius,
+          cornerRadius: context.sizing.containerRadius,
           child: Transform.translate(
             offset: Offset(0, scaled(_unreadBadgeCutoutChildVerticalOffset)),
             child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
@@ -746,7 +746,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       CutoutSpec(
         edge: CutoutEdge.right,
-        alignment: const Alignment(1.02, 0),
+        alignment: const Alignment(1, 0),
         depth: iconCutoutDepth,
         thickness: iconCutoutThickness,
         cornerRadius: iconCutoutRadius,
@@ -769,7 +769,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.52, 1),
           depth: 16,
           thickness: timestampThickness,
-          cornerRadius: 18,
+          cornerRadius: context.sizing.containerRadius,
           child: Transform.translate(
             offset: Offset(0, -scaled(3)),
             child: Text(
@@ -829,7 +829,10 @@ class _ChatListTileState extends State<ChatListTile> {
             ? l10n.chatsSemanticsUnselectHint
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
-    Widget tileContent = tileSurface.withTapBounce();
+    Widget tileContent = Padding(
+      padding: EdgeInsetsDirectional.only(end: iconCutoutDepth / 2),
+      child: tileSurface.withTapBounce(),
+    );
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
@@ -1413,7 +1416,6 @@ const double _unreadBadgeMinWidth = 36.0;
 const double _unreadBadgeCutoutClearance = 0.0;
 const double _unreadBadgeCutoutVerticalClearance = 1.0;
 const double _unreadBadgeMinDepth = 10.0;
-const double _unreadBadgeCornerRadius = 12.0;
 const double _unreadBadgeCutoutChildVerticalOffset = -2.0;
 const double _unreadBadgeCutoutDepthAdjustment = -2.0;
 
@@ -1453,7 +1455,7 @@ class _UnreadBadge extends StatelessWidget {
     final Color textColor =
         highlight ? colors.primaryForeground : colors.mutedForeground;
     final borderWidth = scaled(_unreadBadgeBorderWidth);
-    final cornerRadius = scaled(_unreadBadgeCornerRadius);
+    final cornerRadius = textScaler.scale(context.sizing.containerRadius);
     final horizontalPadding = scaled(_unreadBadgeHorizontalPadding);
     final verticalPadding = scaled(_unreadBadgeVerticalPadding);
     return Semantics(

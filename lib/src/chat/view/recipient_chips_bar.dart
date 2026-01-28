@@ -374,35 +374,39 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                     runSpacing: 8,
                     children: [
                       ...chips,
-                      _AnimatedChipWrapper(
-                        key: const ValueKey('autocomplete-field'),
-                        child: _RecipientAutocompleteField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          tapRegionGroup: _tapRegionGroup,
-                          fieldOuterPadding: autocompleteFieldOuterPadding,
-                          fieldInnerPadding: autocompleteFieldInnerPadding,
-                          backgroundColor: barBackground,
-                          avatarPathsByJid: avatarPathsByJid,
-                          showSuggestionsWhenEmpty:
-                              widget.showSuggestionsWhenEmpty,
-                          optionsBuilder: (raw) => _autocompleteOptions(
-                            raw,
-                            availableAutocompleteChats,
-                            knownDomains,
-                            knownAddresses,
-                            shareTokenSignatureEnabled: context
-                                .watch<SettingsCubit>()
-                                .state
-                                .shareTokenSignatureEnabled,
-                          ),
-                          highlightedIndexListenable:
-                              _highlightedSuggestionIndex,
-                          onManualEntry: _handleManualEntry,
-                          onOptionsChanged: _updateSuggestions,
-                          onSubmitted: _handleAutocompleteSubmit,
-                          onRecipientAdded: _handleRecipientAdded,
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final settingsState =
+                              context.watch<SettingsCubit>().state;
+                          return _AnimatedChipWrapper(
+                            key: const ValueKey('autocomplete-field'),
+                            child: _RecipientAutocompleteField(
+                              controller: _controller,
+                              focusNode: _focusNode,
+                              tapRegionGroup: _tapRegionGroup,
+                              fieldOuterPadding: autocompleteFieldOuterPadding,
+                              fieldInnerPadding: autocompleteFieldInnerPadding,
+                              backgroundColor: barBackground,
+                              avatarPathsByJid: avatarPathsByJid,
+                              showSuggestionsWhenEmpty:
+                                  widget.showSuggestionsWhenEmpty,
+                              optionsBuilder: (raw) => _autocompleteOptions(
+                                raw,
+                                availableAutocompleteChats,
+                                knownDomains,
+                                knownAddresses,
+                                shareTokenSignatureEnabled:
+                                    settingsState.shareTokenSignatureEnabled,
+                              ),
+                              highlightedIndexListenable:
+                                  _highlightedSuggestionIndex,
+                              onManualEntry: _handleManualEntry,
+                              onOptionsChanged: _updateSuggestions,
+                              onSubmitted: _handleAutocompleteSubmit,
+                              onRecipientAdded: _handleRecipientAdded,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
