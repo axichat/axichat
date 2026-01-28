@@ -417,13 +417,6 @@ class _AxiButtonState extends State<AxiButton> {
 
         if (widget.width != null) {
           content = SizedBox(width: widget.width, child: content);
-        } else if (widget.widthBehavior == AxiButtonWidth.expand) {
-          content = LayoutBuilder(
-            builder: (context, constraints) => SizedBox(
-              width: constraints.maxWidth,
-              child: content,
-            ),
-          );
         }
 
         Widget button = Material(

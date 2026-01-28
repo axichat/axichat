@@ -726,6 +726,11 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
+    final cutoutGap = context.spacing.xs;
+    final iconButtonTapTarget = context.sizing.iconButtonTapTarget;
+    final iconCutoutThickness = iconButtonTapTarget + (cutoutGap * 2);
+    final iconCutoutDepth = (iconCutoutThickness / 2) + cutoutGap;
+    final iconCutoutRadius = context.radii.squircle;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
         CutoutSpec(
@@ -742,9 +747,9 @@ class _ChatListTileState extends State<ChatListTile> {
       CutoutSpec(
         edge: CutoutEdge.right,
         alignment: const Alignment(1.02, 0),
-        depth: 32,
-        thickness: 46,
-        cornerRadius: 18,
+        depth: iconCutoutDepth,
+        thickness: iconCutoutThickness,
+        cornerRadius: iconCutoutRadius,
         child: selectionActive
             ? _ChatSelectionCutoutButton(
                 backgroundColor: tileBackgroundColor,
@@ -1496,11 +1501,6 @@ class _ChatActionsToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
-    final iconSize = scaled(18);
-    final minButtonSize = scaled(36);
-    final borderWidth = scaled(1.4);
     final icon = expanded ? LucideIcons.x : LucideIcons.ellipsisVertical;
     final tooltip = expanded
         ? context.l10n.chatsHideActions
@@ -1513,11 +1513,8 @@ class _ChatActionsToggle extends StatelessWidget {
       color: colors.mutedForeground,
       backgroundColor: backgroundColor,
       borderColor: colors.border,
-      borderWidth: borderWidth,
-      cornerRadius: scaled(14),
-      buttonSize: minButtonSize,
-      tapTargetSize: minButtonSize,
-      iconSize: iconSize,
+      borderWidth: context.borderSide.width,
+      cornerRadius: context.radii.squircle,
     );
     return Semantics(
       container: true,
@@ -1544,9 +1541,6 @@ class _ChatSelectionCutoutButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
-    final borderWidth = scaled(1.4);
     return Semantics(
       container: true,
       button: true,
@@ -1559,8 +1553,11 @@ class _ChatSelectionCutoutButton extends StatelessWidget {
         decoration: ShapeDecoration(
           color: backgroundColor,
           shape: SquircleBorder(
-            cornerRadius: scaled(14),
-            side: BorderSide(color: colors.border, width: borderWidth),
+            cornerRadius: context.radii.squircle,
+            side: BorderSide(
+              color: colors.border,
+              width: context.borderSide.width,
+            ),
           ),
         ),
         child: SelectionIndicator(

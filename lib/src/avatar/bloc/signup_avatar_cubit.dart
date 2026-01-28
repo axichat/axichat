@@ -400,6 +400,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   void updateCropRect(Rect rect) {
     final avatar = state.avatar;
+    if (state.processing) return;
     if (avatar == null || avatar.source != AvatarSource.upload) return;
     final constrained = _pipeline.constrainCropRect(avatar: avatar, rect: rect);
     if (avatar.cropRect == constrained) return;
@@ -413,6 +414,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   void resetCrop() {
     final avatar = state.avatar;
+    if (state.processing) return;
     if (avatar == null || avatar.source != AvatarSource.upload) return;
     final reset = _pipeline.initialCropRect(avatar);
     if (reset == null) return;
@@ -424,11 +426,18 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
   }
 
-  Future<void> commitCrop() async {
+  Future<void> commitCrop([Rect? rect]) async {
     final avatar = state.avatar;
     if (avatar == null || avatar.source != AvatarSource.upload) return;
     if (state.processing) return;
-    await _refreshAvatarPayload(avatar);
+    final resolvedRect =
+        rect ?? avatar.cropRect ?? _pipeline.resolveCropRect(avatar);
+    if (resolvedRect == null) return;
+    final nextAvatar = avatar.cropRect == resolvedRect
+        ? avatar
+        : avatar.copyWith(cropRect: resolvedRect);
+    emit(state.copyWith(avatar: nextAvatar, clearError: true));
+    await _refreshAvatarPayload(nextAvatar);
   }
 
   Future<void> _applyAvatarFromBytes(Uint8List bytes) async {

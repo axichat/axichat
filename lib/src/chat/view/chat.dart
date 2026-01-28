@@ -11534,13 +11534,9 @@ class _ChatComposerIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
     final iconColor = onPressed == null
         ? colors.mutedForeground
         : (activeColor ?? colors.foreground);
-    final minButtonExtent = scaled(42);
-    final cornerRadius = scaled(14);
     return AxiIconButton(
       iconData: icon,
       tooltip: tooltip,
@@ -11550,11 +11546,8 @@ class _ChatComposerIconButton extends StatelessWidget {
       color: iconColor,
       backgroundColor: colors.card,
       borderColor: colors.border,
-      borderWidth: scaled(1.4),
-      cornerRadius: cornerRadius,
-      buttonSize: minButtonExtent,
-      tapTargetSize: minButtonExtent,
-      iconSize: scaled(22),
+      borderWidth: context.borderSide.width,
+      cornerRadius: context.radii.squircle,
     );
   }
 }

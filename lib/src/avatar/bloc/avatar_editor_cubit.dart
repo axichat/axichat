@@ -430,6 +430,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void updateCropRect(Rect rect) {
     final draftAvatar = state.draftAvatar;
+    if (state.processing) return;
     if (draftAvatar == null) return;
     final clamped = _pipeline.constrainCropRect(
       avatar: draftAvatar,
@@ -468,19 +469,27 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void resetCrop() {
     final draftAvatar = state.draftAvatar;
+    if (state.processing) return;
     if (draftAvatar == null) return;
     final reset = _pipeline.initialCropRect(draftAvatar);
     if (reset == null) return;
     emit(state.copyWith(draftAvatar: draftAvatar.copyWith(cropRect: reset)));
   }
 
-  Future<void> commitCrop() async {
+  Future<void> commitCrop([Rect? rect]) async {
     final draftAvatar = state.draftAvatar;
     if (draftAvatar == null || draftAvatar.source != AvatarSource.upload) {
       return;
     }
     if (state.processing) return;
-    await _refreshDraftPayload(draftAvatar);
+    final resolvedRect =
+        rect ?? draftAvatar.cropRect ?? _pipeline.resolveCropRect(draftAvatar);
+    if (resolvedRect == null) return;
+    final nextAvatar = draftAvatar.cropRect == resolvedRect
+        ? draftAvatar
+        : draftAvatar.copyWith(cropRect: resolvedRect);
+    emit(state.copyWith(draftAvatar: nextAvatar));
+    await _refreshDraftPayload(nextAvatar);
   }
 
   Future<void> publish() async {

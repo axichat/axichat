@@ -911,9 +911,9 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                 onCropReset: () => context
                                     .read<AvatarEditorCubit>()
                                     .resetCrop(),
-                                onCropCommitted: (_) => context
+                                onCropCommitted: (rect) => context
                                     .read<AvatarEditorCubit>()
-                                    .commitCrop(),
+                                    .commitCrop(rect),
                                 onShuffle: () => context
                                     .read<AvatarEditorCubit>()
                                     .shuffleCarousel(context.colorScheme),

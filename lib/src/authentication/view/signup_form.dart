@@ -714,9 +714,11 @@ class _SignupFormState extends State<SignupForm>
                                                   onCropReset: context
                                                       .read<SignupAvatarCubit>()
                                                       .resetCrop,
-                                                  onCropCommitted: (_) => context
-                                                      .read<SignupAvatarCubit>()
-                                                      .commitCrop(),
+                                                  onCropCommitted: (rect) =>
+                                                      context
+                                                          .read<
+                                                              SignupAvatarCubit>()
+                                                          .commitCrop(rect),
                                                   onShuffle: () => context
                                                       .read<SignupAvatarCubit>()
                                                       .shuffleCarousel(

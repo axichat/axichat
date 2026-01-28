@@ -26,6 +26,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -533,12 +534,22 @@ class SettingsControls extends StatelessWidget {
             _SettingsLinkButton(
               label: context.l10n.settingsDonateLabel,
               link: donateUrl,
-              iconData: LucideIcons.link,
+              iconData: FontAwesomeIcons.heart,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsMastodonLabel,
               link: mastodonUrl,
-              iconData: LucideIcons.link,
+              iconData: FontAwesomeIcons.mastodon,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsGithubLabel,
+              link: githubUrl,
+              iconData: FontAwesomeIcons.github,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsGitlabLabel,
+              link: gitlabUrl,
+              iconData: FontAwesomeIcons.gitlab,
             ),
             const SizedBox(height: 160),
           ],

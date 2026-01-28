@@ -738,6 +738,8 @@
   "settingsWebsiteLabel": "Website",
   "settingsDonateLabel": "Donate",
   "settingsMastodonLabel": "Mastodon",
+  "settingsGithubLabel": "GitHub",
+  "settingsGitlabLabel": "GitLab",
   "profileJidDescription": "This is your Jabber ID. Comprised of your username and domain, it's a unique address that represents you on the XMPP network.",
   "profileResourceDescription": "This is your XMPP resource. Every device you use has a different one, which is why your phone can have a different presence to your desktop.",
   "profileStatusPlaceholder": "Status message",

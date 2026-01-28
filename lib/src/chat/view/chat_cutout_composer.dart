@@ -6,9 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-const double _kCutoutDepth = 30;
-const double _kCutoutThickness = 49;
-const double _kCutoutCornerRadius = 18;
 const double _kHorizontalInset = 34;
 const double _kVerticalInset = 20;
 
@@ -17,23 +14,23 @@ class ChatComposerAccessory {
     required this.child,
     required this.edge,
     this.alignment,
-    this.depth = _kCutoutDepth,
-    this.thickness = _kCutoutThickness,
-    this.cornerRadius = _kCutoutCornerRadius,
+    this.depth,
+    this.thickness,
+    this.cornerRadius,
   });
 
   final Widget child;
   final CutoutEdge edge;
   final Alignment? alignment;
-  final double depth;
-  final double thickness;
-  final double cornerRadius;
+  final double? depth;
+  final double? thickness;
+  final double? cornerRadius;
 
   factory ChatComposerAccessory.leading({
     required Widget child,
-    double depth = _kCutoutDepth,
-    double thickness = _kCutoutThickness,
-    double cornerRadius = _kCutoutCornerRadius,
+    double? depth,
+    double? thickness,
+    double? cornerRadius,
   }) {
     return ChatComposerAccessory(
       child: child,
@@ -47,9 +44,9 @@ class ChatComposerAccessory {
 
   factory ChatComposerAccessory.trailing({
     required Widget child,
-    double depth = _kCutoutDepth,
-    double thickness = _kCutoutThickness,
-    double cornerRadius = _kCutoutCornerRadius,
+    double? depth,
+    double? thickness,
+    double? cornerRadius,
   }) {
     return ChatComposerAccessory(
       child: child,
@@ -116,16 +113,21 @@ class ChatCutoutComposer extends StatelessWidget {
       ),
     };
 
-    final textStyle = context.textTheme.p.copyWith(fontSize: 16, height: 1.35);
+    final textStyle = context.textTheme.p.copyWith(height: 1.35);
     final cursorHeight = textStyle.fontSize == null
         ? null
         : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
+    final cutoutGap = context.spacing.xs;
+    final iconButtonTapTarget = context.sizing.iconButtonTapTarget;
+    final defaultCutoutThickness = iconButtonTapTarget + (cutoutGap * 2);
+    final defaultCutoutDepth = (defaultCutoutThickness / 2) + cutoutGap;
+    final defaultCutoutCornerRadius = context.radii.squircle;
 
     return CutoutSurface(
       backgroundColor: colors.card,
       borderColor: colors.border,
       shape: SquircleBorder(
-        cornerRadius: scaled(18),
+        cornerRadius: defaultCutoutCornerRadius,
         side: BorderSide(
           color: colors.border,
         ),
@@ -135,9 +137,9 @@ class ChatCutoutComposer extends StatelessWidget {
             (action) => CutoutSpec(
               edge: action.edge,
               alignment: action.alignment ?? _alignmentFor(action.edge),
-              depth: action.depth,
-              thickness: action.thickness,
-              cornerRadius: action.cornerRadius,
+              depth: action.depth ?? defaultCutoutDepth,
+              thickness: action.thickness ?? defaultCutoutThickness,
+              cornerRadius: action.cornerRadius ?? defaultCutoutCornerRadius,
               child: action.child,
             ),
           )

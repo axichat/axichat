@@ -898,34 +898,29 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
       TextAlign.center => Alignment.center,
       _ => Alignment.centerLeft,
     };
-    final CrossAxisAlignment columnAlignment = switch (widget.textAlign) {
-      TextAlign.right => CrossAxisAlignment.end,
-      TextAlign.center => CrossAxisAlignment.center,
-      _ => CrossAxisAlignment.start,
-    };
     return ValueListenableBuilder<double>(
       valueListenable: widget.scrollOffsetListenable,
       builder: (context, scrollOffset, child) {
         final int selectedIndex = _resolveSelectedIndex(scrollOffset);
         return Align(
           alignment: menuAlignment,
-          widthFactor: 1.0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: columnAlignment,
-            spacing: _profileHeaderTextSpacing,
-            children: [
-              for (final entry in sectionLabels.indexed)
-                _SettingsJumpLink(
-                  label: entry.$2,
-                  onTap: () async => await _jumpTo(
-                    sectionKeys[entry.$1],
-                    animationDuration,
+          child: IntrinsicWidth(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: _profileHeaderTextSpacing,
+              children: [
+                for (final entry in sectionLabels.indexed)
+                  _SettingsJumpLink(
+                    label: entry.$2,
+                    onTap: () async => await _jumpTo(
+                      sectionKeys[entry.$1],
+                      animationDuration,
+                    ),
+                    textAlign: widget.textAlign,
+                    selected: selectedIndex == entry.$1,
                   ),
-                  textAlign: widget.textAlign,
-                  selected: selectedIndex == entry.$1,
-                ),
-            ],
+              ],
+            ),
           ),
         );
       },

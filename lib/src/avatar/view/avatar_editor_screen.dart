@@ -448,7 +448,8 @@ class _CropCard extends StatelessWidget {
                         context.read<AvatarEditorCubit>().updateCropRect,
                     onCropReset: context.read<AvatarEditorCubit>().resetCrop,
                     onCropCommitted: canCommit
-                        ? (_) => context.read<AvatarEditorCubit>().commitCrop()
+                        ? (rect) =>
+                            context.read<AvatarEditorCubit>().commitCrop(rect)
                         : null,
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
@@ -457,7 +458,9 @@ class _CropCard extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: AxiButton.secondary(
                     onPressed: canCommit
-                        ? () => context.read<AvatarEditorCubit>().commitCrop()
+                        ? () => context
+                            .read<AvatarEditorCubit>()
+                            .commitCrop(cropRect)
                         : null,
                     child: Text(l10n.commonDone),
                   ),
