@@ -371,7 +371,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                             child: AxiHoverBand(
                               shape: paintShape,
                               color: hoverTintColor,
-                              heightFactor: hoverBandHeightFactor,
+                              innerHeightFactor: hoverBandHeightFactor,
                             ),
                           ),
                         ),

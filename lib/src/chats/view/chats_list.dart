@@ -726,7 +726,7 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
-    final cutoutGap = context.spacing.xs;
+    final cutoutGap = context.spacing.xxs;
     final iconButtonTapTarget = context.sizing.iconButtonTapTarget;
     final iconCutoutThickness = iconButtonTapTarget + (cutoutGap * 2);
     final iconCutoutDepth = (iconCutoutThickness / 2) + cutoutGap;
@@ -738,7 +738,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.84, -1),
           depth: unreadDepth,
           thickness: unreadThickness,
-          cornerRadius: _unreadBadgeCornerRadius,
+          cornerRadius: context.sizing.containerRadius,
           child: Transform.translate(
             offset: Offset(0, scaled(_unreadBadgeCutoutChildVerticalOffset)),
             child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
@@ -769,7 +769,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.52, 1),
           depth: 16,
           thickness: timestampThickness,
-          cornerRadius: 18,
+          cornerRadius: context.sizing.containerRadius,
           child: Transform.translate(
             offset: Offset(0, -scaled(3)),
             child: Text(
@@ -1413,7 +1413,6 @@ const double _unreadBadgeMinWidth = 36.0;
 const double _unreadBadgeCutoutClearance = 0.0;
 const double _unreadBadgeCutoutVerticalClearance = 1.0;
 const double _unreadBadgeMinDepth = 10.0;
-const double _unreadBadgeCornerRadius = 12.0;
 const double _unreadBadgeCutoutChildVerticalOffset = -2.0;
 const double _unreadBadgeCutoutDepthAdjustment = -2.0;
 
@@ -1453,7 +1452,7 @@ class _UnreadBadge extends StatelessWidget {
     final Color textColor =
         highlight ? colors.primaryForeground : colors.mutedForeground;
     final borderWidth = scaled(_unreadBadgeBorderWidth);
-    final cornerRadius = scaled(_unreadBadgeCornerRadius);
+    final cornerRadius = textScaler.scale(context.sizing.containerRadius);
     final horizontalPadding = scaled(_unreadBadgeHorizontalPadding);
     final verticalPadding = scaled(_unreadBadgeVerticalPadding);
     return Semantics(

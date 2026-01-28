@@ -38,7 +38,7 @@ class CalendarTile extends StatelessWidget {
           alignment: const Alignment(0.86, -1),
           depth: 14,
           thickness: badgeWidth,
-          cornerRadius: 18,
+          cornerRadius: context.sizing.containerRadius,
           child: _ReminderBadge(count: dueReminderCount),
         ),
     ];
@@ -127,7 +127,7 @@ class _ReminderBadge extends StatelessWidget {
       decoration: ShapeDecoration(
         color: colors.primary,
         shape: SquircleBorder(
-          cornerRadius: context.radii.squircle,
+          cornerRadius: context.sizing.containerRadius,
           side: BorderSide(color: colors.card, width: 2),
         ),
       ),
@@ -160,7 +160,7 @@ class _TaskTimestamp extends StatelessWidget {
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.secondary.withValues(alpha: 0.2),
-        shape: SquircleBorder(cornerRadius: context.radii.squircle),
+        shape: SquircleBorder(cornerRadius: context.sizing.containerRadius),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

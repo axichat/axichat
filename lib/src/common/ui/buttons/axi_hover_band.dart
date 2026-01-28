@@ -10,12 +10,12 @@ class AxiHoverBand extends StatelessWidget {
     super.key,
     required this.shape,
     required this.color,
-    required this.heightFactor,
+    required this.innerHeightFactor,
   });
 
   final ShapeBorder shape;
   final Color color;
-  final double heightFactor;
+  final double innerHeightFactor;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +24,7 @@ class AxiHoverBand extends StatelessWidget {
       painter: _AxiHoverBandPainter(
         shape: shape,
         color: color,
-        heightFactor: heightFactor,
+        innerHeightFactor: innerHeightFactor,
         textDirection: textDirection,
       ),
       child: const SizedBox.expand(),
@@ -36,22 +36,21 @@ class _AxiHoverBandPainter extends CustomPainter {
   const _AxiHoverBandPainter({
     required this.shape,
     required this.color,
-    required this.heightFactor,
+    required this.innerHeightFactor,
     required this.textDirection,
   });
 
   final ShapeBorder shape;
   final Color color;
-  final double heightFactor;
+  final double innerHeightFactor;
   final TextDirection textDirection;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final rect = Offset.zero & size;
-    final double clampedFactor = heightFactor.clamp(0.0, 1.0).toDouble();
-    final double bandHeight = rect.height * clampedFactor;
-    final double innerHeight = math.max(0.0, rect.height - bandHeight);
+    final double clampedFactor = innerHeightFactor.clamp(0.0, 1.0).toDouble();
+    final double innerHeight = math.max(0.0, rect.height * clampedFactor);
     final Rect innerRect = Rect.fromLTWH(
       rect.left,
       rect.top,
@@ -63,20 +62,32 @@ class _AxiHoverBandPainter extends CustomPainter {
         shape.getOuterPath(innerRect, textDirection: textDirection);
     final Path band = Path.combine(PathOperation.difference, outer, inner);
     final Color transparent = color.withValues(alpha: 0.0);
-    final Paint paint = Paint()
+    final Paint verticalPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.bottomCenter,
         end: Alignment.topCenter,
         colors: <Color>[color, transparent],
       ).createShader(rect);
-    canvas.drawPath(band, paint);
+    final Paint horizontalPaint = Paint()
+      ..blendMode = BlendMode.modulate
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: <Color>[color, transparent, color],
+        stops: const <double>[0.0, 0.5, 1.0],
+      ).createShader(rect);
+    canvas
+      ..saveLayer(rect, Paint())
+      ..drawPath(band, verticalPaint)
+      ..drawPath(band, horizontalPaint)
+      ..restore();
   }
 
   @override
   bool shouldRepaint(covariant _AxiHoverBandPainter oldDelegate) {
     return oldDelegate.shape != shape ||
         oldDelegate.color != color ||
-        oldDelegate.heightFactor != heightFactor ||
+        oldDelegate.innerHeightFactor != innerHeightFactor ||
         oldDelegate.textDirection != textDirection;
   }
 }

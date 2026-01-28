@@ -405,7 +405,7 @@ class _AxiButtonState extends State<AxiButton> {
               child: AxiHoverBand(
                 shape: shape,
                 color: hoverTintColor,
-                heightFactor: hoverBandHeightFactor,
+                innerHeightFactor: hoverBandHeightFactor,
               ),
             ),
           );
