@@ -697,7 +697,7 @@ Path _bubblePath(
   List<_CutoutDescriptor> cutouts,
 ) {
   final rect = Offset.zero & size;
-  final shape = ContinuousRectangleBorder(borderRadius: borderRadius);
+  final shape = SquircleBorder(borderRadius: borderRadius);
   var path = Path()..addPath(shape.getOuterPath(rect), Offset.zero);
   for (final cutout in cutouts) {
     final cutoutPath = switch (cutout.shape) {
