@@ -475,10 +475,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void resetCrop() {
     final draftAvatar = state.draftAvatar;
-    if (state.processing) return;
     if (draftAvatar == null) return;
     final reset = _pipeline.initialCropRect(draftAvatar);
     if (reset == null) return;
+    if (state.processing) {
+      _pendingCropRect = reset;
+      return;
+    }
     emit(state.copyWith(draftAvatar: draftAvatar.copyWith(cropRect: reset)));
   }
 
@@ -487,7 +490,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (draftAvatar == null || draftAvatar.source != AvatarSource.upload) {
       return;
     }
-    if (state.processing) return;
+    if (state.processing) {
+      _pendingCropRect = rect ??
+          draftAvatar.cropRect ??
+          _pipeline.resolveCropRect(draftAvatar);
+      return;
+    }
     final resolvedRect =
         rect ?? draftAvatar.cropRect ?? _pipeline.resolveCropRect(draftAvatar);
     if (resolvedRect == null) return;
@@ -581,6 +589,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         ),
       );
       return null;
+    } finally {
+      await _flushPendingCropIfNeeded();
     }
   }
 
@@ -646,6 +656,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         carouselAvatar: null,
       ),
     );
+    _pendingCropRect = null;
     try {
       final avatar = await _pipeline.buildFromUpload(bytes);
       emit(
@@ -669,6 +680,25 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         ),
       );
     }
+  }
+
+  Future<void> _flushPendingCropIfNeeded() async {
+    final pending = _pendingCropRect;
+    if (pending == null) return;
+    _pendingCropRect = null;
+    if (state.processing) return;
+    final draftAvatar = state.draftAvatar;
+    if (draftAvatar == null || draftAvatar.source != AvatarSource.upload) {
+      return;
+    }
+    final resolved = _pipeline.constrainCropRect(
+      avatar: draftAvatar,
+      rect: pending,
+    );
+    if (draftAvatar.cropRect == resolved) return;
+    final nextAvatar = draftAvatar.copyWith(cropRect: resolved);
+    emit(state.copyWith(draftAvatar: nextAvatar));
+    await _refreshDraftPayload(nextAvatar);
   }
 
   Future<Uint8List?> _loadPickedFileBytes(PlatformFile file) async {

@@ -71,7 +71,7 @@ class CalendarTile extends StatelessWidget {
     return CutoutSurface(
       backgroundColor: colors.card,
       borderColor: colors.border,
-      shape: SquircleBorder(cornerRadius: 18),
+      shape: SquircleBorder(cornerRadius: context.radii.squircle),
       cutouts: cutouts,
       child: tile,
     ).withTapBounce();
@@ -96,7 +96,7 @@ class _CalendarAvatar extends StatelessWidget {
       decoration: ShapeDecoration(
         color: background,
         shape: SquircleBorder(
-          cornerRadius: 16,
+          cornerRadius: context.radii.squircle,
           side: BorderSide(color: borderColor, width: 1.2),
         ),
       ),
@@ -127,7 +127,7 @@ class _ReminderBadge extends StatelessWidget {
       decoration: ShapeDecoration(
         color: colors.primary,
         shape: SquircleBorder(
-          cornerRadius: 14,
+          cornerRadius: context.radii.squircle,
           side: BorderSide(color: colors.card, width: 2),
         ),
       ),
@@ -160,7 +160,7 @@ class _TaskTimestamp extends StatelessWidget {
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.secondary.withValues(alpha: 0.2),
-        shape: SquircleBorder(cornerRadius: 12),
+        shape: SquircleBorder(cornerRadius: context.radii.squircle),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

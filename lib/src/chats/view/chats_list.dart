@@ -788,7 +788,7 @@ class _ChatListTileState extends State<ChatListTile> {
       borderColor: surfaceBorderColor,
       cutouts: cutouts,
       shape: SquircleBorder(
-        cornerRadius: scaled(18),
+        cornerRadius: context.radii.squircle,
         side: BorderSide(color: surfaceBorderColor),
       ),
       child: Column(

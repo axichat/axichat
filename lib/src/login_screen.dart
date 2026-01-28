@@ -838,8 +838,7 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
         final primaryHeight = scaled(_MorphingAuthButton._primaryHeight);
         final height =
             lerpDouble(compactHeight, primaryHeight, t) ?? primaryHeight;
-        final borderRadius =
-            lerpDouble(scaled(18), scaled(26), t) ?? scaled(26);
+        final borderRadius = scaled(context.radii.squircle);
         final baseBorderColor = Color.lerp(
               colors.border.withValues(alpha: 0.9),
               colors.primary,
@@ -879,7 +878,7 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
               alignment: Alignment.center,
               depth: baseCutoutDepth,
               thickness: baseCutoutThickness,
-              cornerRadius: 18,
+              cornerRadius: context.radii.squircle,
               child: const SizedBox.shrink(),
             ),
           );
