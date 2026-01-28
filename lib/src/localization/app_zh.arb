@@ -661,6 +661,8 @@
   "settingsWebsiteLabel": "Website",
   "settingsDonateLabel": "Donate",
   "settingsMastodonLabel": "Mastodon",
+  "settingsGithubLabel": "GitHub",
+  "settingsGitlabLabel": "GitLab",
   "profileJidDescription": "这是你的 Jabber ID，由用户名和域名组成，是你在 XMPP 网络中的唯一地址。",
   "profileResourceDescription": "这是你的 XMPP 资源。每台设备都有自己的资源，因此手机和电脑的在线状态可以不同。",
   "profileStatusPlaceholder": "状态消息",

@@ -661,6 +661,8 @@
   "settingsWebsiteLabel": "Website",
   "settingsDonateLabel": "Donate",
   "settingsMastodonLabel": "Mastodon",
+  "settingsGithubLabel": "GitHub",
+  "settingsGitlabLabel": "GitLab",
   "profileJidDescription": "Ceci est votre identifiant Jabber. Composé de votre nom d’utilisateur et de votre domaine, il constitue une adresse unique sur le réseau XMPP.",
   "profileResourceDescription": "Ceci est votre ressource XMPP. Chaque appareil a la sienne, c’est pourquoi votre téléphone peut avoir une présence différente de celle de votre ordinateur.",
   "profileStatusPlaceholder": "Message d’état",

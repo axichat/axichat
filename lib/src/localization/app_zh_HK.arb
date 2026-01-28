@@ -661,6 +661,8 @@
   "settingsWebsiteLabel": "Website",
   "settingsDonateLabel": "Donate",
   "settingsMastodonLabel": "Mastodon",
+  "settingsGithubLabel": "GitHub",
+  "settingsGitlabLabel": "GitLab",
   "profileJidDescription": "這是你的 Jabber ID，由使用者名稱與網域組成，是你在 XMPP 網路上的唯一地址。",
   "profileResourceDescription": "這是你的 XMPP 資源。每台裝置都有自己的資源，因此手機與桌機的在線狀態可能不同。",
   "profileStatusPlaceholder": "狀態訊息",
