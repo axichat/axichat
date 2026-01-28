@@ -21,8 +21,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _taskShareHeaderIconSize = 18.0;
-const double _taskShareProgressStrokeWidth = 2.0;
 const bool _taskShareReadOnlyDefault = true;
 
 Future<void> showCalendarTaskShareSheet({

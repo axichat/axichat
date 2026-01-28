@@ -145,7 +145,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _layoutTheme.zoomControlsPaddingVertical;
   double get _zoomControlsLabelPaddingHorizontal =>
       _layoutTheme.zoomControlsLabelPaddingHorizontal;
-  double get _zoomControlsIconSize => _layoutTheme.zoomControlsIconSize;
   ValueListenable<bool> get _cancelBucketHoverNotifier =>
       widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
 
@@ -4088,7 +4087,7 @@ class _CalendarZoomControls extends StatelessWidget {
     final colors = theme.colorScheme;
     const double zoomControlsShadowAlpha = 0.12;
     final Color zoomControlsShadowColor =
-        context.colorScheme.shadow.withValues(alpha: zoomControlsShadowAlpha);
+        context.colorScheme.border.withValues(alpha: zoomControlsShadowAlpha);
     final labelStyle = calendarZoomLabelTextStyle.copyWith(
       color: colors.foreground,
       fontFamily: theme.textTheme.small.fontFamily,
@@ -4108,7 +4107,6 @@ class _CalendarZoomControls extends StatelessWidget {
         iconSize: context.sizing.iconButtonIconSize,
         buttonSize: context.sizing.iconButtonTapTarget,
         tapTargetSize: context.sizing.iconButtonTapTarget,
-        usePrimary: false,
       );
       return AxiTooltip(builder: (_) => Text(tooltip), child: button);
     }

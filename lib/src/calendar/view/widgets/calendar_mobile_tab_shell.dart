@@ -76,6 +76,7 @@ class TasksTabLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final spacing = context.spacing;
     final TextStyle resolvedStyle = textStyle ??
         context.textTheme.small.copyWith(fontWeight: FontWeight.w600);
@@ -91,8 +92,7 @@ class TasksTabLabel extends StatelessWidget {
       builder: (context, _) {
         final double t = animation!.value;
         final double scale = 0.85 + (0.25 * t);
-        final Color primary =
-            baseColor ?? ShadTheme.of(context).colorScheme.primary;
+        final Color primary = baseColor ?? colors.primary;
         final Color badgeColor = Color.lerp(
           primary.withValues(alpha: 0.55),
           primary,

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -351,7 +352,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
+    final spacingTokens = context.spacing;
     final showHoverEffects = enableInteractions &&
         (isPopoverOpen || isHovering || isResizing || isDragging);
     final highlightSelection = isSelectionMode && isSelected;
@@ -396,7 +397,7 @@ class _ResizableTaskBody extends StatelessWidget {
     final availableHeight = (height - 4).clamp(0.0, double.infinity);
     if (availableHeight <= 6) {
       return Container(
-        margin: EdgeInsets.all(spacing.xxs),
+        margin: EdgeInsets.all(spacingTokens.xxs),
         decoration: decoration,
         child: Stack(
           children: [
@@ -408,13 +409,13 @@ class _ResizableTaskBody extends StatelessWidget {
 
     double padding;
     if (availableHeight >= 96) {
-      padding = spacing.s;
+      padding = spacingTokens.s;
     } else if (availableHeight >= 72) {
-      padding = spacing.xs;
+      padding = spacingTokens.xs;
     } else if (availableHeight >= 48) {
-      padding = spacing.xs;
+      padding = spacingTokens.xs;
     } else {
-      padding = spacing.xxs;
+      padding = spacingTokens.xxs;
     }
 
     final innerHeight = (availableHeight - padding * 2).clamp(
@@ -424,7 +425,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
     if (innerHeight <= 10) {
       final Widget compactBody = Container(
-        margin: EdgeInsets.all(spacing.xxs),
+        margin: EdgeInsets.all(spacingTokens.xxs),
         decoration: decoration,
         child: Stack(
           children: [

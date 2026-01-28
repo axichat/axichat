@@ -292,7 +292,7 @@ class _CriticalPathShareSectionLabel extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: context.textTheme.muted.copyWith(
-            letterSpacing: _criticalPathShareLabelLetterSpacing,
+        letterSpacing: _criticalPathShareLabelLetterSpacing,
       ),
     );
   }

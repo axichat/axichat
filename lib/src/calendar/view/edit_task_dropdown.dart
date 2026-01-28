@@ -1423,20 +1423,23 @@ class _EditTaskInlineActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = context.colorScheme;
+    final ShadColorScheme scheme = context.colorScheme;
     final Color baseColor =
-        action.destructive ? scheme.error : calendarPrimaryColor;
-    final Color background = baseColor.withValues(alpha: 0.12);
+        action.destructive ? scheme.destructive : calendarPrimaryColor;
     return AxiButton.secondary(
       onPressed: action.onSelected,
       widthBehavior: AxiButtonWidth.fit,
       leading: Icon(
         action.icon,
         size: context.sizing.iconButtonIconSize,
+        color: baseColor,
       ),
       child: Text(
         action.label,
-        style: const TextStyle(fontWeight: FontWeight.w500),
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+          color: baseColor,
+        ),
       ),
     );
   }

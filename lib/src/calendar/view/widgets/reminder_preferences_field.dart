@@ -336,15 +336,15 @@ class _ReminderSection extends StatelessWidget {
           children: [
             Text(label.toUpperCase(), style: labelStyle),
             if (mixed)
-                Container(
-                  margin: EdgeInsets.only(left: spacing.s),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: spacing.s,
-                    vertical: spacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(10),
+              Container(
+                margin: EdgeInsets.only(left: spacing.s),
+                padding: EdgeInsets.symmetric(
+                  horizontal: spacing.s,
+                  vertical: spacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.muted.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   'Mixed',
@@ -357,11 +357,11 @@ class _ReminderSection extends StatelessWidget {
               ),
           ],
         ),
-                SizedBox(height: spacing.xs),
-                Wrap(
-                  spacing: spacing.s,
-                  runSpacing: spacing.s,
-                  children: options
+        SizedBox(height: spacing.xs),
+        Wrap(
+          spacing: spacing.s,
+          runSpacing: spacing.s,
+          children: options
               .map(
                 (Duration option) => _ReminderChip(
                   label: _labelFor(l10n, option),

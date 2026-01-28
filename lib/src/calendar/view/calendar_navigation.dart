@@ -1178,11 +1178,13 @@ class _CalendarDropdown extends StatelessWidget {
                 ),
               ),
               _navIconButton(
+                context: context,
                 icon: Icons.chevron_left,
                 onPressed: () => onMonthChanged(_addMonths(month, -1)),
               ),
               const SizedBox(width: calendarGutterSm),
               _navIconButton(
+                context: context,
                 icon: Icons.chevron_right,
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
@@ -1322,6 +1324,7 @@ class _CalendarDropdown extends StatelessWidget {
   }
 
   Widget _navIconButton({
+    required BuildContext context,
     required IconData icon,
     required VoidCallback onPressed,
   }) {

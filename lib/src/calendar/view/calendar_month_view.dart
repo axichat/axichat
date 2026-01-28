@@ -309,9 +309,10 @@ class _MonthDayTile extends StatelessWidget {
     final Color badgeBackground = highlightDay
         ? calendarPrimaryColor.withValues(alpha: isToday ? 0.18 : 0.12)
         : Colors.transparent;
-    const EdgeInsets dayPadding = EdgeInsets.symmetric(
-      horizontal: 8,
-      vertical: 4,
+    final spacing = context.spacing;
+    final EdgeInsets dayPadding = EdgeInsets.symmetric(
+      horizontal: spacing.s,
+      vertical: spacing.xs,
     );
 
     final List<DayEvent> visible = events.take(_maxVisibleEvents).toList();
@@ -356,7 +357,7 @@ class _MonthDayTile extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: spacing.xs),
               ...visible.map(
                 (DayEvent event) => _DayEventBullet(
                   event: event,
@@ -366,7 +367,7 @@ class _MonthDayTile extends StatelessWidget {
               ),
               if (overflow > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: EdgeInsets.only(top: spacing.xs),
                   child: Text(
                     context.l10n.calendarMonthOverflowMore(overflow),
                     style: textTheme.small.copyWith(
