@@ -535,7 +535,7 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
         AxiIconButton.ghost(
           iconData: LucideIcons.layoutGrid,
           tooltip: context.l10n.attachmentGalleryLayoutGridLabel,
-          usePrimary: layout == AttachmentGalleryLayout.grid,
+          selected: layout == AttachmentGalleryLayout.grid,
           onPressed: layout == AttachmentGalleryLayout.grid
               ? null
               : () => onChanged(AttachmentGalleryLayout.grid),
@@ -544,7 +544,7 @@ class AttachmentGalleryLayoutToggle extends StatelessWidget {
         AxiIconButton.ghost(
           iconData: LucideIcons.list,
           tooltip: context.l10n.attachmentGalleryLayoutListLabel,
-          usePrimary: layout == AttachmentGalleryLayout.list,
+          selected: layout == AttachmentGalleryLayout.list,
           onPressed: layout == AttachmentGalleryLayout.list
               ? null
               : () => onChanged(AttachmentGalleryLayout.list),

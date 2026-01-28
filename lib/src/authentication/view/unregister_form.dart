@@ -94,7 +94,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                   controller: _passwordTextController,
                 ),
               ),
-              const SizedBox.square(),
+              SizedBox(height: spacing.s),
               AxiButton.destructive(
                 loading: loading,
                 onPressed: loading ? null : () => _onPressed(context),

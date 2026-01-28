@@ -37,8 +37,6 @@ class AttachmentGalleryScreen extends StatelessWidget {
           title: Text(context.l10n.draftAttachmentsLabel),
           backgroundColor: context.colorScheme.background,
           surfaceTintColor: context.colorScheme.background,
-          elevation: 0,
-          scrolledUnderElevation: 0,
           shape: Border(
             bottom: BorderSide(
               color: context.borderSide.color,

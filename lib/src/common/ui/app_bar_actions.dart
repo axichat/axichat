@@ -19,6 +19,7 @@ class AppBarActionItem {
     this.onPressed,
     this.enabled = true,
     this.destructive = false,
+    this.selected = false,
     this.tooltip,
   });
 
@@ -30,6 +31,7 @@ class AppBarActionItem {
   final VoidCallback? onPressed;
   final bool enabled;
   final bool destructive;
+  final bool selected;
   final String? tooltip;
 
   AxiMenuAction toMenuAction() {
@@ -100,7 +102,7 @@ class AppBarActions extends StatelessWidget {
               actions: menuActions,
               enabled: hasEnabledAction,
               ghost: true,
-              usePrimary: true,
+              selected: true,
             );
           }
           return AxiMore(
@@ -108,7 +110,7 @@ class AppBarActions extends StatelessWidget {
             tooltip: moreTooltip!,
             enabled: hasEnabledAction,
             ghost: true,
-            usePrimary: true,
+            selected: true,
           );
         }
 
@@ -124,6 +126,7 @@ class AppBarActions extends StatelessWidget {
                       iconData: actions[index].iconData,
                       icon: actions[index].icon,
                       tooltip: actions[index].tooltip ?? actions[index].label,
+                      selected: actions[index].selected,
                       onPressed: actions[index].enabled
                           ? actions[index].onPressed
                           : null,

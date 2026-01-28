@@ -4236,6 +4236,7 @@ class _ChatState extends State<Chat> {
                                       ? l10n.chatSearchClose
                                       : l10n.chatSearchMessages,
                                   iconData: LucideIcons.search,
+                                  selected: _chatRoute.isSearch,
                                   onPressed: () => context
                                       .read<ChatSearchCubit>()
                                       .toggleActive(),
@@ -4243,6 +4244,7 @@ class _ChatState extends State<Chat> {
                                 AppBarActionItem(
                                   label: l10n.chatAttachmentTooltip,
                                   iconData: LucideIcons.image,
+                                  selected: _chatRoute.isGallery,
                                   onPressed: _openChatAttachments,
                                 ),
                                 AppBarActionItem(
@@ -4255,6 +4257,7 @@ class _ChatState extends State<Chat> {
                                     count: pinnedCount,
                                     iconColor: pinnedIconColor,
                                   ),
+                                  selected: _pinnedPanelVisible,
                                   onPressed: _togglePinnedMessages,
                                 ),
                                 if (chatCalendarAvailable)
@@ -4263,6 +4266,7 @@ class _ChatState extends State<Chat> {
                                         ? l10n.commonClose
                                         : l10n.homeRailCalendar,
                                     iconData: LucideIcons.calendarClock,
+                                    selected: showingChatCalendar,
                                     onPressed: () {
                                       if (showingChatCalendar) {
                                         _closeChatCalendar();
@@ -4277,6 +4281,7 @@ class _ChatState extends State<Chat> {
                                         ? l10n.chatCloseSettings
                                         : l10n.chatSettings,
                                     iconData: LucideIcons.settings,
+                                    selected: isSettingsRoute,
                                     onPressed: _toggleSettingsPanel,
                                   ),
                               ];

@@ -56,14 +56,13 @@ class _AvatarEditorBody extends StatelessWidget {
       builder: (context, state) {
         final colors = context.colorScheme;
         final spacing = context.spacing;
-        final transparentColor = colors.background.withValues(alpha: 0);
         final isWide = MediaQuery.sizeOf(context).width >= largeScreen;
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
             elevation: 0,
             backgroundColor: colors.background,
-            surfaceTintColor: transparentColor,
+            surfaceTintColor: Colors.transparent,
             scrolledUnderElevation: 0,
             shape: Border(
               bottom: context.borderSide.copyWith(color: colors.border),
@@ -459,9 +458,8 @@ class _BackgroundPicker extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final template = state.draftAvatar?.template;
-    final transparentColor = colors.background.withValues(alpha: 0);
     final presets = [
-      transparentColor,
+      Colors.transparent,
       colors.accent,
       colors.primary,
       colors.secondary,
@@ -552,10 +550,10 @@ class _BackgroundPicker extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: AxiButton.outline(
               size: AxiButtonSize.sm,
-              onPressed: state.backgroundColor.a == 0
+              onPressed: state.backgroundColor == Colors.transparent
                   ? null
                   : () => context.read<AvatarEditorCubit>().setBackgroundColor(
-                        transparentColor,
+                        Colors.transparent,
                         colors,
                       ),
               child: Text(l10n.avatarBackgroundTransparent),
@@ -913,7 +911,6 @@ class _TemplatePreviewCard extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final transparentColor = colors.background.withValues(alpha: 0);
     final previewBackground =
         template.hasAlphaBackground ? colors.card : colors.card;
     final assetPath = template.assetPath;
@@ -936,7 +933,7 @@ class _TemplatePreviewCard extends StatelessWidget {
     return AxiTapBounce(
       enabled: true,
       child: Material(
-        color: transparentColor,
+        color: Colors.transparent,
         shape: overlayShape,
         clipBehavior: Clip.antiAlias,
         child: ShadFocusable(
@@ -951,7 +948,7 @@ class _TemplatePreviewCard extends StatelessWidget {
               duration: animationDuration,
               width: cardWidth,
               decoration: BoxDecoration(
-                color: transparentColor,
+                color: Colors.transparent,
                 borderRadius: context.radius,
                 border: border,
               ),

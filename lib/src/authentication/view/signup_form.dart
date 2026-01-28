@@ -523,14 +523,12 @@ class _SignupFormState extends State<SignupForm>
             );
             final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
             final captchaSize = Size(
-              sizing.menuItemHeight * 5,
-              sizing.menuItemHeight * 2,
+              sizing.menuMaxWidth,
+              sizing.listButtonHeight,
             );
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
-            const defaultDescriptionHeight = 0.0;
-            final usernameDescriptionHeight =
-                _usernameDescriptionHeight ?? defaultDescriptionHeight;
+            final usernameDescriptionHeight = _usernameDescriptionHeight;
             final errorText = _errorText?.trim();
             return Align(
               alignment: Alignment.topCenter,
@@ -590,7 +588,7 @@ class _SignupFormState extends State<SignupForm>
                         capability: context.watch<Capability>(),
                       ),
                     ),
-                    const SizedBox.square(),
+                    SizedBox(height: spacing.s),
                     Padding(
                       padding: horizontalPadding,
                       child: AxiAnimatedSize(
@@ -618,18 +616,31 @@ class _SignupFormState extends State<SignupForm>
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
                                       children: [
-                                        Transform.translate(
-                                          offset: Offset(
-                                            0,
-                                            -usernameDescriptionHeight,
-                                          ),
-                                          child: SignupAvatarSelector(
-                                            bytes: avatarState.displayedBytes,
-                                            username: _jidTextController.text,
-                                            processing: avatarState.processing,
-                                            onTap: _openAvatarEditor,
-                                          ),
-                                        ),
+                                        usernameDescriptionHeight == null
+                                            ? SignupAvatarSelector(
+                                                bytes:
+                                                    avatarState.displayedBytes,
+                                                username:
+                                                    _jidTextController.text,
+                                                processing:
+                                                    avatarState.processing,
+                                                onTap: _openAvatarEditor,
+                                              )
+                                            : Transform.translate(
+                                                offset: Offset(
+                                                  0,
+                                                  -usernameDescriptionHeight,
+                                                ),
+                                                child: SignupAvatarSelector(
+                                                  bytes: avatarState
+                                                      .displayedBytes,
+                                                  username:
+                                                      _jidTextController.text,
+                                                  processing:
+                                                      avatarState.processing,
+                                                  onTap: _openAvatarEditor,
+                                                ),
+                                              ),
                                         SizedBox(width: spacing.s),
                                         Expanded(
                                           child: AxiTextFormField(
@@ -967,7 +978,7 @@ class _SignupFormState extends State<SignupForm>
                         ),
                       ),
                     ),
-                    const SizedBox.square(),
+                    SizedBox(height: spacing.s),
                     Padding(
                       padding: horizontalPadding,
                       child: Builder(
@@ -1002,23 +1013,18 @@ class _SignupFormState extends State<SignupForm>
                           );
 
                           final continueButton = showNextButton
-                              ? Padding(
-                                  padding: EdgeInsets.only(
-                                    right: showSubmitButton ? spacing.s : 0,
-                                  ),
-                                  child: AxiButton.primary(
-                                    loading: isCheckingPwned,
-                                    onPressed: loading ||
-                                            isCheckingPwned ||
-                                            avatarState.processing
-                                        ? null
-                                        : () async {
-                                            await _handleContinuePressed(
-                                              context,
-                                            );
-                                          },
-                                    child: Text(context.l10n.signupContinue),
-                                  ),
+                              ? AxiButton.primary(
+                                  loading: isCheckingPwned,
+                                  onPressed: loading ||
+                                          isCheckingPwned ||
+                                          avatarState.processing
+                                      ? null
+                                      : () async {
+                                          await _handleContinuePressed(
+                                            context,
+                                          );
+                                        },
+                                  child: Text(context.l10n.signupContinue),
                                 )
                               : const SizedBox.shrink();
 
@@ -1035,7 +1041,6 @@ class _SignupFormState extends State<SignupForm>
                               : const SizedBox.shrink();
 
                           return Wrap(
-                            spacing: 0,
                             runSpacing: spacing.s,
                             children: [
                               backButton,
@@ -1093,7 +1098,7 @@ class _SignupProgressMeter extends StatelessWidget {
             (currentStepIndex + 1).clamp(1, totalSteps).toInt();
         final percentLabel =
             context.l10n.commonPercentLabel(clampedPercent.round());
-        final barHeight = sizing.progressIndicatorStrokeWidth * 4;
+        final barHeight = sizing.progressIndicatorBarHeight;
         final barRadius = BorderRadius.circular(sizing.containerRadius);
         return Semantics(
           label: context.l10n.signupProgressLabel,
@@ -1181,7 +1186,7 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
       builder: (context, animatedBits, child) {
         final normalized = (animatedBits / maxEntropyBits).clamp(0.0, 1.0);
         final fillColor = _colorForLevel(strengthLevel, colors);
-        final barHeight = sizing.progressIndicatorStrokeWidth * 4;
+        final barHeight = sizing.progressIndicatorBarHeight;
         final barRadius = BorderRadius.circular(sizing.containerRadius);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1359,13 +1364,14 @@ class _CaptchaFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final borderSide = context.borderSide;
     final radius = BorderRadius.circular(context.sizing.containerRadius);
     return Container(
       width: size.width,
       height: size.height,
       decoration: BoxDecoration(
         borderRadius: radius,
-        border: Border.all(color: colors.border),
+        border: Border.fromBorderSide(borderSide),
         color: colors.card,
       ),
       child: ClipRRect(

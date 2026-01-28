@@ -4,21 +4,64 @@
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
-const double _tooltipVerticalOffset = 12;
-const EdgeInsets _tooltipPadding = EdgeInsets.symmetric(
-  horizontal: 12,
-  vertical: 8,
-);
-
-class AxiTooltip extends StatelessWidget {
+class AxiTooltip extends StatefulWidget {
   const AxiTooltip({super.key, required this.builder, required this.child});
 
   final WidgetBuilder builder;
   final Widget child;
 
   @override
+  State<AxiTooltip> createState() => _AxiTooltipState();
+}
+
+class _AxiTooltipState extends State<AxiTooltip> {
+  final GlobalKey _childKey = GlobalKey();
+  double _targetHeight = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleSizeUpdate();
+  }
+
+  @override
+  void didUpdateWidget(covariant AxiTooltip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleSizeUpdate();
+  }
+
+  void _scheduleSizeUpdate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateSize());
+  }
+
+  void _updateSize() {
+    final BuildContext? context = _childKey.currentContext;
+    final RenderObject? renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return;
+    }
+    const double minDelta = 0.5;
+    final double nextHeight = renderObject.size.height;
+    if ((nextHeight - _targetHeight).abs() < minDelta) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _targetHeight = nextHeight;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final content = builder(context);
+    final EdgeInsets padding = EdgeInsets.symmetric(
+      horizontal: context.spacing.s,
+      vertical: context.spacing.xs,
+    );
+    final double fallbackHeight = context.sizing.iconButtonTapTarget;
+    final double resolvedHeight =
+        _targetHeight > 0 ? _targetHeight : fallbackHeight;
+    final double verticalOffset = (resolvedHeight * 0.5) + context.spacing.xxs;
+    final content = widget.builder(context);
     final colors = context.colorScheme;
     final radius = context.radius;
     final textStyle = content is Text && content.style != null
@@ -30,15 +73,26 @@ class AxiTooltip extends StatelessWidget {
       richMessage: hasPlainText ? null : _richSpan(content, textStyle),
       message: hasPlainText ? plainText : null,
       preferBelow: true,
-      verticalOffset: _tooltipVerticalOffset,
-      padding: _tooltipPadding,
+      verticalOffset: verticalOffset,
+      padding: padding,
       decoration: BoxDecoration(
         color: colors.popover,
         borderRadius: radius,
         border: Border.all(color: colors.border),
       ),
       textStyle: textStyle,
-      child: child,
+      child: NotificationListener<SizeChangedLayoutNotification>(
+        onNotification: (notification) {
+          _scheduleSizeUpdate();
+          return false;
+        },
+        child: SizeChangedLayoutNotifier(
+          child: KeyedSubtree(
+            key: _childKey,
+            child: widget.child,
+          ),
+        ),
+      ),
     );
   }
 

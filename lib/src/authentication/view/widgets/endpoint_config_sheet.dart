@@ -176,7 +176,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final textTheme = context.textTheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final portFieldWidth = sizing.menuItemHeight * 2;
+    final portFieldWidth = sizing.listButtonHeight;
     final config = _draftConfig ?? context.watch<EndpointConfigCubit>().state;
     final placeholderStyle = textTheme.muted;
     final inputStyle = textTheme.p;
@@ -459,7 +459,7 @@ class EndpointSuffix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AxiButton.link(
+    return AxiButton.ghost(
       size: AxiButtonSize.sm,
       semanticLabel: context.l10n.authCustomServerOpenSettings,
       onPressed: () => EndpointConfigSheet.show(context),

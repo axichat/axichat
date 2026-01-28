@@ -25,7 +25,6 @@ import 'feedback_system.dart';
 
 const bool _defaultShowTransferMenu = true;
 const bool _defaultTransferMenuGhost = false;
-const bool _defaultTransferMenuUsePrimary = false;
 
 class SyncControls extends StatelessWidget {
   const SyncControls({
@@ -34,14 +33,14 @@ class SyncControls extends StatelessWidget {
     this.compact = false,
     this.showTransferMenu = _defaultShowTransferMenu,
     this.transferMenuGhost = _defaultTransferMenuGhost,
-    this.transferMenuUsePrimary = _defaultTransferMenuUsePrimary,
+    this.transferMenuSelected = false,
   });
 
   final CalendarState state;
   final bool compact;
   final bool showTransferMenu;
   final bool transferMenuGhost;
-  final bool transferMenuUsePrimary;
+  final bool transferMenuSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +48,7 @@ class SyncControls extends StatelessWidget {
         ? CalendarTransferMenu(
             state: state,
             ghost: transferMenuGhost,
-            usePrimary: transferMenuUsePrimary,
+            selected: transferMenuSelected,
           )
         : null;
     if (compact) {
@@ -65,13 +64,13 @@ class CalendarTransferMenu extends StatefulWidget {
     required this.state,
     this.additionalActions,
     this.ghost = _defaultTransferMenuGhost,
-    this.usePrimary = _defaultTransferMenuUsePrimary,
+    this.selected = false,
   });
 
   final CalendarState state;
   final List<AxiMenuAction>? additionalActions;
   final bool ghost;
-  final bool usePrimary;
+  final bool selected;
 
   @override
   State<CalendarTransferMenu> createState() => _CalendarTransferMenuState();
@@ -94,7 +93,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       additionalActions: widget.additionalActions,
       busy: disabled,
       ghost: widget.ghost,
-      usePrimary: widget.usePrimary,
+      selected: widget.selected,
     );
   }
 
@@ -369,7 +368,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
     this.additionalActions,
     this.busy = false,
     this.ghost = _defaultTransferMenuGhost,
-    this.usePrimary = _defaultTransferMenuUsePrimary,
+    this.selected = false,
   });
 
   final bool hasCalendarData;
@@ -378,7 +377,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
   final List<AxiMenuAction>? additionalActions;
   final bool busy;
   final bool ghost;
-  final bool usePrimary;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -402,7 +401,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
         ...?additionalActions,
       ],
       ghost: ghost,
-      usePrimary: usePrimary,
+      selected: selected,
     );
   }
 }

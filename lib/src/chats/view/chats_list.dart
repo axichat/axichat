@@ -727,9 +727,9 @@ class _ChatListTileState extends State<ChatListTile> {
     );
 
     final cutoutGap = context.spacing.xxs;
-    final iconButtonTapTarget = context.sizing.iconButtonTapTarget;
-    final iconCutoutThickness = iconButtonTapTarget + (cutoutGap * 2);
-    final iconCutoutDepth = (iconCutoutThickness / 2) + cutoutGap;
+    final iconButtonSize = context.sizing.iconButtonSize;
+    final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
+    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
@@ -746,7 +746,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       CutoutSpec(
         edge: CutoutEdge.right,
-        alignment: const Alignment(1.02, 0),
+        alignment: const Alignment(1, 0),
         depth: iconCutoutDepth,
         thickness: iconCutoutThickness,
         cornerRadius: iconCutoutRadius,
@@ -829,7 +829,10 @@ class _ChatListTileState extends State<ChatListTile> {
             ? l10n.chatsSemanticsUnselectHint
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
-    Widget tileContent = tileSurface.withTapBounce();
+    Widget tileContent = Padding(
+      padding: EdgeInsetsDirectional.only(end: iconCutoutDepth / 2),
+      child: tileSurface.withTapBounce(),
+    );
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
