@@ -96,7 +96,9 @@ class AxiCheckboxFormField extends FormField<bool> {
                           materialTapTargetSize: MaterialTapTargetSize.padded,
                           visualDensity: VisualDensity.compact,
                           shape: RoundedSuperellipseBorder(
-                            borderRadius: context.radius,
+                            borderRadius: BorderRadius.circular(
+                              context.radii.squircleSm,
+                            ),
                           ),
                           side: BorderSide(
                             color: borderColor,

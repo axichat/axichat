@@ -68,9 +68,5 @@ const double axiSpaceL = 32;
 const double axiSpaceXl = 64;
 const double axiSpaceXxl = 128;
 
-const double axiSquircleRadius = 12;
-const BorderRadius axiBorderRadius =
-    BorderRadius.all(Radius.circular(axiSquircleRadius));
-
 const double axiIconSize = axiSpaceM;
 const double axiIconSizeSm = axiSpaceS;
