@@ -172,10 +172,9 @@ class _LoginFormState extends State<LoginForm> {
                       controller: _passwordTextController,
                     ),
                   ),
+                  SizedBox(height: spacing.m),
                   Padding(
-                    padding: horizontalPadding.add(
-                      EdgeInsets.only(top: spacing.s, bottom: spacing.xs),
-                    ),
+                    padding: horizontalPadding,
                     child: AxiCheckboxFormField(
                       key: _rememberMeFieldKey,
                       enabled: !loading,
@@ -191,7 +190,7 @@ class _LoginFormState extends State<LoginForm> {
                       },
                     ),
                   ),
-                  SizedBox(height: spacing.s),
+                  SizedBox(height: spacing.l),
                   Padding(
                     padding: horizontalPadding,
                     child: AxiAnimatedSize(

@@ -216,10 +216,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (state is AuthenticationNone) {
       _completionHandledState = null;
-      if (_activeFlow != null || _operationProgressController.isActive) {
-        // Ignore redundant resets while an auth flow is already in progress.
-        return;
-      }
       _resetAuthUiState();
       return;
     }

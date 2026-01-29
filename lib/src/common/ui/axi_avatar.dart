@@ -24,7 +24,7 @@ class AxiAvatar extends StatefulWidget {
     this.presence,
     this.status,
     this.active = false,
-    this.shape = AxiAvatarShape.circle,
+    this.shape = AxiAvatarShape.squircle,
     this.size = 50.0,
     this.avatarPath,
     this.avatarBytes,
@@ -216,12 +216,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
 
   @override
   Widget build(BuildContext context) {
-    final radius = widget.size * 0.45;
     final ShapeBorder avatarShape = widget.shape == AxiAvatarShape.circle
         ? const CircleBorder()
-        : ContinuousRectangleBorder(
-            borderRadius: BorderRadius.circular(radius),
-          );
+        : SquircleBorder(cornerRadius: context.radii.squircle);
     final Uint8List? avatarBytes = _resolvedAvatarBytes;
 
     Widget child = SizedBox.square(

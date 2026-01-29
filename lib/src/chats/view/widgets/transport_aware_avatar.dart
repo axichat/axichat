@@ -107,7 +107,6 @@ class TransportAwareAvatar extends StatelessWidget {
           Positioned.fill(
             child: AxiAvatar(
               jid: avatarIdentifier,
-              shape: AxiAvatarShape.circle,
               size: size,
               presence: presence,
               status: status,

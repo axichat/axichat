@@ -2,16 +2,22 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:axichat/src/common/ui/axi_spacing.dart';
 
 class AxiRadii extends ThemeExtension<AxiRadii> {
-  const AxiRadii({required this.squircle});
+  const AxiRadii({
+    required this.squircle,
+    required this.squircleSm,
+  });
 
   final double squircle;
+  final double squircleSm;
 
   @override
-  AxiRadii copyWith({double? squircle}) {
-    return AxiRadii(squircle: squircle ?? this.squircle);
+  AxiRadii copyWith({double? squircle, double? squircleSm}) {
+    return AxiRadii(
+      squircle: squircle ?? this.squircle,
+      squircleSm: squircleSm ?? this.squircleSm,
+    );
   }
 
   @override
@@ -21,4 +27,11 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
   }
 }
 
-const AxiRadii axiRadii = AxiRadii(squircle: axiSquircleRadius);
+const double axiSquircleRadius = 12;
+const BorderRadius axiBorderRadius =
+    BorderRadius.all(Radius.circular(axiSquircleRadius));
+
+const AxiRadii axiRadii = AxiRadii(
+  squircle: axiSquircleRadius,
+  squircleSm: 8,
+);

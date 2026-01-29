@@ -10349,20 +10349,22 @@ class _RecipientAvatarBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     const borderWidth = 1.6;
+    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     final avatarPath = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
     final resolvedAvatarPath =
         avatarPath?.isNotEmpty == true ? avatarPath : null;
-    return Container(
+    return SizedBox(
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
-      padding: const EdgeInsets.all(borderWidth),
-      decoration: BoxDecoration(color: colors.card, shape: BoxShape.circle),
-      child: ClipOval(
-        child: AxiAvatar(
-          jid: chat.avatarIdentifier,
-          size: _recipientAvatarSize - (borderWidth * 2),
-          shape: AxiAvatarShape.circle,
-          avatarPath: resolvedAvatarPath,
+      child: DecoratedBox(
+        decoration: ShapeDecoration(color: colors.card, shape: shape),
+        child: Padding(
+          padding: const EdgeInsets.all(borderWidth),
+          child: AxiAvatar(
+            jid: chat.avatarIdentifier,
+            size: _recipientAvatarSize - (borderWidth * 2),
+            avatarPath: resolvedAvatarPath,
+          ),
         ),
       ),
     );
@@ -10505,17 +10507,16 @@ class _TypingAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = context.colorScheme.card;
+    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     return Container(
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
       padding: const EdgeInsets.all(_typingAvatarBorderWidth),
-      decoration: BoxDecoration(color: borderColor, shape: BoxShape.circle),
-      child: ClipOval(
-        child: AxiAvatar(
-          jid: jid,
-          size: _recipientAvatarSize - (_typingAvatarBorderWidth * 2),
-          avatarPath: avatarPath,
-        ),
+      decoration: ShapeDecoration(color: borderColor, shape: shape),
+      child: AxiAvatar(
+        jid: jid,
+        size: _recipientAvatarSize - (_typingAvatarBorderWidth * 2),
+        avatarPath: avatarPath,
       ),
     );
   }
@@ -13459,9 +13460,10 @@ class _GuestChatAppIconAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const String guestChatAppIconAssetPath = 'assets/icons/app_icon_source.png';
+    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     return SizedBox.square(
-      child: ClipOval(
-        clipBehavior: Clip.antiAlias,
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: shape),
         child: Image.asset(
           guestChatAppIconAssetPath,
           width: size,

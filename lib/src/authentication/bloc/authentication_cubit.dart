@@ -1123,6 +1123,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final usingStoredCredentials = username == null && password == null;
+    _StoredLoginCredentials? storedLogin;
+    if (usingStoredCredentials) {
+      storedLogin = await _readStoredLoginCredentials();
+      if (!storedLogin.hasUsableCredentials) {
+        _log.info('Login aborted due to missing stored credentials.');
+        _authenticatedJid = null;
+        await _xmppService.disconnect();
+        _emit(const AuthenticationNone());
+        return;
+      }
+    }
     final currentConfig = endpointConfig;
     _log.info(
       'Login requested '
@@ -1171,16 +1182,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
-    final storedLogin = await _readStoredLoginCredentials();
+    storedLogin ??= await _readStoredLoginCredentials();
     var credentialDisposition = _CredentialDisposition.keep;
-
-    if (usingStoredCredentials && !storedLogin.hasUsableCredentials) {
-      _log.info('Login aborted due to missing stored credentials.');
-      _authenticatedJid = null;
-      await _xmppService.disconnect();
-      _emit(const AuthenticationNone());
-      return;
-    }
 
     late final String resolvedJid;
     late final String resolvedPassword;

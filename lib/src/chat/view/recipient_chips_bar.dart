@@ -1037,7 +1037,6 @@ class _RecipientChipAvatar extends StatelessWidget {
         : AxiAvatar(
             jid: target.address ?? target.displayName ?? '',
             size: _chipAvatarSize,
-            shape: AxiAvatarShape.circle,
             avatarPath: avatarPathsByJid[
                 (target.address ?? target.displayName ?? '').toLowerCase()],
           );
@@ -2023,7 +2022,6 @@ class _SuggestionAvatar extends StatelessWidget {
     return AxiAvatar(
       jid: jid,
       size: 32,
-      shape: AxiAvatarShape.circle,
       avatarPath: avatarPath,
     );
   }

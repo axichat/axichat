@@ -263,12 +263,19 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                   key: previewKey,
                   dimension: 96,
                   child: DecoratedBox(
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: colors.card,
-                      shape: BoxShape.circle,
-                      border: Border.fromBorderSide(context.borderSide),
+                      shape: SquircleBorder(
+                        cornerRadius: context.radii.squircle,
+                        side: context.borderSide,
+                      ),
                     ),
-                    child: ClipOval(
+                    child: ClipPath(
+                      clipper: ShapeBorderClipper(
+                        shape: SquircleBorder(
+                          cornerRadius: context.radii.squircle,
+                        ),
+                      ),
                       child: Image.asset(
                         _fallbackSignupAvatarAssetPath,
                         fit: BoxFit.cover,

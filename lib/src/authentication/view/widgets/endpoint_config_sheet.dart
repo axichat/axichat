@@ -463,7 +463,12 @@ class EndpointSuffix extends StatelessWidget {
       size: AxiButtonSize.sm,
       semanticLabel: context.l10n.authCustomServerOpenSettings,
       onPressed: () => EndpointConfigSheet.show(context),
-      child: Text('@$server'),
+      child: Text(
+        '@$server',
+        style: context.textTheme.small.copyWith(
+          color: context.colorScheme.foreground,
+        ),
+      ),
     );
   }
 }
