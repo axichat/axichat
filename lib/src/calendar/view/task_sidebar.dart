@@ -75,6 +75,7 @@ import 'widgets/task_text_field.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_task_list_tile.dart';
+import 'widgets/task_tile_surface.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
 
@@ -3799,44 +3800,35 @@ class _SelectionTaskTile extends StatelessWidget {
     return CalendarTaskTitleHoverReporter(
       title: task.title,
       enabled: !isActive,
-      child: Container(
+      child: TaskTileSurface(
         margin: EdgeInsets.only(bottom: spacing.s),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(calendarBorderRadius),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => onFocusTask(task),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? calendarSidebarBackgroundColor
-                      : calendarContainerColor,
-                  border: Border(
-                    left: BorderSide(color: borderColor, width: 3),
-                    top: BorderSide(color: calendarBorderColor),
-                    right: BorderSide(color: calendarBorderColor),
-                    bottom: BorderSide(color: calendarBorderColor),
-                  ),
-                ),
-                child: CalendarTaskListTile(
-                  task: task,
-                  scheduleLabel: scheduleLabel,
-                  onToggleCompletion: (completed) =>
-                      onToggleCompletion(task, completed),
-                  trailing: AxiTooltip(
-                    builder: (_) => Text(context.l10n.calendarSelectionRemove),
-                    child: AxiIconButton.ghost(
-                      iconData: Icons.close,
-                      onPressed: () => onRemoveTask(task),
-                      iconSize: context.sizing.iconButtonIconSize,
-                      buttonSize: context.sizing.iconButtonTapTarget,
-                      tapTargetSize: context.sizing.iconButtonTapTarget,
-                      color: calendarSubtitleColor,
-                    ),
-                  ),
-                ),
-              ),
+        decoration: BoxDecoration(
+          color: isActive
+              ? calendarSidebarBackgroundColor
+              : calendarContainerColor,
+          borderRadius: context.radius,
+          border: Border(
+            left: BorderSide(color: borderColor, width: 3),
+            top: BorderSide(color: calendarBorderColor),
+            right: BorderSide(color: calendarBorderColor),
+            bottom: BorderSide(color: calendarBorderColor),
+          ),
+        ),
+        onTap: () => onFocusTask(task),
+        child: CalendarTaskListTile(
+          task: task,
+          scheduleLabel: scheduleLabel,
+          onToggleCompletion: (completed) =>
+              onToggleCompletion(task, completed),
+          trailing: AxiTooltip(
+            builder: (_) => Text(context.l10n.calendarSelectionRemove),
+            child: AxiIconButton.ghost(
+              iconData: Icons.close,
+              onPressed: () => onRemoveTask(task),
+              iconSize: context.sizing.iconButtonIconSize,
+              buttonSize: context.sizing.iconButtonTapTarget,
+              tapTargetSize: context.sizing.iconButtonTapTarget,
+              color: calendarSubtitleColor,
             ),
           ),
         ),
@@ -5068,396 +5060,312 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverAnchorToken == _anchorToken;
 
-    Widget tile = Container(
-      margin: const EdgeInsets.only(bottom: calendarGutterSm),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isActive
-                ? calendarSidebarBackgroundColor
-                : calendarContainerColor,
-            border: Border(
-              left: BorderSide(color: borderColor, width: 3),
-              top: BorderSide(color: calendarBorderColor),
-              right: BorderSide(color: calendarBorderColor),
-              bottom: BorderSide(color: calendarBorderColor),
-            ),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(calendarBorderRadius),
-            child: enableInteraction
-                ? Builder(
-                    builder: (tileContext) {
-                      final VoidCallback? customTap = onTapOverride;
-                      if (customTap != null) {
-                        return MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(
-                              calendarBorderRadius,
-                            ),
-                            hoverColor: calendarSidebarBackgroundColor
-                                .withValues(alpha: 0.5),
-                            onTap: customTap,
-                            child: CalendarTaskListTile(
-                              task: task,
-                              trailing: trailing,
-                              onToggleCompletion: onToggleCompletion,
-                            ),
-                          ),
-                        );
-                      }
-
-                      if (host._shouldUseSheetMenus(tileContext)) {
-                        return MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(
-                              calendarBorderRadius,
-                            ),
-                            hoverColor: calendarSidebarBackgroundColor
-                                .withValues(alpha: 0.5),
-                            onTap: () =>
-                                host._showTaskEditSheet(tileContext, task),
-                            child: CalendarTaskListTile(
-                              task: task,
-                              trailing: trailing,
-                              onToggleCompletion: onToggleCompletion,
-                            ),
-                          ),
-                        );
-                      }
-
-                      final ShadPopoverController controller =
-                          host._popoverControllerFor(_anchorToken, task.id);
-                      final renderBox =
-                          tileContext.findRenderObject() as RenderBox?;
-                      final bool hasLayout = _hasRenderableLayout(renderBox);
-                      final tileSize = hasLayout ? renderBox!.size : Size.zero;
-                      Offset tileOrigin = Offset.zero;
-                      if (hasLayout) {
-                        try {
-                          tileOrigin = renderBox!.localToGlobal(Offset.zero);
-                        } catch (_) {
-                          tileOrigin = Offset.zero;
-                        }
-                      }
-                      final mediaQuery = MediaQuery.of(tileContext);
-                      final screenSize = mediaQuery.size;
-                      final viewPadding = mediaQuery.viewPadding;
-
-                      const double margin = calendarPopoverScreenMargin;
-                      const double dropdownMaxHeight =
-                          calendarSidebarPopoverMaxHeight;
-                      const double dropdownWidth = calendarTaskPopoverWidth;
-                      const double preferredVerticalGap =
-                          calendarPopoverPreferredVerticalGap;
-                      const double preferredHorizontalGap =
-                          calendarPopoverPreferredHorizontalGap;
-                      const double centerDivider = 2.0;
-                      const double zeroClamp = 0.0;
-                      const double heightDifferenceThreshold = 4.0;
-                      const double minimumHeight = calendarTaskPopoverMinHeight;
-
-                      final usableLeft = viewPadding.left + margin;
-                      final usableRight =
-                          screenSize.width - viewPadding.right - margin;
-                      final usableTop = viewPadding.top + margin;
-                      final usableBottom =
-                          screenSize.height - viewPadding.bottom - margin;
-                      final usableHeight = math.max(
-                        zeroClamp,
-                        usableBottom - usableTop,
-                      );
-
-                      final availableBelow =
-                          usableBottom - (tileOrigin.dy + tileSize.height);
-                      final availableAbove = tileOrigin.dy - usableTop;
-                      final availableRight =
-                          usableRight - (tileOrigin.dx + tileSize.width);
-                      final availableLeft = tileOrigin.dx - usableLeft;
-
-                      const double requiredHorizontalSpace =
-                          dropdownWidth + preferredHorizontalGap;
-                      final bool canOpenRight =
-                          availableRight >= requiredHorizontalSpace;
-                      final bool canOpenLeft =
-                          availableLeft >= requiredHorizontalSpace;
-                      final bool openToLeft = canOpenLeft &&
-                          (!canOpenRight || availableLeft > availableRight);
-                      final bool openToSide = canOpenRight || canOpenLeft;
-
-                      double effectiveMaxHeight;
-                      late final ShadAnchor anchor;
-
-                      if (openToSide) {
-                        if (usableHeight <= zeroClamp) {
-                          effectiveMaxHeight = minimumHeight;
-                        } else {
-                          effectiveMaxHeight = math.min(
-                            dropdownMaxHeight,
-                            usableHeight,
-                          );
-                          if (effectiveMaxHeight < minimumHeight) {
-                            effectiveMaxHeight = usableHeight;
-                          }
-                        }
-
-                        final double halfHeight =
-                            effectiveMaxHeight / centerDivider;
-                        final double triggerCenterY =
-                            tileOrigin.dy + tileSize.height / centerDivider;
-                        final double clampedCenterY = triggerCenterY.clamp(
-                          usableTop + halfHeight,
-                          usableBottom - halfHeight,
-                        );
-                        final double overlayTop = clampedCenterY - halfHeight;
-
-                        final double desiredLeft = openToLeft
-                            ? tileOrigin.dx -
-                                dropdownWidth -
-                                preferredHorizontalGap
-                            : tileOrigin.dx +
-                                tileSize.width +
-                                preferredHorizontalGap;
-                        final double overlayLeft = desiredLeft.clamp(
-                          usableLeft,
-                          usableRight - dropdownWidth,
-                        );
-
-                        final double offsetDx = openToLeft
-                            ? overlayLeft + dropdownWidth - tileOrigin.dx
-                            : overlayLeft - (tileOrigin.dx + tileSize.width);
-                        final double offsetDy =
-                            overlayTop - (triggerCenterY - halfHeight);
-
-                        final Alignment targetAnchor = openToLeft
-                            ? Alignment.centerLeft
-                            : Alignment.centerRight;
-                        final Alignment childAnchor = openToLeft
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft;
-
-                        anchor = ShadAnchor(
-                          overlayAlignment: targetAnchor,
-                          childAlignment: childAnchor,
-                          offset: Offset(offsetDx, offsetDy),
-                        );
-                      } else {
-                        final normalizedAbove = math.max(
-                          zeroClamp,
-                          availableAbove,
-                        );
-                        final normalizedBelow = math.max(
-                          zeroClamp,
-                          availableBelow,
-                        );
-
-                        final heightIfAbove = math.min(
-                          dropdownMaxHeight,
-                          normalizedAbove,
-                        );
-                        final heightIfBelow = math.min(
-                          dropdownMaxHeight,
-                          normalizedBelow,
-                        );
-
-                        bool showAbove;
-                        if (heightIfAbove <= zeroClamp &&
-                            heightIfBelow <= zeroClamp) {
-                          showAbove = false;
-                        } else if (heightIfBelow <= zeroClamp) {
-                          showAbove = true;
-                        } else if (heightIfAbove <= zeroClamp) {
-                          showAbove = false;
-                        } else if ((heightIfBelow - heightIfAbove).abs() <=
-                            heightDifferenceThreshold) {
-                          showAbove = normalizedAbove > normalizedBelow;
-                        } else {
-                          showAbove = heightIfAbove > heightIfBelow;
-                        }
-
-                        final availableSpace =
-                            showAbove ? normalizedAbove : normalizedBelow;
-                        final double fallbackMaxHeight =
-                            usableHeight <= zeroClamp
-                                ? minimumHeight
-                                : math.min(dropdownMaxHeight, usableHeight);
-
-                        effectiveMaxHeight = availableSpace > zeroClamp
-                            ? math.min(dropdownMaxHeight, availableSpace)
-                            : fallbackMaxHeight;
-                        if (effectiveMaxHeight < minimumHeight &&
-                            availableSpace > zeroClamp) {
-                          effectiveMaxHeight = availableSpace;
-                        }
-
-                        final extraAbove = math.max(
-                          zeroClamp,
-                          normalizedAbove - effectiveMaxHeight,
-                        );
-                        final extraBelow = math.max(
-                          zeroClamp,
-                          normalizedBelow - effectiveMaxHeight,
-                        );
-                        final extraVerticalSpace =
-                            showAbove ? extraAbove : extraBelow;
-                        final appliedVerticalGap = math.min(
-                          preferredVerticalGap,
-                          extraVerticalSpace,
-                        );
-
-                        final triggerLeft = tileOrigin.dx;
-                        final double centeredLeft = tileOrigin.dx +
-                            (tileSize.width - dropdownWidth) / centerDivider;
-                        final double overlayLeft = centeredLeft.clamp(
-                          usableLeft,
-                          usableRight - dropdownWidth,
-                        );
-                        final double horizontalOffset =
-                            overlayLeft - triggerLeft;
-
-                        final verticalOffset = showAbove
-                            ? -appliedVerticalGap
-                            : appliedVerticalGap;
-
-                        final targetAnchor = showAbove
-                            ? Alignment.topLeft
-                            : Alignment.bottomLeft;
-                        final childAnchor = showAbove
-                            ? Alignment.bottomLeft
-                            : Alignment.topLeft;
-
-                        anchor = ShadAnchor(
-                          overlayAlignment: targetAnchor,
-                          childAlignment: childAnchor,
-                          offset: Offset(horizontalOffset, verticalOffset),
-                        );
-                      }
-
-                      final scaffoldMessenger = ScaffoldMessenger.maybeOf(
-                        tileContext,
-                      );
-
-                      return AxiPopover(
-                        controller: controller,
-                        closeOnTapOutside: true,
-                        anchor: anchor,
-                        padding: EdgeInsets.zero,
-                        popover: (context) {
-                          return BlocBuilder<B, CalendarState>(
-                            builder: (context, state) {
-                              final baseId = task.baseId;
-                              final latestTask =
-                                  state.model.tasks[baseId] ?? task;
-                              final CalendarTask? storedTask =
-                                  state.model.tasks[task.id];
-                              final CalendarTask? occurrenceTask =
-                                  storedTask == null && task.isOccurrence
-                                      ? latestTask.occurrenceForId(task.id)
-                                      : null;
-                              final CalendarTask displayTask =
-                                  storedTask ?? occurrenceTask ?? latestTask;
-                              final bool shouldUpdateOccurrence =
-                                  storedTask == null && occurrenceTask != null;
-                              final List<TaskContextAction> inlineActions =
-                                  host._sidebarInlineActions(displayTask);
-
-                              return EditTaskDropdown<B>(
-                                task: displayTask,
-                                maxHeight: effectiveMaxHeight,
-                                inlineActions: inlineActions,
-                                collectionMethod:
-                                    state.model.collection?.method,
-                                onClose: () => host._closeTaskPopover(task.id),
-                                scaffoldMessenger: scaffoldMessenger,
-                                locationHelper:
-                                    LocationAutocompleteHelper.fromState(state),
-                                onTaskUpdated: (updatedTask) {
-                                  context.read<B>().add(
-                                        CalendarEvent.taskUpdated(
-                                          task: updatedTask,
-                                        ),
-                                      );
-                                },
-                                onOccurrenceUpdated: shouldUpdateOccurrence
-                                    ? (
-                                        updatedTask,
-                                        scope, {
-                                        required bool scheduleTouched,
-                                        required bool checklistTouched,
-                                      }) {
-                                        if (scheduleTouched ||
-                                            checklistTouched) {
-                                          context.read<B>().add(
-                                                CalendarEvent
-                                                    .taskOccurrenceUpdated(
-                                                  taskId: baseId,
-                                                  occurrenceId: task.id,
-                                                  scheduledTime: scheduleTouched
-                                                      ? updatedTask
-                                                          .scheduledTime
-                                                      : null,
-                                                  duration: scheduleTouched
-                                                      ? updatedTask.duration
-                                                      : null,
-                                                  endDate: scheduleTouched
-                                                      ? updatedTask.endDate
-                                                      : null,
-                                                  checklist: checklistTouched
-                                                      ? updatedTask.checklist
-                                                      : null,
-                                                  range: scope.range,
-                                                ),
-                                              );
-                                        }
-                                      }
-                                    : null,
-                                onTaskDeleted: (taskId) {
-                                  context.read<B>().add(
-                                        CalendarEvent.taskDeleted(
-                                            taskId: taskId),
-                                      );
-                                  host._closeTaskPopover(taskId);
-                                },
-                              );
-                            },
-                          );
-                        },
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(
-                              calendarBorderRadius,
-                            ),
-                            hoverColor: calendarSidebarBackgroundColor
-                                .withValues(alpha: 0.5),
-                            onTap: () => host._toggleTaskPopover(
-                              taskId: task.id,
-                              anchorToken: _anchorToken,
-                              controller: controller,
-                            ),
-                            child: CalendarTaskListTile(
-                              task: task,
-                              trailing: trailing,
-                              onToggleCompletion: onToggleCompletion,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : CalendarTaskListTile(
-                    task: task,
-                    trailing: trailing,
-                    onToggleCompletion: onToggleCompletion,
-                  ),
-          ),
-        ),
+    final Decoration tileDecoration = BoxDecoration(
+      color: isActive ? calendarSidebarBackgroundColor : calendarContainerColor,
+      borderRadius: context.radius,
+      border: Border(
+        left: BorderSide(color: borderColor, width: 3),
+        top: BorderSide(color: calendarBorderColor),
+        right: BorderSide(color: calendarBorderColor),
+        bottom: BorderSide(color: calendarBorderColor),
       ),
     );
+
+    Widget buildListTile({VoidCallback? onTap, Color? hoverColor}) {
+      return TaskTileSurface(
+        margin: const EdgeInsets.only(bottom: calendarGutterSm),
+        decoration: tileDecoration,
+        onTap: onTap,
+        hoverColor: hoverColor,
+        child: CalendarTaskListTile(
+          task: task,
+          trailing: trailing,
+          onToggleCompletion: onToggleCompletion,
+        ),
+      );
+    }
+
+    Widget tile;
+    if (!enableInteraction) {
+      tile = buildListTile();
+    } else {
+      tile = Builder(
+        builder: (tileContext) {
+          final VoidCallback? customTap = onTapOverride;
+          final Color hoverColor =
+              calendarSidebarBackgroundColor.withValues(alpha: 0.5);
+          if (customTap != null) {
+            return buildListTile(onTap: customTap, hoverColor: hoverColor);
+          }
+
+          if (host._shouldUseSheetMenus(tileContext)) {
+            return buildListTile(
+              onTap: () => host._showTaskEditSheet(tileContext, task),
+              hoverColor: hoverColor,
+            );
+          }
+
+          final ShadPopoverController controller =
+              host._popoverControllerFor(_anchorToken, task.id);
+          final renderBox = tileContext.findRenderObject() as RenderBox?;
+          final bool hasLayout = _hasRenderableLayout(renderBox);
+          final Size tileSize = hasLayout ? renderBox!.size : Size.zero;
+          Offset tileOrigin = Offset.zero;
+          if (hasLayout) {
+            try {
+              tileOrigin = renderBox!.localToGlobal(Offset.zero);
+            } catch (_) {
+              tileOrigin = Offset.zero;
+            }
+          }
+          final mediaQuery = MediaQuery.of(tileContext);
+          final Size screenSize = mediaQuery.size;
+          final EdgeInsets viewPadding = mediaQuery.viewPadding;
+
+          const double margin = calendarPopoverScreenMargin;
+          const double dropdownMaxHeight = calendarSidebarPopoverMaxHeight;
+          const double dropdownWidth = calendarTaskPopoverWidth;
+          const double preferredVerticalGap =
+              calendarPopoverPreferredVerticalGap;
+          const double preferredHorizontalGap =
+              calendarPopoverPreferredHorizontalGap;
+          const double centerDivider = 2.0;
+          const double zeroClamp = 0.0;
+          const double heightDifferenceThreshold = 4.0;
+          const double minimumHeight = calendarTaskPopoverMinHeight;
+
+          final double usableLeft = viewPadding.left + margin;
+          final double usableRight =
+              screenSize.width - viewPadding.right - margin;
+          final double usableTop = viewPadding.top + margin;
+          final double usableBottom =
+              screenSize.height - viewPadding.bottom - margin;
+          final double usableHeight =
+              math.max(zeroClamp, usableBottom - usableTop);
+
+          final double availableBelow =
+              usableBottom - (tileOrigin.dy + tileSize.height);
+          final double availableAbove = tileOrigin.dy - usableTop;
+          final double availableRight =
+              usableRight - (tileOrigin.dx + tileSize.width);
+          final double availableLeft = tileOrigin.dx - usableLeft;
+
+          const double requiredHorizontalSpace =
+              dropdownWidth + preferredHorizontalGap;
+          final bool canOpenRight =
+              availableRight >= requiredHorizontalSpace;
+          final bool canOpenLeft = availableLeft >= requiredHorizontalSpace;
+          final bool openToLeft = canOpenLeft &&
+              (!canOpenRight || availableLeft > availableRight);
+          final bool openToSide = canOpenRight || canOpenLeft;
+
+          double effectiveMaxHeight;
+          late final ShadAnchor anchor;
+
+          if (openToSide) {
+            if (usableHeight <= zeroClamp) {
+              effectiveMaxHeight = minimumHeight;
+            } else {
+              effectiveMaxHeight = math.min(dropdownMaxHeight, usableHeight);
+              if (effectiveMaxHeight < minimumHeight) {
+                effectiveMaxHeight = usableHeight;
+              }
+            }
+
+            final double halfHeight = effectiveMaxHeight / centerDivider;
+            final double triggerCenterY =
+                tileOrigin.dy + tileSize.height / centerDivider;
+            final double clampedCenterY = triggerCenterY.clamp(
+              usableTop + halfHeight,
+              usableBottom - halfHeight,
+            );
+            final double overlayTop = clampedCenterY - halfHeight;
+
+            final double desiredLeft = openToLeft
+                ? tileOrigin.dx - dropdownWidth - preferredHorizontalGap
+                : tileOrigin.dx + tileSize.width + preferredHorizontalGap;
+            final double overlayLeft = desiredLeft.clamp(
+              usableLeft,
+              usableRight - dropdownWidth,
+            );
+
+            final double offsetDx = openToLeft
+                ? overlayLeft + dropdownWidth - tileOrigin.dx
+                : overlayLeft - (tileOrigin.dx + tileSize.width);
+            final double offsetDy =
+                overlayTop - (triggerCenterY - halfHeight);
+
+            final Alignment targetAnchor =
+                openToLeft ? Alignment.centerLeft : Alignment.centerRight;
+            final Alignment childAnchor =
+                openToLeft ? Alignment.centerRight : Alignment.centerLeft;
+
+            anchor = ShadAnchor(
+              overlayAlignment: targetAnchor,
+              childAlignment: childAnchor,
+              offset: Offset(offsetDx, offsetDy),
+            );
+          } else {
+            final double normalizedAbove = math.max(zeroClamp, availableAbove);
+            final double normalizedBelow = math.max(zeroClamp, availableBelow);
+
+            final double heightIfAbove =
+                math.min(dropdownMaxHeight, normalizedAbove);
+            final double heightIfBelow =
+                math.min(dropdownMaxHeight, normalizedBelow);
+
+            bool showAbove;
+            if (heightIfAbove <= zeroClamp && heightIfBelow <= zeroClamp) {
+              showAbove = false;
+            } else if (heightIfBelow <= zeroClamp) {
+              showAbove = true;
+            } else if (heightIfAbove <= zeroClamp) {
+              showAbove = false;
+            } else if ((heightIfBelow - heightIfAbove).abs() <=
+                heightDifferenceThreshold) {
+              showAbove = normalizedAbove > normalizedBelow;
+            } else {
+              showAbove = heightIfAbove > heightIfBelow;
+            }
+
+            final double availableSpace =
+                showAbove ? normalizedAbove : normalizedBelow;
+            final double fallbackMaxHeight = usableHeight <= zeroClamp
+                ? minimumHeight
+                : math.min(dropdownMaxHeight, usableHeight);
+
+            effectiveMaxHeight = availableSpace > zeroClamp
+                ? math.min(dropdownMaxHeight, availableSpace)
+                : fallbackMaxHeight;
+            if (effectiveMaxHeight < minimumHeight && availableSpace > zeroClamp) {
+              effectiveMaxHeight = availableSpace;
+            }
+
+            final double extraAbove = math.max(
+              zeroClamp,
+              normalizedAbove - effectiveMaxHeight,
+            );
+            final double extraBelow = math.max(
+              zeroClamp,
+              normalizedBelow - effectiveMaxHeight,
+            );
+            final double extraVerticalSpace =
+                showAbove ? extraAbove : extraBelow;
+            final double appliedVerticalGap =
+                math.min(preferredVerticalGap, extraVerticalSpace);
+
+            final double triggerLeft = tileOrigin.dx;
+            final double centeredLeft = tileOrigin.dx +
+                (tileSize.width - dropdownWidth) / centerDivider;
+            final double overlayLeft =
+                centeredLeft.clamp(usableLeft, usableRight - dropdownWidth);
+            final double horizontalOffset = overlayLeft - triggerLeft;
+
+            final double verticalOffset =
+                showAbove ? -appliedVerticalGap : appliedVerticalGap;
+
+            final Alignment targetAnchor =
+                showAbove ? Alignment.topLeft : Alignment.bottomLeft;
+            final Alignment childAnchor =
+                showAbove ? Alignment.bottomLeft : Alignment.topLeft;
+
+            anchor = ShadAnchor(
+              overlayAlignment: targetAnchor,
+              childAlignment: childAnchor,
+              offset: Offset(horizontalOffset, verticalOffset),
+            );
+          }
+
+          final scaffoldMessenger = ScaffoldMessenger.maybeOf(tileContext);
+
+          return AxiPopover(
+            controller: controller,
+            closeOnTapOutside: true,
+            anchor: anchor,
+            padding: EdgeInsets.zero,
+            popover: (context) {
+              return BlocBuilder<B, CalendarState>(
+                builder: (context, state) {
+                  final baseId = task.baseId;
+                  final latestTask = state.model.tasks[baseId] ?? task;
+                  final CalendarTask? storedTask = state.model.tasks[task.id];
+                  final CalendarTask? occurrenceTask =
+                      storedTask == null && task.isOccurrence
+                          ? latestTask.occurrenceForId(task.id)
+                          : null;
+                  final CalendarTask displayTask =
+                      storedTask ?? occurrenceTask ?? latestTask;
+                  final bool shouldUpdateOccurrence =
+                      storedTask == null && occurrenceTask != null;
+                  final List<TaskContextAction> inlineActions =
+                      host._sidebarInlineActions(displayTask);
+
+                  return EditTaskDropdown<B>(
+                    task: displayTask,
+                    maxHeight: effectiveMaxHeight,
+                    inlineActions: inlineActions,
+                    collectionMethod: state.model.collection?.method,
+                    onClose: () => host._closeTaskPopover(task.id),
+                    scaffoldMessenger: scaffoldMessenger,
+                    locationHelper:
+                        LocationAutocompleteHelper.fromState(state),
+                    onTaskUpdated: (updatedTask) {
+                      context.read<B>().add(
+                            CalendarEvent.taskUpdated(task: updatedTask),
+                          );
+                    },
+                    onOccurrenceUpdated: shouldUpdateOccurrence
+                        ? (
+                            updatedTask,
+                            scope, {
+                            required bool scheduleTouched,
+                            required bool checklistTouched,
+                          }) {
+                            if (scheduleTouched || checklistTouched) {
+                              context.read<B>().add(
+                                    CalendarEvent.taskOccurrenceUpdated(
+                                      taskId: baseId,
+                                      occurrenceId: task.id,
+                                      scheduledTime: scheduleTouched
+                                          ? updatedTask.scheduledTime
+                                          : null,
+                                      duration: scheduleTouched
+                                          ? updatedTask.duration
+                                          : null,
+                                      endDate: scheduleTouched
+                                          ? updatedTask.endDate
+                                          : null,
+                                      checklist: checklistTouched
+                                          ? updatedTask.checklist
+                                          : null,
+                                      range: scope.range,
+                                    ),
+                                  );
+                            }
+                          }
+                        : null,
+                    onTaskDeleted: (taskId) {
+                      context.read<B>().add(
+                            CalendarEvent.taskDeleted(taskId: taskId),
+                          );
+                      host._closeTaskPopover(taskId);
+                    },
+                  );
+                },
+              );
+            },
+            child: buildListTile(
+              onTap: () => host._toggleTaskPopover(
+                taskId: task.id,
+                anchorToken: _anchorToken,
+                controller: controller,
+              ),
+              hoverColor: hoverColor,
+            ),
+          );
+        },
+      );
+    }
 
     if (enableInteraction && allowContextMenu && host._hasPrecisePointerInput) {
       tile = host._wrapWithSidebarContextMenu(task: task, child: tile);

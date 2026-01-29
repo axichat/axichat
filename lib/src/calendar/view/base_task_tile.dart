@@ -21,6 +21,7 @@ import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/calendar_task_list_tile.dart';
+import 'widgets/task_tile_surface.dart';
 
 const bool _calendarUseRootNavigator = false;
 
@@ -300,50 +301,44 @@ class _CompactTaskTile extends StatelessWidget {
       l10n,
       task,
     );
-    return Container(
+    return TaskTileSurface(
       margin: margin,
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarEventRadius),
+        borderRadius: context.radius,
         boxShadow: calendarLightShadow,
         border: Border.all(color: calendarBorderColor, width: 1),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(calendarEventRadius),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 4,
-                  decoration: BoxDecoration(
-                    color: indicatorColor,
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(calendarEventRadius),
-                    ),
-                  ),
+      onTap: onTap,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: indicatorColor,
+                borderRadius: BorderRadius.horizontal(
+                  left: Radius.circular(context.radius.topLeft.x),
                 ),
-                Expanded(
-                  child: CalendarTaskListTile(
-                    task: task,
-                    scheduleLabel: scheduleLabel,
-                    trailing: showActions
-                        ? _TaskActionMenu(
-                            onEdit: onEdit,
-                            onDelete: onDelete,
-                            showIcons: false,
-                            iconSize: 20,
-                          )
-                        : null,
-                    onToggleCompletion: onToggleCompletion,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            Expanded(
+              child: CalendarTaskListTile(
+                task: task,
+                scheduleLabel: scheduleLabel,
+                trailing: showActions
+                    ? _TaskActionMenu(
+                        onEdit: onEdit,
+                        onDelete: onDelete,
+                        showIcons: false,
+                        iconSize: 20,
+                      )
+                    : null,
+                onToggleCompletion: onToggleCompletion,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -405,95 +400,89 @@ class _MediumTaskTile extends StatelessWidget {
         task.isCompleted ? taskCompletedColor : taskColor;
     final Color progressTrack = textColor.withValues(alpha: 0.25);
     final bool showActions = onEdit != null || onDelete != null;
-    return Container(
+    return TaskTileSurface(
       margin: margin,
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(calendarEventRadius),
+        borderRadius: context.radius,
         boxShadow: calendarLightShadow,
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(calendarEventRadius),
-          child: Padding(
-            padding: calendarPaddingLg,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: onTap,
+      child: Padding(
+        padding: calendarPaddingLg,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        task.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: textColor,
-                          decoration: task.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                      decoration: task.isCompleted
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
-                    const SizedBox(width: calendarGutterSm),
-                    _TaskCompletionToggle(
-                      isUpdating: isUpdating,
-                      isCompleted: task.isCompleted,
-                      onToggle: onToggleCompletion,
-                    ),
-                  ],
+                  ),
                 ),
-                if (task.hasChecklist) ...[
-                  const SizedBox(height: calendarGutterSm),
-                  TaskChecklistProgressBar(
-                    progress: task.checklistProgress,
-                    activeColor: textColor,
-                    backgroundColor: progressTrack,
-                  ),
-                ],
-                if (timeLabel != null) ...[
-                  const SizedBox(height: calendarGutterSm),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 12,
-                        color: textColor.withValues(alpha: 0.8),
-                      ),
-                      const SizedBox(width: calendarInsetMd),
-                      Text(
-                        timeLabel!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: textColor.withValues(alpha: 0.9),
-                          fontWeight: timeFontWeight,
-                        ),
-                      ),
-                      if (showActions) ...[
-                        const Spacer(),
-                        _TaskActionMenu(onEdit: onEdit, onDelete: onDelete),
-                      ],
-                    ],
-                  ),
-                ] else ...[
-                  if (showActions) ...[
-                    const SizedBox(height: calendarInsetMd),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _TaskActionMenu(
-                        onEdit: onEdit,
-                        onDelete: onDelete,
-                      ),
-                    ),
-                  ],
-                ],
+                const SizedBox(width: calendarGutterSm),
+                _TaskCompletionToggle(
+                  isUpdating: isUpdating,
+                  isCompleted: task.isCompleted,
+                  onToggle: onToggleCompletion,
+                ),
               ],
             ),
-          ),
+            if (task.hasChecklist) ...[
+              const SizedBox(height: calendarGutterSm),
+              TaskChecklistProgressBar(
+                progress: task.checklistProgress,
+                activeColor: textColor,
+                backgroundColor: progressTrack,
+              ),
+            ],
+            if (timeLabel != null) ...[
+              const SizedBox(height: calendarGutterSm),
+              Row(
+                children: [
+                  Icon(
+                    Icons.access_time,
+                    size: 12,
+                    color: textColor.withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(width: calendarInsetMd),
+                  Text(
+                    timeLabel!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textColor.withValues(alpha: 0.9),
+                      fontWeight: timeFontWeight,
+                    ),
+                  ),
+                  if (showActions) ...[
+                    const Spacer(),
+                    _TaskActionMenu(onEdit: onEdit, onDelete: onDelete),
+                  ],
+                ],
+              ),
+            ] else ...[
+              if (showActions) ...[
+                const SizedBox(height: calendarInsetMd),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _TaskActionMenu(
+                    onEdit: onEdit,
+                    onDelete: onDelete,
+                  ),
+                ),
+              ],
+            ],
+          ],
         ),
       ),
     );
@@ -538,16 +527,17 @@ class _FullTaskTile extends StatelessWidget {
         task.isCompleted ? taskCompletedColor : task.priorityColor;
     final Color progressTrack = colors.muted.withValues(alpha: 0.2);
     final bool showActions = onEdit != null || onDelete != null;
-    return Container(
+    return TaskTileSurface(
       margin: margin,
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarEventRadius),
+        borderRadius: context.radius,
         boxShadow: calendarLightShadow,
         border: Border.all(color: calendarBorderColor, width: 1),
       ),
+      onTap: onTap,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(calendarEventRadius - 1),
+        borderRadius: context.radius,
         child: Container(
           decoration: BoxDecoration(
             border: Border(left: BorderSide(color: indicatorColor, width: 4)),
@@ -568,9 +558,7 @@ class _FullTaskTile extends StatelessWidget {
                           padding: calendarPaddingMd,
                           decoration: BoxDecoration(
                             color: calendarSelectedDayColor,
-                            borderRadius: BorderRadius.circular(
-                              calendarEventRadius,
-                            ),
+                            borderRadius: context.radius,
                           ),
                           child: Text(
                             task.description!,

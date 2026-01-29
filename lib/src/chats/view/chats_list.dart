@@ -554,7 +554,10 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
   @override
   Widget build(BuildContext context) {
+    final topSpacer = context.spacing.l;
+    final scrollbarInset = context.spacing.s;
     final slivers = <Widget>[
+      SliverToBoxAdapter(child: SizedBox(height: topSpacer)),
       SliverAnimatedList(
         key: _listKey,
         initialItemCount: _displayedItems.length,
@@ -575,9 +578,14 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         SliverToBoxAdapter(child: widget.calendarShortcut),
       );
     }
-    return CustomScrollView(
-      physics: widget.scrollPhysics,
-      slivers: slivers,
+    return RawScrollbar(
+      interactive: true,
+      crossAxisMargin: scrollbarInset,
+      radius: Radius.circular(context.radii.squircle),
+      child: CustomScrollView(
+        physics: widget.scrollPhysics,
+        slivers: slivers,
+      ),
     );
   }
 }

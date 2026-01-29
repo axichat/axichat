@@ -3,20 +3,19 @@
 
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'controllers/task_interaction_controller.dart';
-import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/calendar_task_tile_render.dart';
+import 'widgets/calendar_task_title_hover_reporter.dart';
 
 class DragFeedbackHint {
   const DragFeedbackHint({
@@ -133,6 +132,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
   static const double _accentWidth = 4.0;
   static const double _accentPadding = 6.0;
+
   Color get _taskColor => widget.task.priorityColor;
 
   void _updateContextMenuState({
@@ -241,10 +241,22 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 overlay: widget.overlay,
               );
 
+              final shape =
+                  RoundedSuperellipseBorder(borderRadius: context.radius);
+              final Widget shapedBody = Material(
+                color: Colors.transparent,
+                shape: shape,
+                clipBehavior: Clip.antiAlias,
+                child: taskBody,
+              );
+              final Widget animatedBody = AxiTapBounce(
+                enabled: widget.enableInteractions,
+                child: shapedBody,
+              );
               final Widget sizedBody = SizedBox(
                 width: widget.width,
                 height: widget.height,
-                child: taskBody,
+                child: animatedBody,
               );
 
               final Widget contextualized = _wrapWithContextMenu(sizedBody);
@@ -305,6 +317,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   }
 
   Offset get debugContextMenuLocalPosition => _contextMenuLocalPosition;
+
   Offset get debugContextMenuNormalizedPosition =>
       _contextMenuNormalizedPosition;
 }
@@ -352,7 +365,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacingTokens = context.spacing;
+    final spacing = context.spacing;
     final showHoverEffects = enableInteractions &&
         (isPopoverOpen || isHovering || isResizing || isDragging);
     final highlightSelection = isSelectionMode && isSelected;
@@ -383,7 +396,7 @@ class _ResizableTaskBody extends StatelessWidget {
         : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
     final decoration = BoxDecoration(
       color: backgroundColor,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: context.radius,
       border: Border.all(
         color: borderColor,
         width: highlightSelection
@@ -397,7 +410,7 @@ class _ResizableTaskBody extends StatelessWidget {
     final availableHeight = (height - 4).clamp(0.0, double.infinity);
     if (availableHeight <= 6) {
       return Container(
-        margin: EdgeInsets.all(spacingTokens.xxs),
+        margin: EdgeInsets.all(spacing.xxs),
         decoration: decoration,
         child: Stack(
           children: [
@@ -409,13 +422,13 @@ class _ResizableTaskBody extends StatelessWidget {
 
     double padding;
     if (availableHeight >= 96) {
-      padding = spacingTokens.s;
+      padding = spacing.s;
     } else if (availableHeight >= 72) {
-      padding = spacingTokens.xs;
+      padding = spacing.xs;
     } else if (availableHeight >= 48) {
-      padding = spacingTokens.xs;
+      padding = spacing.xs;
     } else {
-      padding = spacingTokens.xxs;
+      padding = spacing.xxs;
     }
 
     final innerHeight = (availableHeight - padding * 2).clamp(
@@ -425,7 +438,7 @@ class _ResizableTaskBody extends StatelessWidget {
 
     if (innerHeight <= 10) {
       final Widget compactBody = Container(
-        margin: EdgeInsets.all(spacingTokens.xxs),
+        margin: EdgeInsets.all(spacing.xxs),
         decoration: decoration,
         child: Stack(
           children: [
@@ -471,7 +484,7 @@ class _ResizableTaskBody extends StatelessWidget {
         innerHeight >= _minDeadlineHeight &&
         width >= _minDeadlineWidth;
 
-    final double spacing = innerHeight >= 90
+    final double gap = innerHeight >= 90
         ? calendarInsetLg
         : innerHeight >= 64
             ? calendarInsetMd
@@ -531,8 +544,8 @@ class _ResizableTaskBody extends StatelessWidget {
     final children = <Widget>[titleSection()];
 
     if (showTime && !inlineTime) {
-      if (spacing > 0) {
-        children.add(SizedBox(height: spacing));
+      if (gap > 0) {
+        children.add(SizedBox(height: gap));
       }
       children.add(
         Text(
@@ -549,8 +562,8 @@ class _ResizableTaskBody extends StatelessWidget {
     }
 
     if (showDescription) {
-      if (spacing > 0) {
-        children.add(SizedBox(height: spacing));
+      if (gap > 0) {
+        children.add(SizedBox(height: gap));
       }
       children.add(
         Text(
@@ -564,21 +577,21 @@ class _ResizableTaskBody extends StatelessWidget {
     }
 
     if (showDeadline) {
-      if (spacing > 0) {
-        children.add(SizedBox(height: spacing));
+      if (gap > 0) {
+        children.add(SizedBox(height: gap));
       }
       children.add(_TaskDeadlineBadge(deadline: task.deadline!));
     }
 
     if (showLocation) {
-      if (spacing > 0) {
-        children.add(SizedBox(height: spacing));
+      if (gap > 0) {
+        children.add(SizedBox(height: gap));
       }
       children.add(_TaskLocationRow(location: task.location!));
     }
 
     final Widget detailedBody = Container(
-      margin: const EdgeInsets.all(2),
+      margin: EdgeInsets.all(spacing.xxs),
       decoration: decoration,
       child: Stack(
         children: [
