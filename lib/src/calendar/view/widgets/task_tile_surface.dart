@@ -20,7 +20,7 @@ class TaskTileSurface extends StatelessWidget {
   });
 
   final EdgeInsets margin;
-  final Decoration decoration;
+  final BoxDecoration decoration;
   final Widget child;
   final VoidCallback? onTap;
   final Color? hoverColor;
@@ -31,28 +31,39 @@ class TaskTileSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
     final MouseCursor effectiveCursor = mouseCursor ??
         (onTap != null ? SystemMouseCursors.click : MouseCursor.defer);
+    final BoxDecoration decorated = decoration.copyWith(
+      borderRadius: BorderRadius.zero,
+    );
 
     return Container(
       margin: margin,
-      decoration: decoration,
-      child: Material(
-        color: Colors.transparent,
-        shape: shape,
+      child: PhysicalShape(
+        clipper: ShapeBorderClipper(shape: shape),
         clipBehavior: Clip.antiAlias,
-        child: AxiTapBounce(
-          enabled: onTap != null,
-          child: InkWell(
-            onTap: onTap,
-            customBorder: shape,
-            mouseCursor: effectiveCursor,
-            hoverColor: hoverColor ?? Colors.transparent,
-            splashColor: splashColor ?? Colors.transparent,
-            highlightColor: highlightColor ?? Colors.transparent,
-            focusColor: focusColor ?? Colors.transparent,
-            child: child,
+        color: Colors.transparent,
+        child: DecoratedBox(
+          decoration: decorated,
+          child: Material(
+            color: Colors.transparent,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: AxiTapBounce(
+              enabled: onTap != null,
+              child: InkWell(
+                onTap: onTap,
+                customBorder: shape,
+                mouseCursor: effectiveCursor,
+                hoverColor: hoverColor ?? Colors.transparent,
+                splashColor: splashColor ?? Colors.transparent,
+                highlightColor: highlightColor ?? Colors.transparent,
+                focusColor: focusColor ?? Colors.transparent,
+                child: child,
+              ),
+            ),
           ),
         ),
       ),

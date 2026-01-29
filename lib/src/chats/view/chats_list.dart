@@ -561,8 +561,9 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
   @override
   Widget build(BuildContext context) {
-    final topSpacer = context.spacing.l;
-    final scrollbarInset = context.spacing.s;
+    final topSpacer = context.spacing.m;
+    final scrollbarInset = context.spacing.xxs;
+    final scrollbarThickness = context.spacing.xs;
     final slivers = <Widget>[
       SliverToBoxAdapter(child: SizedBox(height: topSpacer)),
       SliverAnimatedList(
@@ -587,7 +588,9 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
     }
     return RawScrollbar(
       interactive: true,
+      controller: _scrollController,
       crossAxisMargin: scrollbarInset,
+      thickness: scrollbarThickness,
       radius: Radius.circular(context.radii.squircle),
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),

@@ -286,70 +286,73 @@ class _FeedbackToastState extends State<FeedbackToast> {
       onExit: (_) => hovered.value = false,
       child: ShadResponsiveBuilder(
         builder: (context, breakpoint) {
-          return ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth:
-                  breakpoint >= theme.breakpoints.md ? 0 : double.infinity,
-              maxWidth:
-                  breakpoint >= theme.breakpoints.md ? 420 : double.infinity,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: effectiveBorder,
-                borderRadius: effectiveBorderRadius,
-                boxShadow: effectiveShadows,
-                color: effectiveBackgroundColor,
+          return UnconstrainedBox(
+            constrainedAxis: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth:
+                    breakpoint >= theme.breakpoints.md ? 0 : double.infinity,
+                maxWidth:
+                    breakpoint >= theme.breakpoints.md ? 420 : double.infinity,
               ),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: effectivePadding,
-                    child: Row(
-                      textDirection: widget.textDirection,
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: effectiveCrossAxisAlignment,
-                      children: [
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.title != null)
-                                DefaultTextStyle(
-                                  style: effectiveTitleStyle,
-                                  child: widget.title!,
-                                ),
-                              if (widget.description != null)
-                                DefaultTextStyle(
-                                  style: effectiveDescriptionStyle,
-                                  child: widget.description!,
-                                ),
-                            ],
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: effectiveBorder,
+                  borderRadius: effectiveBorderRadius,
+                  boxShadow: effectiveShadows,
+                  color: effectiveBackgroundColor,
+                ),
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: effectivePadding,
+                      child: Row(
+                        textDirection: widget.textDirection,
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: effectiveCrossAxisAlignment,
+                        children: [
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (widget.title != null)
+                                  DefaultTextStyle(
+                                    style: effectiveTitleStyle,
+                                    child: widget.title!,
+                                  ),
+                                if (widget.description != null)
+                                  DefaultTextStyle(
+                                    style: effectiveDescriptionStyle,
+                                    child: widget.description!,
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                        if (widget.action != null)
-                          Padding(
-                            padding: effectiveActionPadding,
-                            child: widget.action,
-                          ),
-                      ],
+                          if (widget.action != null)
+                            Padding(
+                              padding: effectiveActionPadding,
+                              child: widget.action,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  ValueListenableBuilder(
-                    valueListenable: hovered,
-                    builder: (context, hovered, child) {
-                      if (!effectiveShowCloseIconOnlyWhenHovered) {
-                        return child!;
-                      }
-                      return Visibility.maintain(
-                        visible: hovered,
-                        child: child!,
-                      );
-                    },
-                    child: effectiveCloseIcon,
-                  ).positionedWith(effectiveCloseIconPosition),
-                ],
+                    ValueListenableBuilder(
+                      valueListenable: hovered,
+                      builder: (context, hovered, child) {
+                        if (!effectiveShowCloseIconOnlyWhenHovered) {
+                          return child!;
+                        }
+                        return Visibility.maintain(
+                          visible: hovered,
+                          child: child!,
+                        );
+                      },
+                      child: effectiveCloseIcon,
+                    ).positionedWith(effectiveCloseIconPosition),
+                  ],
+                ),
               ),
             ),
           );

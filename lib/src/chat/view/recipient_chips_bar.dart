@@ -104,7 +104,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? Object();
+    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -151,7 +151,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? Object();
+      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1651,7 +1651,7 @@ final class _RecipientAutocompleteOverlayState
                 showWhenUnlinked: false,
                 offset: overlayOffset,
                 child: InBoundsFadeScale(
-                  child: TapRegion(
+                  child: TextFieldTapRegion(
                     groupId: widget.tapRegionGroup,
                     onTapOutside: (_) => _dismissOverlay(),
                     child: Align(
@@ -1701,7 +1701,7 @@ final class _RecipientAutocompleteOverlayState
                                       onSelected: (option) {
                                         widget.onRecipientAdded(option);
                                         widget.controller.clear();
-                                        _dismissOverlay();
+                                        _recomputeOptions();
                                         widget.focusNode.requestFocus();
                                       },
                                       titleStyle: titleStyle,
@@ -1727,7 +1727,7 @@ final class _RecipientAutocompleteOverlayState
             ],
           );
         },
-        child: TapRegion(
+        child: TextFieldTapRegion(
           groupId: widget.tapRegionGroup,
           onTapOutside: (_) => _handleTapOutside(),
           child: Listener(

@@ -990,12 +990,19 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   static const EdgeInsets _inviteSheetContentPadding =
       EdgeInsets.fromLTRB(16, 0, 16, 16);
 
+  final ScrollController _scrollController = ScrollController();
   late List<ComposerRecipient> _recipients;
 
   @override
   void initState() {
     super.initState();
     _recipients = List<ComposerRecipient>.from(widget.initialRecipients);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1033,8 +1040,10 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         onClose: widget.onClose,
       ),
       body: Scrollbar(
+        controller: _scrollController,
         thumbVisibility: true,
         child: ListView(
+          controller: _scrollController,
           padding: _inviteSheetContentPadding,
           children: [
             RecipientChipsBar(

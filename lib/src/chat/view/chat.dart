@@ -8915,9 +8915,11 @@ class _PinnedBadgeIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final double iconSize =
         context.iconTheme.size ?? _pinnedBadgeFallbackIconSize;
-    final double badgeInset = iconSize * _pinnedBadgeInsetScale;
+    final double badgeInset =
+        math.max(spacing.xxs, iconSize * _pinnedBadgeInsetScale);
     final Icon icon = Icon(iconData, size: iconSize, color: iconColor);
     if (count <= _pinnedBadgeHiddenCount) {
       return icon;
@@ -8930,7 +8932,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
       fit: BoxFit.scaleDown,
       child: Text(
         label,
-        style: context.textTheme.small.copyWith(
+        style: context.textTheme.p.copyWith(
           color: colors.destructive,
           fontWeight: FontWeight.w700,
         ),
@@ -8943,8 +8945,32 @@ class _PinnedBadgeIcon extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.hardEdge,
         children: [
-          Center(child: icon),
-          Positioned(top: badgeInset, right: badgeInset, child: badge),
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: spacing.xs,
+                top: spacing.xxs,
+              ),
+              child: Center(child: icon),
+            ),
+          ),
+          Positioned(
+            top: badgeInset,
+            right: badgeInset,
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.background,
+                shape: RoundedSuperellipseBorder(borderRadius: context.radius),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: spacing.xs,
+                  vertical: spacing.xxs,
+                ),
+                child: badge,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -14042,7 +14068,6 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
           child: Align(
             alignment: Alignment.centerRight,
             child: AxiButton.primary(
-              size: AxiButtonSize.sm,
               onPressed: _canSend ? _handleSend : null,
               leading: Icon(LucideIcons.send, size: iconSize),
               child: Text(l10n.commonSend),

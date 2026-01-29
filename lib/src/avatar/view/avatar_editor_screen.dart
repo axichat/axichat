@@ -230,7 +230,6 @@ class _AvatarSummaryCard extends StatelessWidget {
                 spacing: spacing.s,
                 children: [
                   AxiButton.outline(
-                    size: AxiButtonSize.sm,
                     loading: state.shuffling,
                     onPressed:
                         state.processing || state.publishing || state.shuffling
@@ -245,7 +244,6 @@ class _AvatarSummaryCard extends StatelessWidget {
                     child: Text(l10n.signupAvatarShuffle),
                   ),
                   AxiButton.outline(
-                    size: AxiButtonSize.sm,
                     onPressed: state.processing || state.publishing
                         ? null
                         : context.read<AvatarEditorCubit>().pickImage,
@@ -256,7 +254,6 @@ class _AvatarSummaryCard extends StatelessWidget {
                     child: Text(l10n.signupAvatarUploadImage),
                   ),
                   AxiButton.primary(
-                    size: AxiButtonSize.sm,
                     loading: state.publishing,
                     onPressed: state.draftAvatar == null ||
                             state.processing ||
@@ -549,7 +546,6 @@ class _BackgroundPicker extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: AxiButton.outline(
-              size: AxiButtonSize.sm,
               onPressed: state.backgroundColor == Colors.transparent
                   ? null
                   : () => context.read<AvatarEditorCubit>().setBackgroundColor(

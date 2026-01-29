@@ -5060,7 +5060,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverAnchorToken == _anchorToken;
 
-    final Decoration tileDecoration = BoxDecoration(
+    final BoxDecoration tileDecoration = BoxDecoration(
       color: isActive ? calendarSidebarBackgroundColor : calendarContainerColor,
       borderRadius: context.radius,
       border: Border(
