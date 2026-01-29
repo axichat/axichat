@@ -409,6 +409,7 @@ class AnimatedChatsListView extends StatefulWidget {
 class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   final GlobalKey<SliverAnimatedListState> _listKey =
       GlobalKey<SliverAnimatedListState>();
+  final ScrollController _scrollController = ScrollController();
   late List<Chat> _displayedItems;
   bool _diffScheduled = false;
 
@@ -416,6 +417,12 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   void initState() {
     super.initState();
     _displayedItems = List<Chat>.from(widget.items);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -582,9 +589,13 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       interactive: true,
       crossAxisMargin: scrollbarInset,
       radius: Radius.circular(context.radii.squircle),
-      child: CustomScrollView(
-        physics: widget.scrollPhysics,
-        slivers: slivers,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: widget.scrollPhysics,
+          slivers: slivers,
+        ),
       ),
     );
   }

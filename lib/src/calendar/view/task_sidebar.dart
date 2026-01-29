@@ -5152,11 +5152,10 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
 
           const double requiredHorizontalSpace =
               dropdownWidth + preferredHorizontalGap;
-          final bool canOpenRight =
-              availableRight >= requiredHorizontalSpace;
+          final bool canOpenRight = availableRight >= requiredHorizontalSpace;
           final bool canOpenLeft = availableLeft >= requiredHorizontalSpace;
-          final bool openToLeft = canOpenLeft &&
-              (!canOpenRight || availableLeft > availableRight);
+          final bool openToLeft =
+              canOpenLeft && (!canOpenRight || availableLeft > availableRight);
           final bool openToSide = canOpenRight || canOpenLeft;
 
           double effectiveMaxHeight;
@@ -5192,8 +5191,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
             final double offsetDx = openToLeft
                 ? overlayLeft + dropdownWidth - tileOrigin.dx
                 : overlayLeft - (tileOrigin.dx + tileSize.width);
-            final double offsetDy =
-                overlayTop - (triggerCenterY - halfHeight);
+            final double offsetDy = overlayTop - (triggerCenterY - halfHeight);
 
             final Alignment targetAnchor =
                 openToLeft ? Alignment.centerLeft : Alignment.centerRight;
@@ -5237,7 +5235,8 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
             effectiveMaxHeight = availableSpace > zeroClamp
                 ? math.min(dropdownMaxHeight, availableSpace)
                 : fallbackMaxHeight;
-            if (effectiveMaxHeight < minimumHeight && availableSpace > zeroClamp) {
+            if (effectiveMaxHeight < minimumHeight &&
+                availableSpace > zeroClamp) {
               effectiveMaxHeight = availableSpace;
             }
 
@@ -5307,8 +5306,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                     collectionMethod: state.model.collection?.method,
                     onClose: () => host._closeTaskPopover(task.id),
                     scaffoldMessenger: scaffoldMessenger,
-                    locationHelper:
-                        LocationAutocompleteHelper.fromState(state),
+                    locationHelper: LocationAutocompleteHelper.fromState(state),
                     onTaskUpdated: (updatedTask) {
                       context.read<B>().add(
                             CalendarEvent.taskUpdated(task: updatedTask),

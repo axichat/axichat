@@ -424,9 +424,8 @@ class _MediumTaskTile extends StatelessWidget {
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: textColor,
-                      decoration: task.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
+                      decoration:
+                          task.isCompleted ? TextDecoration.lineThrough : null,
                     ),
                   ),
                 ),

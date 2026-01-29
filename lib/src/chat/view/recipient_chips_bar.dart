@@ -104,7 +104,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
+    _tapRegionGroup = widget.tapRegionGroup ?? Object();
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -151,7 +151,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
+      _tapRegionGroup = widget.tapRegionGroup ?? Object();
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1767,6 +1767,7 @@ final class _RecipientAutocompleteOverlayState
                         ),
                         child: AxiTextField(
                           controller: widget.controller,
+                          groupId: widget.tapRegionGroup,
                           focusNode: widget.focusNode,
                           maxLines: 1,
                           keyboardType: TextInputType.emailAddress,
