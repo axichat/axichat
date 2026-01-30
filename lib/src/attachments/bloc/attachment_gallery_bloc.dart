@@ -161,7 +161,6 @@ class AttachmentGalleryBloc
         super(const AttachmentGalleryState(status: RequestStatus.loading)) {
     on<AttachmentGalleryItemsUpdated>(_onItemsUpdated);
     on<AttachmentGalleryLoadFailed>(_onLoadFailed);
-    on<AttachmentGalleryChatsUpdated>(_onChatsUpdated);
     on<AttachmentGalleryQueryChanged>(_onQueryChanged);
     on<AttachmentGallerySortChanged>(_onSortChanged);
     on<AttachmentGalleryTypeFilterChanged>(_onTypeFilterChanged);
@@ -185,7 +184,6 @@ class AttachmentGalleryBloc
   final Chat? _chatOverride;
   final bool _showChatLabel;
   StreamSubscription<List<AttachmentGalleryItem>>? _itemsSubscription;
-  List<Chat> _chats = const <Chat>[];
 
   Stream<FileMetadataData?> fileMetadataStream(String id) =>
       _xmppService.fileMetadataStream(id);
@@ -235,25 +233,6 @@ class AttachmentGalleryBloc
       state.copyWith(
         status: RequestStatus.failure,
         error: event.error,
-      ),
-    );
-  }
-
-  void _onChatsUpdated(
-    AttachmentGalleryChatsUpdated event,
-    Emitter<AttachmentGalleryState> emit,
-  ) {
-    _chats = event.items;
-    emit(
-      state.copyWith(
-        entries: _resolveEntries(
-          items: state.items,
-          query: state.query,
-          sortOption: state.sortOption,
-          typeFilter: state.typeFilter,
-          sourceFilter: state.sourceFilter,
-          allowedOnceStanzaIds: state.allowedOnceStanzaIds,
-        ),
       ),
     );
   }
@@ -346,10 +325,10 @@ class AttachmentGalleryBloc
     AttachmentGalleryApprovalGranted event,
     Emitter<AttachmentGalleryState> emit,
   ) async {
-    final trimmedStanzaId = event.stanzaId.trim();
-    final nextAllowedOnce = trimmedStanzaId.isEmpty
+    final normalizedStanzaId = _normalizeStanzaId(event.stanzaId);
+    final nextAllowedOnce = normalizedStanzaId.isEmpty
         ? state.allowedOnceStanzaIds
-        : <String>{...state.allowedOnceStanzaIds, trimmedStanzaId};
+        : <String>{...state.allowedOnceStanzaIds, normalizedStanzaId};
     emit(
       state.copyWith(
         allowedOnceStanzaIds: nextAllowedOnce,
@@ -378,7 +357,15 @@ class AttachmentGalleryBloc
     AttachmentGalleryEmailDownloadRequested event,
     Emitter<AttachmentGalleryState> emit,
   ) async {
-    event.completer.complete(await downloadEmailMessage(event.message));
+    if (event.completer.isCompleted) return;
+    try {
+      final downloaded = await downloadEmailMessage(event.message);
+      if (event.completer.isCompleted) return;
+      event.completer.complete(downloaded);
+    } catch (error, stackTrace) {
+      if (event.completer.isCompleted) return;
+      event.completer.completeError(error, stackTrace);
+    }
   }
 
   List<AttachmentGalleryEntryData> _resolveEntries({
@@ -390,9 +377,6 @@ class AttachmentGalleryBloc
     required Set<String> allowedOnceStanzaIds,
   }) {
     final normalizedQuery = query.trim().toLowerCase();
-    final chatLookup = _showChatLabel || normalizedQuery.isNotEmpty
-        ? <String, Chat>{for (final chat in _chats) chat.jid: chat}
-        : const <String, Chat>{};
     final filtered = <AttachmentGalleryEntryData>[];
     for (final item in items) {
       if (!typeFilter.matches(item.metadata)) {
@@ -402,7 +386,7 @@ class AttachmentGalleryBloc
       if (!sourceFilter.matches(isSelf: isSelf)) {
         continue;
       }
-      final chat = _chatOverride ?? chatLookup[item.message.chatJid];
+      final chat = _chatOverride ?? item.chat;
       if (normalizedQuery.isNotEmpty) {
         if (!item.metadata.normalizedFilename.contains(normalizedQuery)) {
           if (!_showChatLabel) {
@@ -421,7 +405,9 @@ class AttachmentGalleryBloc
           item: item,
           chat: chat,
           isSelf: isSelf,
-          allowOnce: allowedOnceStanzaIds.contains(item.message.stanzaID),
+          allowOnce: allowedOnceStanzaIds.contains(
+            _normalizeStanzaId(item.message.stanzaID),
+          ),
           allowByTrust: isSelf ||
               (chat?.attachmentAutoDownload ?? defaultAutoDownload).isAllowed,
         ),
@@ -432,6 +418,8 @@ class AttachmentGalleryBloc
     );
     return List.unmodifiable(filtered);
   }
+
+  String _normalizeStanzaId(String stanzaId) => stanzaId.trim();
 
   @override
   Future<void> close() async {

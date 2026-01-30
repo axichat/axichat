@@ -63,6 +63,10 @@ class _LoginFormState extends State<LoginForm> {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     await context.read<EndpointConfigCubit>().restore();
     if (!context.mounted) return;
+    await context
+        .read<AuthenticationCubit>()
+        .updateEndpointConfig(context.read<EndpointConfigCubit>().state);
+    if (!context.mounted) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,

@@ -424,11 +424,15 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         : state.backgroundColor == Colors.transparent
             ? colors.accent
             : state.backgroundColor;
-    _nextCarouselAvatar = await _buildAvatarFromTemplate(
-      template: template,
-      background: background,
-      colors: colors,
-    );
+    try {
+      _nextCarouselAvatar = await _buildAvatarFromTemplate(
+        template: template,
+        background: background,
+        colors: colors,
+      );
+    } on FormatException {
+      _nextCarouselAvatar = null;
+    }
   }
 
   void updateCropRect(Rect rect) {

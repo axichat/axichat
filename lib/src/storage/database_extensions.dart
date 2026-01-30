@@ -173,6 +173,7 @@ extension AttachmentGalleryQueries on XmppDrift {
     final messagesTable = messages;
     final messageAttachmentsTable = messageAttachments;
     final fileMetadataTable = fileMetadata;
+    final chatsTable = chats;
     final attachmentQuery = select(messagesTable).join([
       leftOuterJoin(
         messageAttachmentsTable,
@@ -186,6 +187,7 @@ extension AttachmentGalleryQueries on XmppDrift {
             (messageAttachmentsTable.id.isNull() &
                 fileMetadataTable.id.equalsExp(messagesTable.fileMetadataID)),
       ),
+      innerJoin(chatsTable, chatsTable.jid.equalsExp(messagesTable.chatJid)),
     ]);
     attachmentQuery.where(messagesTable.retracted.equals(false));
     if (trimmedJid != null && trimmedJid.isNotEmpty) {
@@ -197,6 +199,7 @@ extension AttachmentGalleryQueries on XmppDrift {
             (row) => AttachmentGalleryItem(
               message: row.readTable(messagesTable),
               metadata: row.readTable(fileMetadataTable),
+              chat: row.readTable(chatsTable),
             ),
           )
           .toList(growable: false);

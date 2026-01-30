@@ -82,6 +82,10 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _bootstrap() async {
     await context.read<EndpointConfigCubit>().restore();
     if (!mounted) return;
+    await context
+        .read<AuthenticationCubit>()
+        .updateEndpointConfig(context.read<EndpointConfigCubit>().state);
+    if (!mounted) return;
     final bootstrap = context.read<AuthBootstrap>();
     final preferredFlow = bootstrap.hasStoredLoginCredentials
         ? _AuthFlow.login

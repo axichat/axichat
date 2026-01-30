@@ -8,7 +8,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -209,223 +208,212 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     const gridMaxColumns = 4;
     const gridMinAvailableWidth = 0.0;
     final gridHorizontalPadding = context.spacing.m * 2;
-    return BlocListener<ChatsCubit, ChatsState>(
-      listenWhen: (previous, current) => previous.items != current.items,
-      listener: (context, state) {
-        context.read<AttachmentGalleryBloc>().add(
-              AttachmentGalleryChatsUpdated(
-                items: state.items ?? const <Chat>[],
-              ),
-            );
-      },
-      child: BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
-        builder: (context, state) {
-          if (state.items.isEmpty) {
-            if (state.status.isLoading) {
-              return Center(
-                child: AxiProgressIndicator(
-                  color: context.colorScheme.foreground,
-                ),
-              );
-            }
-            if (state.status.isFailure) {
-              return Center(
-                child: Text(
-                  context.l10n.attachmentGalleryErrorMessage,
-                  style: context.textTheme.muted,
-                  textAlign: TextAlign.center,
-                ),
-              );
-            }
+    return BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
+      builder: (context, state) {
+        if (state.items.isEmpty) {
+          if (state.status.isLoading) {
             return Center(
-              child: Text(
-                context.l10n.draftNoAttachments,
-                style: context.textTheme.muted,
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
               ),
             );
           }
-
-          final layout = _resolveLayout(
-            hasVisualMedia: state.entries.any(
-              (entry) =>
-                  entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
+          if (state.status.isFailure) {
+            return Center(
+              child: Text(
+                context.l10n.attachmentGalleryErrorMessage,
+                style: context.textTheme.muted,
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+          return Center(
+            child: Text(
+              context.l10n.draftNoAttachments,
+              style: context.textTheme.muted,
             ),
-            overrideLayout: state.layoutOverride,
           );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  context.spacing.m,
-                  context.spacing.s,
-                  context.spacing.m,
-                  0,
-                ),
-                child: AttachmentGalleryControls(
-                  searchController: _searchController,
-                  sortOption: state.sortOption,
-                  onSortChanged: (value) {
-                    context.read<AttachmentGalleryBloc>().add(
-                          AttachmentGallerySortChanged(sortOption: value),
-                        );
-                  },
-                  typeFilter: state.typeFilter,
-                  onTypeFilterChanged: (value) {
-                    context.read<AttachmentGalleryBloc>().add(
-                          AttachmentGalleryTypeFilterChanged(typeFilter: value),
-                        );
-                  },
-                  sourceFilter: state.sourceFilter,
-                  onSourceFilterChanged: (value) {
-                    context.read<AttachmentGalleryBloc>().add(
-                          AttachmentGallerySourceFilterChanged(
-                            sourceFilter: value,
-                          ),
-                        );
-                  },
-                  layout: layout,
-                  onLayoutChanged: _handleLayoutChanged,
-                  onClearSearch: _searchController.clear,
-                ),
+        }
+
+        final layout = _resolveLayout(
+          hasVisualMedia: state.entries.any(
+            (entry) =>
+                entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
+          ),
+          overrideLayout: state.layoutOverride,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                context.spacing.m,
+                context.spacing.s,
+                context.spacing.m,
+                0,
               ),
-              SizedBox(height: context.spacing.m),
-              Expanded(
-                child: state.entries.isEmpty
-                    ? Center(
-                        child: Text(
-                          state.query.trim().isNotEmpty ||
-                                  state.typeFilter !=
-                                      AttachmentGalleryTypeFilter.all ||
-                                  state.sourceFilter !=
-                                      AttachmentGallerySourceFilter.all
-                              ? context.l10n.chatEmptySearch
-                              : context.l10n.draftNoAttachments,
-                          style: context.textTheme.muted,
-                          textAlign: TextAlign.center,
+              child: AttachmentGalleryControls(
+                searchController: _searchController,
+                sortOption: state.sortOption,
+                onSortChanged: (value) {
+                  context.read<AttachmentGalleryBloc>().add(
+                        AttachmentGallerySortChanged(sortOption: value),
+                      );
+                },
+                typeFilter: state.typeFilter,
+                onTypeFilterChanged: (value) {
+                  context.read<AttachmentGalleryBloc>().add(
+                        AttachmentGalleryTypeFilterChanged(typeFilter: value),
+                      );
+                },
+                sourceFilter: state.sourceFilter,
+                onSourceFilterChanged: (value) {
+                  context.read<AttachmentGalleryBloc>().add(
+                        AttachmentGallerySourceFilterChanged(
+                          sourceFilter: value,
                         ),
-                      )
-                    : layout == AttachmentGalleryLayout.list
-                        ? ListView.separated(
-                            padding: EdgeInsets.fromLTRB(
-                              context.spacing.m,
-                              0,
-                              context.spacing.m,
-                              context.spacing.m,
-                            ),
-                            itemCount: state.entries.length,
-                            separatorBuilder: (_, __) =>
-                                SizedBox(height: context.spacing.m),
-                            itemBuilder: (context, index) =>
-                                AttachmentGalleryEntry(
-                              entry: state.entries[index],
-                              showChatLabel: widget.showChatLabel,
-                              autoDownloadImages: context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .autoDownloadImages,
-                              autoDownloadVideos: context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .autoDownloadVideos,
-                              autoDownloadDocuments: context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .autoDownloadDocuments,
-                              autoDownloadArchives: context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .autoDownloadArchives,
-                              layout: layout,
-                              onApproveAttachment: _approveAttachment,
-                              metaSeparator:
-                                  context.l10n.attachmentGalleryMetaSeparator,
-                            ),
-                          )
-                        : LayoutBuilder(
-                            builder: (context, constraints) {
-                              final gridMetrics = _resolveGridMetrics(
-                                maxWidth: constraints.maxWidth,
-                                horizontalPadding: gridHorizontalPadding,
-                                minTileWidth: context.sizing.menuItemHeight * 3,
-                                gridSpacing: context.spacing.s,
-                                minColumns: gridMinColumns,
-                                maxColumns: gridMaxColumns,
-                                minAvailableWidth: gridMinAvailableWidth,
-                              );
-                              final rowCount = (state.entries.length /
-                                      gridMetrics.crossAxisCount)
-                                  .ceil();
-                              return ListView.separated(
-                                padding: EdgeInsets.fromLTRB(
-                                  context.spacing.m,
-                                  0,
-                                  context.spacing.m,
-                                  context.spacing.m,
-                                ),
-                                itemCount: rowCount,
-                                separatorBuilder: (_, __) =>
-                                    SizedBox(height: context.spacing.s),
-                                itemBuilder: (context, rowIndex) {
-                                  final rowStart =
-                                      rowIndex * gridMetrics.crossAxisCount;
-                                  final rowEnd = math.min(
-                                    rowStart + gridMetrics.crossAxisCount,
-                                    state.entries.length,
-                                  );
-                                  final rowItems = state.entries.sublist(
-                                    rowStart,
-                                    rowEnd,
-                                  );
-                                  return Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      for (var index = 0;
-                                          index < rowItems.length;
-                                          index += 1) ...[
-                                        SizedBox(
-                                          width: gridMetrics.tileWidth,
-                                          child: AttachmentGalleryEntry(
-                                            entry: rowItems[index],
-                                            showChatLabel: widget.showChatLabel,
-                                            autoDownloadImages: context
-                                                .watch<SettingsCubit>()
-                                                .state
-                                                .autoDownloadImages,
-                                            autoDownloadVideos: context
-                                                .watch<SettingsCubit>()
-                                                .state
-                                                .autoDownloadVideos,
-                                            autoDownloadDocuments: context
-                                                .watch<SettingsCubit>()
-                                                .state
-                                                .autoDownloadDocuments,
-                                            autoDownloadArchives: context
-                                                .watch<SettingsCubit>()
-                                                .state
-                                                .autoDownloadArchives,
-                                            layout: layout,
-                                            onApproveAttachment:
-                                                _approveAttachment,
-                                            metaSeparator: context.l10n
-                                                .attachmentGalleryMetaSeparator,
-                                          ),
-                                        ),
-                                        if (index < rowItems.length - 1)
-                                          SizedBox(width: context.spacing.s),
-                                      ],
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                          ),
+                      );
+                },
+                layout: layout,
+                onLayoutChanged: _handleLayoutChanged,
+                onClearSearch: _searchController.clear,
               ),
-            ],
-          );
-        },
-      ),
+            ),
+            SizedBox(height: context.spacing.m),
+            Expanded(
+              child: state.entries.isEmpty
+                  ? Center(
+                      child: Text(
+                        state.query.trim().isNotEmpty ||
+                                state.typeFilter !=
+                                    AttachmentGalleryTypeFilter.all ||
+                                state.sourceFilter !=
+                                    AttachmentGallerySourceFilter.all
+                            ? context.l10n.chatEmptySearch
+                            : context.l10n.draftNoAttachments,
+                        style: context.textTheme.muted,
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : layout == AttachmentGalleryLayout.list
+                      ? ListView.separated(
+                          padding: EdgeInsets.fromLTRB(
+                            context.spacing.m,
+                            0,
+                            context.spacing.m,
+                            context.spacing.m,
+                          ),
+                          itemCount: state.entries.length,
+                          separatorBuilder: (_, __) =>
+                              SizedBox(height: context.spacing.m),
+                          itemBuilder: (context, index) =>
+                              AttachmentGalleryEntry(
+                            entry: state.entries[index],
+                            showChatLabel: widget.showChatLabel,
+                            autoDownloadImages: context
+                                .watch<SettingsCubit>()
+                                .state
+                                .autoDownloadImages,
+                            autoDownloadVideos: context
+                                .watch<SettingsCubit>()
+                                .state
+                                .autoDownloadVideos,
+                            autoDownloadDocuments: context
+                                .watch<SettingsCubit>()
+                                .state
+                                .autoDownloadDocuments,
+                            autoDownloadArchives: context
+                                .watch<SettingsCubit>()
+                                .state
+                                .autoDownloadArchives,
+                            layout: layout,
+                            onApproveAttachment: _approveAttachment,
+                            metaSeparator:
+                                context.l10n.attachmentGalleryMetaSeparator,
+                          ),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final gridMetrics = _resolveGridMetrics(
+                              maxWidth: constraints.maxWidth,
+                              horizontalPadding: gridHorizontalPadding,
+                              minTileWidth: context.sizing.menuItemHeight * 3,
+                              gridSpacing: context.spacing.s,
+                              minColumns: gridMinColumns,
+                              maxColumns: gridMaxColumns,
+                              minAvailableWidth: gridMinAvailableWidth,
+                            );
+                            final rowCount = (state.entries.length /
+                                    gridMetrics.crossAxisCount)
+                                .ceil();
+                            return ListView.separated(
+                              padding: EdgeInsets.fromLTRB(
+                                context.spacing.m,
+                                0,
+                                context.spacing.m,
+                                context.spacing.m,
+                              ),
+                              itemCount: rowCount,
+                              separatorBuilder: (_, __) =>
+                                  SizedBox(height: context.spacing.s),
+                              itemBuilder: (context, rowIndex) {
+                                final rowStart =
+                                    rowIndex * gridMetrics.crossAxisCount;
+                                final rowEnd = math.min(
+                                  rowStart + gridMetrics.crossAxisCount,
+                                  state.entries.length,
+                                );
+                                final rowItems = state.entries.sublist(
+                                  rowStart,
+                                  rowEnd,
+                                );
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    for (var index = 0;
+                                        index < rowItems.length;
+                                        index += 1) ...[
+                                      SizedBox(
+                                        width: gridMetrics.tileWidth,
+                                        child: AttachmentGalleryEntry(
+                                          entry: rowItems[index],
+                                          showChatLabel: widget.showChatLabel,
+                                          autoDownloadImages: context
+                                              .watch<SettingsCubit>()
+                                              .state
+                                              .autoDownloadImages,
+                                          autoDownloadVideos: context
+                                              .watch<SettingsCubit>()
+                                              .state
+                                              .autoDownloadVideos,
+                                          autoDownloadDocuments: context
+                                              .watch<SettingsCubit>()
+                                              .state
+                                              .autoDownloadDocuments,
+                                          autoDownloadArchives: context
+                                              .watch<SettingsCubit>()
+                                              .state
+                                              .autoDownloadArchives,
+                                          layout: layout,
+                                          onApproveAttachment:
+                                              _approveAttachment,
+                                          metaSeparator: context.l10n
+                                              .attachmentGalleryMetaSeparator,
+                                        ),
+                                      ),
+                                      if (index < rowItems.length - 1)
+                                        SizedBox(width: context.spacing.s),
+                                    ],
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

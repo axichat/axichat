@@ -216,9 +216,6 @@ class _SignupFormState extends State<SignupForm>
 
   void _onPressed(BuildContext context) async {
     if (context.read<SignupAvatarCubit>().state.processing) return;
-    context.read<SignupAvatarCubit>().pauseCarousel();
-    final avatarPayload =
-        await context.read<SignupAvatarCubit>().buildSelectedAvatarPayload();
     FocusManager.instance.primaryFocus?.unfocus();
     final captchaSrc = await _captchaSrc;
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -231,6 +228,10 @@ class _SignupFormState extends State<SignupForm>
       });
       return;
     }
+    context.read<SignupAvatarCubit>().pauseCarousel();
+    final avatarPayload =
+        await context.read<SignupAvatarCubit>().buildSelectedAvatarPayload();
+    if (!context.mounted) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().signup(
           username: _jidTextController.value.text,

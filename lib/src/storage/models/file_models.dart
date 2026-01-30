@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart' hide JsonKey;
@@ -123,10 +124,12 @@ final class AttachmentGalleryItem {
   const AttachmentGalleryItem({
     required this.message,
     required this.metadata,
+    required this.chat,
   });
 
   final Message message;
   final FileMetadataData metadata;
+  final Chat? chat;
 }
 
 @UseRowClass(FileMetadataData)

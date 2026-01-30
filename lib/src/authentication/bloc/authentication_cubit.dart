@@ -325,7 +325,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   _AuthTransaction? _authTransaction;
   bool get _stickyAuthActive => state is AuthenticationComplete;
   int _failedLoginAttempts = 0;
-  Duration? _loginBackoffDelayPending;
+  DateTime? _loginBackoffUntil;
+  final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -514,12 +515,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _recordLoginFailure() {
     const attemptIncrement = 1;
     _failedLoginAttempts += attemptIncrement;
-    _loginBackoffDelayPending = _loginBackoffDelay(_failedLoginAttempts);
+    final delay = _loginBackoffDelay(_failedLoginAttempts);
+    _loginBackoffUntil = DateTime.now().add(delay);
   }
 
   void _resetLoginBackoff() {
     _failedLoginAttempts = 0;
-    _loginBackoffDelayPending = null;
+    _loginBackoffUntil = null;
   }
 
   Duration _loginBackoffDelay(int attempt) {
@@ -539,12 +541,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _awaitLoginBackoff() async {
-    final delay = _loginBackoffDelayPending;
-    if (delay == null) {
+    final until = _loginBackoffUntil;
+    if (until == null) {
       return;
     }
-    _loginBackoffDelayPending = null;
-    await Future.delayed(delay);
+    final remaining = until.difference(DateTime.now());
+    if (!remaining.isNegative) {
+      await Future.delayed(remaining);
+    }
+    _loginBackoffUntil = null;
   }
 
   Future<void> _recoverAuthTransaction() async {
@@ -1104,6 +1109,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _emailProvisioningClient.close();
     }
     _ownedHttpClient?.close();
+    _pendingDeletionQueue.dispose();
     return super.close();
   }
 
@@ -2840,7 +2846,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _flushPendingAccountDeletions() async {
-    await _processPendingAccountDeletions();
+    await _pendingDeletionQueue.enqueue(_processPendingAccountDeletions);
   }
 
   Future<void> _processPendingAccountDeletions() async {
@@ -3403,5 +3409,48 @@ class _PendingAccountDeletion {
     final createdAtTimestamp = DateTime.tryParse(createdAt);
     final base = createdAtTimestamp ?? DateTime.now();
     return base.add(legacyMaxAge).toIso8601String();
+  }
+}
+
+final class _CoalescingAsyncQueue {
+  bool _running = false;
+  bool _queued = false;
+  Completer<void>? _completer;
+
+  Future<void> enqueue(Future<void> Function() operation) async {
+    if (_running) {
+      _queued = true;
+      final completer = _completer;
+      if (completer != null) {
+        return completer.future;
+      }
+      final fallback = Completer<void>();
+      _completer = fallback;
+      return fallback.future;
+    }
+
+    _running = true;
+    final completer = Completer<void>();
+    _completer = completer;
+    try {
+      do {
+        _queued = false;
+        await operation();
+      } while (_queued);
+      completer.complete();
+    } catch (error, stackTrace) {
+      completer.completeError(error, stackTrace);
+      rethrow;
+    } finally {
+      _running = false;
+      _completer = null;
+    }
+  }
+
+  void dispose() {
+    final completer = _completer;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
   }
 }

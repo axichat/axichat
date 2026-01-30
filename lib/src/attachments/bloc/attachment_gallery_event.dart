@@ -13,10 +13,6 @@ class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
     required String error,
   }) = AttachmentGalleryLoadFailed;
 
-  const factory AttachmentGalleryEvent.chatsUpdated({
-    required List<Chat> items,
-  }) = AttachmentGalleryChatsUpdated;
-
   const factory AttachmentGalleryEvent.queryChanged({
     required String query,
   }) = AttachmentGalleryQueryChanged;
