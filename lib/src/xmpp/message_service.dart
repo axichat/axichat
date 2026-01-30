@@ -6038,7 +6038,12 @@ mixin MessageService
           if (db is! XmppDrift) {
             return Stream.value(const <AttachmentGalleryItem>[]);
           }
-          return db.watchAttachmentGallery(chatJid: chatJid);
+          final trimmedJid = chatJid?.trim();
+          final includeChat = trimmedJid == null || trimmedJid.isEmpty;
+          return db.watchAttachmentGallery(
+            chatJid: chatJid,
+            includeChat: includeChat,
+          );
         },
       );
 

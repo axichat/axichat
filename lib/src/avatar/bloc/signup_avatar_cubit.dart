@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
+import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
 import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
@@ -56,21 +57,21 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     List<AvatarTemplate>? templates,
     AvatarPipeline? pipeline,
   })  : _templates = templates ?? buildDefaultAvatarTemplates(),
+        _random = math.Random(),
         _pipeline = pipeline ??
             AvatarPipeline(
               config: _defaultPipelineConfig,
             ),
         super(const SignupAvatarState(backgroundColor: Colors.transparent)) {
-    _abstractTemplates = _templates
-        .where(
-          (template) => template.category == AvatarTemplateCategory.abstract,
-        )
-        .toList();
-    _nonAbstractTemplates = _templates
-        .where(
-          (template) => template.category != AvatarTemplateCategory.abstract,
-        )
-        .toList();
+    _carouselEngine = AvatarCarouselEngine(
+      pipeline: _pipeline,
+      templates: _templates,
+      random: _random,
+      config: const AvatarCarouselEngineConfig(
+        historyLimit: _avatarCarouselHistoryLimit,
+        abstractWarmupDuration: _abstractWarmupDuration,
+      ),
+    );
   }
 
   static const AvatarPipelineConfig _defaultPipelineConfig =
@@ -88,23 +89,15 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const _abstractWarmupDuration = Duration(seconds: 3);
 
   final List<AvatarTemplate> _templates;
+  final math.Random _random;
   final AvatarPipeline _pipeline;
   Rect? _pendingCropRect;
-  late final List<AvatarTemplate> _abstractTemplates;
-  late final List<AvatarTemplate> _nonAbstractTemplates;
-  final math.Random _random = math.Random();
-
+  late final AvatarCarouselEngine _carouselEngine;
   final List<Avatar> _carouselBuffer = <Avatar>[];
-  final List<String> _recentTemplateKeys = <String>[];
-  final List<AvatarTemplate> _abstractCarouselBag = <AvatarTemplate>[];
-  final List<AvatarTemplate> _nonAbstractCarouselBag = <AvatarTemplate>[];
   Timer? _avatarCarouselTimer;
   Future<bool>? _prefillCarouselFuture;
-  _NonAbstractWarmupState _nonAbstractWarmupState =
-      _NonAbstractWarmupState.pending;
   _CarouselVisibility _carouselVisibility = _CarouselVisibility.visible;
   ShadColorScheme? _colors;
-  DateTime? _abstractOnlyUntil;
   Avatar? _currentCarouselAvatar;
 
   @override
@@ -115,17 +108,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> initialize(ShadColorScheme colors) async {
     _colors = colors;
-    if (_abstractOnlyUntil != null) return;
-    _abstractOnlyUntil = DateTime.now().add(_abstractWarmupDuration);
+    _carouselEngine.startWarmupIfNeeded();
     emit(state.copyWith(backgroundColor: colors.accent, clearError: true));
     if (_isCarouselVisible) {
       await _startAvatarCarousel();
     }
-  }
-
-  bool get _abstractWarmupActive {
-    final until = _abstractOnlyUntil;
-    return until != null && DateTime.now().isBefore(until);
   }
 
   Future<void> setVisible(bool visible, ShadColorScheme colors) async {
@@ -308,11 +295,8 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         background: resolvedBackground,
         colors: colors,
       );
-      _pushRecentTemplateKey(_pipeline.templateKey(template));
-      if (!_nonAbstractReady &&
-          template.category != AvatarTemplateCategory.abstract) {
-        _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
-      }
+      _carouselEngine.markTemplateUsed(template);
+      _carouselEngine.markNonAbstractReady(template);
       emit(
         state.copyWith(
           avatar: avatar,
@@ -622,11 +606,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   Future<void> _resumeAvatarCarouselIfNeeded() async {
-    if (!_shouldRunCarousel ||
-        _abstractOnlyUntil == null ||
-        _avatarCarouselTimer != null) {
+    if (!_shouldRunCarousel || _avatarCarouselTimer != null) {
       return;
     }
+    _carouselEngine.startWarmupIfNeeded();
     await _startAvatarCarousel();
   }
 
@@ -667,12 +650,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
     final entry = _carouselBuffer.removeAt(0);
     _currentCarouselAvatar = entry;
-    final entryCategory =
-        entry.template?.category ?? AvatarTemplateCategory.abstract;
-    if (!_nonAbstractReady &&
-        entryCategory != AvatarTemplateCategory.abstract) {
-      _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
-    }
     emit(
       state.copyWith(
         carouselAvatar: entry,
@@ -715,159 +692,47 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }) async {
     final colors = _colors;
     if (colors == null) return false;
-    final warmupActive = _abstractWarmupActive;
-
-    if (!warmupActive &&
-        preferAbstract &&
-        !_nonAbstractReady &&
-        _nonAbstractWarmupState != _NonAbstractWarmupState.warming &&
-        _nonAbstractTemplates.isNotEmpty) {
-      _nonAbstractWarmupState = _NonAbstractWarmupState.warming;
-      await _warmFirstNonAbstractAvatar(colors);
-    }
-
-    var added = 0;
-    var attempts = 0;
-    const maxAttempts = 6;
-    try {
-      while (_isCarouselVisible &&
-          !state.hasUserSelectedAvatar &&
-          !state.processing &&
-          _carouselBuffer.length < targetSize &&
-          attempts < maxAttempts) {
-        final useAbstractOnly =
-            (warmupActive || (preferAbstract && !_nonAbstractReady)) &&
-                _abstractTemplates.isNotEmpty;
-        AvatarTemplate? template = useAbstractOnly
-            ? _pickFromPool(_abstractTemplates, bag: _abstractCarouselBag)
-            : null;
-        template ??= _pickCarouselTemplate();
-        if (template == null) break;
-        attempts++;
-        _pushRecentTemplateKey(_pipeline.templateKey(template));
-        final background = template.hasAlphaBackground
-            ? _randomAvatarBackgroundColor()
-            : state.backgroundColor;
-        final avatar = await _buildAvatarFromTemplate(
-          template: template,
-          background: background,
-          colors: colors,
-        );
-        _carouselBuffer.add(avatar);
-        if (!_nonAbstractReady &&
-            template.category != AvatarTemplateCategory.abstract) {
-          _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
-        }
-        added++;
-      }
-      if (added == 0 &&
-          _carouselBuffer.isEmpty &&
-          _isCarouselVisible &&
-          !state.hasUserSelectedAvatar) {
-        final fallbackBackground = state.backgroundColor == Colors.transparent
-            ? colors.accent
-            : state.backgroundColor;
-        final fallback = _fallbackAvatarPayload(
-          background: fallbackBackground,
-          accent: colors.primary,
-        );
-        _carouselBuffer.add(
-          Avatar(
-            source: AvatarSource.template,
-            payload: fallback,
-            backgroundColor: fallbackBackground,
-          ),
-        );
-        return true;
-      }
-    } on FormatException {
-      // Ignore prefill failures; fallback handled by buffer logic.
-    }
-    return added > 0;
-  }
-
-  Future<void> _warmFirstNonAbstractAvatar(ShadColorScheme colors) async {
-    try {
-      final template = _pickFromPool(
-        _nonAbstractTemplates,
-        bag: _nonAbstractCarouselBag,
-      );
-      if (template == null) return;
-      _pushRecentTemplateKey(_pipeline.templateKey(template));
-      final background = template.hasAlphaBackground
-          ? _randomAvatarBackgroundColor()
-          : state.backgroundColor;
-      final avatar = await _buildAvatarFromTemplate(
-        template: template,
-        background: background,
-        colors: colors,
-      );
-      if (!_isCarouselVisible) return;
-      _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
-      _carouselBuffer.add(avatar);
-    } on FormatException {
-      // Ignore warmup failures; fallback handled by buffer.
-    } finally {
-      if (_nonAbstractWarmupState != _NonAbstractWarmupState.ready) {
-        _nonAbstractWarmupState = _NonAbstractWarmupState.pending;
-      }
-    }
-  }
-
-  AvatarTemplate? _pickCarouselTemplate() {
-    final hasAbstract = _abstractTemplates.isNotEmpty;
-    final hasOther = _nonAbstractTemplates.isNotEmpty;
-    if (!hasAbstract && !hasOther) {
-      return null;
-    }
-    if (!hasOther) {
-      return _pickFromPool(_abstractTemplates, bag: _abstractCarouselBag);
-    }
-    if (!hasAbstract) {
-      return _pickFromPool(_nonAbstractTemplates, bag: _nonAbstractCarouselBag);
-    }
-    final useAbstract = _random.nextBool();
-    return _pickFromPool(
-      useAbstract ? _abstractTemplates : _nonAbstractTemplates,
-      bag: useAbstract ? _abstractCarouselBag : _nonAbstractCarouselBag,
+    _carouselEngine.startWarmupIfNeeded();
+    final remaining = targetSize - _carouselBuffer.length;
+    if (remaining <= 0) return true;
+    final context = AvatarCarouselBuildContext(
+      colors: colors,
+      currentBackground: state.backgroundColor,
     );
-  }
-
-  AvatarTemplate? _pickFromPool(
-    List<AvatarTemplate> pool, {
-    required List<AvatarTemplate> bag,
-  }) {
-    if (pool.isEmpty) return null;
-    if (bag.isEmpty) {
-      bag.addAll(pool);
-      bag.shuffle(_random);
+    final avatars = await _carouselEngine.prefill(
+      targetSize: remaining,
+      preferAbstract: preferAbstract,
+      context: context,
+      renderSpec: _resolveCarouselRenderSpec,
+    );
+    if (avatars.isNotEmpty) {
+      _carouselBuffer.addAll(avatars);
     }
-    AvatarTemplate? selection;
-    final recycled = <AvatarTemplate>[];
-    while (bag.isNotEmpty) {
-      final candidate = bag.removeAt(0);
-      if (_recentTemplateKeys.contains(_pipeline.templateKey(candidate))) {
-        recycled.add(candidate);
-        continue;
-      }
-      selection = candidate;
-      break;
+    if (avatars.isEmpty &&
+        _carouselBuffer.isEmpty &&
+        _isCarouselVisible &&
+        !state.hasUserSelectedAvatar) {
+      final fallbackBackground = state.backgroundColor == Colors.transparent
+          ? colors.accent
+          : state.backgroundColor;
+      final fallback = _fallbackAvatarPayload(
+        background: fallbackBackground,
+        accent: colors.primary,
+      );
+      _carouselBuffer.add(
+        Avatar(
+          source: AvatarSource.template,
+          payload: fallback,
+          backgroundColor: fallbackBackground,
+        ),
+      );
+      return true;
     }
-    bag.addAll(recycled);
-    selection ??=
-        bag.isNotEmpty ? bag.removeAt(0) : pool[_random.nextInt(pool.length)];
-    return selection;
-  }
-
-  void _pushRecentTemplateKey(String key) {
-    _recentTemplateKeys.add(key);
-    if (_recentTemplateKeys.length > _avatarCarouselHistoryLimit) {
-      _recentTemplateKeys.removeAt(0);
-    }
+    return avatars.isNotEmpty;
   }
 
   _AvatarSelection? _pickAvatarSelection() {
-    final template = _pickCarouselTemplate();
+    final template = _carouselEngine.pickTemplate(preferAbstract: false);
     if (template == null) return null;
     final background = state.backgroundLocked
         ? (state.lockedBackgroundColor ?? state.backgroundColor)
@@ -889,6 +754,30 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   Color _randomAvatarBackgroundColor() => _pipeline.randomBackground(_random);
+
+  AvatarRenderSpec _resolveCarouselRenderSpec(
+    AvatarTemplate template,
+    AvatarCarouselBuildContext context,
+  ) {
+    final resolvedBackground = template.hasAlphaBackground
+        ? _randomAvatarBackgroundColor()
+        : context.currentBackground == Colors.transparent
+            ? context.colors.accent
+            : context.currentBackground;
+    final useTemplateInset =
+        template.category != AvatarTemplateCategory.abstract;
+    final padAlphaTemplate = template.hasAlphaBackground && useTemplateInset;
+    final insetFraction = useTemplateInset
+        ? (padAlphaTemplate
+            ? avatarTransparentInsetFraction
+            : avatarInsetFraction)
+        : 0.0;
+    return AvatarRenderSpec(
+      background: resolvedBackground,
+      insetFraction: insetFraction,
+      cropSide: _avatarCarouselCropSide,
+    );
+  }
 
   AvatarUploadPayload _fallbackAvatarPayload({
     required Color background,
@@ -975,8 +864,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   bool get _isCarouselVisible =>
       _carouselVisibility == _CarouselVisibility.visible;
 
-  bool get _nonAbstractReady =>
-      _nonAbstractWarmupState == _NonAbstractWarmupState.ready;
+  bool get _nonAbstractReady => _carouselEngine.nonAbstractReady;
 
   bool get _shouldRunCarousel =>
       _isCarouselVisible && !state.hasUserSelectedAvatar && !state.processing;
@@ -990,5 +878,3 @@ class _AvatarSelection {
 }
 
 enum _CarouselVisibility { visible, hidden }
-
-enum _NonAbstractWarmupState { pending, warming, ready }

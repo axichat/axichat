@@ -5056,18 +5056,16 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     final ValueChanged<bool>? onToggleCompletion = widget.onToggleCompletion;
     final VoidCallback? onTapOverride = widget.onTapOverride;
     final bool allowContextMenu = widget.allowContextMenu;
+    final BorderSide borderSide = context.borderSide;
 
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverAnchorToken == _anchorToken;
 
     final BoxDecoration tileDecoration = BoxDecoration(
       color: isActive ? calendarSidebarBackgroundColor : calendarContainerColor,
-      borderRadius: context.radius,
-      border: Border(
-        left: BorderSide(color: borderColor, width: 3),
-        top: BorderSide(color: calendarBorderColor),
-        right: BorderSide(color: calendarBorderColor),
-        bottom: BorderSide(color: calendarBorderColor),
+      border: Border.all(
+        color: calendarBorderColor,
+        width: borderSide.width,
       ),
     );
 
@@ -5077,10 +5075,23 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
         decoration: tileDecoration,
         onTap: onTap,
         hoverColor: hoverColor,
-        child: CalendarTaskListTile(
-          task: task,
-          trailing: trailing,
-          onToggleCompletion: onToggleCompletion,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ColoredBox(
+                  color: borderColor,
+                  child: SizedBox(width: borderSide.width),
+                ),
+              ),
+            ),
+            CalendarTaskListTile(
+              task: task,
+              trailing: trailing,
+              onToggleCompletion: onToggleCompletion,
+            ),
+          ],
         ),
       );
     }

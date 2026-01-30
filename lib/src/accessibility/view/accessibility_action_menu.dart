@@ -2,15 +2,18 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
+import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -47,10 +50,32 @@ String _stepLabelFor(BuildContext context, AccessibilityStepEntry entry) {
   }
 }
 
+bool _isChatStep(AccessibilityStepEntry entry) {
+  return entry.kind == AccessibilityStepKind.chatMessages ||
+      entry.kind == AccessibilityStepKind.conversation ||
+      entry.kind == AccessibilityStepKind.composer;
+}
+
+String? _activeChatJidFor(AccessibilityStepEntry entry) {
+  if (!_isChatStep(entry)) return null;
+  if (entry.recipients.isEmpty) return null;
+  return entry.recipients.first.jid;
+}
+
+int _unreadCountFor(List<AccessibilityContact> contacts, String jid) {
+  for (final contact in contacts) {
+    if (contact.jid == jid) {
+      return contact.unreadCount;
+    }
+  }
+  return 0;
+}
+
 List<AccessibilityMenuSection> _sectionsFor(
   BuildContext context,
-  AccessibilityActionState state,
-) {
+  AccessibilityActionState state, {
+  AccessibilityChatState? chatState,
+}) {
   final entry = state.stack.last;
   switch (entry.kind) {
     case AccessibilityStepKind.root:
@@ -63,13 +88,16 @@ List<AccessibilityMenuSection> _sectionsFor(
     case AccessibilityStepKind.invites:
       return _inviteSectionsFor(context, state);
     case AccessibilityStepKind.composer:
-      return _conversationSectionsFor(context, state, entry);
+      return _conversationSectionsFor(context, state, entry,
+          chatState: chatState);
     case AccessibilityStepKind.newContact:
       return _newContactSectionsFor(context, state);
     case AccessibilityStepKind.chatMessages:
-      return _conversationSectionsFor(context, state, entry);
+      return _conversationSectionsFor(context, state, entry,
+          chatState: chatState);
     case AccessibilityStepKind.conversation:
-      return _conversationSectionsFor(context, state, entry);
+      return _conversationSectionsFor(context, state, entry,
+          chatState: chatState);
   }
 }
 
@@ -393,20 +421,21 @@ List<AccessibilityMenuSection> _inviteSectionsFor(
 List<AccessibilityMenuSection> _conversationSectionsFor(
   BuildContext context,
   AccessibilityActionState state,
-  AccessibilityStepEntry entry,
-) {
-  return [_messageSectionFor(context, state, entry)];
+  AccessibilityStepEntry entry, {
+  AccessibilityChatState? chatState,
+}) {
+  return [_messageSectionFor(context, state, entry, chatState: chatState)];
 }
 
 AccessibilityMenuSection _messageSectionFor(
   BuildContext context,
   AccessibilityActionState state,
-  AccessibilityStepEntry entry,
-) {
+  AccessibilityStepEntry entry, {
+  AccessibilityChatState? chatState,
+}) {
   final l10n = context.l10n;
-  final targetJid = entry.recipients.isNotEmpty
-      ? entry.recipients.first.jid
-      : state.activeChatJid;
+  final targetJid =
+      entry.recipients.isNotEmpty ? entry.recipients.first.jid : chatState?.jid;
   if (targetJid == null) {
     return AccessibilityMenuSection(
       id: 'chat-messages',
@@ -425,8 +454,9 @@ AccessibilityMenuSection _messageSectionFor(
   final contact = _contactFor(state, context, targetJid);
   final items = <AccessibilityMenuItem>[];
   var lastSender = '';
-  final attachmentIndex = state.attachments;
-  for (final message in state.messages) {
+  final attachmentIndex = chatState?.attachments ?? const {};
+  final messages = chatState?.messages ?? const <Message>[];
+  for (final message in messages) {
     final senderLabel = _senderLabelFor(context, state, message);
     final timestampLabel = _formatTimestamp(context, message.timestamp);
     final attachments = attachmentIndex[_messageId(message)] ?? const [];
@@ -1005,34 +1035,42 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                         ),
                                         child: FocusTraversalGroup(
                                           policy: OrderedTraversalPolicy(),
-                                          child: _AccessibilityActionContent(
+                                          child: _AccessibilityChatScope(
                                             state: widget.state,
-                                            sectionsListKey: _sectionsListKey,
-                                            actionsListKey: _actionsListKey,
-                                            enableActivationShortcut:
-                                                !_isEditingText,
-                                            legendFocusNode:
-                                                _shortcutLegendFocusNode,
-                                            messageFocusNode: _messageFocusNode,
-                                            composerFocusNode:
-                                                _composerFocusNode,
-                                            newContactFocusNode:
-                                                _newContactFocusNode,
-                                            legendGroupKey: _legendGroupKey,
-                                            messageCarouselKey:
-                                                _messageCarouselKey,
-                                            composerGroupKey: _composerGroupKey,
-                                            actionsGroupKey: _actionsGroupKey,
-                                            actionsFocusNode: _actionsFocusNode,
-                                            newContactGroupKey:
-                                                _newContactGroupKey,
-                                            viewportHeight: viewportHeight,
-                                            activateItemActivator:
-                                                activateItemActivator,
-                                            nextGroupActivator:
-                                                nextGroupActivator,
-                                            previousGroupActivator:
-                                                previousGroupActivator,
+                                            builder: (context, chatState) =>
+                                                _AccessibilityActionContent(
+                                              state: widget.state,
+                                              chatState: chatState,
+                                              sectionsListKey: _sectionsListKey,
+                                              actionsListKey: _actionsListKey,
+                                              enableActivationShortcut:
+                                                  !_isEditingText,
+                                              legendFocusNode:
+                                                  _shortcutLegendFocusNode,
+                                              messageFocusNode:
+                                                  _messageFocusNode,
+                                              composerFocusNode:
+                                                  _composerFocusNode,
+                                              newContactFocusNode:
+                                                  _newContactFocusNode,
+                                              legendGroupKey: _legendGroupKey,
+                                              messageCarouselKey:
+                                                  _messageCarouselKey,
+                                              composerGroupKey:
+                                                  _composerGroupKey,
+                                              actionsGroupKey: _actionsGroupKey,
+                                              actionsFocusNode:
+                                                  _actionsFocusNode,
+                                              newContactGroupKey:
+                                                  _newContactGroupKey,
+                                              viewportHeight: viewportHeight,
+                                              activateItemActivator:
+                                                  activateItemActivator,
+                                              nextGroupActivator:
+                                                  nextGroupActivator,
+                                              previousGroupActivator:
+                                                  previousGroupActivator,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1352,9 +1390,149 @@ class _AccessibilityGroupMarker extends InheritedWidget {
       oldWidget.group != group;
 }
 
+class _AccessibilityChatScope extends StatelessWidget {
+  const _AccessibilityChatScope({
+    required this.state,
+    required this.builder,
+  });
+
+  final AccessibilityActionState state;
+  final Widget Function(BuildContext, AccessibilityChatState? chatState)
+      builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = state.currentEntry;
+    final chatJid = _activeChatJidFor(entry);
+    if (chatJid == null) {
+      return builder(context, null);
+    }
+    final unreadCount = _unreadCountFor(state.contacts, chatJid);
+    return BlocProvider(
+      key: ValueKey(chatJid),
+      create: (context) => AccessibilityChatBloc(
+        jid: chatJid,
+        messageService: context.read<XmppService>(),
+        emailService: RepositoryProvider.of<EmailService?>(context),
+        initialLocalization: context.l10n,
+        contacts: state.contacts,
+        myJid: state.myJid,
+        initialUnreadCount: unreadCount,
+        draftId: entry.draftId,
+      ),
+      child: _AccessibilityChatSync(
+        state: state,
+        unreadCount: unreadCount,
+        builder: builder,
+      ),
+    );
+  }
+}
+
+class _AccessibilityChatSync extends StatefulWidget {
+  const _AccessibilityChatSync({
+    required this.state,
+    required this.unreadCount,
+    required this.builder,
+  });
+
+  final AccessibilityActionState state;
+  final int unreadCount;
+  final Widget Function(BuildContext, AccessibilityChatState? chatState)
+      builder;
+
+  @override
+  State<_AccessibilityChatSync> createState() => _AccessibilityChatSyncState();
+}
+
+class _AccessibilityChatSyncState extends State<_AccessibilityChatSync> {
+  String? _localeName;
+  List<AccessibilityContact>? _contacts;
+  String? _myJid;
+  int? _unreadCount;
+  int? _draftId;
+
+  @override
+  void initState() {
+    super.initState();
+    _contacts = widget.state.contacts;
+    _myJid = widget.state.myJid;
+    _unreadCount = widget.unreadCount;
+    _draftId = widget.state.currentEntry.draftId;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final localeName = context.l10n.localeName;
+    if (_localeName != localeName) {
+      _localeName = localeName;
+      context
+          .read<AccessibilityChatBloc>()
+          .add(AccessibilityChatLocaleUpdated(context.l10n));
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _AccessibilityChatSync oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final bloc = context.read<AccessibilityChatBloc>();
+    if (!identical(_contacts, widget.state.contacts) ||
+        _myJid != widget.state.myJid) {
+      _contacts = widget.state.contacts;
+      _myJid = widget.state.myJid;
+      bloc.add(
+        AccessibilityChatContactsUpdated(
+          contacts: widget.state.contacts,
+          myJid: widget.state.myJid,
+        ),
+      );
+    }
+    if (_unreadCount != widget.unreadCount) {
+      _unreadCount = widget.unreadCount;
+      bloc.add(AccessibilityChatUnreadUpdated(widget.unreadCount));
+    }
+    final draftId = widget.state.currentEntry.draftId;
+    if (_draftId != draftId) {
+      _draftId = draftId;
+      bloc.add(AccessibilityChatDraftIdUpdated(draftId));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<AccessibilityChatBloc, AccessibilityChatState>(
+          listenWhen: (previous, current) =>
+              previous.sendCount != current.sendCount,
+          listener: (context, state) {
+            context
+                .read<AccessibilityActionBloc>()
+                .add(const AccessibilityComposerChanged(''));
+          },
+        ),
+        BlocListener<AccessibilityChatBloc, AccessibilityChatState>(
+          listenWhen: (previous, current) =>
+              previous.draftSaveCount != current.draftSaveCount,
+          listener: (context, state) {
+            context
+                .read<AccessibilityActionBloc>()
+                .add(AccessibilityDraftIdUpdated(state.draftId));
+          },
+        ),
+      ],
+      child: BlocBuilder<AccessibilityChatBloc, AccessibilityChatState>(
+        builder: (context, chatState) => widget.builder(context, chatState),
+      ),
+    );
+  }
+}
+
 class _AccessibilityActionContent extends StatelessWidget {
   const _AccessibilityActionContent({
     required this.state,
+    required this.chatState,
     required this.sectionsListKey,
     required this.actionsListKey,
     required this.enableActivationShortcut,
@@ -1375,6 +1553,7 @@ class _AccessibilityActionContent extends StatelessWidget {
   });
 
   final AccessibilityActionState state;
+  final AccessibilityChatState? chatState;
   final GlobalKey<_AccessibilitySectionListState> sectionsListKey;
   final GlobalKey<_AccessibilitySectionListState> actionsListKey;
   final bool enableActivationShortcut;
@@ -1401,14 +1580,12 @@ class _AccessibilityActionContent extends StatelessWidget {
     final headerTitle = breadcrumbLabels.isNotEmpty
         ? breadcrumbLabels.last
         : _entryLabel(state.currentEntry, context);
-    final isConversation =
-        state.currentEntry.kind == AccessibilityStepKind.composer ||
-            state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            state.currentEntry.kind == AccessibilityStepKind.conversation;
+    final isConversation = _isChatStep(state.currentEntry);
+    final hasChatState = chatState != null;
     final hasComposer = isConversation;
     final hasNewContact =
         state.currentEntry.kind == AccessibilityStepKind.newContact;
-    final sections = _sectionsFor(context, state);
+    final sections = _sectionsFor(context, state, chatState: chatState);
     final messageSections =
         sections.where((section) => section.id == 'chat-messages').toList();
     final messageSection =
@@ -1463,6 +1640,14 @@ class _AccessibilityActionContent extends StatelessWidget {
     const actionsOrder = NumericFocusOrder(5);
     const actionsListOrder = NumericFocusOrder(6);
     const sectionsOrder = NumericFocusOrder(4);
+    final bannerStatus =
+        (isConversation && hasChatState ? chatState?.statusMessage : null) ??
+            state.statusMessage;
+    final bannerError =
+        (isConversation && hasChatState ? chatState?.errorMessage : null) ??
+            state.errorMessage;
+    final busy =
+        isConversation && hasChatState ? chatState?.busy ?? false : state.busy;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1498,21 +1683,21 @@ class _AccessibilityActionContent extends StatelessWidget {
           ),
         ),
         SizedBox(height: spacing.s),
-        if (state.statusMessage != null)
+        if (bannerStatus != null)
           FocusTraversalOrder(
             order: statusOrder,
             child: _AccessibilityBanner(
-              message: state.statusMessage!,
+              message: bannerStatus,
               color: context.colorScheme.card,
               foreground: context.colorScheme.foreground,
               icon: Icons.check_circle,
             ),
           ),
-        if (state.errorMessage != null)
+        if (bannerError != null)
           FocusTraversalOrder(
             order: statusOrder,
             child: _AccessibilityBanner(
-              message: state.errorMessage!,
+              message: bannerError,
               color: context.colorScheme.destructive.withValues(
                 alpha: context.motion.tapHoverAlpha,
               ),
@@ -1520,7 +1705,7 @@ class _AccessibilityActionContent extends StatelessWidget {
               icon: Icons.error_outline,
             ),
           ),
-        if (state.statusMessage != null || state.errorMessage != null)
+        if (bannerStatus != null || bannerError != null)
           SizedBox(height: spacing.s),
         if (messageSection != null)
           FocusTraversalOrder(
@@ -1533,7 +1718,13 @@ class _AccessibilityActionContent extends StatelessWidget {
                 focusNode: messageFocusNode,
                 initialIndex: messageInitialIndex(
                   messageSection.items,
-                  activeUnreadCount(state.activeChatJid, currentRecipients),
+                  activeUnreadCount(
+                    chatState?.jid ??
+                        (currentRecipients.isNotEmpty
+                            ? currentRecipients.first.jid
+                            : null),
+                    currentRecipients,
+                  ),
                 ),
               ),
             ),
@@ -1546,6 +1737,7 @@ class _AccessibilityActionContent extends StatelessWidget {
               group: composerGroupKey,
               child: _ComposerSection(
                 state: state,
+                enabled: !busy,
                 focusNode: composerFocusNode,
                 groupKey: composerGroupKey,
                 nextGroupActivator: nextGroupActivator,
@@ -1561,29 +1753,26 @@ class _AccessibilityActionContent extends StatelessWidget {
               child: _ActionButtonsGroup(
                 focusNode: actionsFocusNode,
                 groupKey: actionsGroupKey,
-                saveEnabled: currentRecipients.isNotEmpty && !state.busy,
+                saveEnabled:
+                    hasChatState && currentRecipients.isNotEmpty && !busy,
                 sendEnabled: state.composerText.trim().isNotEmpty &&
                     currentRecipients.isNotEmpty &&
-                    !state.busy,
+                    !busy &&
+                    hasChatState,
                 activateShortcut: const SingleActivator(
                   LogicalKeyboardKey.enter,
                 ),
-                onSave: () => context.read<AccessibilityActionBloc>().add(
-                      AccessibilityMenuActionTriggered(
-                        AccessibilityCommandAction(
-                          command: AccessibilityCommand.saveDraft,
-                          body: state.composerText,
-                          recipients: currentRecipients,
-                        ),
+                onSave: () => context.read<AccessibilityChatBloc>().add(
+                      AccessibilityChatSaveDraftRequested(
+                        body: state.composerText,
+                        recipients: currentRecipients,
+                        draftId: state.currentEntry.draftId,
                       ),
                     ),
-                onSend: () => context.read<AccessibilityActionBloc>().add(
-                      AccessibilityMenuActionTriggered(
-                        AccessibilityCommandAction(
-                          command: AccessibilityCommand.sendMessage,
-                          body: state.composerText,
-                          recipients: currentRecipients,
-                        ),
+                onSend: () => context.read<AccessibilityChatBloc>().add(
+                      AccessibilityChatSendRequested(
+                        body: state.composerText,
+                        recipients: currentRecipients,
                       ),
                     ),
               ),
@@ -2116,6 +2305,7 @@ class _ShortcutLegendEntry extends StatelessWidget {
 class _ComposerSection extends StatelessWidget {
   const _ComposerSection({
     required this.state,
+    required this.enabled,
     required this.focusNode,
     required this.groupKey,
     required this.nextGroupActivator,
@@ -2123,6 +2313,7 @@ class _ComposerSection extends StatelessWidget {
   });
 
   final AccessibilityActionState state;
+  final bool enabled;
   final FocusNode focusNode;
   final GlobalKey groupKey;
   final ShortcutActivator nextGroupActivator;
@@ -2151,7 +2342,7 @@ class _ComposerSection extends StatelessWidget {
                 hintText: context.l10n.accessibilityComposerPlaceholder,
                 minLines: 3,
                 maxLines: 5,
-                enabled: !state.busy,
+                enabled: enabled,
                 focusNode: focusNode,
                 autofocus: false,
                 nextGroupActivator: nextGroupActivator,

@@ -714,7 +714,6 @@ class _HomeScreenState extends State<HomeScreen> {
         final bloc = AccessibilityActionBloc(
           chatsService: context.read<XmppService>(),
           messageService: context.read<XmppService>(),
-          emailService: context.read<EmailService>(),
           rosterService:
               isRoster ? context.read<XmppService>() as RosterService : null,
           initialLocalization: l10n,

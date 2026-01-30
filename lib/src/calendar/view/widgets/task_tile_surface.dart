@@ -35,34 +35,40 @@ class TaskTileSurface extends StatelessWidget {
         RoundedSuperellipseBorder(borderRadius: context.radius);
     final MouseCursor effectiveCursor = mouseCursor ??
         (onTap != null ? SystemMouseCursors.click : MouseCursor.defer);
-    final BoxDecoration decorated = decoration.copyWith(
-      borderRadius: BorderRadius.zero,
+    final Border? border =
+        decoration.border is Border ? decoration.border as Border : null;
+    final BorderSide? uniformSide =
+        border == null || !border.isUniform ? null : border.top;
+    final RoundedSuperellipseBorder decoratedShape = uniformSide == null
+        ? shape
+        : RoundedSuperellipseBorder(
+            borderRadius: context.radius,
+            side: uniformSide,
+          );
+    final ShapeDecoration shapedDecoration = ShapeDecoration(
+      color: decoration.color,
+      shape: decoratedShape,
+      shadows: decoration.boxShadow,
     );
 
     return Container(
       margin: margin,
-      child: PhysicalShape(
-        clipper: ShapeBorderClipper(shape: shape),
-        clipBehavior: Clip.antiAlias,
-        color: Colors.transparent,
-        child: DecoratedBox(
-          decoration: decorated,
-          child: Material(
-            color: Colors.transparent,
-            shape: shape,
-            clipBehavior: Clip.antiAlias,
-            child: AxiTapBounce(
-              enabled: onTap != null,
-              child: InkWell(
-                onTap: onTap,
-                customBorder: shape,
-                mouseCursor: effectiveCursor,
-                hoverColor: hoverColor ?? Colors.transparent,
-                splashColor: splashColor ?? Colors.transparent,
-                highlightColor: highlightColor ?? Colors.transparent,
-                focusColor: focusColor ?? Colors.transparent,
-                child: child,
-              ),
+      child: DecoratedBox(
+        decoration: shapedDecoration,
+        child: Material(
+          type: MaterialType.transparency,
+          shape: decoratedShape,
+          child: AxiTapBounce(
+            enabled: onTap != null,
+            child: InkWell(
+              onTap: onTap,
+              customBorder: decoratedShape,
+              mouseCursor: effectiveCursor,
+              hoverColor: hoverColor ?? Colors.transparent,
+              splashColor: splashColor ?? Colors.transparent,
+              highlightColor: highlightColor ?? Colors.transparent,
+              focusColor: focusColor ?? Colors.transparent,
+              child: child,
             ),
           ),
         ),

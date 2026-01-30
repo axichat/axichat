@@ -19,10 +19,7 @@ class AccessibilityActionState extends Equatable {
     required this.busy,
     required this.statusMessage,
     required this.errorMessage,
-    required this.messages,
-    required this.activeChatJid,
     required this.discardWarningActive,
-    required this.attachments,
   });
 
   const AccessibilityActionState.initial()
@@ -40,10 +37,7 @@ class AccessibilityActionState extends Equatable {
         busy = false,
         statusMessage = null,
         errorMessage = null,
-        messages = const [],
-        activeChatJid = null,
-        discardWarningActive = false,
-        attachments = const <String, List<FileMetadataData>>{};
+        discardWarningActive = false;
 
   final bool visible;
   final List<AccessibilityStepEntry> stack;
@@ -57,10 +51,7 @@ class AccessibilityActionState extends Equatable {
   final bool busy;
   final String? statusMessage;
   final String? errorMessage;
-  final List<Message> messages;
-  final String? activeChatJid;
   final bool discardWarningActive;
-  final Map<String, List<FileMetadataData>> attachments;
 
   AccessibilityStepEntry get currentEntry => stack.last;
 
@@ -77,10 +68,7 @@ class AccessibilityActionState extends Equatable {
     bool? busy,
     Object? statusMessage = _unset,
     Object? errorMessage = _unset,
-    List<Message>? messages,
-    Object? activeChatJid = _unset,
     bool? discardWarningActive,
-    Map<String, List<FileMetadataData>>? attachments,
   }) =>
       AccessibilityActionState(
         visible: visible ?? this.visible,
@@ -99,12 +87,7 @@ class AccessibilityActionState extends Equatable {
         errorMessage: errorMessage == _unset
             ? this.errorMessage
             : errorMessage as String?,
-        messages: messages ?? this.messages,
-        activeChatJid: activeChatJid == _unset
-            ? this.activeChatJid
-            : activeChatJid as String?,
         discardWarningActive: discardWarningActive ?? this.discardWarningActive,
-        attachments: attachments ?? this.attachments,
       );
 
   @override
@@ -121,9 +104,6 @@ class AccessibilityActionState extends Equatable {
         busy,
         statusMessage,
         errorMessage,
-        messages,
-        activeChatJid,
         discardWarningActive,
-        attachments,
       ];
 }

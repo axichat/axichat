@@ -168,13 +168,14 @@ extension StateStoreOperations on XmppStateStore {
 extension AttachmentGalleryQueries on XmppDrift {
   Stream<List<AttachmentGalleryItem>> watchAttachmentGallery({
     String? chatJid,
+    bool includeChat = true,
   }) {
     final trimmedJid = chatJid?.trim();
     final messagesTable = messages;
     final messageAttachmentsTable = messageAttachments;
     final fileMetadataTable = fileMetadata;
     final chatsTable = chats;
-    final attachmentQuery = select(messagesTable).join([
+    final joins = <Join>[
       leftOuterJoin(
         messageAttachmentsTable,
         messageAttachmentsTable.messageId.equalsExp(messagesTable.id),
@@ -187,8 +188,16 @@ extension AttachmentGalleryQueries on XmppDrift {
             (messageAttachmentsTable.id.isNull() &
                 fileMetadataTable.id.equalsExp(messagesTable.fileMetadataID)),
       ),
-      innerJoin(chatsTable, chatsTable.jid.equalsExp(messagesTable.chatJid)),
-    ]);
+    ];
+    if (includeChat) {
+      joins.add(
+        leftOuterJoin(
+          chatsTable,
+          chatsTable.jid.equalsExp(messagesTable.chatJid),
+        ),
+      );
+    }
+    final attachmentQuery = select(messagesTable).join(joins);
     attachmentQuery.where(messagesTable.retracted.equals(false));
     if (trimmedJid != null && trimmedJid.isNotEmpty) {
       attachmentQuery.where(messagesTable.chatJid.equals(trimmedJid));
@@ -199,7 +208,7 @@ extension AttachmentGalleryQueries on XmppDrift {
             (row) => AttachmentGalleryItem(
               message: row.readTable(messagesTable),
               metadata: row.readTable(fileMetadataTable),
-              chat: row.readTable(chatsTable),
+              chat: includeChat ? row.readTableOrNull(chatsTable) : null,
             ),
           )
           .toList(growable: false);

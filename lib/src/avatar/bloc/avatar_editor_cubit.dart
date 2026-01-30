@@ -8,6 +8,7 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
+import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
 import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -60,11 +61,21 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     AvatarPipeline? pipeline,
   })  : _xmppService = xmppService,
         _templates = templates,
+        _random = Random(),
         _pipeline = pipeline ??
             AvatarPipeline(
               config: const AvatarPipelineConfig(minCropSide: minCropSide),
             ),
-        super(const AvatarEditorState());
+        super(const AvatarEditorState()) {
+    _carouselEngine = AvatarCarouselEngine(
+      pipeline: _pipeline,
+      templates: _templates,
+      random: _random,
+      config: const AvatarCarouselEngineConfig(
+        historyLimit: _avatarCarouselHistoryLimit,
+      ),
+    );
+  }
 
   static const minCropSide = 48.0;
   static const avatarInsetFraction = 0.10;
@@ -74,25 +85,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _avatarCarouselCropSide = 100000.0;
 
   final XmppService _xmppService;
-  final List<AvatarTemplate> _templates;
   final AvatarPipeline _pipeline;
+  late final AvatarCarouselEngine _carouselEngine;
+  final List<AvatarTemplate> _templates;
+  final Random _random;
   Rect? _pendingCropRect;
-  late final List<AvatarTemplate> _abstractTemplates = _templates
-      .where((template) => template.category == AvatarTemplateCategory.abstract)
-      .toList(growable: false);
-  late final List<AvatarTemplate> _nonAbstractTemplates = _templates
-      .where((template) => template.category != AvatarTemplateCategory.abstract)
-      .toList(growable: false);
-  late final Map<String, AvatarTemplate> _templateByKey = {
-    for (final template in _templates)
-      _pipeline.templateKey(template): template,
-  };
-  late final List<String> _abstractTemplateKeys =
-      _abstractTemplates.map(_pipeline.templateKey).toList(growable: false);
-  late final List<String> _nonAbstractTemplateKeys =
-      _nonAbstractTemplates.map(_pipeline.templateKey).toList(growable: false);
-  final List<String> _recentTemplateKeys = <String>[];
-  final _random = Random();
 
   Timer? _avatarCarouselTimer;
   Avatar? _nextCarouselAvatar;
@@ -189,6 +186,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
     final template = _pickTemplate();
     if (template == null) return;
+    _carouselEngine.markTemplateUsed(template);
     final background = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor()
         : state.backgroundColor == Colors.transparent
@@ -337,6 +335,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       emit(state.copyWith(shuffling: false));
       return;
     }
+    _carouselEngine.markTemplateUsed(template);
     final background = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor()
         : state.backgroundColor == Colors.transparent
@@ -417,22 +416,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
     final colors = _carouselColors;
     if (colors == null) return;
-    final template = _pickTemplate();
-    if (template == null) return;
-    final background = template.hasAlphaBackground
-        ? _randomAvatarBackgroundColor()
-        : state.backgroundColor == Colors.transparent
-            ? colors.accent
-            : state.backgroundColor;
-    try {
-      _nextCarouselAvatar = await _buildAvatarFromTemplate(
-        template: template,
-        background: background,
-        colors: colors,
-      );
-    } on FormatException {
-      _nextCarouselAvatar = null;
-    }
+    final context = AvatarCarouselBuildContext(
+      colors: colors,
+      currentBackground: state.backgroundColor,
+    );
+    _nextCarouselAvatar = await _carouselEngine.buildNext(
+      context: context,
+      renderSpec: _resolveCarouselRenderSpec,
+    );
   }
 
   void updateCropRect(Rect rect) {
@@ -598,33 +589,28 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  AvatarTemplate? _pickTemplate() {
-    final hasAbstract = _abstractTemplates.isNotEmpty;
-    final hasNonAbstract = _nonAbstractTemplates.isNotEmpty;
-    if (!hasAbstract && !hasNonAbstract) return null;
-    final useAbstract = !hasNonAbstract ||
-        (hasAbstract && hasNonAbstract && _random.nextBool());
-    final pool = useAbstract ? _abstractTemplates : _nonAbstractTemplates;
-    final keys = useAbstract ? _abstractTemplateKeys : _nonAbstractTemplateKeys;
-    if (keys.isEmpty || pool.isEmpty) return null;
-    final recentKeys = _recentTemplateKeys.toSet();
-    final availableKeys =
-        keys.where((key) => !recentKeys.contains(key)).toList();
-    final pickKeys = availableKeys.isEmpty ? keys : availableKeys;
-    final selectionKey = pickKeys[_random.nextInt(pickKeys.length)];
-    final selection =
-        _templateByKey[selectionKey] ?? pool[_random.nextInt(pool.length)];
-    _pushRecentTemplateKey(selectionKey);
-    return selection;
-  }
+  AvatarTemplate? _pickTemplate() =>
+      _carouselEngine.pickTemplate(preferAbstract: false);
 
   Color _randomAvatarBackgroundColor() => _pipeline.randomBackground(_random);
 
-  void _pushRecentTemplateKey(String key) {
-    _recentTemplateKeys.add(key);
-    if (_recentTemplateKeys.length > _avatarCarouselHistoryLimit) {
-      _recentTemplateKeys.removeAt(0);
-    }
+  AvatarRenderSpec _resolveCarouselRenderSpec(
+    AvatarTemplate template,
+    AvatarCarouselBuildContext context,
+  ) {
+    final resolvedBackground = template.hasAlphaBackground
+        ? _randomAvatarBackgroundColor()
+        : context.currentBackground == Colors.transparent
+            ? context.colors.accent
+            : context.currentBackground;
+    final useTemplateInset =
+        template.category != AvatarTemplateCategory.abstract;
+    final insetFraction = useTemplateInset ? avatarInsetFraction : 0.0;
+    return AvatarRenderSpec(
+      background: resolvedBackground,
+      insetFraction: insetFraction,
+      cropSide: _avatarCarouselCropSide,
+    );
   }
 
   Future<Avatar> _buildAvatarFromTemplate({

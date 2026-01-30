@@ -53,19 +53,6 @@ class AccessibilityComposerChanged extends AccessibilityActionEvent {
   List<Object?> get props => [value];
 }
 
-class AccessibilitySendMessageRequested extends AccessibilityActionEvent {
-  const AccessibilitySendMessageRequested({
-    required this.body,
-    required this.recipients,
-  });
-
-  final String body;
-  final List<AccessibilityContact> recipients;
-
-  @override
-  List<Object?> get props => [body, recipients];
-}
-
 class AccessibilityRecipientRemoved extends AccessibilityActionEvent {
   const AccessibilityRecipientRemoved(this.jid);
 
@@ -114,15 +101,11 @@ class AccessibilityLocaleUpdated extends AccessibilityActionEvent {
   List<Object?> get props => [localization.localeName];
 }
 
-class AccessibilityMessagesUpdated extends AccessibilityActionEvent {
-  const AccessibilityMessagesUpdated({
-    required this.jid,
-    required this.messages,
-  });
+class AccessibilityDraftIdUpdated extends AccessibilityActionEvent {
+  const AccessibilityDraftIdUpdated(this.draftId);
 
-  final String jid;
-  final List<Message> messages;
+  final int? draftId;
 
   @override
-  List<Object?> get props => [jid, messages];
+  List<Object?> get props => [draftId];
 }

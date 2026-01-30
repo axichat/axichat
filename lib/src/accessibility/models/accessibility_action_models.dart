@@ -124,12 +124,10 @@ class AccessibilityNavigateAction extends AccessibilityMenuAction {
 
 enum AccessibilityCommand {
   openChat,
-  sendMessage,
   addRecipient,
   backToContacts,
   closeMenu,
   confirmNewContact,
-  saveDraft,
   resumeDraft,
 }
 

@@ -465,27 +465,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         );
       },
     );
+    final double surfaceRadius = context.sizing.containerRadius;
     final BorderRadius radius = isSheet
-        ? const BorderRadius.vertical(top: Radius.circular(24))
-        : BorderRadius.circular(8);
-    final Color background = isSheet
-        ? Theme.of(context).colorScheme.surface
-        : calendarContainerColor;
-    const double dropdownShadowAlpha = 0.12;
-    const double dropdownShadowBlurRadius = 24;
-    const Offset dropdownShadowOffset = Offset(0, 8);
-    final Color dropdownShadowColor = Theme.of(
-      context,
-    ).shadowColor.withValues(alpha: dropdownShadowAlpha);
-    final List<BoxShadow>? boxShadow = isSheet
-        ? null
-        : [
-            BoxShadow(
-              color: dropdownShadowColor,
-              blurRadius: dropdownShadowBlurRadius,
-              offset: dropdownShadowOffset,
-            ),
-          ];
+        ? BorderRadius.vertical(top: Radius.circular(surfaceRadius))
+        : BorderRadius.circular(surfaceRadius);
+    final Color background = context.colorScheme.card;
+    final List<BoxShadow>? boxShadow = isSheet ? null : calendarElevation3;
     final CalendarMethod? method = widget.collectionMethod;
     final CalendarIcsMeta? icsMeta = widget.task.icsMeta;
     final List<CalendarRawProperty> rawProperties =
@@ -804,11 +789,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             border: popoverBorder,
             boxShadow: boxShadow ?? const <BoxShadow>[],
           );
-          return SafeArea(top: true, bottom: true, child: transformed);
+          return transformed;
         }
 
         if (!isSheet) {
-          return SafeArea(top: true, bottom: true, child: surfaced);
+          return surfaced;
         }
         return SafeArea(top: false, bottom: false, child: surfaced);
       },
@@ -1142,19 +1127,17 @@ class _TaskPopoverSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: radius,
-        child: Container(
-          width: width,
-          constraints: constraints,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: radius,
-            border: border,
-            boxShadow: boxShadow,
-          ),
-          child: child,
+      type: MaterialType.transparency,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: radius,
+          border: border,
+          boxShadow: boxShadow,
+        ),
+        child: ConstrainedBox(
+          constraints: constraints ?? const BoxConstraints(),
+          child: SizedBox(width: width, child: child),
         ),
       ),
     );
@@ -1211,22 +1194,24 @@ class _TaskPopoverContainerTransformState
   Widget build(BuildContext context) {
     return SizedBox(
       width: widget.width,
-      height: widget.maxHeight,
-      child: Navigator(
-        onGenerateRoute: (_) => PageRouteBuilder<void>(
-          pageBuilder: (context, _, __) => _TaskPopoverTransformBody(
-            containerKey: _containerKey,
-            header: widget.header,
-            body: widget.body,
-            width: widget.width,
-            maxHeight: widget.maxHeight,
-            radius: widget.radius,
-            background: widget.background,
-            border: widget.border,
-            boxShadow: widget.boxShadow,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: widget.maxHeight),
+        child: Navigator(
+          onGenerateRoute: (_) => PageRouteBuilder<void>(
+            pageBuilder: (context, _, __) => _TaskPopoverTransformBody(
+              containerKey: _containerKey,
+              header: widget.header,
+              body: widget.body,
+              width: widget.width,
+              maxHeight: widget.maxHeight,
+              radius: widget.radius,
+              background: widget.background,
+              border: widget.border,
+              boxShadow: widget.boxShadow,
+            ),
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
           ),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
         ),
       ),
     );

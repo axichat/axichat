@@ -7,6 +7,7 @@ import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/jid_transport.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -37,9 +38,11 @@ String _unblockedMessage(String address) => 'Unblocked $address';
 
 class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {
+  static const String visibleItemsCacheKey = 'visibleItems';
+
   BlocklistCubit({required XmppService xmppService})
       : _xmppService = xmppService,
-        super(const BlocklistAvailable(items: null)) {
+        super(const BlocklistAvailable(items: null, visibleItems: null)) {
     _xmppBlocklistSubscription = _xmppService.blocklistStream().listen(
           _handleXmppBlocklist,
         );
@@ -51,6 +54,8 @@ class BlocklistCubit extends Cubit<BlocklistState>
   final XmppService _xmppService;
   List<BlocklistData>? _xmppBlocklist;
   List<EmailBlocklistEntry>? _emailBlocklist;
+  String _filterQuery = '';
+  SearchSortOrder _filterSortOrder = SearchSortOrder.newestFirst;
 
   late final StreamSubscription<List<BlocklistData>> _xmppBlocklistSubscription;
   late final StreamSubscription<List<EmailBlocklistEntry>>
@@ -62,6 +67,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     final current = change.currentState;
     if (current is BlocklistAvailable) {
       cache[blocklistItemsCacheKey] = current.items;
+      cache[visibleItemsCacheKey] = current.visibleItems;
     }
   }
 
@@ -187,6 +193,19 @@ class BlocklistCubit extends Cubit<BlocklistState>
     emit(const BlocklistSuccess(_unblockAllSuccessMessage));
   }
 
+  void updateFilter({
+    required String query,
+    required SearchSortOrder sortOrder,
+  }) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (_filterQuery == normalizedQuery && _filterSortOrder == sortOrder) {
+      return;
+    }
+    _filterQuery = normalizedQuery;
+    _filterSortOrder = sortOrder;
+    _rebuildVisibleItems();
+  }
+
   void _handleXmppBlocklist(List<BlocklistData> items) {
     _xmppBlocklist = items;
     _emitMerged();
@@ -199,7 +218,8 @@ class BlocklistCubit extends Cubit<BlocklistState>
 
   void _emitMerged() {
     if (_xmppBlocklist == null && _emailBlocklist == null) {
-      emit(const BlocklistAvailable(items: null));
+      cache[visibleItemsCacheKey] = null;
+      emit(const BlocklistAvailable(items: null, visibleItems: null));
       return;
     }
     final entries = <BlocklistEntry>[
@@ -218,6 +238,56 @@ class BlocklistCubit extends Cubit<BlocklistState>
             transport: MessageTransport.email,
           ),
     ];
-    emit(BlocklistAvailable(items: entries));
+    final visibleItems = _applyFilters(entries);
+    cache[visibleItemsCacheKey] = visibleItems;
+    emit(BlocklistAvailable(items: entries, visibleItems: visibleItems));
+  }
+
+  void _rebuildVisibleItems() {
+    final items = _resolveCachedItems();
+    if (items == null) {
+      cache[visibleItemsCacheKey] = null;
+      return;
+    }
+    final visibleItems = _applyFilters(items);
+    cache[visibleItemsCacheKey] = visibleItems;
+    final current = state;
+    if (current is BlocklistAvailable) {
+      emit(
+        BlocklistAvailable(
+          items: current.items,
+          visibleItems: visibleItems,
+        ),
+      );
+    }
+  }
+
+  List<BlocklistEntry>? _resolveCachedItems() {
+    final current = state;
+    if (current is BlocklistAvailable && current.items != null) {
+      return current.items;
+    }
+    final cached = cache[blocklistItemsCacheKey];
+    if (cached is List<BlocklistEntry>) {
+      return cached;
+    }
+    return null;
+  }
+
+  List<BlocklistEntry> _applyFilters(List<BlocklistEntry> items) {
+    List<BlocklistEntry> visibleItems = items;
+    if (_filterQuery.isNotEmpty) {
+      visibleItems = visibleItems
+          .where((item) => item.address.toLowerCase().contains(_filterQuery))
+          .toList();
+    } else {
+      visibleItems = List<BlocklistEntry>.from(visibleItems);
+    }
+    visibleItems.sort(
+      (a, b) => _filterSortOrder.isNewestFirst
+          ? b.blockedAt.compareTo(a.blockedAt)
+          : a.blockedAt.compareTo(b.blockedAt),
+    );
+    return visibleItems;
   }
 }
