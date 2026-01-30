@@ -7478,7 +7478,7 @@ mixin MessageService
     if (stanzaId.isEmpty) return;
     try {
       final accountJid = myJid?.trim();
-      final isSelf = sameBareAddress(message.senderJid, accountJid);
+      final isSelf = sameNormalizedAddressValue(message.senderJid, accountJid);
       var isTrusted = isSelf;
       if (!isTrusted) {
         isTrusted = await _dbOpReturning<XmppDatabase, bool>((db) async {

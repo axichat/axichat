@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
@@ -144,6 +145,10 @@ class EmailDeltaTransport implements ChatTransport {
   bool _accountsSupported = true;
   final Map<int, _DeltaAccountSession> _accountSessions = {};
   var _defaultChatAttachmentAutoDownload = AttachmentAutoDownload.blocked;
+
+  AppLocalizations get _l10n =>
+      _localizationsProvider?.call() ??
+      lookupAppLocalizations(const Locale('en'));
 
   void updateDefaultChatAttachmentAutoDownload(
     AttachmentAutoDownload value,
@@ -1456,7 +1461,7 @@ class EmailDeltaTransport implements ChatTransport {
     final hasBody = trimmedBody?.isNotEmpty == true;
     final resolvedBody = hasBody
         ? trimmedBody
-        : (metadata == null ? null : deltaAttachmentLabel(metadata));
+        : (metadata == null ? null : _deltaAttachmentLabel(metadata));
     final resolvedTimestamp = timestamp ?? DateTime.timestamp();
     final message = Message(
       stanzaID: resolvedStanzaId,
@@ -1619,6 +1624,46 @@ class EmailDeltaTransport implements ChatTransport {
       return accountSender;
     }
     return _selfJidForAddress(null);
+  }
+
+  String _deltaAttachmentLabel(FileMetadataData metadata) {
+    final filename = metadata.filename.trim();
+    final label =
+        filename.isEmpty ? _l10n.chatAttachmentFallbackLabel : filename;
+    final sizeLabel = _formatAttachmentBytes(metadata.sizeBytes);
+    return _l10n.chatAttachmentCaption(label, sizeLabel);
+  }
+
+  String _formatAttachmentBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) {
+      return _l10n.chatAttachmentUnknownSize;
+    }
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    const unitBase = 1024;
+    while (value >= unitBase && unitIndex < 4) {
+      value /= unitBase;
+      unitIndex++;
+    }
+    const precisionThreshold = 10;
+    final precision = value >= precisionThreshold || unitIndex == 0 ? 0 : 1;
+    final unitLabel = _attachmentUnitLabel(unitIndex);
+    return '${value.toStringAsFixed(precision)} $unitLabel';
+  }
+
+  String _attachmentUnitLabel(int unitIndex) {
+    switch (unitIndex) {
+      case 0:
+        return _l10n.commonFileSizeUnitBytes;
+      case 1:
+        return _l10n.commonFileSizeUnitKilobytes;
+      case 2:
+        return _l10n.commonFileSizeUnitMegabytes;
+      case 3:
+        return _l10n.commonFileSizeUnitGigabytes;
+      default:
+        return _l10n.commonFileSizeUnitTerabytes;
+    }
   }
 
   Future<Chat> _ensureChat(

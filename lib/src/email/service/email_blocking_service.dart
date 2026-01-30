@@ -37,7 +37,7 @@ class EmailBlockingService {
   }
 
   Future<void> block(String address) async {
-    final normalized = normalizedAddressKey(address);
+    final normalized = normalizedAddressValue(address);
     if (normalized == null || normalized.isEmpty) return;
     final db = await _db;
     await db.addEmailBlock(normalized);
@@ -46,7 +46,7 @@ class EmailBlockingService {
   }
 
   Future<void> unblock(String address) async {
-    final normalized = normalizedAddressKey(address);
+    final normalized = normalizedAddressValue(address);
     if (normalized == null || normalized.isEmpty) return;
     final db = await _db;
     await db.removeEmailBlock(normalized);
@@ -55,7 +55,7 @@ class EmailBlockingService {
   }
 
   Future<bool> isBlocked(String address) async {
-    final normalized = normalizedAddressKey(address);
+    final normalized = normalizedAddressValue(address);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }

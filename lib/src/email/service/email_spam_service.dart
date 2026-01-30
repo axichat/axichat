@@ -60,6 +60,6 @@ class EmailSpamService {
   }
 
   String? _normalize(String address) {
-    return normalizedAddressKey(address);
+    return normalizedAddressValue(address);
   }
 }

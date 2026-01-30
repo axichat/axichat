@@ -385,7 +385,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = normalizedAddressKey(value);
+    final normalized = normalizedAddressValue(value);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }
@@ -403,7 +403,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final String? _chatLookupJid = jid == null
       ? null
       : _isEmailOnlyAddress(jid)
-          ? normalizedAddressKey(jid) ?? jid!.trim().toLowerCase()
+          ? normalizedAddressValue(jid) ?? jid!.trim().toLowerCase()
           : jid;
   final MessageService _messageService;
   XmppService? _xmppService;

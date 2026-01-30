@@ -3183,7 +3183,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   String _normalizeJid(String jid) {
-    return normalizedAddressKey(jid) ?? jid.trim().toLowerCase();
+    final parts = jid.split('@');
+    if (parts.length == 2) {
+      return _normalizeSignupKey(parts.first, parts.last);
+    }
+    return jid.trim().toLowerCase();
   }
 
   String _normalizeSignupKey(String username, String host) =>
@@ -3258,7 +3262,7 @@ class _SessionEmailCredentials {
   final String address;
   final String password;
 
-  bool matches(String jid) => sameBareAddress(address, jid);
+  bool matches(String jid) => sameNormalizedAddressValue(address, jid);
 }
 
 class _DatabaseSecrets {

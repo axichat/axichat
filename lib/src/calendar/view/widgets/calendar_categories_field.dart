@@ -222,7 +222,6 @@ class _CategoryChip extends StatelessWidget {
     final textTheme = context.textTheme;
     final colors = context.colorScheme;
     final TextStyle labelStyle = textTheme.small.copyWith(
-      fontWeight: FontWeight.w600,
       color: colors.foreground,
     );
     return InputChip(
@@ -230,7 +229,7 @@ class _CategoryChip extends StatelessWidget {
       showCheckmark: false,
       backgroundColor: backgroundColor,
       selectedColor: backgroundColor,
-      side: BorderSide(color: context.borderSide.color),
+      side: context.borderSide,
       labelStyle: labelStyle,
       label: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _categoryChipMaxWidth),

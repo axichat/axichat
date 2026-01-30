@@ -152,6 +152,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final l10n = context.l10n;
     final recipients = widget.recipients;
     final rosterItems =
@@ -201,7 +204,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ),
     ];
 
-    final barBackground = context.colorScheme.surfaceContainerHigh;
+    final barBackground = colors.surfaceContainerHigh;
     final availableAutocompleteChats = widget.availableChats
         .where(
           (chat) => !widget.recipients.any(
@@ -225,7 +228,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     );
     final headerStyle = context.textTheme.small.copyWith(
       fontWeight: FontWeight.w600,
-      color: context.colorScheme.onSurfaceVariant,
+      color: colors.onSurfaceVariant,
     );
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
@@ -351,12 +354,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                 alignment: Alignment.topLeft,
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: spacing.m,
-                    vertical: spacing.s,
+                    horizontal: context.spacing.m,
+                    vertical: context.spacing.s,
                   ),
                   child: Wrap(
-                    spacing: spacing.s,
-                    runSpacing: spacing.s,
+                    spacing: context.spacing.s,
+                    runSpacing: context.spacing.s,
                     children: [
                       ...chips,
                       Builder(
@@ -747,7 +750,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   String? _normalizeAddress(String? raw) {
-    return normalizedAddressKey(raw);
+    return normalizedAddressValue(raw);
   }
 
   bool _isOwnAddress(String? raw) {
@@ -1103,10 +1106,9 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sizing = context.sizing;
     return AxiButton.secondary(
       size: AxiButtonSize.sm,
-      leading: Icon(icon, size: sizing.menuItemIconSize),
+      leading: Icon(icon, size: context.sizing.menuItemIconSize),
       onPressed: onPressed,
       child: Text(label),
     );
@@ -1192,17 +1194,14 @@ class _RecipientAutocompleteField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sizing = context.sizing;
-    final double fieldMinWidth = sizing.iconButtonTapTarget;
-    final double fieldMaxWidth = sizing.menuMaxWidth;
     final double fieldHorizontalPadding =
         (fieldOuterPadding + fieldInnerPadding) * 2;
     final TextStyle textStyle = context.textTheme.p;
     return AutofillGroup(
       child: _RecipientAutocompleteFieldSizer(
         controller: controller,
-        minWidth: fieldMinWidth,
-        maxWidth: fieldMaxWidth,
+        minWidth: context.sizing.iconButtonTapTarget,
+        maxWidth: context.sizing.menuMaxWidth,
         horizontalPadding: fieldHorizontalPadding,
         textStyle: textStyle,
         child: _RecipientAutocompleteOverlay(
@@ -1409,6 +1408,8 @@ final class _RecipientAutocompleteOverlayState
   }
 
   _AutocompleteOverlayLimits _overlayLimits(BuildContext overlayContext) {
+    final spacing = overlayContext.spacing;
+    final sizing = overlayContext.sizing;
     final triggerBox =
         _triggerKey.currentContext?.findRenderObject() as RenderBox?;
     final triggerSize = triggerBox?.size ?? Size.zero;
@@ -1434,23 +1435,15 @@ final class _RecipientAutocompleteOverlayState
     final keyboardInset = viewInsets.bottom;
     final visibleHeight = math.max(0.0, screenSize.height - keyboardInset);
 
-    final double overlayGap = overlayContext.spacing.xs;
-    final double overlayMargin = overlayContext.spacing.m;
-    final double overlayHorizontalMargin = overlayContext.spacing.m;
-    final double suggestionTileHeight = overlayContext.sizing.listButtonHeight;
-    final double suggestionMaxHeight = overlayContext.sizing.menuMaxHeight;
-    final double overlayPreferredMaxWidth = overlayContext.sizing.menuMaxWidth;
-    final double overlayPreferredMinWidth = overlayContext.sizing.menuMinWidth;
-
     final desiredHeight = math.min(
-      suggestionMaxHeight,
-      _options.length * suggestionTileHeight,
+      sizing.menuMaxHeight,
+      _options.length * sizing.listButtonHeight,
     );
     final belowSpace = visibleHeight -
         (triggerOrigin.dy + triggerSize.height) -
         bottomSafe -
-        overlayMargin;
-    final aboveSpace = triggerOrigin.dy - topSafe - overlayMargin;
+        spacing.m;
+    final aboveSpace = triggerOrigin.dy - topSafe - spacing.m;
     final normalizedBelow = math.max(0.0, belowSpace);
     final normalizedAbove = math.max(0.0, aboveSpace);
     final belowHeight = math.min(desiredHeight, normalizedBelow);
@@ -1460,19 +1453,19 @@ final class _RecipientAutocompleteOverlayState
 
     final maxAllowedWidth = math.max(
       0.0,
-      screenSize.width - overlayHorizontalMargin * 2,
+      screenSize.width - spacing.m * 2,
     );
-    final maxWidth = math.min(overlayPreferredMaxWidth, maxAllowedWidth);
-    final minWidth = math.min(overlayPreferredMinWidth, maxWidth);
+    final maxWidth = math.min(sizing.menuMaxWidth, maxAllowedWidth);
+    final minWidth = math.min(sizing.menuMinWidth, maxWidth);
 
     final verticalOffset = placeBelow
-        ? triggerSize.height + overlayGap
-        : -(maxHeight + overlayGap);
+        ? triggerSize.height + spacing.xs
+        : -(maxHeight + spacing.xs);
 
     return _AutocompleteOverlayLimits(
       triggerOrigin: triggerOrigin,
       screenWidth: screenSize.width,
-      horizontalMargin: overlayHorizontalMargin,
+      horizontalMargin: spacing.m,
       verticalOffset: verticalOffset,
       maxHeight: maxHeight,
       minWidth: minWidth,
@@ -1486,18 +1479,14 @@ final class _RecipientAutocompleteOverlayState
     required TextStyle? titleStyle,
     required TextStyle? subtitleStyle,
   }) {
-    final double tileHorizontalPadding = overlayContext.spacing.m * 2;
-    final double avatarSize = overlayContext.sizing.iconButtonSize;
-    final double gapAfterAvatar = overlayContext.spacing.s;
-    final double gapBeforeTrailingIcon = overlayContext.spacing.s;
-    final double trailingIconSize = overlayContext.sizing.menuItemIconSize;
-    final double extraTextBreathingRoom = overlayContext.spacing.s;
-    final fixedWidth = tileHorizontalPadding +
-        avatarSize +
-        gapAfterAvatar +
-        gapBeforeTrailingIcon +
-        trailingIconSize +
-        extraTextBreathingRoom;
+    final spacing = overlayContext.spacing;
+    final sizing = overlayContext.sizing;
+    final fixedWidth = spacing.m * 2 +
+        sizing.iconButtonSize +
+        spacing.s +
+        spacing.s +
+        sizing.menuItemIconSize +
+        spacing.s;
 
     final availableTextWidth = math.max(0.0, limits.maxWidth - fixedWidth);
     final direction = Directionality.of(overlayContext);
@@ -1584,11 +1573,10 @@ final class _RecipientAutocompleteOverlayState
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final spacing = context.spacing;
     final sizing = context.sizing;
     final hintColor = colors.mutedForeground;
     final textStyle = context.textTheme.p;
-    final double fieldVerticalPadding = spacing.xs;
+    final double fieldVerticalPadding = context.spacing.xs;
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -1617,7 +1605,10 @@ final class _RecipientAutocompleteOverlayState
             titleStyle: titleStyle,
             subtitleStyle: subtitleStyle,
           );
-          final overlayOffset = Offset(0, limits.verticalOffset);
+          final overlayOffset = _overlayOffsetForWidth(
+            limits: limits,
+            width: overlayWidth,
+          );
 
           return Stack(
             children: [

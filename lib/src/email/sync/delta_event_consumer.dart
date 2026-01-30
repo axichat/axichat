@@ -483,7 +483,9 @@ class DeltaEventConsumer {
         .where((entry) => entry.chatId > _deltaChatLastSpecialId)
         .map((entry) => entry.chatId)
         .toSet();
-    _archivedChatIds = archivedChatIds;
+    _archivedChatIds
+      ..clear()
+      ..addAll(archivedChatIds);
     _archivedChatlistFetchedAt = DateTime.timestamp();
 
     final entriesByChatId = <int, DeltaChatlistEntry>{};
@@ -1171,14 +1173,14 @@ class DeltaEventConsumer {
 
   bool _isSelfPendingSender(Message message) {
     final String normalizedSender =
-        normalizedAddressKey(message.senderJid) ?? '';
+        normalizedAddressValue(message.senderJid) ?? '';
     if (normalizedSender.isEmpty) {
       return false;
     }
     if (normalizedSender.isDeltaPlaceholderJid) {
       return true;
     }
-    final String normalizedSelf = normalizedAddressKey(_selfJid) ?? '';
+    final String normalizedSelf = normalizedAddressValue(_selfJid) ?? '';
     if (normalizedSelf.isEmpty) {
       return false;
     }
@@ -1591,7 +1593,9 @@ class DeltaEventConsumer {
     _archivedChatlistInFlight = future;
     try {
       final ids = await future;
-      _archivedChatIds = ids;
+      _archivedChatIds
+        ..clear()
+        ..addAll(ids);
       _archivedChatlistFetchedAt = DateTime.timestamp();
       return ids;
     } finally {

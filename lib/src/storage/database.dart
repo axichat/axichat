@@ -1369,7 +1369,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) =>
-      normalizedAddressKey(address) ?? address.trim().toLowerCase();
+      normalizedAddressValue(address) ?? address.trim().toLowerCase();
   String? _normalizeBlocklistJid(String jid) {
     final normalized = normalizedAddressKey(jid);
     if (normalized != null && normalized.isNotEmpty) {
@@ -2545,12 +2545,12 @@ WHERE jid = ?
   }) async {
     const String sqlPlaceholderToken = '?';
     const String sqlPlaceholderSeparator = ', ';
-    final normalizedAddress = normalizedAddressKey(resolvedAddress);
+    final normalizedAddress = normalizedAddressValue(resolvedAddress);
     if (normalizedAddress == null || normalizedAddress.isEmpty) {
       return;
     }
     final normalizedPlaceholders = placeholderJids
-        .map(normalizedAddressKey)
+        .map(normalizedAddressValue)
         .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
@@ -2597,7 +2597,7 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     const String deltaKeySeparator = '|';
     final normalizedPlaceholders = placeholderJids
-        .map(normalizedAddressKey)
+        .map(normalizedAddressValue)
         .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
@@ -2649,7 +2649,7 @@ WHERE email_from_address IN ($placeholderClause)
       final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
       final candidates = messagesByKey[key] ?? const <Message>[];
       final hasNonPlaceholder = candidates.any((candidate) {
-        final sender = normalizedAddressKey(candidate.senderJid) ?? '';
+        final sender = normalizedAddressValue(candidate.senderJid) ?? '';
         return !normalizedPlaceholders.contains(sender);
       });
       if (hasNonPlaceholder) {

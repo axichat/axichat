@@ -139,7 +139,6 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   isUpdating: _isUpdating,
                   onToggleCompletion: toggleAction,
                   timeLabel: timeLabel,
-                  timeFontWeight: timeFontWeight,
                   onEdit: editAction,
                   onDelete: deleteAction,
                 );
@@ -366,7 +365,6 @@ class _MediumTaskTile extends StatelessWidget {
     required this.isUpdating,
     required this.onToggleCompletion,
     required this.timeLabel,
-    required this.timeFontWeight,
     required this.onEdit,
     required this.onDelete,
   });
@@ -378,7 +376,6 @@ class _MediumTaskTile extends StatelessWidget {
   final bool isUpdating;
   final ValueChanged<bool>? onToggleCompletion;
   final String? timeLabel;
-  final FontWeight? timeFontWeight;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -392,18 +389,16 @@ class _MediumTaskTile extends StatelessWidget {
     final Brightness textBrightness =
         ThemeData.estimateBrightnessForColor(backgroundColor);
     final Color textColor = textBrightness == Brightness.dark
-        ? colors.background
+        ? colors.primaryForeground
         : colors.foreground;
     final Color progressTrack = textColor.withValues(alpha: 0.25);
     final bool showActions = onEdit != null || onDelete != null;
     final TextStyle titleStyle = textTheme.p.copyWith(
       color: textColor,
-      fontWeight: FontWeight.w600,
       decoration: task.isCompleted ? TextDecoration.lineThrough : null,
     );
     final TextStyle timeStyle = textTheme.small.copyWith(
       color: textColor.withValues(alpha: 0.9),
-      fontWeight: timeFontWeight ?? textTheme.small.fontWeight,
     );
     return TaskTileSurface(
       margin: margin,

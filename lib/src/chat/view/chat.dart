@@ -2204,7 +2204,7 @@ class _ChatState extends State<Chat> {
 
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = normalizedAddressKey(value);
+    final normalized = normalizedAddressValue(value);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }
@@ -2264,7 +2264,7 @@ class _ChatState extends State<Chat> {
       if (candidate.isEmpty) {
         return null;
       }
-      final String? normalizedCandidate = normalizedAddressKey(candidate);
+      final String? normalizedCandidate = normalizedAddressValue(candidate);
       if (normalizedCandidate == null || normalizedCandidate.isEmpty) {
         return null;
       }
@@ -2272,7 +2272,7 @@ class _ChatState extends State<Chat> {
         if (!entry.transport.isEmail) {
           continue;
         }
-        if (normalizedAddressKey(entry.address) == normalizedCandidate) {
+        if (normalizedAddressValue(entry.address) == normalizedCandidate) {
           return entry;
         }
       }
@@ -3712,7 +3712,7 @@ class _ChatState extends State<Chat> {
               for (final item in rosterItems) {
                 final path = item.avatarPath?.trim();
                 if (path == null || path.isEmpty) continue;
-                final normalizedJid = item.jid.normalizedJidKey;
+                final normalizedJid = normalizedAddressValue(item.jid);
                 if (normalizedJid == null) continue;
                 rosterAvatarPathsByJid[normalizedJid] = path;
               }
@@ -3722,11 +3722,12 @@ class _ChatState extends State<Chat> {
                 final path =
                     (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
                 if (path == null || path.isEmpty) continue;
-                final normalizedJid = chat.jid.normalizedJidKey;
+                final normalizedJid = normalizedAddressValue(chat.jid);
                 if (normalizedJid != null && normalizedJid.isNotEmpty) {
                   chatAvatarPathsByJid[normalizedJid] = path;
                 }
-                final normalizedRemoteJid = chat.remoteJid.normalizedJidKey;
+                final normalizedRemoteJid =
+                    normalizedAddressValue(chat.remoteJid);
                 if (normalizedRemoteJid != null &&
                     normalizedRemoteJid.isNotEmpty) {
                   chatAvatarPathsByJid[normalizedRemoteJid] = path;
@@ -3756,7 +3757,7 @@ class _ChatState extends State<Chat> {
                 }
               }
               String? avatarPathForBareJid(String jid) {
-                final normalized = normalizedAddressKey(jid);
+                final normalized = normalizedAddressValue(jid);
                 if (normalized == null || normalized.isEmpty) return null;
                 return rosterAvatarPathsByJid[normalized] ??
                     chatAvatarPathsByJid[normalized];
@@ -3770,8 +3771,8 @@ class _ChatState extends State<Chat> {
                   return avatarPathForBareJid(trimmed);
                 }
                 final bareParticipant =
-                    normalizedAddressKey(trimmed.substring(0, slashIndex));
-                final roomJid = normalizedAddressKey(chatEntity?.jid);
+                    normalizedAddressValue(trimmed.substring(0, slashIndex));
+                final roomJid = normalizedAddressValue(chatEntity?.jid);
                 final isRoomParticipant =
                     bareParticipant != null && bareParticipant == roomJid;
                 if (!isRoomParticipant) {
@@ -8786,7 +8787,7 @@ class _ChatState extends State<Chat> {
     final statuses = <String, FanOutRecipientState>{};
     for (final status in lastEntry.statuses) {
       statuses[status.chat.jid] = status.state;
-      final emailKey = status.chat.emailAddress.normalizedJidKey;
+      final emailKey = normalizedAddressValue(status.chat.emailAddress);
       if (emailKey != null && emailKey.isNotEmpty) {
         statuses[emailKey] = status.state;
       }

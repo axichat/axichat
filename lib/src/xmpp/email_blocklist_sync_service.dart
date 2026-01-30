@@ -50,7 +50,7 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       _connection.getManager<EmailBlocklistPubSubManager>();
 
   String? _normalizeEmailBlocklistAddress(String? address) =>
-      normalizedAddressKey(address);
+      normalizedAddressValue(address);
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {

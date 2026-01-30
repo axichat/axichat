@@ -90,7 +90,6 @@ class CalendarLoadingIndicator extends StatelessWidget {
             resolvedMessage,
             style: textTheme.p.copyWith(
               color: colors.foreground,
-              fontWeight: FontWeight.w600,
             ),
             textAlign: TextAlign.center,
           ),

@@ -166,7 +166,7 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
     );
     final EdgeInsets contentPadding = EdgeInsets.fromLTRB(
       spacing.l,
-      spacing.zero,
+      spacing.xxs,
       spacing.l,
       spacing.l,
     );

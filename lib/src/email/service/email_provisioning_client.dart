@@ -249,10 +249,9 @@ class EmailProvisioningClient {
         stackTrace,
       );
       throw const EmailProvisioningApiException(
-        'We could not delete your email account. Please check your '
-        'connection and try again.',
         code: EmailProvisioningApiErrorCode.network,
         isRecoverable: true,
+        debugMessage: 'Email account deletion request failed.',
       );
     }
 

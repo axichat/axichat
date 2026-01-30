@@ -12,6 +12,11 @@ String? normalizeAddress(String? raw) {
   return trimmed;
 }
 
+String? normalizedAddressValue(String? raw) {
+  final normalized = normalizeAddress(raw);
+  return normalized?.toLowerCase();
+}
+
 mox.JID? parseJid(String? raw) {
   final normalized = normalizeAddress(raw);
   if (normalized == null) return null;
@@ -38,6 +43,13 @@ String? bareAddress(String? raw) {
     return _stripResource(normalized);
   }
   return parsed.toBare().toString();
+}
+
+String? bareAddressValue(String? raw) {
+  if (raw == null) return null;
+  final index = raw.indexOf('/');
+  if (index == -1) return raw;
+  return raw.substring(0, index);
 }
 
 String? bareAddressOrNull(String? raw, {int? maxBytes}) {
@@ -72,6 +84,13 @@ String? normalizedAddressKey(String? raw) {
     return normalized.toLowerCase();
   }
   return parsed.toBare().toString().toLowerCase();
+}
+
+bool sameNormalizedAddressValue(String? a, String? b) {
+  final left = normalizedAddressValue(a);
+  final right = normalizedAddressValue(b);
+  if (left == null || right == null) return false;
+  return left == right;
 }
 
 bool sameBareAddress(String? a, String? b) {
@@ -109,9 +128,15 @@ String? addressLocalPart(String? raw) {
 }
 
 String? addressDomainPart(String? raw) {
-  final parsed = parseJid(raw);
-  if (parsed == null) return null;
-  final domain = parsed.domain.trim();
+  final normalized = normalizeAddress(raw);
+  if (normalized == null || !normalized.contains('@')) {
+    return null;
+  }
+  final parts = normalized.split('@');
+  if (parts.length != 2) {
+    return null;
+  }
+  final domain = parts.last.trim();
   return domain.isEmpty ? null : domain;
 }
 

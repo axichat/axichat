@@ -1986,7 +1986,7 @@ class XmppService extends XmppBase
   }
 
   ui.Color? _demoAvatarBackgroundForJid(String jid) {
-    final normalized = normalizedAddressKey(jid);
+    final normalized = normalizedAddressValue(jid);
     if (normalized == null) {
       return null;
     }

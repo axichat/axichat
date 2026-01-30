@@ -311,18 +311,18 @@ class EmailService {
   })  : _credentialStore = credentialStore,
         _databaseBuilder = databaseBuilder,
         _endpointConfig = endpointConfig,
-        _transport = transport ??
-            EmailDeltaTransport(
-              databaseBuilder: databaseBuilder,
-              logger: logger,
-              localizationsProvider: () => _l10n,
-            ),
         _connectionConfigBuilder = connectionConfigBuilder ??
             const EmailConnectionConfigBuilder(_defaultConnectionConfig),
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
         _messageService = messageService,
         _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
+    _transport = transport ??
+        EmailDeltaTransport(
+          databaseBuilder: databaseBuilder,
+          logger: logger,
+          localizationsProvider: () => _l10n,
+        );
     blocking = EmailBlockingService(
       databaseBuilder: databaseBuilder,
       onBlock: DeltaChatBlockCallback(_transport.blockContact),
@@ -345,7 +345,7 @@ class EmailService {
 
   final CredentialStore _credentialStore;
   final Future<XmppDatabase> Function() _databaseBuilder;
-  final EmailDeltaTransport _transport;
+  late final EmailDeltaTransport _transport;
   final EmailConnectionConfigBuilder _connectionConfigBuilder;
   final Logger _log;
   EndpointConfig _endpointConfig;
@@ -658,7 +658,7 @@ class EmailService {
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
-    final normalizedOverrideAddress = normalizedAddressKey(
+    final normalizedOverrideAddress = normalizedAddressValue(
       addressOverride,
     );
     final preferredAddress = _preferredAddressFromJid(jid);
@@ -2410,7 +2410,9 @@ class EmailService {
       return null;
     }
     final selfJid = _selfSenderJidForAccount(accountId) ?? selfSenderJid;
-    if (sameBareAddress(message.senderJid, selfJid)) {
+    final senderBare = bareAddressValue(message.senderJid);
+    final selfBare = bareAddressValue(selfJid);
+    if (senderBare != null && selfBare != null && senderBare == selfBare) {
       return null;
     }
     var chat = await db.getChat(message.chatJid);
@@ -3378,7 +3380,7 @@ class EmailService {
   ) async {
     final resolvedByJid = <String, Chat>{};
     for (final target in targets) {
-      final Chat? chat;
+      final Chat chat;
       if (target.chat != null) {
         chat = await ensureChatForEmailChat(target.chat!);
       } else {
@@ -3390,9 +3392,6 @@ class EmailService {
           address: address,
           displayName: target.displayName ?? address,
         );
-      }
-      if (chat == null) {
-        continue;
       }
       if (resolvedByJid.containsKey(chat.jid)) {
         continue;
@@ -3640,8 +3639,6 @@ class EmailService {
 
   String? _scopeForOptionalJid(String? jid) =>
       jid == null ? _activeCredentialScope : _scopeForJid(jid);
-
-  String _normalizeJid(String jid) => bareAddress(jid) ?? jid;
 
   String _requireActiveScope() {
     final scope = _activeCredentialScope;
