@@ -562,8 +562,6 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   @override
   Widget build(BuildContext context) {
     final topSpacer = context.spacing.m;
-    final scrollbarInset = context.spacing.xxs;
-    final scrollbarThickness = context.spacing.xs;
     final slivers = <Widget>[
       SliverToBoxAdapter(child: SizedBox(height: topSpacer)),
       SliverAnimatedList(
@@ -586,21 +584,10 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         SliverToBoxAdapter(child: widget.calendarShortcut),
       );
     }
-    return RawScrollbar(
-      interactive: true,
+    return CustomScrollView(
       controller: _scrollController,
-      thumbVisibility: true,
-      crossAxisMargin: scrollbarInset,
-      thickness: scrollbarThickness,
-      radius: Radius.circular(context.radii.squircle),
-      child: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: widget.scrollPhysics,
-          slivers: slivers,
-        ),
-      ),
+      physics: widget.scrollPhysics,
+      slivers: slivers,
     );
   }
 }
@@ -853,7 +840,7 @@ class _ChatListTileState extends State<ChatListTile> {
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
     Widget tileContent = Padding(
-      padding: EdgeInsetsDirectional.only(end: iconCutoutDepth / 2),
+      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
       child: tileSurface.withTapBounce(),
     );
     if (isDesktop) {

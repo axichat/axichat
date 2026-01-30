@@ -17,6 +17,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.tapSplashAlpha,
     required this.tapHoverAlpha,
     required this.tapFocusAlpha,
+    required this.statusBannerSlideOffset,
+    required this.statusBannerSuccessDuration,
   });
 
   final double buttonBounceScale;
@@ -31,6 +33,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final double tapSplashAlpha;
   final double tapHoverAlpha;
   final double tapFocusAlpha;
+  final Offset statusBannerSlideOffset;
+  final Duration statusBannerSuccessDuration;
 
   @override
   AxiMotion copyWith({
@@ -46,6 +50,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     double? tapSplashAlpha,
     double? tapHoverAlpha,
     double? tapFocusAlpha,
+    Offset? statusBannerSlideOffset,
+    Duration? statusBannerSuccessDuration,
   }) {
     return AxiMotion(
       buttonBounceScale: buttonBounceScale ?? this.buttonBounceScale,
@@ -67,6 +73,10 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
       tapSplashAlpha: tapSplashAlpha ?? this.tapSplashAlpha,
       tapHoverAlpha: tapHoverAlpha ?? this.tapHoverAlpha,
       tapFocusAlpha: tapFocusAlpha ?? this.tapFocusAlpha,
+      statusBannerSlideOffset:
+          statusBannerSlideOffset ?? this.statusBannerSlideOffset,
+      statusBannerSuccessDuration:
+          statusBannerSuccessDuration ?? this.statusBannerSuccessDuration,
     );
   }
 
@@ -90,4 +100,6 @@ const AxiMotion axiMotion = AxiMotion(
   tapSplashAlpha: 0.18,
   tapHoverAlpha: 0.08,
   tapFocusAlpha: 0.32,
+  statusBannerSlideOffset: Offset(0.0, -0.08),
+  statusBannerSuccessDuration: Duration(milliseconds: 900),
 );

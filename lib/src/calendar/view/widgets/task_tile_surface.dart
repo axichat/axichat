@@ -56,28 +56,27 @@ class TaskTileSurface extends StatelessWidget {
     );
     final double? stripeWidth = leadingStripeWidth;
     final Color? stripeColor = leadingStripeColor;
-    final Widget content = stripeColor != null &&
-            stripeWidth != null &&
-            stripeWidth > 0
-        ? CustomPaint(
-            painter: _TaskTileStripePainter(
-              shape: decoratedShape,
-              color: stripeColor,
-              width: stripeWidth,
-            ),
-            child: child,
-          )
-        : child;
+    final Widget content =
+        stripeColor != null && stripeWidth != null && stripeWidth > 0
+            ? CustomPaint(
+                painter: _TaskTileStripePainter(
+                  shape: decoratedShape,
+                  color: stripeColor,
+                  width: stripeWidth,
+                ),
+                child: child,
+              )
+            : child;
 
     return Container(
       margin: margin,
-      child: DecoratedBox(
-        decoration: shapedDecoration,
-        child: Material(
-          type: MaterialType.transparency,
-          shape: decoratedShape,
-          child: AxiTapBounce(
-            enabled: onTap != null,
+      child: AxiTapBounce(
+        enabled: onTap != null,
+        child: DecoratedBox(
+          decoration: shapedDecoration,
+          child: Material(
+            type: MaterialType.transparency,
+            shape: decoratedShape,
             child: InkWell(
               onTap: onTap,
               customBorder: decoratedShape,

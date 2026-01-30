@@ -244,7 +244,6 @@ class _ChatCalendarWidgetState
     return CalendarTransferMenu(
       state: state,
       ghost: true,
-      selected: true,
       additionalActions: [
         AxiMenuAction(
           icon: context.watch<SettingsCubit>().state.hideCompletedScheduled

@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -189,12 +190,13 @@ class AttachmentGalleryBloc
       _xmppService.fileMetadataStream(id);
 
   bool _isSelfMessage(Message message) {
-    final sender = message.senderJid.trim().toLowerCase();
-    final xmppJid = _xmppService.myJid?.trim().toLowerCase();
-    if (xmppJid != null && sender == xmppJid) return true;
-    final emailJid = _emailService?.selfSenderJid?.trim().toLowerCase();
-    if (emailJid != null && sender == emailJid) return true;
-    return false;
+    if (AddressTools.sameBare(message.senderJid, _xmppService.myJid)) {
+      return true;
+    }
+    return AddressTools.sameBare(
+      message.senderJid,
+      _emailService?.selfSenderJid,
+    );
   }
 
   Future<bool> downloadEmailMessage(Message message) async {

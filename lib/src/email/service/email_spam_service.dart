@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
@@ -53,8 +54,6 @@ class EmailSpamService {
   }
 
   String? _normalize(String address) {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) return null;
-    return normalized;
+    return AddressTools.normalizedKey(address);
   }
 }

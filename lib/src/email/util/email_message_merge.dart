@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/storage/models.dart';
 
@@ -95,11 +96,11 @@ Message resolveOriginMergePrimary({
   required Message duplicate,
   required String? selfJid,
 }) {
-  final String normalizedSelf = selfJid?.trim().toLowerCase() ?? '';
-  final String existingSender = existing.senderJid.trim();
-  final String duplicateSender = duplicate.senderJid.trim();
-  final String normalizedExisting = existingSender.toLowerCase();
-  final String normalizedDuplicate = duplicateSender.toLowerCase();
+  final String normalizedSelf = AddressTools.normalizedKey(selfJid) ?? '';
+  final String normalizedExisting =
+      AddressTools.normalizedKey(existing.senderJid) ?? '';
+  final String normalizedDuplicate =
+      AddressTools.normalizedKey(duplicate.senderJid) ?? '';
   final bool existingIsPlaceholder = normalizedExisting.isDeltaPlaceholderJid;
   final bool duplicateIsPlaceholder = normalizedDuplicate.isDeltaPlaceholderJid;
   final bool existingIsSelf = _isSelfSender(

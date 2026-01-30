@@ -27,8 +27,9 @@ class BlocklistTile extends StatelessWidget {
           state is BlocklistLoading &&
           (state.jid == entry.address || state.jid == null),
       builder: (context, disabled) {
-        final normalizedJid = entry.address.trim().toLowerCase();
-        final avatarPath = avatarPathsByJid?[normalizedJid];
+        final normalizedJid = entry.address.normalizedJidKey;
+        final avatarPath =
+            normalizedJid == null ? null : avatarPathsByJid?[normalizedJid];
         final avatar = AxiAvatar(
           jid: entry.address,
           avatarPath: avatarPath,

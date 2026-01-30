@@ -111,11 +111,12 @@ class _DraftsListBody extends StatelessWidget {
                             ? rosterState.items
                             : context.read<RosterCubit>()['items']
                                 as List<RosterItem>?;
-                        final normalizedJid = item.jids[0].trim().toLowerCase();
+                        final normalizedJid = item.jids[0].normalizedJidKey;
                         String? avatarPath;
-                        if (cachedItems != null) {
+                        if (cachedItems != null && normalizedJid != null) {
                           for (final rosterItem in cachedItems) {
-                            if (rosterItem.jid.toLowerCase() == normalizedJid) {
+                            if (rosterItem.jid.normalizedJidKey ==
+                                normalizedJid) {
                               avatarPath = rosterItem.avatarPath;
                               break;
                             }

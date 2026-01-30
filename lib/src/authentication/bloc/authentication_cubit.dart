@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -3121,11 +3122,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   String _normalizeJid(String jid) {
-    final parts = jid.split('@');
-    if (parts.length == 2) {
-      return _normalizeSignupKey(parts.first, parts.last);
-    }
-    return jid.trim().toLowerCase();
+    return AddressTools.normalizedKey(jid) ?? jid.trim().toLowerCase();
   }
 
   String _normalizeSignupKey(String username, String host) =>
@@ -3200,8 +3197,7 @@ class _SessionEmailCredentials {
   final String address;
   final String password;
 
-  bool matches(String jid) =>
-      address.trim().toLowerCase() == jid.trim().toLowerCase();
+  bool matches(String jid) => AddressTools.sameBare(address, jid);
 }
 
 class _DatabaseSecrets {

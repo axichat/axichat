@@ -58,7 +58,7 @@ export 'dynamic_inline_text.dart';
 export 'fade_scale_dialog.dart';
 export 'in_bounds_fade_scale.dart';
 export 'jid_input.dart';
-export 'package:axichat/src/common/jid_validation.dart';
+export 'package:axichat/src/common/address_tools.dart';
 export 'link_action_dialog.dart';
 export 'list_item_padding.dart';
 export 'password_input.dart';
@@ -101,6 +101,14 @@ extension ModalTypography on BuildContext {
   }
 }
 
+extension AxiTextThemeTokens on ShadTextTheme {
+  TextStyle get sectionLabel => small.copyWith(
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.6,
+      );
+}
+
 const smallScreen = 920.0;
 const mediumScreen = 900.0;
 const largeScreen = 1200.0;
@@ -124,6 +132,12 @@ const basePageItemLimit = 15;
 
 const axiGreen = Color(0xff00ff55);
 const axiWarning = Color(0xFFFD7E14);
+
+extension AxiStatusColors on ShadColorScheme {
+  Color get green => axiGreen;
+
+  Color get warning => axiWarning;
+}
 
 class CalendarPalette {
   CalendarPalette._();

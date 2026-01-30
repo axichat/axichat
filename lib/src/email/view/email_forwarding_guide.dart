@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -377,7 +376,7 @@ class EmailForwardingAddressCard extends StatelessWidget {
     final colors = context.colorScheme;
     final radius = context.radius;
     final l10n = context.l10n;
-    final resolved = forwardingAddress.bareJid.trim();
+    final resolved = forwardingAddress.bareJid?.trim() ?? '';
     final hasAddress = resolved.isNotEmpty;
     final textStyle =
         hasAddress ? context.textTheme.small : context.textTheme.muted;
@@ -496,7 +495,8 @@ class _EmailForwardingWelcomeGateState
 
 String _resolveForwardingAddress(BuildContext context) {
   final String? jid = context.read<XmppService>().myJid;
-  return (jid ?? _emptyForwardingAddress).bareJid.trim();
+  final bare = (jid ?? _emptyForwardingAddress).bareJid?.trim();
+  return bare == null || bare.isEmpty ? _emptyForwardingAddress : bare;
 }
 
 Future<void> showEmailForwardingGuideDialog(BuildContext context) async {

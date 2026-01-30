@@ -741,7 +741,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       if (byJid != null) {
         return byJid;
       }
-      final emailKey = targetChat.emailAddress?.trim().toLowerCase();
+      final emailKey = targetChat.emailAddress.normalizedJidKey;
       if (emailKey != null && emailKey.isNotEmpty) {
         final byEmail = widget.latestStatuses[emailKey];
         if (byEmail != null) {
@@ -749,7 +749,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         }
       }
     }
-    final addressKey = recipient.target.address?.trim().toLowerCase();
+    final addressKey = recipient.target.address.normalizedJidKey;
     if (addressKey != null && addressKey.isNotEmpty) {
       return widget.latestStatuses[addressKey];
     }
@@ -757,21 +757,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   String? _extractDomain(String? raw) {
-    final address = raw?.trim();
-    if (address == null || address.isEmpty || !address.contains('@')) {
-      return null;
-    }
-    final parts = address.split('@');
-    if (parts.length != 2) return null;
-    final domain = parts.last.trim().toLowerCase();
-    if (domain.isEmpty) return null;
-    return domain;
+    final domain = AddressTools.domainPart(raw)?.toLowerCase();
+    return domain == null || domain.isEmpty ? null : domain;
   }
 
   String? _normalizeAddress(String? raw) {
-    final value = raw?.trim();
-    if (value == null || value.isEmpty) return null;
-    return value.toLowerCase();
+    return AddressTools.normalizedKey(raw);
   }
 
   bool _isOwnAddress(String? raw) {

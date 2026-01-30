@@ -3807,13 +3807,10 @@ class _SelectionTaskTile extends StatelessWidget {
               ? calendarSidebarBackgroundColor
               : calendarContainerColor,
           borderRadius: context.radius,
-          border: Border(
-            left: BorderSide(color: borderColor, width: 3),
-            top: BorderSide(color: calendarBorderColor),
-            right: BorderSide(color: calendarBorderColor),
-            bottom: BorderSide(color: calendarBorderColor),
-          ),
+          border: Border.all(color: calendarBorderColor),
         ),
+        leadingStripeColor: borderColor,
+        leadingStripeWidth: context.sizing.progressIndicatorBarHeight,
         onTap: () => onFocusTask(task),
         child: CalendarTaskListTile(
           task: task,
@@ -5074,25 +5071,14 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
       return TaskTileSurface(
         margin: const EdgeInsets.only(bottom: calendarGutterSm),
         decoration: tileDecoration,
+        leadingStripeColor: borderColor,
+        leadingStripeWidth: stripWidth,
         onTap: onTap,
         hoverColor: hoverColor,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ColoredBox(
-                  color: borderColor,
-                  child: SizedBox(width: stripWidth),
-                ),
-              ),
-            ),
-            CalendarTaskListTile(
-              task: task,
-              trailing: trailing,
-              onToggleCompletion: onToggleCompletion,
-            ),
-          ],
+        child: CalendarTaskListTile(
+          task: task,
+          trailing: trailing,
+          onToggleCompletion: onToggleCompletion,
         ),
       );
     }
@@ -5183,14 +5169,13 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
               }
             }
 
-            final double halfHeight = effectiveMaxHeight / centerDivider;
             final double triggerCenterY =
                 tileOrigin.dy + tileSize.height / centerDivider;
-            final double clampedCenterY = triggerCenterY.clamp(
-              usableTop + halfHeight,
-              usableBottom - halfHeight,
+            final double overlayTop =
+                (triggerCenterY - effectiveMaxHeight / centerDivider).clamp(
+              usableTop,
+              usableBottom - effectiveMaxHeight,
             );
-            final double overlayTop = clampedCenterY - halfHeight;
 
             final double desiredLeft = openToLeft
                 ? tileOrigin.dx - dropdownWidth - preferredHorizontalGap
@@ -5200,20 +5185,13 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
               usableRight - dropdownWidth,
             );
 
-            final double offsetDx = openToLeft
-                ? overlayLeft + dropdownWidth - tileOrigin.dx
-                : overlayLeft - (tileOrigin.dx + tileSize.width);
-            final double offsetDy = overlayTop - (triggerCenterY - halfHeight);
-
-            final Alignment targetAnchor =
-                openToLeft ? Alignment.centerLeft : Alignment.centerRight;
-            final Alignment childAnchor =
-                openToLeft ? Alignment.centerRight : Alignment.centerLeft;
-
             anchor = ShadAnchor(
-              overlayAlignment: targetAnchor,
-              childAlignment: childAnchor,
-              offset: Offset(offsetDx, offsetDy),
+              overlayAlignment: Alignment.topLeft,
+              childAlignment: Alignment.topLeft,
+              offset: Offset(
+                overlayLeft - tileOrigin.dx,
+                overlayTop - tileOrigin.dy,
+              ),
             );
           } else {
             final double normalizedAbove = math.max(zeroClamp, availableAbove);
@@ -5272,18 +5250,18 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                 centeredLeft.clamp(usableLeft, usableRight - dropdownWidth);
             final double horizontalOffset = overlayLeft - triggerLeft;
 
-            final double verticalOffset =
-                showAbove ? -appliedVerticalGap : appliedVerticalGap;
-
-            final Alignment targetAnchor =
-                showAbove ? Alignment.topLeft : Alignment.bottomLeft;
-            final Alignment childAnchor =
-                showAbove ? Alignment.bottomLeft : Alignment.topLeft;
+            final double desiredTop = showAbove
+                ? tileOrigin.dy - appliedVerticalGap - effectiveMaxHeight
+                : tileOrigin.dy + tileSize.height + appliedVerticalGap;
+            final double overlayTop = desiredTop.clamp(
+              usableTop,
+              usableBottom - effectiveMaxHeight,
+            );
 
             anchor = ShadAnchor(
-              overlayAlignment: targetAnchor,
-              childAlignment: childAnchor,
-              offset: Offset(horizontalOffset, verticalOffset),
+              overlayAlignment: Alignment.topLeft,
+              childAlignment: Alignment.topLeft,
+              offset: Offset(horizontalOffset, overlayTop - tileOrigin.dy),
             );
           }
 

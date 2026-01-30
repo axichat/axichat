@@ -30,8 +30,8 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
   late final StreamSubscription<ConnectionState> _connectivitySubscription;
 
   @override
-  Future<void> close() {
-    _connectivitySubscription.cancel();
+  Future<void> close() async {
+    await _connectivitySubscription.cancel();
     return super.close();
   }
 }

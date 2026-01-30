@@ -535,7 +535,8 @@ List<AccessibilityMenuSection> _newContactSectionsFor(
             command: AccessibilityCommand.confirmNewContact,
           ),
           icon: Icons.check,
-          disabled: !state.newContactInput.trim().isValidJid,
+          disabled:
+              !AddressStringExtensions(state.newContactInput.trim()).isValidJid,
         ),
       ],
     ),
@@ -2499,7 +2500,8 @@ class _NewContactSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final canSubmit = state.newContactInput.trim().isValidJid;
+    final canSubmit =
+        AddressStringExtensions(state.newContactInput.trim()).isValidJid;
     final locate = context.read;
     return FocusTraversalGroup(
       key: groupKey,

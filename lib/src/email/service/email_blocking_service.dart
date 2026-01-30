@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
@@ -30,8 +31,8 @@ class EmailBlockingService {
   }
 
   Future<void> block(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) return;
+    final normalized = AddressTools.normalizedKey(address);
+    if (normalized == null || normalized.isEmpty) return;
     final db = await _db;
     await db.addEmailBlock(normalized);
     // Sync to DeltaChat core to stop downloading messages from this contact
@@ -39,8 +40,8 @@ class EmailBlockingService {
   }
 
   Future<void> unblock(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) return;
+    final normalized = AddressTools.normalizedKey(address);
+    if (normalized == null || normalized.isEmpty) return;
     final db = await _db;
     await db.removeEmailBlock(normalized);
     // Sync to DeltaChat core to resume downloading messages from this contact
@@ -48,8 +49,8 @@ class EmailBlockingService {
   }
 
   Future<bool> isBlocked(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = AddressTools.normalizedKey(address);
+    if (normalized == null || normalized.isEmpty) {
       return false;
     }
     final db = await _db;

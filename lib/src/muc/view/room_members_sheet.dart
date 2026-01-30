@@ -478,19 +478,16 @@ class _MemberTileState extends State<_MemberTile> {
         }
       }
 
-      final realJid = widget.occupant.realJid?.trim();
-      if (realJid == null || realJid.isEmpty) {
+      final realJid = widget.occupant.realJid;
+      final normalizedBareJid = AddressTools.normalizedKey(realJid);
+      if (normalizedBareJid == null || normalizedBareJid.isEmpty) {
         return null;
       }
 
-      final bareJid =
-          realJid.contains('/') ? realJid.split('/').first : realJid;
-      final normalizedBareJid = bareJid.trim().toLowerCase();
-      if (normalizedBareJid.isEmpty) return null;
-
       if (rosterItems != null) {
         for (final item in rosterItems) {
-          if (item.jid.trim().toLowerCase() != normalizedBareJid) continue;
+          final normalizedItem = item.jid.normalizedJidKey;
+          if (normalizedItem != normalizedBareJid) continue;
           final path = item.avatarPath?.trim();
           if (path?.isNotEmpty == true) {
             return path;
@@ -501,7 +498,7 @@ class _MemberTileState extends State<_MemberTile> {
 
       if (chats != null) {
         for (final chat in chats) {
-          final candidateBare = chat.remoteJid.trim().toLowerCase();
+          final candidateBare = chat.remoteJid.normalizedJidKey;
           if (candidateBare != normalizedBareJid) continue;
           final path = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
           if (path?.isNotEmpty == true) {

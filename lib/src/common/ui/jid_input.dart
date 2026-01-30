@@ -98,7 +98,7 @@ class JidInput extends StatelessWidget {
         if (error != null ||
             (!focus.hasFocus &&
                 controller.text.isNotEmpty &&
-                !controller.text.isValidJid)) {
+                !AddressStringExtensions(controller.text).isValidJid)) {
           child = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,

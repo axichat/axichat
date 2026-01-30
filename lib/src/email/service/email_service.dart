@@ -10,7 +10,7 @@ import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/jid_transport.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -611,7 +611,9 @@ class EmailService {
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
-    final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
+    final normalizedOverrideAddress = AddressTools.normalizedKey(
+      addressOverride,
+    );
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
     final shouldPersistCredentials = persistCredentials;
@@ -2306,9 +2308,8 @@ class EmailService {
     if (message.warning == MessageWarning.emailSpamQuarantined) {
       return null;
     }
-    String bare(String value) => value.split('/').first;
     final selfJid = _selfSenderJidForAccount(accountId) ?? selfSenderJid;
-    if (selfJid != null && bare(message.senderJid) == bare(selfJid)) {
+    if (AddressTools.sameBare(message.senderJid, selfJid)) {
       return null;
     }
     var chat = await db.getChat(message.chatJid);
@@ -3331,10 +3332,8 @@ class EmailService {
   }
 
   String? _senderParticipantJid({String? senderJid}) {
-    final normalized = senderJid?.trim();
-    if (normalized != null && normalized.isNotEmpty) {
-      return normalized;
-    }
+    final normalized = AddressTools.normalize(senderJid);
+    if (normalized != null) return normalized;
     return selfSenderJid ?? deltaSelfJid;
   }
 
@@ -3363,17 +3362,18 @@ class EmailService {
   }
 
   String? _preferredAddressFromJid(String jid) {
-    final bare = _normalizeJid(jid);
-    final parts = bare.split('@');
+    final normalized = AddressTools.normalizedKey(jid);
+    if (normalized == null) {
+      return null;
+    }
+    final parts = normalized.split('@');
     if (parts.length != 2) {
       return null;
     }
-    final local = parts[0].trim().toLowerCase();
-    final domain = parts[1].trim().toLowerCase();
-    if (local.isEmpty || domain.isEmpty) {
+    if (parts.first.isEmpty || parts.last.isEmpty) {
       return null;
     }
-    return '$local@$domain';
+    return normalized;
   }
 
   static Map<String, String> _defaultConnectionConfig(
@@ -3441,12 +3441,8 @@ class EmailService {
   }
 
   static String? _domainFromAddress(String address) {
-    final parts = address.split('@');
-    if (parts.length != 2) {
-      return null;
-    }
-    final domain = parts[1].trim().toLowerCase();
-    return domain.isEmpty ? null : domain;
+    final domain = AddressTools.domainPart(address)?.toLowerCase();
+    return domain == null || domain.isEmpty ? null : domain;
   }
 
   static String? _localPartFromAddress(String address) {
@@ -3589,12 +3585,13 @@ class EmailService {
     );
   }
 
-  String _scopeForJid(String jid) => _normalizeJid(jid).toLowerCase();
+  String _scopeForJid(String jid) =>
+      AddressTools.normalizedKey(jid) ?? jid.trim().toLowerCase();
 
   String? _scopeForOptionalJid(String? jid) =>
       jid == null ? _activeCredentialScope : _scopeForJid(jid);
 
-  String _normalizeJid(String jid) => jid.split('/').first;
+  String _normalizeJid(String jid) => AddressTools.bare(jid) ?? jid;
 
   String _requireActiveScope() {
     final scope = _activeCredentialScope;

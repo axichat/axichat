@@ -15,19 +15,6 @@ part 'settings_cubit.freezed.dart';
 part 'settings_cubit.g.dart';
 part 'settings_state.dart';
 
-EndpointConfig _endpointConfigFromJson(Object? value) {
-  if (value is Map<String, dynamic>) {
-    return EndpointConfig.fromJson(value);
-  }
-  if (value is Map) {
-    return EndpointConfig.fromJson(value.cast<String, dynamic>());
-  }
-  return const EndpointConfig();
-}
-
-Map<String, dynamic> _endpointConfigToJson(EndpointConfig config) =>
-    config.toJson();
-
 class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsCubit({XmppService? xmppService})
       : _xmppService = xmppService,

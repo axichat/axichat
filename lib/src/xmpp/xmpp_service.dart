@@ -277,14 +277,11 @@ bool _isFirstPartyJid({required mox.JID? myJid, required String jid}) {
   if (myJid == null) {
     return false;
   }
-  try {
-    final target = mox.JID.fromString(jid);
-    final myDomain = myJid.domain.toLowerCase();
-    final targetDomain = target.domain.toLowerCase();
-    return targetDomain == myDomain || targetDomain.endsWith('.$myDomain');
-  } on Exception {
-    return false;
-  }
+  final target = AddressTools.parse(jid);
+  if (target == null) return false;
+  final myDomain = myJid.domain.trim().toLowerCase();
+  final targetDomain = target.domain.trim().toLowerCase();
+  return targetDomain == myDomain || targetDomain.endsWith('.$myDomain');
 }
 
 typedef ConnectionState = mox.XmppConnectionState;
@@ -656,7 +653,6 @@ class XmppService extends XmppBase
   @override
   Future<XmppDatabase> get database => _database.future;
 
-  @override
   @override
   bool get isDatabaseReady => _database.isCompleted;
 

@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
@@ -1147,14 +1148,15 @@ class DeltaEventConsumer {
   }
 
   bool _isSelfPendingSender(Message message) {
-    final String normalizedSender = message.senderJid.trim().toLowerCase();
+    final String normalizedSender =
+        AddressTools.normalizedKey(message.senderJid) ?? '';
     if (normalizedSender.isEmpty) {
       return false;
     }
     if (normalizedSender.isDeltaPlaceholderJid) {
       return true;
     }
-    final String normalizedSelf = _selfJid.trim().toLowerCase();
+    final String normalizedSelf = AddressTools.normalizedKey(_selfJid) ?? '';
     if (normalizedSelf.isEmpty) {
       return false;
     }

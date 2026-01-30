@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
+
 const String deltaDomain = 'delta.chat';
 const String deltaUserDomain = 'user.delta.chat';
 const String deltaSelfLocalPart = 'dc-self';
@@ -19,7 +21,8 @@ const List<String> deltaPlaceholderJids = <String>[
 ];
 
 extension DeltaJidExtensions on String {
-  String get normalizedDeltaJid => trim().toLowerCase();
+  String get normalizedDeltaJid =>
+      AddressTools.normalizedKey(this) ?? trim().toLowerCase();
 
   bool get isDeltaPlaceholderJid =>
       deltaPlaceholderJids.contains(normalizedDeltaJid);
@@ -27,17 +30,17 @@ extension DeltaJidExtensions on String {
 
 extension DeltaJidNullableExtensions on String? {
   String? resolveDeltaPlaceholderJid([String? fallback]) {
-    final trimmed = this?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
+    final normalized = AddressTools.normalize(this);
+    if (normalized == null) {
       return null;
     }
-    if (!trimmed.isDeltaPlaceholderJid) {
-      return trimmed;
+    if (!normalized.isDeltaPlaceholderJid) {
+      return normalized;
     }
-    final fallbackTrimmed = fallback?.trim();
-    if (fallbackTrimmed == null || fallbackTrimmed.isEmpty) {
+    final fallbackNormalized = AddressTools.normalize(fallback);
+    if (fallbackNormalized == null) {
       return null;
     }
-    return fallbackTrimmed.isDeltaPlaceholderJid ? null : fallbackTrimmed;
+    return fallbackNormalized.isDeltaPlaceholderJid ? null : fallbackNormalized;
   }
 }

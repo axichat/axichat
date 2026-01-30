@@ -8,7 +8,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
-import 'package:axichat/src/xmpp/jid_extensions.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
