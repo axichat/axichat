@@ -55,10 +55,9 @@ class _BlocklistListState extends State<BlocklistList> {
           }
           final visibleItems = state.visibleItems ?? items;
           return BlocBuilder<RosterCubit, RosterState>(
-            buildWhen: (_, current) => current is RosterAvailable,
+            buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final cachedRosterItems =
-                  rosterState is RosterAvailable ? rosterState.items : null;
+              final cachedRosterItems = rosterState.items;
               final avatarPathsByJid = <String, String>{};
               if (cachedRosterItems != null) {
                 for (final item in cachedRosterItems) {

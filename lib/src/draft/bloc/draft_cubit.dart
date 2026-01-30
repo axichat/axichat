@@ -63,7 +63,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   })  : _messageService = messageService,
         _shareTokenSignatureEnabled = shareTokenSignatureEnabled,
         _emailService = emailService,
-        super(const DraftsAvailable(items: null)) {
+        super(const DraftsAvailable(items: null, visibleItems: null)) {
     _draftsSubscription = _messageService.draftsStream().listen((items) {
       _items = items;
       emit(_stateForItems(items));
@@ -373,7 +373,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         useSubjectToken: includeSignatureToken,
         tokenAsSignature: includeSignatureToken,
       );
-      _throwIfFanOutFailed(report, failureContext: 'Message');
+      _throwIfFanOutFailed(report);
     }
     if (hasAttachments) {
       final caption = trimmedBody.isNotEmpty ? trimmedBody : null;
@@ -399,7 +399,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
             useSubjectToken: includeSignatureToken,
             tokenAsSignature: includeSignatureToken,
           );
-          _throwIfFanOutFailed(report, failureContext: attachment.fileName);
+          _throwIfFanOutFailed(report);
         }
       } finally {
         if (shouldBundle) {
@@ -481,10 +481,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return [bundled];
   }
 
-  void _throwIfFanOutFailed(
-    FanOutSendReport report, {
-    required String failureContext,
-  }) {
+  void _throwIfFanOutFailed(FanOutSendReport report) {
     if (!report.hasFailures) {
       return;
     }

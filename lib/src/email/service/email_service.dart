@@ -238,13 +238,39 @@ class EmailProvisioningException implements Exception {
   String toString() => 'EmailProvisioningException: $message';
 }
 
-class FanOutValidationException implements Exception {
-  const FanOutValidationException(this.message);
+enum FanOutValidationFailure {
+  noRecipients,
+  resolveFailed,
+  tooManyRecipients,
+  emptyMessage,
+  invalidShareToken,
+}
 
-  final String message;
+extension FanOutValidationFailureX on FanOutValidationFailure {
+  String message(AppLocalizations l10n, {int? maxRecipients}) {
+    switch (this) {
+      case FanOutValidationFailure.noRecipients:
+        return l10n.fanOutErrorNoRecipients;
+      case FanOutValidationFailure.resolveFailed:
+        return l10n.fanOutErrorResolveFailed;
+      case FanOutValidationFailure.tooManyRecipients:
+        return l10n.fanOutErrorTooManyRecipients(maxRecipients ?? 0);
+      case FanOutValidationFailure.emptyMessage:
+        return l10n.fanOutErrorEmptyMessage;
+      case FanOutValidationFailure.invalidShareToken:
+        return l10n.fanOutErrorInvalidShareToken;
+    }
+  }
+}
+
+class FanOutValidationException implements Exception {
+  const FanOutValidationException(this.reason, {this.maxRecipients});
+
+  final FanOutValidationFailure reason;
+  final int? maxRecipients;
 
   @override
-  String toString() => 'FanOutValidationException: $message';
+  String toString() => 'FanOutValidationException($reason)';
 }
 
 class EmailService {
@@ -611,7 +637,7 @@ class EmailService {
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
-    final normalizedOverrideAddress = AddressTools.normalizedKey(
+    final normalizedOverrideAddress = normalizeAddressdKey(
       addressOverride,
     );
     final preferredAddress = _preferredAddressFromJid(jid);
@@ -1208,15 +1234,20 @@ class EmailService {
     }
     await _ensureReady();
     if (targets.isEmpty) {
-      throw const FanOutValidationException('Select at least one recipient.');
+      throw const FanOutValidationException(
+        FanOutValidationFailure.noRecipients,
+      );
     }
     final resolvedTargets = await _resolveFanOutTargets(targets);
     if (resolvedTargets.isEmpty) {
-      throw const FanOutValidationException('Unable to resolve recipients.');
+      throw const FanOutValidationException(
+        FanOutValidationFailure.resolveFailed,
+      );
     }
     if (resolvedTargets.length > _maxFanOutRecipients) {
-      throw const FanOutValidationException(
-        'Fan-out limited to $_maxFanOutRecipients recipients.',
+      throw FanOutValidationException(
+        FanOutValidationFailure.tooManyRecipients,
+        maxRecipients: _maxFanOutRecipients,
       );
     }
     final trimmedBody = body?.trim() ?? '';
@@ -1231,7 +1262,9 @@ class EmailService {
     final hasAttachment = attachment != null;
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
     if (!hasBody && !hasAttachment && !hasSubject) {
-      throw const FanOutValidationException('Message cannot be empty.');
+      throw const FanOutValidationException(
+        FanOutValidationFailure.emptyMessage,
+      );
     }
     final db = await _databaseBuilder();
     final existingShare =
@@ -1403,7 +1436,9 @@ class EmailService {
     String? subject,
   }) async {
     if (targets.isEmpty) {
-      throw const FanOutValidationException('Select at least one recipient.');
+      throw const FanOutValidationException(
+        FanOutValidationFailure.noRecipients,
+      );
     }
     final resolvedShareId = shareId ?? ShareTokenCodec.generateShareId();
     final statuses = <FanOutRecipientStatus>[];
@@ -1539,6 +1574,10 @@ class EmailService {
     if (trimmedBody?.isNotEmpty == true) {
       return trimmedBody!;
     }
+    final trimmedSubject = subject?.trim();
+    if (trimmedSubject?.isNotEmpty == true) {
+      return trimmedSubject!;
+    }
     return '';
   }
 
@@ -1548,7 +1587,7 @@ class EmailService {
     } on ArgumentError catch (error, stackTrace) {
       _log.warning(_shareTokenInvalidLog, error, stackTrace);
       throw const FanOutValidationException(
-        'Unable to derive share token for the provided identifier.',
+        FanOutValidationFailure.invalidShareToken,
       );
     }
   }
@@ -2309,7 +2348,7 @@ class EmailService {
       return null;
     }
     final selfJid = _selfSenderJidForAccount(accountId) ?? selfSenderJid;
-    if (AddressTools.sameBare(message.senderJid, selfJid)) {
+    if (sameBareAddress(message.senderJid, selfJid)) {
       return null;
     }
     var chat = await db.getChat(message.chatJid);
@@ -3332,7 +3371,7 @@ class EmailService {
   }
 
   String? _senderParticipantJid({String? senderJid}) {
-    final normalized = AddressTools.normalize(senderJid);
+    final normalized = normalizeAddress(senderJid);
     if (normalized != null) return normalized;
     return selfSenderJid ?? deltaSelfJid;
   }
@@ -3362,7 +3401,7 @@ class EmailService {
   }
 
   String? _preferredAddressFromJid(String jid) {
-    final normalized = AddressTools.normalizedKey(jid);
+    final normalized = normalizeAddressdKey(jid);
     if (normalized == null) {
       return null;
     }
@@ -3441,7 +3480,7 @@ class EmailService {
   }
 
   static String? _domainFromAddress(String address) {
-    final domain = AddressTools.domainPart(address)?.toLowerCase();
+    final domain = addressDomainPart(address)?.toLowerCase();
     return domain == null || domain.isEmpty ? null : domain;
   }
 
@@ -3586,12 +3625,12 @@ class EmailService {
   }
 
   String _scopeForJid(String jid) =>
-      AddressTools.normalizedKey(jid) ?? jid.trim().toLowerCase();
+      normalizeAddressdKey(jid) ?? jid.trim().toLowerCase();
 
   String? _scopeForOptionalJid(String? jid) =>
       jid == null ? _activeCredentialScope : _scopeForJid(jid);
 
-  String _normalizeJid(String jid) => AddressTools.bare(jid) ?? jid;
+  String _normalizeJid(String jid) => bareAddress(jid) ?? jid;
 
   String _requireActiveScope() {
     final scope = _activeCredentialScope;

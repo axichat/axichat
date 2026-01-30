@@ -237,14 +237,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _omemoService = omemoService,
         _mucService = mucService,
         _settingsSnapshot = settings,
-        _xmppService = messageService is XmppService ? messageService : null,
-        super(
-          ChatState(
-            items: const [],
-            emailServiceAvailable: emailService != null,
-            emailSelfJid: emailService?.selfSenderJid,
-          ),
-        ) {
+        super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
@@ -277,9 +270,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatAlertHidden>(_onChatAlertHidden);
-    on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
-    on<ChatContactAddRequested>(_onChatContactAddRequested);
-    on<ChatRecipientEmailChatRequested>(_onChatRecipientEmailChatRequested);
     on<ChatQuoteRequested>(_onChatQuoteRequested);
     on<ChatQuoteCleared>(_onChatQuoteCleared);
     on<ChatMessagePinRequested>(_onChatMessagePinRequested);
@@ -307,6 +297,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatRoomMembersOpened>(_onChatRoomMembersOpened);
     on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
+    on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
       if (chatLookupJid == null) return;
@@ -384,7 +375,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = AddressTools.normalizedKey(value);
+    final normalized = normalizeAddressdKey(value);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }
@@ -402,10 +393,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final String? _chatLookupJid = jid == null
       ? null
       : _isEmailOnlyAddress(jid)
-          ? AddressTools.normalizedKey(jid) ?? jid!.trim().toLowerCase()
+          ? normalizeAddressdKey(jid) ?? jid!.trim().toLowerCase()
           : jid;
   final MessageService _messageService;
-  final XmppService? _xmppService;
+  XmppService? _xmppService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
   final EmailService? _emailService;
@@ -457,7 +448,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool get encryptionAvailable => _omemoService != null;
   bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
   String? _bareJid(String? jid) {
-    return AddressTools.bare(jid);
+    return bareAddress(jid);
   }
 
   Future<void> _markEmailMessagesDisplayedLocally(
@@ -1254,12 +1245,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     for (final entries in membersByKind.values) {
-      entries
-        ..sort(
-          (a, b) => a.occupant.nick
-              .toLowerCase()
-              .compareTo(b.occupant.nick.toLowerCase()),
-        );
+      entries.sort(
+        (a, b) => a.occupant.nick
+            .toLowerCase()
+            .compareTo(b.occupant.nick.toLowerCase()),
+      );
     }
 
     final sections = <RoomMemberSection>[];

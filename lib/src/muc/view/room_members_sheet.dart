@@ -13,7 +13,6 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -397,19 +396,147 @@ class _MemberTile extends StatefulWidget {
 class _MemberTileState extends State<_MemberTile> {
   bool _showActions = false;
 
+  static const double _avatarSize = 40.0;
+
+  late final XmppService _xmppService;
+  Future<StoredAvatar?>? _selfAvatarFuture;
+
   void _toggleActions() => setState(() => _showActions = !_showActions);
 
   void _closeActions() => setState(() => _showActions = false);
 
   @override
+  void initState() {
+    super.initState();
+    _xmppService = context.read<XmppService>();
+    if (widget.isSelf) {
+      _selfAvatarFuture = _xmppService.getOwnAvatar();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _MemberTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isSelf && widget.isSelf) {
+      _selfAvatarFuture = _xmppService.getOwnAvatar();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final sizing = context.sizing;
+    final colors = context.colorScheme;
+    final borderColor =
+        widget.isSelf ? colors.primary.withValues(alpha: 0.3) : colors.border;
     final avatarKey = _avatarKey(widget.occupant);
-    final avatar = AxiAvatar(
-      jid: avatarKey,
-      size: sizing.iconButtonSize,
-      avatarPath: widget.avatarPath,
+
+    String? resolveAvatarPath({
+      required List<RosterItem>? rosterItems,
+      required List<Chat>? chats,
+      required String? selfAvatarPath,
+    }) {
+      if (widget.isSelf) {
+        final selfPath = selfAvatarPath?.trim();
+        if (selfPath?.isNotEmpty == true) {
+          return selfPath;
+        }
+      }
+
+      final realJid = widget.occupant.realJid;
+      final normalizedBareJid = normalizeAddressdKey(realJid);
+      if (normalizedBareJid == null || normalizedBareJid.isEmpty) {
+        return null;
+      }
+
+      if (rosterItems != null) {
+        for (final item in rosterItems) {
+          final normalizedItem = item.jid.normalizedJidKey;
+          if (normalizedItem != normalizedBareJid) continue;
+          final path = item.avatarPath?.trim();
+          if (path?.isNotEmpty == true) {
+            return path;
+          }
+          break;
+        }
+      }
+
+      if (chats != null) {
+        for (final chat in chats) {
+          final candidateBare = chat.remoteJid.normalizedJidKey;
+          if (candidateBare != normalizedBareJid) continue;
+          final path = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
+          if (path?.isNotEmpty == true) {
+            return path;
+          }
+          break;
+        }
+      }
+
+      return null;
+    }
+
+    Widget avatarFromSources({
+      required List<Chat>? chats,
+      required List<RosterItem>? rosterItems,
+      required StoredAvatar? selfAvatar,
+    }) {
+      final selfAvatarPath = selfAvatar?.path;
+      final avatarPath = resolveAvatarPath(
+        rosterItems: rosterItems,
+        chats: chats,
+        selfAvatarPath: selfAvatarPath,
+      );
+      return AxiAvatar(
+        jid: avatarKey,
+        size: _avatarSize,
+        avatarPath: avatarPath,
+      );
+    }
+
+    Widget avatarBuilder({
+      required List<Chat>? chats,
+      required List<RosterItem>? rosterItems,
+    }) {
+      if (!widget.isSelf) {
+        return avatarFromSources(
+          chats: chats,
+          rosterItems: rosterItems,
+          selfAvatar: null,
+        );
+      }
+
+      final seededAvatarFuture = _selfAvatarFuture;
+      return FutureBuilder<StoredAvatar?>(
+        future: seededAvatarFuture,
+        builder: (context, snapshot) {
+          final stored = snapshot.data;
+          return StreamBuilder<StoredAvatar?>(
+            stream: _xmppService.selfAvatarStream,
+            initialData: stored,
+            builder: (context, streamSnapshot) {
+              final effectiveAvatar = streamSnapshot.data ?? stored;
+              return avatarFromSources(
+                chats: chats,
+                rosterItems: rosterItems,
+                selfAvatar: effectiveAvatar,
+              );
+            },
+          );
+        },
+      );
+    }
+
+    final avatar = BlocBuilder<ChatsCubit, ChatsState>(
+      buildWhen: (previous, current) => previous.items != current.items,
+      builder: (context, chatsState) {
+        final chats = chatsState.items;
+        return BlocBuilder<RosterCubit, RosterState>(
+          buildWhen: (previous, current) => previous.items != current.items,
+          builder: (context, rosterState) {
+            final cachedItems = rosterState.items;
+            return avatarBuilder(chats: chats, rosterItems: cachedItems);
+          },
+        );
+      },
     );
 
     final tile = AxiListTile(
@@ -420,24 +547,26 @@ class _MemberTileState extends State<_MemberTile> {
       selected: widget.isSelf,
       paintSurface: true,
       tapBounce: true,
+      minTileHeight: 56,
+      surfaceColor: colors.card,
+      surfaceShape: SquircleBorder(
+        cornerRadius: 14,
+        side: BorderSide(color: borderColor, width: 1.2),
+      ),
+      contentPadding: const EdgeInsetsDirectional.fromSTEB(14, 8, 14, 8),
     );
 
     final actionsPanel = widget.actions.isEmpty
         ? const SizedBox.shrink()
         : AnimatedCrossFade(
-            duration: widget.animationDuration,
+            duration: baseAnimationDuration,
             sizeCurve: Curves.easeInOutCubic,
             crossFadeState: _showActions
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                spacing.s,
-                spacing.xs,
-                spacing.s,
-                spacing.xs,
-              ),
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
               child: _MemberActionPanel(
                 occupantId: widget.occupant.occupantId,
                 actions: widget.actions,
@@ -612,10 +741,10 @@ class RoomAvatarEditorSheet extends StatefulWidget {
 
 class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
   Future<void> _handleSave() async {
-    if (context.read<AvatarEditorCubit>().state.isBusy) return;
-    context.read<AvatarEditorCubit>().pauseCarousel();
-    final payload =
-        await context.read<AvatarEditorCubit>().buildSelectedAvatarPayload();
+    final cubit = context.read<AvatarEditorCubit>();
+    if (cubit.state.isBusy) return;
+    cubit.pauseCarousel();
+    final payload = await cubit.buildSelectedAvatarPayload();
     if (payload == null) return;
     widget.onSave(payload);
   }
@@ -883,65 +1012,59 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   }
 }
 
-class _NicknameSheet extends StatefulWidget {
+class _NicknameSheet extends StatelessWidget {
   const _NicknameSheet({
     required this.controller,
-    required this.focusNode,
     required this.onSubmit,
     required this.onCancel,
   });
 
   final TextEditingController controller;
-  final FocusNode focusNode;
   final ValueChanged<String> onSubmit;
   final VoidCallback onCancel;
 
   @override
-  State<_NicknameSheet> createState() => _NicknameSheetState();
-}
-
-class _NicknameSheetState extends State<_NicknameSheet> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => widget.focusNode.requestFocus(),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final contentPadding = EdgeInsets.fromLTRB(
+      spacing.m,
+      0,
+      spacing.m,
+      spacing.m,
+    );
     final Widget actions = Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        ShadButton.outline(
-          onPressed: widget.onCancel,
+        AxiButton.outline(
+          size: AxiButtonSize.sm,
+          onPressed: onCancel,
           child: Text(l10n.commonCancel),
-        ).withTapBounce(),
-        const SizedBox(width: 8),
-        ShadButton(
-          onPressed: () => widget.onSubmit(widget.controller.text.trim()),
+        ),
+        SizedBox(width: spacing.s),
+        AxiButton.primary(
+          size: AxiButtonSize.sm,
+          onPressed: () => onSubmit(controller.text.trim()),
           child: Text(l10n.mucUpdateNickname),
-        ).withTapBounce(),
+        ),
       ],
     );
     return AxiSheetScaffold(
       header: AxiSheetHeader(
         title: Text(l10n.mucChangeNicknameTitle),
-        onClose: widget.onCancel,
+        onClose: onCancel,
       ),
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: contentPadding,
         child: AxiTextFormField(
-          controller: widget.controller,
-          focusNode: widget.focusNode,
+          controller: controller,
+          autofocus: true,
           placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-          onSubmitted: widget.onSubmit,
+          onSubmitted: onSubmit,
         ),
       ),
       footer: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: contentPadding,
         child: actions,
       ),
     );
@@ -964,25 +1087,21 @@ class _HeaderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final headerStyle = context.modalHeaderTextStyle;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     return Row(
       children: [
         Text(l10n.mucMembersTitle, style: headerStyle),
         const Spacer(),
         if (canInvite)
-          ShadButton.outline(
-            size: ShadButtonSize.sm,
+          AxiButton.outline(
+            size: AxiButtonSize.sm,
             onPressed: onInviteTap,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(LucideIcons.userPlus, size: 16),
-                const SizedBox(width: 6),
-                Text(l10n.mucInviteUser),
-              ],
-            ),
+            leading: Icon(LucideIcons.userPlus, size: sizing.menuItemIconSize),
+            child: Text(l10n.mucInviteUser),
           ),
         if (onClose != null) ...[
-          const SizedBox(width: 8),
+          SizedBox(width: spacing.s),
           AxiIconButton(
             iconData: LucideIcons.x,
             tooltip: l10n.commonClose,

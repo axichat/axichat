@@ -683,12 +683,9 @@ class _UnknownSenderBanner extends StatelessWidget {
           return const SizedBox.shrink();
         }
         return BlocBuilder<RosterCubit, RosterState>(
-          buildWhen: (_, current) => current is RosterAvailable,
+          buildWhen: (previous, current) => previous.items != current.items,
           builder: (context, rosterState) {
-            final cached = rosterState is RosterAvailable
-                ? rosterState.items
-                : context.read<RosterCubit>()['items'] as List<RosterItem>?;
-            final rosterItems = cached ?? const <RosterItem>[];
+            final rosterItems = rosterState.items ?? const <RosterItem>[];
             final rosterEntry = rosterItems
                 .where((entry) => entry.jid == chat.remoteJid)
                 .singleOrNull;
@@ -1745,7 +1742,7 @@ class _ChatState extends State<Chat> {
     if (trimmedOwner == null || trimmedOwner.isEmpty) {
       return null;
     }
-    final String? normalizedOwner = AddressTools.normalizedKey(trimmedOwner);
+    final String? normalizedOwner = normalizeAddressdKey(trimmedOwner);
     if (normalizedOwner == null) {
       return trimmedOwner;
     }
@@ -1778,8 +1775,8 @@ class _ChatState extends State<Chat> {
     required String senderJid,
     required String? chatJid,
   }) {
-    final senderBare = AddressTools.normalizedKey(senderJid);
-    final chatBare = AddressTools.normalizedKey(chatJid);
+    final senderBare = normalizeAddressdKey(senderJid);
+    final chatBare = normalizeAddressdKey(chatJid);
     if (senderBare == null || chatBare == null) {
       return false;
     }
@@ -1828,8 +1825,8 @@ class _ChatState extends State<Chat> {
       chatJid: chatJid,
     );
     if (!isMucSender) {
-      return AddressTools.normalizedKey(senderJid) ==
-          AddressTools.normalizedKey(trimmedClaimed);
+      return normalizeAddressdKey(senderJid) ==
+          normalizeAddressdKey(trimmedClaimed);
     }
     final String? normalizedSender = _normalizeOccupantId(senderJid);
     final String? normalizedClaimed = _normalizeOccupantId(trimmedClaimed);
@@ -1844,8 +1841,8 @@ class _ChatState extends State<Chat> {
     if (realJid == null) {
       return false;
     }
-    return AddressTools.normalizedKey(realJid) ==
-        AddressTools.normalizedKey(trimmedClaimed);
+    return normalizeAddressdKey(realJid) ==
+        normalizeAddressdKey(trimmedClaimed);
   }
 
   String? _availabilityActorId({
@@ -1972,8 +1969,7 @@ class _ChatState extends State<Chat> {
         selfNick: selfNick,
       );
     }
-    return AddressTools.bare(quotedMessage.senderJid) ==
-        AddressTools.bare(currentUserId);
+    return bareAddress(quotedMessage.senderJid) == bareAddress(currentUserId);
   }
 
   void _toggleSettingsPanel() {
@@ -2245,7 +2241,7 @@ class _ChatState extends State<Chat> {
 
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = AddressTools.normalizedKey(value);
+    final normalized = normalizeAddressdKey(value);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }
@@ -2305,7 +2301,7 @@ class _ChatState extends State<Chat> {
       if (candidate.isEmpty) {
         return null;
       }
-      final String? normalizedCandidate = AddressTools.normalizedKey(candidate);
+      final String? normalizedCandidate = normalizeAddressdKey(candidate);
       if (normalizedCandidate == null || normalizedCandidate.isEmpty) {
         return null;
       }
@@ -2313,13 +2309,13 @@ class _ChatState extends State<Chat> {
         if (!entry.transport.isEmail) {
           continue;
         }
-        if (AddressTools.normalizedKey(entry.address) == normalizedCandidate) {
+        if (normalizeAddressdKey(entry.address) == normalizedCandidate) {
           return entry;
         }
       }
       return null;
     }
-    final String? chatBareJid = AddressTools.normalizedKey(chat.remoteJid);
+    final String? chatBareJid = normalizeAddressdKey(chat.remoteJid);
     if (chatBareJid == null || chatBareJid.isEmpty) {
       return null;
     }
@@ -2327,7 +2323,7 @@ class _ChatState extends State<Chat> {
       if (!entry.transport.isXmpp) {
         continue;
       }
-      final String? entryBareJid = AddressTools.normalizedKey(entry.address);
+      final String? entryBareJid = normalizeAddressdKey(entry.address);
       if (entryBareJid != null && entryBareJid == chatBareJid) {
         return entry;
       }
@@ -3695,11 +3691,11 @@ class _ChatState extends State<Chat> {
                   ? resolvedProfileJid
                   : xmppSelfJid;
               final String? normalizedXmppSelfJid =
-                  AddressTools.normalizedKey(selfXmppJid);
+                  normalizeAddressdKey(selfXmppJid);
               final String? normalizedEmailSelfJid =
-                  AddressTools.normalizedKey(resolvedEmailSelfJid);
+                  normalizeAddressdKey(resolvedEmailSelfJid);
               final String? normalizedChatJid =
-                  AddressTools.normalizedKey(chatEntity?.remoteJid);
+                  normalizeAddressdKey(chatEntity?.remoteJid);
               final bool isSelfChat = normalizedChatJid != null &&
                   ((normalizedXmppSelfJid != null &&
                           normalizedChatJid == normalizedXmppSelfJid) ||
@@ -3737,8 +3733,7 @@ class _ChatState extends State<Chat> {
                   : fanOutReports.entries.last;
               final showAttachmentWarning =
                   warningEntry?.value.attachmentWarning ?? false;
-              final rosterItems = (context.watch<RosterCubit>().cache['items']
-                      as List<RosterItem>?) ??
+              final rosterItems = context.watch<RosterCubit>().state.items ??
                   const <RosterItem>[];
               final rosterAvatarPathsByJid = <String, String>{};
               for (final item in rosterItems) {
@@ -3788,7 +3783,7 @@ class _ChatState extends State<Chat> {
                 }
               }
               String? avatarPathForBareJid(String jid) {
-                final normalized = AddressTools.normalizedKey(jid);
+                final normalized = normalizeAddressdKey(jid);
                 if (normalized == null || normalized.isEmpty) return null;
                 return rosterAvatarPathsByJid[normalized] ??
                     chatAvatarPathsByJid[normalized];
@@ -3801,9 +3796,9 @@ class _ChatState extends State<Chat> {
                 if (slashIndex == -1) {
                   return avatarPathForBareJid(trimmed);
                 }
-                final bareParticipant = AddressTools.normalizedKey(
-                    trimmed.substring(0, slashIndex));
-                final roomJid = AddressTools.normalizedKey(chatEntity?.jid);
+                final bareParticipant =
+                    normalizeAddressdKey(trimmed.substring(0, slashIndex));
+                final roomJid = normalizeAddressdKey(chatEntity?.jid);
                 final isRoomParticipant =
                     bareParticipant != null && bareParticipant == roomJid;
                 if (!isRoomParticipant) {
@@ -4042,15 +4037,11 @@ class _ChatState extends State<Chat> {
                       title: jid == null
                           ? const SizedBox.shrink()
                           : BlocBuilder<RosterCubit, RosterState>(
-                              buildWhen: (_, current) =>
-                                  current is RosterAvailable,
+                              buildWhen: (previous, current) =>
+                                  previous.items != current.items,
                               builder: (context, rosterState) {
-                                final cached = rosterState is RosterAvailable
-                                    ? rosterState.items
-                                    : context.read<RosterCubit>()['items']
-                                        as List<RosterItem>?;
                                 final rosterItems =
-                                    cached ?? const <RosterItem>[];
+                                    rosterState.items ?? const <RosterItem>[];
                                 final item = rosterItems
                                     .where((entry) => entry.jid == jid)
                                     .singleOrNull;
@@ -4512,20 +4503,20 @@ class _ChatState extends State<Chat> {
                                         index++) {
                                       final e = filteredItems[index];
                                       final senderBare =
-                                          AddressTools.bare(e.senderJid);
+                                          bareAddress(e.senderJid);
                                       final normalizedSenderBare =
-                                          AddressTools.normalizedKey(
+                                          normalizeAddressdKey(
                                         e.senderJid,
                                       );
                                       final isSelfXmpp = senderBare != null &&
                                           senderBare ==
-                                              AddressTools.bare(
+                                              bareAddress(
                                                 profileState()?.jid,
                                               );
                                       final isSelfEmail = senderBare != null &&
                                           resolvedEmailSelfJid != null &&
                                           senderBare ==
-                                              AddressTools.bare(
+                                              bareAddress(
                                                 resolvedEmailSelfJid,
                                               );
                                       final bool isDeltaPlaceholderSender =

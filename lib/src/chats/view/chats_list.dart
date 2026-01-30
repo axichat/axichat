@@ -55,11 +55,9 @@ class ChatsList extends StatelessWidget {
       builder: (context, searchState) {
         return BlocBuilder<RosterCubit, RosterState>(
           builder: (context, rosterState) {
-            final rosterContacts = rosterState is RosterAvailable
-                ? (rosterState.items ?? const <RosterItem>[])
-                    .map((item) => item.jid)
-                    .toSet()
-                : const <String>{};
+            final rosterContacts = (rosterState.items ?? const <RosterItem>[])
+                .map((item) => item.jid)
+                .toSet();
             return _ChatsListSync(
               searchState: searchState,
               rosterContacts: rosterContacts,
@@ -390,15 +388,117 @@ class _ChatsListBody extends StatelessWidget {
   }
 }
 
+class _AnimatedChatTile extends StatelessWidget {
+  const _AnimatedChatTile({
+    required this.chat,
+    required this.animation,
+    required this.entering,
+    required this.fromTop,
+    required this.archivedContext,
+    required this.onArchivedTap,
+    required this.selectionActive,
+    required this.isSelected,
+    required this.isOpen,
+    required this.timestampNowListenable,
+  });
+
+  final Chat chat;
+  final Animation<double> animation;
+  final bool entering;
+  final bool fromTop;
+  final bool archivedContext;
+  final Future<void> Function(Chat chat)? onArchivedTap;
+  final bool selectionActive;
+  final bool isSelected;
+  final bool isOpen;
+  final ValueListenable<DateTime> timestampNowListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    final distance = context.spacing.s / context.sizing.listButtonHeight;
+    final offset = fromTop ? Offset(0, -distance) : Offset(0, distance);
+    final slideAnimation = CurvedAnimation(
+      parent: entering ? animation : ReverseAnimation(animation),
+      curve: Curves.easeOutCubic,
+    );
+    final tween = entering
+        ? Tween<Offset>(begin: offset, end: Offset.zero)
+        : Tween<Offset>(begin: Offset.zero, end: offset);
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: tween.animate(slideAnimation),
+        child: _ChatTileSlot(
+          chat: chat,
+          archivedContext: archivedContext,
+          onArchivedTap: onArchivedTap,
+          selectionActive: selectionActive,
+          isSelected: isSelected,
+          isOpen: isOpen,
+          timestampNowListenable: timestampNowListenable,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatTileSlot extends StatelessWidget {
+  const _ChatTileSlot({
+    required this.chat,
+    required this.archivedContext,
+    required this.onArchivedTap,
+    required this.selectionActive,
+    required this.isSelected,
+    required this.isOpen,
+    required this.timestampNowListenable,
+  });
+
+  final Chat chat;
+  final bool archivedContext;
+  final Future<void> Function(Chat chat)? onArchivedTap;
+  final bool selectionActive;
+  final bool isSelected;
+  final bool isOpen;
+  final ValueListenable<DateTime> timestampNowListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<DateTime>(
+      valueListenable: timestampNowListenable,
+      builder: (context, timestampNow, _) {
+        return ListItemPadding(
+          child: ChatListTile(
+            item: chat,
+            archivedContext: archivedContext,
+            onArchivedTap: onArchivedTap,
+            selectionActive: selectionActive,
+            isSelected: isSelected,
+            isOpen: isOpen,
+            timestampNow: timestampNow,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class ChatListTile extends StatefulWidget {
   const ChatListTile({
     super.key,
     required this.item,
+    required this.selectionActive,
+    required this.isSelected,
+    required this.isOpen,
+    required this.timestampNow,
     this.archivedContext = false,
     this.onArchivedTap,
   });
 
   final Chat item;
+  final bool selectionActive;
+  final bool isSelected;
+  final bool isOpen;
+  final DateTime timestampNow;
   final bool archivedContext;
   final Future<void> Function(Chat chat)? onArchivedTap;
 
@@ -540,40 +640,11 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
     return true;
   }
 
-  Widget _buildAnimatedTile(
-    Chat chat,
-    Animation<double> animation, {
-    required bool entering,
-    required bool fromTop,
-  }) {
-    const double distance = 0.16;
-    const offsetFromTop = Offset(0, -distance);
-    const offsetFromBottom = Offset(0, distance);
-    final offset = fromTop ? offsetFromTop : offsetFromBottom;
-    const curve = Curves.easeOutCubic;
-    final slideAnimation = CurvedAnimation(
-      parent: entering ? animation : ReverseAnimation(animation),
-      curve: curve,
-    );
-    final tween = entering
-        ? Tween<Offset>(begin: offset, end: Offset.zero)
-        : Tween<Offset>(begin: Offset.zero, end: offset);
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(
-        position: tween.animate(slideAnimation),
-        child: _buildChatTile(chat),
-      ),
-    );
-  }
-
-  Widget _buildChatTile(Chat chat) => ListItemPadding(
-        child: ChatListTile(item: chat),
-      );
-
   @override
   Widget build(BuildContext context) {
     final topSpacer = context.spacing.m;
+    final scrollbarInset = context.spacing.xxs;
+    final scrollbarThickness = context.spacing.xs;
     final slivers = <Widget>[
       SliverToBoxAdapter(child: SizedBox(height: topSpacer)),
       SliverAnimatedList(
@@ -581,11 +652,17 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         initialItemCount: _displayedItems.length,
         itemBuilder: (context, index, animation) {
           final chat = _displayedItems[index];
-          return _buildAnimatedTile(
-            chat,
-            animation,
+          return _AnimatedChatTile(
+            chat: chat,
+            animation: animation,
             entering: true,
             fromTop: index == 0,
+            archivedContext: false,
+            onArchivedTap: null,
+            selectionActive: widget.selectedJids.isNotEmpty,
+            isSelected: widget.selectedJids.contains(chat.jid),
+            isOpen: widget.openJid == chat.jid,
+            timestampNowListenable: _timestampNow,
           );
         },
       ),
@@ -596,10 +673,21 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         SliverToBoxAdapter(child: widget.calendarShortcut),
       );
     }
-    return CustomScrollView(
+    return RawScrollbar(
+      interactive: true,
       controller: _scrollController,
-      physics: widget.scrollPhysics,
-      slivers: slivers,
+      thumbVisibility: true,
+      crossAxisMargin: scrollbarInset,
+      thickness: scrollbarThickness,
+      radius: Radius.circular(context.radii.squircle),
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: widget.scrollPhysics,
+          slivers: slivers,
+        ),
+      ),
     );
   }
 }
@@ -608,27 +696,42 @@ class _ChatListTileState extends State<ChatListTile> {
   bool _showActions = false;
   bool _focused = false;
   late final FocusNode _focusNode;
-  late DateTime _timestampNow;
-  Timer? _timestampTicker;
+  String? _cachedTimestampLabel;
+  double _cachedTimestampWidth = 0;
+  int? _cachedUnreadCount;
+  double _cachedUnreadWidth = 0;
+  double _cachedUnreadHeight = 0;
+  double _textScaleFactor = 1;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode(debugLabel: 'chat-tile-${widget.item.jid}');
-    _timestampNow = kEnableDemoChats ? demoNow() : DateTime.now();
-    _timestampTicker = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        _timestampNow = kEnableDemoChats ? demoNow() : DateTime.now();
-      });
-    });
   }
 
   @override
   void dispose() {
-    _timestampTicker?.cancel();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatListTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectionActive && !oldWidget.selectionActive && _showActions) {
+      setState(() {
+        _showActions = false;
+      });
+    }
+    if (oldWidget.item.unreadCount != widget.item.unreadCount) {
+      _cachedUnreadCount = null;
+      _cachedUnreadWidth = 0;
+      _cachedUnreadHeight = 0;
+    }
+    if (oldWidget.item.lastMessage != widget.item.lastMessage) {
+      _cachedTimestampLabel = null;
+      _cachedTimestampWidth = 0;
+    }
   }
 
   @override
@@ -638,6 +741,9 @@ class _ChatListTileState extends State<ChatListTile> {
     final colors = context.colorScheme;
     final textScaler = MediaQuery.of(context).textScaler;
     final isDesktop = EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final motion = context.motion;
     double scaled(double value) {
       if (!value.isFinite) {
         return value;
@@ -653,59 +759,58 @@ class _ChatListTileState extends State<ChatListTile> {
       }
     }
 
+    final scaleFactor = textScaler.scale(1);
+    if (_textScaleFactor != scaleFactor) {
+      _textScaleFactor = scaleFactor;
+      _cachedTimestampLabel = null;
+      _cachedTimestampWidth = 0;
+      _cachedUnreadCount = null;
+      _cachedUnreadWidth = 0;
+      _cachedUnreadHeight = 0;
+    }
+
     final displayName = item.displayName;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadThickness =
-        showUnreadBadge ? _measureUnreadBadgeWidth(context, unreadCount) : 0.0;
+        showUnreadBadge ? _resolveUnreadWidth(context, unreadCount) : 0.0;
     final double unreadHeight =
-        showUnreadBadge ? _measureUnreadBadgeHeight(context, unreadCount) : 0.0;
+        showUnreadBadge ? _resolveUnreadHeight(context, unreadCount) : 0.0;
+    final unreadCutoutClearance = spacing.xs;
+    final unreadCutoutVerticalClearance = spacing.xs;
+    final unreadMinDepth = spacing.s + spacing.xs;
     final double unreadDepth = showUnreadBadge
         ? math.max(
-            _unreadBadgeMinDepth,
-            (unreadHeight / 2) +
-                _unreadBadgeCutoutVerticalClearance +
-                _unreadBadgeCutoutDepthAdjustment,
+            unreadMinDepth,
+            (unreadHeight / 2) + unreadCutoutVerticalClearance,
           )
         : 0.0;
     final subtitleText = _subtitlePreview(item.lastMessage);
     final timestampLabel = item.lastMessage == null
         ? null
-        : formatTimeSinceLabel(l10n, _timestampNow, item.lastChangeTimestamp);
+        : formatTimeSinceLabel(l10n, widget.timestampNow, item.lastChangeTimestamp);
     final timestampThickness = timestampLabel == null
         ? 0.0
         : math.max(
-            scaled(32.0),
-            _measureLabelWidth(context, timestampLabel) + scaled(16.0),
+            scaled(sizing.menuItemHeight),
+            _resolveTimestampWidth(context, timestampLabel) +
+                scaled(spacing.m),
           );
-    ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
-    ChatsCubit? chatsCubit() => context.read<ChatsCubit?>();
-    final selectedJids = chatsState()?.selectedJids ?? const <String>{};
-    final selectionActive = selectedJids.isNotEmpty;
-    final isSelected = selectedJids.contains(item.jid);
-    final openJid = chatsState()?.openJid;
-    final isOpen = openJid != null && openJid == item.jid;
-    if (selectionActive && _showActions) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _showActions = false;
-        });
-      });
-    }
+    final selectionActive = widget.selectionActive;
+    final isSelected = widget.isSelected;
+    final isOpen = widget.isOpen;
 
-    final brightness = Theme.of(context).brightness;
+    final brightness = colors.brightness;
+    final overlayAlpha = brightness == Brightness.dark
+        ? motion.tapHoverAlpha
+        : motion.tapSplashAlpha;
     final selectionOverlay = colors.primary.withValues(
-      alpha: brightness == Brightness.dark ? 0.12 : 0.06,
+      alpha: overlayAlpha,
     );
     final tileBackgroundColor =
         isOpen ? Color.alphaBlend(selectionOverlay, colors.card) : colors.card;
     late final VoidCallback tileOnTap;
-    if (chatsState() == null) {
-      tileOnTap = () async {
-        await _handleTap(item);
-      };
-    } else if (selectionActive) {
+    if (selectionActive) {
       tileOnTap =
           () => context.read<ChatsCubit>().toggleChatSelection(item.jid);
     } else {
@@ -714,29 +819,27 @@ class _ChatListTileState extends State<ChatListTile> {
       };
     }
     final tilePadding = EdgeInsetsDirectional.only(
-      start: scaled(16),
-      end: scaled(showUnreadBadge ? 40 : 28),
-      top: scaled(4),
-      bottom: scaled(4),
+      start: scaled(spacing.m),
+      end: scaled(showUnreadBadge ? spacing.l : spacing.m),
+      top: scaled(spacing.xs),
+      bottom: scaled(spacing.xs),
     );
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: tileOnTap,
-      onLongPress: chatsCubit() == null
-          ? null
-          : () {
-              if (selectionActive) {
-                chatsCubit()?.toggleChatSelection(item.jid);
-              } else {
-                chatsCubit()?.ensureChatSelected(item.jid);
-              }
-              if (_showActions) {
-                setState(() => _showActions = false);
-              }
-            },
+      onLongPress: () {
+        if (selectionActive) {
+          context.read<ChatsCubit>().toggleChatSelection(item.jid);
+        } else {
+          context.read<ChatsCubit>().ensureChatSelected(item.jid);
+        }
+        if (_showActions) {
+          setState(() => _showActions = false);
+        }
+      },
       leadingConstraints: BoxConstraints(
-        maxWidth: scaled(72),
-        maxHeight: scaled(80),
+        maxWidth: scaled(sizing.iconButtonTapTarget + spacing.s),
+        maxHeight: scaled(sizing.iconButtonTapTarget + spacing.s),
       ),
       selected: isOpen || isSelected,
       paintSurface: false,
@@ -748,27 +851,28 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
-    final cutoutGap = context.spacing.xxs;
-    final iconButtonSize = context.sizing.iconButtonSize;
+    final cutoutGap = spacing.xs;
+    final iconButtonSize = sizing.iconButtonSize;
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
     final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
+    final unreadChildOffset = -spacing.xs;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
         CutoutSpec(
           edge: CutoutEdge.top,
-          alignment: const Alignment(0.84, -1),
+          alignment: Alignment.topRight,
           depth: unreadDepth,
           thickness: unreadThickness,
-          cornerRadius: context.sizing.containerRadius,
+          cornerRadius: sizing.containerRadius,
           child: Transform.translate(
-            offset: Offset(0, scaled(_unreadBadgeCutoutChildVerticalOffset)),
+            offset: Offset(0, scaled(unreadChildOffset)),
             child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
           ),
         ),
       CutoutSpec(
         edge: CutoutEdge.right,
-        alignment: const Alignment(1, 0),
+        alignment: Alignment.centerRight,
         depth: iconCutoutDepth,
         thickness: iconCutoutThickness,
         cornerRadius: iconCutoutRadius,
@@ -788,12 +892,12 @@ class _ChatListTileState extends State<ChatListTile> {
       if (timestampLabel != null)
         CutoutSpec(
           edge: CutoutEdge.bottom,
-          alignment: const Alignment(0.52, 1),
-          depth: 16,
+          alignment: Alignment.bottomCenter,
+          depth: spacing.m,
           thickness: timestampThickness,
-          cornerRadius: context.sizing.containerRadius,
+          cornerRadius: sizing.containerRadius,
           child: Transform.translate(
-            offset: Offset(0, -scaled(3)),
+            offset: Offset(0, -scaled(spacing.xs)),
             child: Text(
               timestampLabel,
               style: context.textTheme.small.copyWith(
@@ -811,13 +915,16 @@ class _ChatListTileState extends State<ChatListTile> {
       cutouts: cutouts,
       shape: SquircleBorder(
         cornerRadius: context.radii.squircle,
-        side: BorderSide(color: surfaceBorderColor),
+        side: BorderSide(
+          color: surfaceBorderColor,
+          width: context.borderSide.width,
+        ),
       ),
       child: Column(
         children: [
           tile,
           AnimatedCrossFade(
-            duration: const Duration(milliseconds: 220),
+            duration: baseAnimationDuration,
             sizeCurve: Curves.easeInOutCubic,
             crossFadeState: _showActions
                 ? CrossFadeState.showSecond
@@ -825,13 +932,15 @@ class _ChatListTileState extends State<ChatListTile> {
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
               padding: EdgeInsetsDirectional.fromSTEB(
-                scaled(16),
+                scaled(spacing.m),
                 0,
-                scaled(16),
-                scaled(20),
+                scaled(spacing.m),
+                scaled(spacing.m + spacing.xs),
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: scaled(18)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: scaled(spacing.m + spacing.xs),
+                ),
                 child: _ChatActionPanel(
                   chat: item,
                   archivedContext: widget.archivedContext,
@@ -858,7 +967,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
-        items: _chatContextMenuItems(item, chatsState()),
+        items: _chatContextMenuItems(item),
         child: tileContent,
       );
     }

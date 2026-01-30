@@ -14,7 +14,9 @@ import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart'
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/common/safe_logging.dart';
@@ -57,7 +59,7 @@ class CalendarBloc extends BaseCalendarBloc {
 
   final CalendarSyncManager Function(CalendarBloc bloc) _syncManagerBuilder;
   late final CalendarSyncManager _syncManager;
-  final CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
+  CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
   final XmppService _xmppService;
   final EmailService? _emailService;
   final VoidCallback? _onDispose;
@@ -65,6 +67,56 @@ class CalendarBloc extends BaseCalendarBloc {
   @protected
   CalendarAvailabilityShareSource get availabilityShareSource =>
       const CalendarAvailabilityShareSource.personal();
+
+  void attachAvailabilityCoordinator(
+    CalendarAvailabilityShareCoordinator coordinator,
+  ) {
+    if (_availabilityCoordinator == coordinator) return;
+    _availabilityCoordinator = coordinator;
+    final model = state.model;
+    Future<void>(() async {
+      await coordinator.handleModelChanged(
+        source: availabilityShareSource,
+        model: model,
+      );
+    });
+  }
+
+  Future<void> sendCalendarSyncMessage({
+    required String jid,
+    required CalendarSyncOutbound outbound,
+    required ChatType chatType,
+  }) async {
+    await _xmppService.sendCalendarSyncMessage(
+      jid: jid,
+      outbound: outbound,
+      chatType: chatType,
+    );
+  }
+
+  Future<void> sendAvailabilityMessage({
+    required String jid,
+    required CalendarAvailabilityMessage message,
+    required ChatType chatType,
+  }) async {
+    await _xmppService.sendAvailabilityMessage(
+      jid: jid,
+      message: message,
+      chatType: chatType,
+    );
+  }
+
+  Future<CalendarSnapshotUploadResult> uploadCalendarSnapshot(File file) {
+    return _xmppService.uploadCalendarSnapshot(file);
+  }
+
+  void registerChatCalendarSyncHandler(ChatCalendarSyncHandler handler) {
+    _xmppService.setChatCalendarSyncCallback(handler);
+  }
+
+  void clearChatCalendarSyncHandler() {
+    _xmppService.clearChatCalendarSyncCallback();
+  }
 
   @override
   void emitModel(

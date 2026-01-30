@@ -316,10 +316,19 @@ class _NexusTabViews extends StatelessWidget {
           BlocListener<RosterCubit, RosterState>(
             listener: (context, state) {
               if (toast == null) return;
-              if (state is RosterFailure) {
-                toast(FeedbackToast.error(message: state.message));
-              } else if (state is RosterSuccess) {
-                toast(FeedbackToast.success(message: state.message));
+              final actionState = state.actionState;
+              if (actionState is RosterActionFailure) {
+                toast(
+                  FeedbackToast.error(
+                    message: _rosterFailureToastMessage(context, actionState),
+                  ),
+                );
+              } else if (actionState is RosterActionSuccess) {
+                toast(
+                  FeedbackToast.success(
+                    message: _rosterSuccessToastMessage(context, actionState),
+                  ),
+                );
               }
             },
           ),
@@ -938,6 +947,28 @@ IconData _tabIcon(HomeTab tab) {
     case HomeTab.drafts:
       return LucideIcons.fileText;
   }
+}
+
+String _rosterFailureToastMessage(
+  BuildContext context,
+  RosterActionFailure failure,
+) {
+  final l10n = context.l10n;
+  return switch (failure.reason) {
+    RosterFailureReason.invalidJid => l10n.jidInputInvalid,
+    RosterFailureReason.addFailed ||
+    RosterFailureReason.removeFailed ||
+    RosterFailureReason.rejectFailed =>
+      l10n.authGenericError,
+  };
+}
+
+String _rosterSuccessToastMessage(
+  BuildContext context,
+  RosterActionSuccess success,
+) {
+  final l10n = context.l10n;
+  return l10n.commonDone;
 }
 
 class _HomeSearchPanel extends StatefulWidget {

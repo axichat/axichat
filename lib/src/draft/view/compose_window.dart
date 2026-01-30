@@ -252,8 +252,6 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final containerRadius =
-        BorderRadius.circular(context.sizing.containerRadius);
     final isMinimized = entry.isMinimized;
     final isExpanded = entry.isExpanded;
 
@@ -262,6 +260,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final baseWidth = sizing.dialogMaxWidth - spacing.l;
     final expandedWidth = sizing.dialogMaxWidth + spacing.xl;
     final minWidth = sizing.menuMaxWidth + spacing.m;
+    final stackOffset = spacing.m + spacing.xs;
     final maxHeight = mediaSize.height * sizing.dialogMaxHeightFraction;
     final baseHeight = sizing.dialogMaxWidth - spacing.l;
     final expandedHeight = sizing.dialogMaxWidth + spacing.s;
@@ -290,8 +289,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       ),
       math.min(availableHeight, minHeight),
     );
-    final double targetHeight =
-        isMinimized ? headerHeight : normalHeight;
+    final double targetHeight = isMinimized ? headerHeight : normalHeight;
     final double collapseOffset = isMinimized ? normalHeight - targetHeight : 0;
     final double bodyHeight = math.max(targetHeight - headerHeight, 0);
 
@@ -303,6 +301,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       targetHeight: normalHeight,
       index: widget.index,
       windowPadding: windowPadding,
+      stackOffset: stackOffset,
     );
 
     return AnimatedPositioned(
@@ -313,61 +312,53 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       width: targetWidth,
       height: targetHeight,
       child: InBoundsFadeScale(
-        child: Material(
-          type: MaterialType.transparency,
-          child: DecoratedBox(
-            decoration: ShapeDecoration(
-              color: colors.card,
-              shadows: calendarMediumShadow,
-              shape: ContinuousRectangleBorder(
-                borderRadius: containerRadius,
-                side: context.borderSide,
-              ),
-            ),
-            child: Column(
-              children: [
-                _ComposeWindowHeader(
-                  id: entry.id,
-                  seed: entry.seed,
-                  minimized: isMinimized,
-                  expanded: isExpanded,
-                  onMinimize: () => isMinimized
-                      ? context.read<ComposeWindowCubit>().restore(entry.id)
-                      : context.read<ComposeWindowCubit>().minimize(entry.id),
-                  onToggleExpanded: () => context
-                      .read<ComposeWindowCubit>()
-                      .toggleExpanded(entry.id),
-                  onClose: () =>
-                      context.read<ComposeWindowCubit>().closeWindow(entry.id),
-                  onDragStart: (details) =>
-                      _handleDragStart(details, resolvedOffset),
-                  onDragUpdate: (details) =>
-                      _handleDragUpdate(
-                        details,
-                        targetWidth,
-                        normalHeight,
-                        windowPadding,
-                      ),
-                  onDragEnd: _handleDragEnd,
+        child: AxiModalSurface(
+          padding: EdgeInsets.zero,
+          backgroundColor: colors.card,
+          borderColor: context.borderSide.color,
+          cornerRadius: sizing.containerRadius,
+          shadows: calendarMediumShadow,
+          child: Column(
+            children: [
+              _ComposeWindowHeader(
+                id: entry.id,
+                seed: entry.seed,
+                minimized: isMinimized,
+                expanded: isExpanded,
+                onMinimize: () => isMinimized
+                    ? context.read<ComposeWindowCubit>().restore(entry.id)
+                    : context.read<ComposeWindowCubit>().minimize(entry.id),
+                onToggleExpanded: () =>
+                    context.read<ComposeWindowCubit>().toggleExpanded(entry.id),
+                onClose: () =>
+                    context.read<ComposeWindowCubit>().closeWindow(entry.id),
+                onDragStart: (details) =>
+                    _handleDragStart(details, resolvedOffset),
+                onDragUpdate: (details) => _handleDragUpdate(
+                  details,
+                  targetWidth,
+                  normalHeight,
+                  windowPadding,
                 ),
-                Expanded(
-                  child: Offstage(
-                    offstage: isMinimized,
-                    child: AnimatedOpacity(
-                      opacity: isMinimized ? 0 : 1,
-                      duration: baseAnimationDuration,
-                      curve: Curves.easeInOut,
-                      child: _ComposeWindowBody(
-                        key: ValueKey(entry.session),
-                        id: entry.id,
-                        seed: entry.seed,
-                        availableHeight: bodyHeight,
-                      ),
+                onDragEnd: _handleDragEnd,
+              ),
+              Expanded(
+                child: Offstage(
+                  offstage: isMinimized,
+                  child: AnimatedOpacity(
+                    opacity: isMinimized ? 0 : 1,
+                    duration: baseAnimationDuration,
+                    curve: Curves.easeInOut,
+                    child: _ComposeWindowBody(
+                      key: ValueKey(entry.session),
+                      id: entry.id,
+                      seed: entry.seed,
+                      availableHeight: bodyHeight,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -382,6 +373,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required double targetHeight,
     required int index,
     required double windowPadding,
+    required double stackOffset,
   }) {
     final defaultOffset = Offset(
       math.max(
@@ -390,7 +382,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
             targetWidth -
             windowPadding -
             viewPadding.right -
-            (index * 20),
+            (index * stackOffset),
       ),
       math.max(
         windowPadding + viewPadding.top,
@@ -398,7 +390,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
             targetHeight -
             windowPadding -
             viewPadding.bottom -
-            (index * 20),
+            (index * stackOffset),
       ),
     );
     final clamped = _clampOffset(
@@ -464,17 +456,11 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
   }) {
     final maxX = math.max(
       windowPadding + viewPadding.left,
-      viewportSize.width -
-          targetWidth -
-          windowPadding -
-          viewPadding.right,
+      viewportSize.width - targetWidth - windowPadding - viewPadding.right,
     );
     final maxY = math.max(
       windowPadding + viewPadding.top,
-      viewportSize.height -
-          targetHeight -
-          windowPadding -
-          viewPadding.bottom,
+      viewportSize.height - targetHeight - windowPadding - viewPadding.bottom,
     );
     final dx = offset.dx.clamp(windowPadding + viewPadding.left, maxX);
     final dy = offset.dy.clamp(windowPadding + viewPadding.top, maxY);

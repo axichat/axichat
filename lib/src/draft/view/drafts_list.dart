@@ -153,7 +153,7 @@ class _DraftsListBody extends StatelessWidget {
                             ) ==
                             true &&
                         context.mounted) {
-                      context.read<DraftCubit?>()?.deleteDraft(id: item.id);
+                      context.read<DraftCubit>().deleteDraft(id: item.id);
                     }
                   },
                 ),

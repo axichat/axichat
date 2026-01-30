@@ -2,12 +2,10 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -15,7 +13,6 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:flutter/foundation.dart';
 
 part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
@@ -43,26 +40,6 @@ enum ChatRouteIndex {
   bool get allowsChatInteraction => isMain || isSearch;
 }
 
-enum ChatListFilter {
-  all,
-  contacts,
-  nonContacts,
-  xmpp,
-  email,
-  hidden;
-
-  static ChatListFilter fromId(String? id) {
-    return switch (id) {
-      'contacts' => ChatListFilter.contacts,
-      'nonContacts' => ChatListFilter.nonContacts,
-      'xmpp' => ChatListFilter.xmpp,
-      'email' => ChatListFilter.email,
-      'hidden' => ChatListFilter.hidden,
-      _ => ChatListFilter.all,
-    };
-  }
-}
-
 class _ChatViewResults {
   const _ChatViewResults({
     required this.visibleItems,
@@ -81,6 +58,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     required HomeRefreshSyncService homeRefreshSyncService,
     EmailService? emailService,
   })  : _chatsService = xmppService,
+        _xmppService = xmppService,
         _homeRefreshSyncService = homeRefreshSyncService,
         _emailService = emailService,
         super(
@@ -98,7 +76,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       rosterContacts: const <String>{},
       searchQuery: '',
       searchActive: false,
-      searchFilter: ChatListFilter.all,
+      searchFilter: SearchFilterId.all,
       searchSortOrder: SearchSortOrder.newestFirst,
       selectedJids: const <String>{},
     );
@@ -113,7 +91,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       creationStatus: RequestStatus.none,
       searchQuery: '',
       searchActive: false,
-      searchFilter: ChatListFilter.all,
+      searchFilter: SearchFilterId.all,
       searchSortOrder: SearchSortOrder.newestFirst,
       rosterContacts: const <String>{},
       visibleItems: derived.visibleItems,
@@ -123,6 +101,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   final ChatsService _chatsService;
+  final XmppService _xmppService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EmailService? _emailService;
 
@@ -139,6 +118,12 @@ class ChatsCubit extends Cubit<ChatsState> {
     return super.close();
   }
 
+  Stream<void> get demoResetStream => _xmppService.demoResetStream;
+
+  void startDemoInteractivePhase() {
+    _xmppService.startDemoInteractivePhase();
+  }
+
   void scheduleExportCleanup(File file) {
     if (file.path.trim().isEmpty) return;
     const cleanupDelay = Duration(hours: 1);
@@ -151,14 +136,13 @@ class ChatsCubit extends Cubit<ChatsState> {
   void updateSearchSnapshot({
     required bool active,
     required String query,
-    required String? filterId,
+    required SearchFilterId? filterId,
     required SearchSortOrder sortOrder,
   }) {
     final normalizedQuery = active ? query.trim() : '';
-    final filter = ChatListFilter.fromId(filterId);
     if (state.searchActive == active &&
         state.searchQuery == normalizedQuery &&
-        state.searchFilter == filter &&
+        state.searchFilter == filterId &&
         state.searchSortOrder == sortOrder) {
       return;
     }
@@ -167,7 +151,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       rosterContacts: state.rosterContacts,
       searchQuery: normalizedQuery,
       searchActive: active,
-      searchFilter: filter,
+      searchFilter: filterId,
       searchSortOrder: sortOrder,
       selectedJids: state.selectedJids,
     );
@@ -175,7 +159,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       state.copyWith(
         searchActive: active,
         searchQuery: normalizedQuery,
-        searchFilter: filter,
+        searchFilter: filterId,
         searchSortOrder: sortOrder,
         visibleItems: derived.visibleItems,
         archivedItems: derived.archivedItems,
