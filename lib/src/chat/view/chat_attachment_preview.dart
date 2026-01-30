@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
@@ -19,7 +20,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart'
-    show XmppFileTooBigException, XmppService;
+    show XmppFileTooBigException;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -32,30 +33,12 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
-class _AttachmentSpinner extends StatelessWidget {
-  const _AttachmentSpinner({required this.size, required this.color});
-
-  static const double _strokeWidth = 2;
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CircularProgressIndicator(strokeWidth: _strokeWidth, color: color),
-    );
-  }
-}
-
 class _AttachmentFileNameText extends StatelessWidget {
   const _AttachmentFileNameText({
     required this.filename,
     required this.style,
-    this.maxLines = _attachmentFileNameMaxLines,
-    this.overflow = _attachmentFileNameOverflow,
+    this.maxLines = 1,
+    this.overflow = TextOverflow.ellipsis,
   });
 
   final String filename;
@@ -75,35 +58,6 @@ class _AttachmentFileNameText extends StatelessWidget {
   }
 }
 
-const double _attachmentPreviewCornerRadius = 18.0;
-const OutlinedBorder _attachmentSurfaceDefaultShape = ContinuousRectangleBorder(
-  borderRadius: BorderRadius.all(
-    Radius.circular(_attachmentPreviewCornerRadius),
-  ),
-);
-const double _attachmentActionSpacing = 8.0;
-const double _attachmentOverlayIconSize = 16.0;
-const double _attachmentVideoIconSize = 20.0;
-const double _attachmentOverlayPadding = 8.0;
-const double _attachmentVideoSpinnerSize = 32.0;
-const double _attachmentSpinnerSize = 32.0;
-const double _attachmentVideoFallbackAspectRatio = 16 / 9;
-const double _attachmentRemoteIconSize = 18.0;
-const double _attachmentRemoteSpacing = 8.0;
-const double _attachmentRemoteBodySpacing = 12.0;
-const double _attachmentRemoteSpinnerSize = 16.0;
-const int _attachmentFileNameMaxLines = 1;
-const TextOverflow _attachmentFileNameOverflow = TextOverflow.ellipsis;
-const double _attachmentFileIconWidth = 42.0;
-const double _attachmentFileIconHeight = 46.0;
-const double _attachmentFileIconSize = 20.0;
-const double _attachmentFileRowSpacing = 12.0;
-const int _attachmentActionButtonCount = 3;
-const double _attachmentActionRowMinWidth =
-    (AxiIconButton.kTapTargetSize * _attachmentActionButtonCount) +
-        (_attachmentActionSpacing * (_attachmentActionButtonCount - 1));
-const double _attachmentUnknownMaxWidth = 420.0;
-const double _attachmentMaxWidthFraction = 0.9;
 const int _attachmentImagePreviewMaxBytes = 16 * 1024 * 1024;
 const int _attachmentImageMaxPixels = 16 * 1024 * 1024;
 const int _attachmentImageMaxFrames = 60;
@@ -294,7 +248,7 @@ class ChatAttachmentPreview extends StatefulWidget {
     this.downloadDelegate,
     this.onAllowPressed,
     this.surfaceShape,
-    this.maxWidthFraction = _attachmentMaxWidthFraction,
+    this.maxWidthFraction,
   });
 
   final String stanzaId;
@@ -310,7 +264,7 @@ class ChatAttachmentPreview extends StatefulWidget {
   final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
   final OutlinedBorder? surfaceShape;
-  final double maxWidthFraction;
+  final double? maxWidthFraction;
 
   @override
   State<ChatAttachmentPreview> createState() => _ChatAttachmentPreviewState();
@@ -319,6 +273,8 @@ class ChatAttachmentPreview extends StatefulWidget {
 class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
   Future<FileTypeReport>? _typeReportFuture;
   int? _typeReportKey;
+  Future<bool>? _fileExistsFuture;
+  int? _fileExistsKey;
 
   bool _shouldAutoDownload(FileMetadataData metadata) {
     if (widget.autoDownloadUserInitiated) {
@@ -365,14 +321,36 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     _typeReportKey = null;
   }
 
+  Future<bool> _resolveFileExistsFuture(File file) {
+    final nextKey = file.path.hashCode;
+    final cachedFuture = _fileExistsFuture;
+    if (cachedFuture != null && _fileExistsKey == nextKey) {
+      return cachedFuture;
+    }
+    _fileExistsKey = nextKey;
+    final nextFuture = file.exists();
+    _fileExistsFuture = nextFuture;
+    return nextFuture;
+  }
+
+  void _clearFileExistsCache() {
+    _fileExistsFuture = null;
+    _fileExistsKey = null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final OutlinedBorder resolvedShape =
-        widget.surfaceShape ?? _attachmentSurfaceDefaultShape;
+    final sizing = context.sizing;
+    final OutlinedBorder resolvedShape = widget.surfaceShape ??
+        ContinuousRectangleBorder(
+          borderRadius: BorderRadius.circular(sizing.containerRadius),
+        );
+    final maxWidthFraction =
+        widget.maxWidthFraction ?? sizing.dialogMaxHeightFraction;
     return RepaintBoundary(
       child: _AttachmentSurfaceScope(
         shape: resolvedShape,
-        maxWidthFraction: widget.maxWidthFraction,
+        maxWidthFraction: maxWidthFraction,
         child: StreamBuilder<FileMetadataData?>(
           stream: widget.metadataStream,
           initialData: widget.initialMetadata,
@@ -394,10 +372,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                   snapshot.connectionState != ConnectionState.done) {
                 return _AttachmentSurface(
                   child: Center(
-                    child: _AttachmentSpinner(
-                      size: _attachmentSpinnerSize,
-                      color: colors.primary,
-                    ),
+                    child: AxiProgressIndicator(color: colors.primary),
                   ),
                 );
               }
@@ -408,55 +383,109 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             final shouldAutoDownload = _shouldAutoDownload(metadata);
             final path = metadata.path?.trim();
             final localFile = path == null || path.isEmpty ? null : File(path);
-            final hasLocalFile = localFile?.existsSync() ?? false;
-            if (!hasLocalFile) {
-              _clearTypeReportCache();
-            }
-            if (hasLocalFile) {
-              final typeReportFuture = _resolveTypeReportFuture(
-                metadata: metadata,
-                file: localFile!,
-              );
-              return FutureBuilder<FileTypeReport>(
-                future: typeReportFuture,
-                builder: (context, typeSnapshot) {
-                  if (typeSnapshot.connectionState != ConnectionState.done) {
+            if (localFile != null) {
+              final existsFuture = _resolveFileExistsFuture(localFile);
+              return FutureBuilder<bool>(
+                future: existsFuture,
+                builder: (context, existsSnapshot) {
+                  if (existsSnapshot.connectionState != ConnectionState.done) {
                     return _AttachmentSurface(
                       child: Center(
-                        child: _AttachmentSpinner(
-                          size: _attachmentSpinnerSize,
-                          color: colors.primary,
-                        ),
+                        child: AxiProgressIndicator(color: colors.primary),
                       ),
                     );
                   }
-                  final FileTypeReport? report = typeSnapshot.data;
-                  final FileTypeReport resolvedReport =
-                      report ?? declaredReport;
-                  final bool useDeclaredFallback =
-                      !resolvedReport.hasReliableDetection;
-                  final bool isImage = resolvedReport.isDetectedImage ||
-                      (useDeclaredFallback && resolvedReport.isDeclaredImage);
-                  final bool isVideo = resolvedReport.isDetectedVideo ||
-                      (useDeclaredFallback && resolvedReport.isDeclaredVideo);
-                  if (isImage) {
+                  final hasLocalFile = existsSnapshot.data ?? false;
+                  if (!hasLocalFile) {
+                    _clearTypeReportCache();
+                    _clearFileExistsCache();
+                  }
+                  if (hasLocalFile) {
+                    final typeReportFuture = _resolveTypeReportFuture(
+                      metadata: metadata,
+                      file: localFile,
+                    );
+                    return FutureBuilder<FileTypeReport>(
+                      future: typeReportFuture,
+                      builder: (context, typeSnapshot) {
+                        if (typeSnapshot.connectionState !=
+                            ConnectionState.done) {
+                          return _AttachmentSurface(
+                            child: Center(
+                              child: AxiProgressIndicator(
+                                color: colors.primary,
+                              ),
+                            ),
+                          );
+                        }
+                        final FileTypeReport? report = typeSnapshot.data;
+                        final FileTypeReport resolvedReport =
+                            report ?? declaredReport;
+                        final bool useDeclaredFallback =
+                            !resolvedReport.hasReliableDetection;
+                        final bool isImage = resolvedReport.isDetectedImage ||
+                            (useDeclaredFallback &&
+                                resolvedReport.isDeclaredImage);
+                        final bool isVideo = resolvedReport.isDetectedVideo ||
+                            (useDeclaredFallback &&
+                                resolvedReport.isDeclaredVideo);
+                        if (isImage) {
+                          return _ImageAttachment(
+                            metadata: metadata,
+                            stanzaId: stanzaId,
+                            autoDownload: shouldAutoDownload,
+                            autoDownloadUserInitiated:
+                                autoDownloadUserInitiated,
+                            downloadDelegate: downloadDelegate,
+                            typeReport: resolvedReport,
+                          );
+                        }
+                        if (isVideo) {
+                          return _VideoAttachment(
+                            metadata: metadata,
+                            stanzaId: stanzaId,
+                            autoDownload: shouldAutoDownload,
+                            autoDownloadUserInitiated:
+                                autoDownloadUserInitiated,
+                            downloadDelegate: downloadDelegate,
+                            typeReport: resolvedReport,
+                          );
+                        }
+                        return _FileAttachment(
+                          metadata: metadata,
+                          stanzaId: stanzaId,
+                          autoDownload: shouldAutoDownload,
+                          autoDownloadUserInitiated: autoDownloadUserInitiated,
+                          downloadDelegate: downloadDelegate,
+                          typeReport: resolvedReport,
+                        );
+                      },
+                    );
+                  }
+                  if (!allowed) {
+                    return _BlockedAttachment(
+                      metadata: metadata,
+                      onAllowPressed: onAllowPressed,
+                    );
+                  }
+                  if (metadata.isImage) {
                     return _ImageAttachment(
                       metadata: metadata,
                       stanzaId: stanzaId,
                       autoDownload: shouldAutoDownload,
                       autoDownloadUserInitiated: autoDownloadUserInitiated,
                       downloadDelegate: downloadDelegate,
-                      typeReport: resolvedReport,
+                      typeReport: declaredReport,
                     );
                   }
-                  if (isVideo) {
+                  if (metadata.isVideo) {
                     return _VideoAttachment(
                       metadata: metadata,
                       stanzaId: stanzaId,
                       autoDownload: shouldAutoDownload,
                       autoDownloadUserInitiated: autoDownloadUserInitiated,
                       downloadDelegate: downloadDelegate,
-                      typeReport: resolvedReport,
+                      typeReport: declaredReport,
                     );
                   }
                   return _FileAttachment(
@@ -465,7 +494,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     autoDownload: shouldAutoDownload,
                     autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
-                    typeReport: resolvedReport,
+                    typeReport: declaredReport,
                   );
                 },
               );
@@ -521,10 +550,12 @@ class _BlockedAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     return _AttachmentSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 8,
+        spacing: spacing.s,
         children: [
           Text(
             l10n.chatAttachmentBlockedTitle,
@@ -546,11 +577,12 @@ class _BlockedAttachment extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: ShadButton(
+            child: AxiButton(
+              label: Text(l10n.chatAttachmentLoad),
+              size: AxiButtonSize.sm,
+              variant: AxiButtonVariant.secondary,
               onPressed: onAllowPressed,
-              enabled: onAllowPressed != null,
-              child: Text(l10n.chatAttachmentLoad),
-            ).withTapBounce(enabled: onAllowPressed != null),
+            ),
           ),
         ],
       ),
@@ -584,9 +616,17 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
   var _autoDownloadRequested = false;
   Future<bool>? _previewAllowed;
   String? _previewPath;
+  File? _localFile;
+  bool _hasLocalFile = false;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshLocalFile();
+  }
 
   @override
   void didUpdateWidget(covariant _ImageAttachment oldWidget) {
@@ -596,7 +636,40 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     if (oldPath != nextPath) {
       _previewAllowed = null;
       _previewPath = null;
+      _refreshLocalFile();
     }
+  }
+
+  Future<void> _refreshLocalFile() async {
+    final path = widget.metadata.path?.trim();
+    final file = path == null || path.isEmpty ? null : File(path);
+    final exists = await file?.exists() ?? false;
+    if (!mounted) return;
+    setState(() {
+      _localFile = file;
+      _hasLocalFile = exists;
+    });
+    await _maybeAutoDownload();
+  }
+
+  Future<void> _maybeAutoDownload() async {
+    if (!widget.autoDownload ||
+        _autoDownloadRequested ||
+        _downloading ||
+        _hasLocalFile) {
+      return;
+    }
+    final metadata = widget.metadata;
+    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
+        ? null
+        : metadata.sourceUrls!.first;
+    final canDownload = url != null || widget.downloadDelegate != null;
+    if (!canDownload) return;
+    _autoDownloadRequested = true;
+    await _downloadAttachment(
+      showFeedback: widget.autoDownloadUserInitiated,
+      requireConfirmation: widget.autoDownloadUserInitiated,
+    );
   }
 
   @override
@@ -606,26 +679,11 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final path = metadata.path;
-    final localFile = path == null ? null : File(path);
-    final hasLocalFile = localFile?.existsSync() ?? false;
+    final localFile = _localFile;
+    final hasLocalFile = _hasLocalFile;
     final canDownload = url != null || widget.downloadDelegate != null;
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
-    }
-    if (widget.autoDownload &&
-        !_autoDownloadRequested &&
-        !_downloading &&
-        !hasLocalFile &&
-        canDownload) {
-      _autoDownloadRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _downloadAttachment(
-          showFeedback: widget.autoDownloadUserInitiated,
-          requireConfirmation: widget.autoDownloadUserInitiated,
-        );
-      });
     }
     if (!hasLocalFile) {
       if (_encrypted) {
@@ -662,10 +720,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         if (snapshot.connectionState != ConnectionState.done) {
           return _AttachmentSurface(
             child: Center(
-              child: _AttachmentSpinner(
-                size: _attachmentSpinnerSize,
-                color: colors.primary,
-              ),
+              child: AxiProgressIndicator(color: colors.primary),
             ),
           );
         }
@@ -797,12 +852,10 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
   }
 
   Future<bool> _downloadViaXmpp() async {
-    final xmpp = context.read<XmppService>();
-    final downloadedPath = await xmpp.downloadInboundAttachment(
-      metadataId: widget.metadata.id,
-      stanzaId: widget.stanzaId,
-    );
-    return downloadedPath?.trim().isNotEmpty == true;
+    return context.read<ChatBloc>().downloadInboundAttachment(
+          metadataId: widget.metadata.id,
+          stanzaId: widget.stanzaId,
+        );
   }
 
   double _aspectRatio(FileMetadataData metadata) {
@@ -840,6 +893,8 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   var _autoDownloadRequested = false;
   var _initFailed = false;
   VideoPlayerController? _controller;
+  File? _localFile;
+  bool _hasLocalFile = false;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
@@ -847,7 +902,8 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   @override
   void initState() {
     super.initState();
-    _initializeVideoIfAvailable();
+    _refreshLocalFile();
+    unawaited(_initializeVideoIfAvailable());
   }
 
   @override
@@ -857,7 +913,8 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final nextPath = widget.metadata.path?.trim();
     if (oldPath != nextPath) {
       _resetController();
-      _initializeVideoIfAvailable();
+      _refreshLocalFile();
+      unawaited(_initializeVideoIfAvailable());
     }
   }
 
@@ -867,32 +924,49 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     super.dispose();
   }
 
+  Future<void> _refreshLocalFile() async {
+    final path = widget.metadata.path?.trim();
+    final file = path == null || path.isEmpty ? null : File(path);
+    final exists = await file?.exists() ?? false;
+    if (!mounted) return;
+    setState(() {
+      _localFile = file;
+      _hasLocalFile = exists;
+    });
+    await _maybeAutoDownload();
+  }
+
+  Future<void> _maybeAutoDownload() async {
+    if (!widget.autoDownload ||
+        _autoDownloadRequested ||
+        _downloading ||
+        _hasLocalFile) {
+      return;
+    }
+    final metadata = widget.metadata;
+    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
+        ? null
+        : metadata.sourceUrls!.first;
+    final canDownload = url != null || widget.downloadDelegate != null;
+    if (!canDownload) return;
+    _autoDownloadRequested = true;
+    await _downloadAttachment(
+      showFeedback: widget.autoDownloadUserInitiated,
+      requireConfirmation: widget.autoDownloadUserInitiated,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final metadata = widget.metadata;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final path = metadata.path?.trim();
-    final localFile = path == null || path.isEmpty ? null : File(path);
-    final hasLocalFile = localFile?.existsSync() ?? false;
+    final localFile = _localFile;
+    final hasLocalFile = _hasLocalFile;
     final canDownload = url != null || widget.downloadDelegate != null;
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
-    }
-    if (widget.autoDownload &&
-        !_autoDownloadRequested &&
-        !_downloading &&
-        !hasLocalFile &&
-        canDownload) {
-      _autoDownloadRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _downloadAttachment(
-          showFeedback: widget.autoDownloadUserInitiated,
-          requireConfirmation: widget.autoDownloadUserInitiated,
-        );
-      });
     }
     if (!hasLocalFile) {
       if (_encrypted) {
@@ -938,37 +1012,31 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       controller: controller,
     );
     final actionButtons = Positioned(
-      top: _attachmentOverlayPadding,
-      right: _attachmentOverlayPadding,
+      top: spacing.s,
+      right: spacing.s,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ShadButton.ghost(
-            size: ShadButtonSize.sm,
+          AxiIconButton.ghost(
+            iconData: LucideIcons.save,
+            iconSize: sizing.iconButtonIconSize,
             onPressed: _downloading
                 ? null
                 : () async {
                     if (localFile == null) return;
                     await _handleSaveAttachment(localFile);
                   },
-            child: const Icon(
-              LucideIcons.save,
-              size: _attachmentOverlayIconSize,
-            ),
           ),
-          const SizedBox(width: _attachmentActionSpacing),
-          ShadButton.ghost(
-            size: ShadButtonSize.sm,
+          SizedBox(width: spacing.s),
+          AxiIconButton.ghost(
+            iconData: LucideIcons.share2,
+            iconSize: sizing.iconButtonIconSize,
             onPressed: _downloading
                 ? null
                 : () async {
                     if (localFile == null) return;
                     await _handleShareAttachment(localFile);
                   },
-            child: const Icon(
-              LucideIcons.share2,
-              size: _attachmentOverlayIconSize,
-            ),
           ),
         ],
       ),
@@ -1006,20 +1074,15 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                       VideoPlayer(controller)
                     else
                       Center(
-                        child: _AttachmentSpinner(
-                          size: _attachmentVideoSpinnerSize,
-                          color: colors.primary,
-                        ),
+                        child: AxiProgressIndicator(color: colors.primary),
                       ),
                     if (initialized && controller != null)
                       Center(
-                        child: ShadButton.ghost(
-                          size: ShadButtonSize.sm,
+                        child: AxiIconButton.ghost(
+                          iconData:
+                              playing ? LucideIcons.pause : LucideIcons.play,
+                          iconSize: sizing.iconButtonIconSize,
                           onPressed: _togglePlayback,
-                          child: Icon(
-                            playing ? LucideIcons.pause : LucideIcons.play,
-                            size: _attachmentVideoIconSize,
-                          ),
                         ),
                       ),
                     if (initialized) actionButtons,
@@ -1094,12 +1157,10 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   }
 
   Future<bool> _downloadViaXmpp() async {
-    final xmpp = context.read<XmppService>();
-    final downloadedPath = await xmpp.downloadInboundAttachment(
-      metadataId: widget.metadata.id,
-      stanzaId: widget.stanzaId,
-    );
-    return downloadedPath?.trim().isNotEmpty == true;
+    return context.read<ChatBloc>().downloadInboundAttachment(
+          metadataId: widget.metadata.id,
+          stanzaId: widget.stanzaId,
+        );
   }
 
   Future<void> _handleSaveAttachment(File file) async {
@@ -1150,7 +1211,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     setState(() {});
   }
 
-  void _initializeVideoIfAvailable() {
+  Future<void> _initializeVideoIfAvailable() async {
     _initFailed = false;
     final guardKey = _mediaDecodeGuardKey(widget.metadata.id);
     if (!MediaDecodeGuard.instance.allowAttempt(guardKey)) {
@@ -1160,12 +1221,12 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final path = widget.metadata.path?.trim();
     if (path == null || path.isEmpty) return;
     final file = File(path);
-    if (!file.existsSync()) return;
+    if (!await file.exists()) return;
     if (!_isVideoMetadataAllowed(widget.metadata)) {
       _markVideoInitFailed();
       return;
     }
-    final length = _safeFileLength(file);
+    final length = await _safeFileLength(file);
     if (length == null || length < _attachmentVideoMinBytes) {
       _markVideoInitFailed();
       return;
@@ -1195,9 +1256,9 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     });
   }
 
-  int? _safeFileLength(File file) {
+  Future<int?> _safeFileLength(File file) async {
     try {
-      return file.lengthSync();
+      return await file.length();
     } on Exception {
       return null;
     }
@@ -1261,6 +1322,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     required FileMetadataData metadata,
     required VideoPlayerController? controller,
   }) {
+    const fallbackAspectRatio = 16 / 9;
     final controllerValue = controller?.value;
     final controllerRatio = controllerValue?.aspectRatio;
     if (controllerRatio != null && controllerRatio > 0) {
@@ -1271,7 +1333,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     if (width != null && height != null && width > 0 && height > 0) {
       return width / height;
     }
-    return _attachmentVideoFallbackAspectRatio;
+    return fallbackAspectRatio;
   }
 }
 
@@ -1281,14 +1343,15 @@ double _resolveAttachmentWidth(
   required double? intrinsicWidth,
 }) {
   final scope = _AttachmentSurfaceScope.maybeOf(context);
+  final sizing = context.sizing;
   final maxWidthFraction =
-      scope?.maxWidthFraction ?? _attachmentMaxWidthFraction;
+      scope?.maxWidthFraction ?? sizing.dialogMaxHeightFraction;
   final availableWidth = constraints.maxWidth.isFinite
       ? constraints.maxWidth
       : MediaQuery.sizeOf(context).width;
   final targetWidth = intrinsicWidth != null && intrinsicWidth > 0
       ? intrinsicWidth
-      : math.min(_attachmentUnknownMaxWidth, availableWidth);
+      : math.min(sizing.dialogMaxWidth, availableWidth);
   return math.min(targetWidth, availableWidth * maxWidthFraction);
 }
 
@@ -1330,11 +1393,16 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
     final spacing = context.spacing;
     final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
     final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
+    final fallbackWidth = math.min(maxWidth, sizing.dialogMaxWidth);
+    final fallbackHeight =
+        math.min(maxHeight, fallbackWidth * sizing.dialogMaxHeightFraction);
     final intrinsic = _intrinsicSizeFrom(metadata);
     final targetSize = _fitWithinBounds(
       intrinsicSize: intrinsic,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
+      fallbackWidth: fallbackWidth,
+      fallbackHeight: fallbackHeight,
     );
     final l10n = context.l10n;
     return Center(
@@ -1345,7 +1413,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
             width: targetSize.width,
             height: targetSize.height,
             child: InteractiveViewer(
-              maxScale: 4,
+              maxScale: sizing.mediaPreviewMaxScale,
               child: Image.file(file, fit: BoxFit.contain),
             ),
           ),
@@ -1417,14 +1485,16 @@ Size _fitWithinBounds({
   required Size? intrinsicSize,
   required double maxWidth,
   required double maxHeight,
+  required double fallbackWidth,
+  required double fallbackHeight,
 }) {
   final cappedWidth = math.max(0.0, maxWidth);
   final cappedHeight = math.max(0.0, maxHeight);
   if (intrinsicSize == null ||
       intrinsicSize.width <= 0 ||
       intrinsicSize.height <= 0) {
-    final width = math.min(cappedWidth, 360.0);
-    final height = math.min(cappedHeight, width * 0.75);
+    final width = math.min(cappedWidth, fallbackWidth);
+    final height = math.min(cappedHeight, fallbackHeight);
     return Size(width, height);
   }
   final aspectRatio = intrinsicSize.width / intrinsicSize.height;
@@ -1486,11 +1556,24 @@ class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
   late final ShadPopoverController _actionsController;
+  File? _localFile;
+  bool _hasLocalFile = false;
 
   @override
   void initState() {
     super.initState();
     _actionsController = ShadPopoverController();
+    _refreshLocalFile();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FileAttachment oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldPath = oldWidget.metadata.path?.trim();
+    final nextPath = widget.metadata.path?.trim();
+    if (oldPath != nextPath) {
+      _refreshLocalFile();
+    }
   }
 
   @override
@@ -1499,19 +1582,52 @@ class _FileAttachmentState extends State<_FileAttachment> {
     super.dispose();
   }
 
+  Future<void> _refreshLocalFile() async {
+    final path = widget.metadata.path?.trim();
+    final file = path == null || path.isEmpty ? null : File(path);
+    final exists = await file?.exists() ?? false;
+    if (!mounted) return;
+    setState(() {
+      _localFile = file;
+      _hasLocalFile = exists;
+    });
+    await _maybeAutoDownload();
+  }
+
+  Future<void> _maybeAutoDownload() async {
+    if (!widget.autoDownload ||
+        _autoDownloadRequested ||
+        _downloading ||
+        _hasLocalFile) {
+      return;
+    }
+    final metadata = widget.metadata;
+    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
+        ? null
+        : metadata.sourceUrls!.first;
+    final canDownload = url != null || widget.downloadDelegate != null;
+    if (!canDownload) return;
+    _autoDownloadRequested = true;
+    await _downloadOnly(
+      showFeedback: widget.autoDownloadUserInitiated,
+      requireConfirmation: widget.autoDownloadUserInitiated,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final metadata = widget.metadata;
     final FileTypeReport report =
         widget.typeReport ?? metadata.declaredTypeReport;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final path = metadata.path?.trim();
-    final localFile = path == null || path.isEmpty ? null : File(path);
-    final hasLocalFile = localFile?.existsSync() ?? false;
+    final localFile = _localFile;
+    final hasLocalFile = _hasLocalFile;
     final canDownload = url != null || widget.downloadDelegate != null;
     final bool shareEnabled = hasLocalFile || canDownload;
     final FileOpenRisk risk = assessFileOpenRisk(
@@ -1543,32 +1659,21 @@ class _FileAttachmentState extends State<_FileAttachment> {
         : canDownload
             ? () => _downloadOnly(showFeedback: true, requireConfirmation: true)
             : null;
-    if (widget.autoDownload &&
-        !_autoDownloadRequested &&
-        !_downloading &&
-        !hasLocalFile &&
-        canDownload) {
-      _autoDownloadRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _downloadOnly(
-          showFeedback: widget.autoDownloadUserInitiated,
-          requireConfirmation: widget.autoDownloadUserInitiated,
-        );
-      });
-    }
+    final border = context.borderSide;
     final Widget attachmentIcon = DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.muted.withValues(alpha: 0.15),
+        color: colors.muted,
         shape: SquircleBorder(
-          cornerRadius: 12,
-          side: BorderSide(color: colors.border),
+          cornerRadius: context.radii.squircle,
+          side: border,
         ),
       ),
-      child: const SizedBox(
-        width: _attachmentFileIconWidth,
-        height: _attachmentFileIconHeight,
-        child: Icon(LucideIcons.paperclip, size: _attachmentFileIconSize),
+      child: SizedBox.square(
+        dimension: sizing.iconButtonTapTarget,
+        child: Icon(
+          LucideIcons.paperclip,
+          size: sizing.iconButtonIconSize,
+        ),
       ),
     );
     final sizeLabel = _formatAttachmentSize(
@@ -1578,12 +1683,15 @@ class _FileAttachmentState extends State<_FileAttachment> {
     );
     final fileNameStyle =
         context.textTheme.small.copyWith(fontWeight: FontWeight.w600);
+    final actionSpacing = spacing.s;
+    const actionButtonCount = 3;
+    final actionRowMinWidth = (sizing.iconButtonTapTarget * actionButtonCount) +
+        (actionSpacing * (actionButtonCount - 1));
     final Widget attachmentActions = _downloading
-        ? SizedBox(
-            width: 48,
-            height: 48,
+        ? SizedBox.square(
+            dimension: sizing.iconButtonTapTarget,
             child: Center(
-              child: _AttachmentSpinner(size: 18, color: colors.primary),
+              child: AxiProgressIndicator(color: colors.primary),
             ),
           )
         : Row(
@@ -1594,13 +1702,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
                 tooltip: downloadAndSaveTooltip,
                 onPressed: hasLocalFile || canDownload ? _saveAttachment : null,
               ),
-              const SizedBox(width: _attachmentActionSpacing),
+              SizedBox(width: actionSpacing),
               AxiIconButton(
                 iconData: LucideIcons.share2,
                 tooltip: downloadAndShareTooltip,
                 onPressed: shareEnabled ? _shareAttachment : null,
               ),
-              const SizedBox(width: _attachmentActionSpacing),
+              SizedBox(width: actionSpacing),
               AxiIconButton(
                 iconData: openIconData,
                 tooltip: openTooltip,
@@ -1614,9 +1722,9 @@ class _FileAttachmentState extends State<_FileAttachment> {
         builder: (context, constraints) {
           final availableWidth = constraints.maxWidth;
           final detailsWidth = availableWidth -
-              _attachmentFileIconWidth -
-              (_attachmentFileRowSpacing * 2) -
-              _attachmentActionRowMinWidth;
+              sizing.iconButtonTapTarget -
+              (spacing.s * 2) -
+              actionRowMinWidth;
           final shouldMeasureText = availableWidth.isFinite && detailsWidth > 0;
           final TextPainter painter = TextPainter(
             text: TextSpan(text: metadata.filename, style: fileNameStyle),
@@ -1682,7 +1790,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
           final Widget attachmentDetails = Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 4,
+            spacing: spacing.xs,
             children: [
               _AttachmentFileNameText(
                 filename: metadata.filename,
@@ -1702,9 +1810,9 @@ class _FileAttachmentState extends State<_FileAttachment> {
             return Row(
               children: [
                 attachmentIcon,
-                const SizedBox(width: _attachmentFileRowSpacing),
+                SizedBox(width: spacing.s),
                 Expanded(child: attachmentDetails),
-                const SizedBox(width: _attachmentFileRowSpacing),
+                SizedBox(width: spacing.s),
                 actionRow,
               ],
             );
@@ -1712,13 +1820,11 @@ class _FileAttachmentState extends State<_FileAttachment> {
           return Row(
             children: [
               attachmentIcon,
-              const SizedBox(width: _attachmentFileRowSpacing),
+              SizedBox(width: spacing.s),
               Expanded(child: attachmentDetails),
-              const SizedBox(width: _attachmentFileRowSpacing),
+              SizedBox(width: spacing.s),
               ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: _attachmentActionRowMinWidth,
-                ),
+                constraints: BoxConstraints(minWidth: actionRowMinWidth),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: actionRow,
@@ -1924,11 +2030,16 @@ class _FileAttachmentState extends State<_FileAttachment> {
   }
 
   Future<String?> _downloadViaXmpp() async {
-    final xmpp = context.read<XmppService>();
-    return xmpp.downloadInboundAttachment(
-      metadataId: widget.metadata.id,
-      stanzaId: widget.stanzaId,
-    );
+    final downloaded = await context.read<ChatBloc>().downloadInboundAttachment(
+          metadataId: widget.metadata.id,
+          stanzaId: widget.stanzaId,
+        );
+    if (!downloaded) return null;
+    final refreshed = await _reloadMetadata();
+    final refreshedPath = refreshed?.path?.trim();
+    if (refreshedPath == null || refreshedPath.isEmpty) return null;
+    final refreshedFile = File(refreshedPath);
+    return await refreshedFile.exists() ? refreshedFile.path : null;
   }
 
   Future<String?> _resolveLocalPath({
@@ -1940,7 +2051,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final existingFile = resolvedExisting == null || resolvedExisting.isEmpty
         ? null
         : File(resolvedExisting);
-    if (existingFile?.existsSync() ?? false) return existingFile!.path;
+    if (await existingFile?.exists() ?? false) return existingFile!.path;
     final allowed = await _confirmDownloadAllowed(
       context,
       metadata: widget.metadata,
@@ -1958,15 +2069,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
       final refreshedPath = refreshed?.path?.trim();
       if (refreshedPath == null || refreshedPath.isEmpty) return null;
       final refreshedFile = File(refreshedPath);
-      return refreshedFile.existsSync() ? refreshedFile.path : null;
+      return await refreshedFile.exists() ? refreshedFile.path : null;
     }
     return _downloadViaXmpp();
   }
 
   Future<FileMetadataData?> _reloadMetadata() async {
-    final xmpp = context.read<XmppService>();
-    final db = await xmpp.database;
-    return db.getFileMetadata(widget.metadata.id);
+    return context.read<ChatBloc>().reloadFileMetadata(widget.metadata.id);
   }
 }
 
@@ -1985,6 +2094,8 @@ class _EncryptedAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final openLabel = l10n.commonOpen;
     final openTooltip = l10n.chatAttachmentDownloadAndOpen;
     return LayoutBuilder(
@@ -1992,7 +2103,7 @@ class _EncryptedAttachment extends StatelessWidget {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final width = availableWidth * 0.9;
+        final width = availableWidth * sizing.dialogMaxHeightFraction;
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
@@ -2003,16 +2114,16 @@ class _EncryptedAttachment extends StatelessWidget {
               backgroundColor: colors.card,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: _attachmentRemoteBodySpacing,
+                spacing: spacing.m,
                 children: [
                   Row(
                     children: [
                       Icon(
                         LucideIcons.lock,
-                        size: _attachmentRemoteIconSize,
+                        size: sizing.iconButtonIconSize,
                         color: colors.mutedForeground,
                       ),
-                      const SizedBox(width: _attachmentRemoteSpacing),
+                      SizedBox(width: spacing.s),
                       Expanded(
                         child: _AttachmentFileNameText(
                           filename: filename,
@@ -2027,30 +2138,15 @@ class _EncryptedAttachment extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
-                      child: ShadButton(
-                        onPressed: onPressed,
-                        enabled: onPressed != null,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ButtonSpinnerSlot(
-                              isVisible: downloading,
-                              spinner: _AttachmentSpinner(
-                                size: _attachmentRemoteSpinnerSize,
-                                color: colors.primaryForeground,
-                              ),
-                              slotSize: _attachmentRemoteSpinnerSize,
-                              gap: _attachmentRemoteSpacing,
-                              duration: baseAnimationDuration,
-                            ),
-                            Text(
-                              downloading
-                                  ? l10n.chatAttachmentLoading
-                                  : openLabel,
-                            ),
-                          ],
+                      child: AxiButton(
+                        label: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
                         ),
-                      ).withTapBounce(enabled: onPressed != null),
+                        size: AxiButtonSize.sm,
+                        variant: AxiButtonVariant.secondary,
+                        loading: downloading,
+                        onPressed: onPressed,
+                      ),
                     ),
                   ),
                 ],
@@ -2078,6 +2174,8 @@ class _RemoteImageAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final openLabel = l10n.commonOpen;
     final openTooltip = l10n.chatAttachmentDownloadAndOpen;
     return LayoutBuilder(
@@ -2085,7 +2183,7 @@ class _RemoteImageAttachment extends StatelessWidget {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final width = availableWidth * 0.9;
+        final width = availableWidth * sizing.dialogMaxHeightFraction;
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
@@ -2096,16 +2194,16 @@ class _RemoteImageAttachment extends StatelessWidget {
               backgroundColor: colors.card,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: _attachmentRemoteBodySpacing,
+                spacing: spacing.m,
                 children: [
                   Row(
                     children: [
                       Icon(
                         LucideIcons.image,
-                        size: _attachmentRemoteIconSize,
+                        size: sizing.iconButtonIconSize,
                         color: colors.mutedForeground,
                       ),
-                      const SizedBox(width: _attachmentRemoteSpacing),
+                      SizedBox(width: spacing.s),
                       Expanded(
                         child: _AttachmentFileNameText(
                           filename: filename,
@@ -2120,30 +2218,15 @@ class _RemoteImageAttachment extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
-                      child: ShadButton(
-                        onPressed: onPressed,
-                        enabled: onPressed != null,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ButtonSpinnerSlot(
-                              isVisible: downloading,
-                              spinner: _AttachmentSpinner(
-                                size: _attachmentRemoteSpinnerSize,
-                                color: colors.primaryForeground,
-                              ),
-                              slotSize: _attachmentRemoteSpinnerSize,
-                              gap: _attachmentRemoteSpacing,
-                              duration: baseAnimationDuration,
-                            ),
-                            Text(
-                              downloading
-                                  ? l10n.chatAttachmentLoading
-                                  : openLabel,
-                            ),
-                          ],
+                      child: AxiButton(
+                        label: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
                         ),
-                      ).withTapBounce(enabled: onPressed != null),
+                        size: AxiButtonSize.sm,
+                        variant: AxiButtonVariant.secondary,
+                        loading: downloading,
+                        onPressed: onPressed,
+                      ),
                     ),
                   ),
                 ],
@@ -2171,6 +2254,8 @@ class _RemoteVideoAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final openLabel = l10n.commonOpen;
     final openTooltip = l10n.chatAttachmentDownloadAndOpen;
     return LayoutBuilder(
@@ -2178,7 +2263,7 @@ class _RemoteVideoAttachment extends StatelessWidget {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final width = availableWidth * 0.9;
+        final width = availableWidth * sizing.dialogMaxHeightFraction;
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
@@ -2189,16 +2274,16 @@ class _RemoteVideoAttachment extends StatelessWidget {
               backgroundColor: colors.card,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: _attachmentRemoteBodySpacing,
+                spacing: spacing.m,
                 children: [
                   Row(
                     children: [
                       Icon(
                         LucideIcons.video,
-                        size: _attachmentRemoteIconSize,
+                        size: sizing.iconButtonIconSize,
                         color: colors.mutedForeground,
                       ),
-                      const SizedBox(width: _attachmentRemoteSpacing),
+                      SizedBox(width: spacing.s),
                       Expanded(
                         child: _AttachmentFileNameText(
                           filename: filename,
@@ -2213,30 +2298,15 @@ class _RemoteVideoAttachment extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
-                      child: ShadButton(
-                        onPressed: onPressed,
-                        enabled: onPressed != null,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ButtonSpinnerSlot(
-                              isVisible: downloading,
-                              spinner: _AttachmentSpinner(
-                                size: _attachmentRemoteSpinnerSize,
-                                color: colors.primaryForeground,
-                              ),
-                              slotSize: _attachmentRemoteSpinnerSize,
-                              gap: _attachmentRemoteSpacing,
-                              duration: baseAnimationDuration,
-                            ),
-                            Text(
-                              downloading
-                                  ? l10n.chatAttachmentLoading
-                                  : openLabel,
-                            ),
-                          ],
+                      child: AxiButton(
+                        label: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
                         ),
-                      ).withTapBounce(enabled: onPressed != null),
+                        size: AxiButtonSize.sm,
+                        variant: AxiButtonVariant.secondary,
+                        loading: downloading,
+                        onPressed: onPressed,
+                      ),
                     ),
                   ),
                 ],
@@ -2271,24 +2341,27 @@ class _AttachmentSurfaceScope extends InheritedWidget {
 class _AttachmentSurface extends StatelessWidget {
   const _AttachmentSurface({
     required this.child,
-    this.padding = const EdgeInsets.all(12),
+    this.padding,
     this.backgroundColor,
     this.borderSide,
   });
 
   final Widget child;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
   final Color? backgroundColor;
   final BorderSide? borderSide;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final resolvedBackground = backgroundColor ?? colors.card;
-    final resolvedBorder = borderSide ?? BorderSide(color: colors.border);
+    final resolvedBorder = borderSide ?? context.borderSide;
     final scope = _AttachmentSurfaceScope.maybeOf(context);
-    final OutlinedBorder baseShape =
-        scope?.shape ?? _attachmentSurfaceDefaultShape;
+    final OutlinedBorder baseShape = scope?.shape ??
+        ContinuousRectangleBorder(
+          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        );
     final OutlinedBorder resolvedShape = baseShape.copyWith(
       side: resolvedBorder,
     );
@@ -2300,7 +2373,10 @@ class _AttachmentSurface extends StatelessWidget {
       child: ClipPath(
         clipper: ShapeBorderClipper(shape: baseShape),
         clipBehavior: Clip.antiAlias,
-        child: Padding(padding: padding, child: child),
+        child: Padding(
+          padding: padding ?? EdgeInsets.all(spacing.m),
+          child: child,
+        ),
       ),
     );
   }
@@ -2352,11 +2428,13 @@ class _AttachmentError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     return _AttachmentSurface(
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 20),
-          const SizedBox(width: 8),
+          Icon(Icons.error_outline, size: sizing.iconButtonIconSize),
+          SizedBox(width: spacing.s),
           Expanded(
             child: Text(
               message,

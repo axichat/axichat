@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:axichat/src/storage/database.dart';
 import 'package:hive/hive.dart';
@@ -51,11 +52,18 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
 
   bool get initialized => Hive.isBoxOpen(boxName);
 
-  static final Map<String, RegisteredStateKey> _keyCache = {};
+  static const int _keyCacheMaxSize = 2048;
+  static final LinkedHashMap<String, RegisteredStateKey> _keyCache =
+      LinkedHashMap<String, RegisteredStateKey>();
 
   static RegisteredStateKey registerKey(String key) {
     final cached = _keyCache[key];
-    if (cached != null) return cached;
+    if (cached != null) {
+      _keyCache
+        ..remove(key)
+        ..[key] = cached;
+      return cached;
+    }
 
     for (final existing in RegisteredStateKey._registeredKeys) {
       if (existing.value != key) continue;
@@ -65,6 +73,9 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
 
     final created = RegisteredStateKey._(key);
     _keyCache[key] = created;
+    if (_keyCache.length > _keyCacheMaxSize) {
+      _keyCache.remove(_keyCache.keys.first);
+    }
 
     final uniqueByValue = <String, RegisteredStateKey>{};
     for (final existing in RegisteredStateKey._registeredKeys.toList()) {

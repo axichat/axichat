@@ -159,6 +159,12 @@ abstract class AppLocalizations {
   /// **'Calendar'**
   String get homeRailCalendar;
 
+  /// No description provided for @homeSyncTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get homeSyncTooltip;
+
   /// No description provided for @homeSearchPlaceholderTabs.
   ///
   /// In en, this message translates to:
@@ -3440,6 +3446,12 @@ abstract class AppLocalizations {
   /// **'About Axichat'**
   String get settingsAboutAxichat;
 
+  /// No description provided for @settingsAboutLegalese.
+  ///
+  /// In en, this message translates to:
+  /// **'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.'**
+  String get settingsAboutLegalese;
+
   /// No description provided for @settingsTermsLabel.
   ///
   /// In en, this message translates to:
@@ -6710,6 +6722,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t read that file.'**
   String get emailContactsImportReadFailure;
 
+  /// No description provided for @emailContactsImportFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is too large to import.'**
+  String get emailContactsImportFileTooLarge;
+
   /// No description provided for @emailContactsImportUnsupportedFile.
   ///
   /// In en, this message translates to:
@@ -6721,6 +6739,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No contacts found in that file.'**
   String get emailContactsImportNoContacts;
+
+  /// No description provided for @emailContactsImportTooManyContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'This file contains too many contacts to import.'**
+  String get emailContactsImportTooManyContacts;
 
   /// No description provided for @emailContactsImportFailed.
   ///
@@ -6734,6 +6758,36 @@ abstract class AppLocalizations {
   /// **'Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.'**
   String emailContactsImportSuccess(
       Object imported, Object duplicates, Object invalid, Object failed);
+
+  /// No description provided for @fanOutErrorNoRecipients.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one recipient.'**
+  String get fanOutErrorNoRecipients;
+
+  /// No description provided for @fanOutErrorResolveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t resolve recipients.'**
+  String get fanOutErrorResolveFailed;
+
+  /// No description provided for @fanOutErrorTooManyRecipients.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many recipients (max {max}).'**
+  String fanOutErrorTooManyRecipients(int max);
+
+  /// No description provided for @fanOutErrorEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a message or attachment before sending.'**
+  String get fanOutErrorEmptyMessage;
+
+  /// No description provided for @fanOutErrorInvalidShareToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Share token is invalid.'**
+  String get fanOutErrorInvalidShareToken;
 
   /// No description provided for @emailForwardingGuideTitle.
   ///
@@ -6842,6 +6896,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open notification'**
   String get notificationOpenAction;
+
+  /// No description provided for @notificationAttachmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment'**
+  String get notificationAttachmentLabel;
+
+  /// No description provided for @notificationAttachmentLabelWithName.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment: {filename}'**
+  String notificationAttachmentLabelWithName(String filename);
+
+  /// No description provided for @notificationReactionFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'New reaction'**
+  String get notificationReactionFallback;
+
+  /// No description provided for @notificationReactionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reaction: {reaction}'**
+  String notificationReactionLabel(String reaction);
+
+  /// No description provided for @notificationWebxdcFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'New update'**
+  String get notificationWebxdcFallback;
+
+  /// No description provided for @shareTokenFooterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Please do not remove:'**
+  String get shareTokenFooterLabel;
 
   /// No description provided for @notificationBackgroundConnectionDisabledTitle.
   ///
@@ -9868,6 +9958,222 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only the area inside the circle will appear in the final avatar.'**
   String get signupAvatarCropHint;
+
+  /// No description provided for @xmppOperationPubSubBookmarksStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing bookmarks...'**
+  String get xmppOperationPubSubBookmarksStart;
+
+  /// No description provided for @xmppOperationPubSubBookmarksSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks synced'**
+  String get xmppOperationPubSubBookmarksSuccess;
+
+  /// No description provided for @xmppOperationPubSubBookmarksFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks sync failed'**
+  String get xmppOperationPubSubBookmarksFailure;
+
+  /// No description provided for @xmppOperationPubSubConversationsStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing chats list...'**
+  String get xmppOperationPubSubConversationsStart;
+
+  /// No description provided for @xmppOperationPubSubConversationsSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats list synced'**
+  String get xmppOperationPubSubConversationsSuccess;
+
+  /// No description provided for @xmppOperationPubSubConversationsFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats list sync failed'**
+  String get xmppOperationPubSubConversationsFailure;
+
+  /// No description provided for @xmppOperationPubSubDraftsStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing drafts...'**
+  String get xmppOperationPubSubDraftsStart;
+
+  /// No description provided for @xmppOperationPubSubDraftsSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts synced'**
+  String get xmppOperationPubSubDraftsSuccess;
+
+  /// No description provided for @xmppOperationPubSubDraftsFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts sync failed'**
+  String get xmppOperationPubSubDraftsFailure;
+
+  /// No description provided for @xmppOperationPubSubSpamStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing spam list...'**
+  String get xmppOperationPubSubSpamStart;
+
+  /// No description provided for @xmppOperationPubSubSpamSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Spam list synced'**
+  String get xmppOperationPubSubSpamSuccess;
+
+  /// No description provided for @xmppOperationPubSubSpamFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Spam list sync failed'**
+  String get xmppOperationPubSubSpamFailure;
+
+  /// No description provided for @xmppOperationPubSubEmailBlocklistStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing email blocklist...'**
+  String get xmppOperationPubSubEmailBlocklistStart;
+
+  /// No description provided for @xmppOperationPubSubEmailBlocklistSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Email blocklist synced'**
+  String get xmppOperationPubSubEmailBlocklistSuccess;
+
+  /// No description provided for @xmppOperationPubSubEmailBlocklistFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Email blocklist sync failed'**
+  String get xmppOperationPubSubEmailBlocklistFailure;
+
+  /// No description provided for @xmppOperationPubSubAvatarMetadataStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing avatar details...'**
+  String get xmppOperationPubSubAvatarMetadataStart;
+
+  /// No description provided for @xmppOperationPubSubAvatarMetadataSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar details synced'**
+  String get xmppOperationPubSubAvatarMetadataSuccess;
+
+  /// No description provided for @xmppOperationPubSubAvatarMetadataFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar details sync failed'**
+  String get xmppOperationPubSubAvatarMetadataFailure;
+
+  /// No description provided for @xmppOperationPubSubFetchStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing account updates...'**
+  String get xmppOperationPubSubFetchStart;
+
+  /// No description provided for @xmppOperationPubSubFetchSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Account updates synced'**
+  String get xmppOperationPubSubFetchSuccess;
+
+  /// No description provided for @xmppOperationPubSubFetchFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Account updates sync failed'**
+  String get xmppOperationPubSubFetchFailure;
+
+  /// No description provided for @xmppOperationMamLoginStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing messages...'**
+  String get xmppOperationMamLoginStart;
+
+  /// No description provided for @xmppOperationMamLoginSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages synced'**
+  String get xmppOperationMamLoginSuccess;
+
+  /// No description provided for @xmppOperationMamLoginFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Message sync failed'**
+  String get xmppOperationMamLoginFailure;
+
+  /// No description provided for @xmppOperationMamGlobalStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing full history...'**
+  String get xmppOperationMamGlobalStart;
+
+  /// No description provided for @xmppOperationMamGlobalSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'History synced'**
+  String get xmppOperationMamGlobalSuccess;
+
+  /// No description provided for @xmppOperationMamGlobalFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'History sync failed'**
+  String get xmppOperationMamGlobalFailure;
+
+  /// No description provided for @xmppOperationMamMucStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing room history...'**
+  String get xmppOperationMamMucStart;
+
+  /// No description provided for @xmppOperationMamMucSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Room history synced'**
+  String get xmppOperationMamMucSuccess;
+
+  /// No description provided for @xmppOperationMamMucFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Room history sync failed'**
+  String get xmppOperationMamMucFailure;
+
+  /// No description provided for @xmppOperationMamFetchStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching archived messages...'**
+  String get xmppOperationMamFetchStart;
+
+  /// No description provided for @xmppOperationMamFetchSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive fetched'**
+  String get xmppOperationMamFetchSuccess;
+
+  /// No description provided for @xmppOperationMamFetchFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive fetch failed'**
+  String get xmppOperationMamFetchFailure;
+
+  /// No description provided for @xmppOperationMucJoinStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Joining room...'**
+  String get xmppOperationMucJoinStart;
+
+  /// No description provided for @xmppOperationMucJoinSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Room joined'**
+  String get xmppOperationMucJoinSuccess;
+
+  /// No description provided for @xmppOperationMucJoinFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Room join failed'**
+  String get xmppOperationMucJoinFailure;
 }
 
 class _AppLocalizationsDelegate

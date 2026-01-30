@@ -297,6 +297,7 @@ class EmailService {
             EmailDeltaTransport(
               databaseBuilder: databaseBuilder,
               logger: logger,
+              localizationsProvider: () => _l10n,
             ),
         _connectionConfigBuilder =
             connectionConfigBuilder ?? _defaultConnectionConfig,

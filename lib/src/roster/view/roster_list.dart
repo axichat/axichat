@@ -26,7 +26,6 @@ class RosterList extends StatelessWidget {
         context.read<RosterCubit>().updateContactsCriteria(
               query: query,
               sort: tabState.sort,
-              filter: RosterFilter.fromId(tabState.filterId),
             );
       },
       child: BlocBuilder<RosterCubit, RosterState>(

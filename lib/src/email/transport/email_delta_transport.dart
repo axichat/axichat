@@ -13,6 +13,7 @@ import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -123,13 +124,16 @@ class EmailDeltaTransport implements ChatTransport {
     required Future<XmppDatabase> Function() databaseBuilder,
     DeltaSafe? deltaSafe,
     Logger? logger,
+    AppLocalizations Function()? localizationsProvider,
   })  : _databaseBuilder = databaseBuilder,
         _deltaSafe = deltaSafe ?? DeltaSafe(),
-        _log = logger ?? Logger('EmailDeltaTransport');
+        _log = logger ?? Logger('EmailDeltaTransport'),
+        _localizationsProvider = localizationsProvider;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaSafe _deltaSafe;
   final Logger _log;
+  final AppLocalizations Function()? _localizationsProvider;
 
   DeltaAccountsHandle? _accounts;
   DeltaContextHandle? _context;
@@ -154,6 +158,8 @@ class EmailDeltaTransport implements ChatTransport {
   final Map<int, Future<void>> _accountOpening = {};
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
+  Future<void> _originIdHydrationQueue = Future<void>.value();
+  final Set<String> _originIdHydrationPending = <String>{};
 
   String? _databasePrefix;
   String? _databasePassphrase;
@@ -831,6 +837,7 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
       messageStorageMode: _messageStorageMode,
       defaultChatAttachmentAutoDownload: _defaultChatAttachmentAutoDownload,
+      localizationsProvider: _localizationsProvider,
       selfJidProvider: () => _selfJidForAccount(accountId),
       logger: _log,
     );
@@ -1046,13 +1053,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<bool> _tryOpenAccountsContext(String prefix, String passphrase) async {
     var firstFailure = true;
-    bool shouldRetry(Exception error) {
-      final message = error.toString();
-      final isAllocFailure = message.contains('allocate Delta accounts');
-      final isBadInput = message.contains('No such file or directory');
-      if (isAllocFailure || isBadInput) {
-        return false;
-      }
+    bool shouldRetry() {
       if (firstFailure) {
         firstFailure = false;
         return true;
@@ -1086,7 +1087,7 @@ class EmailDeltaTransport implements ChatTransport {
           legacyDatabasePath: databasePath,
         );
       } on DeltaSafeException catch (error, stackTrace) {
-        if (!shouldRetry(error)) {
+        if (!shouldRetry()) {
           _log.warning(
             'Delta accounts ensureAccount failed',
             error,
@@ -1117,7 +1118,7 @@ class EmailDeltaTransport implements ChatTransport {
           await _context!.open(passphrase: passphrase);
           _contextOpened = true;
         } on DeltaSafeException catch (error, stackTrace) {
-          if (!shouldRetry(error)) {
+          if (!shouldRetry()) {
             _log.warning(
               'Failed to open Delta account at ${databaseFile.path}',
               error,
@@ -1700,15 +1701,36 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required int accountId,
   }) async {
-    try {
-      await _hydrateOriginId(
-        context: context,
-        msgId: msgId,
-        accountId: accountId,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.fine(_originIdHydrationFailedLog, error, stackTrace);
+    _queueOriginIdHydration(
+      context: context,
+      msgId: msgId,
+      accountId: accountId,
+    );
+  }
+
+  void _queueOriginIdHydration({
+    required DeltaContextHandle context,
+    required int msgId,
+    required int accountId,
+  }) {
+    final key = '$accountId:$msgId';
+    if (_originIdHydrationPending.contains(key)) {
+      return;
     }
+    _originIdHydrationPending.add(key);
+    _originIdHydrationQueue = _originIdHydrationQueue.then((_) async {
+      try {
+        await _hydrateOriginId(
+          context: context,
+          msgId: msgId,
+          accountId: accountId,
+        );
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_originIdHydrationFailedLog, error, stackTrace);
+      } finally {
+        _originIdHydrationPending.remove(key);
+      }
+    });
   }
 
   Future<void> _scheduleAttachmentMetadataHydration({
@@ -2092,9 +2114,9 @@ class EmailDeltaTransport implements ChatTransport {
     if (consumer == null) {
       return;
     }
-    for (final messageId in messageIds) {
-      await consumer.hydrateMessage(messageId);
-    }
+    await Future.wait(
+      messageIds.map((messageId) => consumer.hydrateMessage(messageId)),
+    );
   }
 
   /// Sets the visibility of a chat (normal, archived, pinned).

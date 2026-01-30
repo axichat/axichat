@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
@@ -34,7 +35,6 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final iconSize = sizing.menuItemIconSize;
     final count = widget.selectedChats.length;
     final allFavorited = widget.selectedChats.every((chat) => chat.favorited);
     final allArchived = widget.selectedChats.every((chat) => chat.archived);
@@ -67,7 +67,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ContextActionButton(
                 icon: Icon(
                   shouldFavorite ? LucideIcons.star : LucideIcons.starOff,
-                  size: iconSize,
+                  size: sizing.menuItemIconSize,
                 ),
                 label: shouldFavorite
                     ? l10n.commonFavorite
@@ -82,7 +82,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ContextActionButton(
                 icon: Icon(
                   shouldArchive ? LucideIcons.archive : LucideIcons.undo2,
-                  size: iconSize,
+                  size: sizing.menuItemIconSize,
                 ),
                 label:
                     shouldArchive ? l10n.commonArchive : l10n.commonUnarchive,
@@ -96,7 +96,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ContextActionButton(
                 icon: Icon(
                   shouldHide ? LucideIcons.eyeOff : LucideIcons.eye,
-                  size: iconSize,
+                  size: sizing.menuItemIconSize,
                 ),
                 label: shouldHide ? l10n.commonHide : l10n.commonShow,
                 onPressed: () async {
@@ -112,7 +112,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 onPressed: () => _exportSelectedChats(context),
               ),
               ContextActionButton(
-                icon: Icon(LucideIcons.trash2, size: iconSize),
+                icon: Icon(LucideIcons.trash2, size: sizing.menuItemIconSize),
                 label: l10n.commonDelete,
                 destructive: true,
                 onPressed: _confirmDelete,

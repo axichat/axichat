@@ -25,6 +25,8 @@ const int _vcardFirstNameIndex = 1;
 const int _vcardAdditionalNameIndex = 2;
 const int _vcardPrefixIndex = 3;
 const int _vcardSuffixIndex = 4;
+const int _maxImportBytes = 5 * 1024 * 1024;
+const int _maxContactCount = 5000;
 const String _csvDelimiter = ',';
 const String _csvAlternateDelimiter = ';';
 const String _csvQuote = '"';
@@ -165,9 +167,17 @@ class EmailContactImportService {
 
   Future<String> _readFile(File file) async {
     try {
+      final length = await file.length();
+      if (length > _maxImportBytes) {
+        throw const EmailContactImportException(
+          EmailContactImportFailureReason.fileTooLarge,
+        );
+      }
       final List<int> bytes = await file.readAsBytes();
       final String content = _decodeFileBytes(bytes);
       return _stripBom(content);
+    } on EmailContactImportException {
+      rethrow;
     } catch (_) {
       throw const EmailContactImportException(
         EmailContactImportFailureReason.readFailure,
@@ -247,6 +257,14 @@ class EmailContactImportService {
     return _parseCsvContacts(content);
   }
 
+  void _enforceContactLimit(int count) {
+    if (count > _maxContactCount) {
+      throw const EmailContactImportException(
+        EmailContactImportFailureReason.tooManyContacts,
+      );
+    }
+  }
+
   List<EmailContactImportContact> _parseCsvContacts(String content) {
     final String delimiter = _detectCsvDelimiter(content);
     final List<List<String>> rows = _CsvParser(
@@ -283,6 +301,7 @@ class EmailContactImportService {
               displayName: displayName,
             ),
           );
+          _enforceContactLimit(contacts.length);
         }
       }
     }
@@ -306,6 +325,7 @@ class EmailContactImportService {
             displayName: parsed.displayName,
           ),
         );
+        _enforceContactLimit(contacts.length);
       }
     }
     return contacts;
@@ -457,6 +477,7 @@ class EmailContactImportService {
         contacts.add(
           EmailContactImportContact(address: email, displayName: currentName),
         );
+        _enforceContactLimit(contacts.length);
       }
       currentName = null;
       currentEmails = <String>[];
@@ -626,6 +647,8 @@ class EmailContactImportService {
     int failed = _startIndex;
     int imported = _startIndex;
 
+    final List<EmailContactImportContact> toImport =
+        <EmailContactImportContact>[];
     for (final EmailContactImportContact contact in contacts) {
       final String normalized = normalizeEmailAddress(contact.address);
       if (normalized.isEmpty || !normalized.isValidEmailAddress) {
@@ -636,14 +659,38 @@ class EmailContactImportService {
         duplicates += _nextIndex;
         continue;
       }
-      try {
-        await _emailService.ensureChatForAddress(
+      toImport.add(
+        EmailContactImportContact(
           address: normalized,
           displayName: contact.displayName,
-        );
-        imported += _nextIndex;
-      } catch (_) {
-        failed += _nextIndex;
+        ),
+      );
+    }
+
+    const int batchSize = 25;
+    for (int index = _startIndex; index < toImport.length; index += batchSize) {
+      final int rawEnd = index + batchSize;
+      final int end = rawEnd > toImport.length ? toImport.length : rawEnd;
+      final batch = toImport.sublist(index, end);
+      final results = await Future.wait(
+        batch.map((contact) async {
+          try {
+            await _emailService.ensureChatForAddress(
+              address: contact.address,
+              displayName: contact.displayName,
+            );
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }),
+      );
+      for (final succeeded in results) {
+        if (succeeded) {
+          imported += _nextIndex;
+        } else {
+          failed += _nextIndex;
+        }
       }
     }
 

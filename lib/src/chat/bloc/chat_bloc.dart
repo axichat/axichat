@@ -4238,6 +4238,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await emailService.downloadFullMessage(message);
   }
 
+  Future<bool> downloadInboundAttachment({
+    required String metadataId,
+    required String stanzaId,
+  }) async {
+    final xmppService = _xmppService;
+    if (xmppService == null) return false;
+    final downloadedPath = await xmppService.downloadInboundAttachment(
+      metadataId: metadataId,
+      stanzaId: stanzaId,
+    );
+    return downloadedPath?.trim().isNotEmpty == true;
+  }
+
+  Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
+    final db = await _messageService.database;
+    return db.getFileMetadata(metadataId);
+  }
+
   List<String> _orderedUniqueAttachmentIds(
     Iterable<MessageAttachmentData> attachments,
   ) {

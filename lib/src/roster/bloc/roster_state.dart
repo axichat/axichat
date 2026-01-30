@@ -3,31 +3,17 @@
 
 part of 'roster_cubit.dart';
 
-enum RosterFilter {
-  all,
-  online,
-  offline;
-
-  static RosterFilter fromId(SearchFilterId? id) => switch (id) {
-        SearchFilterId.online => RosterFilter.online,
-        SearchFilterId.offline => RosterFilter.offline,
-        _ => RosterFilter.all,
-      };
-}
-
 final class RosterViewCriteria extends Equatable {
   const RosterViewCriteria({
     this.query = '',
     this.sort = SearchSortOrder.newestFirst,
-    this.filter = RosterFilter.all,
   });
 
   final String query;
   final SearchSortOrder sort;
-  final RosterFilter filter;
 
   @override
-  List<Object?> get props => [query, sort, filter];
+  List<Object?> get props => [query, sort];
 }
 
 enum RosterActionType { add, remove, reject }

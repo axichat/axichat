@@ -16,6 +16,7 @@ class EmailAttachmentOptimizer {
   static const _maxDimension = 2048;
   static const _jpegQuality = 82;
   static const _pngCompressionLevel = 6;
+  static const int _maxWebBytes = 5 * 1024 * 1024;
   static const Duration _optimizedCleanupDelay = Duration(hours: 1);
   static const _optimizedDirectoryName = 'email_attachments';
   static const _optimizedFilePrefix = 'attachment_';
@@ -44,6 +45,12 @@ class EmailAttachmentOptimizer {
     final file = File(attachment.path);
     if (!await file.exists()) {
       return attachment;
+    }
+    if (kIsWeb) {
+      final length = await file.length();
+      if (length > _maxWebBytes) {
+        return attachment;
+      }
     }
     try {
       final Directory tempDir = await getTemporaryDirectory();

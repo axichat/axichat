@@ -28,8 +28,10 @@ enum EmailContactImportFailureReason {
   noEmailAccount,
   emptyFile,
   readFailure,
+  fileTooLarge,
   unsupportedFileType,
   noContacts,
+  tooManyContacts,
   importFailed,
 }
 

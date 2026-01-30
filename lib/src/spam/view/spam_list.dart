@@ -4,50 +4,71 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
-import 'package:axichat/src/common/search/search_models.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
-import 'package:axichat/src/home/home_search_definitions.dart';
-import 'package:axichat/src/home/home_search_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class SpamList extends StatelessWidget {
+class SpamList extends StatefulWidget {
   const SpamList({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final filters = spamSearchFilters(l10n);
-    return BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
-      selector: (state) {
-        final items = state.items;
-        if (items == null) return null;
-        return items.where((chat) => chat.spam).toList();
-      },
-      builder: (context, items) {
-        if (items == null) {
-          return Center(
-            child: AxiProgressIndicator(color: context.colorScheme.foreground),
-          );
-        }
+  State<SpamList> createState() => _SpamListState();
+}
 
-        return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-          builder: (context, searchState) => _SpamListBody(
-            items: items,
-            filters: filters,
-            l10n: l10n,
-            searchState: searchState,
-          ),
+class _SpamListState extends State<SpamList> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final searchState = context.read<HomeSearchCubit>().state;
+    final tabState = searchState.stateFor(HomeTab.spam);
+    context.read<ChatsCubit>().updateSpamSearchSnapshot(
+          active: searchState.active,
+          query: tabState.query,
+          filterId: tabState.filterId,
+          sortOrder: tabState.sort,
         );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<HomeSearchCubit, HomeSearchState>(
+      listenWhen: (previous, current) {
+        final previousTab = previous.stateFor(HomeTab.spam);
+        final currentTab = current.stateFor(HomeTab.spam);
+        return previous.active != current.active ||
+            previousTab.query != currentTab.query ||
+            previousTab.filterId != currentTab.filterId ||
+            previousTab.sort != currentTab.sort;
       },
+      listener: (context, searchState) {
+        final tabState = searchState.stateFor(HomeTab.spam);
+        context.read<ChatsCubit>().updateSpamSearchSnapshot(
+              active: searchState.active,
+              query: tabState.query,
+              filterId: tabState.filterId,
+              sortOrder: tabState.sort,
+            );
+      },
+      child: BlocBuilder<ChatsCubit, ChatsState>(
+        builder: (context, state) {
+          if (state.items == null) {
+            return Center(
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
+              ),
+            );
+          }
+          return _SpamListBody(
+            items: state.spamVisibleItems,
+            updatingJids: state.spamUpdatingJids,
+          );
+        },
+      ),
     );
   }
 }
@@ -55,47 +76,16 @@ class SpamList extends StatelessWidget {
 class _SpamListBody extends StatelessWidget {
   const _SpamListBody({
     required this.items,
-    required this.filters,
-    required this.l10n,
-    this.searchState,
+    required this.updatingJids,
   });
 
   final List<Chat> items;
-  final List<HomeSearchFilter> filters;
-  final AppLocalizations l10n;
-  final HomeSearchState? searchState;
+  final Set<String> updatingJids;
 
   @override
   Widget build(BuildContext context) {
-    final tabState =
-        searchState?.stateFor(HomeTab.spam) ?? const TabSearchState();
-    final searchActive = searchState?.active ?? false;
-    final query = searchActive ? tabState.query.trim().toLowerCase() : '';
-    final filterId = tabState.filterId ?? filters.first.id;
-    final sortOrder = tabState.sort;
-
-    var visibleItems = List<Chat>.from(items);
-
-    visibleItems = visibleItems
-        .where((chat) => _spamFilterMatches(chat, filterId))
-        .toList();
-
-    if (query.isNotEmpty) {
-      visibleItems =
-          visibleItems.where((chat) => _chatMatchesQuery(chat, query)).toList();
-    }
-
-    visibleItems.sort(
-      (a, b) => sortOrder.isNewestFirst
-          ? (b.spamUpdatedAt ?? b.lastChangeTimestamp).compareTo(
-              a.spamUpdatedAt ?? a.lastChangeTimestamp,
-            )
-          : (a.spamUpdatedAt ?? a.lastChangeTimestamp).compareTo(
-              b.spamUpdatedAt ?? b.lastChangeTimestamp,
-            ),
-    );
-
-    if (visibleItems.isEmpty) {
+    final l10n = context.l10n;
+    if (items.isEmpty) {
       return Center(
         child: Text(l10n.spamEmpty, style: context.textTheme.muted),
       );
@@ -104,9 +94,10 @@ class _SpamListBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
-        itemCount: visibleItems.length,
+        itemCount: items.length,
         itemBuilder: (context, index) {
-          final chat = visibleItems[index];
+          final chat = items[index];
+          final isUpdating = updatingJids.contains(chat.jid);
           return ListItemPadding(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,9 +111,11 @@ class _SpamListBody extends StatelessWidget {
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: ShadButton.secondary(
-                    size: ShadButtonSize.sm,
-                    onPressed: () => _moveToInbox(context, chat),
+                  child: AxiButton.secondary(
+                    size: AxiButtonSize.sm,
+                    loading: isUpdating,
+                    onPressed:
+                        isUpdating ? null : () => _moveToInbox(context, chat),
                     child: Text(l10n.spamMoveToInbox),
                   ),
                 ),
@@ -135,42 +128,25 @@ class _SpamListBody extends StatelessWidget {
   }
 }
 
-bool _spamFilterMatches(Chat chat, SearchFilterId filterId) {
-  return switch (filterId) {
-    SearchFilterId.email => chat.transport.isEmail,
-    SearchFilterId.xmpp => chat.transport.isXmpp,
-    _ => true,
-  };
-}
-
-bool _chatMatchesQuery(Chat chat, String query) {
-  if (query.isEmpty) return true;
-  final lower = query.toLowerCase();
-  return chat.title.toLowerCase().contains(lower) ||
-      chat.jid.toLowerCase().contains(lower);
-}
-
 Future<void> _moveToInbox(BuildContext context, Chat chat) async {
-  final l10n = context.l10n;
-  final xmppService = context.read<XmppService?>();
   final toaster = ShadToaster.maybeOf(context);
-  if (xmppService == null) {
-    toaster?.show(FeedbackToast.error(message: l10n.chatSpamUpdateFailed));
-    return;
-  }
-  try {
-    await xmppService.setSpamStatus(jid: chat.jid, spam: false);
-  } on Exception {
-    toaster?.show(FeedbackToast.error(message: l10n.chatSpamUpdateFailed));
-    return;
-  }
+  final success = await context.read<ChatsCubit>().moveSpamToInbox(chat: chat);
   if (!context.mounted) {
+    return;
+  }
+  if (success == null) {
+    return;
+  }
+  if (!success) {
+    toaster?.show(
+      FeedbackToast.error(message: context.l10n.chatSpamUpdateFailed),
+    );
     return;
   }
   toaster?.show(
     FeedbackToast.success(
-      title: l10n.spamMoveToastTitle,
-      message: l10n.spamMoveToastMessage(chat.title),
+      title: context.l10n.spamMoveToastTitle,
+      message: context.l10n.spamMoveToastMessage(chat.title),
     ),
   );
 }

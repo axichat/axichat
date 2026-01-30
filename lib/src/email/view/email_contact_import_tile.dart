@@ -307,6 +307,8 @@ FeedbackTone _toneForFailure(EmailContactImportFailureReason reason) {
     case EmailContactImportFailureReason.emptyFile:
     case EmailContactImportFailureReason.noContacts:
       return FeedbackTone.info;
+    case EmailContactImportFailureReason.fileTooLarge:
+    case EmailContactImportFailureReason.tooManyContacts:
     case EmailContactImportFailureReason.unsupportedFileType:
       return FeedbackTone.warning;
     case EmailContactImportFailureReason.noEmailAccount:
@@ -327,10 +329,14 @@ String _failureMessage(
       return l10n.emailContactsImportEmptyFile;
     case EmailContactImportFailureReason.readFailure:
       return l10n.emailContactsImportReadFailure;
+    case EmailContactImportFailureReason.fileTooLarge:
+      return l10n.emailContactsImportFileTooLarge;
     case EmailContactImportFailureReason.unsupportedFileType:
       return l10n.emailContactsImportUnsupportedFile;
     case EmailContactImportFailureReason.noContacts:
       return l10n.emailContactsImportNoContacts;
+    case EmailContactImportFailureReason.tooManyContacts:
+      return l10n.emailContactsImportTooManyContacts;
     case EmailContactImportFailureReason.importFailed:
       return l10n.emailContactsImportFailed;
   }

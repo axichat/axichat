@@ -299,7 +299,7 @@ class _ChatsListBody extends StatelessWidget {
           if (!enableRefresh) return animated;
 
           return CustomRefreshIndicator(
-            onRefresh: context.read<ChatsCubit>().refreshHomeSync,
+            onRefresh: () => context.read<ChatsCubit>().refreshHomeSync(),
             offsetToArmed: refreshOffsetToArmed,
             triggerMode: IndicatorTriggerMode.anywhere,
             leadingScrollIndicatorVisible: true,
@@ -895,9 +895,7 @@ class _ChatListTileState extends State<ChatListTile> {
             offset: Offset(0, -scaled(spacing.xs)),
             child: Text(
               timestampLabel,
-              style: context.textTheme.small.copyWith(
-                color: colors.mutedForeground,
-              ),
+              style: context.textTheme.muted,
             ),
           ),
         ),

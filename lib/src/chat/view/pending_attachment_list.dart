@@ -34,11 +34,12 @@ class PendingAttachmentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Align(
       alignment: Alignment.centerLeft,
       child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
+        spacing: spacing.m,
+        runSpacing: spacing.m,
         children: attachments
             .map(
               (pending) => _PendingAttachmentPreview(
@@ -82,6 +83,7 @@ class _PendingAttachmentPreview extends StatefulWidget {
 class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
   late final ShadContextMenuController _menuController =
       ShadContextMenuController();
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
   Future<FileTypeReport>? _typeReportFuture;
   String? _typeReportPath;
 
@@ -174,14 +176,26 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     }
     Widget interactive = preview;
     if (hasGesture) {
-      final borderRadius = BorderRadius.circular(16);
-      interactive = Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: borderRadius,
-          onTap: widget.onPressed,
-          onLongPress: widget.onLongPress ?? widget.onPressed,
-          child: preview,
+      final shape = RoundedSuperellipseBorder(borderRadius: context.radius);
+      interactive = ClipPath(
+        clipper: ShapeBorderClipper(shape: shape),
+        child: ShadFocusable(
+          canRequestFocus: true,
+          builder: (context, focused, child) =>
+              child ?? const SizedBox.shrink(),
+          child: ShadGestureDetector(
+            cursor: SystemMouseCursors.click,
+            hoverStrategies: mobileHoverStrategies,
+            onTap: widget.onPressed,
+            onLongPress: widget.onLongPress ?? widget.onPressed,
+            onTapDown: _bounceController.handleTapDown,
+            onTapUp: _bounceController.handleTapUp,
+            onTapCancel: _bounceController.handleTapCancel,
+            child: AxiTapBounce(
+              controller: _bounceController,
+              child: preview,
+            ),
+          ),
         ),
       );
     }
@@ -225,7 +239,7 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
 
     final attachment = pending.attachment;
     final l10n = context.l10n;
-    final sizeLabel = formatBytes(attachment.sizeBytes);
+    final sizeLabel = formatBytes(attachment.sizeBytes, l10n);
     final statusMessage = _statusLabel(pending.status, l10n);
     final hasTapHandler = widget.onPressed != null;
     final semanticsOnTap = widget.onPressed ?? (hasMenu ? _showMenu : null);
@@ -266,11 +280,14 @@ class _PendingImageAttachment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final borderRadius = BorderRadius.circular(16);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final borderRadius = BorderRadius.circular(sizing.containerRadius);
+    final previewExtent = sizing.listButtonHeight + spacing.m + spacing.s;
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     return SizedBox(
-      width: 72,
-      height: 72,
+      width: previewExtent,
+      height: previewExtent,
       child: Stack(
         children: [
           Positioned.fill(
@@ -305,8 +322,8 @@ class _PendingImageAttachment extends StatelessWidget {
             )
           else
             Positioned(
-              top: 6,
-              right: 6,
+              top: spacing.xs,
+              right: spacing.xs,
               child: PendingAttachmentStatusBadge(status: pending.status),
             ),
         ],
@@ -327,41 +344,48 @@ class _PendingFileAttachment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final borderRadius = BorderRadius.circular(16);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final borderRadius = BorderRadius.circular(sizing.containerRadius);
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     final background = isFailed ? colors.destructive : colors.card;
     final foreground =
         isFailed ? colors.destructiveForeground : colors.foreground;
-    final sizeLabel = formatBytes(pending.attachment.sizeBytes);
+    final borderColor = isFailed ? colors.destructive : colors.border;
+    final sizeLabel = formatBytes(pending.attachment.sizeBytes, context.l10n);
     return IntrinsicWidth(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 300),
+        constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
         child: Container(
           decoration: BoxDecoration(
             color: background,
             borderRadius: borderRadius,
             border: Border.all(
-              color: colors.border.withValues(alpha: isFailed ? 0.5 : 1),
+              color: borderColor,
+              width: context.borderSide.width,
             ),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.m,
+            vertical: spacing.s,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: sizing.iconButtonSize,
+                height: sizing.iconButtonSize,
                 decoration: BoxDecoration(
-                  color: background.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(12),
+                  color: colors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(sizing.containerRadius),
                 ),
                 child: Icon(
                   attachmentIcon(pending.attachment, typeReport: typeReport),
                   color: foreground,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: spacing.m),
               Flexible(
                 fit: FlexFit.loose,
                 child: Column(
@@ -377,17 +401,17 @@ class _PendingFileAttachment extends StatelessWidget {
                         color: foreground,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: spacing.xs),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           sizeLabel,
                           style: context.textTheme.small.copyWith(
-                            color: foreground.withValues(alpha: 0.8),
+                            color: colors.mutedForeground,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: spacing.xs),
                         PendingAttachmentStatusInlineBadge(
                           status: pending.status,
                         ),
@@ -425,8 +449,11 @@ class _PendingImageSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const extent = 72.0;
-    final radius = borderRadius ?? BorderRadius.circular(16);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final extent = sizing.listButtonHeight + spacing.m + spacing.s;
+    final radius =
+        borderRadius ?? BorderRadius.circular(sizing.containerRadius);
     return SizedBox(
       width: extent,
       height: extent,
@@ -441,23 +468,32 @@ class _PendingFileSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const borderRadiusValue = 16.0;
-    const iconExtent = 40.0;
-    const iconRadius = 12.0;
-    const lineHeight = 12.0;
-    const primaryLineWidth = 150.0;
-    const secondaryLineWidth = 110.0;
-    const actionWidth = 28.0;
-
-    final borderRadius = BorderRadius.circular(borderRadiusValue);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final borderRadius = BorderRadius.circular(sizing.containerRadius);
+    final iconExtent = sizing.iconButtonSize;
+    final iconRadius = sizing.containerRadius;
+    final lineHeight = sizing.progressIndicatorBarHeight;
+    final primaryLineWidth = sizing.menuMaxWidth - spacing.xl;
+    final secondaryLineWidth = sizing.menuMaxWidth - spacing.xxl;
+    final actionWidth = sizing.iconButtonSize;
     return Container(
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      constraints: BoxConstraints(
+        minWidth: sizing.menuMaxWidth - spacing.xl,
+        maxWidth: sizing.menuMaxWidth,
+      ),
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: borderRadius,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: context.borderSide.color,
+          width: context.borderSide.width,
+        ),
       ),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -473,36 +509,42 @@ class _PendingFileSkeleton extends StatelessWidget {
                   child: const _ShimmerSurface(),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: spacing.m),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     SizedBox(
-                      height: 16,
+                      height: sizing.buttonHeightSm,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(
+                          sizing.containerRadius,
+                        ),
                         child: const _ShimmerSurface(),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: spacing.s),
                     Row(
                       children: [
                         SizedBox(
                           width: primaryLineWidth,
                           height: lineHeight,
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(
+                              sizing.containerRadius,
+                            ),
                             child: const _ShimmerSurface(),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: spacing.s),
                         SizedBox(
                           width: secondaryLineWidth,
                           height: lineHeight,
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(
+                              sizing.containerRadius,
+                            ),
                             child: const _ShimmerSurface(),
                           ),
                         ),
@@ -513,14 +555,14 @@ class _PendingFileSkeleton extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.m),
           Align(
             alignment: Alignment.centerRight,
             child: SizedBox(
               width: actionWidth,
               height: actionWidth,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(sizing.containerRadius),
                 child: const _ShimmerSurface(),
               ),
             ),
@@ -531,52 +573,19 @@ class _PendingFileSkeleton extends StatelessWidget {
   }
 }
 
-class _ShimmerSurface extends StatefulWidget {
+class _ShimmerSurface extends StatelessWidget {
   const _ShimmerSurface();
-
-  @override
-  State<_ShimmerSurface> createState() => _ShimmerSurfaceState();
-}
-
-class _ShimmerSurfaceState extends State<_ShimmerSurface>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final base = colors.border.withValues(alpha: 0.30);
-    final highlight = colors.card.withValues(alpha: 0.85);
     return ExcludeSemantics(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final shimmer = _controller.value;
-          final start = (shimmer - 0.25).clamp(0.0, 1.0);
-          final mid = shimmer.clamp(0.0, 1.0);
-          final end = (shimmer + 0.25).clamp(0.0, 1.0);
-          return SizedBox.expand(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [base, highlight, base],
-                  stops: [start, mid, end],
-                ),
-              ),
-            ),
-          );
-        },
+      child: SizedBox.expand(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHighest,
+          ),
+        ),
       ),
     );
   }
@@ -601,6 +610,8 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final errorLabel =
         message?.isNotEmpty == true ? message! : l10n.chatAttachmentSendFailed;
     return Positioned.fill(
@@ -608,10 +619,10 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
         borderRadius: borderRadius,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: colors.destructive.withValues(alpha: 0.92),
+            color: colors.destructive,
           ),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(spacing.s),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -619,10 +630,10 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
                   children: [
                     Icon(
                       LucideIcons.triangleAlert,
-                      size: 14,
+                      size: sizing.menuItemIconSize,
                       color: colors.destructiveForeground,
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: spacing.xs),
                     Expanded(
                       child: AxiTooltip(
                         builder: (_) => Text(
@@ -676,41 +687,17 @@ class _PendingAttachmentOverlayAction extends StatelessWidget {
   final String tooltip;
   final VoidCallback onPressed;
 
-  static const double _buttonSize = 20;
-  static const double _tapTargetSize = 26;
-  static const double _iconSize = 14;
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return AxiIconButton(
+    return AxiIconButton.outline(
       iconData: icon,
       tooltip: tooltip,
       onPressed: onPressed,
-      buttonSize: _buttonSize,
-      tapTargetSize: _tapTargetSize,
-      iconSize: _iconSize,
-      backgroundColor: colors.destructiveForeground.withValues(alpha: 0.12),
-      borderColor: colors.destructiveForeground.withValues(alpha: 0.4),
       color: colors.destructiveForeground,
-      cornerRadius: 10,
-      borderWidth: 1,
+      backgroundColor: colors.surfaceContainerHighest,
+      borderColor: colors.destructiveForeground,
     );
-  }
-}
-
-class _PendingAttachmentSpinner extends StatelessWidget {
-  const _PendingAttachmentSpinner({
-    required this.color,
-    this.strokeWidth = 2.5,
-  });
-
-  final Color color;
-  final double strokeWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    return CircularProgressIndicator(strokeWidth: strokeWidth, color: color);
   }
 }
 
@@ -722,19 +709,25 @@ class PendingAttachmentStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final l10n = context.l10n;
-    final background = colors.background.withValues(alpha: 0.85);
+    final background = colors.surfaceContainerHighest;
+    final extent = sizing.iconButtonIconSize + spacing.xs;
     return AxiTooltip(
       builder: (_) => Text(_statusLabel(status, l10n)),
       child: Container(
-        width: 24,
-        height: 24,
+        width: extent,
+        height: extent,
         decoration: BoxDecoration(
           color: background,
           shape: BoxShape.circle,
-          border: Border.all(color: colors.border),
+          border: Border.all(
+            color: context.borderSide.color,
+            width: context.borderSide.width,
+          ),
         ),
-        padding: const EdgeInsets.all(4),
+        padding: EdgeInsets.all(spacing.xs),
         child: _StatusIndicator(status: status),
       ),
     );
@@ -749,11 +742,12 @@ class PendingAttachmentStatusInlineBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final sizing = context.sizing;
     return AxiTooltip(
       builder: (_) => Text(_statusLabel(status, l10n)),
       child: SizedBox(
-        width: 20,
-        height: 20,
+        width: sizing.iconButtonIconSize,
+        height: sizing.iconButtonIconSize,
         child: _StatusIndicator(status: status),
       ),
     );
@@ -768,15 +762,20 @@ class _StatusIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final sizing = context.sizing;
     switch (status) {
       case PendingAttachmentStatus.uploading:
-        return _PendingAttachmentSpinner(color: colors.primary, strokeWidth: 2);
+        return AxiProgressIndicator(color: colors.primary);
       case PendingAttachmentStatus.queued:
-        return Icon(LucideIcons.clock, size: 14, color: colors.mutedForeground);
+        return Icon(
+          LucideIcons.clock,
+          size: sizing.menuItemIconSize,
+          color: colors.mutedForeground,
+        );
       case PendingAttachmentStatus.failed:
         return Icon(
           LucideIcons.triangleAlert,
-          size: 14,
+          size: sizing.menuItemIconSize,
           color: colors.destructive,
         );
     }
@@ -803,8 +802,14 @@ IconData attachmentIcon(
   return Icons.insert_drive_file_outlined;
 }
 
-String formatBytes(int bytes) {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+String formatBytes(int bytes, AppLocalizations l10n) {
+  final units = [
+    l10n.commonFileSizeUnitBytes,
+    l10n.commonFileSizeUnitKilobytes,
+    l10n.commonFileSizeUnitMegabytes,
+    l10n.commonFileSizeUnitGigabytes,
+    l10n.commonFileSizeUnitTerabytes,
+  ];
   var size = bytes.toDouble();
   var unit = 0;
   while (size >= 1024 && unit < units.length - 1) {

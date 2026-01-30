@@ -61,6 +61,7 @@ class NotificationService {
     cleanupInterval: _messageNotificationRateLimitCleanupInterval,
   );
   final Logger _log = Logger('NotificationService');
+  PackageInfo? _packageInfo;
   Future<PackageInfo>? _packageInfoFuture;
 
   bool mute = false;
@@ -561,13 +562,21 @@ class NotificationService {
   }
 
   Future<PackageInfo> _resolvePackageInfo() {
-    final cached = _packageInfoFuture;
+    final cached = _packageInfo;
     if (cached != null) {
-      return cached;
+      return Future.value(cached);
+    }
+    final inflight = _packageInfoFuture;
+    if (inflight != null) {
+      return inflight;
     }
     final future = PackageInfo.fromPlatform();
     _packageInfoFuture = future;
-    return future.catchError(
+    return future.then((resolved) {
+      _packageInfo = resolved;
+      _packageInfoFuture = null;
+      return resolved;
+    }).catchError(
       (Object error, StackTrace stackTrace) {
         _packageInfoFuture = null;
         _log.warning('Failed to resolve package info.', error, stackTrace);

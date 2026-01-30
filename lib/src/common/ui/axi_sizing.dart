@@ -21,6 +21,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.appBarScrolledUnderElevation,
     required this.dialogMaxWidth,
     required this.dialogMaxHeightFraction,
+    required this.mediaPreviewMaxScale,
     required this.sheetDragHandleWidth,
     required this.sheetDragHandleHeight,
     required this.modalShadowBlur,
@@ -47,6 +48,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double appBarScrolledUnderElevation;
   final double dialogMaxWidth;
   final double dialogMaxHeightFraction;
+  final double mediaPreviewMaxScale;
   final double sheetDragHandleWidth;
   final double sheetDragHandleHeight;
   final double modalShadowBlur;
@@ -74,6 +76,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? appBarScrolledUnderElevation,
     double? dialogMaxWidth,
     double? dialogMaxHeightFraction,
+    double? mediaPreviewMaxScale,
     double? sheetDragHandleWidth,
     double? sheetDragHandleHeight,
     double? modalShadowBlur,
@@ -102,6 +105,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       dialogMaxWidth: dialogMaxWidth ?? this.dialogMaxWidth,
       dialogMaxHeightFraction:
           dialogMaxHeightFraction ?? this.dialogMaxHeightFraction,
+      mediaPreviewMaxScale: mediaPreviewMaxScale ?? this.mediaPreviewMaxScale,
       sheetDragHandleWidth: sheetDragHandleWidth ?? this.sheetDragHandleWidth,
       sheetDragHandleHeight:
           sheetDragHandleHeight ?? this.sheetDragHandleHeight,
@@ -141,6 +145,7 @@ const AxiSizing axiSizing = AxiSizing(
   appBarScrolledUnderElevation: 0,
   dialogMaxWidth: 640,
   dialogMaxHeightFraction: 0.9,
+  mediaPreviewMaxScale: 4,
   sheetDragHandleWidth: 32,
   sheetDragHandleHeight: 4,
   modalShadowBlur: 32,

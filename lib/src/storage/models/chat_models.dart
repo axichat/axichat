@@ -516,6 +516,26 @@ class Chats extends Table {
 
   @override
   Set<Column> get primaryKey => {jid};
+
+  @override
+  List<Index> get indexes => [
+        Index('idx_chats_last_change', 'last_change_timestamp'),
+      ];
+}
+
+@DataClassName('RecipientAddress')
+class RecipientAddresses extends Table {
+  TextColumn get address => text()();
+
+  DateTimeColumn get lastSeen => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {address};
+
+  @override
+  List<Index> get indexes => [
+        Index('idx_recipient_addresses_last_seen', 'last_seen'),
+      ];
 }
 
 @DataClassName('EmailChatAccountData')

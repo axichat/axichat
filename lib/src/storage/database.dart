@@ -65,7 +65,7 @@ const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 const int _messageStatusSyncEnvelopeVersion = 1;
 const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeIdKey = 'id';
-const int _pinnedMessagesSchemaVersion = 28;
+const int _pinnedMessagesSchemaVersion = 29;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
@@ -1271,6 +1271,7 @@ class EmailSpamlistAccessor
     MessageParticipants,
     MessageCopies,
     Drafts,
+    DraftAttachmentRefs,
     OmemoDevices,
     OmemoTrusts,
     OmemoDeviceLists,
@@ -1282,6 +1283,7 @@ class EmailSpamlistAccessor
     Roster,
     Invites,
     Chats,
+    RecipientAddresses,
     EmailChatAccounts,
     Contacts,
     Blocklist,
@@ -1345,7 +1347,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   String _normalizeEmail(String address) =>
       normalizeAddressdKey(address) ?? address.trim().toLowerCase();
   String? _normalizeBlocklistJid(String jid) {
-    return normalizeAddressdKey(jid);
+    final normalized = normalizeAddressdKey(jid);
+    if (normalized != null && normalized.isNotEmpty) {
+      return normalized;
+    }
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed.toLowerCase();
   }
 
   String _chatTitleForIdentifier(String identifier) {
@@ -1368,6 +1378,8 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     return MigrationStrategy(
       onCreate: (m) async {
         await m.createAll();
+        await _createMessageSearchInfrastructure();
+        await _createRecipientAddressTriggers();
       },
       onUpgrade: (m, from, to) async {
         if (from < 2) {
@@ -1546,7 +1558,21 @@ WHERE delta_chat_id IS NOT NULL
         if (from < 28) {
           await _rebuildChatsTable(m);
         }
-        if (from < _pinnedMessagesSchemaVersion) {
+        if (from < 29) {
+          await m.createTable(draftAttachmentRefs);
+          await m.createTable(recipientAddresses);
+          await m.createIndex(
+            Index('idx_messages_chat_timestamp', 'chat_jid, timestamp'),
+          );
+          await m.createIndex(
+            Index('idx_chats_last_change', 'last_change_timestamp'),
+          );
+          await _createMessageSearchInfrastructure();
+          await _createRecipientAddressTriggers();
+          await _backfillRecipientAddresses();
+          await _backfillDraftAttachmentRefs();
+        }
+        if (from < 28) {
           await m.createTable(pinnedMessages);
         }
       },
@@ -2968,8 +2994,9 @@ WHERE email_from_address IN ($placeholderClause)
     String? subject,
     String? quotingStanzaId,
     List<String> attachmentMetadataIds = const [],
-  }) =>
-      draftsAccessor.insertOrUpdateOne(
+  }) async {
+    return transaction(() async {
+      final draftId = await draftsAccessor.insertOrUpdateOne(
         DraftsCompanion(
           id: Value.absentIfNull(id),
           jids: Value(jids),
@@ -2983,6 +3010,13 @@ WHERE email_from_address IN ($placeholderClause)
           attachmentMetadataIds: Value(attachmentMetadataIds),
         ),
       );
+      await _replaceDraftAttachmentRefs(
+        draftId: draftId,
+        attachmentMetadataIds: attachmentMetadataIds,
+      );
+      return draftId;
+    });
+  }
 
   @override
   Future<void> updateDraftSyncMetadata({
@@ -3017,8 +3051,31 @@ WHERE email_from_address IN ($placeholderClause)
     if (normalized.isEmpty) return 0;
     final existing = await getDraftBySyncId(normalized);
     if (existing == null) {
-      return draftsAccessor.insertOrUpdateOne(
+      return transaction(() async {
+        final draftId = await draftsAccessor.insertOrUpdateOne(
+          DraftsCompanion(
+            jids: Value(jids),
+            draftSyncId: Value(normalized),
+            draftUpdatedAt: Value(draftUpdatedAt),
+            draftSourceId: Value(draftSourceId),
+            draftRecipients: Value(draftRecipients),
+            body: Value(body),
+            subject: Value(subject),
+            quotingStanzaId: Value.absentIfNull(quotingStanzaId),
+            attachmentMetadataIds: Value(attachmentMetadataIds),
+          ),
+        );
+        await _replaceDraftAttachmentRefs(
+          draftId: draftId,
+          attachmentMetadataIds: attachmentMetadataIds,
+        );
+        return draftId;
+      });
+    }
+    await transaction(() async {
+      await draftsAccessor.updateOne(
         DraftsCompanion(
+          id: Value(existing.id),
           jids: Value(jids),
           draftSyncId: Value(normalized),
           draftUpdatedAt: Value(draftUpdatedAt),
@@ -3030,26 +3087,55 @@ WHERE email_from_address IN ($placeholderClause)
           attachmentMetadataIds: Value(attachmentMetadataIds),
         ),
       );
-    }
-    await draftsAccessor.updateOne(
-      DraftsCompanion(
-        id: Value(existing.id),
-        jids: Value(jids),
-        draftSyncId: Value(normalized),
-        draftUpdatedAt: Value(draftUpdatedAt),
-        draftSourceId: Value(draftSourceId),
-        draftRecipients: Value(draftRecipients),
-        body: Value(body),
-        subject: Value(subject),
-        quotingStanzaId: Value.absentIfNull(quotingStanzaId),
-        attachmentMetadataIds: Value(attachmentMetadataIds),
-      ),
-    );
+      await _replaceDraftAttachmentRefs(
+        draftId: existing.id,
+        attachmentMetadataIds: attachmentMetadataIds,
+      );
+    });
     return existing.id;
   }
 
   @override
-  Future<void> removeDraft(int id) => draftsAccessor.deleteOne(id);
+  Future<void> removeDraft(int id) async {
+    await transaction(() async {
+      await (delete(
+        draftAttachmentRefs,
+      )..where((tbl) => tbl.draftId.equals(id)))
+          .go();
+      await draftsAccessor.deleteOne(id);
+    });
+  }
+
+  Future<void> _replaceDraftAttachmentRefs({
+    required int draftId,
+    required List<String> attachmentMetadataIds,
+  }) async {
+    await (delete(
+      draftAttachmentRefs,
+    )..where((tbl) => tbl.draftId.equals(draftId)))
+        .go();
+    final normalizedIds = attachmentMetadataIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (normalizedIds.isEmpty) {
+      return;
+    }
+    await batch((batch) {
+      batch.insertAll(
+        draftAttachmentRefs,
+        normalizedIds
+            .map(
+              (id) => DraftAttachmentRefsCompanion.insert(
+                draftId: draftId,
+                fileMetadataId: id,
+              ),
+            )
+            .toList(growable: false),
+        mode: InsertMode.insertOrIgnore,
+      );
+    });
+  }
 
   @override
   Future<OmemoDevice?> getOmemoDevice(String jid) =>
@@ -3262,6 +3348,12 @@ WHERE email_from_address IN ($placeholderClause)
         .get();
     if (messageAttachmentRefs.isNotEmpty) return true;
 
+    final draftAttachmentRefs = await (selectOnly(draftAttachmentRefs)
+          ..addColumns([draftAttachmentRefs.fileMetadataId])
+          ..where(draftAttachmentRefs.fileMetadataId.equals(id)))
+        .get();
+    if (draftAttachmentRefs.isNotEmpty) return true;
+
     final messageRefs = await (selectOnly(messages)
           ..addColumns([messages.fileMetadataID])
           ..where(messages.fileMetadataID.equals(id)))
@@ -3273,13 +3365,6 @@ WHERE email_from_address IN ($placeholderClause)
           ..where(stickers.fileMetadataID.equals(id)))
         .get();
     if (stickerRefs.isNotEmpty) return true;
-
-    final draftRows = await select(drafts).get();
-    for (final draft in draftRows) {
-      if (draft.attachmentMetadataIds.contains(id)) {
-        return true;
-      }
-    }
 
     return false;
   }
@@ -3591,41 +3676,15 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   Selectable<String> _recipientAddressSuggestionsQuery({int? limit}) {
-    const addressColumn = 'address';
-    final limitClause = limit == null ? '' : 'LIMIT ?';
-    final query = customSelect(
-      '''
-WITH candidates($addressColumn, ts) AS (
-  SELECT lower(trim(jid)) AS $addressColumn, last_change_timestamp AS ts
-  FROM chats
-  WHERE jid IS NOT NULL AND jid != '' AND instr(jid, '@') > 0
-  UNION ALL
-  SELECT lower(trim(contact_jid)) AS $addressColumn, last_change_timestamp AS ts
-  FROM chats
-  WHERE contact_jid IS NOT NULL AND contact_jid != '' AND instr(contact_jid, '@') > 0
-  UNION ALL
-  SELECT lower(trim(email_address)) AS $addressColumn, last_change_timestamp AS ts
-  FROM chats
-  WHERE email_address IS NOT NULL AND email_address != '' AND instr(email_address, '@') > 0
-  UNION ALL
-  SELECT lower(trim(sender_jid)) AS $addressColumn, timestamp AS ts
-  FROM messages
-  WHERE sender_jid IS NOT NULL AND sender_jid != '' AND instr(sender_jid, '@') > 0
-  UNION ALL
-  SELECT lower(trim(chat_jid)) AS $addressColumn, timestamp AS ts
-  FROM messages
-  WHERE chat_jid IS NOT NULL AND chat_jid != '' AND instr(chat_jid, '@') > 0
-)
-SELECT $addressColumn
-FROM candidates
-GROUP BY $addressColumn
-ORDER BY MAX(ts) DESC
-$limitClause
-''',
-      variables: [if (limit != null) Variable<int>(limit)],
-      readsFrom: {chats, messages},
-    );
-    return query.map((row) => row.read<String>(addressColumn));
+    final query = select(recipientAddresses)
+      ..orderBy([
+        (tbl) =>
+            OrderingTerm(expression: tbl.lastSeen, mode: OrderingMode.desc),
+      ]);
+    if (limit != null) {
+      query.limit(limit);
+    }
+    return query.map((row) => row.address);
   }
 
   @override
@@ -4095,13 +4154,33 @@ $limitClause
 
   @override
   Future<void> saveRosterItems(List<RosterItem> items) async {
+    if (items.isEmpty) return;
+    final now = DateTime.timestamp();
     await transaction(() async {
-      for (final item in items) {
-        _log.info('Saving roster item');
-        await createChat(Chat.fromJid(item.jid));
-        await rosterAccessor.insertOrUpdateOne(item);
-        await invitesAccessor.deleteOne(item.jid);
-      }
+      await batch((batch) {
+        batch.insertAll(
+          chats,
+          items
+              .map(
+                (item) => ChatsCompanion.insert(
+                  jid: item.jid,
+                  title: _chatTitleForIdentifier(item.jid),
+                  type: ChatType.chat,
+                  lastChangeTimestamp: now,
+                  contactJid: Value(item.jid),
+                ),
+              )
+              .toList(growable: false),
+          mode: InsertMode.insertOrIgnore,
+        );
+        batch.insertAll(
+          roster,
+          items,
+          mode: InsertMode.insertOrReplace,
+        );
+      });
+      final jids = items.map((item) => item.jid).toList(growable: false);
+      await (delete(invites)..where((tbl) => tbl.jid.isIn(jids))).go();
     });
   }
 
@@ -4116,12 +4195,17 @@ $limitClause
 
   @override
   Future<void> updateRosterItems(List<RosterItem> items) async {
+    if (items.isEmpty) return;
     await transaction(() async {
-      for (final item in items) {
-        _log.info('Updating roster item');
-        await rosterAccessor.updateOne(item);
-        await invitesAccessor.deleteOne(item.jid);
-      }
+      await batch((batch) {
+        batch.insertAll(
+          roster,
+          items,
+          mode: InsertMode.insertOrReplace,
+        );
+      });
+      final jids = items.map((item) => item.jid).toList(growable: false);
+      await (delete(invites)..where((tbl) => tbl.jid.isIn(jids))).go();
     });
   }
 
@@ -4257,18 +4341,7 @@ $limitClause
     if (normalized == null) {
       return false;
     }
-    final entry = await blocklistAccessor.selectOne(normalized);
-    if (entry != null) {
-      return true;
-    }
-    final entries = await blocklistAccessor.selectAll();
-    for (final storedEntry in entries) {
-      final stored = _normalizeBlocklistJid(storedEntry.jid);
-      if (stored != null && stored == normalized) {
-        return true;
-      }
-    }
-    return false;
+    return await blocklistAccessor.selectOne(normalized) != null;
   }
 
   @override
@@ -4358,8 +4431,16 @@ $limitClause
       }
     }
     await transaction(() async {
-      await blocklistAccessor.deleteAll();
-      for (final blocked in normalizedBlocks) {
+      final existingKeys = blockedAtByJid.keys.toSet();
+      final toDelete = existingKeys.difference(normalizedBlocks).toList();
+      if (toDelete.isNotEmpty) {
+        await (delete(
+          blocklist,
+        )..where((tbl) => tbl.jid.isIn(toDelete)))
+            .go();
+      }
+      final toInsert = normalizedBlocks.difference(existingKeys);
+      for (final blocked in toInsert) {
         final blockedAt =
             (blockedAtByJid[blocked] ?? DateTime.timestamp()).toUtc();
         await blocklistAccessor.insertOne(
@@ -4378,12 +4459,37 @@ $limitClause
   @override
   Future<void> replaceContacts(Map<String, String> contactsByNativeId) async {
     await transaction(() async {
-      await delete(contacts).go();
+      final existing = await select(contacts).get();
+      final existingById = <String, String>{
+        for (final entry in existing) entry.nativeID: entry.jid,
+      };
+      final toDelete = existingById.keys
+          .where((id) => !contactsByNativeId.containsKey(id))
+          .toList();
+      if (toDelete.isNotEmpty) {
+        await (delete(
+          contacts,
+        )..where((tbl) => tbl.nativeID.isIn(toDelete)))
+            .go();
+      }
+      final upserts = <ContactsCompanion>[];
       for (final entry in contactsByNativeId.entries) {
-        await into(contacts).insert(
+        final existingJid = existingById[entry.key];
+        if (existingJid == entry.value) {
+          continue;
+        }
+        upserts.add(
           ContactsCompanion.insert(nativeID: entry.key, jid: entry.value),
-          mode: InsertMode.insertOrIgnore,
         );
+      }
+      if (upserts.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(
+            contacts,
+            upserts,
+            mode: InsertMode.insertOrReplace,
+          );
+        });
       }
     });
   }
@@ -4657,6 +4763,160 @@ SELECT
 FROM $tempTableName
 ''');
     await customStatement('DROP TABLE $tempTableName');
+  }
+
+  Future<void> _createMessageSearchInfrastructure() async {
+    await customStatement('''
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
+USING fts5(
+  body,
+  content='messages',
+  content_rowid='rowid'
+)
+''');
+    await customStatement('''
+CREATE TRIGGER IF NOT EXISTS messages_ai
+AFTER INSERT ON messages
+BEGIN
+  INSERT INTO messages_fts(rowid, body)
+  VALUES (new.rowid, new.body);
+END
+''');
+    await customStatement('''
+CREATE TRIGGER IF NOT EXISTS messages_ad
+AFTER DELETE ON messages
+BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, body)
+  VALUES ('delete', old.rowid, old.body);
+END
+''');
+    await customStatement('''
+CREATE TRIGGER IF NOT EXISTS messages_au
+AFTER UPDATE ON messages
+BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, body)
+  VALUES ('delete', old.rowid, old.body);
+  INSERT INTO messages_fts(rowid, body)
+  VALUES (new.rowid, new.body);
+END
+''');
+    await customStatement(
+      "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')",
+    );
+  }
+
+  Future<void> _createRecipientAddressTriggers() async {
+    const upsertClause =
+        'ON CONFLICT(address) DO UPDATE SET last_seen = '
+        'CASE WHEN excluded.last_seen > recipient_addresses.last_seen '
+        'THEN excluded.last_seen ELSE recipient_addresses.last_seen END';
+    await customStatement('''
+CREATE TRIGGER IF NOT EXISTS recipient_addresses_messages_ai
+AFTER INSERT ON messages
+BEGIN
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.sender_jid)), new.timestamp
+  WHERE new.sender_jid IS NOT NULL
+    AND trim(new.sender_jid) != ''
+    AND instr(new.sender_jid, '@') > 0
+  $upsertClause;
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.chat_jid)), new.timestamp
+  WHERE new.chat_jid IS NOT NULL
+    AND trim(new.chat_jid) != ''
+    AND instr(new.chat_jid, '@') > 0
+  $upsertClause;
+END
+''');
+    await customStatement('''
+CREATE TRIGGER IF NOT EXISTS recipient_addresses_chats_ai
+AFTER INSERT ON chats
+BEGIN
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.jid)), new.last_change_timestamp
+  WHERE new.jid IS NOT NULL
+    AND trim(new.jid) != ''
+    AND instr(new.jid, '@') > 0
+  $upsertClause;
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.contact_jid)), new.last_change_timestamp
+  WHERE new.contact_jid IS NOT NULL
+    AND trim(new.contact_jid) != ''
+    AND instr(new.contact_jid, '@') > 0
+  $upsertClause;
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.email_address)), new.last_change_timestamp
+  WHERE new.email_address IS NOT NULL
+    AND trim(new.email_address) != ''
+    AND instr(new.email_address, '@') > 0
+  $upsertClause;
+END
+''');
+    await customStatement('''
+CREATE TRIGGER IF NOT EXISTS recipient_addresses_chats_au
+AFTER UPDATE OF last_change_timestamp, jid, contact_jid, email_address ON chats
+BEGIN
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.jid)), new.last_change_timestamp
+  WHERE new.jid IS NOT NULL
+    AND trim(new.jid) != ''
+    AND instr(new.jid, '@') > 0
+  $upsertClause;
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.contact_jid)), new.last_change_timestamp
+  WHERE new.contact_jid IS NOT NULL
+    AND trim(new.contact_jid) != ''
+    AND instr(new.contact_jid, '@') > 0
+  $upsertClause;
+  INSERT INTO recipient_addresses(address, last_seen)
+  SELECT lower(trim(new.email_address)), new.last_change_timestamp
+  WHERE new.email_address IS NOT NULL
+    AND trim(new.email_address) != ''
+    AND instr(new.email_address, '@') > 0
+  $upsertClause;
+END
+''');
+  }
+
+  Future<void> _backfillRecipientAddresses() async {
+    await customStatement('''
+INSERT INTO recipient_addresses(address, last_seen)
+SELECT address, MAX(ts)
+FROM (
+  SELECT lower(trim(jid)) AS address, last_change_timestamp AS ts
+  FROM chats
+  WHERE jid IS NOT NULL AND jid != '' AND instr(jid, '@') > 0
+  UNION ALL
+  SELECT lower(trim(contact_jid)) AS address, last_change_timestamp AS ts
+  FROM chats
+  WHERE contact_jid IS NOT NULL AND contact_jid != '' AND instr(contact_jid, '@') > 0
+  UNION ALL
+  SELECT lower(trim(email_address)) AS address, last_change_timestamp AS ts
+  FROM chats
+  WHERE email_address IS NOT NULL AND email_address != '' AND instr(email_address, '@') > 0
+  UNION ALL
+  SELECT lower(trim(sender_jid)) AS address, timestamp AS ts
+  FROM messages
+  WHERE sender_jid IS NOT NULL AND sender_jid != '' AND instr(sender_jid, '@') > 0
+  UNION ALL
+  SELECT lower(trim(chat_jid)) AS address, timestamp AS ts
+  FROM messages
+  WHERE chat_jid IS NOT NULL AND chat_jid != '' AND instr(chat_jid, '@') > 0
+)
+GROUP BY address
+ON CONFLICT(address) DO UPDATE SET last_seen =
+  CASE WHEN excluded.last_seen > recipient_addresses.last_seen
+       THEN excluded.last_seen ELSE recipient_addresses.last_seen END
+''');
+  }
+
+  Future<void> _backfillDraftAttachmentRefs() async {
+    await customStatement('''
+INSERT INTO draft_attachment_refs(draft_id, file_metadata_id)
+SELECT d.id, value
+FROM drafts d, json_each(d.attachment_metadata_ids)
+WHERE value IS NOT NULL AND trim(value) != ''
+''');
   }
 
   Future<void> _rebuildMessageCopiesTable(Migrator m) async {

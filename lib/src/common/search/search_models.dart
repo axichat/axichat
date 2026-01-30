@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/localization/app_localizations.dart';
+
 /// Shared filter ids used by search surfaces so we keep naming aligned.
 enum SearchFilterId {
   all,
@@ -10,8 +12,6 @@ enum SearchFilterId {
   email,
   hidden,
   attachments,
-  online,
-  offline,
 }
 
 /// Shared sort order used by search surfaces so we keep naming aligned.
@@ -26,8 +26,8 @@ enum SearchSortOrder {
         SearchSortOrder.oldestFirst => SearchSortOrder.newestFirst,
       };
 
-  String get label => switch (this) {
-        SearchSortOrder.newestFirst => 'Newest first',
-        SearchSortOrder.oldestFirst => 'Oldest first',
+  String label(AppLocalizations l10n) => switch (this) {
+        SearchSortOrder.newestFirst => l10n.chatSearchSortNewestFirst,
+        SearchSortOrder.oldestFirst => l10n.chatSearchSortOldestFirst,
       };
 }

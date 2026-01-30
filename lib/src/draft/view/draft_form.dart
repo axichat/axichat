@@ -1315,7 +1315,7 @@ class _DraftFormState extends State<DraftForm> {
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final attachment = pending.attachment;
-        final sizeLabel = formatBytes(attachment.sizeBytes);
+        final sizeLabel = formatBytes(attachment.sizeBytes, context.l10n);
         final colors = sheetContext.colorScheme;
         final spacing = sheetContext.spacing;
         return AxiSheetScaffold.scroll(

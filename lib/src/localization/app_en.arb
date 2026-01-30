@@ -11,6 +11,7 @@
   "homeRailShowMenu": "Show menu",
   "homeRailHideMenu": "Hide menu",
   "homeRailCalendar": "Calendar",
+  "homeSyncTooltip": "Sync now",
   "homeSearchPlaceholderTabs": "Search tabs",
   "homeSearchPlaceholderForTab": "Search {tab}",
   "@homeSearchPlaceholderForTab": {
@@ -1656,8 +1657,10 @@
   "emailContactsImportAccountRequired": "Set up email before importing contacts.",
   "emailContactsImportEmptyFile": "The selected file is empty.",
   "emailContactsImportReadFailure": "Couldn't read that file.",
+  "emailContactsImportFileTooLarge": "This file is too large to import.",
   "emailContactsImportUnsupportedFile": "Unsupported file type.",
   "emailContactsImportNoContacts": "No contacts found in that file.",
+  "emailContactsImportTooManyContacts": "This file contains too many contacts to import.",
   "emailContactsImportFailed": "Import failed.",
   "emailContactsImportSuccess": "Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.",
   "@emailContactsImportSuccess": {
@@ -1668,6 +1671,18 @@
       "failed": {}
     }
   },
+  "fanOutErrorNoRecipients": "Select at least one recipient.",
+  "fanOutErrorResolveFailed": "Couldn't resolve recipients.",
+  "fanOutErrorTooManyRecipients": "Too many recipients (max {max}).",
+  "@fanOutErrorTooManyRecipients": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "fanOutErrorEmptyMessage": "Add a message or attachment before sending.",
+  "fanOutErrorInvalidShareToken": "Share token is invalid.",
   "emailForwardingGuideTitle": "Connect existing email",
   "emailForwardingGuideSubtitle": "Forward mail from Gmail, Outlook, or any provider.",
   "emailForwardingWelcomeTitle": "Welcome to Axichat",
@@ -1686,6 +1701,26 @@
   "notificationChannelMessages": "Messages",
   "notificationNewMessageTitle": "New message",
   "notificationOpenAction": "Open notification",
+  "notificationAttachmentLabel": "Attachment",
+  "notificationAttachmentLabelWithName": "Attachment: {filename}",
+  "@notificationAttachmentLabelWithName": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationReactionFallback": "New reaction",
+  "notificationReactionLabel": "Reaction: {reaction}",
+  "@notificationReactionLabel": {
+    "placeholders": {
+      "reaction": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationWebxdcFallback": "New update",
+  "shareTokenFooterLabel": "Please do not remove:",
   "notificationBackgroundConnectionDisabledTitle": "Background connection disabled",
   "notificationBackgroundConnectionDisabledBody": "Android blocked Axichat's message service. Re-enable overlay and battery optimization permissions to restore background messaging.",
   "calendarReminderDeadlineNow": "Deadline now",
@@ -2893,5 +2928,41 @@
       "Too many attempts. Wait {seconds} seconds before trying again.",
   "signupAvatarCropTitle": "Crop & focus",
   "signupAvatarCropHint":
-      "Only the area inside the circle will appear in the final avatar."
+      "Only the area inside the circle will appear in the final avatar.",
+  "xmppOperationPubSubBookmarksStart": "Syncing bookmarks...",
+  "xmppOperationPubSubBookmarksSuccess": "Bookmarks synced",
+  "xmppOperationPubSubBookmarksFailure": "Bookmarks sync failed",
+  "xmppOperationPubSubConversationsStart": "Syncing chats list...",
+  "xmppOperationPubSubConversationsSuccess": "Chats list synced",
+  "xmppOperationPubSubConversationsFailure": "Chats list sync failed",
+  "xmppOperationPubSubDraftsStart": "Syncing drafts...",
+  "xmppOperationPubSubDraftsSuccess": "Drafts synced",
+  "xmppOperationPubSubDraftsFailure": "Drafts sync failed",
+  "xmppOperationPubSubSpamStart": "Syncing spam list...",
+  "xmppOperationPubSubSpamSuccess": "Spam list synced",
+  "xmppOperationPubSubSpamFailure": "Spam list sync failed",
+  "xmppOperationPubSubEmailBlocklistStart": "Syncing email blocklist...",
+  "xmppOperationPubSubEmailBlocklistSuccess": "Email blocklist synced",
+  "xmppOperationPubSubEmailBlocklistFailure": "Email blocklist sync failed",
+  "xmppOperationPubSubAvatarMetadataStart": "Syncing avatar details...",
+  "xmppOperationPubSubAvatarMetadataSuccess": "Avatar details synced",
+  "xmppOperationPubSubAvatarMetadataFailure": "Avatar details sync failed",
+  "xmppOperationPubSubFetchStart": "Syncing account updates...",
+  "xmppOperationPubSubFetchSuccess": "Account updates synced",
+  "xmppOperationPubSubFetchFailure": "Account updates sync failed",
+  "xmppOperationMamLoginStart": "Syncing messages...",
+  "xmppOperationMamLoginSuccess": "Messages synced",
+  "xmppOperationMamLoginFailure": "Message sync failed",
+  "xmppOperationMamGlobalStart": "Syncing full history...",
+  "xmppOperationMamGlobalSuccess": "History synced",
+  "xmppOperationMamGlobalFailure": "History sync failed",
+  "xmppOperationMamMucStart": "Syncing room history...",
+  "xmppOperationMamMucSuccess": "Room history synced",
+  "xmppOperationMamMucFailure": "Room history sync failed",
+  "xmppOperationMamFetchStart": "Fetching archived messages...",
+  "xmppOperationMamFetchSuccess": "Archive fetched",
+  "xmppOperationMamFetchFailure": "Archive fetch failed",
+  "xmppOperationMucJoinStart": "Joining room...",
+  "xmppOperationMucJoinSuccess": "Room joined",
+  "xmppOperationMucJoinFailure": "Room join failed"
 }

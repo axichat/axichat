@@ -341,7 +341,7 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
       sendMessage: ({
         required String jid,
         required CalendarSyncOutbound outbound,
-        required ChatType chatType,
+        required m.ChatType chatType,
       }) {
         return calendarBloc.sendCalendarSyncMessage(
           jid: jid,
@@ -356,7 +356,7 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
       sendMessage: ({
         required String jid,
         required CalendarAvailabilityMessage message,
-        required ChatType chatType,
+        required m.ChatType chatType,
       }) {
         return calendarBloc.sendAvailabilityMessage(
           jid: jid,
@@ -601,10 +601,6 @@ class _HomeContent extends StatelessWidget {
                       );
 
                       Widget chatLayout({required bool showChatCalendar}) {
-                        final spacing = context.spacing;
-                        final zero = spacing.xxs - spacing.xxs;
-                        final EdgeInsets secondaryPanePadding =
-                            EdgeInsets.only(left: zero);
                         final Widget content = Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -618,7 +614,6 @@ class _HomeContent extends StatelessWidget {
                                 animatePaneChanges: true,
                                 primaryAlignment: Alignment.topLeft,
                                 secondaryAlignment: Alignment.topLeft,
-                                secondaryPadding: secondaryPanePadding,
                                 primaryChild: Nexus(
                                   tabs: tabs,
                                   navPlacement: navPlacement,

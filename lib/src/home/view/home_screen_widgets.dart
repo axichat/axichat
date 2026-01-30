@@ -195,9 +195,7 @@ class _NexusScaffold extends StatelessWidget {
           },
         ),
       AppBarActionItem(
-        label: searchState.active
-            ? l10n.chatSearchClose
-            : l10n.commonSearch,
+        label: searchState.active ? l10n.chatSearchClose : l10n.commonSearch,
         iconData: LucideIcons.search,
         inline: _SearchToggleButton(
           active: searchState.active,
@@ -308,7 +306,7 @@ class _NexusTabViews extends StatelessWidget {
     final toast = showToast;
     return MultiBlocListener(
       listeners: [
-        if (context.read<RosterCubit?>() != null)
+        if (context.watch<RosterCubit?>() != null)
           BlocListener<RosterCubit, RosterState>(
             listenWhen: (previous, current) =>
                 previous.actionState != current.actionState,
@@ -566,79 +564,28 @@ class _SearchToggleButton extends StatelessWidget {
   }
 }
 
-class _DesktopHomeRefreshButton extends StatefulWidget {
+class _DesktopHomeRefreshButton extends StatelessWidget {
   const _DesktopHomeRefreshButton();
 
   @override
-  State<_DesktopHomeRefreshButton> createState() =>
-      _DesktopHomeRefreshButtonState();
-}
-
-class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _spinController;
-  bool _spinning = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final duration = context.motion.statusBannerSuccessDuration;
-    _spinController ??= AnimationController(vsync: this, duration: duration);
-    if (_spinController?.duration != duration) {
-      _spinController?.duration = duration;
-    }
-  }
-
-  @override
-  void dispose() {
-    _spinController?.dispose();
-    super.dispose();
-  }
-
-  void _setSpinning(bool spinning) {
-    if (_spinning == spinning) return;
-    _spinning = spinning;
-    final controller = _spinController;
-    if (controller == null) return;
-    if (spinning) {
-      controller.repeat();
-    } else {
-      controller
-        ..stop()
-        ..value = 0.0;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return BlocListener<ChatsCubit, ChatsState>(
-      listenWhen: (previous, current) =>
-          previous.refreshStatus != current.refreshStatus,
-      listener: (context, state) => _setSpinning(state.refreshStatus.isLoading),
-      child: BlocSelector<ChatsCubit, ChatsState, RequestStatus>(
-        selector: (state) => state.refreshStatus,
-        builder: (context, status) {
-          final spinning = status.isLoading;
-          final l10n = context.l10n;
-          return AxiIconButton.ghost(
-            iconData: LucideIcons.refreshCw,
-            tooltip: l10n.homeSyncTooltip,
-            onPressed: spinning
-                ? null
-                : () async {
-                    final chatsCubit = context.read<ChatsCubit>();
-                    await chatsCubit.refreshHomeSync();
-                  },
-            icon: RotationTransition(
-              turns: _spinController ?? const AlwaysStoppedAnimation<double>(0),
-              child: Icon(
-                LucideIcons.refreshCw,
-                color: context.colorScheme.primary,
-              ),
-            ),
-          );
-        },
-      ),
+    return BlocSelector<ChatsCubit, ChatsState, RequestStatus>(
+      selector: (state) => state.refreshStatus,
+      builder: (context, status) {
+        final isLoading = status.isLoading;
+        final l10n = context.l10n;
+        return AxiIconButton.ghost(
+          iconData: LucideIcons.refreshCw,
+          tooltip: l10n.homeSyncTooltip,
+          loading: isLoading,
+          onPressed: isLoading
+              ? null
+              : () async {
+                  final chatsCubit = context.read<ChatsCubit>();
+                  await chatsCubit.refreshHomeSync();
+                },
+        );
+      },
     );
   }
 }
@@ -1074,11 +1021,12 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                             .map(
                               (order) => ShadOption<SearchSortOrder>(
                                 value: order,
-                                child: Text(order.label),
+                                child: Text(order.label(l10n)),
                               ),
                             )
                             .toList(),
-                        selectedOptionBuilder: (_, value) => Text(value.label),
+                        selectedOptionBuilder: (_, value) =>
+                            Text(value.label(l10n)),
                       ),
                     ),
                     if (filters.length > 1 && effectiveFilterId != null) ...[

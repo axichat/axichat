@@ -292,3 +292,18 @@ class Drafts extends Table {
   TextColumn get attachmentMetadataIds =>
       text().map(ListConverter<String>()).withDefault(const Constant('[]'))();
 }
+
+@DataClassName('DraftAttachmentRef')
+class DraftAttachmentRefs extends Table {
+  IntColumn get draftId => integer().references(Drafts, #id)();
+
+  TextColumn get fileMetadataId => text().references(FileMetadata, #id)();
+
+  @override
+  Set<Column> get primaryKey => {draftId, fileMetadataId};
+
+  @override
+  List<Index> get indexes => [
+        Index('idx_draft_attachment_file', 'file_metadata_id'),
+      ];
+}

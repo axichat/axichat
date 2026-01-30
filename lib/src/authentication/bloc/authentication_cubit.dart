@@ -2578,7 +2578,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
       }
       if (error.code == provisioning.EmailProvisioningApiErrorCode.network ||
-          error.code == provisioning.EmailProvisioningApiErrorCode.unavailable) {
+          error.code ==
+              provisioning.EmailProvisioningApiErrorCode.unavailable) {
         return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
       }
       return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);

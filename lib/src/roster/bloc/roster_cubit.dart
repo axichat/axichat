@@ -46,12 +46,10 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   void updateContactsCriteria({
     required String query,
     required SearchSortOrder sort,
-    required RosterFilter filter,
   }) {
     final next = RosterViewCriteria(
       query: query.trim().toLowerCase(),
       sort: sort,
-      filter: filter,
     );
     if (next == _contactsCriteria) return;
     _contactsCriteria = next;
@@ -223,14 +221,6 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     RosterViewCriteria criteria,
   ) {
     Iterable<RosterItem> filtered = items;
-    switch (criteria.filter) {
-      case RosterFilter.online:
-        filtered = filtered.where((item) => !item.presence.isUnavailable);
-      case RosterFilter.offline:
-        filtered = filtered.where((item) => item.presence.isUnavailable);
-      case RosterFilter.all:
-        break;
-    }
 
     if (criteria.query.isNotEmpty) {
       filtered = filtered.where((item) => _matchesRosterQuery(item, criteria));

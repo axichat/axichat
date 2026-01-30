@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
@@ -50,7 +51,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         final iconSize = sizing.menuItemIconSize;
         Widget trigger;
         if (widget.compact) {
-          trigger = AxiIconButton.secondary(
+          trigger = AxiIconButton.outline(
             iconData: LucideIcons.listFilter,
             iconSize: iconSize,
             tooltip: tooltip,
@@ -60,6 +61,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
           trigger = AxiTooltip(
             builder: (_) => Text(tooltip),
             child: AxiButton.secondary(
+              size: AxiButtonSize.sm,
               onPressed: popoverController.toggle,
               leading: Icon(LucideIcons.listFilter, size: iconSize),
               child: Text(selectedFilter.label),
@@ -69,7 +71,6 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         return AxiPopover(
           controller: popoverController,
           closeOnTapOutside: true,
-          padding: EdgeInsets.zero,
           popover: (context) {
             return AxiMenu(
               actions: [

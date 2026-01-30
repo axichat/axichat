@@ -9,78 +9,23 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:logging/logging.dart';
 
-const Duration _defaultCompletedRetention = Duration(seconds: 1);
-const Duration _defaultFailedRetention = Duration(seconds: 1);
-const Duration _minimumInProgressDuration = Duration(milliseconds: 100);
-const Duration _idleCompletionDelay = Duration(milliseconds: 300);
-const int _operationIdLength = 10;
-const String _operationIdSeparator = '-';
-
-const String _pubSubBookmarksStartMessage = 'Syncing bookmarks...';
-const String _pubSubBookmarksSuccessMessage = 'Bookmarks synced';
-const String _pubSubBookmarksFailureMessage = 'Bookmarks sync failed';
-
-const String _pubSubConversationsStartMessage = 'Syncing chats list...';
-const String _pubSubConversationsSuccessMessage = 'Chats list synced';
-const String _pubSubConversationsFailureMessage = 'Chats list sync failed';
-
-const String _pubSubDraftsStartMessage = 'Syncing drafts...';
-const String _pubSubDraftsSuccessMessage = 'Drafts synced';
-const String _pubSubDraftsFailureMessage = 'Drafts sync failed';
-
-const String _pubSubSpamStartMessage = 'Syncing spam list...';
-const String _pubSubSpamSuccessMessage = 'Spam list synced';
-const String _pubSubSpamFailureMessage = 'Spam list sync failed';
-
-const String _pubSubEmailBlocklistStartMessage = 'Syncing email blocklist...';
-const String _pubSubEmailBlocklistSuccessMessage = 'Email blocklist synced';
-const String _pubSubEmailBlocklistFailureMessage =
-    'Email blocklist sync failed';
-const String _pubSubAvatarMetadataStartMessage = 'Syncing avatar details...';
-const String _pubSubAvatarMetadataSuccessMessage = 'Avatar details synced';
-const String _pubSubAvatarMetadataFailureMessage = 'Avatar details sync failed';
-const String _pubSubFetchStartMessage = 'Syncing account updates...';
-const String _pubSubFetchSuccessMessage = 'Account updates synced';
-const String _pubSubFetchFailureMessage = 'Account updates sync failed';
-
-const String _mamLoginStartMessage = 'Syncing messages...';
-const String _mamLoginSuccessMessage = 'Messages synced';
-const String _mamLoginFailureMessage = 'Message sync failed';
-
-const String _mamGlobalStartMessage = 'Syncing full history...';
-const String _mamGlobalSuccessMessage = 'History synced';
-const String _mamGlobalFailureMessage = 'History sync failed';
-
-const String _mamMucStartMessage = 'Syncing room history...';
-const String _mamMucSuccessMessage = 'Room history synced';
-const String _mamMucFailureMessage = 'Room history sync failed';
-const String _mamFetchStartMessage = 'Fetching archived messages...';
-const String _mamFetchSuccessMessage = 'Archive fetched';
-const String _mamFetchFailureMessage = 'Archive fetch failed';
-const String _mucJoinStartMessage = 'Joining room...';
-const String _mucJoinSuccessMessage = 'Room joined';
-const String _mucJoinFailureMessage = 'Room join failed';
+part 'xmpp_activity_state.dart';
 
 class XmppActivityCubit extends Cubit<XmppActivityState> {
   XmppActivityCubit({
     required XmppBase xmppBase,
-    Duration completedRetention = _defaultCompletedRetention,
-    Duration failedRetention = _defaultFailedRetention,
+    Duration completedRetention = const Duration(seconds: 1),
+    Duration failedRetention = const Duration(seconds: 1),
   })  : _xmppBase = xmppBase,
         _completedRetention = completedRetention,
         _failedRetention = failedRetention,
         super(const XmppActivityState()) {
-    _subscription = _xmppBase.xmppOperationStream.listen(
-      _handleEvent,
-      onError: (error, stackTrace) {
-        _logger.warning(
-          'Error while processing XMPP activity stream.',
-          error,
-          stackTrace,
-        );
-      },
-    );
+    _subscription = _xmppBase.xmppOperationStream.listen(_handleEvent);
   }
+
+  static const Duration _minimumInProgressDuration =
+      Duration(milliseconds: 100);
+  static const Duration _idleCompletionDelay = Duration(milliseconds: 300);
 
   final XmppBase _xmppBase;
   final Duration _completedRetention;
@@ -130,8 +75,8 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     XmppOperationKind kind,
     DateTime startedAt,
   ) {
-    final String operationId = generateRandomString(length: _operationIdLength);
-    final String id = '${kind.name}$_operationIdSeparator$operationId';
+    final String operationId = generateRandomString(length: 10);
+    final String id = '${kind.name}-$operationId';
     return _XmppOperationHandle(id: id, kind: kind, startedAt: startedAt);
   }
 
@@ -269,104 +214,6 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     await _subscription.cancel();
     return super.close();
   }
-}
-
-class XmppActivityState {
-  const XmppActivityState({this.operations = const []});
-
-  final List<XmppOperation> operations;
-
-  XmppActivityState copyWith({List<XmppOperation>? operations}) =>
-      XmppActivityState(operations: operations ?? this.operations);
-}
-
-class XmppOperation {
-  XmppOperation({
-    required this.id,
-    required this.kind,
-    required this.startedAt,
-    this.status = XmppOperationStatus.inProgress,
-  });
-
-  final String id;
-  final XmppOperationKind kind;
-  final DateTime startedAt;
-  final XmppOperationStatus status;
-
-  XmppOperation copyWith({
-    XmppOperationStatus? status,
-    DateTime? startedAt,
-  }) =>
-      XmppOperation(
-        id: id,
-        kind: kind,
-        startedAt: startedAt ?? this.startedAt,
-        status: status ?? this.status,
-      );
-
-  String statusLabel() => switch (status) {
-        XmppOperationStatus.inProgress => kind.startLabel(),
-        XmppOperationStatus.success => kind.successLabel(),
-        XmppOperationStatus.failure => kind.failureLabel(),
-      };
-}
-
-enum XmppOperationStatus { inProgress, success, failure }
-
-extension XmppOperationKindLabels on XmppOperationKind {
-  String startLabel() => switch (this) {
-        XmppOperationKind.pubSubBookmarks => _pubSubBookmarksStartMessage,
-        XmppOperationKind.pubSubConversations =>
-          _pubSubConversationsStartMessage,
-        XmppOperationKind.pubSubDrafts => _pubSubDraftsStartMessage,
-        XmppOperationKind.pubSubSpam => _pubSubSpamStartMessage,
-        XmppOperationKind.pubSubEmailBlocklist =>
-          _pubSubEmailBlocklistStartMessage,
-        XmppOperationKind.pubSubAvatarMetadata =>
-          _pubSubAvatarMetadataStartMessage,
-        XmppOperationKind.pubSubFetch => _pubSubFetchStartMessage,
-        XmppOperationKind.mamLoginSync => _mamLoginStartMessage,
-        XmppOperationKind.mamGlobalSync => _mamGlobalStartMessage,
-        XmppOperationKind.mamMucSync => _mamMucStartMessage,
-        XmppOperationKind.mamFetch => _mamFetchStartMessage,
-        XmppOperationKind.mucJoin => _mucJoinStartMessage,
-      };
-
-  String successLabel() => switch (this) {
-        XmppOperationKind.pubSubBookmarks => _pubSubBookmarksSuccessMessage,
-        XmppOperationKind.pubSubConversations =>
-          _pubSubConversationsSuccessMessage,
-        XmppOperationKind.pubSubDrafts => _pubSubDraftsSuccessMessage,
-        XmppOperationKind.pubSubSpam => _pubSubSpamSuccessMessage,
-        XmppOperationKind.pubSubEmailBlocklist =>
-          _pubSubEmailBlocklistSuccessMessage,
-        XmppOperationKind.pubSubAvatarMetadata =>
-          _pubSubAvatarMetadataSuccessMessage,
-        XmppOperationKind.pubSubFetch => _pubSubFetchSuccessMessage,
-        XmppOperationKind.mamLoginSync => _mamLoginSuccessMessage,
-        XmppOperationKind.mamGlobalSync => _mamGlobalSuccessMessage,
-        XmppOperationKind.mamMucSync => _mamMucSuccessMessage,
-        XmppOperationKind.mamFetch => _mamFetchSuccessMessage,
-        XmppOperationKind.mucJoin => _mucJoinSuccessMessage,
-      };
-
-  String failureLabel() => switch (this) {
-        XmppOperationKind.pubSubBookmarks => _pubSubBookmarksFailureMessage,
-        XmppOperationKind.pubSubConversations =>
-          _pubSubConversationsFailureMessage,
-        XmppOperationKind.pubSubDrafts => _pubSubDraftsFailureMessage,
-        XmppOperationKind.pubSubSpam => _pubSubSpamFailureMessage,
-        XmppOperationKind.pubSubEmailBlocklist =>
-          _pubSubEmailBlocklistFailureMessage,
-        XmppOperationKind.pubSubAvatarMetadata =>
-          _pubSubAvatarMetadataFailureMessage,
-        XmppOperationKind.pubSubFetch => _pubSubFetchFailureMessage,
-        XmppOperationKind.mamLoginSync => _mamLoginFailureMessage,
-        XmppOperationKind.mamGlobalSync => _mamGlobalFailureMessage,
-        XmppOperationKind.mamMucSync => _mamMucFailureMessage,
-        XmppOperationKind.mamFetch => _mamFetchFailureMessage,
-        XmppOperationKind.mucJoin => _mucJoinFailureMessage,
-      };
 }
 
 class _XmppOperationHandle {

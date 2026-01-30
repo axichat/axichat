@@ -83,6 +83,13 @@ class ChatsCubit extends Cubit<ChatsState> {
       searchSortOrder: SearchSortOrder.newestFirst,
       selectedJids: const <String>{},
     );
+    final spamVisibleItems = _deriveSpamItems(
+      items: items,
+      searchQuery: '',
+      searchActive: false,
+      searchFilter: SearchFilterId.all,
+      searchSortOrder: SearchSortOrder.newestFirst,
+    );
     return ChatsState(
       openJid: null,
       openStack: const <String>[],
@@ -96,10 +103,15 @@ class ChatsCubit extends Cubit<ChatsState> {
       searchActive: false,
       searchFilter: SearchFilterId.all,
       searchSortOrder: SearchSortOrder.newestFirst,
+      spamSearchQuery: '',
+      spamSearchActive: false,
+      spamSearchFilter: SearchFilterId.all,
+      spamSearchSortOrder: SearchSortOrder.newestFirst,
       rosterContacts: const <String>{},
       visibleItems: derived.visibleItems,
       archivedItems: derived.archivedItems,
       selectedChats: derived.selectedChats,
+      spamVisibleItems: spamVisibleItems,
     );
   }
 
@@ -130,8 +142,10 @@ class ChatsCubit extends Cubit<ChatsState> {
   void scheduleExportCleanup(File file) {
     if (file.path.trim().isEmpty) return;
     const cleanupDelay = Duration(hours: 1);
-    final timer = Timer(cleanupDelay, () async {
+    late final Timer timer;
+    timer = Timer(cleanupDelay, () async {
       await ChatHistoryExporter.cleanupExportFile(file);
+      _exportCleanupTimers.remove(timer);
     });
     _exportCleanupTimers.add(timer);
   }
@@ -167,6 +181,37 @@ class ChatsCubit extends Cubit<ChatsState> {
         visibleItems: derived.visibleItems,
         archivedItems: derived.archivedItems,
         selectedChats: derived.selectedChats,
+      ),
+    );
+  }
+
+  void updateSpamSearchSnapshot({
+    required bool active,
+    required String query,
+    required SearchFilterId? filterId,
+    required SearchSortOrder sortOrder,
+  }) {
+    final normalizedQuery = active ? query.trim() : '';
+    if (state.spamSearchActive == active &&
+        state.spamSearchQuery == normalizedQuery &&
+        state.spamSearchFilter == filterId &&
+        state.spamSearchSortOrder == sortOrder) {
+      return;
+    }
+    final spamVisibleItems = _deriveSpamItems(
+      items: state.items ?? const <Chat>[],
+      searchQuery: normalizedQuery,
+      searchActive: active,
+      searchFilter: filterId,
+      searchSortOrder: sortOrder,
+    );
+    emit(
+      state.copyWith(
+        spamSearchActive: active,
+        spamSearchQuery: normalizedQuery,
+        spamSearchFilter: filterId,
+        spamSearchSortOrder: sortOrder,
+        spamVisibleItems: spamVisibleItems,
       ),
     );
   }
@@ -216,8 +261,6 @@ class ChatsCubit extends Cubit<ChatsState> {
         SearchFilterId.hidden => chat.hidden,
         SearchFilterId.all => !chat.hidden,
         SearchFilterId.attachments => !chat.hidden,
-        SearchFilterId.online => !chat.hidden,
-        SearchFilterId.offline => !chat.hidden,
       };
     }
 
@@ -257,6 +300,46 @@ class ChatsCubit extends Cubit<ChatsState> {
     );
   }
 
+  static List<Chat> _deriveSpamItems({
+    required List<Chat> items,
+    required String searchQuery,
+    required bool searchActive,
+    required SearchFilterId? searchFilter,
+    required SearchSortOrder searchSortOrder,
+  }) {
+    final normalizedQuery =
+        searchActive ? searchQuery.trim().toLowerCase() : '';
+    bool matchesFilter(Chat chat) {
+      return switch (searchFilter ?? SearchFilterId.all) {
+        SearchFilterId.email => chat.transport.isEmail,
+        SearchFilterId.xmpp => chat.transport.isXmpp,
+        _ => true,
+      };
+    }
+
+    bool matchesQuery(Chat chat) {
+      if (normalizedQuery.isEmpty) return true;
+      return chat.title.toLowerCase().contains(normalizedQuery) ||
+          chat.jid.toLowerCase().contains(normalizedQuery);
+    }
+
+    final visibleItems = items
+        .where((chat) => chat.spam)
+        .where(matchesFilter)
+        .where(matchesQuery)
+        .toList(growable: false)
+      ..sort(
+        (a, b) {
+          final aTimestamp = a.spamUpdatedAt ?? a.lastChangeTimestamp;
+          final bTimestamp = b.spamUpdatedAt ?? b.lastChangeTimestamp;
+          return searchSortOrder.isNewestFirst
+              ? bTimestamp.compareTo(aTimestamp)
+              : aTimestamp.compareTo(bTimestamp);
+        },
+      );
+    return visibleItems;
+  }
+
   void _updateChats(List<Chat> items) {
     final availableJids = items.map((chat) => chat.jid).toSet();
     final retainedSelection =
@@ -293,6 +376,13 @@ class ChatsCubit extends Cubit<ChatsState> {
       searchSortOrder: state.searchSortOrder,
       selectedJids: retainedSelection,
     );
+    final spamVisibleItems = _deriveSpamItems(
+      items: items,
+      searchQuery: state.spamSearchQuery,
+      searchActive: state.spamSearchActive,
+      searchFilter: state.spamSearchFilter,
+      searchSortOrder: state.spamSearchSortOrder,
+    );
     emit(
       state.copyWith(
         openStack: seededStack,
@@ -305,6 +395,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         visibleItems: derived.visibleItems,
         archivedItems: derived.archivedItems,
         selectedChats: derived.selectedChats,
+        spamVisibleItems: spamVisibleItems,
       ),
     );
   }
@@ -487,6 +578,32 @@ class ChatsCubit extends Cubit<ChatsState> {
       await _chatsService.closeChat();
     }
     await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
+  }
+
+  Future<bool?> moveSpamToInbox({required Chat chat}) async {
+    final jid = chat.jid;
+    if (state.spamUpdatingJids.contains(jid)) {
+      return null;
+    }
+    emit(
+      state.copyWith(
+        spamUpdatingJids: {...state.spamUpdatingJids, jid},
+      ),
+    );
+    bool success = false;
+    try {
+      await _xmppService.setSpamStatus(jid: jid, spam: false);
+      success = true;
+    } on XmppException {
+      success = false;
+    } finally {
+      emit(
+        state.copyWith(
+          spamUpdatingJids: {...state.spamUpdatingJids}..remove(jid),
+        ),
+      );
+    }
+    return success;
   }
 
   Future<List<Message>> loadChatHistory(String jid) {

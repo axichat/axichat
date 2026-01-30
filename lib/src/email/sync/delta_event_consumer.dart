@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
@@ -18,6 +19,7 @@ import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -34,15 +36,12 @@ const int _emptyUnreadCount = 0;
 const int _minimumHistoryWindow = 1;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _deltaAttachmentFallbackPrefix = 'attachment-';
-const String _deltaAttachmentLabelPrefix = '📎 ';
-const String _unknownAttachmentSizeLabel = 'Unknown size';
 const String _emptyJid = '';
 const String _emptyHtml = '';
 const String _originIdHydrationFailedLog = 'Failed to hydrate Delta origin ID.';
 const int _emailChatInitialTimestampMillis = 0;
 const int _attachmentSizeUnitBase = 1024;
 const double _attachmentSizePrecisionThreshold = 10;
-const List<String> _attachmentSizeUnits = <String>['B', 'KB', 'MB', 'GB', 'TB'];
 const int _originIdHydrationDelayMs = 1000;
 const int _originIdHydrationMaxAttempts = 60;
 const int _originIdHydrationAttemptStart = 0;
@@ -50,6 +49,7 @@ const int _originIdHydrationAttemptStep = 1;
 const Duration _originIdHydrationDelay = Duration(
   milliseconds: _originIdHydrationDelayMs,
 );
+const Duration _archivedChatlistCacheTtl = Duration(seconds: 5);
 const String _messageUpdateDiffLogPrefix = 'Message update diff';
 const String _messageUpdateDiffSeparator = ', ';
 const String _messageUpdateDiffUnknown = 'unknown';
@@ -309,12 +309,14 @@ class DeltaEventConsumer {
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
     AttachmentAutoDownload defaultChatAttachmentAutoDownload =
         AttachmentAutoDownload.blocked,
+    AppLocalizations Function()? localizationsProvider,
     String? Function()? selfJidProvider,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
         _defaultChatAttachmentAutoDownload = defaultChatAttachmentAutoDownload,
+        _localizationsProvider = localizationsProvider,
         _selfJidProvider = selfJidProvider,
         _log = logger ?? Logger('DeltaEventConsumer');
 
@@ -322,8 +324,17 @@ class DeltaEventConsumer {
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
   AttachmentAutoDownload _defaultChatAttachmentAutoDownload;
+  final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _selfJidProvider;
   final Logger _log;
+  Future<void>? _chatlistRefreshInFlight;
+  Future<Set<int>>? _archivedChatlistInFlight;
+  DateTime? _archivedChatlistFetchedAt;
+  final Set<int> _archivedChatIds = <int>{};
+
+  AppLocalizations get _l10n =>
+      _localizationsProvider?.call() ??
+      lookupAppLocalizations(const Locale('en'));
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
@@ -458,6 +469,23 @@ class DeltaEventConsumer {
   }
 
   Future<void> refreshChatlistSnapshot() async {
+    final inFlight = _chatlistRefreshInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _refreshChatlistSnapshotInternal();
+    _chatlistRefreshInFlight = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_chatlistRefreshInFlight, future)) {
+        _chatlistRefreshInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _refreshChatlistSnapshotInternal() async {
     final int deltaAccountId = _deltaAccountId;
     final chatlist = await _context.getChatlist();
     final archivedChatlist = await _context.getChatlist(
@@ -471,6 +499,8 @@ class DeltaEventConsumer {
         .where((entry) => entry.chatId > _deltaChatLastSpecialId)
         .map((entry) => entry.chatId)
         .toSet();
+    _archivedChatIds = archivedChatIds;
+    _archivedChatlistFetchedAt = DateTime.timestamp();
 
     final entriesByChatId = <int, DeltaChatlistEntry>{};
     void register(Iterable<DeltaChatlistEntry> entries) {
@@ -524,20 +554,29 @@ class DeltaEventConsumer {
       DateTime? lastTimestamp;
       String? lastPreview;
       if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
-        final last = await _context.getMessage(entry.msgId);
-        lastTimestamp = last?.timestamp;
-        lastPreview = _previewTextForDeltaMessage(last);
-        if (last != null) {
-          final stanzaId = _stanzaId(entry.msgId);
-          final existing = await db.getMessageByStanzaID(stanzaId);
-          if (existing == null) {
-            await _ingestDeltaMessage(
-              chatId: chatId,
-              msg: last,
-              chat: updated,
-              skipSystemChatCheck: true,
-            );
-            hydratedLastMessage = true;
+        final existing = await db.getMessageByDeltaId(
+          entry.msgId,
+          deltaAccountId: deltaAccountId,
+        );
+        if (existing != null) {
+          lastTimestamp = existing.timestamp;
+          lastPreview = existing.body;
+        } else {
+          final last = await _context.getMessage(entry.msgId);
+          lastTimestamp = last?.timestamp;
+          lastPreview = _previewTextForDeltaMessage(last);
+          if (last != null) {
+            final stanzaId = _stanzaId(entry.msgId);
+            final stored = await db.getMessageByStanzaID(stanzaId);
+            if (stored == null) {
+              await _ingestDeltaMessage(
+                chatId: chatId,
+                msg: last,
+                chat: updated,
+                skipSystemChatCheck: true,
+              );
+              hydratedLastMessage = true;
+            }
           }
         }
       }
@@ -815,25 +854,24 @@ class DeltaEventConsumer {
   }
 
   Future<void> _updateUnreadCount(int chatId) async {
-    final supportsFreshMessages = await _context.probeFreshMessagesSupport();
-    if (!supportsFreshMessages) {
-      return;
-    }
     final db = await _db();
     final chat = await db.getChatByDeltaChatId(
       chatId,
       accountId: _deltaAccountId,
     );
     if (chat == null) return;
+    final freshCount = await _context.getFreshMessageCountSafe(chatId);
+    if (!freshCount.supported) {
+      return;
+    }
     if (chat.open) {
       if (chat.unreadCount != _emptyUnreadCount) {
         await db.updateChat(chat.copyWith(unreadCount: _emptyUnreadCount));
       }
       return;
     }
-    final freshCount = await _context.getFreshMessageCount(chatId);
-    if (freshCount != chat.unreadCount) {
-      await db.updateChat(chat.copyWith(unreadCount: freshCount));
+    if (freshCount.count != chat.unreadCount) {
+      await db.updateChat(chat.copyWith(unreadCount: freshCount.count));
     }
   }
 
@@ -877,24 +915,24 @@ class DeltaEventConsumer {
       return;
     }
     final visibleIdSet = visibleIds.toSet();
-    final localMessages = await db.getAllMessagesForChat(chat.jid);
-    final localDeltaMessages = localMessages
-        .where((message) => message.deltaMsgId != null)
-        .toList(growable: false);
-    final localDeltaIds =
-        localDeltaMessages.map((message) => message.deltaMsgId!).toSet();
-    var processed = 0;
-    for (final message in localDeltaMessages) {
-      final deltaId = message.deltaMsgId!;
-      if (visibleIdSet.contains(deltaId)) {
+    final snapshots = await db.getMessageDeltaSnapshot(chat.jid);
+    final localDeltaIds = <int>{};
+    final staleStanzaIds = <String>[];
+    for (final snapshot in snapshots) {
+      final deltaId = snapshot.deltaMsgId;
+      if (deltaId == null) {
         continue;
       }
-      await db.deleteMessage(message.stanzaID);
-      processed += 1;
-      if (processed % _bootstrapYieldEveryMessages == 0) {
-        await Future<void>.delayed(Duration.zero);
+      if (visibleIdSet.contains(deltaId)) {
+        localDeltaIds.add(deltaId);
+      } else {
+        staleStanzaIds.add(snapshot.stanzaId);
       }
     }
+    if (staleStanzaIds.isNotEmpty) {
+      await db.deleteMessagesByStanzaIds(staleStanzaIds);
+    }
+    var processed = 0;
     for (final deltaId in visibleIds) {
       if (localDeltaIds.contains(deltaId)) {
         continue;
@@ -1425,7 +1463,7 @@ class DeltaEventConsumer {
         delta: message,
         metadataId: metadataId,
       );
-      return deltaAttachmentLabel(metadata);
+      return _attachmentLabel(metadata);
     }
     return null;
   }
@@ -1550,13 +1588,46 @@ class DeltaEventConsumer {
       accountId: _deltaAccountId,
     );
     if (chat == null) return;
-    final archivedChatlist = await _context.getChatlist(
-      flags: _deltaChatlistArchivedOnlyFlag,
-    );
-    final isArchived = archivedChatlist.any((entry) => entry.chatId == chatId);
+    final archivedChatIds = await _resolveArchivedChatIds();
+    final isArchived = archivedChatIds.contains(chatId);
     if (chat.archived != isArchived) {
       await db.updateChat(chat.copyWith(archived: isArchived));
     }
+  }
+
+  Future<Set<int>> _resolveArchivedChatIds() async {
+    final fetchedAt = _archivedChatlistFetchedAt;
+    if (fetchedAt != null &&
+        DateTime.timestamp().difference(fetchedAt) <
+            _archivedChatlistCacheTtl) {
+      return _archivedChatIds;
+    }
+    final inFlight = _archivedChatlistInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final future = _loadArchivedChatIds();
+    _archivedChatlistInFlight = future;
+    try {
+      final ids = await future;
+      _archivedChatIds = ids;
+      _archivedChatlistFetchedAt = DateTime.timestamp();
+      return ids;
+    } finally {
+      if (identical(_archivedChatlistInFlight, future)) {
+        _archivedChatlistInFlight = null;
+      }
+    }
+  }
+
+  Future<Set<int>> _loadArchivedChatIds() async {
+    final archivedChatlist = await _context.getChatlist(
+      flags: _deltaChatlistArchivedOnlyFlag,
+    );
+    return archivedChatlist
+        .where((entry) => entry.chatId > _deltaChatLastSpecialId)
+        .map((entry) => entry.chatId)
+        .toSet();
   }
 
   Future<void> _updateChatTimestamp({
@@ -1661,7 +1732,7 @@ class DeltaEventConsumer {
     final normalizedBody = next.body?.trim() ?? '';
     if (normalizedBody.isEmpty) {
       next = next.copyWith(
-        body: deltaAttachmentLabel(merged ?? resolvedMetadata),
+        body: _attachmentLabel(merged ?? resolvedMetadata),
       );
     }
     return next;
@@ -1717,6 +1788,45 @@ class DeltaEventConsumer {
       fallbackPath: fallbackPath,
       fallbackName: fallbackName,
     );
+  }
+
+  String _attachmentLabel(FileMetadataData metadata) {
+    final filename = metadata.filename.trim();
+    final label =
+        filename.isEmpty ? _l10n.chatAttachmentFallbackLabel : filename;
+    final sizeLabel = _formatAttachmentBytes(metadata.sizeBytes);
+    return _l10n.chatAttachmentCaption(label, sizeLabel);
+  }
+
+  String _formatAttachmentBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) {
+      return _l10n.chatAttachmentUnknownSize;
+    }
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= _attachmentSizeUnitBase && unitIndex < 4) {
+      value /= _attachmentSizeUnitBase;
+      unitIndex++;
+    }
+    final precision =
+        value >= _attachmentSizePrecisionThreshold || unitIndex == 0 ? 0 : 1;
+    final unitLabel = _attachmentUnitLabel(unitIndex);
+    return '${value.toStringAsFixed(precision)} $unitLabel';
+  }
+
+  String _attachmentUnitLabel(int unitIndex) {
+    switch (unitIndex) {
+      case 0:
+        return _l10n.commonFileSizeUnitBytes;
+      case 1:
+        return _l10n.commonFileSizeUnitKilobytes;
+      case 2:
+        return _l10n.commonFileSizeUnitMegabytes;
+      case 3:
+        return _l10n.commonFileSizeUnitGigabytes;
+      default:
+        return _l10n.commonFileSizeUnitTerabytes;
+    }
   }
 
   Future<Message> _applyShareMetadata({
@@ -1841,28 +1951,6 @@ String _stripSubjectHeader(String body, String subject) {
   var remainder = trimmedBody.substring(subject.length);
   remainder = remainder.replaceFirst(RegExp(r'^\s+'), '');
   return remainder;
-}
-
-String deltaAttachmentLabel(FileMetadataData metadata) {
-  final sizeBytes = metadata.sizeBytes;
-  final label = metadata.filename.trim();
-  if (sizeBytes == null) return '$_deltaAttachmentLabelPrefix$label';
-  final sizeLabel = _formatAttachmentBytes(sizeBytes);
-  return '$_deltaAttachmentLabelPrefix$label ($sizeLabel)';
-}
-
-String _formatAttachmentBytes(int bytes) {
-  if (bytes <= 0) return _unknownAttachmentSizeLabel;
-  var value = bytes.toDouble();
-  var unitIndex = 0;
-  while (value >= _attachmentSizeUnitBase &&
-      unitIndex < _attachmentSizeUnits.length - 1) {
-    value /= _attachmentSizeUnitBase;
-    unitIndex++;
-  }
-  final precision =
-      value >= _attachmentSizePrecisionThreshold || unitIndex == 0 ? 0 : 1;
-  return '${value.toStringAsFixed(precision)} ${_attachmentSizeUnits[unitIndex]}';
 }
 
 bool _matchesDeltaWelcomeText(String? text) {

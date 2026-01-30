@@ -705,15 +705,43 @@ class XmppService extends XmppBase
       return null;
     }
     if (_notificationPayloadCacheReady) {
-      final cached = _notificationPayloadCache[trimmed] ??
-          _notificationPayloadLowerCache[trimmed.toLowerCase()];
+      final cached = _resolveCachedNotificationPayload(trimmed);
       if (cached != null) {
-        return cached;
+        if (await _chatExists(cached)) {
+          return cached;
+        }
+        _invalidateNotificationPayloadCache();
       }
     }
     await _refreshNotificationPayloadCache();
-    return _notificationPayloadCache[trimmed] ??
-        _notificationPayloadLowerCache[trimmed.toLowerCase()];
+    final resolved = _resolveCachedNotificationPayload(trimmed);
+    if (resolved == null) {
+      return null;
+    }
+    if (await _chatExists(resolved)) {
+      return resolved;
+    }
+    _invalidateNotificationPayloadCache();
+    return null;
+  }
+
+  String? _resolveCachedNotificationPayload(String payload) {
+    final cached = _notificationPayloadCache[payload];
+    if (cached != null) {
+      return cached;
+    }
+    return _notificationPayloadLowerCache[payload.toLowerCase()];
+  }
+
+  void _invalidateNotificationPayloadCache() {
+    _notificationPayloadCache.clear();
+    _notificationPayloadLowerCache.clear();
+    _notificationPayloadCacheReady = false;
+  }
+
+  Future<bool> _chatExists(String jid) async {
+    final db = await database;
+    return (await db.getChat(jid)) != null;
   }
 
   Future<void> _refreshNotificationPayloadCache() {

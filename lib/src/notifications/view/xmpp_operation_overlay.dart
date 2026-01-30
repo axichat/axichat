@@ -5,6 +5,8 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +22,7 @@ class XmppOperationOverlay extends StatefulWidget {
 class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   final List<_ToastEntry> _entries = <_ToastEntry>[];
   final Map<String, Timer> _exitTimers = <String, Timer>{};
+  final Map<String, Timer> _removalTimers = <String, Timer>{};
 
   @override
   void initState() {
@@ -33,6 +36,10 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       timer.cancel();
     }
     _exitTimers.clear();
+    for (final timer in _removalTimers.values) {
+      timer.cancel();
+    }
+    _removalTimers.clear();
     super.dispose();
   }
 
@@ -62,6 +69,10 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         shouldRebuild = true;
         if (updated.status == XmppOperationStatus.inProgress) {
           _cancelExitTimer(updated.id);
+          _cancelRemovalTimer(updated.id);
+          if (!entry.isVisible) {
+            entry.isVisible = true;
+          }
         } else {
           _ensureExitScheduled(updated.id);
         }
@@ -69,8 +80,9 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     }
 
     for (final id in removalQueue) {
-      _removeEntry(id);
-      shouldRebuild = true;
+      if (_startExitNow(id)) {
+        shouldRebuild = true;
+      }
     }
 
     for (final operation in coalesced) {
@@ -98,8 +110,14 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   void _scheduleExit(String id, Duration delay) {
     _cancelExitTimer(id);
     _exitTimers[id] = Timer(delay, () {
-      if (!mounted) return;
-      _removeEntry(id);
+      if (!mounted) {
+        return;
+      }
+      final changed = _setEntryVisibility(id, false);
+      if (changed) {
+        setState(() {});
+      }
+      _scheduleRemoval(id);
     });
   }
 
@@ -115,8 +133,47 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     timer?.cancel();
   }
 
+  void _cancelRemovalTimer(String id) {
+    final Timer? timer = _removalTimers.remove(id);
+    timer?.cancel();
+  }
+
+  bool _startExitNow(String id) {
+    _cancelExitTimer(id);
+    _cancelRemovalTimer(id);
+    final changed = _setEntryVisibility(id, false);
+    _scheduleRemoval(id);
+    return changed;
+  }
+
+  void _scheduleRemoval(String id) {
+    _cancelRemovalTimer(id);
+    final animationDuration = context.motion.statusBannerSuccessDuration;
+    _removalTimers[id] = Timer(animationDuration, () {
+      if (!mounted) {
+        return;
+      }
+      _removeEntry(id);
+      setState(() {});
+    });
+  }
+
+  bool _setEntryVisibility(String id, bool isVisible) {
+    for (final entry in _entries) {
+      if (entry.operation.id == id) {
+        if (entry.isVisible == isVisible) {
+          return false;
+        }
+        entry.isVisible = isVisible;
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _removeEntry(String id) {
     _cancelExitTimer(id);
+    _cancelRemovalTimer(id);
     _entries.removeWhere((entry) => entry.operation.id == id);
   }
 
@@ -149,13 +206,20 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
                 itemCount: _entries.length,
                 itemBuilder: (context, index) {
                   final _ToastEntry entry = _entries[index];
+                  final animationDuration =
+                      context.motion.statusBannerSuccessDuration;
                   return Padding(
                     padding: EdgeInsets.only(bottom: context.spacing.s),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: InBoundsFadeScale(
+                      child: _AnimatedToast(
                         key: ValueKey(entry.operation.id),
-                        child: _XmppOperationToast(operation: entry.operation),
+                        isVisible: entry.isVisible,
+                        duration: animationDuration,
+                        child: InBoundsFadeScale(
+                          child:
+                              _XmppOperationToast(operation: entry.operation),
+                        ),
                       ),
                     ),
                   );
@@ -217,6 +281,8 @@ class _XmppOperationToast extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
+    final l10n = context.l10n;
+    final statusLabel = _resolveOperationLabel(l10n, operation.labelKey);
     final isFailure = operation.status == XmppOperationStatus.failure;
     final surfaceColor = isFailure ? colorScheme.destructive : colorScheme.card;
     final textColor =
@@ -236,7 +302,7 @@ class _XmppOperationToast extends StatelessWidget {
             SizedBox(width: context.spacing.s),
             Flexible(
               child: Text(
-                operation.statusLabel(),
+                statusLabel,
                 style: context.textTheme.p.copyWith(
                   color: textColor,
                 ),
@@ -276,7 +342,108 @@ class _OperationStatusIcon extends StatelessWidget {
 }
 
 class _ToastEntry {
-  _ToastEntry({required this.operation});
+  _ToastEntry({required this.operation}) : isVisible = true;
 
   XmppOperation operation;
+  bool isVisible;
+}
+
+class _AnimatedToast extends StatelessWidget {
+  const _AnimatedToast({
+    required this.isVisible,
+    required this.duration,
+    required this.child,
+    super.key,
+  });
+
+  final bool isVisible;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: duration,
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topLeft,
+      child: AnimatedSlide(
+        offset:
+            isVisible ? Offset.zero : context.motion.statusBannerSlideOffset,
+        duration: duration,
+        curve: Curves.easeInOutCubic,
+        child: AnimatedOpacity(
+          opacity: isVisible ? 1 : 0,
+          duration: duration,
+          curve: Curves.easeInOutCubic,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+String _resolveOperationLabel(
+  AppLocalizations l10n,
+  XmppOperationLabelKey labelKey,
+) {
+  return switch (labelKey) {
+    XmppOperationLabelKey.pubSubBookmarksStart =>
+      l10n.xmppOperationPubSubBookmarksStart,
+    XmppOperationLabelKey.pubSubBookmarksSuccess =>
+      l10n.xmppOperationPubSubBookmarksSuccess,
+    XmppOperationLabelKey.pubSubBookmarksFailure =>
+      l10n.xmppOperationPubSubBookmarksFailure,
+    XmppOperationLabelKey.pubSubConversationsStart =>
+      l10n.xmppOperationPubSubConversationsStart,
+    XmppOperationLabelKey.pubSubConversationsSuccess =>
+      l10n.xmppOperationPubSubConversationsSuccess,
+    XmppOperationLabelKey.pubSubConversationsFailure =>
+      l10n.xmppOperationPubSubConversationsFailure,
+    XmppOperationLabelKey.pubSubDraftsStart =>
+      l10n.xmppOperationPubSubDraftsStart,
+    XmppOperationLabelKey.pubSubDraftsSuccess =>
+      l10n.xmppOperationPubSubDraftsSuccess,
+    XmppOperationLabelKey.pubSubDraftsFailure =>
+      l10n.xmppOperationPubSubDraftsFailure,
+    XmppOperationLabelKey.pubSubSpamStart => l10n.xmppOperationPubSubSpamStart,
+    XmppOperationLabelKey.pubSubSpamSuccess =>
+      l10n.xmppOperationPubSubSpamSuccess,
+    XmppOperationLabelKey.pubSubSpamFailure =>
+      l10n.xmppOperationPubSubSpamFailure,
+    XmppOperationLabelKey.pubSubEmailBlocklistStart =>
+      l10n.xmppOperationPubSubEmailBlocklistStart,
+    XmppOperationLabelKey.pubSubEmailBlocklistSuccess =>
+      l10n.xmppOperationPubSubEmailBlocklistSuccess,
+    XmppOperationLabelKey.pubSubEmailBlocklistFailure =>
+      l10n.xmppOperationPubSubEmailBlocklistFailure,
+    XmppOperationLabelKey.pubSubAvatarMetadataStart =>
+      l10n.xmppOperationPubSubAvatarMetadataStart,
+    XmppOperationLabelKey.pubSubAvatarMetadataSuccess =>
+      l10n.xmppOperationPubSubAvatarMetadataSuccess,
+    XmppOperationLabelKey.pubSubAvatarMetadataFailure =>
+      l10n.xmppOperationPubSubAvatarMetadataFailure,
+    XmppOperationLabelKey.pubSubFetchStart =>
+      l10n.xmppOperationPubSubFetchStart,
+    XmppOperationLabelKey.pubSubFetchSuccess =>
+      l10n.xmppOperationPubSubFetchSuccess,
+    XmppOperationLabelKey.pubSubFetchFailure =>
+      l10n.xmppOperationPubSubFetchFailure,
+    XmppOperationLabelKey.mamLoginStart => l10n.xmppOperationMamLoginStart,
+    XmppOperationLabelKey.mamLoginSuccess => l10n.xmppOperationMamLoginSuccess,
+    XmppOperationLabelKey.mamLoginFailure => l10n.xmppOperationMamLoginFailure,
+    XmppOperationLabelKey.mamGlobalStart => l10n.xmppOperationMamGlobalStart,
+    XmppOperationLabelKey.mamGlobalSuccess =>
+      l10n.xmppOperationMamGlobalSuccess,
+    XmppOperationLabelKey.mamGlobalFailure =>
+      l10n.xmppOperationMamGlobalFailure,
+    XmppOperationLabelKey.mamMucStart => l10n.xmppOperationMamMucStart,
+    XmppOperationLabelKey.mamMucSuccess => l10n.xmppOperationMamMucSuccess,
+    XmppOperationLabelKey.mamMucFailure => l10n.xmppOperationMamMucFailure,
+    XmppOperationLabelKey.mamFetchStart => l10n.xmppOperationMamFetchStart,
+    XmppOperationLabelKey.mamFetchSuccess => l10n.xmppOperationMamFetchSuccess,
+    XmppOperationLabelKey.mamFetchFailure => l10n.xmppOperationMamFetchFailure,
+    XmppOperationLabelKey.mucJoinStart => l10n.xmppOperationMucJoinStart,
+    XmppOperationLabelKey.mucJoinSuccess => l10n.xmppOperationMucJoinSuccess,
+    XmppOperationLabelKey.mucJoinFailure => l10n.xmppOperationMucJoinFailure,
+  };
 }

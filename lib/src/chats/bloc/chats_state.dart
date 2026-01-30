@@ -21,9 +21,15 @@ class ChatsState with _$ChatsState {
     @Default(false) bool searchActive,
     SearchFilterId? searchFilter,
     @Default(SearchSortOrder.newestFirst) SearchSortOrder searchSortOrder,
+    @Default('') String spamSearchQuery,
+    @Default(false) bool spamSearchActive,
+    SearchFilterId? spamSearchFilter,
+    @Default(SearchSortOrder.newestFirst) SearchSortOrder spamSearchSortOrder,
     @Default(<String>{}) Set<String> rosterContacts,
     @Default(<Chat>[]) List<Chat> visibleItems,
     @Default(<Chat>[]) List<Chat> archivedItems,
     @Default(<Chat>[]) List<Chat> selectedChats,
+    @Default(<Chat>[]) List<Chat> spamVisibleItems,
+    @Default(<String>{}) Set<String> spamUpdatingJids,
   }) = _ChatsState;
 }

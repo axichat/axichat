@@ -66,7 +66,7 @@ final class EmailAttachmentBundler {
     var index = _bundleFileIndexStart;
     final files = <Map<String, String>>[];
     for (final attachment in attachmentList) {
-      final entityType = FileSystemEntity.typeSync(
+      final entityType = await FileSystemEntity.type(
         attachment.path,
         followLinks: false,
       );
@@ -109,13 +109,15 @@ final class EmailAttachmentBundler {
     await Isolate.run(() => _writeBundle(payload));
     final zipFile = File(zipPath);
     final sizeBytes = await zipFile.length();
-    return EmailAttachment(
+    final attachment = EmailAttachment(
       path: zipFile.path,
       fileName: zipName,
       sizeBytes: sizeBytes,
       mimeType: emailAttachmentBundleMimeType,
       caption: caption,
     );
+    EmailAttachmentBundler.scheduleCleanup(attachment);
+    return attachment;
   }
 
   static void scheduleCleanup(EmailAttachment attachment) {

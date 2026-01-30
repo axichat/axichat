@@ -36,6 +36,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeRailCalendar => '日历';
 
   @override
+  String get homeSyncTooltip => '立即同步';
+
+  @override
   String get homeSearchPlaceholderTabs => '搜索标签页';
 
   @override
@@ -1828,6 +1831,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAboutAxichat => 'About Axichat';
+
+  @override
+  String get settingsAboutLegalese =>
+      'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
   @override
   String get settingsTermsLabel => 'Terms';
@@ -3630,10 +3637,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailContactsImportReadFailure => 'Couldn\'t read that file.';
 
   @override
+  String get emailContactsImportFileTooLarge =>
+      'This file is too large to import.';
+
+  @override
   String get emailContactsImportUnsupportedFile => 'Unsupported file type.';
 
   @override
   String get emailContactsImportNoContacts => 'No contacts found in that file.';
+
+  @override
+  String get emailContactsImportTooManyContacts =>
+      'This file contains too many contacts to import.';
 
   @override
   String get emailContactsImportFailed => 'Import failed.';
@@ -3643,6 +3658,24 @@ class AppLocalizationsZh extends AppLocalizations {
       Object imported, Object duplicates, Object invalid, Object failed) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
+
+  @override
+  String get fanOutErrorNoRecipients => 'Select at least one recipient.';
+
+  @override
+  String get fanOutErrorResolveFailed => 'Couldn\'t resolve recipients.';
+
+  @override
+  String fanOutErrorTooManyRecipients(int max) {
+    return 'Too many recipients (max $max).';
+  }
+
+  @override
+  String get fanOutErrorEmptyMessage =>
+      'Add a message or attachment before sending.';
+
+  @override
+  String get fanOutErrorInvalidShareToken => 'Share token is invalid.';
 
   @override
   String get emailForwardingGuideTitle => '连接现有邮箱';
@@ -3698,6 +3731,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationOpenAction => '打开通知';
+
+  @override
+  String get notificationAttachmentLabel => 'Attachment';
+
+  @override
+  String notificationAttachmentLabelWithName(String filename) {
+    return 'Attachment: $filename';
+  }
+
+  @override
+  String get notificationReactionFallback => 'New reaction';
+
+  @override
+  String notificationReactionLabel(String reaction) {
+    return 'Reaction: $reaction';
+  }
+
+  @override
+  String get notificationWebxdcFallback => 'New update';
+
+  @override
+  String get shareTokenFooterLabel => 'Please do not remove:';
 
   @override
   String get notificationBackgroundConnectionDisabledTitle => '后台连接已禁用';
@@ -5494,6 +5549,121 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get signupAvatarCropHint =>
       'Only the area inside the circle will appear in the final avatar.';
+
+  @override
+  String get xmppOperationPubSubBookmarksStart => 'Syncing bookmarks...';
+
+  @override
+  String get xmppOperationPubSubBookmarksSuccess => 'Bookmarks synced';
+
+  @override
+  String get xmppOperationPubSubBookmarksFailure => 'Bookmarks sync failed';
+
+  @override
+  String get xmppOperationPubSubConversationsStart => 'Syncing chats list...';
+
+  @override
+  String get xmppOperationPubSubConversationsSuccess => 'Chats list synced';
+
+  @override
+  String get xmppOperationPubSubConversationsFailure =>
+      'Chats list sync failed';
+
+  @override
+  String get xmppOperationPubSubDraftsStart => 'Syncing drafts...';
+
+  @override
+  String get xmppOperationPubSubDraftsSuccess => 'Drafts synced';
+
+  @override
+  String get xmppOperationPubSubDraftsFailure => 'Drafts sync failed';
+
+  @override
+  String get xmppOperationPubSubSpamStart => 'Syncing spam list...';
+
+  @override
+  String get xmppOperationPubSubSpamSuccess => 'Spam list synced';
+
+  @override
+  String get xmppOperationPubSubSpamFailure => 'Spam list sync failed';
+
+  @override
+  String get xmppOperationPubSubEmailBlocklistStart =>
+      'Syncing email blocklist...';
+
+  @override
+  String get xmppOperationPubSubEmailBlocklistSuccess =>
+      'Email blocklist synced';
+
+  @override
+  String get xmppOperationPubSubEmailBlocklistFailure =>
+      'Email blocklist sync failed';
+
+  @override
+  String get xmppOperationPubSubAvatarMetadataStart =>
+      'Syncing avatar details...';
+
+  @override
+  String get xmppOperationPubSubAvatarMetadataSuccess =>
+      'Avatar details synced';
+
+  @override
+  String get xmppOperationPubSubAvatarMetadataFailure =>
+      'Avatar details sync failed';
+
+  @override
+  String get xmppOperationPubSubFetchStart => 'Syncing account updates...';
+
+  @override
+  String get xmppOperationPubSubFetchSuccess => 'Account updates synced';
+
+  @override
+  String get xmppOperationPubSubFetchFailure => 'Account updates sync failed';
+
+  @override
+  String get xmppOperationMamLoginStart => 'Syncing messages...';
+
+  @override
+  String get xmppOperationMamLoginSuccess => 'Messages synced';
+
+  @override
+  String get xmppOperationMamLoginFailure => 'Message sync failed';
+
+  @override
+  String get xmppOperationMamGlobalStart => 'Syncing full history...';
+
+  @override
+  String get xmppOperationMamGlobalSuccess => 'History synced';
+
+  @override
+  String get xmppOperationMamGlobalFailure => 'History sync failed';
+
+  @override
+  String get xmppOperationMamMucStart => 'Syncing room history...';
+
+  @override
+  String get xmppOperationMamMucSuccess => 'Room history synced';
+
+  @override
+  String get xmppOperationMamMucFailure => 'Room history sync failed';
+
+  @override
+  String get xmppOperationMamFetchStart => 'Fetching archived messages...';
+
+  @override
+  String get xmppOperationMamFetchSuccess => 'Archive fetched';
+
+  @override
+  String get xmppOperationMamFetchFailure => 'Archive fetch failed';
+
+  @override
+  String get xmppOperationMucJoinStart => 'Joining room...';
+
+  @override
+  String get xmppOperationMucJoinSuccess => 'Room joined';
+
+  @override
+  String get xmppOperationMucJoinFailure => 'Room join failed';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -5526,6 +5696,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get homeRailCalendar => '日曆';
+
+  @override
+  String get homeSyncTooltip => '立即同步';
 
   @override
   String get homeSearchPlaceholderTabs => '搜尋分頁';
@@ -7320,6 +7493,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsAboutAxichat => 'About Axichat';
+
+  @override
+  String get settingsAboutLegalese =>
+      'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
   @override
   String get settingsTermsLabel => 'Terms';
@@ -9122,10 +9299,18 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get emailContactsImportReadFailure => 'Couldn\'t read that file.';
 
   @override
+  String get emailContactsImportFileTooLarge =>
+      'This file is too large to import.';
+
+  @override
   String get emailContactsImportUnsupportedFile => 'Unsupported file type.';
 
   @override
   String get emailContactsImportNoContacts => 'No contacts found in that file.';
+
+  @override
+  String get emailContactsImportTooManyContacts =>
+      'This file contains too many contacts to import.';
 
   @override
   String get emailContactsImportFailed => 'Import failed.';
@@ -9135,6 +9320,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       Object imported, Object duplicates, Object invalid, Object failed) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
+
+  @override
+  String get fanOutErrorNoRecipients => 'Select at least one recipient.';
+
+  @override
+  String get fanOutErrorResolveFailed => 'Couldn\'t resolve recipients.';
+
+  @override
+  String fanOutErrorTooManyRecipients(int max) {
+    return 'Too many recipients (max $max).';
+  }
+
+  @override
+  String get fanOutErrorEmptyMessage =>
+      'Add a message or attachment before sending.';
+
+  @override
+  String get fanOutErrorInvalidShareToken => 'Share token is invalid.';
 
   @override
   String get emailForwardingGuideTitle => '連結現有電郵';
@@ -9190,6 +9393,28 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get notificationOpenAction => '開啟通知';
+
+  @override
+  String get notificationAttachmentLabel => 'Attachment';
+
+  @override
+  String notificationAttachmentLabelWithName(String filename) {
+    return 'Attachment: $filename';
+  }
+
+  @override
+  String get notificationReactionFallback => 'New reaction';
+
+  @override
+  String notificationReactionLabel(String reaction) {
+    return 'Reaction: $reaction';
+  }
+
+  @override
+  String get notificationWebxdcFallback => 'New update';
+
+  @override
+  String get shareTokenFooterLabel => 'Please do not remove:';
 
   @override
   String get notificationBackgroundConnectionDisabledTitle => '背景連線已停用';
@@ -10986,4 +11211,119 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String get signupAvatarCropHint =>
       'Only the area inside the circle will appear in the final avatar.';
+
+  @override
+  String get xmppOperationPubSubBookmarksStart => 'Syncing bookmarks...';
+
+  @override
+  String get xmppOperationPubSubBookmarksSuccess => 'Bookmarks synced';
+
+  @override
+  String get xmppOperationPubSubBookmarksFailure => 'Bookmarks sync failed';
+
+  @override
+  String get xmppOperationPubSubConversationsStart => 'Syncing chats list...';
+
+  @override
+  String get xmppOperationPubSubConversationsSuccess => 'Chats list synced';
+
+  @override
+  String get xmppOperationPubSubConversationsFailure =>
+      'Chats list sync failed';
+
+  @override
+  String get xmppOperationPubSubDraftsStart => 'Syncing drafts...';
+
+  @override
+  String get xmppOperationPubSubDraftsSuccess => 'Drafts synced';
+
+  @override
+  String get xmppOperationPubSubDraftsFailure => 'Drafts sync failed';
+
+  @override
+  String get xmppOperationPubSubSpamStart => 'Syncing spam list...';
+
+  @override
+  String get xmppOperationPubSubSpamSuccess => 'Spam list synced';
+
+  @override
+  String get xmppOperationPubSubSpamFailure => 'Spam list sync failed';
+
+  @override
+  String get xmppOperationPubSubEmailBlocklistStart =>
+      'Syncing email blocklist...';
+
+  @override
+  String get xmppOperationPubSubEmailBlocklistSuccess =>
+      'Email blocklist synced';
+
+  @override
+  String get xmppOperationPubSubEmailBlocklistFailure =>
+      'Email blocklist sync failed';
+
+  @override
+  String get xmppOperationPubSubAvatarMetadataStart =>
+      'Syncing avatar details...';
+
+  @override
+  String get xmppOperationPubSubAvatarMetadataSuccess =>
+      'Avatar details synced';
+
+  @override
+  String get xmppOperationPubSubAvatarMetadataFailure =>
+      'Avatar details sync failed';
+
+  @override
+  String get xmppOperationPubSubFetchStart => 'Syncing account updates...';
+
+  @override
+  String get xmppOperationPubSubFetchSuccess => 'Account updates synced';
+
+  @override
+  String get xmppOperationPubSubFetchFailure => 'Account updates sync failed';
+
+  @override
+  String get xmppOperationMamLoginStart => 'Syncing messages...';
+
+  @override
+  String get xmppOperationMamLoginSuccess => 'Messages synced';
+
+  @override
+  String get xmppOperationMamLoginFailure => 'Message sync failed';
+
+  @override
+  String get xmppOperationMamGlobalStart => 'Syncing full history...';
+
+  @override
+  String get xmppOperationMamGlobalSuccess => 'History synced';
+
+  @override
+  String get xmppOperationMamGlobalFailure => 'History sync failed';
+
+  @override
+  String get xmppOperationMamMucStart => 'Syncing room history...';
+
+  @override
+  String get xmppOperationMamMucSuccess => 'Room history synced';
+
+  @override
+  String get xmppOperationMamMucFailure => 'Room history sync failed';
+
+  @override
+  String get xmppOperationMamFetchStart => 'Fetching archived messages...';
+
+  @override
+  String get xmppOperationMamFetchSuccess => 'Archive fetched';
+
+  @override
+  String get xmppOperationMamFetchFailure => 'Archive fetch failed';
+
+  @override
+  String get xmppOperationMucJoinStart => 'Joining room...';
+
+  @override
+  String get xmppOperationMucJoinSuccess => 'Room joined';
+
+  @override
+  String get xmppOperationMucJoinFailure => 'Room join failed';
 }

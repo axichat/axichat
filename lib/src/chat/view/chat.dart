@@ -2810,7 +2810,7 @@ class _ChatState extends State<Chat> {
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final attachment = pending.attachment;
-        final sizeLabel = formatBytes(attachment.sizeBytes);
+        final sizeLabel = formatBytes(attachment.sizeBytes, l10n);
         final colors = Theme.of(sheetContext).colorScheme;
         return BlocProvider.value(
           value: locate<ChatBloc>(),
@@ -6413,6 +6413,7 @@ class _ChatState extends State<Chat> {
                                                                                 0
                                                                         ? formatBytes(
                                                                             sizeBytes,
+                                                                            l10n,
                                                                           )
                                                                         : l10n
                                                                             .chatAttachmentUnknownSize;

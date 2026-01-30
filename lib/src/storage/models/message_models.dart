@@ -916,6 +916,11 @@ class Messages extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
+
+  @override
+  List<Index> get indexes => [
+        Index('idx_messages_chat_timestamp', 'chat_jid, timestamp'),
+      ];
 }
 
 @DataClassName('MessageAttachmentData')
