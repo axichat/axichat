@@ -8,13 +8,11 @@ enum RosterFilter {
   online,
   offline;
 
-  static RosterFilter fromId(String? id) {
-    return switch (id) {
-      'online' => RosterFilter.online,
-      'offline' => RosterFilter.offline,
-      _ => RosterFilter.all,
-    };
-  }
+  static RosterFilter fromId(SearchFilterId? id) => switch (id) {
+        SearchFilterId.online => RosterFilter.online,
+        SearchFilterId.offline => RosterFilter.offline,
+        _ => RosterFilter.all,
+      };
 }
 
 final class RosterViewCriteria extends Equatable {

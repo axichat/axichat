@@ -1020,7 +1020,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
     setState(() {});
   }
 
-  String _filterLabel(List<HomeSearchFilter> filters, String? id) {
+  String _filterLabel(List<HomeSearchFilter> filters, SearchFilterId? id) {
     for (final filter in filters) {
       if (filter.id == id) return filter.label;
     }
@@ -1133,7 +1133,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     if (filters.length > 1 && effectiveFilterId != null) ...[
                       const SizedBox(width: 12),
                       Expanded(
-                        child: AxiSelect<String>(
+                        child: AxiSelect<SearchFilterId>(
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
                             context.read<HomeSearchCubit?>()?.updateFilter(
@@ -1143,7 +1143,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                           },
                           options: filters
                               .map(
-                                (filter) => ShadOption<String>(
+                                (filter) => ShadOption<SearchFilterId>(
                                   value: filter.id,
                                   child: Text(filter.label),
                                 ),

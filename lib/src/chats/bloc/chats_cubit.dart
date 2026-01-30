@@ -213,6 +213,8 @@ class ChatsCubit extends Cubit<ChatsState> {
         SearchFilterId.hidden => chat.hidden,
         SearchFilterId.all => !chat.hidden,
         SearchFilterId.attachments => !chat.hidden,
+        SearchFilterId.online => !chat.hidden,
+        SearchFilterId.offline => !chat.hidden,
       };
     }
 

@@ -49,7 +49,8 @@ class EmailForwardingGuideTile extends StatelessWidget {
 
   Future<void> _showGuideDialog(BuildContext context) async {
     final l10n = context.l10n;
-    final forwardingAddress = _resolveForwardingAddress(context);
+    final forwardingAddress =
+        _resolveForwardingAddress(context.read<XmppService>());
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) => EmailForwardingGuideDialog(
@@ -86,7 +87,8 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
 
   Future<void> _showGuideDialog(BuildContext context) async {
-    final forwardingAddress = _resolveForwardingAddress(context);
+    final forwardingAddress =
+        _resolveForwardingAddress(context.read<XmppService>());
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) => EmailForwardingGuideDialog(
@@ -224,17 +226,14 @@ class EmailForwardingWelcomeLayout extends StatelessWidget {
             maxWidth: maxWidth,
             minHeight: constraints.maxHeight,
           ),
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                header,
-                const EmailForwardingSectionDivider(),
-                Expanded(child: content),
-                footer,
-              ],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const EmailForwardingSectionDivider(),
+              Expanded(child: content),
+              footer,
+            ],
           ),
         ),
       ),
@@ -315,7 +314,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
         Text(l10n.emailForwardingGuideNotificationsTitle,
             style: subheaderStyle),
         SizedBox(height: spacing.s),
-        NotificationRequest(
+        const NotificationRequest(
           displayMode: NotificationRequestDisplayMode.always,
         ),
       ],
@@ -472,7 +471,8 @@ String _resolveForwardingAddress(XmppService service) {
 }
 
 Future<void> showEmailForwardingGuideDialog(BuildContext context) async {
-  final forwardingAddress = _resolveForwardingAddress(context);
+  final forwardingAddress =
+      _resolveForwardingAddress(context.read<XmppService>());
   await showFadeScaleDialog<void>(
     context: context,
     builder: (dialogContext) => EmailForwardingGuideDialog(

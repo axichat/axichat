@@ -150,7 +150,7 @@ class _CapabilityChip extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final radii = context.radii;
-    final separator = ' • ';
+    const separator = ' • ';
     final chipPadding = compact
         ? EdgeInsets.symmetric(
             horizontal: spacing.s,

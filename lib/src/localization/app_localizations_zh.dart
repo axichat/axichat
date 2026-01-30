@@ -1725,6 +1725,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileExportFormatVcardSubtitle => '标准联系人名片。';
 
   @override
+  String get profileExportCsvHeaderName => '姓名';
+
+  @override
+  String get profileExportCsvHeaderAddress => '地址';
+
+  @override
+  String get profileExportContactsFilenameFallback => '联系人';
+
+  @override
   String get termsAcceptLabel => '我接受条款和条件';
 
   @override
@@ -1984,6 +1993,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatAttachmentBlockedTitle => '附件已被阻止';
+
+  @override
+  String get chatEmailImageBlockedLabel => '图片已被阻止';
+
+  @override
+  String get chatEmailImageFailedLabel => '图片加载失败';
 
   @override
   String get chatAttachmentBlockedDescription => '仅在信任未知联系人时加载附件。你确认后我们才会获取。';
@@ -7202,6 +7217,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get profileExportFormatVcardSubtitle => '標準聯絡人名片。';
 
   @override
+  String get profileExportCsvHeaderName => '姓名';
+
+  @override
+  String get profileExportCsvHeaderAddress => '地址';
+
+  @override
+  String get profileExportContactsFilenameFallback => '聯絡人';
+
+  @override
   String get termsAcceptLabel => '我接受條款與條件';
 
   @override
@@ -7461,6 +7485,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentBlockedTitle => '附件已被阻擋';
+
+  @override
+  String get chatEmailImageBlockedLabel => '圖片已被阻擋';
+
+  @override
+  String get chatEmailImageFailedLabel => '圖片載入失敗';
 
   @override
   String get chatAttachmentBlockedDescription => '僅在你信任未知聯絡人時才載入附件。你同意後我們才會擷取。';

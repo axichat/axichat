@@ -23,7 +23,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
-import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -118,9 +117,8 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
-      final draftCubit = context.read<DraftCubit>();
       Future<void>(() async {
-        await _cleanupSeedAttachmentMetadata(draftCubit);
+        await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
       });
     }
     _autosaveTimer?.cancel();
@@ -707,7 +705,8 @@ class _DraftFormState extends State<DraftForm> {
           // Best-effort. Keep placeholder size until optimization completes.
         }
       }
-      attachment = await EmailAttachmentOptimizer.optimize(attachment);
+      attachment =
+          await context.read<DraftCubit>().optimizeAttachment(attachment);
       if (!mounted) return;
       setState(() {
         _pendingAttachments = _pendingAttachments
@@ -961,12 +960,11 @@ class _DraftFormState extends State<DraftForm> {
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
     try {
-      final draftCubit = context.read<DraftCubit>();
       if (id != null) {
-        await draftCubit.deleteDraft(id: id!);
+        await context.read<DraftCubit>().deleteDraft(id: id!);
       }
       if (shouldCleanupSeedAttachments) {
-        await _cleanupSeedAttachmentMetadata(draftCubit);
+        await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
       }
       if (!mounted) return;
       setState(() {
@@ -1114,8 +1112,7 @@ class _DraftFormState extends State<DraftForm> {
       context,
     )?.show(FeedbackToast.success(title: l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
-      final draftCubit = context.read<DraftCubit>();
-      await _cleanupSeedAttachmentMetadata(draftCubit);
+      await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
     }
     if (!mounted) {
       return;

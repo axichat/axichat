@@ -124,7 +124,7 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   Padding(
                     padding: horizontalPadding,
-                    child: NotificationRequest(),
+                    child: const NotificationRequest(),
                   ),
                   SizedBox(height: spacing.s),
                   Padding(

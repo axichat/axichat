@@ -3230,6 +3230,24 @@ abstract class AppLocalizations {
   /// **'Standard contact cards.'**
   String get profileExportFormatVcardSubtitle;
 
+  /// No description provided for @profileExportCsvHeaderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get profileExportCsvHeaderName;
+
+  /// No description provided for @profileExportCsvHeaderAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get profileExportCsvHeaderAddress;
+
+  /// No description provided for @profileExportContactsFilenameFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'contacts'**
+  String get profileExportContactsFilenameFallback;
+
   /// No description provided for @termsAcceptLabel.
   ///
   /// In en, this message translates to:
@@ -3739,6 +3757,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Attachment blocked'**
   String get chatAttachmentBlockedTitle;
+
+  /// No description provided for @chatEmailImageBlockedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Image blocked'**
+  String get chatEmailImageBlockedLabel;
+
+  /// No description provided for @chatEmailImageFailedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Image failed'**
+  String get chatEmailImageFailedLabel;
 
   /// No description provided for @chatAttachmentBlockedDescription.
   ///

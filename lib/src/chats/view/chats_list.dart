@@ -17,7 +17,6 @@ import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -55,12 +54,10 @@ class ChatsList extends StatelessWidget {
       builder: (context, searchState) {
         return BlocBuilder<RosterCubit, RosterState>(
           builder: (context, rosterState) {
-            final rosterContacts = (rosterState.items ?? const <RosterItem>[])
-                .map((item) => item.jid)
-                .toSet();
+            final rosterItems = rosterState.items ?? const <RosterItem>[];
             return _ChatsListSync(
               searchState: searchState,
-              rosterContacts: rosterContacts,
+              rosterItems: rosterItems,
               showCalendarShortcut: showCalendarShortcut,
               calendarAvailable: calendarAvailable,
               isDesktopPlatform: isDesktopPlatform,
@@ -75,14 +72,14 @@ class ChatsList extends StatelessWidget {
 class _ChatsListSync extends StatefulWidget {
   const _ChatsListSync({
     required this.searchState,
-    required this.rosterContacts,
+    required this.rosterItems,
     required this.showCalendarShortcut,
     required this.calendarAvailable,
     required this.isDesktopPlatform,
   });
 
   final HomeSearchState searchState;
-  final Set<String> rosterContacts;
+  final List<RosterItem> rosterItems;
   final bool showCalendarShortcut;
   final bool calendarAvailable;
   final bool isDesktopPlatform;
@@ -105,7 +102,7 @@ class _ChatsListSyncState extends State<_ChatsListSync> {
     if (oldWidget.searchState != widget.searchState) {
       _syncSearch();
     }
-    if (!setEquals(oldWidget.rosterContacts, widget.rosterContacts)) {
+    if (!listEquals(oldWidget.rosterItems, widget.rosterItems)) {
       _syncRoster();
     }
   }
@@ -122,7 +119,8 @@ class _ChatsListSyncState extends State<_ChatsListSync> {
   }
 
   void _syncRoster() {
-    context.read<ChatsCubit>().updateRosterContacts(widget.rosterContacts);
+    final rosterContacts = widget.rosterItems.map((item) => item.jid).toSet();
+    context.read<ChatsCubit>().updateRosterContacts(rosterContacts);
   }
 
   @override
@@ -879,7 +877,7 @@ class _ChatListTileState extends State<ChatListTile> {
                 backgroundColor: tileBackgroundColor,
                 selected: isSelected,
                 onPressed: () =>
-                    context.read<ChatsCubit?>()?.toggleChatSelection(item.jid),
+                    context.read<ChatsCubit>().toggleChatSelection(item.jid),
               )
             : _ChatActionsToggle(
                 backgroundColor: tileBackgroundColor,
@@ -999,6 +997,83 @@ class _ChatListTileState extends State<ChatListTile> {
         child: tileContent,
       ),
     );
+  }
+
+  double _resolveTimestampWidth(BuildContext context, String label) {
+    if (_cachedTimestampLabel == label && _cachedTimestampWidth > 0) {
+      return _cachedTimestampWidth;
+    }
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: context.textTheme.small,
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.of(context).textScaler,
+    )..layout();
+    _cachedTimestampLabel = label;
+    _cachedTimestampWidth = painter.width;
+    return _cachedTimestampWidth;
+  }
+
+  double _resolveUnreadWidth(BuildContext context, int count) {
+    if (_cachedUnreadCount == count && _cachedUnreadWidth > 0) {
+      return _cachedUnreadWidth;
+    }
+    _cacheUnreadMetrics(context, count);
+    return _cachedUnreadWidth;
+  }
+
+  double _resolveUnreadHeight(BuildContext context, int count) {
+    if (_cachedUnreadCount == count && _cachedUnreadHeight > 0) {
+      return _cachedUnreadHeight;
+    }
+    _cacheUnreadMetrics(context, count);
+    return _cachedUnreadHeight;
+  }
+
+  void _cacheUnreadMetrics(BuildContext context, int count) {
+    final spacing = context.spacing;
+    final borderWidth = context.borderSide.width;
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$count',
+        style: context.textTheme.small.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.of(context).textScaler,
+    )..layout();
+    final textWidth = textPainter.width;
+    final textHeight = textPainter.height;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) {
+      if (!value.isFinite) {
+        return value;
+      }
+      final scaledValue = textScaler.scale(value);
+      if (!scaledValue.isFinite || scaledValue <= 0) {
+        return value;
+      }
+      return scaledValue;
+    }
+
+    final horizontalPadding = scaled(spacing.s);
+    final verticalPadding = scaled(spacing.xs);
+    final minWidth = scaled(spacing.l);
+    final cutoutClearance = scaled(spacing.xs);
+    final scaledBorderWidth = scaled(borderWidth);
+    _cachedUnreadCount = count;
+    _cachedUnreadWidth = math.max(
+      minWidth,
+      textWidth +
+          (horizontalPadding * 2) +
+          (scaledBorderWidth * 2) +
+          cutoutClearance,
+    );
+    _cachedUnreadHeight =
+        textHeight + (verticalPadding * 2) + (scaledBorderWidth * 2);
   }
 
   String? _subtitlePreview(String? rawMessage) {
@@ -1447,70 +1522,6 @@ Future<bool> _confirmChatExport(BuildContext context) async {
   return confirmed == true;
 }
 
-double _measureLabelWidth(BuildContext context, String text) {
-  final painter = TextPainter(
-    text: TextSpan(
-      text: text,
-      style: context.textTheme.small.copyWith(
-        color: context.colorScheme.mutedForeground,
-      ),
-    ),
-    textDirection: Directionality.of(context),
-  )..layout();
-  return painter.width;
-}
-
-double _measureUnreadBadgeWidth(BuildContext context, int count) {
-  final textPainter = TextPainter(
-    text: TextSpan(
-      text: '$count',
-      style: context.textTheme.small.copyWith(
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.2,
-      ),
-    ),
-    textDirection: Directionality.of(context),
-  )..layout();
-  final textWidth = textPainter.width;
-  final textScaler = MediaQuery.of(context).textScaler;
-  double scaled(double value) => textScaler.scale(value);
-  return math.max(
-    scaled(_unreadBadgeMinWidth),
-    textWidth +
-        (scaled(_unreadBadgeHorizontalPadding) * 2) +
-        (scaled(_unreadBadgeBorderWidth) * 2) +
-        scaled(_unreadBadgeCutoutClearance),
-  );
-}
-
-const double _unreadBadgeHorizontalPadding = 10.0;
-const double _unreadBadgeVerticalPadding = 4.0;
-const double _unreadBadgeBorderWidth = 2.0;
-const double _unreadBadgeMinWidth = 36.0;
-const double _unreadBadgeCutoutClearance = 0.0;
-const double _unreadBadgeCutoutVerticalClearance = 1.0;
-const double _unreadBadgeMinDepth = 10.0;
-const double _unreadBadgeCutoutChildVerticalOffset = -2.0;
-const double _unreadBadgeCutoutDepthAdjustment = -2.0;
-
-double _measureUnreadBadgeHeight(BuildContext context, int count) {
-  final textScaler = MediaQuery.of(context).textScaler;
-  double scaled(double value) => textScaler.scale(value);
-  final textPainter = TextPainter(
-    text: TextSpan(
-      text: '$count',
-      style: context.textTheme.small.copyWith(
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.2,
-      ),
-    ),
-    textDirection: Directionality.of(context),
-  )..layout();
-  return textPainter.height +
-      (scaled(_unreadBadgeVerticalPadding) * 2) +
-      (scaled(_unreadBadgeBorderWidth) * 2);
-}
-
 class _UnreadBadge extends StatelessWidget {
   const _UnreadBadge({required this.count, required this.highlight});
 
@@ -1520,18 +1531,30 @@ class _UnreadBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final spacing = context.spacing;
     final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
+    double scaled(double value) {
+      if (!value.isFinite) {
+        return value;
+      }
+      final scaledValue = textScaler.scale(value);
+      if (!scaledValue.isFinite || scaledValue <= 0) {
+        return value;
+      }
+      return scaledValue;
+    }
     final Color background =
-        highlight ? colors.primary : colors.secondary.withValues(alpha: 0.2);
-    final Color borderColor =
-        highlight ? colors.background : colors.border.withValues(alpha: 0.8);
+        highlight
+            ? colors.primary
+            : colors.secondary.withValues(alpha: motion.tapSplashAlpha);
+    final Color borderColor = highlight ? colors.background : colors.border;
     final Color textColor =
         highlight ? colors.primaryForeground : colors.mutedForeground;
-    final borderWidth = scaled(_unreadBadgeBorderWidth);
-    final cornerRadius = textScaler.scale(context.sizing.containerRadius);
-    final horizontalPadding = scaled(_unreadBadgeHorizontalPadding);
-    final verticalPadding = scaled(_unreadBadgeVerticalPadding);
+    final borderWidth = scaled(context.borderSide.width);
+    final cornerRadius = scaled(context.sizing.containerRadius);
+    final horizontalPadding = scaled(spacing.s);
+    final verticalPadding = scaled(spacing.xs);
     return Semantics(
       container: true,
       label: context.l10n.chatsUnreadLabel(count),
@@ -1554,7 +1577,6 @@ class _UnreadBadge extends StatelessWidget {
             style: context.textTheme.small.copyWith(
               color: textColor,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
             ),
           ),
         ),

@@ -9,38 +9,43 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-Future<bool?> showNotificationDialog(BuildContext context) =>
+Future<bool?> showNotificationDialog(
+  BuildContext context,
+  T Function<T>() locate,
+) =>
     showFadeScaleDialog<bool>(
       context: context,
       builder: (context) =>
           BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
-        builder: (context, state) => ShadDialog(
-          title: Text(
-            context.l10n.notificationsDialogTitle,
-            style: context.modalHeaderTextStyle,
-          ),
-          actions: [
-            AxiButton.destructive(
-              onPressed: state.isRequestingPermissions
-                  ? null
-                  : () => context.pop(false),
-              child: Text(context.l10n.notificationsDialogIgnore),
+        bloc: locate<NotificationRequestCubit>(),
+        builder: (context, state) {
+          return ShadDialog(
+            title: Text(
+              context.l10n.notificationsDialogTitle,
+              style: context.modalHeaderTextStyle,
             ),
-            AxiButton.primary(
-              onPressed: state.isRequestingPermissions
-                  ? null
-                  : () async {
-                      final requestCubit =
-                          context.read<NotificationRequestCubit>();
-                      final granted = await requestCubit.requestPermissions();
-                      if (granted && context.mounted) {
-                        context.pop(true);
-                      }
-                    },
-              child: Text(context.l10n.notificationsDialogContinue),
-            ),
-          ],
-          child: Text(context.l10n.notificationsDialogDescription),
-        ),
+            actions: [
+              AxiButton.destructive(
+                onPressed: state.isRequestingPermissions
+                    ? null
+                    : () => context.pop(false),
+                child: Text(context.l10n.notificationsDialogIgnore),
+              ),
+              AxiButton.primary(
+                onPressed: state.isRequestingPermissions
+                    ? null
+                    : () async {
+                        final granted = await locate<NotificationRequestCubit>()
+                            .requestPermissions();
+                        if (granted && context.mounted) {
+                          context.pop(true);
+                        }
+                      },
+                child: Text(context.l10n.notificationsDialogContinue),
+              ),
+            ],
+            child: Text(context.l10n.notificationsDialogDescription),
+          );
+        },
       ),
     );

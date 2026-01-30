@@ -10,23 +10,17 @@ import 'package:share_handler/share_handler.dart';
 
 part 'share_intent_models.dart';
 
-const int _maxSharedTextLength = 32 * 1024;
-const int _maxSharedAttachmentCount = 32;
-const int _maxSharedAttachmentPathLength = 4096;
-const String _sharedTextNullToken = '\u0000';
-const String _sharedAttachmentNullToken = _sharedTextNullToken;
-const String _sharedTextEmpty = '';
-const String _sharedAttachmentImageMimeType = 'image/*';
-const String _sharedAttachmentVideoMimeType = 'video/*';
-const String _sharedAttachmentAudioMimeType = 'audio/*';
-const String _sharedAttachmentFileMimeType = 'application/octet-stream';
-
 class ShareIntentCubit extends Cubit<ShareIntentState> {
+  static const int _maxSharedTextLength = 32 * 1024;
+  static const int _maxSharedAttachmentCount = 32;
+  static const int _maxSharedAttachmentPathLength = 4096;
+
   ShareIntentCubit({ShareHandlerPlatform? handler})
       : _handler = handler ?? ShareHandlerPlatform.instance,
         super(const ShareIntentState.idle());
 
   final ShareHandlerPlatform _handler;
+  Future<void>? _initialization;
   StreamSubscription<SharedMedia>? _subscription;
 
   Future<void> initialize() async {
@@ -36,16 +30,19 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
     if (_subscription != null) {
       return;
     }
+    final Future<void>? pending = _initialization;
+    if (pending != null) {
+      await pending;
+      return;
+    }
+    final Future<void> initialization = _initializeInternal();
+    _initialization = initialization;
     try {
-      _subscription = _handler.sharedMediaStream.listen(_handleMedia);
-      final initial = await _handler.getInitialSharedMedia();
-      if (initial != null) {
-        _handleMedia(initial);
+      await initialization;
+    } finally {
+      if (_initialization == initialization) {
+        _initialization = null;
       }
-    } on PlatformException {
-      await _subscription?.cancel();
-      _subscription = null;
-      // Share handler not available on this platform; ignore.
     }
   }
 
@@ -69,7 +66,7 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
 
   void _handleMedia(SharedMedia media) {
     final String? sanitizedText = _sanitizeSharedText(
-      media.content ?? _sharedTextEmpty,
+      media.content ?? '',
     );
     final List<ShareAttachmentPayload> attachments = _sanitizeSharedAttachments(
       media.attachments,
@@ -84,13 +81,32 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
     );
   }
 
+  Future<void> _initializeInternal() async {
+    try {
+      final SharedMedia? initial = await _handler.getInitialSharedMedia();
+      if (initial != null) {
+        _handleMedia(initial);
+      }
+      _subscription = _handler.sharedMediaStream.listen(
+        _handleMedia,
+        onDone: () {
+          _subscription = null;
+        },
+      );
+    } on PlatformException {
+      await _subscription?.cancel();
+      _subscription = null;
+      // Share handler not available on this platform; ignore.
+    }
+  }
+
   bool get _isSupportedPlatform =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
   String? _sanitizeSharedText(String text) {
-    final String normalized = text.replaceAll(_sharedTextNullToken, '').trim();
+    final String normalized = text.replaceAll('\u0000', '').trim();
     if (normalized.isEmpty) {
       return null;
     }
@@ -113,7 +129,7 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
       final String path = attachment.path.trim();
       if (path.isEmpty) continue;
       if (path.length > _maxSharedAttachmentPathLength) continue;
-      if (path.contains(_sharedAttachmentNullToken)) continue;
+      if (path.contains('\u0000')) continue;
       if (!seenPaths.add(path)) continue;
       sanitized.add(ShareAttachmentPayload(path: path, type: attachment.type));
       if (sanitized.length >= _maxSharedAttachmentCount) {

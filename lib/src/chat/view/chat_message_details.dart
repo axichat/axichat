@@ -4,12 +4,10 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -17,24 +15,40 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_html/flutter_html.dart' as html_widget;
-import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const double _messageDetailsCopyIconSize = 16.0;
-const double _messageDetailsCopySpacing = 6.0;
-const double _messageDetailsSectionSpacing = 8.0;
-const double _messageDetailsMetadataSpacing = 12.0;
-const double _messageDetailsHeadersDialogMaxHeight = 320.0;
-const double _messageDetailsHeadersCardPadding = 12.0;
-
-class ChatMessageDetails extends StatelessWidget {
-  const ChatMessageDetails({super.key, this.onAddRecipient});
+class ChatMessageDetails extends StatefulWidget {
+  const ChatMessageDetails({
+    super.key,
+    this.onAddRecipient,
+    required this.loadedEmailImageMessageIds,
+    required this.onEmailImagesApproved,
+  });
 
   final ValueChanged<Chat>? onAddRecipient;
+  final Set<String> loadedEmailImageMessageIds;
+  final ValueChanged<String> onEmailImagesApproved;
+
+  @override
+  State<ChatMessageDetails> createState() => _ChatMessageDetailsState();
+}
+
+class _ChatMessageDetailsState extends State<ChatMessageDetails> {
+  Locale? _lastLocale;
+  late intl.DateFormat _timestampFormat;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final locale = Localizations.localeOf(context);
+    if (_lastLocale == locale) return;
+    _lastLocale = locale;
+    _timestampFormat =
+        intl.DateFormat.yMMMMEEEEd(locale.toLanguageTag()).add_jms();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,18 +60,8 @@ class ChatMessageDetails extends StatelessWidget {
         return BlocSelector<ProfileCubit, ProfileState, String?>(
           selector: (profileState) => profileState.jid,
           builder: (context, profileJid) {
-            EmailService? emailService;
-            try {
-              emailService = RepositoryProvider.of<EmailService>(
-                context,
-                listen: false,
-              );
-            } catch (_) {
-              emailService = null;
-            }
-            final emailSelfJid = emailService?.selfSenderJid;
-            final String? resolvedEmailSelfJid =
-                emailSelfJid.resolveDeltaPlaceholderJid();
+            final resolvedEmailSelfJid =
+                state.emailSelfJid?.resolveDeltaPlaceholderJid();
             final bareSender = bareAddress(message.senderJid);
             final bool isPlaceholderSender =
                 bareSender?.isDeltaPlaceholderJid ?? false;
@@ -77,17 +81,20 @@ class ChatMessageDetails extends StatelessWidget {
             final protocolLabel = isEmailMessage
                 ? MessageTransport.email.label
                 : transport?.label ?? MessageTransport.xmpp.label;
+            final colors = context.colorScheme;
+            final spacing = context.spacing;
+            final sizing = context.sizing;
+            final textTheme = context.textTheme;
+            final settings = context.watch<SettingsCubit>().state;
             final protocolIcon = Icon(
               isEmailMessage ? LucideIcons.mail : LucideIcons.messageCircle,
-              size: 16,
-              color: isEmailMessage
-                  ? context.colorScheme.destructive
-                  : context.colorScheme.primary,
+              size: sizing.menuItemIconSize,
+              color: isEmailMessage ? colors.destructive : colors.primary,
             );
             final timestamp = message.timestamp?.toLocal();
             final timestampLabel = timestamp == null
                 ? l10n.commonUnknownLabel
-                : intl.DateFormat.yMMMMEEEEd().add_jms().format(timestamp);
+                : _timestampFormat.format(timestamp);
             final showEmailRecipients = isFromSelf &&
                 (transport?.isEmail ?? false) &&
                 shareParticipants.isNotEmpty;
@@ -160,8 +167,7 @@ class ChatMessageDetails extends StatelessWidget {
                 ),
               );
             }
-            final spacing = context.spacing;
-            final iconSize = context.sizing.iconButtonIconSize;
+            final iconSize = sizing.iconButtonIconSize;
             void handleBack() {
               context
                   .read<ChatsCubit>()
@@ -173,7 +179,7 @@ class ChatMessageDetails extends StatelessWidget {
                 width: double.maxFinite,
                 padding: EdgeInsets.all(spacing.m),
                 child: Column(
-                  spacing: 24,
+                  spacing: spacing.l,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Align(
@@ -187,85 +193,53 @@ class ChatMessageDetails extends StatelessWidget {
                     ),
                     if (message.htmlBody != null &&
                         message.htmlBody!.isNotEmpty)
-                      Builder(
-                        builder: (context) {
-                          final messageId = message.id;
-                          final shouldLoadImages = context
-                                  .read<SettingsCubit>()
-                                  .state
-                                  .autoLoadEmailImages ||
-                              (messageId != null &&
-                                  state.loadedImageMessageIds.contains(
-                                    messageId,
-                                  ));
-                          return html_widget.Html(
-                            data: HtmlContentCodec.sanitizeHtml(
-                              message.htmlBody ?? '',
-                            ),
-                            extensions: [
-                              createEmailImageExtension(
-                                shouldLoad: shouldLoadImages,
-                                onLoadRequested: messageId == null
-                                    ? null
-                                    : () {
-                                        context.read<ChatBloc>().add(
-                                              ChatEmailImagesLoaded(messageId),
-                                            );
-                                      },
-                              ),
-                            ],
-                            onLinkTap: (url, _, __) {
-                              if (url == null) return;
-                              _handleLinkTap(context, url);
-                            },
-                            style: {
-                              'body': html_widget.Style(
-                                margin: html_widget.Margins.zero,
-                                padding: html_widget.HtmlPaddings.zero,
-                                fontSize: html_widget.FontSize(
-                                  context.textTheme.lead.fontSize ?? 16.0,
-                                ),
-                              ),
-                            },
-                          );
-                        },
+                      _SanitizedHtmlBody(
+                        html: message.htmlBody ?? '',
+                        textStyle: textTheme.lead,
+                        shouldLoadImages: settings.autoLoadEmailImages ||
+                            (message.id != null &&
+                                widget.loadedEmailImageMessageIds
+                                    .contains(message.id)),
+                        onLoadRequested: message.id == null
+                            ? null
+                            : () => widget.onEmailImagesApproved(message.id!),
+                        onLinkTap: (url) => _handleLinkTap(context, url),
                       )
                     else
                       SelectableText(
                         message.body ?? '',
-                        style: context.textTheme.lead,
+                        style: textTheme.lead,
                       ),
                     if (shareContext?.subject?.isNotEmpty == true)
                       Column(
-                        spacing: 8,
+                        spacing: spacing.s,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
                             context.l10n.chatMessageSubjectLabel,
-                            style: context.textTheme.muted,
+                            style: textTheme.muted,
                           ),
                           Text(
                             shareContext!.subject!,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style: textTheme.bodyLarge.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ],
                       ),
                     if (showEmailRecipients)
                       Column(
-                        spacing: 8,
+                        spacing: spacing.s,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
                             context.l10n.chatMessageRecipientsLabel,
-                            style: context.textTheme.muted,
+                            style: textTheme.muted,
                           ),
                           Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                            spacing: spacing.s,
+                            runSpacing: spacing.s,
                             alignment: WrapAlignment.center,
                             children: [
                               for (final participant in shareParticipants)
@@ -274,7 +248,9 @@ class ChatMessageDetails extends StatelessWidget {
                                   onPressed: () => _showRecipientActions(
                                     context,
                                     recipient: participant,
-                                    emailService: emailService,
+                                    canCreateEmailChat:
+                                        state.emailServiceAvailable &&
+                                            participant.deltaChatId == null,
                                   ),
                                 ),
                             ],
@@ -283,16 +259,16 @@ class ChatMessageDetails extends StatelessWidget {
                       )
                     else if (shareParticipants.isNotEmpty)
                       Column(
-                        spacing: 8,
+                        spacing: spacing.s,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
                             context.l10n.chatMessageAlsoSentToLabel,
-                            style: context.textTheme.muted,
+                            style: textTheme.muted,
                           ),
                           Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                            spacing: spacing.s,
+                            runSpacing: spacing.s,
                             alignment: WrapAlignment.center,
                             children: [
                               for (final participant in shareParticipants)
@@ -301,7 +277,9 @@ class ChatMessageDetails extends StatelessWidget {
                                   onPressed: () => _showRecipientActions(
                                     context,
                                     recipient: participant,
-                                    emailService: emailService,
+                                    canCreateEmailChat:
+                                        state.emailServiceAvailable &&
+                                            participant.deltaChatId == null,
                                   ),
                                 ),
                             ],
@@ -317,14 +295,14 @@ class ChatMessageDetails extends StatelessWidget {
                       _ReactionsRow(reactions: message.reactionsPreview),
                     if (isFromSelf)
                       Wrap(
-                        spacing: 12.0,
-                        runSpacing: 12.0,
+                        spacing: spacing.m,
+                        runSpacing: spacing.m,
                         alignment: WrapAlignment.center,
                         children: [
                           ShadBadge.secondary(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: EdgeInsets.all(spacing.s),
                             child: Row(
-                              spacing: 6.0,
+                              spacing: spacing.xs,
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(l10n.chatMessageStatusSent),
@@ -336,9 +314,9 @@ class ChatMessageDetails extends StatelessWidget {
                             ),
                           ),
                           ShadBadge.secondary(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: EdgeInsets.all(spacing.s),
                             child: Row(
-                              spacing: 6.0,
+                              spacing: spacing.xs,
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(l10n.chatMessageStatusReceived),
@@ -350,9 +328,9 @@ class ChatMessageDetails extends StatelessWidget {
                             ),
                           ),
                           ShadBadge.secondary(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: EdgeInsets.all(spacing.s),
                             child: Row(
-                              spacing: 6.0,
+                              spacing: spacing.xs,
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(l10n.chatMessageStatusDisplayed),
@@ -366,7 +344,7 @@ class ChatMessageDetails extends StatelessWidget {
                         ],
                       ),
                     Column(
-                      spacing: 12,
+                      spacing: spacing.m,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         _MessageDetailsInfo(
@@ -374,8 +352,8 @@ class ChatMessageDetails extends StatelessWidget {
                           value: timestampLabel,
                         ),
                         Wrap(
-                          spacing: 24,
-                          runSpacing: 12,
+                          spacing: spacing.l,
+                          runSpacing: spacing.m,
                           alignment: WrapAlignment.center,
                           children: [
                             _MessageDetailsInfo(
@@ -401,16 +379,16 @@ class ChatMessageDetails extends StatelessWidget {
                       ),
                     if (metadataItems.isNotEmpty)
                       Column(
-                        spacing: _messageDetailsSectionSpacing,
+                        spacing: spacing.s,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
                             l10n.chatMessageDetailsMetadataLabel,
-                            style: context.textTheme.muted,
+                            style: textTheme.muted,
                           ),
                           Wrap(
-                            spacing: _messageDetailsMetadataSpacing,
-                            runSpacing: _messageDetailsMetadataSpacing,
+                            spacing: spacing.m,
+                            runSpacing: spacing.m,
                             alignment: WrapAlignment.center,
                             children: metadataItems,
                           ),
@@ -431,13 +409,13 @@ class ChatMessageDetails extends StatelessWidget {
                       ),
                     if (message.error.isNotNone)
                       Column(
-                        spacing: 8,
+                        spacing: spacing.s,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             l10n.chatMessageInfoError,
-                            style: context.textTheme.muted,
+                            style: textTheme.muted,
                           ),
                           Text(
                             message.error.label(l10n),
@@ -478,83 +456,87 @@ class ChatMessageDetails extends StatelessWidget {
   Future<void> _showRecipientActions(
     BuildContext context, {
     required Chat recipient,
-    required EmailService? emailService,
+    required bool canCreateEmailChat,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
-    final l10n = context.l10n;
-    final onAddRecipient = this.onAddRecipient;
+    final onAddRecipient = widget.onAddRecipient;
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return ShadDialog(
-          title: Text(
-            recipient.contactDisplayName ?? recipient.title,
-            style: context.modalHeaderTextStyle,
-          ),
-          actions: [
-            ShadButton.outline(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.commonClose),
-            ).withTapBounce(),
-          ],
-          child: Column(
-            spacing: 8,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (onAddRecipient != null)
-                ShadButton.secondary(
-                  size: ShadButtonSize.sm,
-                  onPressed: () {
-                    final recipientName =
-                        recipient.contactDisplayName ?? recipient.title;
-                    onAddRecipient(recipient);
-                    Navigator.of(dialogContext).pop();
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          l10n.chatMessageAddRecipientSuccess(recipientName),
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(l10n.chatMessageAddRecipients),
-                ).withTapBounce(),
-              ShadButton.secondary(
-                size: ShadButtonSize.sm,
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  context.read<ChatsCubit?>()?.openChat(jid: recipient.jid);
-                },
-                child: Text(l10n.chatMessageOpenChat),
-              ).withTapBounce(),
-              if (emailService != null && recipient.deltaChatId == null)
-                ShadButton.secondary(
-                  size: ShadButtonSize.sm,
-                  onPressed: () async {
-                    final recipientName =
-                        recipient.contactDisplayName ?? recipient.title;
-                    try {
-                      final ensured = await emailService.ensureChatForEmailChat(
-                        recipient,
-                      );
-                      if (!context.mounted) return;
-                      Navigator.of(dialogContext).pop();
-                      context.read<ChatsCubit?>()?.openChat(jid: ensured.jid);
-                    } catch (_) {
-                      if (!context.mounted) return;
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            l10n.chatMessageCreateChatFailure(recipientName),
+        final spacing = context.spacing;
+        var creating = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return ShadDialog(
+              title: Text(
+                recipient.contactDisplayName ?? recipient.title,
+                style: context.modalHeaderTextStyle,
+              ),
+              actions: [
+                AxiButton(
+                  label: Text(context.l10n.commonClose),
+                  size: AxiButtonSize.sm,
+                  variant: AxiButtonVariant.outline,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ],
+              child: Column(
+                spacing: spacing.s,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (onAddRecipient != null)
+                    AxiButton(
+                      label: Text(context.l10n.chatMessageAddRecipients),
+                      size: AxiButtonSize.sm,
+                      variant: AxiButtonVariant.secondary,
+                      onPressed: () {
+                        final recipientName =
+                            recipient.contactDisplayName ?? recipient.title;
+                        onAddRecipient(recipient);
+                        Navigator.of(dialogContext).pop();
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              context.l10n.chatMessageAddRecipientSuccess(
+                                  recipientName),
+                            ),
                           ),
-                        ),
-                      );
-                    }
-                  },
-                  child: Text(l10n.chatMessageCreateChat),
-                ).withTapBounce(),
-            ],
-          ),
+                        );
+                      },
+                    ),
+                  AxiButton(
+                    label: Text(context.l10n.chatMessageOpenChat),
+                    size: AxiButtonSize.sm,
+                    variant: AxiButtonVariant.secondary,
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      context.read<ChatsCubit?>()?.openChat(jid: recipient.jid);
+                    },
+                  ),
+                  if (canCreateEmailChat)
+                    AxiButton(
+                      label: Text(context.l10n.chatMessageCreateChat),
+                      size: AxiButtonSize.sm,
+                      variant: AxiButtonVariant.secondary,
+                      loading: creating,
+                      onPressed: creating
+                          ? null
+                          : () {
+                              setState(() {
+                                creating = true;
+                              });
+                              Navigator.of(dialogContext).pop();
+                              context.read<ChatBloc>().add(
+                                    ChatRecipientEmailChatRequested(
+                                      recipient: recipient,
+                                    ),
+                                  );
+                            },
+                    ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -604,6 +586,78 @@ class ChatMessageDetails extends StatelessWidget {
   }
 }
 
+class _SanitizedHtmlBody extends StatefulWidget {
+  const _SanitizedHtmlBody({
+    required this.html,
+    required this.textStyle,
+    required this.shouldLoadImages,
+    required this.onLinkTap,
+    this.onLoadRequested,
+  });
+
+  final String html;
+  final TextStyle textStyle;
+  final bool shouldLoadImages;
+  final ValueChanged<String> onLinkTap;
+  final VoidCallback? onLoadRequested;
+
+  @override
+  State<_SanitizedHtmlBody> createState() => _SanitizedHtmlBodyState();
+}
+
+class _SanitizedHtmlBodyState extends State<_SanitizedHtmlBody> {
+  String? _cachedHtml;
+  String? _lastRaw;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshCache();
+  }
+
+  @override
+  void didUpdateWidget(_SanitizedHtmlBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.html != widget.html) {
+      _refreshCache();
+    }
+  }
+
+  void _refreshCache() {
+    _lastRaw = widget.html;
+    _cachedHtml = HtmlContentCodec.sanitizeHtml(widget.html);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fallbackFontSize = widget.textStyle.fontSize ??
+        context.textTheme.bodyMedium.fontSize ??
+        context.textTheme.bodyLarge.fontSize ??
+        context.textTheme.bodySmall.fontSize ??
+        context.sizing.menuItemIconSize;
+    return html_widget.Html(
+      data: _cachedHtml ?? _lastRaw ?? '',
+      extensions: [
+        createEmailImageExtension(
+          shouldLoad: widget.shouldLoadImages,
+          onLoadRequested: widget.onLoadRequested,
+        ),
+      ],
+      onLinkTap: (url, _, __) {
+        if (url == null) return;
+        widget.onLinkTap(url);
+      },
+      style: {
+        'body': html_widget.Style(
+          margin: html_widget.Margins.zero,
+          padding: html_widget.HtmlPaddings.zero,
+          fontSize: html_widget.FontSize(fallbackFontSize),
+        ),
+      },
+    );
+  }
+}
+
 class _MessageHeadersSection extends StatelessWidget {
   const _MessageHeadersSection({
     required this.headers,
@@ -636,16 +690,18 @@ class _MessageHeadersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusLabel = _statusLabel;
+    final spacing = context.spacing;
     return Column(
-      spacing: _messageDetailsSectionSpacing,
+      spacing: spacing.s,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(title, style: context.textTheme.muted),
-        ShadButton.secondary(
-          size: ShadButtonSize.sm,
+        AxiButton(
+          label: Text(buttonLabel),
+          size: AxiButtonSize.sm,
+          variant: AxiButtonVariant.secondary,
           onPressed: _canOpen ? () => _showHeadersDialog(context) : null,
-          child: Text(buttonLabel),
-        ).withTapBounce(),
+        ),
         if (statusLabel != null)
           Text(statusLabel, style: context.textTheme.muted),
       ],
@@ -690,35 +746,37 @@ class _RawHeadersDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final trimmedNote = note.trim();
     final hasNote = trimmedNote.isNotEmpty;
+    final spacing = context.spacing;
+    final maxHeight = MediaQuery.sizeOf(context).height *
+        context.sizing.dialogMaxHeightFraction;
     return ShadDialog(
       title: Text(title, style: context.modalHeaderTextStyle),
       actions: [
-        ShadButton.secondary(
-          size: ShadButtonSize.sm,
+        AxiButton(
+          label: Text(copyLabel),
+          size: AxiButtonSize.sm,
+          variant: AxiButtonVariant.secondary,
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: headers));
           },
-          child: Text(copyLabel),
-        ).withTapBounce(),
-        ShadButton.outline(
+        ),
+        AxiButton(
+          label: Text(closeLabel),
+          size: AxiButtonSize.sm,
+          variant: AxiButtonVariant.outline,
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(closeLabel),
-        ).withTapBounce(),
+        ),
       ],
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxHeight: _messageDetailsHeadersDialogMaxHeight,
-        ),
+        constraints: BoxConstraints(maxHeight: maxHeight),
         child: SingleChildScrollView(
           child: Column(
-            spacing: _messageDetailsSectionSpacing,
+            spacing: spacing.s,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (hasNote) Text(trimmedNote, style: context.textTheme.muted),
               ShadCard(
-                padding: const EdgeInsets.all(
-                  _messageDetailsHeadersCardPadding,
-                ),
+                padding: EdgeInsets.all(spacing.m),
                 child: SelectableText(headers, style: context.textTheme.small),
               ),
             ],
@@ -749,23 +807,17 @@ class _MessageDetailsInfo extends StatelessWidget {
     final trimmedCopyValue = copyValue?.trim();
     final canCopy = trimmedCopyValue?.isNotEmpty == true;
     final resolvedCopyLabel = copyLabel ?? context.l10n.chatActionCopy;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final copyButton = canCopy
-        ? AxiTooltip(
-            builder: (context) => Text(resolvedCopyLabel),
-            child: ShadIconButton.ghost(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: trimmedCopyValue!));
-              },
-              icon: Icon(
-                LucideIcons.copy,
-                size: _messageDetailsCopyIconSize,
-                color: context.colorScheme.mutedForeground,
-              ),
-              decoration: const ShadDecoration(
-                secondaryBorder: ShadBorder.none,
-                secondaryFocusedBorder: ShadBorder.none,
-              ),
-            ).withTapBounce(),
+        ? AxiIconButton.ghost(
+            tooltip: resolvedCopyLabel,
+            iconData: LucideIcons.copy,
+            iconSize: sizing.menuItemIconSize,
+            color: context.colorScheme.mutedForeground,
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: trimmedCopyValue!));
+            },
           )
         : null;
     final valueText = SelectableText(
@@ -779,11 +831,11 @@ class _MessageDetailsInfo extends StatelessWidget {
       children: [
         if (leading != null) ...[
           leading!,
-          const SizedBox(width: _messageDetailsCopySpacing),
+          SizedBox(width: spacing.xs),
         ],
         Flexible(fit: FlexFit.loose, child: valueText),
         if (copyButton != null) ...[
-          const SizedBox(width: _messageDetailsCopySpacing),
+          SizedBox(width: spacing.xs),
           copyButton,
         ],
       ],
@@ -807,14 +859,17 @@ class _RecipientChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton.secondary(
-      size: ShadButtonSize.sm,
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return AxiButton(
+      size: AxiButtonSize.sm,
+      variant: AxiButtonVariant.secondary,
       onPressed: onPressed,
-      child: Row(
+      label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(LucideIcons.mail, size: 14),
-          const SizedBox(width: 6),
+          Icon(LucideIcons.mail, size: sizing.menuItemIconSize),
+          SizedBox(width: spacing.xs),
           Text(
             chat.contactDisplayName?.isNotEmpty == true
                 ? chat.contactDisplayName!
@@ -822,7 +877,7 @@ class _RecipientChip extends StatelessWidget {
           ),
         ],
       ),
-    ).withTapBounce();
+    );
   }
 }
 
@@ -834,20 +889,25 @@ class _ReactionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final highlight = reaction.reactedBySelf;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: highlight ? colors.primary.withValues(alpha: 0.15) : colors.card,
-        borderRadius: BorderRadius.circular(999),
+        color: highlight ? colors.secondary : colors.card,
+        borderRadius: BorderRadius.circular(sizing.containerRadius),
         border: Border.all(color: colors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.m,
+          vertical: spacing.xs,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(reaction.emoji, style: const TextStyle(fontSize: 16)),
-            const SizedBox(width: 6),
+            Text(reaction.emoji, style: context.textTheme.bodyMedium),
+            SizedBox(width: spacing.xs),
             Text('${reaction.count}', style: context.textTheme.small),
           ],
         ),
@@ -867,8 +927,9 @@ class _RecipientsRow extends StatelessWidget {
     if (recipients.isEmpty) {
       return const SizedBox.shrink();
     }
+    final spacing = context.spacing;
     return Column(
-      spacing: 8,
+      spacing: spacing.s,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (sender != null)
@@ -877,8 +938,8 @@ class _RecipientsRow extends StatelessWidget {
             style: context.textTheme.muted,
           ),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: spacing.s,
+          runSpacing: spacing.s,
           alignment: WrapAlignment.center,
           children: [
             for (final participant in recipients)
@@ -904,8 +965,9 @@ class _ReactionsRow extends StatelessWidget {
     if (reactions.isEmpty) {
       return const SizedBox.shrink();
     }
+    final spacing = context.spacing;
     return Column(
-      spacing: 8,
+      spacing: spacing.s,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
@@ -913,8 +975,8 @@ class _ReactionsRow extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: spacing.s,
+          runSpacing: spacing.s,
           alignment: WrapAlignment.center,
           children: [
             for (final reaction in reactions) _ReactionChip(reaction: reaction),

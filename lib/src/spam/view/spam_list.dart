@@ -67,12 +67,12 @@ class _SpamListBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabState = searchState?.stateFor(HomeTab.spam);
+    final tabState =
+        searchState?.stateFor(HomeTab.spam) ?? const TabSearchState();
     final searchActive = searchState?.active ?? false;
-    final query =
-        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-    final filterId = tabState?.filterId ?? filters.first.id;
-    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+    final query = searchActive ? tabState.query.trim().toLowerCase() : '';
+    final filterId = tabState.filterId ?? filters.first.id;
+    final sortOrder = tabState.sort;
 
     var visibleItems = List<Chat>.from(items);
 
@@ -111,7 +111,13 @@ class _SpamListBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ChatListTile(item: chat),
+                ChatListTile(
+                  item: chat,
+                  selectionActive: false,
+                  isSelected: false,
+                  isOpen: false,
+                  timestampNow: DateTime.now(),
+                ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: ShadButton.secondary(
@@ -129,15 +135,12 @@ class _SpamListBody extends StatelessWidget {
   }
 }
 
-bool _spamFilterMatches(Chat chat, String filterId) {
-  switch (filterId) {
-    case 'email':
-      return chat.transport.isEmail;
-    case 'xmpp':
-      return chat.transport.isXmpp;
-    default:
-      return true;
-  }
+bool _spamFilterMatches(Chat chat, SearchFilterId filterId) {
+  return switch (filterId) {
+    SearchFilterId.email => chat.transport.isEmail,
+    SearchFilterId.xmpp => chat.transport.isXmpp,
+    _ => true,
+  };
 }
 
 bool _chatMatchesQuery(Chat chat, String query) {

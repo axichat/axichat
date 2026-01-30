@@ -1817,6 +1817,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileExportFormatVcardSubtitle => 'Standard-Visitenkarten.';
 
   @override
+  String get profileExportCsvHeaderName => 'Name';
+
+  @override
+  String get profileExportCsvHeaderAddress => 'Adresse';
+
+  @override
+  String get profileExportContactsFilenameFallback => 'kontakte';
+
+  @override
   String get termsAcceptLabel => 'Ich akzeptiere die Geschäftsbedingungen';
 
   @override
@@ -2088,6 +2097,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatAttachmentBlockedTitle => 'Anhang blockiert';
+
+  @override
+  String get chatEmailImageBlockedLabel => 'Bild blockiert';
+
+  @override
+  String get chatEmailImageFailedLabel => 'Bild fehlgeschlagen';
 
   @override
   String get chatAttachmentBlockedDescription =>

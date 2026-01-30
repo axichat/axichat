@@ -7,6 +7,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
+import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
@@ -117,6 +118,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   ) async {
     if (metadataIds.isEmpty) return const [];
     return _messageService.loadDraftAttachments(metadataIds);
+  }
+
+  Future<EmailAttachment> optimizeAttachment(EmailAttachment attachment) async {
+    return EmailAttachmentOptimizer.optimize(attachment);
   }
 
   Future<void> deleteDraftAttachmentMetadata(String metadataId) async {

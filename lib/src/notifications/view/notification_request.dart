@@ -65,6 +65,7 @@ class _NotificationRequestBody extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
       builder: (context, state) {
+        final locate = context.read;
         if (state.hasPermissions == null ||
             state.foregroundServiceActive ||
             !displayMode.shouldShowFor(capability)) {
@@ -87,7 +88,10 @@ class _NotificationRequestBody extends StatelessWidget {
           onChanged: state.isBusy
               ? null
               : (enabled) async {
-                  final confirmed = await showNotificationDialog(context);
+                  final confirmed = await showNotificationDialog(
+                    context,
+                    locate,
+                  );
                   if (!context.mounted || confirmed != true) {
                     return;
                   }
@@ -100,8 +104,7 @@ class _NotificationRequestBody extends StatelessWidget {
                   if (!context.mounted) {
                     return;
                   }
-                  await context
-                      .read<NotificationRequestCubit>()
+                  await locate<NotificationRequestCubit>()
                       .enableForegroundService();
                 },
         );

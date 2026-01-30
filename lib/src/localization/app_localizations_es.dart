@@ -1812,6 +1812,15 @@ class AppLocalizationsEs extends AppLocalizations {
       'Tarjetas de contacto estándar.';
 
   @override
+  String get profileExportCsvHeaderName => 'Nombre';
+
+  @override
+  String get profileExportCsvHeaderAddress => 'Dirección';
+
+  @override
+  String get profileExportContactsFilenameFallback => 'contactos';
+
+  @override
   String get termsAcceptLabel => 'Acepto los términos y condiciones';
 
   @override
@@ -2086,6 +2095,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatAttachmentBlockedTitle => 'Adjunto bloqueado';
+
+  @override
+  String get chatEmailImageBlockedLabel => 'Imagen bloqueada';
+
+  @override
+  String get chatEmailImageFailedLabel => 'Imagen fallida';
 
   @override
   String get chatAttachmentBlockedDescription =>

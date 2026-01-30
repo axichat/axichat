@@ -82,14 +82,10 @@ class SettingsControls extends StatelessWidget {
           vertical: spacing.s,
         );
         final exportState = context.watch<ProfileExportCubit>().state;
-        final selectTextStyle = context.textTheme.small.copyWith(
-          color: context.colorScheme.foreground,
-        );
-        final double dividerIndent =
-            fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
-        final bool canForegroundService = context.select<SettingsCubit, bool>(
-          (cubit) => cubit.canForegroundService,
-        );
+        final selectTextStyle = context.textTheme.small;
+        final double dividerIndent = fullWidthDividers
+            ? sectionHeaderPadding.horizontal - sectionHeaderPadding.horizontal
+            : sectionHeaderPadding.horizontal;
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
@@ -139,10 +135,12 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            if (canForegroundService)
+            if (context.select<SettingsCubit, bool>(
+              (cubit) => cubit.canForegroundService,
+            ))
               Padding(
                 padding: EdgeInsets.all(spacing.m),
-                child: NotificationRequest(),
+                child: const NotificationRequest(),
               ),
             _SettingsActionButton(
               iconData: LucideIcons.keyRound,
@@ -818,7 +816,7 @@ class _SettingsSectionHeader extends StatelessWidget {
   const _SettingsSectionHeader({
     required this.label,
     this.showDivider = true,
-    this.dividerIndent = 0.0,
+    required this.dividerIndent,
     required this.padding,
   });
 
@@ -859,12 +857,9 @@ class MessageStorageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final spacing = context.spacing;
     final l10n = context.l10n;
-    final selectTextStyle = context.textTheme.small.copyWith(
-      color: colors.foreground,
-    );
+    final selectTextStyle = context.textTheme.small;
     return AxiModalSurface(
       padding: EdgeInsets.symmetric(
         horizontal: spacing.m,
@@ -879,9 +874,7 @@ class MessageStorageTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.settingsMessageStorageTitle,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.foreground,
-                  ),
+                  style: context.textTheme.small,
                 ),
               ),
               StreamBuilder<bool>(
@@ -931,9 +924,7 @@ class MessageStorageTile extends StatelessWidget {
           SizedBox(height: spacing.s),
           Text(
             l10n.settingsMessageStorageSubtitle,
-            style: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground,
-            ),
+            style: context.textTheme.muted,
           ),
         ],
       ),

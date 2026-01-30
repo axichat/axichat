@@ -938,7 +938,6 @@ class EmailService {
     if (_running) return;
     await _transport.start();
     _running = true;
-    await _applyDownloadLimit();
     _startImapSyncLoop();
   }
 
@@ -1241,7 +1240,7 @@ class EmailService {
       );
     }
     if (resolvedTargets.length > _maxFanOutRecipients) {
-      throw FanOutValidationException(
+      throw const FanOutValidationException(
         FanOutValidationFailure.tooManyRecipients,
         maxRecipients: _maxFanOutRecipients,
       );
@@ -1340,8 +1339,11 @@ class EmailService {
     await db.createMessageShare(share: shareRecord, participants: participants);
 
     final statuses = <FanOutRecipientStatus>[];
-    var originatorCaptured = existingShare?.originatorDcMsgId != null;
-    for (final entry in resolvedTargets.values) {
+    final bool originatorAlreadyCaptured =
+        existingShare?.originatorDcMsgId != null;
+    int? originatorMsgId;
+
+    Future<(FanOutRecipientStatus, int?)> sendTo(Chat entry) async {
       try {
         final context = await _ensureEmailChatContext(entry);
         final chatId = context.deltaChatId;
@@ -1376,19 +1378,13 @@ class EmailService {
             ),
           );
         }
-        if (!originatorCaptured) {
-          await db.assignShareOriginator(
-            shareId: resolvedShareId,
-            originatorDcMsgId: msgId,
-          );
-          originatorCaptured = true;
-        }
-        statuses.add(
+        return (
           FanOutRecipientStatus(
             chat: context.chat,
             state: FanOutRecipientState.sent,
             deltaMsgId: msgId,
           ),
+          msgId,
         );
       } on Exception catch (error, stackTrace) {
         final targetId = entry.deltaChatId != null
@@ -1399,14 +1395,35 @@ class EmailService {
           error,
           stackTrace,
         );
-        statuses.add(
+        return (
           FanOutRecipientStatus(
             chat: entry,
             state: FanOutRecipientState.failed,
             error: error,
           ),
+          null,
         );
       }
+    }
+
+    final results = await Future.wait(
+      resolvedTargets.values.map(sendTo),
+    );
+
+    for (final result in results) {
+      statuses.add(result.$1);
+      if (!originatorAlreadyCaptured &&
+          originatorMsgId == null &&
+          result.$2 != null) {
+        originatorMsgId = result.$2;
+      }
+    }
+
+    if (!originatorAlreadyCaptured && originatorMsgId != null) {
+      await db.assignShareOriginator(
+        shareId: resolvedShareId,
+        originatorDcMsgId: originatorMsgId,
+      );
     }
 
     final attachmentWarning = hasAttachment &&
@@ -3257,21 +3274,6 @@ class EmailService {
     return now.millisecondsSinceEpoch;
   }
 
-  Future<void> _applyDownloadLimit() async {
-    try {
-      final current = await _transport.getCoreConfig(_emailDownloadLimitKey);
-      if (current?.trim() == _emailDownloadLimitDisabledValue) {
-        return;
-      }
-      await _transport.setCoreConfig(
-        key: _emailDownloadLimitKey,
-        value: _emailDownloadLimitDisabledValue,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to update email download limit', error, stackTrace);
-    }
-  }
-
   Future<String?> _notificationBody({
     required XmppDatabase db,
     required Message message,
@@ -3427,7 +3429,6 @@ class EmailService {
   ) {
     final configValues = <String, String>{
       _showEmailsConfigKey: _showEmailsAllValue,
-      _emailDownloadLimitKey: _emailDownloadLimitDisabledValue,
       _mdnsEnabledConfigKey: _mdnsEnabledValue,
     };
     final normalizedAddress = address.trim();

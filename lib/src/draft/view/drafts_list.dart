@@ -33,10 +33,10 @@ class _DraftsListState extends State<DraftsList> {
 
   void _syncSearchSnapshot(HomeSearchState searchState) {
     final tabState = searchState.stateFor(HomeTab.drafts);
-    final query =
-        searchState.active ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-    final filterAttachmentsOnly = tabState?.filterId == 'attachments';
-    final sortOrder = switch (tabState?.sort) {
+    final query = searchState.active ? tabState.query.trim().toLowerCase() : '';
+    final filterAttachmentsOnly =
+        tabState.filterId == SearchFilterId.attachments;
+    final sortOrder = switch (tabState.sort) {
       SearchSortOrder.oldestFirst => DraftSortOrder.oldestFirst,
       _ => DraftSortOrder.newestFirst,
     };

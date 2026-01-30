@@ -15,14 +15,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 
 const int _emptyCount = 0;
-const String _xmppMessagesFileLabel = 'xmpp-messages';
-const String _emailMessagesFileLabel = 'email-messages';
-const String _xmppContactsFileLabel = 'xmpp-contacts';
-const String _emailContactsFileLabel = 'email-contacts';
-final DateTime _fallbackTimestamp = DateTime.fromMillisecondsSinceEpoch(
-  0,
-  isUtc: true,
-);
 
 enum ProfileExportKind {
   xmppMessages,
@@ -124,7 +116,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         operation: () => _exportMessages(
           kind: ProfileExportKind.xmppMessages,
           transport: MessageTransport.xmpp,
-          fileLabel: _xmppMessagesFileLabel,
+          fileLabel: 'xmpp-messages',
           lineFormatter: null,
         ),
       );
@@ -137,7 +129,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         operation: () => _exportMessages(
           kind: ProfileExportKind.emailMessages,
           transport: MessageTransport.email,
-          fileLabel: _emailMessagesFileLabel,
+          fileLabel: 'email-messages',
           lineFormatter: ({
             required Chat chat,
             required Message message,
@@ -249,7 +241,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     final file = await ContactExporter.exportContacts(
       contacts: contacts,
       format: format,
-      fileLabel: _xmppContactsFileLabel,
+      fileLabel: 'xmpp-contacts',
       labels: labels,
     );
     return ProfileExportResult.success(
@@ -263,7 +255,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     ContactExportFormat format,
     ContactExportLabels labels,
   ) async {
-    final flags = DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
+    const flags = DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
     final emailContacts = await _emailService.getContacts(
       flags: flags,
     );
@@ -287,7 +279,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     final file = await ContactExporter.exportContacts(
       contacts: contacts,
       format: format,
-      fileLabel: _emailContactsFileLabel,
+      fileLabel: 'email-contacts',
       labels: labels,
     );
     return ProfileExportResult.success(
