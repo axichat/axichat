@@ -28,16 +28,12 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-const double _draftComposerControlExtent = 42;
-const double _draftSubjectHeight = 32;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -73,20 +69,22 @@ class _DraftFormState extends State<DraftForm> {
   final _formKey = GlobalKey<FormState>();
   bool _showValidationMessages = false;
   String? _sendErrorMessage;
-  late final MessageService _messageService;
   late final TextEditingController _bodyTextController;
   late final TextEditingController _subjectTextController;
   late final FocusNode _bodyFocusNode;
   late final FocusNode _subjectFocusNode;
   late List<ComposerRecipient> _recipients;
   late List<PendingAttachment> _pendingAttachments;
-  bool _dependenciesInitialized = false;
+  bool _recipientsInitialized = false;
+  bool _hydrationScheduled = false;
 
   late var id = widget.id;
   bool _loadingAttachments = false;
   bool _addingAttachment = false;
   int _pendingAttachmentSeed = 0;
   bool _sendingDraft = false;
+  bool _savingDraft = false;
+  bool _discardingDraft = false;
   bool _sendCompletionHandled = false;
   bool _seedAttachmentCleanupHandled = false;
   Timer? _autosaveTimer;
@@ -105,6 +103,7 @@ class _DraftFormState extends State<DraftForm> {
     _bodyFocusNode = FocusNode();
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
+    _recipients = const [];
   }
 
   @override
@@ -118,7 +117,7 @@ class _DraftFormState extends State<DraftForm> {
 
   @override
   void dispose() {
-    if (_dependenciesInitialized && _shouldCleanupSeedAttachments) {
+    if (_shouldCleanupSeedAttachments) {
       Future<void>(() async {
         await _cleanupSeedAttachmentMetadata();
       });
@@ -170,15 +169,14 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_dependenciesInitialized) return;
-    _messageService = context.read<MessageService>();
-    _recipients = _initialRecipients();
-    if (widget.attachmentMetadataIds.isNotEmpty) {
-      Future<void>(() async {
-        await _hydrateAttachments();
-      });
+    if (_hydrationScheduled || widget.attachmentMetadataIds.isEmpty) {
+      return;
     }
-    _dependenciesInitialized = true;
+    _hydrationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _hydrateAttachments();
+    });
   }
 
   void _handleTaskDrop(CalendarDragPayload payload) {
@@ -188,336 +186,339 @@ class _DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return _buildForm(
-      context,
-      l10n,
-      context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[],
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
+    final sectionSpacing = spacing.s + spacing.xs;
+    final smallGap = spacing.xs + spacing.xxs;
+    final inputPadding = EdgeInsets.symmetric(
+      horizontal: spacing.s,
+      vertical: spacing.xs,
     );
-  }
+    final subjectHeight = sizing.buttonHeightRegular;
 
-  Widget _buildForm(
-    BuildContext context,
-    AppLocalizations l10n,
-    List<Chat> chats,
-  ) {
-    final autovalidateMode = _showValidationMessages
-        ? AutovalidateMode.always
-        : AutovalidateMode.disabled;
-    const horizontalPadding = EdgeInsets.symmetric(horizontal: 16);
-    return SingleChildScrollView(
-      padding: EdgeInsets.zero,
-      child: Form(
-        key: _formKey,
-        autovalidateMode: autovalidateMode,
-        child: BlocConsumer<DraftCubit, DraftState>(
-          listener: (context, state) async {
-            if (state is DraftSaveComplete) {
-              if (!state.autoSaved) {
-                ShadToaster.maybeOf(
-                  context,
-                )?.show(FeedbackToast.success(title: l10n.draftSaved));
-              }
-            }
-            if (state is DraftSending) {
-              if (_sendingDraft && mounted) {
-                setState(() {
-                  _sendErrorMessage = null;
-                  _pendingAttachments = _pendingAttachments
-                      .map(
-                        (pending) => pending.copyWith(
-                          status: PendingAttachmentStatus.uploading,
-                          clearErrorMessage: true,
-                        ),
-                      )
-                      .toList();
-                });
-              }
-            } else if (state is DraftFailure) {
-              if (!_sendingDraft) return;
-              if (mounted) {
-                setState(() {
-                  _sendCompletionHandled = true;
-                  _sendingDraft = false;
-                  _sendErrorMessage = state.message;
-                  _pendingAttachments = _pendingAttachments
-                      .map(
-                        (pending) => pending.copyWith(
-                          status: PendingAttachmentStatus.queued,
-                          clearErrorMessage: true,
-                        ),
-                      )
-                      .toList();
-                });
-              }
-            } else if (state is DraftSendComplete) {
-              await _handleSendComplete();
-            }
-          },
-          builder: (context, state) {
-            final isSending = state is DraftSending && _sendingDraft;
-            final enabled = !isSending;
-            final bodyText = _bodyTextController.text.trim();
-            final subjectText = _subjectTextController.text.trim();
-            final pendingAttachments = _pendingAttachments;
-            final hasAttachments = pendingAttachments.isNotEmpty;
-            final hasPreparingAttachments = pendingAttachments.any(
-              (pending) => pending.isPreparing,
-            );
-            final split = _splitRecipients();
-            final hasActiveRecipients = split.hasActiveRecipients;
-            final hasContent = _hasContent(hasAttachments: hasAttachments);
-            final canSave = enabled &&
-                (hasActiveRecipients ||
-                    bodyText.isNotEmpty ||
-                    subjectText.isNotEmpty ||
-                    hasAttachments);
-            final canDiscard = enabled &&
-                (id != null ||
-                    bodyText.isNotEmpty ||
-                    subjectText.isNotEmpty ||
-                    hasAttachments);
-            final sendBlocker = _sendValidationMessage(
-              hasActiveRecipients: hasActiveRecipients,
-              hasContent: hasContent,
-            );
-            final bool showSendBlockerMessage = _showValidationMessages &&
-                sendBlocker != null &&
-                sendBlocker != l10n.draftNoRecipients;
-            final String? sendErrorMessage = _sendErrorMessage;
-            final readyToSend = sendBlocker == null &&
-                !_addingAttachment &&
-                !hasPreparingAttachments;
-            final bool showAutosaveHint = _lastAutosaveAt != null &&
-                _lastSavedSignature == _currentDraftSignature();
-            return _DraftTaskDropRegion(
-              onTaskDropped: enabled ? _handleTaskDrop : null,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FormField<void>(
-                    validator: (_) =>
-                        hasActiveRecipients ? null : l10n.draftNoRecipients,
-                    builder: (field) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          RecipientChipsBar(
-                            recipients: _recipients,
-                            availableChats: chats,
-                            onRecipientAdded: (target) {
-                              _handleRecipientAdded(target);
-                              field.didChange(null);
-                            },
-                            onRecipientRemoved: (key) {
-                              _handleRecipientRemoved(key);
-                              field.didChange(null);
-                            },
-                            onRecipientToggled: (key) {
-                              _handleRecipientToggled(key);
-                              field.didChange(null);
-                            },
-                            latestStatuses: const {},
-                            collapsedByDefault: false,
-                            suggestionAddresses: widget.suggestionAddresses,
-                            suggestionDomains: widget.suggestionDomains,
-                          ),
-                          if (_showValidationMessages && field.hasError)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                field.errorText ?? '',
-                                style: TextStyle(
-                                  color: context.colorScheme.destructive,
-                                  fontWeight: FontWeight.w600,
-                                ),
+    return BlocBuilder<ChatsCubit, ChatsState>(
+      builder: (context, chatsState) {
+        final chats = chatsState.items;
+        _scheduleRecipientsInitialization(chats);
+        final autovalidateMode = _showValidationMessages
+            ? AutovalidateMode.always
+            : AutovalidateMode.disabled;
+        return SingleChildScrollView(
+          padding: EdgeInsets.zero,
+          child: Form(
+            key: _formKey,
+            autovalidateMode: autovalidateMode,
+            child: BlocConsumer<DraftCubit, DraftState>(
+              listener: (context, state) async {
+                if (state is DraftSaveComplete) {
+                  if (!state.autoSaved) {
+                    ShadToaster.maybeOf(
+                      context,
+                    )?.show(FeedbackToast.success(title: l10n.draftSaved));
+                  }
+                }
+                if (state is DraftSending) {
+                  if (_sendingDraft && mounted) {
+                    setState(() {
+                      _sendErrorMessage = null;
+                      _pendingAttachments = _pendingAttachments
+                          .map(
+                            (pending) => pending.copyWith(
+                              status: PendingAttachmentStatus.uploading,
+                              clearErrorMessage: true,
+                            ),
+                          )
+                          .toList();
+                    });
+                  }
+                } else if (state is DraftFailure) {
+                  if (!_sendingDraft) return;
+                  if (mounted) {
+                    setState(() {
+                      _sendCompletionHandled = true;
+                      _sendingDraft = false;
+                      _sendErrorMessage =
+                          _draftFailureMessage(state.type, l10n);
+                      _pendingAttachments = _pendingAttachments
+                          .map(
+                            (pending) => pending.copyWith(
+                              status: PendingAttachmentStatus.queued,
+                              clearErrorMessage: true,
+                            ),
+                          )
+                          .toList();
+                    });
+                  }
+                } else if (state is DraftSendComplete) {
+                  await _handleSendComplete();
+                }
+              },
+              builder: (context, state) {
+                final isSending = state is DraftSending && _sendingDraft;
+                final enabled =
+                    !isSending && !_savingDraft && !_discardingDraft;
+                final bodyText = _bodyTextController.text.trim();
+                final subjectText = _subjectTextController.text.trim();
+                final pendingAttachments = _pendingAttachments;
+                final hasAttachments = pendingAttachments.isNotEmpty;
+                final hasPreparingAttachments = pendingAttachments.any(
+                  (pending) => pending.isPreparing,
+                );
+                final split = _splitRecipients();
+                final hasActiveRecipients = split.hasActiveRecipients;
+                final hasContent = _hasContent(hasAttachments: hasAttachments);
+                final canSave = enabled &&
+                    (hasActiveRecipients ||
+                        bodyText.isNotEmpty ||
+                        subjectText.isNotEmpty ||
+                        hasAttachments);
+                final canDiscard = enabled &&
+                    (id != null ||
+                        bodyText.isNotEmpty ||
+                        subjectText.isNotEmpty ||
+                        hasAttachments);
+                final sendBlocker = _sendValidationMessage(
+                  hasActiveRecipients: hasActiveRecipients,
+                  hasContent: hasContent,
+                );
+                final bool showSendBlockerMessage = _showValidationMessages &&
+                    sendBlocker != null &&
+                    sendBlocker != l10n.draftNoRecipients;
+                final String? sendErrorMessage = _sendErrorMessage;
+                final readyToSend = sendBlocker == null &&
+                    !_addingAttachment &&
+                    !hasPreparingAttachments;
+                final bool showAutosaveHint = _lastAutosaveAt != null &&
+                    _lastSavedSignature == _currentDraftSignature();
+                return _DraftTaskDropRegion(
+                  onTaskDropped: enabled ? _handleTaskDrop : null,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FormField<void>(
+                        validator: (_) =>
+                            hasActiveRecipients ? null : l10n.draftNoRecipients,
+                        builder: (field) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              RecipientChipsBar(
+                                recipients: _recipients,
+                                availableChats: chats,
+                                onRecipientAdded: (target) {
+                                  _handleRecipientAdded(target);
+                                  field.didChange(null);
+                                },
+                                onRecipientRemoved: (key) {
+                                  _handleRecipientRemoved(key);
+                                  field.didChange(null);
+                                },
+                                onRecipientToggled: (key) {
+                                  _handleRecipientToggled(key);
+                                  field.didChange(null);
+                                },
+                                latestStatuses: const {},
+                                collapsedByDefault: false,
+                                suggestionAddresses: widget.suggestionAddresses,
+                                suggestionDomains: widget.suggestionDomains,
                               ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Semantics(
-                                label: l10n.draftSubjectSemantics,
-                                textField: true,
-                                child: AxiTextFormField(
-                                  controller: _subjectTextController,
-                                  focusNode: _subjectFocusNode,
-                                  enabled: enabled,
-                                  minLines: 1,
-                                  maxLines: 1,
-                                  textInputAction: TextInputAction.next,
-                                  onSubmitted: (_) =>
-                                      _bodyFocusNode.requestFocus(),
-                                  placeholder: Text(
-                                    l10n.draftSubjectHintOptional,
-                                  ),
-                                  constraints: const BoxConstraints.tightFor(
-                                    height: _draftSubjectHeight,
-                                  ),
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  placeholderAlignment: Alignment.centerLeft,
-                                  inputPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            _DraftSendIconButton(
-                              readyToSend: readyToSend,
-                              sending: isSending,
-                              disabledReason: sendBlocker,
-                              onPressed: isSending ||
-                                      _addingAttachment ||
-                                      hasPreparingAttachments
-                                  ? null
-                                  : _handleSendDraft,
-                            ),
-                          ],
-                        ),
-                        if (showSendBlockerMessage)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              sendBlocker,
-                              style: TextStyle(
-                                color: context.colorScheme.destructive,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        if (sendErrorMessage != null && sendBlocker == null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              sendErrorMessage,
-                              style: TextStyle(
-                                color: context.colorScheme.destructive,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: _DraftAttachmentsSection(
-                      enabled: enabled,
-                      loading: _loadingAttachments,
-                      attachments: _pendingAttachments,
-                      addingAttachment: _addingAttachment,
-                      onAddAttachment: _handleAttachmentAdded,
-                      onRetry: _handlePendingAttachmentRetry,
-                      onRemove: _handlePendingAttachmentRemoved,
-                      onAttachmentPressed: _handlePendingAttachmentPressed,
-                      onAttachmentLongPressed:
-                          _handlePendingAttachmentLongPressed,
-                      onPreview: _showAttachmentPreview,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: Semantics(
-                      label: l10n.draftMessageSemantics,
-                      textField: true,
-                      child: AxiTextFormField(
-                        controller: _bodyTextController,
-                        focusNode: _bodyFocusNode,
-                        enabled: enabled,
-                        minLines: 7,
-                        maxLines: null,
-                        placeholder: Text(l10n.draftMessageHint),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (isSending)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      context.colorScheme.primary,
+                              if (_showValidationMessages && field.hasError)
+                                Padding(
+                                  padding: EdgeInsets.only(top: spacing.s),
+                                  child: Text(
+                                    field.errorText ?? '',
+                                    style: textTheme.small.copyWith(
+                                      color: colors.destructive,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  l10n.draftSendingStatus,
-                                  style: context.textTheme.muted,
+                            ],
+                          );
+                        },
+                      ),
+                      SizedBox(height: sectionSpacing),
+                      Padding(
+                        padding: horizontalPadding,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Semantics(
+                                    label: l10n.draftSubjectSemantics,
+                                    textField: true,
+                                    child: AxiTextFormField(
+                                      controller: _subjectTextController,
+                                      focusNode: _subjectFocusNode,
+                                      enabled: enabled,
+                                      minLines: 1,
+                                      maxLines: 1,
+                                      textInputAction: TextInputAction.next,
+                                      onSubmitted: (_) =>
+                                          _bodyFocusNode.requestFocus(),
+                                      placeholder: Text(
+                                        l10n.draftSubjectHintOptional,
+                                      ),
+                                      constraints: BoxConstraints.tightFor(
+                                        height: subjectHeight,
+                                      ),
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      placeholderAlignment:
+                                          Alignment.centerLeft,
+                                      inputPadding: inputPadding,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: sectionSpacing),
+                                _DraftSendIconButton(
+                                  readyToSend: readyToSend,
+                                  sending: isSending,
+                                  disabledReason: sendBlocker,
+                                  onPressed: isSending ||
+                                          _addingAttachment ||
+                                          hasPreparingAttachments
+                                      ? null
+                                      : _handleSendDraft,
                                 ),
                               ],
                             ),
-                          ),
-                        if (showAutosaveHint)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              l10n.draftAutosaved,
-                              style: context.textTheme.muted,
-                            ),
-                          ),
-                        Row(
-                          children: [
-                            ShadButton.destructive(
-                              enabled: canDiscard,
-                              onPressed: canDiscard ? _handleDiscard : null,
-                              child: Text(l10n.draftDiscard),
-                            ).withTapBounce(enabled: canDiscard),
-                            const Spacer(),
-                            ShadButton.outline(
-                              enabled: canSave,
-                              onPressed: canSave ? _handleSaveDraft : null,
-                              child: Text(l10n.draftSave),
-                            ).withTapBounce(enabled: canSave),
+                            if (showSendBlockerMessage)
+                              Padding(
+                                padding: EdgeInsets.only(top: spacing.s),
+                                child: Text(
+                                  sendBlocker,
+                                  style: textTheme.small.copyWith(
+                                    color: colors.destructive,
+                                  ),
+                                ),
+                              ),
+                            if (sendErrorMessage != null && sendBlocker == null)
+                              Padding(
+                                padding: EdgeInsets.only(top: spacing.s),
+                                child: Text(
+                                  sendErrorMessage,
+                                  style: textTheme.small.copyWith(
+                                    color: colors.destructive,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                      ],
-                    ),
+                      ),
+                      SizedBox(height: sectionSpacing),
+                      Padding(
+                        padding: horizontalPadding,
+                        child: _DraftAttachmentsSection(
+                          enabled: enabled,
+                          loading: _loadingAttachments,
+                          attachments: _pendingAttachments,
+                          addingAttachment: _addingAttachment,
+                          onAddAttachment: _handleAttachmentAdded,
+                          onRetry: _handlePendingAttachmentRetry,
+                          onRemove: _handlePendingAttachmentRemoved,
+                          onAttachmentPressed: _handlePendingAttachmentPressed,
+                          onAttachmentLongPressed:
+                              _handlePendingAttachmentLongPressed,
+                          onPreview: _showAttachmentPreview,
+                        ),
+                      ),
+                      SizedBox(height: sectionSpacing),
+                      Padding(
+                        padding: horizontalPadding,
+                        child: Semantics(
+                          label: l10n.draftMessageSemantics,
+                          textField: true,
+                          child: AxiTextFormField(
+                            controller: _bodyTextController,
+                            focusNode: _bodyFocusNode,
+                            enabled: enabled,
+                            minLines: 7,
+                            maxLines: null,
+                            placeholder: Text(l10n.draftMessageHint),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: sectionSpacing),
+                      Padding(
+                        padding: horizontalPadding,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (isSending)
+                              Padding(
+                                padding: EdgeInsets.only(bottom: spacing.s),
+                                child: Row(
+                                  children: [
+                                    AxiProgressIndicator(
+                                      color: colors.primary,
+                                    ),
+                                    SizedBox(width: smallGap),
+                                    Text(
+                                      l10n.draftSendingStatus,
+                                      style: textTheme.muted,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (showAutosaveHint)
+                              Padding(
+                                padding: EdgeInsets.only(bottom: spacing.s),
+                                child: Text(
+                                  l10n.draftAutosaved,
+                                  style: textTheme.muted,
+                                ),
+                              ),
+                            Row(
+                              children: [
+                                AxiButton.destructive(
+                                  onPressed: canDiscard ? _handleDiscard : null,
+                                  child: Text(l10n.draftDiscard),
+                                ),
+                                const Spacer(),
+                                AxiButton.outline(
+                                  onPressed: canSave ? _handleSaveDraft : null,
+                                  child: Text(l10n.draftSave),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: sectionSpacing),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
-  List<ComposerRecipient> _initialRecipients() {
+  void _scheduleRecipientsInitialization(List<Chat> chats) {
+    if (_recipientsInitialized || chats.isEmpty) return;
+    _recipientsInitialized = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _recipients = _initialRecipients(chats));
+    });
+  }
+
+  List<ComposerRecipient> _initialRecipients(List<Chat> chats) {
     final recipients = <ComposerRecipient>[];
     for (final value in widget.jids) {
       final trimmed = value.trim();
       if (trimmed.isEmpty) continue;
       Chat? match;
-      for (final chat
-          in context.read<ChatsCubit?>()?.state.items ?? const <Chat>[]) {
+      for (final chat in chats) {
         if (chat.jid == trimmed) {
           match = chat;
           break;
@@ -585,9 +586,9 @@ class _DraftFormState extends State<DraftForm> {
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final hydrated = await _messageService.loadDraftAttachments(
-      metadataIds.toList(),
-    );
+    final hydrated = await context
+        .read<DraftCubit>()
+        .loadDraftAttachments(metadataIds.toList());
     final List<PendingAttachment> pending = <PendingAttachment>[];
     for (final attachment in hydrated) {
       final EmailAttachment resolvedAttachment =
@@ -751,11 +752,18 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleSaveDraft() async {
-    await _saveDraft(autoSave: false);
+    if (_savingDraft) return;
+    setState(() => _savingDraft = true);
+    try {
+      await _saveDraft(autoSave: false);
+    } finally {
+      if (mounted) {
+        setState(() => _savingDraft = false);
+      }
+    }
   }
 
   Future<void> _saveDraft({required bool autoSave}) async {
-    if (context.read<DraftCubit?>() == null) return;
     final int saveEpoch = _saveEpoch;
     final bool wasNewDraft = id == null;
     final List<String> attachmentIds =
@@ -807,7 +815,9 @@ class _DraftFormState extends State<DraftForm> {
       if (staleMetadataIds.isNotEmpty) {
         for (final metadataId in staleMetadataIds) {
           try {
-            await _messageService.deleteFileMetadata(metadataId);
+            await context
+                .read<DraftCubit>()
+                .deleteDraftAttachmentMetadata(metadataId);
           } on Exception {
             // Best-effort cleanup for share intent attachment metadata.
           }
@@ -818,7 +828,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   void _scheduleAutosave() {
-    if (!_dependenciesInitialized || _sendingDraft) {
+    if (_sendingDraft || _savingDraft || _discardingDraft) {
       return;
     }
     if (_addingAttachment) {
@@ -855,9 +865,6 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   bool _shouldAutosave() {
-    if (context.read<DraftCubit?>() == null) {
-      return false;
-    }
     if (_pendingAttachments.any((pending) => pending.isPreparing)) {
       return false;
     }
@@ -948,30 +955,40 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleDiscard() async {
     final l10n = context.l10n;
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
+    if (_discardingDraft) return;
+    setState(() => _discardingDraft = true);
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
-    if (id != null && context.read<DraftCubit?>() != null) {
-      await context.read<DraftCubit>().deleteDraft(id: id!);
+    try {
+      if (id != null) {
+        await context.read<DraftCubit>().deleteDraft(id: id!);
+      }
+      if (shouldCleanupSeedAttachments) {
+        await _cleanupSeedAttachmentMetadata();
+      }
+      if (!mounted) return;
+      setState(() {
+        id = null;
+        _recipients = [];
+        _recipientsInitialized = false;
+        _pendingAttachments = const [];
+        _bodyTextController.clear();
+        _subjectTextController.clear();
+        _showValidationMessages = false;
+        _lastAutosaveAt = null;
+        _lastSavedSignature = null;
+      });
+      _showToast(l10n.draftDiscarded);
+      widget.onDiscarded?.call();
+    } finally {
+      if (mounted) {
+        setState(() => _discardingDraft = false);
+      }
     }
-    if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata();
-    }
-    setState(() {
-      id = null;
-      _recipients = [];
-      _pendingAttachments = const [];
-      _bodyTextController.clear();
-      _subjectTextController.clear();
-      _showValidationMessages = false;
-      _lastAutosaveAt = null;
-      _lastSavedSignature = null;
-    });
-    _showToast(l10n.draftDiscarded);
-    widget.onDiscarded?.call();
   }
 
   Future<void> _cleanupSeedAttachmentMetadata() async {
-    if (!_dependenciesInitialized || !_shouldCleanupSeedAttachments) {
+    if (!_shouldCleanupSeedAttachments) {
       return;
     }
     _seedAttachmentCleanupHandled = true;
@@ -981,7 +998,9 @@ class _DraftFormState extends State<DraftForm> {
     }
     for (final metadataId in metadataIds) {
       try {
-        await _messageService.deleteFileMetadata(metadataId);
+        await context
+            .read<DraftCubit>()
+            .deleteDraftAttachmentMetadata(metadataId);
       } on Exception {
         // Best-effort cleanup for share intent attachment metadata.
       }
@@ -1000,7 +1019,6 @@ class _DraftFormState extends State<DraftForm> {
         _pendingAttachments.any((pending) => pending.isPreparing)) {
       return;
     }
-    if (context.read<DraftCubit?>() == null) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
     final xmppJids =
@@ -1047,7 +1065,6 @@ class _DraftFormState extends State<DraftForm> {
             xmppJids: xmppJids,
             emailTargets: emailTargets,
             body: _bodyTextController.text,
-            l10n: l10n,
             subject: _subjectTextController.text,
             attachments: _currentAttachments(),
           );
@@ -1223,6 +1240,17 @@ class _DraftFormState extends State<DraftForm> {
     return null;
   }
 
+  String _draftFailureMessage(
+    DraftSendFailureType type,
+    AppLocalizations l10n,
+  ) {
+    return switch (type) {
+      DraftSendFailureType.noRecipients => l10n.draftNoRecipients,
+      DraftSendFailureType.noContent => l10n.draftValidationNoContent,
+      DraftSendFailureType.sendFailed => l10n.draftSendFailed,
+    };
+  }
+
   void _revalidateFormIfNeeded() {
     if (!_showValidationMessages) return;
     _formKey.currentState?.validate();
@@ -1248,6 +1276,7 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     if (!mounted) return;
     final attachment = pending.attachment;
     final file = File(attachment.path);
@@ -1260,19 +1289,22 @@ class _DraftFormState extends State<DraftForm> {
       context: context,
       builder: (dialogContext) {
         return Dialog(
-          child: Stack(
-            children: [
-              Positioned.fill(child: Image.file(file, fit: BoxFit.contain)),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: AxiIconButton(
-                  iconData: LucideIcons.x,
-                  tooltip: l10n.commonClose,
-                  onPressed: () => Navigator.of(dialogContext).pop(),
+          child: AxiModalSurface(
+            padding: EdgeInsets.zero,
+            child: Stack(
+              children: [
+                Positioned.fill(child: Image.file(file, fit: BoxFit.contain)),
+                Positioned(
+                  top: spacing.s,
+                  right: spacing.s,
+                  child: AxiIconButton(
+                    iconData: LucideIcons.x,
+                    tooltip: l10n.commonClose,
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -1285,41 +1317,53 @@ class _DraftFormState extends State<DraftForm> {
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      dialogMaxWidth: 520,
+      dialogMaxWidth: context.sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);
-        final colors = Theme.of(sheetContext).colorScheme;
+        final colors = sheetContext.colorScheme;
+        final spacing = sheetContext.spacing;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
             title: Text(l10n.chatAttachmentTooltip),
             onClose: () => Navigator.of(sheetContext).maybePop(),
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: EdgeInsets.fromLTRB(
+              spacing.m,
+              spacing.m,
+              spacing.m,
+              spacing.s,
+            ),
           ),
-          bodyPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          bodyPadding: EdgeInsets.fromLTRB(
+            spacing.m,
+            0,
+            spacing.m,
+            spacing.m,
+          ),
           children: [
-            ListTile(
+            AxiListTile(
               leading: Icon(attachmentIcon(attachment), color: colors.primary),
-              title: Text(attachment.fileName),
-              subtitle: Text(sizeLabel),
+              title: attachment.fileName,
+              subtitle: sizeLabel,
+              paintSurface: false,
             ),
             if (attachment.isImage)
-              ListTile(
+              AxiListButton(
                 leading: const Icon(LucideIcons.image),
-                title: Text(l10n.draftAttachmentPreview),
-                onTap: () {
+                onPressed: () {
                   Navigator.of(sheetContext).pop();
                   _showAttachmentPreview(pending);
                 },
+                child: Text(l10n.draftAttachmentPreview),
               ),
-            ListTile(
+            AxiListButton.destructive(
               leading: const Icon(LucideIcons.trash2),
-              title: Text(l10n.draftRemoveAttachment),
-              onTap: () {
+              onPressed: () {
                 Navigator.of(sheetContext).pop();
                 _handlePendingAttachmentRemoved(pending.id);
               },
+              child: Text(l10n.draftRemoveAttachment),
             ),
           ],
         );
@@ -1376,6 +1420,8 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
     }
     final colors = context.colorScheme;
     final borderRadius = context.radius;
+    final borderWidth = context.borderSide.width;
+    final hoverAlpha = context.motion.tapHoverAlpha;
     return DragTarget<CalendarDragPayload>(
       hitTestBehavior: HitTestBehavior.translucent,
       onWillAcceptWithDetails: (details) {
@@ -1392,15 +1438,16 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
         final RenderBox? box = _box;
         final Size? regionSize = box?.size;
         final Widget highlight = AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
+          duration: baseAnimationDuration,
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             border: Border.all(
               color: hovering ? colors.primary : Colors.transparent,
-              width: 1.5,
+              width: borderWidth,
             ),
             borderRadius: borderRadius,
-            color: hovering ? colors.primary.withValues(alpha: 0.04) : null,
+            color:
+                hovering ? colors.primary.withValues(alpha: hoverAlpha) : null,
           ),
           child: widget.child,
         );
@@ -1433,38 +1480,44 @@ class _TaskDragGhostOverlay extends StatelessWidget {
   final CalendarDragPayload payload;
   final Offset anchor;
   final Size regionSize;
-  static const double _defaultGhostWidth = 240;
-  static const double _defaultGhostHeight = 84;
-  static const double _minGhostWidth = 180;
-  static const double _maxGhostWidth = 360;
-  static const double _minGhostHeight = 64;
-  static const double _maxGhostHeight = 180;
-  static const double _pointerClampPadding = 0.25;
 
-  Size _ghostSize() {
-    final double width = payload.sourceBounds?.width ?? _defaultGhostWidth;
-    final double height = payload.sourceBounds?.height ?? _defaultGhostHeight;
+  Size _ghostSize(BuildContext context) {
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    final double defaultGhostWidth = sizing.menuMaxWidth;
+    final double defaultGhostHeight = sizing.listButtonHeight + spacing.s;
+    final double minGhostWidth = sizing.menuMaxWidth - spacing.l;
+    final double maxGhostWidth = sizing.dialogMaxWidth;
+    final double minGhostHeight = sizing.listButtonHeight + spacing.xs;
+    final double maxGhostHeight = sizing.listButtonHeight * 4;
+    final double width = payload.sourceBounds?.width ?? defaultGhostWidth;
+    final double height = payload.sourceBounds?.height ?? defaultGhostHeight;
     return Size(
-      width.clamp(_minGhostWidth, _maxGhostWidth),
-      height.clamp(_minGhostHeight, _maxGhostHeight),
+      width.clamp(minGhostWidth, maxGhostWidth),
+      height.clamp(minGhostHeight, maxGhostHeight),
     );
   }
 
-  Offset _ghostOffset(Size ghostSize) {
+  Offset _ghostOffset(BuildContext context, Size ghostSize) {
+    final spacing = context.spacing;
+    final double pointerClampPadding = spacing.xs / (spacing.m * 2);
+    final double centerFraction = spacing.m / (spacing.m * 2);
     final double pointerFraction =
-        (payload.pointerNormalizedX ?? 0.5).clamp(0.0, 1.0).toDouble();
+        (payload.pointerNormalizedX ?? centerFraction)
+            .clamp(0.0, 1.0)
+            .toDouble();
     final double pointerOffsetY =
         (payload.pointerOffsetY ?? (ghostSize.height / 2))
             .clamp(0.0, ghostSize.height)
             .toDouble();
     double left = anchor.dx - (ghostSize.width * pointerFraction);
     double top = anchor.dy - pointerOffsetY;
-    final double minLeft = -ghostSize.width * _pointerClampPadding;
+    final double minLeft = -ghostSize.width * pointerClampPadding;
     final double maxLeft =
-        regionSize.width - (ghostSize.width * (1 - _pointerClampPadding));
-    final double minTop = -ghostSize.height * _pointerClampPadding;
+        regionSize.width - (ghostSize.width * (1 - pointerClampPadding));
+    final double minTop = -ghostSize.height * pointerClampPadding;
     final double maxTop =
-        regionSize.height - (ghostSize.height * _pointerClampPadding);
+        regionSize.height - (ghostSize.height * pointerClampPadding);
     left = left.clamp(minLeft, maxLeft);
     top = top.clamp(minTop, maxTop);
     return Offset(left, top);
@@ -1472,8 +1525,8 @@ class _TaskDragGhostOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Size ghostSize = _ghostSize();
-    final Offset offset = _ghostOffset(ghostSize);
+    final Size ghostSize = _ghostSize(context);
+    final Offset offset = _ghostOffset(context, ghostSize);
     return Positioned(
       left: offset.dx,
       top: offset.dy,
@@ -1511,7 +1564,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
     final CalendarTask task = payload.snapshot;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final materialScheme = Theme.of(context).colorScheme;
+    final spacing = context.spacing;
     final l10n = context.l10n;
     final String title =
         task.title.trim().isEmpty ? l10n.draftTaskUntitled : task.title.trim();
@@ -1519,23 +1572,29 @@ class _DraftTaskDragGhost extends StatelessWidget {
         ? task.description!.trim()
         : null;
     final borderRadius = context.radius;
+    final shadowColor = colors.shadow.withValues(
+      alpha: context.motion.tapSplashAlpha,
+    );
     return Material(
       color: Colors.transparent,
-      elevation: 8,
+      elevation: 0,
       borderRadius: borderRadius,
       child: Container(
         width: size.width,
         constraints: BoxConstraints(minHeight: size.height),
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(spacing.s + spacing.xs),
         decoration: BoxDecoration(
-          color: colors.card.withValues(alpha: 0.96),
+          color: colors.card,
           borderRadius: borderRadius,
-          border: Border.all(color: colors.primary, width: 1.25),
+          border: Border.all(
+            color: colors.primary,
+            width: context.borderSide.width,
+          ),
           boxShadow: [
             BoxShadow(
-              color: materialScheme.shadow.withValues(alpha: 0.14),
-              blurRadius: 12,
-              offset: const Offset(0, 8),
+              color: shadowColor,
+              blurRadius: context.sizing.modalShadowBlur,
+              offset: Offset(0, context.sizing.modalShadowOffsetY),
             ),
           ],
         ),
@@ -1547,21 +1606,18 @@ class _DraftTaskDragGhost extends StatelessWidget {
               title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: textTheme.small.copyWith(
-                fontWeight: FontWeight.w700,
-                color: colors.foreground,
-              ),
+              style: textTheme.small.copyWith(color: colors.foreground),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: spacing.xs + spacing.xxs),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   LucideIcons.calendarClock,
-                  size: 14,
+                  size: context.sizing.menuItemIconSize,
                   color: colors.primary,
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: spacing.xs + spacing.xxs),
                 Flexible(
                   child: Text(
                     _timingLabel(context),
@@ -1569,14 +1625,13 @@ class _DraftTaskDragGhost extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.muted.copyWith(
                       color: colors.mutedForeground,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ],
             ),
             if (description != null) ...[
-              const SizedBox(height: 6),
+              SizedBox(height: spacing.xs + spacing.xxs),
               Text(
                 description,
                 maxLines: 2,
@@ -1608,12 +1663,8 @@ class _DraftSendIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
-    final disabledColor = colors.mutedForeground.withValues(alpha: 0.9);
-    final iconColor = sending
-        ? disabledColor
-        : readyToSend
-            ? colors.primary
-            : disabledColor;
+    final disabledColor = colors.mutedForeground;
+    final iconColor = readyToSend && !sending ? colors.primary : disabledColor;
     final borderColor =
         sending || !readyToSend ? colors.border : colors.primary;
     final tooltip =
@@ -1623,6 +1674,7 @@ class _DraftSendIconButton extends StatelessWidget {
       tooltip: tooltip,
       icon: LucideIcons.send,
       onPressed: interactive ? onPressed : null,
+      loading: sending,
       iconColorOverride: iconColor,
       borderColorOverride: borderColor,
     );
@@ -1685,7 +1737,9 @@ class _DraftAttachmentsSection extends StatelessWidget {
 
     Widget body;
     if (loading) {
-      body = const Center(child: CircularProgressIndicator());
+      body = Center(
+        child: AxiProgressIndicator(color: context.colorScheme.foreground),
+      );
     } else if (attachments.isEmpty) {
       body = Text(l10n.draftNoAttachments, style: context.textTheme.muted);
     } else {
@@ -1713,7 +1767,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.spacing.s),
         body,
       ],
     );
@@ -1725,6 +1779,7 @@ class _DraftComposerIconButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     this.onPressed,
+    this.loading = false,
     this.iconColorOverride,
     this.borderColorOverride,
   });
@@ -1732,12 +1787,14 @@ class _DraftComposerIconButton extends StatelessWidget {
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
+  final bool loading;
   final Color? iconColorOverride;
   final Color? borderColorOverride;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final sizing = context.sizing;
     final enabled = onPressed != null;
     final iconColor = iconColorOverride ??
         (enabled ? colors.foreground : colors.mutedForeground);
@@ -1747,14 +1804,15 @@ class _DraftComposerIconButton extends StatelessWidget {
       tooltip: tooltip,
       semanticLabel: tooltip,
       onPressed: onPressed,
+      loading: loading,
       color: iconColor,
       backgroundColor: colors.card,
       borderColor: borderColor,
-      borderWidth: 1.4,
-      cornerRadius: 16,
-      buttonSize: _draftComposerControlExtent,
-      tapTargetSize: _draftComposerControlExtent,
-      iconSize: 24,
+      borderWidth: context.borderSide.width,
+      cornerRadius: context.radii.squircle,
+      buttonSize: sizing.iconButtonSize,
+      tapTargetSize: sizing.iconButtonTapTarget,
+      iconSize: sizing.iconButtonIconSize,
     );
   }
 }

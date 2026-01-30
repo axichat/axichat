@@ -17,6 +17,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -59,6 +60,8 @@ class NotificationService {
     limit: _messageNotificationPerThreadRateLimit,
     cleanupInterval: _messageNotificationRateLimitCleanupInterval,
   );
+  final Logger _log = Logger('NotificationService');
+  Future<PackageInfo>? _packageInfoFuture;
 
   bool mute = false;
   bool notificationPreviewsEnabled = false;
@@ -149,10 +152,11 @@ class NotificationService {
           recordNotificationLaunch(payload);
         }
       } on UnimplementedError catch (error, stackTrace) {
-        debugPrint(
-          'Notification launch details unsupported on this platform: $error',
+        _log.warning(
+          'Notification launch details unsupported on this platform.',
+          error,
+          stackTrace,
         );
-        debugPrintStack(stackTrace: stackTrace);
       }
 
       _initialized = true;
@@ -179,11 +183,12 @@ class NotificationService {
       }
       return true;
     } on MissingPluginException catch (error, stackTrace) {
-      debugPrint(
-        'Permission plugin unavailable; disabling notifications: $error',
+      _log.warning(
+        'Permission plugin unavailable; disabling notifications.',
+        error,
+        stackTrace,
       );
       mute = true;
-      debugPrintStack(stackTrace: stackTrace);
       return false;
     }
   }
@@ -214,10 +219,11 @@ class NotificationService {
 
       return true;
     } on MissingPluginException catch (error, stackTrace) {
-      debugPrint(
-        'Permission plugin unavailable while requesting permissions: $error',
+      _log.warning(
+        'Permission plugin unavailable while requesting permissions.',
+        error,
+        stackTrace,
       );
-      debugPrintStack(stackTrace: stackTrace);
       mute = true;
       return false;
     }
@@ -315,10 +321,11 @@ class NotificationService {
       return await FlutterForegroundTask.isAppOnForeground;
     } on MissingPluginException catch (error, stackTrace) {
       if (!_foregroundCheckUnavailable) {
-        debugPrint(
-          'Foreground task plugin unavailable; assuming app is backgrounded: $error',
+        _log.warning(
+          'Foreground task plugin unavailable; assuming app is backgrounded.',
+          error,
+          stackTrace,
         );
-        debugPrintStack(stackTrace: stackTrace);
         _foregroundCheckUnavailable = true;
       }
       return false;
@@ -397,13 +404,11 @@ class NotificationService {
       return;
     }
     _schedulingUnsupported = true;
-    debugPrint(_unsupportedSchedulingMessage);
-    if (error != null) {
-      debugPrint('$error');
-    }
-    if (stackTrace != null) {
-      debugPrintStack(stackTrace: stackTrace);
-    }
+    _log.warning(
+      _unsupportedSchedulingMessage,
+      error,
+      stackTrace,
+    );
   }
 
   Future<void> _scheduleInAppTimer({
@@ -475,7 +480,7 @@ class NotificationService {
 
   Future<NotificationDetails> _notificationDetails() async {
     await _ensureInitialized();
-    final packageInfo = await PackageInfo.fromPlatform();
+    final packageInfo = await _resolvePackageInfo();
 
     final androidDetails = AndroidNotificationDetails(
       channel,
@@ -500,7 +505,7 @@ class NotificationService {
     required bool showPreview,
   }) async {
     await _ensureInitialized();
-    final packageInfo = await PackageInfo.fromPlatform();
+    final packageInfo = await _resolvePackageInfo();
 
     final androidDetails = AndroidNotificationDetails(
       channel,
@@ -554,4 +559,7 @@ class NotificationService {
     }
     return (hash & 0x7fffffff) + 1;
   }
+
+  Future<PackageInfo> _resolvePackageInfo() =>
+      _packageInfoFuture ??= PackageInfo.fromPlatform();
 }

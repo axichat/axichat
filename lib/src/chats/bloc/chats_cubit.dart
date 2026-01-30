@@ -2,9 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -12,6 +15,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:flutter/foundation.dart';
 
 part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
@@ -39,6 +43,38 @@ enum ChatRouteIndex {
   bool get allowsChatInteraction => isMain || isSearch;
 }
 
+enum ChatListFilter {
+  all,
+  contacts,
+  nonContacts,
+  xmpp,
+  email,
+  hidden;
+
+  static ChatListFilter fromId(String? id) {
+    return switch (id) {
+      'contacts' => ChatListFilter.contacts,
+      'nonContacts' => ChatListFilter.nonContacts,
+      'xmpp' => ChatListFilter.xmpp,
+      'email' => ChatListFilter.email,
+      'hidden' => ChatListFilter.hidden,
+      _ => ChatListFilter.all,
+    };
+  }
+}
+
+class _ChatViewResults {
+  const _ChatViewResults({
+    required this.visibleItems,
+    required this.archivedItems,
+    required this.selectedChats,
+  });
+
+  final List<Chat> visibleItems;
+  final List<Chat> archivedItems;
+  final List<Chat> selectedChats;
+}
+
 class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({
     required XmppService xmppService,
@@ -48,20 +84,42 @@ class ChatsCubit extends Cubit<ChatsState> {
         _homeRefreshSyncService = homeRefreshSyncService,
         _emailService = emailService,
         super(
-          ChatsState(
-            openJid: null,
-            openStack: const <String>[],
-            forwardStack: const <String>[],
-            openCalendar: false,
-            openChatCalendar: false,
-            openChatRoute: ChatRouteIndex.main,
-            items: xmppService.cachedChatList,
-            creationStatus: RequestStatus.none,
-          ),
+          _seedInitialState(xmppService.cachedChatList),
         ) {
     _chatsSubscription = _chatsService.chatsStream().listen(
           (items) => _updateChats(items),
         );
+  }
+
+  static ChatsState _seedInitialState(List<Chat>? cached) {
+    final items = cached ?? const <Chat>[];
+    final derived = _deriveChatViews(
+      items: items,
+      rosterContacts: const <String>{},
+      searchQuery: '',
+      searchActive: false,
+      searchFilter: ChatListFilter.all,
+      searchSortOrder: SearchSortOrder.newestFirst,
+      selectedJids: const <String>{},
+    );
+    return ChatsState(
+      openJid: null,
+      openStack: const <String>[],
+      forwardStack: const <String>[],
+      openCalendar: false,
+      openChatCalendar: false,
+      openChatRoute: ChatRouteIndex.main,
+      items: items,
+      creationStatus: RequestStatus.none,
+      searchQuery: '',
+      searchActive: false,
+      searchFilter: ChatListFilter.all,
+      searchSortOrder: SearchSortOrder.newestFirst,
+      rosterContacts: const <String>{},
+      visibleItems: derived.visibleItems,
+      archivedItems: derived.archivedItems,
+      selectedChats: derived.selectedChats,
+    );
   }
 
   final ChatsService _chatsService;
@@ -69,11 +127,144 @@ class ChatsCubit extends Cubit<ChatsState> {
   final EmailService? _emailService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
+  final List<Timer> _exportCleanupTimers = [];
 
   @override
   Future<void> close() async {
+    for (final timer in _exportCleanupTimers) {
+      timer.cancel();
+    }
+    _exportCleanupTimers.clear();
     await _chatsSubscription.cancel();
     return super.close();
+  }
+
+  void scheduleExportCleanup(File file) {
+    if (file.path.trim().isEmpty) return;
+    const cleanupDelay = Duration(hours: 1);
+    final timer = Timer(cleanupDelay, () async {
+      await ChatHistoryExporter.cleanupExportFile(file);
+    });
+    _exportCleanupTimers.add(timer);
+  }
+
+  void updateSearchSnapshot({
+    required bool active,
+    required String query,
+    required String? filterId,
+    required SearchSortOrder sortOrder,
+  }) {
+    final normalizedQuery = active ? query.trim() : '';
+    final filter = ChatListFilter.fromId(filterId);
+    if (state.searchActive == active &&
+        state.searchQuery == normalizedQuery &&
+        state.searchFilter == filter &&
+        state.searchSortOrder == sortOrder) {
+      return;
+    }
+    final derived = _deriveChatViews(
+      items: state.items ?? const <Chat>[],
+      rosterContacts: state.rosterContacts,
+      searchQuery: normalizedQuery,
+      searchActive: active,
+      searchFilter: filter,
+      searchSortOrder: sortOrder,
+      selectedJids: state.selectedJids,
+    );
+    emit(
+      state.copyWith(
+        searchActive: active,
+        searchQuery: normalizedQuery,
+        searchFilter: filter,
+        searchSortOrder: sortOrder,
+        visibleItems: derived.visibleItems,
+        archivedItems: derived.archivedItems,
+        selectedChats: derived.selectedChats,
+      ),
+    );
+  }
+
+  void updateRosterContacts(Set<String> contacts) {
+    if (setEquals(state.rosterContacts, contacts)) {
+      return;
+    }
+    final derived = _deriveChatViews(
+      items: state.items ?? const <Chat>[],
+      rosterContacts: contacts,
+      searchQuery: state.searchQuery,
+      searchActive: state.searchActive,
+      searchFilter: state.searchFilter,
+      searchSortOrder: state.searchSortOrder,
+      selectedJids: state.selectedJids,
+    );
+    emit(
+      state.copyWith(
+        rosterContacts: contacts,
+        visibleItems: derived.visibleItems,
+        archivedItems: derived.archivedItems,
+        selectedChats: derived.selectedChats,
+      ),
+    );
+  }
+
+  static _ChatViewResults _deriveChatViews({
+    required List<Chat> items,
+    required Set<String> rosterContacts,
+    required String searchQuery,
+    required bool searchActive,
+    required ChatListFilter searchFilter,
+    required SearchSortOrder searchSortOrder,
+    required Set<String> selectedJids,
+  }) {
+    final normalizedQuery =
+        searchActive ? searchQuery.trim().toLowerCase() : '';
+    bool matchesFilter(Chat chat) {
+      return switch (searchFilter) {
+        ChatListFilter.contacts =>
+          !chat.hidden && rosterContacts.contains(chat.jid),
+        ChatListFilter.nonContacts =>
+          !chat.hidden && !rosterContacts.contains(chat.jid),
+        ChatListFilter.xmpp => !chat.hidden && chat.transport.isXmpp,
+        ChatListFilter.email => !chat.hidden && chat.transport.isEmail,
+        ChatListFilter.hidden => chat.hidden,
+        ChatListFilter.all => !chat.hidden,
+      };
+    }
+
+    bool matchesQuery(Chat chat) {
+      if (normalizedQuery.isEmpty) return true;
+      final alias = chat.contactDisplayName?.toLowerCase() ?? '';
+      return chat.title.toLowerCase().contains(normalizedQuery) ||
+          alias.contains(normalizedQuery) ||
+          chat.jid.toLowerCase().contains(normalizedQuery) ||
+          (chat.lastMessage?.toLowerCase().contains(normalizedQuery) ??
+              false) ||
+          (chat.alert?.toLowerCase().contains(normalizedQuery) ?? false);
+    }
+
+    final visibleItems = items
+        .where((chat) => !chat.archived && !chat.spam)
+        .where(matchesFilter)
+        .where(matchesQuery)
+        .toList(growable: false)
+      ..sort(
+        (a, b) => searchSortOrder.isNewestFirst
+            ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+            : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
+      );
+
+    final archivedItems =
+        items.where((chat) => chat.archived).toList(growable: false);
+    final selectedChats = selectedJids.isEmpty
+        ? const <Chat>[]
+        : items
+            .where((chat) => selectedJids.contains(chat.jid))
+            .toList(growable: false);
+    return _ChatViewResults(
+      visibleItems: visibleItems,
+      archivedItems: archivedItems,
+      selectedChats: selectedChats,
+    );
   }
 
   void _updateChats(List<Chat> items) {
@@ -103,6 +294,15 @@ class ChatsCubit extends Cubit<ChatsState> {
             : state.openChatRoute.isCalendar
                 ? ChatRouteIndex.main
                 : state.openChatRoute;
+    final derived = _deriveChatViews(
+      items: items,
+      rosterContacts: state.rosterContacts,
+      searchQuery: state.searchQuery,
+      searchActive: state.searchActive,
+      searchFilter: state.searchFilter,
+      searchSortOrder: state.searchSortOrder,
+      selectedJids: retainedSelection,
+    );
     emit(
       state.copyWith(
         openStack: seededStack,
@@ -112,6 +312,9 @@ class ChatsCubit extends Cubit<ChatsState> {
         selectedJids: retainedSelection,
         openChatCalendar: shouldKeepChatCalendar,
         openChatRoute: nextChatRoute,
+        visibleItems: derived.visibleItems,
+        archivedItems: derived.archivedItems,
+        selectedChats: derived.selectedChats,
       ),
     );
   }
@@ -398,7 +601,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   void ensureChatSelected(String jid) {
     if (state.selectedJids.contains(jid)) return;
     final updated = Set<String>.of(state.selectedJids)..add(jid);
-    emit(state.copyWith(selectedJids: updated));
+    _emitSelectionUpdate(updated);
   }
 
   void toggleChatSelection(String jid) {
@@ -406,56 +609,97 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (!updated.remove(jid)) {
       updated.add(jid);
     }
-    emit(state.copyWith(selectedJids: updated));
+    _emitSelectionUpdate(updated);
   }
 
   void clearSelection() {
     if (state.selectedJids.isEmpty) return;
-    emit(state.copyWith(selectedJids: const <String>{}));
+    _emitSelectionUpdate(const <String>{});
+  }
+
+  void _emitSelectionUpdate(Set<String> selectedJids) {
+    final derived = _deriveChatViews(
+      items: state.items ?? const <Chat>[],
+      rosterContacts: state.rosterContacts,
+      searchQuery: state.searchQuery,
+      searchActive: state.searchActive,
+      searchFilter: state.searchFilter,
+      searchSortOrder: state.searchSortOrder,
+      selectedJids: selectedJids,
+    );
+    emit(
+      state.copyWith(
+        selectedJids: selectedJids,
+        visibleItems: derived.visibleItems,
+        archivedItems: derived.archivedItems,
+        selectedChats: derived.selectedChats,
+      ),
+    );
   }
 
   Future<void> bulkToggleFavorited({required bool favorited}) async {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
-    for (final jid in targets) {
-      await _chatsService.toggleChatFavorited(jid: jid, favorited: favorited);
-    }
+    await Future.wait(
+      targets.map(
+        (jid) =>
+            _chatsService.toggleChatFavorited(jid: jid, favorited: favorited),
+      ),
+    );
     clearSelection();
   }
 
   Future<void> bulkToggleArchived({required bool archived}) async {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
-    for (final jid in targets) {
-      if (archived && state.openJid == jid) {
-        await _chatsService.closeChat();
-      }
-      await _chatsService.toggleChatArchived(jid: jid, archived: archived);
+    if (archived && targets.contains(state.openJid)) {
+      await _chatsService.closeChat();
     }
+    await Future.wait(
+      targets.map(
+        (jid) => _chatsService.toggleChatArchived(jid: jid, archived: archived),
+      ),
+    );
     clearSelection();
   }
 
   Future<void> bulkToggleHidden({required bool hidden}) async {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
-    for (final jid in targets) {
-      if (hidden && state.openJid == jid) {
-        await _chatsService.closeChat();
-      }
-      await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
+    if (hidden && targets.contains(state.openJid)) {
+      await _chatsService.closeChat();
     }
+    await Future.wait(
+      targets.map(
+        (jid) => _chatsService.toggleChatHidden(jid: jid, hidden: hidden),
+      ),
+    );
     clearSelection();
   }
 
   Future<void> bulkDeleteSelectedChats() async {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
-    for (final jid in targets) {
-      if (state.openJid == jid) {
-        await _chatsService.closeChat();
-      }
-      await _chatsService.deleteChat(jid: jid);
+    if (targets.contains(state.openJid)) {
+      await _chatsService.closeChat();
     }
+    await Future.wait(
+      targets.map((jid) => _chatsService.deleteChat(jid: jid)),
+    );
     clearSelection();
+  }
+
+  Future<int> countChatHistoryMessages(String jid) async {
+    final db = await _loadDatabase();
+    return db.countChatMessages(jid);
+  }
+
+  Future<List<Message>> loadChatHistoryPage({
+    required String jid,
+    required int offset,
+    required int limit,
+  }) async {
+    final db = await _loadDatabase();
+    return db.getChatMessages(jid, start: offset, end: limit);
   }
 }

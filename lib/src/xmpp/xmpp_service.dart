@@ -22,6 +22,7 @@ import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -465,6 +466,9 @@ class XmppService extends XmppBase
   static const String _capabilityHashBase = 'https://axichat.im/caps';
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
+  final Map<String, String> _notificationPayloadCache = <String, String>{};
+  final Map<String, String> _notificationPayloadLowerCache = <String, String>{};
+  bool _notificationPayloadCacheReady = false;
   static const int _notificationPayloadLookupStart = 0;
   static const int _notificationPayloadLookupEnd = 0;
 
@@ -695,18 +699,52 @@ class XmppService extends XmppBase
 
   Future<String?> resolveNotificationPayload(String payload) async {
     final trimmed = payload.trim();
-    if (trimmed.isEmpty) {
+    if (trimmed.isEmpty ||
+        !_notificationPayloadCodec.isPayloadLengthValid(trimmed)) {
       return null;
+    }
+    if (_notificationPayloadCacheReady) {
+      final cached = _notificationPayloadCache[trimmed] ??
+          _notificationPayloadLowerCache[trimmed.toLowerCase()];
+      if (cached != null) {
+        return cached;
+      }
     }
     final db = await database;
     final chats = await db.getChats(
       start: _notificationPayloadLookupStart,
       end: _notificationPayloadLookupEnd,
     );
-    return _notificationPayloadCodec.resolveChatJid(
-      payload: trimmed,
-      chatJids: chats.map((chat) => chat.jid),
-    );
+    final chatJids = chats.map((chat) => chat.jid);
+    _buildNotificationPayloadCache(chatJids);
+    return _notificationPayloadCache[trimmed] ??
+        _notificationPayloadLowerCache[trimmed.toLowerCase()];
+  }
+
+  void _buildNotificationPayloadCache(Iterable<String> chatJids) {
+    _notificationPayloadCache
+      ..clear()
+      ..addEntries(
+        chatJids.map((jid) {
+          final encoded = _notificationPayloadCodec.encodeChatJid(jid);
+          if (encoded == null) {
+            return null;
+          }
+          return MapEntry(encoded, jid);
+        }).whereType<MapEntry<String, String>>(),
+      );
+    _notificationPayloadLowerCache
+      ..clear()
+      ..addEntries(
+        chatJids.map((jid) {
+          final normalized = jid.trim();
+          if (normalized.isEmpty) {
+            return null;
+          }
+          return MapEntry(normalized.toLowerCase(), normalized);
+        }).whereType<MapEntry<String, String>>(),
+      );
+    _notificationPayloadCacheReady = true;
   }
 
   @override
@@ -1898,7 +1936,10 @@ class XmppService extends XmppBase
   }
 
   ui.Color? _demoAvatarBackgroundForJid(String jid) {
-    final normalized = jid.trim().toLowerCase();
+    final normalized = AddressTools.normalizedKey(jid);
+    if (normalized == null) {
+      return null;
+    }
     return switch (normalized) {
       kDemoSelfJid => _demoFranklinBackground,
       'washington@axi.im' => _demoWashingtonBackground,

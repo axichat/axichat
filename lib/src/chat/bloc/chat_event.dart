@@ -65,6 +65,33 @@ final class _RoomStateUpdated extends ChatEvent {
   List<Object?> get props => [roomState];
 }
 
+final class _RoomRosterUpdated extends ChatEvent {
+  const _RoomRosterUpdated(this.items);
+
+  final List<RosterItem> items;
+
+  @override
+  List<Object?> get props => [items];
+}
+
+final class _RoomChatsUpdated extends ChatEvent {
+  const _RoomChatsUpdated(this.items);
+
+  final List<Chat> items;
+
+  @override
+  List<Object?> get props => [items];
+}
+
+final class _RoomSelfAvatarUpdated extends ChatEvent {
+  const _RoomSelfAvatarUpdated(this.avatar);
+
+  final StoredAvatar? avatar;
+
+  @override
+  List<Object?> get props => [avatar];
+}
+
 final class _EmailSyncStateChanged extends ChatEvent {
   const _EmailSyncStateChanged(this.state);
 
@@ -248,6 +275,31 @@ final class ChatAlertHidden extends ChatEvent {
 
   @override
   List<Object?> get props => [forever];
+}
+
+final class ChatSpamStatusRequested extends ChatEvent {
+  const ChatSpamStatusRequested({required this.sendToSpam});
+
+  final bool sendToSpam;
+
+  @override
+  List<Object?> get props => [sendToSpam];
+}
+
+final class ChatContactAddRequested extends ChatEvent {
+  const ChatContactAddRequested();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatRecipientEmailChatRequested extends ChatEvent {
+  const ChatRecipientEmailChatRequested({required this.recipient});
+
+  final Chat recipient;
+
+  @override
+  List<Object?> get props => [recipient];
 }
 
 final class ChatQuoteRequested extends ChatEvent {
@@ -475,11 +527,11 @@ final class ChatContactRenameRequested extends ChatEvent {
   List<Object?> get props => [displayName, successMessage, failureMessage];
 }
 
-final class ChatEmailImagesLoaded extends ChatEvent {
-  const ChatEmailImagesLoaded(this.messageId);
+final class ChatOpenChatRequested extends ChatEvent {
+  const ChatOpenChatRequested({required this.jid});
 
-  final String messageId;
+  final String jid;
 
   @override
-  List<Object?> get props => [messageId];
+  List<Object?> get props => [jid];
 }

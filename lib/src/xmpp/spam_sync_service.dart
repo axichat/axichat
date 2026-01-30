@@ -42,6 +42,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   SpamPubSubManager? get _spamManager =>
       _connection.getManager<SpamPubSubManager>();
 
+  String? _normalizeSpamJid(String? jid) => AddressTools.normalizedKey(jid);
+
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
@@ -110,8 +112,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       final remoteItems = snapshot.items;
       final remoteByJid = <String, SpamSyncPayload>{};
       for (final item in remoteItems) {
-        final normalized = item.jid.trim().toLowerCase();
-        if (normalized.isEmpty) {
+        final normalized = _normalizeSpamJid(item.jid);
+        if (normalized == null || normalized.isEmpty) {
           continue;
         }
         remoteByJid[normalized] = item;
@@ -124,8 +126,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       );
       final localByJid = <String, EmailSpamEntry>{};
       for (final item in localItems) {
-        final normalized = item.address.trim().toLowerCase();
-        if (normalized.isEmpty) {
+        final normalized = _normalizeSpamJid(item.address);
+        if (normalized == null || normalized.isEmpty) {
           continue;
         }
         localByJid[normalized] = item;
@@ -213,8 +215,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> setSpamStatus({required String jid, required bool spam}) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     final updatedAt = DateTime.timestamp().toUtc();
@@ -240,8 +242,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> publishSpamSync(EmailSpamEntry entry) async {
-    final normalized = entry.address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(entry.address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
@@ -276,8 +278,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> retractSpamSync(String jid) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
@@ -350,8 +352,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
 
   Future<void> _applySpamSyncRetraction(String jid) async {
     await _ensurePendingSpamSyncLoaded();
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     if (_pendingSpamPublishes.contains(normalized)) {
@@ -397,8 +399,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     required String sourceId,
     required anti_abuse.SyncOrigin origin,
   }) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _dbOp<XmppDatabase>((db) async {
@@ -509,7 +511,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       return;
     }
     for (final entry in raw) {
-      final normalized = entry?.toString().trim().toLowerCase();
+      final normalized = _normalizeSpamJid(entry?.toString());
       if (normalized == null || normalized.isEmpty) {
         continue;
       }
@@ -584,8 +586,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _queueSpamPublish(String jid) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingSpamSyncLoaded();
@@ -595,8 +597,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _queueSpamRetraction(String jid) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingSpamSyncLoaded();
@@ -606,8 +608,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _clearPendingSpamPublish(String jid) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingSpamSyncLoaded();
@@ -619,8 +621,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _clearPendingSpamRetraction(String jid) async {
-    final normalized = jid.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeSpamJid(jid);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingSpamSyncLoaded();

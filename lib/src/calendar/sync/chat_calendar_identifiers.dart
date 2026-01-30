@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:crypto/crypto.dart';
 
 const String _chatCalendarStorageIdPrefix = 'chat_calendar_';
@@ -17,7 +18,8 @@ String chatCalendarSyncStateKey(String chatJid) {
 }
 
 String _hashJid(String jid) {
-  final normalized = jid.trim().toLowerCase();
+  final normalized =
+      AddressTools.normalizedKey(jid) ?? jid.trim().toLowerCase();
   final bytes = utf8.encode(normalized);
   return sha256.convert(bytes).toString();
 }

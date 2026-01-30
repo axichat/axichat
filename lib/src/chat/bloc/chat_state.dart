@@ -18,6 +18,7 @@ class ChatState with _$ChatState {
     @Default(<String, Message>{}) Map<String, Message> quotedMessagesById,
     Chat? chat,
     RoomState? roomState,
+    @Default(<RoomMemberSection>[]) List<RoomMemberSection> roomMemberSections,
     Message? focused,
     Message? quoting,
     @Default(false) bool typing,
@@ -46,8 +47,11 @@ class ChatState with _$ChatState {
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
     @Default(ConnectionState.notConnected) ConnectionState xmppConnectionState,
     @Default(false) bool supportsHttpFileUpload,
+    @Default(false) bool emailServiceAvailable,
+    String? emailSelfJid,
+    String? openChatJid,
+    @Default(0) int openChatRequestId,
     ChatToast? toast,
     @Default(0) int toastId,
-    @Default(<String>{}) Set<String> loadedImageMessageIds,
   }) = _ChatState;
 }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/common/ui/in_bounds_fade_scale.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -24,28 +25,27 @@ class OmemoOperationOverlay extends StatelessWidget {
             alignment: Alignment.bottomLeft,
             child: Padding(
               padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                bottom: 32 + bottomInset,
+                left: context.spacing.m,
+                right: context.spacing.m,
+                bottom: context.spacing.l + bottomInset,
               ),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 320,
-                  maxHeight: 320,
+                constraints: BoxConstraints(
+                  maxWidth: context.sizing.menuMaxWidth,
+                  maxHeight: context.sizing.menuMaxHeight,
                 ),
                 child: ListView.builder(
                   shrinkWrap: true,
                   reverse: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  padding: EdgeInsets.symmetric(vertical: context.spacing.xs),
                   clipBehavior: Clip.none,
                   itemCount: operations.length,
                   itemBuilder: (context, index) {
                     final reverseIndex = operations.length - 1 - index;
                     final operation = operations[reverseIndex];
-                    final bottomSpacing = index == 0 ? 8.0 : 8.0;
                     return Padding(
-                      padding: EdgeInsets.only(bottom: bottomSpacing),
+                      padding: EdgeInsets.only(bottom: context.spacing.s),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: InBoundsFadeScale(
@@ -72,35 +72,23 @@ class _OmemoOperationToast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final surfaceColor = switch (operation.status) {
-      OmemoOperationStatus.inProgress => colorScheme.surfaceContainerHigh,
-      OmemoOperationStatus.success => colorScheme.surfaceBright,
-      OmemoOperationStatus.failure => colorScheme.errorContainer,
-    };
-    final textColor = switch (operation.status) {
-      OmemoOperationStatus.failure => colorScheme.onErrorContainer,
-      _ => colorScheme.onSurface,
-    };
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: surfaceColor.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 12,
-            offset: Offset(0, 8),
-            color: Color(0x1A000000),
-          ),
-        ],
-      ),
+    final colorScheme = context.colorScheme;
+    final isFailure = operation.status == OmemoOperationStatus.failure;
+    final surfaceColor = isFailure ? colorScheme.destructive : colorScheme.card;
+    final textColor =
+        isFailure ? colorScheme.destructiveForeground : colorScheme.foreground;
+    return AxiModalSurface(
+      backgroundColor: surfaceColor,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m,
+          vertical: context.spacing.s,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _OperationStatusIcon(status: operation.status),
-            const SizedBox(width: 12),
+            SizedBox(width: context.spacing.s),
             Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,20 +96,19 @@ class _OmemoOperationToast extends StatelessWidget {
                 children: [
                   Text(
                     operation.statusLabel(),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: textColor),
+                    style: context.textTheme.p.copyWith(
+                      color: textColor,
+                    ),
                   ),
                   if (operation.status == OmemoOperationStatus.failure &&
                       operation.error != null)
                     Padding(
-                      padding: const EdgeInsets.only(top: 4),
+                      padding: EdgeInsets.only(top: context.spacing.xs),
                       child: Text(
                         operation.error!,
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelMedium
-                            ?.copyWith(color: textColor.withValues(alpha: 0.9)),
+                        style: context.textTheme.small.copyWith(
+                          color: textColor,
+                        ),
                       ),
                     ),
                 ],
@@ -141,26 +128,20 @@ class _OperationStatusIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme = context.colorScheme;
     return switch (status) {
-      OmemoOperationStatus.inProgress => SizedBox(
-          height: 18,
-          width: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.2,
-            valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
-            backgroundColor: colorScheme.onSurface.withValues(alpha: 0.12),
-          ),
+      OmemoOperationStatus.inProgress => AxiProgressIndicator(
+          color: colorScheme.primary,
         ),
       OmemoOperationStatus.success => Icon(
           Icons.check_circle_rounded,
-          size: 20,
+          size: context.sizing.iconButtonIconSize,
           color: colorScheme.primary,
         ),
       OmemoOperationStatus.failure => Icon(
           Icons.error_rounded,
-          size: 20,
-          color: colorScheme.onErrorContainer,
+          size: context.sizing.iconButtonIconSize,
+          color: colorScheme.destructiveForeground,
         ),
     };
   }

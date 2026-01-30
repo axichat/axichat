@@ -3,27 +3,8 @@
 
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
 const _mucAdminXmlns = 'http://jabber.org/protocol/muc#admin';
 const _mucOwnerXmlns = 'http://jabber.org/protocol/muc#owner';
-const _mucJoinXmlns = 'http://jabber.org/protocol/muc';
-const _occupantIdXmlns = 'urn:xmpp:occupant-id:0';
-const _directInviteXmlns = 'jabber:x:conference';
-const _directInviteTag = 'x';
-const _directInviteRoomAttr = 'jid';
-const _directInviteReasonAttr = 'reason';
-const _directInvitePasswordAttr = 'password';
-const _directInviteContinueAttr = 'continue';
-const _axiInviteXmlns = 'urn:axichat:invite:1';
-const _axiInviteTag = 'invite';
-const _axiInviteRevokeTag = 'invite-revoke';
-const _axiInviteTokenAttr = 'token';
-const _axiInviteRoomAttr = 'room';
-const _axiInviteRoomNameAttr = 'room_name';
-const _axiInviteInviterAttr = 'inviter';
-const _axiInviteInviteeAttr = 'invitee';
-const _axiInviteReasonAttr = 'reason';
-const _axiInvitePasswordAttr = 'password';
 const _mucDiscoFeature = 'http://jabber.org/protocol/muc';
 const _discoInfoXmlns = 'http://jabber.org/protocol/disco#info';
 const _dataFormXmlns = 'jabber:x:data';
@@ -105,7 +86,6 @@ const _mucCreateRoomBookmarkTimeoutLog =
 const bool _mucAvatarSupportEnabled = true;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
-const Set<String> _selfPresenceFallbackStatusCodes = {mucStatusSelfPresence};
 const Set<String> _emptyStatusCodes = <String>{};
 const Map<String, Occupant> _emptyOccupants = <String, Occupant>{};
 const bool _preserveOccupantsDefault = false;
@@ -578,7 +558,8 @@ mixin MucService on XmppBase, BaseStreamService {
     final roomState = roomStateFor(normalizedRoom);
     if (roomState == null) return false;
     if (_roomNeedsJoin(normalizedRoom)) return false;
-    if (!roomState.selfPresenceStatusCodes.contains(mucStatusSelfPresence)) {
+    if (!roomState.selfPresenceStatusCodes
+        .contains(MucStatusCode.selfPresence.code)) {
       return false;
     }
     final myOccupantId = roomState.myOccupantId;
@@ -1138,9 +1119,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final room = _roomStates[key];
     if (room != null) {
       final codes = room.selfPresenceStatusCodes;
-      if (codes.contains(mucStatusKicked) ||
-          codes.contains(mucStatusBanned) ||
-          codes.contains(mucStatusRoomShutdown)) {
+      if (codes.contains(MucStatusCode.kicked.code) ||
+          codes.contains(MucStatusCode.banned.code) ||
+          codes.contains(MucStatusCode.roomShutdown.code)) {
         return;
       }
     }
@@ -2443,7 +2424,8 @@ mixin MucService on XmppBase, BaseStreamService {
       isAvailablePresence: event.isAvailable,
       isNickChange: event.isNickChange,
       statusCount: event.statusCodes.length,
-      hasSelfStatus: event.statusCodes.contains(mucStatusSelfPresence),
+      hasSelfStatus:
+          event.statusCodes.contains(MucStatusCode.selfPresence.code),
     );
     if (!event.isAvailable && !event.isNickChange) {
       final Set<String> statusCodes =
@@ -2493,7 +2475,7 @@ mixin MucService on XmppBase, BaseStreamService {
       statusCodes: event.statusCodes,
       reason: event.reason,
     );
-    if (event.statusCodes.contains(mucStatusRoomCreated)) {
+    if (event.statusCodes.contains(MucStatusCode.roomCreated.code)) {
       _instantRoomConfiguredRooms.remove(roomJid);
       _instantRoomPendingRooms.add(roomJid);
       fireAndForget(
@@ -2508,7 +2490,7 @@ mixin MucService on XmppBase, BaseStreamService {
       );
     }
     _completeJoinAttempt(roomJid);
-    if (event.statusCodes.contains(mucStatusConfigurationChanged)) {
+    if (event.statusCodes.contains(MucStatusCode.configurationChanged.code)) {
       await _refreshRoomAvatar(roomJid);
     }
 
@@ -2669,8 +2651,8 @@ mixin MucService on XmppBase, BaseStreamService {
     final myOccupantId = updated.myOccupantId;
     if (myOccupantId == null || myOccupantId != occupantId) return;
     final codes = updated.selfPresenceStatusCodes;
-    if (codes.contains(mucStatusSelfPresence)) return;
-    final mergedCodes = <String>{...codes, ..._selfPresenceFallbackStatusCodes};
+    if (codes.contains(MucStatusCode.selfPresence.code)) return;
+    final mergedCodes = <String>{...codes, MucStatusCode.selfPresence.code};
     _applySelfPresenceStatus(
       roomJid: roomJid,
       statusCodes: mergedCodes,

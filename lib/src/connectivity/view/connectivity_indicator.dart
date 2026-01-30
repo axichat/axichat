@@ -52,7 +52,10 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
   void _handleConnectivityState(ConnectivityState state) {
     final previous = _connectivityState;
     if (previous == null) {
-      _connectivityState = state;
+      setState(() {
+        _connectivityState = state;
+        _showConnectedSuccess = false;
+      });
       return;
     }
     _connectedSuccessTimer?.cancel();

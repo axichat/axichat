@@ -11,7 +11,6 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/email_address.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -20,16 +19,43 @@ import 'package:equatable/equatable.dart';
 
 part 'draft_state.dart';
 
-const int _coreDraftRecipientLimit = 1;
-const int _emailAttachmentBundleMinimumCount = 2;
-const String _jidSeparator = '@';
-const String _axiDomainPatternSource = r'@(?:[\\w-]+\\.)*axi\\.im$';
-final RegExp _axiDomainPattern = RegExp(
-  _axiDomainPatternSource,
-  caseSensitive: false,
-);
+enum DraftSortOrder {
+  newestFirst,
+  oldestFirst;
+
+  bool get isNewestFirst => this == DraftSortOrder.newestFirst;
+}
+
+class DraftSearchSnapshot extends Equatable {
+  const DraftSearchSnapshot({
+    required this.query,
+    required this.filterAttachmentsOnly,
+    required this.sortOrder,
+  });
+
+  final String query;
+  final bool filterAttachmentsOnly;
+  final DraftSortOrder sortOrder;
+
+  @override
+  List<Object?> get props => [query, filterAttachmentsOnly, sortOrder];
+}
+
+enum DraftSendFailureType { noRecipients, noContent, sendFailed }
+
+class DraftSendValidationException implements Exception {
+  const DraftSendValidationException(this.type);
+
+  final DraftSendFailureType type;
+}
 
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
+  static const int _emailAttachmentBundleMinimumCount = 2;
+  static final RegExp _axiDomainPattern = RegExp(
+    r'@(?:[\\w-]+\\.)*axi\\.im$',
+    caseSensitive: false,
+  );
+
   DraftCubit({
     required MessageService messageService,
     EmailService? emailService,
@@ -40,7 +66,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         super(const DraftsAvailable(items: null)) {
     _draftsSubscription = _messageService.draftsStream().listen((items) {
       _items = items;
-      emit(DraftsAvailable(items: items));
+      emit(_stateForItems(items));
     });
   }
 
@@ -48,6 +74,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   final EmailService? _emailService;
   bool _shareTokenSignatureEnabled;
   List<Draft>? _items;
+  DraftSearchSnapshot _searchSnapshot = const DraftSearchSnapshot(
+    query: '',
+    filterAttachmentsOnly: false,
+    sortOrder: DraftSortOrder.newestFirst,
+  );
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
 
@@ -71,16 +102,36 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     _shareTokenSignatureEnabled = enabled;
   }
 
+  void updateSearchSnapshot(DraftSearchSnapshot snapshot) {
+    if (_searchSnapshot == snapshot) {
+      return;
+    }
+    _searchSnapshot = snapshot;
+    final items = _items;
+    if (items == null) return;
+    emit(_stateForItems(items));
+  }
+
+  Future<List<EmailAttachment>> loadDraftAttachments(
+    List<String> metadataIds,
+  ) async {
+    if (metadataIds.isEmpty) return const [];
+    return _messageService.loadDraftAttachments(metadataIds);
+  }
+
+  Future<void> deleteDraftAttachmentMetadata(String metadataId) async {
+    await _messageService.deleteFileMetadata(metadataId);
+  }
+
   Future<bool> sendDraft({
     required int? id,
     required List<String> xmppJids,
     required List<FanOutTarget> emailTargets,
     required String body,
-    required AppLocalizations l10n,
     String? subject,
     List<EmailAttachment> attachments = const [],
   }) async {
-    emit(DraftSending(items: _items));
+    emit(DraftSending(items: _items, visibleItems: _visibleItems));
     try {
       if (emailTargets.isNotEmpty) {
         await _sendEmailDraft(
@@ -97,25 +148,47 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           attachments: attachments,
         );
       }
-    } on FanOutValidationException catch (error) {
+    } on DraftSendValidationException catch (error) {
       emit(
         DraftFailure(
-          _mapFanOutValidationMessage(error.message, l10n),
+          error.type,
           items: _items,
+          visibleItems: _visibleItems,
+        ),
+      );
+      return false;
+    } on FanOutValidationException {
+      emit(
+        DraftFailure(
+          DraftSendFailureType.sendFailed,
+          items: _items,
+          visibleItems: _visibleItems,
         ),
       );
       return false;
     } on XmppMessageException catch (_) {
-      emit(DraftFailure(l10n.draftSendFailed, items: _items));
+      emit(
+        DraftFailure(
+          DraftSendFailureType.sendFailed,
+          items: _items,
+          visibleItems: _visibleItems,
+        ),
+      );
       return false;
     } on Exception catch (_) {
-      emit(DraftFailure(l10n.draftSendFailed, items: _items));
+      emit(
+        DraftFailure(
+          DraftSendFailureType.sendFailed,
+          items: _items,
+          visibleItems: _visibleItems,
+        ),
+      );
       return false;
     }
     if (id != null) {
       await deleteDraft(id: id);
     }
-    emit(DraftSendComplete(items: _items));
+    emit(DraftSendComplete(items: _items, visibleItems: _visibleItems));
     return true;
   }
 
@@ -144,21 +217,14 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     } on Exception {
       // Best-effort: core draft syncing should not block local saves.
     }
-    emit(DraftSaveComplete(items: _items, autoSaved: autoSave));
+    emit(
+      DraftSaveComplete(
+        items: _items,
+        visibleItems: _visibleItems,
+        autoSaved: autoSave,
+      ),
+    );
     return result;
-  }
-
-  String _mapFanOutValidationMessage(String message, AppLocalizations l10n) {
-    switch (message) {
-      case 'Select at least one recipient.':
-        return l10n.draftNoRecipients;
-      case 'Message cannot be empty.':
-        return l10n.draftValidationNoContent;
-      case 'Unable to resolve recipients.':
-        return l10n.draftNoRecipients;
-      default:
-        return message;
-    }
   }
 
   Future<void> deleteDraft({required int id}) async {
@@ -227,8 +293,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   Future<XmppDatabase> _loadDatabase() async {
-    final xmppBase = _messageService as XmppBase;
-    return xmppBase.database;
+    return _messageService.database;
   }
 
   bool get _shouldUseCoreDraftFallback {
@@ -238,6 +303,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   String? _singleEmailRecipient(List<String> jids) {
+    const int coreDraftRecipientLimit = 1;
     final normalizedRecipients = <String>{};
     for (final jid in jids) {
       final normalized = normalizeEmailAddress(jid);
@@ -246,7 +312,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       }
       normalizedRecipients.add(normalized);
     }
-    if (normalizedRecipients.length != _coreDraftRecipientLimit) {
+    if (normalizedRecipients.length != coreDraftRecipientLimit) {
       return null;
     }
     final recipient = normalizedRecipients.first;
@@ -257,11 +323,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   bool _isEmailOnlyAddress(String value) {
+    const String jidSeparator = '@';
     final normalized = value.trim().toLowerCase();
     if (normalized.isEmpty) {
       return false;
     }
-    if (!normalized.contains(_jidSeparator)) {
+    if (!normalized.contains(jidSeparator)) {
       return false;
     }
     return !_axiDomainPattern.hasMatch(normalized);
@@ -278,13 +345,15 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       throw StateError('EmailService unavailable for email draft send.');
     }
     if (targets.isEmpty) {
-      throw const FanOutValidationException('Select at least one recipient.');
+      throw const DraftSendValidationException(
+        DraftSendFailureType.noRecipients,
+      );
     }
     final trimmedBody = body.trim();
     final hasSubject = subject?.trim().isNotEmpty == true;
     final hasAttachments = attachments.isNotEmpty;
     if (!hasSubject && trimmedBody.isEmpty && attachments.isEmpty) {
-      throw const FanOutValidationException('Message cannot be empty.');
+      throw const DraftSendValidationException(DraftSendFailureType.noContent);
     }
     final htmlBody = trimmedBody.isNotEmpty
         ? HtmlContentCodec.fromPlainText(trimmedBody)
@@ -351,10 +420,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final hasBody = trimmedBody.isNotEmpty;
     final hasAttachments = attachments.isNotEmpty;
     if (!hasBody && !hasAttachments) {
-      throw const FanOutValidationException('Message cannot be empty.');
+      throw const DraftSendValidationException(DraftSendFailureType.noContent);
     }
     if (jids.isEmpty) {
-      throw const FanOutValidationException('Select at least one recipient.');
+      throw const DraftSendValidationException(
+        DraftSendFailureType.noRecipients,
+      );
     }
     final db = await _messageService.database;
     final attachmentGroupId =
@@ -417,18 +488,45 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (!report.hasFailures) {
       return;
     }
-    final failedRecipients = report.statuses
-        .where((status) => status.state == FanOutRecipientState.failed)
-        .map(
-          (status) => status.chat.contactDisplayName?.isNotEmpty == true
-              ? status.chat.contactDisplayName!
-              : status.chat.jid,
-        )
-        .toList();
-    final recipientList = failedRecipients.join(', ');
-    final message = failedRecipients.length == 1
-        ? '$failureContext failed to send to $recipientList.'
-        : '$failureContext failed to send to $recipientList.';
-    throw FanOutValidationException(message);
+    throw const DraftSendValidationException(DraftSendFailureType.sendFailed);
+  }
+
+  List<Draft> _computeVisibleItems(List<Draft> items) {
+    final snapshot = _searchSnapshot;
+    var visibleItems = List<Draft>.from(items);
+    if (snapshot.filterAttachmentsOnly) {
+      visibleItems = visibleItems
+          .where((draft) => draft.attachmentMetadataIds.isNotEmpty)
+          .toList();
+    }
+    final query = snapshot.query;
+    if (query.isNotEmpty) {
+      final lower = query.toLowerCase();
+      visibleItems = visibleItems.where((draft) {
+        final recipients = draft.jids.join(', ').toLowerCase();
+        return recipients.contains(lower) ||
+            (draft.body?.toLowerCase().contains(lower) ?? false) ||
+            (draft.subject?.toLowerCase().contains(lower) ?? false);
+      }).toList();
+    }
+    visibleItems.sort(
+      (a, b) => snapshot.sortOrder.isNewestFirst
+          ? b.id.compareTo(a.id)
+          : a.id.compareTo(b.id),
+    );
+    return visibleItems;
+  }
+
+  List<Draft>? get _visibleItems {
+    final items = _items;
+    if (items == null) return null;
+    return _computeVisibleItems(items);
+  }
+
+  DraftsAvailable _stateForItems(List<Draft> items) {
+    return DraftsAvailable(
+      items: items,
+      visibleItems: _computeVisibleItems(items),
+    );
   }
 }

@@ -3,65 +3,137 @@
 
 part of 'roster_cubit.dart';
 
-sealed class RosterState extends Equatable {
-  const RosterState();
+enum RosterFilter {
+  all,
+  online,
+  offline;
+
+  static RosterFilter fromId(String? id) {
+    return switch (id) {
+      'online' => RosterFilter.online,
+      'offline' => RosterFilter.offline,
+      _ => RosterFilter.all,
+    };
+  }
 }
 
-final class RosterInitial extends RosterState
-    implements RosterAvailable, RosterInvitesAvailable {
-  const RosterInitial();
+final class RosterViewCriteria extends Equatable {
+  const RosterViewCriteria({
+    this.query = '',
+    this.sort = SearchSortOrder.newestFirst,
+    this.filter = RosterFilter.all,
+  });
+
+  final String query;
+  final SearchSortOrder sort;
+  final RosterFilter filter;
 
   @override
-  List<Invite>? get invites => null;
-
-  @override
-  List<RosterItem>? get items => null;
-
-  @override
-  List<Object?> get props => [items, invites];
+  List<Object?> get props => [query, sort, filter];
 }
 
-final class RosterAvailable extends RosterState {
-  const RosterAvailable({required this.items});
+enum RosterActionType { add, remove, reject }
 
-  final List<RosterItem>? items;
-
-  @override
-  List<Object?> get props => [items];
+enum RosterFailureReason {
+  invalidJid,
+  addFailed,
+  removeFailed,
+  rejectFailed,
 }
 
-final class RosterInvitesAvailable extends RosterState {
-  const RosterInvitesAvailable({required this.invites});
-
-  final List<Invite>? invites;
-
-  @override
-  List<Object?> get props => [invites];
+sealed class RosterActionState extends Equatable {
+  const RosterActionState();
 }
 
-final class RosterLoading extends RosterState {
-  const RosterLoading({required this.jid});
+final class RosterActionIdle extends RosterActionState {
+  const RosterActionIdle();
 
+  @override
+  List<Object?> get props => const [];
+}
+
+final class RosterActionLoading extends RosterActionState {
+  const RosterActionLoading({required this.action, required this.jid});
+
+  final RosterActionType action;
   final String jid;
 
   @override
-  List<Object?> get props => [jid];
+  List<Object?> get props => [action, jid];
 }
 
-final class RosterSuccess extends RosterState {
-  const RosterSuccess(this.message);
+final class RosterActionSuccess extends RosterActionState {
+  const RosterActionSuccess({required this.action, required this.jid});
 
-  final String message;
+  final RosterActionType action;
+  final String jid;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [action, jid];
 }
 
-final class RosterFailure extends RosterState {
-  const RosterFailure(this.message);
+final class RosterActionFailure extends RosterActionState {
+  const RosterActionFailure({
+    required this.action,
+    required this.jid,
+    required this.reason,
+  });
 
-  final String message;
+  final RosterActionType action;
+  final String jid;
+  final RosterFailureReason reason;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [action, jid, reason];
+}
+
+final class RosterState extends Equatable {
+  const RosterState({
+    this.items,
+    this.invites,
+    this.visibleItems,
+    this.visibleInvites,
+    this.contactsCriteria = const RosterViewCriteria(),
+    this.invitesCriteria = const RosterViewCriteria(),
+    this.actionState = const RosterActionIdle(),
+  });
+
+  final List<RosterItem>? items;
+  final List<Invite>? invites;
+  final List<RosterItem>? visibleItems;
+  final List<Invite>? visibleInvites;
+  final RosterViewCriteria contactsCriteria;
+  final RosterViewCriteria invitesCriteria;
+  final RosterActionState actionState;
+
+  RosterState copyWith({
+    List<RosterItem>? items,
+    List<Invite>? invites,
+    List<RosterItem>? visibleItems,
+    List<Invite>? visibleInvites,
+    RosterViewCriteria? contactsCriteria,
+    RosterViewCriteria? invitesCriteria,
+    RosterActionState? actionState,
+  }) {
+    return RosterState(
+      items: items ?? this.items,
+      invites: invites ?? this.invites,
+      visibleItems: visibleItems ?? this.visibleItems,
+      visibleInvites: visibleInvites ?? this.visibleInvites,
+      contactsCriteria: contactsCriteria ?? this.contactsCriteria,
+      invitesCriteria: invitesCriteria ?? this.invitesCriteria,
+      actionState: actionState ?? this.actionState,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        items,
+        invites,
+        visibleItems,
+        visibleInvites,
+        contactsCriteria,
+        invitesCriteria,
+        actionState,
+      ];
 }

@@ -3,14 +3,20 @@
 
 import 'package:axichat/src/storage/models/chat_models.dart';
 
-const mucStatusSelfPresence = '110';
-const mucStatusNickChange = '303';
-const mucStatusRoomCreated = '201';
-const mucStatusNickAssigned = '210';
-const mucStatusConfigurationChanged = '104';
-const mucStatusBanned = '301';
-const mucStatusKicked = '307';
-const mucStatusRoomShutdown = '332';
+enum MucStatusCode {
+  selfPresence('110'),
+  nickChange('303'),
+  roomCreated('201'),
+  nickAssigned('210'),
+  configurationChanged('104'),
+  banned('301'),
+  kicked('307'),
+  roomShutdown('332');
+
+  const MucStatusCode(this.code);
+
+  final String code;
+}
 
 enum OccupantAffiliation {
   owner,
@@ -29,6 +35,8 @@ enum OccupantAffiliation {
 
   bool get isNone => this == none;
 
+  bool get canManagePins => isOwner || isAdmin || isMember;
+
   String get xmlValue => switch (this) {
         OccupantAffiliation.owner => 'owner',
         OccupantAffiliation.admin => 'admin',
@@ -44,10 +52,6 @@ enum OccupantAffiliation {
         'outcast' => outcast,
         _ => none,
       };
-}
-
-extension OccupantAffiliationPins on OccupantAffiliation {
-  bool get canManagePins => isOwner || isAdmin || isMember;
 }
 
 enum OccupantRole {
@@ -138,6 +142,7 @@ class RoomState {
   final String? myOccupantId;
   final Set<String> selfPresenceStatusCodes;
   final String? selfPresenceReason;
+  late final _RoomOccupantGroups _occupantGroups = _buildOccupantGroups();
 
   OccupantAffiliation get myAffiliation =>
       occupants[myOccupantId]?.affiliation ?? OccupantAffiliation.none;
@@ -147,51 +152,72 @@ class RoomState {
     return role ?? OccupantRole.none;
   }
 
-  List<Occupant> get owners => _sortedByNick(
-        occupants.values
-            .where((occupant) => occupant.affiliation.isOwner)
-            .toList(),
-      );
+  List<Occupant> get owners => _occupantGroups.owners;
 
-  List<Occupant> get admins => _sortedByNick(
-        occupants.values
-            .where((occupant) => occupant.affiliation.isAdmin)
-            .toList(),
-      );
+  List<Occupant> get admins => _occupantGroups.admins;
 
-  List<Occupant> get moderators => _sortedByNick(
-        occupants.values
-            .where((occupant) => occupant.role.isModerator)
-            .toList(),
-      );
+  List<Occupant> get moderators => _occupantGroups.moderators;
 
-  List<Occupant> get members => _sortedByNick(
-        occupants.values
-            .where((occupant) => occupant.affiliation.isMember)
-            .toList(),
-      );
+  List<Occupant> get members => _occupantGroups.members;
 
-  List<Occupant> get visitors => _sortedByNick(
-        occupants.values
-            .where((occupant) => occupant.affiliation.isNone)
-            .toList(),
-      );
+  List<Occupant> get visitors => _occupantGroups.visitors;
 
   bool get roomCreated =>
-      selfPresenceStatusCodes.contains(mucStatusRoomCreated);
+      selfPresenceStatusCodes.contains(MucStatusCode.roomCreated.code);
 
   bool get nickAssigned =>
-      selfPresenceStatusCodes.contains(mucStatusNickAssigned);
+      selfPresenceStatusCodes.contains(MucStatusCode.nickAssigned.code);
 
-  bool get wasKicked => selfPresenceStatusCodes.contains(mucStatusKicked);
+  bool get wasKicked =>
+      selfPresenceStatusCodes.contains(MucStatusCode.kicked.code);
 
-  bool get wasBanned => selfPresenceStatusCodes.contains(mucStatusBanned);
+  bool get wasBanned =>
+      selfPresenceStatusCodes.contains(MucStatusCode.banned.code);
 
   bool get roomShutdown =>
-      selfPresenceStatusCodes.contains(mucStatusRoomShutdown);
+      selfPresenceStatusCodes.contains(MucStatusCode.roomShutdown.code);
 
-  List<Occupant> _sortedByNick(List<Occupant> items) => items
-    ..sort((a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()));
+  _RoomOccupantGroups _buildOccupantGroups() {
+    final owners = <Occupant>[];
+    final admins = <Occupant>[];
+    final moderators = <Occupant>[];
+    final members = <Occupant>[];
+    final visitors = <Occupant>[];
+    final seen = <String>{};
+
+    for (final occupant in occupants.values) {
+      if (!seen.add(occupant.occupantId)) continue;
+      if (occupant.affiliation.isOwner) {
+        owners.add(occupant);
+      } else if (occupant.affiliation.isAdmin) {
+        admins.add(occupant);
+      } else if (occupant.role.isModerator) {
+        moderators.add(occupant);
+      } else if (occupant.affiliation.isMember) {
+        members.add(occupant);
+      } else {
+        visitors.add(occupant);
+      }
+    }
+
+    _sortByNick(owners);
+    _sortByNick(admins);
+    _sortByNick(moderators);
+    _sortByNick(members);
+    _sortByNick(visitors);
+
+    return _RoomOccupantGroups(
+      owners: owners,
+      admins: admins,
+      moderators: moderators,
+      members: members,
+      visitors: visitors,
+    );
+  }
+
+  void _sortByNick(List<Occupant> items) {
+    items.sort((a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()));
+  }
 
   RoomState copyWith({
     Map<String, Occupant>? occupants,
@@ -215,7 +241,7 @@ extension RoomStateAvatarPermissions on RoomState {
 
 extension RoomStatePresence on RoomState {
   bool get hasSelfPresence =>
-      selfPresenceStatusCodes.contains(mucStatusSelfPresence);
+      selfPresenceStatusCodes.contains(MucStatusCode.selfPresence.code);
 }
 
 enum MucModerationAction {
@@ -235,4 +261,50 @@ enum MucModerationAction {
       this == member || this == admin || this == owner || this == ban;
 
   bool get isRoleChange => this == moderator || this == participant;
+}
+
+enum RoomMemberSectionKind {
+  owners,
+  admins,
+  moderators,
+  members,
+  visitors;
+}
+
+class RoomMemberEntry {
+  const RoomMemberEntry({
+    required this.occupant,
+    required this.actions,
+    this.avatarPath,
+  });
+
+  final Occupant occupant;
+  final List<MucModerationAction> actions;
+  final String? avatarPath;
+}
+
+class RoomMemberSection {
+  const RoomMemberSection({
+    required this.kind,
+    required this.members,
+  });
+
+  final RoomMemberSectionKind kind;
+  final List<RoomMemberEntry> members;
+}
+
+class _RoomOccupantGroups {
+  const _RoomOccupantGroups({
+    required this.owners,
+    required this.admins,
+    required this.moderators,
+    required this.members,
+    required this.visitors,
+  });
+
+  final List<Occupant> owners;
+  final List<Occupant> admins;
+  final List<Occupant> moderators;
+  final List<Occupant> members;
+  final List<Occupant> visitors;
 }

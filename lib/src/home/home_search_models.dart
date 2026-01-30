@@ -3,12 +3,13 @@
 
 import 'package:flutter/widgets.dart';
 
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 
 class HomeSearchFilter {
   const HomeSearchFilter({required this.id, required this.label});
 
-  final String id;
+  final SearchFilterId id;
   final String label;
 }
 

@@ -1,20 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:intl/intl.dart' as intl;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:axichat/src/storage/models.dart';
-
-typedef ChatHistoryLoader = Future<List<Message>> Function(String jid);
-typedef ChatHistoryMessageLineFormatter = String? Function({
-  required Chat chat,
-  required Message message,
-  required intl.DateFormat format,
-});
 
 class ChatExportResult {
   const ChatExportResult._({
@@ -35,58 +27,74 @@ class ChatExportResult {
 class ChatHistoryExporter {
   const ChatHistoryExporter._();
 
-  static const Duration _exportCleanupDelay = Duration(hours: 1);
-
   static Future<ChatExportResult> exportChats({
     required List<Chat> chats,
-    required ChatHistoryLoader loadHistory,
+    required Future<List<Message>> Function(String jid) loadHistory,
     String? fileLabel,
     intl.DateFormat? dateFormat,
-    ChatHistoryMessageLineFormatter? lineFormatter,
+    String? Function({
+      required Chat chat,
+      required Message message,
+      required intl.DateFormat format,
+    })? lineFormatter,
+    Future<int> Function(String jid)? countHistory,
+    Future<List<Message>> Function({
+      required String jid,
+      required int offset,
+      required int limit,
+    })? loadHistoryPage,
   }) async {
     if (chats.isEmpty) return const ChatExportResult.empty();
     final format = dateFormat ?? intl.DateFormat('y-MM-dd HH:mm');
-    final buffer = StringBuffer();
+    final initialLabel = fileLabel ??
+        _defaultFileLabel(chats, chats.length == 1 ? chats.first : null);
+    final file = await _createExportFile(initialLabel);
+    final sink = file.openWrite();
     var exportedChats = 0;
     var exportedMessages = 0;
     for (final chat in chats) {
-      final history = await loadHistory(chat.jid);
-      final appended = _appendChatHistory(
-        buffer: buffer,
+      final appended = await _writeChatHistory(
+        sink: sink,
         chat: chat,
-        history: history,
         format: format,
+        loadHistory: loadHistory,
+        countHistory: countHistory,
+        loadHistoryPage: loadHistoryPage,
         lineFormatter: lineFormatter,
       );
-      if (appended == 0) continue;
+      if (appended == 0) {
+        continue;
+      }
       exportedChats++;
       exportedMessages += appended;
-      buffer.writeln();
+      sink.writeln();
     }
-    final text = buffer.toString().trim();
-    if (text.isEmpty || exportedMessages == 0) {
+    await sink.flush();
+    await sink.close();
+    if (exportedMessages == 0) {
+      await cleanupExportFile(file);
       return const ChatExportResult.empty();
     }
-    final label = fileLabel ??
-        _defaultFileLabel(chats, exportedChats == 1 ? chats.first : null);
-    final file = await _writeExportFile(text, label);
+    final finalLabel =
+        fileLabel ?? _defaultFileLabel(chats, exportedChats == 1 ? chats.first : null);
+    final resolvedFile = finalLabel == initialLabel
+        ? file
+        : await _renameExportFile(file, finalLabel);
     return ChatExportResult._(
-      file: file,
+      file: resolvedFile,
       chatCount: exportedChats,
       messageCount: exportedMessages,
     );
   }
 
-  static void scheduleCleanup(File file) {
-    if (file.path.trim().isEmpty) {
+  static Future<void> cleanupExportFile(File file) async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } on Exception {
       return;
     }
-    Timer(
-      _exportCleanupDelay,
-      () async {
-        await _cleanupExportFile(file);
-      },
-    );
   }
 
   static String sanitizeLabel(String input) {
@@ -95,39 +103,96 @@ class ChatHistoryExporter {
     return sanitized.isEmpty ? 'thread' : sanitized;
   }
 
-  static Future<File> _writeExportFile(String text, String label) async {
+  static Future<File> _createExportFile(String label) async {
     final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final fileName = '$label-$timestamp.txt';
-    final file = File('${tempDir.path}/$fileName');
-    await file.writeAsString(text);
-    return file;
+    final fileName = '${sanitizeLabel(label)}-$timestamp.txt';
+    return File('${tempDir.path}/$fileName');
   }
 
-  static int _appendChatHistory({
-    required StringBuffer buffer,
+  static Future<File> _renameExportFile(File file, String label) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = '${sanitizeLabel(label)}-$timestamp.txt';
+      return file.rename('${tempDir.path}/$fileName');
+    } on Exception {
+      return file;
+    }
+  }
+
+  static Future<int> _writeChatHistory({
+    required IOSink sink,
     required Chat chat,
-    required List<Message> history,
     required intl.DateFormat format,
-    ChatHistoryMessageLineFormatter? lineFormatter,
-  }) {
+    required Future<List<Message>> Function(String jid) loadHistory,
+    Future<int> Function(String jid)? countHistory,
+    Future<List<Message>> Function({
+      required String jid,
+      required int offset,
+      required int limit,
+    })? loadHistoryPage,
+    String? Function({
+      required Chat chat,
+      required Message message,
+      required intl.DateFormat format,
+    })? lineFormatter,
+  }) async {
+    if (loadHistoryPage != null && countHistory != null) {
+      final total = await countHistory(chat.jid);
+      if (total == 0) return 0;
+      const pageSize = 200;
+      var remaining = total;
+      var appended = 0;
+      _writeChatHeader(sink, chat);
+      while (remaining > 0) {
+        final offset = remaining > pageSize ? remaining - pageSize : 0;
+        final limit = remaining - offset;
+        final page = await loadHistoryPage(
+          jid: chat.jid,
+          offset: offset,
+          limit: limit,
+        );
+        if (page.isEmpty) break;
+        for (final message in page.reversed) {
+          final line = lineFormatter?.call(
+            chat: chat,
+            message: message,
+            format: format,
+          );
+          final content =
+              line ?? _defaultMessageLine(message, format: format);
+          if (content == null || content.isEmpty) continue;
+          sink.writeln(content);
+          appended++;
+        }
+        remaining = offset;
+      }
+      return appended;
+    }
+
+    final history = await loadHistory(chat.jid);
     if (history.isEmpty) return 0;
     var appended = 0;
-    buffer
-      ..writeln('=== ${chat.title} (${chat.jid}) ===')
-      ..writeln();
+    _writeChatHeader(sink, chat);
     for (final message in history) {
-      final formatted = lineFormatter?.call(
+      final line = lineFormatter?.call(
         chat: chat,
         message: message,
         format: format,
       );
-      final content = formatted ?? _defaultMessageLine(message, format: format);
+      final content = line ?? _defaultMessageLine(message, format: format);
       if (content == null || content.isEmpty) continue;
-      buffer.writeln(content);
+      sink.writeln(content);
       appended++;
     }
     return appended;
+  }
+
+  static void _writeChatHeader(IOSink sink, Chat chat) {
+    sink
+      ..writeln('=== ${chat.title} (${chat.jid}) ===')
+      ..writeln();
   }
 
   static String? _defaultMessageLine(
@@ -151,16 +216,5 @@ class ChatHistoryExporter {
       return 'chat-${sanitizeLabel(chats.single.title)}';
     }
     return 'chats';
-  }
-
-  static Future<void> _cleanupExportFile(File file) async {
-    await Future<void>.delayed(_exportCleanupDelay);
-    try {
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } on Exception {
-      return;
-    }
   }
 }

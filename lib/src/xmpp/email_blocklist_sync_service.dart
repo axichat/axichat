@@ -271,8 +271,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> publishEmailBlockSync(EmailBlocklistEntry entry) async {
-    final normalized = entry.address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(entry.address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
@@ -307,8 +307,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> retractEmailBlockSync(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
@@ -383,8 +383,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
 
   Future<void> _applyEmailBlocklistSyncRetraction(String address) async {
     await _ensurePendingEmailBlocklistSyncLoaded();
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     if (_pendingEmailBlocklistPublishes.contains(normalized)) {
@@ -430,8 +430,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     required String sourceId,
     required anti_abuse.SyncOrigin origin,
   }) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _dbOp<XmppDatabase>((db) async {
@@ -541,7 +541,7 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       return;
     }
     for (final entry in raw) {
-      final normalized = entry?.toString().trim().toLowerCase();
+      final normalized = _normalizeEmailBlocklistAddress(entry?.toString());
       if (normalized == null || normalized.isEmpty) {
         continue;
       }
@@ -614,8 +614,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _queueEmailBlocklistPublish(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingEmailBlocklistSyncLoaded();
@@ -625,8 +625,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _queueEmailBlocklistRetraction(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingEmailBlocklistSyncLoaded();
@@ -636,8 +636,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _clearPendingEmailBlocklistPublish(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingEmailBlocklistSyncLoaded();
@@ -649,8 +649,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> _clearPendingEmailBlocklistRetraction(String address) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     await _ensurePendingEmailBlocklistSyncLoaded();

@@ -34,7 +34,7 @@ import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/share/share_intent_cubit.dart';
+import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';

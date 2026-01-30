@@ -17,12 +17,12 @@ class TabSearchState extends Equatable {
 
   final String query;
   final SearchSortOrder sort;
-  final String? filterId;
+  final SearchFilterId? filterId;
 
   TabSearchState copyWith({
     String? query,
     SearchSortOrder? sort,
-    String? filterId,
+    SearchFilterId? filterId,
   }) {
     return TabSearchState(
       query: query ?? this.query,
@@ -61,7 +61,7 @@ class HomeSearchState extends Equatable {
 class HomeSearchCubit extends Cubit<HomeSearchState> {
   HomeSearchCubit({
     required List<HomeTab> tabs,
-    Map<HomeTab, String?> initialFilters = const {},
+    Map<HomeTab, SearchFilterId?> initialFilters = const {},
   }) : super(
           HomeSearchState(
             tabs: List.unmodifiable(tabs),
@@ -129,7 +129,7 @@ class HomeSearchCubit extends Cubit<HomeSearchState> {
     );
   }
 
-  void updateFilter(String? filterId, {HomeTab? tab}) {
+  void updateFilter(SearchFilterId? filterId, {HomeTab? tab}) {
     final targetTab = tab ?? state.activeTab;
     if (targetTab == null) return;
     final current = state.stateFor(targetTab);

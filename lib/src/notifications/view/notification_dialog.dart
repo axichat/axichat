@@ -2,39 +2,45 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-Future<bool?> showNotificationDialog(
-  BuildContext context,
-  NotificationService notificationService,
-) =>
+Future<bool?> showNotificationDialog(BuildContext context) =>
     showFadeScaleDialog<bool>(
       context: context,
-      builder: (context) => ShadDialog(
-        title: Text(
-          context.l10n.notificationsDialogTitle,
-          style: context.modalHeaderTextStyle,
+      builder: (context) =>
+          BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
+        builder: (context, state) => ShadDialog(
+          title: Text(
+            context.l10n.notificationsDialogTitle,
+            style: context.modalHeaderTextStyle,
+          ),
+          actions: [
+            AxiButton.destructive(
+              onPressed: state.isRequestingPermissions
+                  ? null
+                  : () => context.pop(false),
+              child: Text(context.l10n.notificationsDialogIgnore),
+            ),
+            AxiButton.primary(
+              onPressed: state.isRequestingPermissions
+                  ? null
+                  : () async {
+                      final requestCubit =
+                          context.read<NotificationRequestCubit>();
+                      final granted = await requestCubit.requestPermissions();
+                      if (granted && context.mounted) {
+                        context.pop(true);
+                      }
+                    },
+              child: Text(context.l10n.notificationsDialogContinue),
+            ),
+          ],
+          child: Text(context.l10n.notificationsDialogDescription),
         ),
-        actions: [
-          ShadButton.destructive(
-            onPressed: () => context.pop(false),
-            child: Text(context.l10n.notificationsDialogIgnore),
-          ).withTapBounce(),
-          ShadButton(
-            onPressed: () async {
-              if (await notificationService
-                      .requestAllNotificationPermissions() &&
-                  context.mounted) {
-                context.pop(true);
-              }
-            },
-            child: Text(context.l10n.notificationsDialogContinue),
-          ).withTapBounce(),
-        ],
-        child: Text(context.l10n.notificationsDialogDescription),
       ),
     );

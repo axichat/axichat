@@ -6,10 +6,11 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 const String _notificationPayloadPrefix = 'axichat-chat-v1:';
-const int _notificationPayloadMaxLength = 256;
 
 class NotificationPayloadCodec {
   const NotificationPayloadCodec();
+
+  static const int _payloadMaxLength = 256;
 
   String? encodeChatJid(String chatJid) {
     final normalized = chatJid.trim();
@@ -19,8 +20,18 @@ class NotificationPayloadCodec {
     return '$_notificationPayloadPrefix${_hashChatJid(normalized)}';
   }
 
-  bool isEncodedPayload(String payload) =>
-      payload.trim().startsWith(_notificationPayloadPrefix);
+  bool isEncodedPayload(String payload) {
+    final normalized = payload.trim();
+    if (normalized.isEmpty || normalized.length > _payloadMaxLength) {
+      return false;
+    }
+    return normalized.startsWith(_notificationPayloadPrefix);
+  }
+
+  bool isPayloadLengthValid(String payload) {
+    final normalized = payload.trim();
+    return normalized.isNotEmpty && normalized.length <= _payloadMaxLength;
+  }
 
   String? resolveChatJid({
     required String payload,
@@ -30,7 +41,7 @@ class NotificationPayloadCodec {
     if (normalized.isEmpty) {
       return null;
     }
-    if (normalized.length > _notificationPayloadMaxLength) {
+    if (normalized.length > _payloadMaxLength) {
       return null;
     }
     if (!normalized.startsWith(_notificationPayloadPrefix)) {

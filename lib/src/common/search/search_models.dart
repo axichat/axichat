@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+/// Shared filter ids used by search surfaces so we keep naming aligned.
+enum SearchFilterId {
+  all,
+  contacts,
+  nonContacts,
+  xmpp,
+  email,
+  hidden,
+  attachments,
+}
+
 /// Shared sort order used by search surfaces so we keep naming aligned.
 enum SearchSortOrder {
   newestFirst,

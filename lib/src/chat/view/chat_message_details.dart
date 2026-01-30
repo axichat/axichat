@@ -21,18 +21,8 @@ import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
-import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-String? _bareJid(String? jid) {
-  if (jid == null || jid.isEmpty) return null;
-  try {
-    return mox.JID.fromString(jid).toBare().toString();
-  } on Exception {
-    return jid;
-  }
-}
 
 const double _messageDetailsCopyIconSize = 16.0;
 const double _messageDetailsCopySpacing = 6.0;
@@ -68,13 +58,13 @@ class ChatMessageDetails extends StatelessWidget {
             final emailSelfJid = emailService?.selfSenderJid;
             final String? resolvedEmailSelfJid =
                 emailSelfJid.resolveDeltaPlaceholderJid();
-            final bareSender = _bareJid(message.senderJid);
+            final bareSender = AddressTools.bare(message.senderJid);
             final bool isPlaceholderSender =
                 bareSender?.isDeltaPlaceholderJid ?? false;
             final isFromSelf = isPlaceholderSender ||
-                bareSender == _bareJid(profileJid) ||
+                bareSender == AddressTools.bare(profileJid) ||
                 (resolvedEmailSelfJid != null &&
-                    bareSender == _bareJid(resolvedEmailSelfJid));
+                    bareSender == AddressTools.bare(resolvedEmailSelfJid));
             final shareContext = state.shareContexts[message.stanzaID];
             final shareParticipants = _shareParticipants(
               shareContext?.participants ?? const <Chat>[],

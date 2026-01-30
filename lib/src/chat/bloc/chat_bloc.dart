@@ -17,6 +17,7 @@ import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -236,12 +237,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _omemoService = omemoService,
         _mucService = mucService,
         _settingsSnapshot = settings,
-        super(const ChatState(items: [])) {
+        _xmppService = messageService is XmppService ? messageService : null,
+        super(
+          ChatState(
+            items: const [],
+            emailServiceAvailable: emailService != null,
+            emailSelfJid: emailService?.selfSenderJid,
+          ),
+        ) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
     on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
+    on<_RoomRosterUpdated>(_onRoomRosterUpdated);
+    on<_RoomChatsUpdated>(_onRoomChatsUpdated);
+    on<_RoomSelfAvatarUpdated>(_onRoomSelfAvatarUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
@@ -371,8 +382,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = value.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = AddressTools.normalizedKey(value);
+    if (normalized == null || normalized.isEmpty) {
       return false;
     }
     if (!normalized.contains('@')) {
@@ -389,7 +400,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final String? _chatLookupJid = jid == null
       ? null
       : _isEmailOnlyAddress(jid)
-          ? jid!.trim().toLowerCase()
+          ? AddressTools.normalizedKey(jid) ?? jid!.trim().toLowerCase()
           : jid;
   final MessageService _messageService;
   XmppService? _xmppService;
@@ -415,6 +426,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<List<PinnedMessageEntry>>? _pinnedSubscription;
   StreamSubscription<RoomState>? _roomSubscription;
+  StreamSubscription<List<RosterItem>>? _roomRosterSubscription;
+  StreamSubscription<List<Chat>>? _roomChatsSubscription;
+  StreamSubscription<StoredAvatar?>? _roomSelfAvatarSubscription;
   StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
@@ -432,18 +446,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _pinHydrationInFlight = false;
   final Set<String> _roomAffiliationRefreshAttempts = <String>{};
   Completer<void>? _mamLoadingCompleter;
+  List<RosterItem> _roomRosterItems = const <RosterItem>[];
+  List<Chat> _roomChats = const <Chat>[];
+  String? _roomSelfAvatarPath;
 
   RestartableTimer? _typingTimer;
 
   bool get encryptionAvailable => _omemoService != null;
   bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
   String? _bareJid(String? jid) {
-    if (jid == null || jid.isEmpty) return null;
-    try {
-      return mox.JID.fromString(jid).toBare().toString();
-    } on Exception {
-      return jid;
-    }
+    return AddressTools.bare(jid);
   }
 
   Future<void> _markEmailMessagesDisplayedLocally(
@@ -1001,6 +1013,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _messageSubscription?.cancel();
     await _pinnedSubscription?.cancel();
     await _roomSubscription?.cancel();
+    await _roomRosterSubscription?.cancel();
+    await _roomChatsSubscription?.cancel();
+    await _roomSelfAvatarSubscription?.cancel();
     await _typingParticipantsSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
@@ -1100,11 +1115,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     await _roomSubscription?.cancel();
     _roomSubscription = null;
+    await _roomRosterSubscription?.cancel();
+    _roomRosterSubscription = null;
+    await _roomChatsSubscription?.cancel();
+    _roomChatsSubscription = null;
+    await _roomSelfAvatarSubscription?.cancel();
+    _roomSelfAvatarSubscription = null;
+    _roomRosterItems = const <RosterItem>[];
+    _roomChats = const <Chat>[];
+    _roomSelfAvatarPath = null;
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription =
           _mucService.roomStateStream(event.chat.jid).listen((room) {
         _addIfOpen(_RoomStateUpdated(room));
       });
+      _subscribeRoomMemberSources();
       if (resetContext || state.roomState == null) {
         await _primeRoomState(event.chat);
       }
@@ -1113,7 +1138,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       await _ensureMucMembership(event.chat);
     } else {
-      emit(state.copyWith(roomState: null));
+      emit(state.copyWith(roomState: null, roomMemberSections: const []));
     }
     await _primeDemoPendingAttachment(event.chat, emit);
   }
@@ -1125,7 +1150,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chatJid = _bareJid(state.chat?.jid);
     if (chatJid == null) return;
     if (chatJid != _bareJid(event.roomState.roomJid)) return;
-    emit(state.copyWith(roomState: event.roomState));
+    emit(
+      state.copyWith(
+        roomState: event.roomState,
+        roomMemberSections: _buildRoomMemberSections(event.roomState),
+      ),
+    );
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
     _seedLocalRoomOccupant(chat, event.roomState);
@@ -1133,6 +1163,223 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chat: chat,
       roomState: event.roomState,
     );
+  }
+
+  void _onRoomRosterUpdated(
+    _RoomRosterUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _roomRosterItems = event.items;
+    _refreshRoomMemberSections(emit);
+  }
+
+  void _onRoomChatsUpdated(
+    _RoomChatsUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _roomChats = event.items;
+    _refreshRoomMemberSections(emit);
+  }
+
+  void _onRoomSelfAvatarUpdated(
+    _RoomSelfAvatarUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _roomSelfAvatarPath = event.avatar?.path;
+    _refreshRoomMemberSections(emit);
+  }
+
+  void _subscribeRoomMemberSources() {
+    final xmppService = _xmppService;
+    if (xmppService == null) return;
+    _roomRosterSubscription = xmppService.rosterStream().listen((items) {
+      _addIfOpen(_RoomRosterUpdated(items));
+    });
+    _roomChatsSubscription = _chatsService.chatsStream().listen((items) {
+      _addIfOpen(_RoomChatsUpdated(items));
+    });
+    _roomSelfAvatarSubscription = xmppService.selfAvatarStream.listen(
+      (avatar) => _addIfOpen(_RoomSelfAvatarUpdated(avatar)),
+    );
+    final cachedSelfAvatar = xmppService.cachedSelfAvatar;
+    if (cachedSelfAvatar != null) {
+      add(_RoomSelfAvatarUpdated(cachedSelfAvatar));
+    }
+  }
+
+  void _refreshRoomMemberSections(Emitter<ChatState> emit) {
+    final roomState = state.roomState;
+    if (roomState == null) return;
+    emit(
+      state.copyWith(
+        roomMemberSections: _buildRoomMemberSections(roomState),
+      ),
+    );
+  }
+
+  List<RoomMemberSection> _buildRoomMemberSections(RoomState roomState) {
+    final avatarPathsByBareJid = _buildAvatarPathsByBareJid();
+    final selfAvatarPath = _trimmedAvatarPath(
+      _roomSelfAvatarPath ?? _xmppService?.cachedSelfAvatar?.path,
+    );
+    final seen = <String>{};
+    final membersByKind = <RoomMemberSectionKind, List<RoomMemberEntry>>{
+      RoomMemberSectionKind.owners: <RoomMemberEntry>[],
+      RoomMemberSectionKind.admins: <RoomMemberEntry>[],
+      RoomMemberSectionKind.moderators: <RoomMemberEntry>[],
+      RoomMemberSectionKind.members: <RoomMemberEntry>[],
+      RoomMemberSectionKind.visitors: <RoomMemberEntry>[],
+    };
+
+    for (final occupant in roomState.occupants.values) {
+      if (!seen.add(occupant.occupantId)) continue;
+      final kind = _memberSectionKindFor(occupant);
+      membersByKind[kind]!.add(
+        RoomMemberEntry(
+          occupant: occupant,
+          actions: _moderationActionsFor(
+            occupant: occupant,
+            roomState: roomState,
+          ),
+          avatarPath: _avatarPathForOccupant(
+            occupant: occupant,
+            roomState: roomState,
+            avatarPathsByBareJid: avatarPathsByBareJid,
+            selfAvatarPath: selfAvatarPath,
+          ),
+        ),
+      );
+    }
+
+    for (final entries in membersByKind.values) {
+      entries
+        ..sort(
+          (a, b) => a.occupant.nick
+              .toLowerCase()
+              .compareTo(b.occupant.nick.toLowerCase()),
+        );
+    }
+
+    final sections = <RoomMemberSection>[];
+    void addSection(RoomMemberSectionKind kind) {
+      final members = membersByKind[kind];
+      if (members == null || members.isEmpty) return;
+      sections.add(RoomMemberSection(kind: kind, members: members));
+    }
+
+    addSection(RoomMemberSectionKind.owners);
+    addSection(RoomMemberSectionKind.admins);
+    addSection(RoomMemberSectionKind.moderators);
+    addSection(RoomMemberSectionKind.members);
+    addSection(RoomMemberSectionKind.visitors);
+    return sections;
+  }
+
+  RoomMemberSectionKind _memberSectionKindFor(Occupant occupant) {
+    if (occupant.affiliation.isOwner) {
+      return RoomMemberSectionKind.owners;
+    }
+    if (occupant.affiliation.isAdmin) {
+      return RoomMemberSectionKind.admins;
+    }
+    if (occupant.role.isModerator) {
+      return RoomMemberSectionKind.moderators;
+    }
+    if (occupant.affiliation.isMember) {
+      return RoomMemberSectionKind.members;
+    }
+    return RoomMemberSectionKind.visitors;
+  }
+
+  List<MucModerationAction> _moderationActionsFor({
+    required Occupant occupant,
+    required RoomState roomState,
+  }) {
+    if (occupant.occupantId == roomState.myOccupantId) return const [];
+    final myAffiliation = roomState.myAffiliation;
+    final myRole = roomState.myRole;
+    final isOwner = myAffiliation.isOwner;
+    final isAdmin = myAffiliation.isAdmin;
+    final isModerator = myRole.isModerator;
+    final canSetRoles = isOwner || isAdmin || isModerator;
+    final actions = <MucModerationAction>[];
+    if (canSetRoles) {
+      actions.add(MucModerationAction.kick);
+    }
+    if ((isOwner || isAdmin) && occupant.realJid?.isNotEmpty == true) {
+      actions.add(MucModerationAction.ban);
+    }
+    if (isOwner || isAdmin) {
+      if (!occupant.affiliation.isMember) {
+        actions.add(MucModerationAction.member);
+      }
+      if (isOwner) {
+        if (!occupant.affiliation.isAdmin) {
+          actions.add(MucModerationAction.admin);
+        }
+        if (!occupant.affiliation.isOwner) {
+          actions.add(MucModerationAction.owner);
+        }
+      }
+      if (occupant.role.isModerator) {
+        actions.add(MucModerationAction.participant);
+      } else {
+        actions.add(MucModerationAction.moderator);
+      }
+    }
+    if (canSetRoles && !actions.contains(MucModerationAction.participant)) {
+      if (occupant.role.isModerator) {
+        actions.add(MucModerationAction.participant);
+      }
+    }
+    return actions;
+  }
+
+  String? _avatarPathForOccupant({
+    required Occupant occupant,
+    required RoomState roomState,
+    required Map<String, String> avatarPathsByBareJid,
+    required String? selfAvatarPath,
+  }) {
+    if (occupant.occupantId == roomState.myOccupantId) {
+      return selfAvatarPath;
+    }
+    final bareJid = _normalizedBareJid(occupant.realJid);
+    if (bareJid == null) return null;
+    return avatarPathsByBareJid[bareJid];
+  }
+
+  Map<String, String> _buildAvatarPathsByBareJid() {
+    final avatarPaths = <String, String>{};
+    for (final item in _roomRosterItems) {
+      final jid = _normalizedBareJid(item.jid);
+      if (jid == null) continue;
+      final path = _trimmedAvatarPath(item.avatarPath);
+      if (path == null) continue;
+      avatarPaths[jid] = path;
+    }
+    for (final chat in _roomChats) {
+      final jid = _normalizedBareJid(chat.remoteJid);
+      if (jid == null) continue;
+      if (avatarPaths.containsKey(jid)) continue;
+      final path = _trimmedAvatarPath(
+        chat.avatarPath ?? chat.contactAvatarPath,
+      );
+      if (path == null) continue;
+      avatarPaths[jid] = path;
+    }
+    return avatarPaths;
+  }
+
+  String? _normalizedBareJid(String? jid) {
+    final bareJid = _bareJid(jid);
+    if (bareJid == null || bareJid.isEmpty) return null;
+    return bareJid.trim().toLowerCase();
+  }
+
+  String? _trimmedAvatarPath(String? path) {
+    final trimmed = path?.trim();
+    return trimmed?.isNotEmpty == true ? trimmed : null;
   }
 
   Future<void> _primeRoomState(Chat chat) async {

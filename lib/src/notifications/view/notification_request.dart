@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/main.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/notifications/view/notification_dialog.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -26,7 +25,7 @@ enum NotificationRequestDisplayMode {
   }
 }
 
-class NotificationRequest extends StatefulWidget {
+class NotificationRequest extends StatelessWidget {
   const NotificationRequest({
     super.key,
     required this.notificationService,
@@ -39,74 +38,73 @@ class NotificationRequest extends StatefulWidget {
   final NotificationRequestDisplayMode displayMode;
 
   @override
-  State<NotificationRequest> createState() => _NotificationRequestState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => NotificationRequestCubit(
+        notificationService: notificationService,
+        xmppService: context.read<XmppService>(),
+      )..refreshPermissions(),
+      child: _NotificationRequestBody(
+        capability: capability,
+        displayMode: displayMode,
+      ),
+    );
+  }
 }
 
-class _NotificationRequestState extends State<NotificationRequest> {
-  late var _future = widget.notificationService.hasAllNotificationPermissions();
+class _NotificationRequestBody extends StatelessWidget {
+  const _NotificationRequestBody({
+    required this.capability,
+    required this.displayMode,
+  });
+
+  final Capability capability;
+  final NotificationRequestDisplayMode displayMode;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return FutureBuilder(
-      initialData: foregroundServiceActive.value,
-      future: _future,
-      builder: (context, snapshot) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: foregroundServiceActive,
-          builder: (context, serviceActive, _) {
-            if (!snapshot.hasData ||
-                serviceActive ||
-                !widget.displayMode.shouldShowFor(widget.capability)) {
-              return const SizedBox.shrink();
-            }
+    return BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
+      builder: (context, state) {
+        if (state.hasPermissions == null ||
+            state.foregroundServiceActive ||
+            !displayMode.shouldShowFor(capability)) {
+          return const SizedBox.shrink();
+        }
 
-            if (snapshot.requireData) {
-              return ShadSwitch(
-                enabled: false,
-                value: true,
-                label: Text(l10n.notificationsRestartTitle),
-                sublabel: Text(l10n.notificationsRestartSubtitle),
-              );
-            }
+        if (state.hasPermissions == true) {
+          return ShadSwitch(
+            enabled: false,
+            value: true,
+            label: Text(l10n.notificationsRestartTitle),
+            sublabel: Text(l10n.notificationsRestartSubtitle),
+          );
+        }
 
-            return ShadSwitch(
-              label: Text(l10n.notificationsMessageToggle),
-              sublabel: Text(l10n.notificationsRequiresRestart),
-              value: snapshot.requireData,
-              onChanged: (enabled) async {
-                final confirmed = await showNotificationDialog(
-                  context,
-                  widget.notificationService,
-                );
-                if (!context.mounted || confirmed != true) {
-                  return;
-                }
-                if (!widget.displayMode.shouldShowFor(widget.capability)) {
-                  return;
-                }
-                if (!widget.capability.canForegroundService) {
-                  return;
-                }
-                final permissionCheck =
-                    widget.notificationService.hasAllNotificationPermissions();
-                setState(() {
-                  _future = permissionCheck;
-                });
-                if (!await permissionCheck) {
-                  return;
-                }
-                if (!context.mounted) {
-                  return;
-                }
-                final xmppService = context.read<XmppService>();
-                withForeground = true;
-                foregroundServiceActive.value = true;
-                initForegroundService();
-                await xmppService.ensureForegroundSocketIfActive();
-              },
-            );
-          },
+        return ShadSwitch(
+          label: Text(l10n.notificationsMessageToggle),
+          sublabel: Text(l10n.notificationsRequiresRestart),
+          value: state.hasPermissions ?? false,
+          onChanged: state.isBusy
+              ? null
+              : (enabled) async {
+                  final confirmed = await showNotificationDialog(context);
+                  if (!context.mounted || confirmed != true) {
+                    return;
+                  }
+                  if (!displayMode.shouldShowFor(capability)) {
+                    return;
+                  }
+                  if (!capability.canForegroundService) {
+                    return;
+                  }
+                  final requestCubit = context.read<NotificationRequestCubit>();
+                  final granted = await requestCubit.requestPermissions();
+                  if (!granted || !context.mounted) {
+                    return;
+                  }
+                  await requestCubit.enableForegroundService();
+                },
         );
       },
     );

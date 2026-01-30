@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
@@ -1307,15 +1308,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final bool _inMemory;
 
   bool get isInMemory => _inMemory;
-  String _normalizeEmail(String address) => address.trim().toLowerCase();
+  String _normalizeEmail(String address) =>
+      AddressTools.normalizedKey(address) ?? address.trim().toLowerCase();
   String? _normalizeBlocklistJid(String jid) {
-    final trimmed = jid.trim();
-    if (trimmed.isEmpty) return null;
-    try {
-      return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
-    } catch (_) {
-      return trimmed.toLowerCase();
-    }
+    return AddressTools.normalizedKey(jid);
   }
 
   String _chatTitleForIdentifier(String identifier) {
@@ -2390,12 +2386,13 @@ WHERE jid = ?
   }) async {
     const String sqlPlaceholderToken = '?';
     const String sqlPlaceholderSeparator = ', ';
-    final normalizedAddress = resolvedAddress.trim().toLowerCase();
-    if (normalizedAddress.isEmpty) {
+    final normalizedAddress = AddressTools.normalizedKey(resolvedAddress);
+    if (normalizedAddress == null || normalizedAddress.isEmpty) {
       return;
     }
     final normalizedPlaceholders = placeholderJids
-        .map((jid) => jid.trim().toLowerCase())
+        .map(AddressTools.normalizedKey)
+        .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
     if (normalizedPlaceholders.isEmpty) {
@@ -2441,7 +2438,8 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     const String deltaKeySeparator = '|';
     final normalizedPlaceholders = placeholderJids
-        .map((jid) => jid.trim().toLowerCase())
+        .map(AddressTools.normalizedKey)
+        .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
     if (normalizedPlaceholders.isEmpty) {
@@ -2492,7 +2490,7 @@ WHERE email_from_address IN ($placeholderClause)
       final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
       final candidates = messagesByKey[key] ?? const <Message>[];
       final hasNonPlaceholder = candidates.any((candidate) {
-        final sender = candidate.senderJid.trim().toLowerCase();
+        final sender = AddressTools.normalizedKey(candidate.senderJid) ?? '';
         return !normalizedPlaceholders.contains(sender);
       });
       if (hasNonPlaceholder) {

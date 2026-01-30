@@ -1735,21 +1735,6 @@ class _ChatState extends State<Chat> {
     return nick.isEmpty ? null : nick;
   }
 
-  String? _bareJid(String? jid) {
-    if (jid == null || jid.isEmpty) return null;
-    try {
-      return mox.JID.fromString(jid).toBare().toString();
-    } on Exception {
-      return jid;
-    }
-  }
-
-  String? _normalizeBareJid(String? jid) {
-    final bare = _bareJid(jid)?.trim();
-    if (bare == null || bare.isEmpty) return null;
-    return bare.toLowerCase();
-  }
-
   String? _resolveAvailabilityOwnerLabel({
     required String? ownerJid,
     required String? normalizedXmppSelfJid,
@@ -1760,7 +1745,7 @@ class _ChatState extends State<Chat> {
     if (trimmedOwner == null || trimmedOwner.isEmpty) {
       return null;
     }
-    final String? normalizedOwner = _normalizeBareJid(trimmedOwner);
+    final String? normalizedOwner = AddressTools.normalizedKey(trimmedOwner);
     if (normalizedOwner == null) {
       return trimmedOwner;
     }
@@ -1793,8 +1778,8 @@ class _ChatState extends State<Chat> {
     required String senderJid,
     required String? chatJid,
   }) {
-    final senderBare = _normalizeBareJid(senderJid);
-    final chatBare = _normalizeBareJid(chatJid);
+    final senderBare = AddressTools.normalizedKey(senderJid);
+    final chatBare = AddressTools.normalizedKey(chatJid);
     if (senderBare == null || chatBare == null) {
       return false;
     }
@@ -1843,7 +1828,8 @@ class _ChatState extends State<Chat> {
       chatJid: chatJid,
     );
     if (!isMucSender) {
-      return _normalizeBareJid(senderJid) == _normalizeBareJid(trimmedClaimed);
+      return AddressTools.normalizedKey(senderJid) ==
+          AddressTools.normalizedKey(trimmedClaimed);
     }
     final String? normalizedSender = _normalizeOccupantId(senderJid);
     final String? normalizedClaimed = _normalizeOccupantId(trimmedClaimed);
@@ -1858,7 +1844,8 @@ class _ChatState extends State<Chat> {
     if (realJid == null) {
       return false;
     }
-    return _normalizeBareJid(realJid) == _normalizeBareJid(trimmedClaimed);
+    return AddressTools.normalizedKey(realJid) ==
+        AddressTools.normalizedKey(trimmedClaimed);
   }
 
   String? _availabilityActorId({
@@ -1985,7 +1972,8 @@ class _ChatState extends State<Chat> {
         selfNick: selfNick,
       );
     }
-    return _bareJid(quotedMessage.senderJid) == _bareJid(currentUserId);
+    return AddressTools.bare(quotedMessage.senderJid) ==
+        AddressTools.bare(currentUserId);
   }
 
   void _toggleSettingsPanel() {
@@ -2257,8 +2245,8 @@ class _ChatState extends State<Chat> {
 
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = value.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = AddressTools.normalizedKey(value);
+    if (normalized == null || normalized.isEmpty) {
       return false;
     }
     if (!normalized.contains('@')) {
@@ -2317,18 +2305,21 @@ class _ChatState extends State<Chat> {
       if (candidate.isEmpty) {
         return null;
       }
-      final String normalizedCandidate = candidate.toLowerCase();
+      final String? normalizedCandidate = AddressTools.normalizedKey(candidate);
+      if (normalizedCandidate == null || normalizedCandidate.isEmpty) {
+        return null;
+      }
       for (final entry in entries) {
         if (!entry.transport.isEmail) {
           continue;
         }
-        if (entry.address.trim().toLowerCase() == normalizedCandidate) {
+        if (AddressTools.normalizedKey(entry.address) == normalizedCandidate) {
           return entry;
         }
       }
       return null;
     }
-    final String? chatBareJid = _normalizeBareJid(chat.remoteJid);
+    final String? chatBareJid = AddressTools.normalizedKey(chat.remoteJid);
     if (chatBareJid == null || chatBareJid.isEmpty) {
       return null;
     }
@@ -2336,7 +2327,7 @@ class _ChatState extends State<Chat> {
       if (!entry.transport.isXmpp) {
         continue;
       }
-      final String? entryBareJid = _normalizeBareJid(entry.address);
+      final String? entryBareJid = AddressTools.normalizedKey(entry.address);
       if (entryBareJid != null && entryBareJid == chatBareJid) {
         return entry;
       }
@@ -3703,15 +3694,12 @@ class _ChatState extends State<Chat> {
               final String? selfXmppJid = resolvedProfileJid?.isNotEmpty == true
                   ? resolvedProfileJid
                   : xmppSelfJid;
-              final String? normalizedXmppSelfJid = _normalizeBareJid(
-                selfXmppJid,
-              );
-              final String? normalizedEmailSelfJid = _normalizeBareJid(
-                resolvedEmailSelfJid,
-              );
-              final String? normalizedChatJid = _normalizeBareJid(
-                chatEntity?.remoteJid,
-              );
+              final String? normalizedXmppSelfJid =
+                  AddressTools.normalizedKey(selfXmppJid);
+              final String? normalizedEmailSelfJid =
+                  AddressTools.normalizedKey(resolvedEmailSelfJid);
+              final String? normalizedChatJid =
+                  AddressTools.normalizedKey(chatEntity?.remoteJid);
               final bool isSelfChat = normalizedChatJid != null &&
                   ((normalizedXmppSelfJid != null &&
                           normalizedChatJid == normalizedXmppSelfJid) ||
@@ -3756,7 +3744,9 @@ class _ChatState extends State<Chat> {
               for (final item in rosterItems) {
                 final path = item.avatarPath?.trim();
                 if (path == null || path.isEmpty) continue;
-                rosterAvatarPathsByJid[item.jid.toLowerCase()] = path;
+                final normalizedJid = item.jid.normalizedJidKey;
+                if (normalizedJid == null) continue;
+                rosterAvatarPathsByJid[normalizedJid] = path;
               }
               final chatAvatarPathsByJid = <String, String>{};
               for (final chat
@@ -3764,12 +3754,13 @@ class _ChatState extends State<Chat> {
                 final path =
                     (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
                 if (path == null || path.isEmpty) continue;
-                final normalizedJid = chat.jid.trim().toLowerCase();
-                if (normalizedJid.isNotEmpty) {
+                final normalizedJid = chat.jid.normalizedJidKey;
+                if (normalizedJid != null && normalizedJid.isNotEmpty) {
                   chatAvatarPathsByJid[normalizedJid] = path;
                 }
-                final normalizedRemoteJid = chat.remoteJid.trim().toLowerCase();
-                if (normalizedRemoteJid.isNotEmpty) {
+                final normalizedRemoteJid = chat.remoteJid.normalizedJidKey;
+                if (normalizedRemoteJid != null &&
+                    normalizedRemoteJid.isNotEmpty) {
                   chatAvatarPathsByJid[normalizedRemoteJid] = path;
                 }
               }
@@ -3797,8 +3788,8 @@ class _ChatState extends State<Chat> {
                 }
               }
               String? avatarPathForBareJid(String jid) {
-                final normalized = jid.trim().toLowerCase();
-                if (normalized.isEmpty) return null;
+                final normalized = AddressTools.normalizedKey(jid);
+                if (normalized == null || normalized.isEmpty) return null;
                 return rosterAvatarPathsByJid[normalized] ??
                     chatAvatarPathsByJid[normalized];
               }
@@ -3810,11 +3801,11 @@ class _ChatState extends State<Chat> {
                 if (slashIndex == -1) {
                   return avatarPathForBareJid(trimmed);
                 }
-                final bareParticipant =
-                    trimmed.substring(0, slashIndex).trim().toLowerCase();
-                final roomJid = chatEntity?.jid.trim().toLowerCase();
+                final bareParticipant = AddressTools.normalizedKey(
+                    trimmed.substring(0, slashIndex));
+                final roomJid = AddressTools.normalizedKey(chatEntity?.jid);
                 final isRoomParticipant =
-                    roomJid != null && bareParticipant == roomJid;
+                    bareParticipant != null && bareParticipant == roomJid;
                 if (!isRoomParticipant) {
                   return avatarPathForBareJid(
                     trimmed.substring(0, slashIndex),
@@ -4520,18 +4511,23 @@ class _ChatState extends State<Chat> {
                                         index < filteredItems.length;
                                         index++) {
                                       final e = filteredItems[index];
-                                      final senderBare = _bareJid(
+                                      final senderBare =
+                                          AddressTools.bare(e.senderJid);
+                                      final normalizedSenderBare =
+                                          AddressTools.normalizedKey(
                                         e.senderJid,
                                       );
-                                      final normalizedSenderBare =
-                                          _normalizeBareJid(e.senderJid);
                                       final isSelfXmpp = senderBare != null &&
                                           senderBare ==
-                                              _bareJid(profileState()?.jid);
+                                              AddressTools.bare(
+                                                profileState()?.jid,
+                                              );
                                       final isSelfEmail = senderBare != null &&
                                           resolvedEmailSelfJid != null &&
                                           senderBare ==
-                                              _bareJid(resolvedEmailSelfJid);
+                                              AddressTools.bare(
+                                                resolvedEmailSelfJid,
+                                              );
                                       final bool isDeltaPlaceholderSender =
                                           normalizedSenderBare != null &&
                                               normalizedSenderBare
@@ -8864,7 +8860,7 @@ class _ChatState extends State<Chat> {
     final statuses = <String, FanOutRecipientState>{};
     for (final status in lastEntry.statuses) {
       statuses[status.chat.jid] = status.state;
-      final emailKey = status.chat.emailAddress?.trim().toLowerCase();
+      final emailKey = status.chat.emailAddress.normalizedJidKey;
       if (emailKey != null && emailKey.isNotEmpty) {
         statuses[emailKey] = status.state;
       }

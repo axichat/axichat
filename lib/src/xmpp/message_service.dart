@@ -2589,9 +2589,9 @@ mixin MessageService
     final managerNickPresent = managerNick?.isNotEmpty == true;
     final needsJoin = _roomNeedsJoin(normalizedRoom);
     final hasSelfPresence = roomState?.hasSelfPresence == true;
-    final hasSelfStatus =
-        roomState?.selfPresenceStatusCodes.contains(mucStatusSelfPresence) ==
-            true;
+    final hasSelfStatus = roomState?.selfPresenceStatusCodes
+            .contains(MucStatusCode.selfPresence.code) ==
+        true;
     final myOccupantId = roomState?.myOccupantId;
     final myOccupantIdPresent = myOccupantId?.trim().isNotEmpty == true;
     final expectedOccupantIdMatches = managerNickPresent &&
@@ -7349,8 +7349,7 @@ mixin MessageService
     if (stanzaId.isEmpty) return;
     try {
       final accountJid = myJid?.trim();
-      final isSelf = accountJid != null &&
-          message.senderJid.trim().toLowerCase() == accountJid.toLowerCase();
+      final isSelf = AddressTools.sameBare(message.senderJid, accountJid);
       var isTrusted = isSelf;
       if (!isTrusted) {
         isTrusted = await _dbOpReturning<XmppDatabase, bool>((db) async {

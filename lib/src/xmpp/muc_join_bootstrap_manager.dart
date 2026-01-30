@@ -225,20 +225,20 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final trimmedStoredNick = storedNick?.trim();
     final bool isSelfByStoredNick = trimmedStoredNick?.isNotEmpty == true &&
         trimmedStoredNick!.toLowerCase() == nick.toLowerCase();
-    final isSelfPresence = statuses.contains(mucStatusSelfPresence) ||
-        statuses.contains(mucStatusNickAssigned) ||
+    final isSelfPresence = statuses.contains(MucStatusCode.selfPresence.code) ||
+        statuses.contains(MucStatusCode.nickAssigned.code) ||
         isSelfByStoredNick;
     if (!isSelfPresence) return state;
-    final resolvedStatuses = statuses.contains(mucStatusSelfPresence)
+    final resolvedStatuses = statuses.contains(MucStatusCode.selfPresence.code)
         ? statuses
-        : <String>{...statuses, ..._selfPresenceFallbackStatusCodes};
+        : <String>{...statuses, MucStatusCode.selfPresence.code};
     final bool isError = presenceType == _presenceTypeError;
     final bool isUnavailable = presenceType == _presenceTypeUnavailable;
     final bool isAvailable = !isUnavailable && !isError;
     final newNickAttr = item.attributes['nick'];
     final newNick = newNickAttr is String ? newNickAttr.trim() : null;
-    final isNickChange =
-        statuses.contains(mucStatusNickChange) && newNick?.isNotEmpty == true;
+    final isNickChange = statuses.contains(MucStatusCode.nickChange.code) &&
+        newNick?.isNotEmpty == true;
     final affiliationAttr = item.attributes['affiliation'];
     final roleAttr = item.attributes['role'];
     final affiliation = affiliationAttr is String ? affiliationAttr : 'none';
@@ -297,8 +297,8 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     required String nick,
     required Set<String> statusCodes,
   }) {
-    if (statusCodes.contains(mucStatusSelfPresence) ||
-        statusCodes.contains(mucStatusNickAssigned)) {
+    if (statusCodes.contains(MucStatusCode.selfPresence.code) ||
+        statusCodes.contains(MucStatusCode.nickAssigned.code)) {
       return true;
     }
     final String? toAttr = presence.to;
