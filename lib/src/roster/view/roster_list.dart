@@ -37,7 +37,8 @@ class RosterList extends StatelessWidget {
 
           if (items == null) {
             return Center(
-              child: AxiProgressIndicator(color: context.colorScheme.foreground),
+              child:
+                  AxiProgressIndicator(color: context.colorScheme.foreground),
             );
           }
 

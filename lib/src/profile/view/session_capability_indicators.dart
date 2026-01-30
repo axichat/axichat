@@ -10,19 +10,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const _capabilityChipSpacing = 8.0;
-const _capabilityChipRunSpacing = 6.0;
-const double _capabilityChipCornerRadius = 12.0;
-const double _capabilityChipIconSize = 14.0;
-const double _capabilityChipIconSpacing = 6.0;
-const double _capabilityChipHorizontalPadding = 10.0;
-const double _capabilityChipVerticalPadding = 6.0;
-const double _capabilityChipCompactHorizontalPadding = 8.0;
-const double _capabilityChipCompactVerticalPadding = 4.0;
-const int _capabilityChipMaxLines = 2;
-const int _capabilityChipCompactMaxLines = 1;
-const String _capabilityChipSeparator = ' • ';
-
 class SessionCapabilityIndicators extends StatelessWidget {
   const SessionCapabilityIndicators({
     super.key,
@@ -41,15 +28,15 @@ class SessionCapabilityIndicators extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final chatChip = _chatChipData(colors, l10n);
     final emailChip = _emailChipData(colors, l10n);
     final chipAlignment = compact ? WrapAlignment.end : WrapAlignment.start;
-    const double runSpacing = _capabilityChipRunSpacing;
     return Wrap(
       alignment: chipAlignment,
       runAlignment: chipAlignment,
-      spacing: _capabilityChipSpacing,
-      runSpacing: runSpacing,
+      spacing: spacing.s,
+      runSpacing: spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _CapabilityChip(data: chatChip, compact: compact),
@@ -160,14 +147,18 @@ class _CapabilityChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final radii = context.radii;
+    final separator = ' • ';
     final chipPadding = compact
-        ? const EdgeInsets.symmetric(
-            horizontal: _capabilityChipCompactHorizontalPadding,
-            vertical: _capabilityChipCompactVerticalPadding,
+        ? EdgeInsets.symmetric(
+            horizontal: spacing.s,
+            vertical: spacing.xxs,
           )
-        : const EdgeInsets.symmetric(
-            horizontal: _capabilityChipHorizontalPadding,
-            vertical: _capabilityChipVerticalPadding,
+        : EdgeInsets.symmetric(
+            horizontal: spacing.m,
+            vertical: spacing.xs,
           );
     final labelStyle = context.textTheme.small.copyWith(
       color: colors.foreground,
@@ -181,14 +172,13 @@ class _CapabilityChip extends StatelessWidget {
       color: data.foreground,
       fontWeight: FontWeight.w700,
     );
-    final maxLines =
-        compact ? _capabilityChipCompactMaxLines : _capabilityChipMaxLines;
+    final maxLines = compact ? 1 : 2;
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: data.background,
-        shape: SquircleBorder(
-          cornerRadius: _capabilityChipCornerRadius,
-          side: BorderSide(color: colors.border),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(radii.squircleSm),
+          side: context.borderSide,
         ),
       ),
       child: Padding(
@@ -198,10 +188,10 @@ class _CapabilityChip extends StatelessWidget {
           children: [
             Icon(
               data.icon,
-              size: _capabilityChipIconSize,
+              size: sizing.menuItemIconSize,
               color: colors.foreground,
             ),
-            const SizedBox(width: _capabilityChipIconSpacing),
+            SizedBox(width: spacing.xs),
             Flexible(
               fit: FlexFit.loose,
               child: Text.rich(
@@ -213,7 +203,7 @@ class _CapabilityChip extends StatelessWidget {
                     _ => [
                         TextSpan(text: data.label, style: labelStyle),
                         TextSpan(
-                          text: _capabilityChipSeparator,
+                          text: separator,
                           style: separatorStyle,
                         ),
                         TextSpan(text: data.status, style: statusStyle),

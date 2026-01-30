@@ -560,6 +560,20 @@ class NotificationService {
     return (hash & 0x7fffffff) + 1;
   }
 
-  Future<PackageInfo> _resolvePackageInfo() =>
-      _packageInfoFuture ??= PackageInfo.fromPlatform();
+  Future<PackageInfo> _resolvePackageInfo() {
+    final cached = _packageInfoFuture;
+    if (cached != null) {
+      return cached;
+    }
+    final future = PackageInfo.fromPlatform();
+    _packageInfoFuture = future;
+    return future.catchError(
+      (Object error, StackTrace stackTrace) {
+        _packageInfoFuture = null;
+        _log.warning('Failed to resolve package info.', error, stackTrace);
+        throw error;
+      },
+      test: (Object error) => error is Exception,
+    );
+  }
 }

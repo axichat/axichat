@@ -22,7 +22,7 @@ const List<String> deltaPlaceholderJids = <String>[
 
 extension DeltaJidExtensions on String {
   String get normalizedDeltaJid =>
-      AddressTools.normalizedKey(this) ?? trim().toLowerCase();
+      normalizeAddressdKey(this) ?? trim().toLowerCase();
 
   bool get isDeltaPlaceholderJid =>
       deltaPlaceholderJids.contains(normalizedDeltaJid);
@@ -30,14 +30,14 @@ extension DeltaJidExtensions on String {
 
 extension DeltaJidNullableExtensions on String? {
   String? resolveDeltaPlaceholderJid([String? fallback]) {
-    final normalized = AddressTools.normalize(this);
+    final normalized = normalizeAddress(this);
     if (normalized == null) {
       return null;
     }
     if (!normalized.isDeltaPlaceholderJid) {
       return normalized;
     }
-    final fallbackNormalized = AddressTools.normalize(fallback);
+    final fallbackNormalized = normalizeAddress(fallback);
     if (fallbackNormalized == null) {
       return null;
     }

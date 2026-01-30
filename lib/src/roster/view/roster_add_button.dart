@@ -37,6 +37,8 @@ class RosterAddButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     BlocConsumer<RosterCubit, RosterState>(
+                      listenWhen: (previous, current) =>
+                          previous.actionState != current.actionState,
                       listener: (context, state) {
                         final actionState = state.actionState;
                         if (actionState is RosterActionSuccess &&
@@ -49,8 +51,7 @@ class RosterAddButton extends StatelessWidget {
                         final actionState = state.actionState;
                         final errorMessage = switch (actionState) {
                           RosterActionFailure(:final reason)
-                              when actionState.action ==
-                                  RosterActionType.add =>
+                              when actionState.action == RosterActionType.add =>
                             _rosterFailureMessage(context, reason),
                           _ => null,
                         };

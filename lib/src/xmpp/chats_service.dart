@@ -47,7 +47,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
       {};
-  bool _conversationIndexLoginSyncInFlight = false;
+  Future<List<ConvItem>>? _conversationIndexLoginSync;
   List<Chat>? _cachedChatList;
   bool? _lastMarkerResponsive;
 
@@ -78,13 +78,21 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
-    if (_conversationIndexLoginSyncInFlight) {
-      return _emptyConversationIndexSnapshot;
-    }
+    final pendingSync = _conversationIndexLoginSync;
+    if (pendingSync != null) return pendingSync;
     if (connectionState != ConnectionState.connected) {
       return _emptyConversationIndexSnapshot;
     }
-    _conversationIndexLoginSyncInFlight = true;
+    final task = _syncConversationIndexSnapshot();
+    _conversationIndexLoginSync = task;
+    return task.whenComplete(() {
+      if (_conversationIndexLoginSync == task) {
+        _conversationIndexLoginSync = null;
+      }
+    });
+  }
+
+  Future<List<ConvItem>> _syncConversationIndexSnapshot() async {
     try {
       await database;
       if (connectionState != ConnectionState.connected) {
@@ -108,8 +116,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       return snapshot.items;
     } on XmppAbortedException {
       return _emptyConversationIndexSnapshot;
-    } finally {
-      _conversationIndexLoginSyncInFlight = false;
     }
   }
 

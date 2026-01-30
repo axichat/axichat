@@ -278,7 +278,7 @@ bool _isFirstPartyJid({required mox.JID? myJid, required String jid}) {
   if (myJid == null) {
     return false;
   }
-  final target = AddressTools.parse(jid);
+  final target = parseJid(jid);
   if (target == null) return false;
   final myDomain = myJid.domain.trim().toLowerCase();
   final targetDomain = target.domain.trim().toLowerCase();
@@ -469,6 +469,7 @@ class XmppService extends XmppBase
   final Map<String, String> _notificationPayloadCache = <String, String>{};
   final Map<String, String> _notificationPayloadLowerCache = <String, String>{};
   bool _notificationPayloadCacheReady = false;
+  Future<void>? _notificationPayloadCacheFuture;
   static const int _notificationPayloadLookupStart = 0;
   static const int _notificationPayloadLookupEnd = 0;
 
@@ -710,6 +711,24 @@ class XmppService extends XmppBase
         return cached;
       }
     }
+    await _refreshNotificationPayloadCache();
+    return _notificationPayloadCache[trimmed] ??
+        _notificationPayloadLowerCache[trimmed.toLowerCase()];
+  }
+
+  Future<void> _refreshNotificationPayloadCache() {
+    final existing = _notificationPayloadCacheFuture;
+    if (existing != null) {
+      return existing;
+    }
+    final future = _loadNotificationPayloadCache();
+    _notificationPayloadCacheFuture = future;
+    return future.whenComplete(() {
+      _notificationPayloadCacheFuture = null;
+    });
+  }
+
+  Future<void> _loadNotificationPayloadCache() async {
     final db = await database;
     final chats = await db.getChats(
       start: _notificationPayloadLookupStart,
@@ -717,8 +736,6 @@ class XmppService extends XmppBase
     );
     final chatJids = chats.map((chat) => chat.jid);
     _buildNotificationPayloadCache(chatJids);
-    return _notificationPayloadCache[trimmed] ??
-        _notificationPayloadLowerCache[trimmed.toLowerCase()];
   }
 
   void _buildNotificationPayloadCache(Iterable<String> chatJids) {
@@ -1936,7 +1953,7 @@ class XmppService extends XmppBase
   }
 
   ui.Color? _demoAvatarBackgroundForJid(String jid) {
-    final normalized = AddressTools.normalizedKey(jid);
+    final normalized = normalizeAddressdKey(jid);
     if (normalized == null) {
       return null;
     }

@@ -28,27 +28,35 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
 
   Future<void> refreshPermissions() async {
     emit(state.copyWith(isCheckingPermissions: true));
-    final hasPermissions =
-        await _notificationService.hasAllNotificationPermissions();
-    emit(
-      state.copyWith(
-        hasPermissions: hasPermissions,
-        isCheckingPermissions: false,
-      ),
-    );
+    bool? hasPermissions;
+    try {
+      hasPermissions =
+          await _notificationService.hasAllNotificationPermissions();
+    } finally {
+      emit(
+        state.copyWith(
+          hasPermissions: hasPermissions ?? state.hasPermissions,
+          isCheckingPermissions: false,
+        ),
+      );
+    }
   }
 
   Future<bool> requestPermissions() async {
     emit(state.copyWith(isRequestingPermissions: true));
-    final hasPermissions =
-        await _notificationService.requestAllNotificationPermissions();
-    emit(
-      state.copyWith(
-        hasPermissions: hasPermissions,
-        isRequestingPermissions: false,
-      ),
-    );
-    return hasPermissions;
+    bool? hasPermissions;
+    try {
+      hasPermissions =
+          await _notificationService.requestAllNotificationPermissions();
+      return hasPermissions;
+    } finally {
+      emit(
+        state.copyWith(
+          hasPermissions: hasPermissions ?? state.hasPermissions,
+          isRequestingPermissions: false,
+        ),
+      );
+    }
   }
 
   Future<bool> enableForegroundService() async {
@@ -56,16 +64,19 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
       return true;
     }
     emit(state.copyWith(isEnablingForeground: true));
-    withForeground = true;
-    foregroundServiceActive.value = true;
-    initForegroundService();
-    await _xmppService.ensureForegroundSocketIfActive();
-    emit(
-      state.copyWith(
-        isEnablingForeground: false,
-        foregroundServiceActive: foregroundServiceActive.value,
-      ),
-    );
+    try {
+      withForeground = true;
+      foregroundServiceActive.value = true;
+      initForegroundService();
+      await _xmppService.ensureForegroundSocketIfActive();
+    } finally {
+      emit(
+        state.copyWith(
+          isEnablingForeground: false,
+          foregroundServiceActive: foregroundServiceActive.value,
+        ),
+      );
+    }
     return foregroundServiceActive.value;
   }
 

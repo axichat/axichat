@@ -180,6 +180,22 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     await _loadFromBytes(bytes, buildDraft: true);
   }
 
+  Future<void> seedFromAvatarPath(String? avatarPath) async {
+    final resolvedPath = avatarPath?.trim();
+    if (resolvedPath == null || resolvedPath.isEmpty) {
+      return;
+    }
+    try {
+      final bytes = await _xmppService.loadAvatarBytes(resolvedPath);
+      if (bytes == null || bytes.isEmpty) {
+        return;
+      }
+      await seedFromBytes(bytes);
+    } on FileSystemException {
+      return;
+    }
+  }
+
   Future<void> seedRandomTemplate(ShadColorScheme colors) async {
     if (state.draftAvatar != null || state.processing) {
       return;

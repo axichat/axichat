@@ -4,7 +4,6 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -14,7 +13,6 @@ import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
 import 'package:axichat/src/profile/utils/contact_exporter.dart';
@@ -22,7 +20,6 @@ import 'package:axichat/src/profile/view/contact_export_sheet.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,27 +28,6 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/link.dart';
-
-const double _compactTileHeight = 52.0;
-const EdgeInsets _compactTilePadding = EdgeInsets.symmetric(
-  horizontal: 16,
-  vertical: 6,
-);
-const EdgeInsets _settingsSectionHeaderPadding = EdgeInsets.symmetric(
-  horizontal: 16.0,
-  vertical: 6.0,
-);
-const String _aboutLegalese = 'Copyright (C) 2025 Axichat LLC\n\n'
-    'This program is free software: you can redistribute it and/or modify '
-    'it under the terms of the GNU Affero General Public License as '
-    'published by the Free Software Foundation, either version 3 of the '
-    'License, or (at your option) any later version.\n\n'
-    'This program is distributed in the hope that it will be useful, '
-    'but WITHOUT ANY WARRANTY; without even the implied warranty of '
-    'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
-    'GNU Affero General Public License for more details.\n\n'
-    'You should have received a copy of the GNU Affero General Public License '
-    'along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
 class SettingsSectionAnchors {
   SettingsSectionAnchors({
@@ -95,12 +71,25 @@ class SettingsControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
+        final spacing = context.spacing;
+        final sizing = context.sizing;
+        final sectionHeaderPadding = EdgeInsets.symmetric(
+          horizontal: spacing.m,
+          vertical: spacing.xs,
+        );
+        final compactTilePadding = EdgeInsets.symmetric(
+          horizontal: spacing.m,
+          vertical: spacing.s,
+        );
         final exportState = context.watch<ProfileExportCubit>().state;
         final selectTextStyle = context.textTheme.small.copyWith(
           color: context.colorScheme.foreground,
         );
         final double dividerIndent =
-            fullWidthDividers ? 0.0 : _settingsSectionHeaderPadding.horizontal;
+            fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
+        final bool canForegroundService = context.select<SettingsCubit, bool>(
+          (cubit) => cubit.canForegroundService,
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
@@ -111,6 +100,7 @@ class SettingsControls extends StatelessWidget {
                     label: context.l10n.settingsSectionAccount,
                     showDivider: showDivider,
                     dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
                   )
                 : KeyedSubtree(
                     key: anchors?.accountKey,
@@ -118,6 +108,7 @@ class SettingsControls extends StatelessWidget {
                       label: context.l10n.settingsSectionAccount,
                       showDivider: showDivider,
                       dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
                   ),
             _SettingsActionButton(
@@ -148,13 +139,10 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            if (context.read<Capability>().canForegroundService)
+            if (canForegroundService)
               Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: NotificationRequest(
-                  notificationService: context.read<NotificationService>(),
-                  capability: context.read<Capability>(),
-                ),
+                padding: EdgeInsets.all(spacing.m),
+                child: NotificationRequest(),
               ),
             _SettingsActionButton(
               iconData: LucideIcons.keyRound,
@@ -171,12 +159,14 @@ class SettingsControls extends StatelessWidget {
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionData,
                     dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
                   )
                 : KeyedSubtree(
                     key: anchors?.dataKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionData,
                       dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
                   ),
             _SettingsActionButton(
@@ -227,28 +217,32 @@ class SettingsControls extends StatelessWidget {
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAppearance,
                     dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
                   )
                 : KeyedSubtree(
                     key: anchors?.appearanceKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAppearance,
                       dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
                   ),
             ListItemPadding(
               child: AxiListTile(
                 title: context.l10n.settingsLanguage,
                 actions: const [LanguageSelector()],
-                minTileHeight: _compactTileHeight,
-                contentPadding: _compactTilePadding,
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
               ),
             ),
             ListItemPadding(
               child: AxiListTile(
                 title: context.l10n.settingsThemeMode,
                 actions: [
-                  SizedBox(
-                    width: 180,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: sizing.menuMaxWidth,
+                    ),
                     child: AxiSelect<ThemeMode>(
                       initialValue: state.themeMode,
                       onChanged: (themeMode) => context
@@ -273,16 +267,18 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
-                minTileHeight: _compactTileHeight,
-                contentPadding: _compactTilePadding,
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
               ),
             ),
             ListItemPadding(
               child: AxiListTile(
                 title: context.l10n.settingsColorScheme,
                 actions: [
-                  SizedBox(
-                    width: 180,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: sizing.menuMaxWidth,
+                    ),
                     child: AxiSelect<ShadColor>(
                       initialValue: state.shadColor,
                       onChanged: (colorScheme) => context
@@ -305,12 +301,12 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
-                minTileHeight: _compactTileHeight,
-                contentPadding: _compactTilePadding,
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsColorfulAvatars),
                 sublabel: Text(context.l10n.settingsColorfulAvatarsDescription),
@@ -321,7 +317,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsLowMotion),
                 sublabel: Text(context.l10n.settingsLowMotionDescription),
@@ -334,20 +330,22 @@ class SettingsControls extends StatelessWidget {
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionChats,
                     dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
                   )
                 : KeyedSubtree(
                     key: anchors?.chatPreferencesKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionChats,
                       dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
                   ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: MessageStorageTile(state: state),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsMuteNotifications),
                 sublabel:
@@ -358,7 +356,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsNotificationPreviews),
                 sublabel:
@@ -370,7 +368,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsChatReadReceipts),
                 sublabel:
@@ -382,7 +380,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsTypingIndicators),
                 sublabel:
@@ -394,7 +392,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsAutoDownloadImages),
                 sublabel:
@@ -406,7 +404,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsAutoDownloadVideos),
                 sublabel:
@@ -418,7 +416,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsAutoDownloadDocuments),
                 sublabel:
@@ -430,7 +428,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsAutoDownloadArchives),
                 sublabel:
@@ -445,16 +443,18 @@ class SettingsControls extends StatelessWidget {
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionEmail,
                     dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
                   )
                 : KeyedSubtree(
                     key: anchors?.emailPreferencesKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionEmail,
                       dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
                   ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsEmailReadReceipts),
                 sublabel:
@@ -466,7 +466,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsShareTokenFooter),
                 sublabel:
@@ -478,7 +478,7 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
                 label: Text(context.l10n.settingsAutoLoadEmailImages),
                 sublabel:
@@ -493,12 +493,14 @@ class SettingsControls extends StatelessWidget {
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAbout,
                     dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
                   )
                 : KeyedSubtree(
                     key: anchors?.aboutKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAbout,
                       dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
                   ),
             _SettingsActionButton(
@@ -508,7 +510,7 @@ class SettingsControls extends StatelessWidget {
                 context: context,
                 applicationName: appDisplayName,
                 applicationVersion: applicationVersion,
-                applicationLegalese: _aboutLegalese,
+                applicationLegalese: context.l10n.settingsAboutLegalese,
               ),
             ),
             _SettingsLinkButton(
@@ -551,7 +553,7 @@ class SettingsControls extends StatelessWidget {
               link: donateUrl,
               iconData: FontAwesomeIcons.heart,
             ),
-            const SizedBox(height: 160),
+            SizedBox(height: spacing.xxl + spacing.l),
           ],
         );
       },
@@ -580,8 +582,11 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
+    final labels = EmailMessageLineLabels(
+      subjectLabel: context.l10n.chatMessageSubjectLabel,
+    );
     final result =
-        await context.read<ProfileExportCubit>().exportEmailMessages();
+        await context.read<ProfileExportCubit>().exportEmailMessages(labels);
     if (!context.mounted) {
       return;
     }
@@ -595,8 +600,14 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted || format == null) {
       return;
     }
+    final labels = ContactExportLabels(
+      csvHeaderName: context.l10n.profileExportCsvHeaderName,
+      csvHeaderAddress: context.l10n.profileExportCsvHeaderAddress,
+      fallbackLabel: context.l10n.profileExportContactsFilenameFallback,
+    );
     final result = await context.read<ProfileExportCubit>().exportXmppContacts(
           format,
+          labels,
         );
     if (!context.mounted) {
       return;
@@ -611,8 +622,14 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted || format == null) {
       return;
     }
+    final labels = ContactExportLabels(
+      csvHeaderName: context.l10n.profileExportCsvHeaderName,
+      csvHeaderAddress: context.l10n.profileExportCsvHeaderAddress,
+      fallbackLabel: context.l10n.profileExportContactsFilenameFallback,
+    );
     final result = await context.read<ProfileExportCubit>().exportEmailContacts(
           format,
+          labels,
         );
     if (!context.mounted) {
       return;
@@ -747,23 +764,28 @@ class _SettingsActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final Widget? leading = iconData == null
+        ? null
+        : Icon(
+            iconData,
+            size: sizing.menuItemIconSize,
+          );
+    final button = destructive
+        ? AxiListButton.destructive(
+            leading: leading,
+            onPressed: onPressed,
+            child: Text(label),
+          )
+        : AxiListButton(
+            leading: leading,
+            onPressed: onPressed,
+            child: Text(label),
+          );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: SizedBox(
-        width: double.infinity,
-        child: ShadButton.ghost(
-          onPressed: onPressed,
-          mainAxisAlignment: MainAxisAlignment.start,
-          foregroundColor: colors.foreground,
-          hoverForegroundColor: colors.primary,
-          leading: iconData == null ? null : Icon(iconData),
-          child: Text(
-            label,
-            style: context.textTheme.small,
-          ),
-        ).withTapBounce(enabled: onPressed != null),
-      ),
+      padding: EdgeInsets.symmetric(vertical: spacing.xs),
+      child: button,
     );
   }
 }
@@ -797,16 +819,18 @@ class _SettingsSectionHeader extends StatelessWidget {
     required this.label,
     this.showDivider = true,
     this.dividerIndent = 0.0,
+    required this.padding,
   });
 
   final String label;
   final bool showDivider;
   final double dividerIndent;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final header = Padding(
-      padding: _settingsSectionHeaderPadding,
+      padding: padding,
       child: Text(label, style: context.textTheme.muted),
     );
     if (!showDivider) {
@@ -816,9 +840,9 @@ class _SettingsSectionHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Divider(
-          color: context.colorScheme.border,
-          thickness: 1.0,
-          height: 1.0,
+          color: context.borderSide.color,
+          thickness: context.borderSide.width,
+          height: context.borderSide.width,
           indent: dividerIndent,
           endIndent: dividerIndent,
         ),
@@ -836,91 +860,82 @@ class MessageStorageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final l10n = context.l10n;
     final selectTextStyle = context.textTheme.small.copyWith(
       color: colors.foreground,
     );
-    return AnimatedContainer(
-      duration: baseAnimationDuration,
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: SquircleBorder(
-          cornerRadius: 18,
-          side: BorderSide(color: colors.border),
-        ),
+    return AxiModalSurface(
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.settingsMessageStorageTitle,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.foreground,
-                      height: 1.2,
-                      fontWeight: FontWeight.w700,
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.settingsMessageStorageTitle,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.foreground,
                   ),
                 ),
-                StreamBuilder<bool>(
-                  stream: context.read<XmppService>().mamSupportStream,
-                  initialData: context.read<XmppService>().mamSupported,
-                  builder: (context, snapshot) {
-                    final mamSupported = snapshot.data ?? false;
-                    final options = mamSupported
-                        ? MessageStorageMode.values
-                        : const [MessageStorageMode.local];
-                    final effectiveMode = mamSupported
-                        ? state.messageStorageMode
-                        : MessageStorageMode.local;
-                    return AxiSelect<MessageStorageMode>(
-                      initialValue: effectiveMode,
-                      onChanged: (mode) {
-                        if (mode == null) return;
-                        if (mode.isServerOnly && !mamSupported) return;
-                        context.read<SettingsCubit>().updateMessageStorageMode(
-                              mode,
-                            );
-                      },
-                      options: options
-                          .map(
-                            (mode) => ShadOption<MessageStorageMode>(
-                              value: mode,
-                              child: Text(
-                                mode.isLocal
-                                    ? l10n.settingsMessageStorageLocal
-                                    : l10n.settingsMessageStorageServerOnly,
-                                style: selectTextStyle,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      selectedOptionBuilder: (context, mode) => Text(
-                        mode.isLocal
-                            ? l10n.settingsMessageStorageLocal
-                            : l10n.settingsMessageStorageServerOnly,
-                        style: selectTextStyle,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.settingsMessageStorageSubtitle,
-              style: context.textTheme.muted.copyWith(
-                color: colors.mutedForeground,
-                height: 1.2,
               ),
+              StreamBuilder<bool>(
+                stream: context.watch<SettingsCubit>().mamSupportStream,
+                initialData: context.watch<SettingsCubit>().mamSupported,
+                builder: (context, snapshot) {
+                  final mamSupported = snapshot.data ?? false;
+                  final options = mamSupported
+                      ? MessageStorageMode.values
+                      : const [MessageStorageMode.local];
+                  final effectiveMode = mamSupported
+                      ? state.messageStorageMode
+                      : MessageStorageMode.local;
+                  return AxiSelect<MessageStorageMode>(
+                    initialValue: effectiveMode,
+                    onChanged: (mode) {
+                      if (mode == null) return;
+                      if (mode.isServerOnly && !mamSupported) return;
+                      context.read<SettingsCubit>().updateMessageStorageMode(
+                            mode,
+                          );
+                    },
+                    options: options
+                        .map(
+                          (mode) => ShadOption<MessageStorageMode>(
+                            value: mode,
+                            child: Text(
+                              mode.isLocal
+                                  ? l10n.settingsMessageStorageLocal
+                                  : l10n.settingsMessageStorageServerOnly,
+                              style: selectTextStyle,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    selectedOptionBuilder: (context, mode) => Text(
+                      mode.isLocal
+                          ? l10n.settingsMessageStorageLocal
+                          : l10n.settingsMessageStorageServerOnly,
+                      style: selectTextStyle,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.s),
+          Text(
+            l10n.settingsMessageStorageSubtitle,
+            style: context.textTheme.muted.copyWith(
+              color: colors.mutedForeground,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

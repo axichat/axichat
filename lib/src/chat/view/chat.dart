@@ -932,6 +932,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
     required this.onChangeNickname,
     required this.onLeaveRoom,
     required this.onClose,
+    required this.rootContext,
   });
 
   final ValueChanged<String> onInvite;
@@ -939,6 +940,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   final ValueChanged<String> onChangeNickname;
   final VoidCallback onLeaveRoom;
   final VoidCallback onClose;
+  final BuildContext rootContext;
 
   @override
   Widget build(BuildContext context) {
@@ -949,6 +951,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
         if (roomState == null) {
           final colors = context.colorScheme;
           final textTheme = context.textTheme;
+          final spacing = context.spacing;
           return SafeArea(
             child: Center(
               child: Column(
@@ -958,7 +961,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
                     color: colors.foreground,
                     semanticsLabel: l10n.chatMembersLoading,
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: spacing.s),
                   Text(
                     l10n.chatMembersLoadingEllipsis,
                     style: textTheme.muted.copyWith(
@@ -972,11 +975,13 @@ class _RoomMembersDrawerContent extends StatelessWidget {
         }
         return RoomMembersSheet(
           roomState: roomState,
+          memberSections: state.roomMemberSections,
           canInvite: roomState.myAffiliation.isOwner ||
               roomState.myAffiliation.isAdmin ||
               roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
+          rootContext: rootContext,
           roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
@@ -1994,53 +1999,57 @@ class _ChatState extends State<Chat> {
       context.read<ChatBloc>().add(const ChatRoomMembersOpened());
     }
     final navigator = Navigator.of(context);
+    final rootContext = context;
     final locate = context.read;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final sizing = context.sizing;
     final Duration animationDuration =
         context.read<SettingsCubit>().animationDuration;
-    const drawerMaxWidth = 420.0;
-    const drawerWidthFraction = 0.9;
-    final drawerWidth = math.min(
-      screenWidth * drawerWidthFraction,
-      drawerMaxWidth,
-    );
+    final colors = context.colorScheme;
     showGeneralDialog(
       context: context,
       useRootNavigator: false,
       barrierDismissible: true,
       barrierLabel: context.l10n.chatRoomMembers,
-      barrierColor: Colors.black.withValues(alpha: 0.45),
+      barrierColor: colors.scrim,
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
           child: Align(
             alignment: Alignment.centerRight,
-            child: SizedBox(
-              width: drawerWidth,
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider.value(value: locate<ChatBloc>()),
-                  BlocProvider.value(value: locate<RosterCubit>()),
-                ],
-                child: Builder(
-                  builder: (dialogContext) => _RoomMembersDrawerContent(
-                    onInvite: (jid) =>
-                        locate<ChatBloc>().add(ChatInviteRequested(jid)),
-                    onAction: (occupantId, action) => locate<ChatBloc>().add(
-                      ChatModerationActionRequested(
-                        occupantId: occupantId,
-                        action: action,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final drawerWidth = math.min(
+                  constraints.maxWidth,
+                  sizing.dialogMaxWidth,
+                );
+                return SizedBox(
+                  width: drawerWidth,
+                  child: BlocProvider.value(
+                    value: locate<ChatBloc>(),
+                    child: Builder(
+                      builder: (dialogContext) => _RoomMembersDrawerContent(
+                        onInvite: (jid) =>
+                            locate<ChatBloc>().add(ChatInviteRequested(jid)),
+                        onAction: (occupantId, action) =>
+                            locate<ChatBloc>().add(
+                          ChatModerationActionRequested(
+                            occupantId: occupantId,
+                            action: action,
+                          ),
+                        ),
+                        onChangeNickname: (nick) => locate<ChatBloc>().add(
+                          ChatNicknameChangeRequested(nick),
+                        ),
+                        onLeaveRoom: () => locate<ChatBloc>().add(
+                          const ChatLeaveRoomRequested(),
+                        ),
+                        onClose: navigator.pop,
+                        rootContext: rootContext,
                       ),
                     ),
-                    onChangeNickname: (nick) => locate<ChatBloc>().add(
-                      ChatNicknameChangeRequested(nick),
-                    ),
-                    onLeaveRoom: () =>
-                        locate<ChatBloc>().add(const ChatLeaveRoomRequested()),
-                    onClose: navigator.pop,
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         );

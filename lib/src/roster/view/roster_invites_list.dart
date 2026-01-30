@@ -34,7 +34,8 @@ class RosterInvitesList extends StatelessWidget {
 
           if (invites == null) {
             return Center(
-              child: AxiProgressIndicator(color: context.colorScheme.foreground),
+              child:
+                  AxiProgressIndicator(color: context.colorScheme.foreground),
             );
           }
 

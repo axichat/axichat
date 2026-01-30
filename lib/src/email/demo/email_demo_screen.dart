@@ -160,8 +160,8 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                                 ? null
                                 : () =>
                                     context.read<EmailDemoCubit>().provision(),
-                            loading: state.status ==
-                                EmailDemoStatus.provisioning,
+                            loading:
+                                state.status == EmailDemoStatus.provisioning,
                             child: Text(context.l10n.emailDemoProvisionButton),
                           ),
                           AxiButton.secondary(
@@ -174,8 +174,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                                       displayName:
                                           context.l10n.emailDemoDisplayNameSelf,
                                     ),
-                            loading:
-                                state.status == EmailDemoStatus.sending,
+                            loading: state.status == EmailDemoStatus.sending,
                             child: Text(context.l10n.emailDemoSendButton),
                           ),
                         ],

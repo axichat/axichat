@@ -14,26 +14,11 @@ import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 
-const int _chatExportStart = 0;
-const int _chatExportEnd = 0;
 const int _emptyCount = 0;
-const int _emailContactListFlags =
-    DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
 const String _xmppMessagesFileLabel = 'xmpp-messages';
 const String _emailMessagesFileLabel = 'email-messages';
 const String _xmppContactsFileLabel = 'xmpp-contacts';
 const String _emailContactsFileLabel = 'email-contacts';
-const String _messageLineTimestampPrefix = '[';
-const String _messageLineTimestampSuffix = ']';
-const String _messageLineSpacer = ' ';
-const String _messageLineSeparator = ': ';
-const String _messageSubjectLabel = 'Subject';
-const String _messageSubjectSeparator = ': ';
-const String _messageSubjectPrefix =
-    ' ($_messageSubjectLabel$_messageSubjectSeparator';
-const String _messageSubjectSuffix = ')';
-const String _subjectOnlyPrefix =
-    '$_messageSubjectLabel$_messageSubjectSeparator';
 final DateTime _fallbackTimestamp = DateTime.fromMillisecondsSinceEpoch(
   0,
   isUtc: true,
@@ -117,6 +102,12 @@ class ProfileExportState {
   }
 }
 
+class EmailMessageLineLabels {
+  const EmailMessageLineLabels({required this.subjectLabel});
+
+  final String subjectLabel;
+}
+
 class ProfileExportCubit extends Cubit<ProfileExportState> {
   ProfileExportCubit({
     required XmppService xmppService,
@@ -138,26 +129,45 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         ),
       );
 
-  Future<ProfileExportResult> exportEmailMessages() => _runExport(
+  Future<ProfileExportResult> exportEmailMessages(
+    EmailMessageLineLabels labels,
+  ) =>
+      _runExport(
         kind: ProfileExportKind.emailMessages,
         operation: () => _exportMessages(
           kind: ProfileExportKind.emailMessages,
           transport: MessageTransport.email,
           fileLabel: _emailMessagesFileLabel,
-          lineFormatter: _formatEmailMessageLine,
+          lineFormatter: ({
+            required Chat chat,
+            required Message message,
+            required intl.DateFormat format,
+          }) =>
+              _formatEmailMessageLine(
+            chat: chat,
+            message: message,
+            format: format,
+            labels: labels,
+          ),
         ),
       );
 
-  Future<ProfileExportResult> exportXmppContacts(ContactExportFormat format) =>
+  Future<ProfileExportResult> exportXmppContacts(
+    ContactExportFormat format,
+    ContactExportLabels labels,
+  ) =>
       _runExport(
         kind: ProfileExportKind.xmppContacts,
-        operation: () => _exportXmppContacts(format),
+        operation: () => _exportXmppContacts(format, labels),
       );
 
-  Future<ProfileExportResult> exportEmailContacts(ContactExportFormat format) =>
+  Future<ProfileExportResult> exportEmailContacts(
+    ContactExportFormat format,
+    ContactExportLabels labels,
+  ) =>
       _runExport(
         kind: ProfileExportKind.emailContacts,
-        operation: () => _exportEmailContacts(format),
+        operation: () => _exportEmailContacts(format, labels),
       );
 
   Future<ProfileExportResult> _runExport({
@@ -184,10 +194,12 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     required String fileLabel,
     ChatHistoryMessageLineFormatter? lineFormatter,
   }) async {
+    const int chatExportStart = 0;
+    const int chatExportEnd = 0;
     final db = await _xmppService.database;
     final chats = await db.getChats(
-      start: _chatExportStart,
-      end: _chatExportEnd,
+      start: chatExportStart,
+      end: chatExportEnd,
     );
     final selectedChats = chats
         .where((chat) => chat.transport == transport)
@@ -213,6 +225,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
 
   Future<ProfileExportResult> _exportXmppContacts(
     ContactExportFormat format,
+    ContactExportLabels labels,
   ) async {
     final db = await _xmppService.database;
     final roster = await db.getRoster();
@@ -237,6 +250,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
       contacts: contacts,
       format: format,
       fileLabel: _xmppContactsFileLabel,
+      labels: labels,
     );
     return ProfileExportResult.success(
       kind: ProfileExportKind.xmppContacts,
@@ -247,9 +261,11 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
 
   Future<ProfileExportResult> _exportEmailContacts(
     ContactExportFormat format,
+    ContactExportLabels labels,
   ) async {
+    final flags = DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
     final emailContacts = await _emailService.getContacts(
-      flags: _emailContactListFlags,
+      flags: flags,
     );
     final contacts = _sortedContacts(
       emailContacts
@@ -272,6 +288,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
       contacts: contacts,
       format: format,
       fileLabel: _emailContactsFileLabel,
+      labels: labels,
     );
     return ProfileExportResult.success(
       kind: ProfileExportKind.emailContacts,
@@ -297,7 +314,18 @@ String? _formatEmailMessageLine({
   required Chat chat,
   required Message message,
   required intl.DateFormat format,
+  required EmailMessageLineLabels labels,
 }) {
+  const String messageLineTimestampPrefix = '[';
+  const String messageLineTimestampSuffix = ']';
+  const String messageLineSpacer = ' ';
+  const String messageLineSeparator = ': ';
+  const String messageSubjectSeparator = ': ';
+  const String messageSubjectSuffix = ')';
+  final String messageSubjectPrefix =
+      ' (${labels.subjectLabel}$messageSubjectSeparator';
+  final String subjectOnlyPrefix =
+      '${labels.subjectLabel}$messageSubjectSeparator';
   final String? body = message.body?.trim();
   final String? subject = message.subject?.trim();
   if ((body == null || body.isEmpty) && (subject == null || subject.isEmpty)) {
@@ -307,23 +335,23 @@ String? _formatEmailMessageLine({
   final String timestamp = format.format(timestampValue);
   final String sender = _resolveEmailSender(chat, message);
   final String content =
-      (body == null || body.isEmpty) ? '$_subjectOnlyPrefix$subject' : body;
+      (body == null || body.isEmpty) ? '$subjectOnlyPrefix$subject' : body;
   final StringBuffer buffer = StringBuffer()
-    ..write(_messageLineTimestampPrefix)
+    ..write(messageLineTimestampPrefix)
     ..write(timestamp)
-    ..write(_messageLineTimestampSuffix)
-    ..write(_messageLineSpacer)
+    ..write(messageLineTimestampSuffix)
+    ..write(messageLineSpacer)
     ..write(sender)
-    ..write(_messageLineSeparator)
+    ..write(messageLineSeparator)
     ..write(content);
   if (subject != null &&
       subject.isNotEmpty &&
       body != null &&
       body.isNotEmpty) {
     buffer
-      ..write(_messageSubjectPrefix)
+      ..write(messageSubjectPrefix)
       ..write(subject)
-      ..write(_messageSubjectSuffix);
+      ..write(messageSubjectSuffix);
   }
   return buffer.toString();
 }

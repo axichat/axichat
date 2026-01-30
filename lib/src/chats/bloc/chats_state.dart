@@ -19,7 +19,7 @@ class ChatsState with _$ChatsState {
     @Default(<String>{}) Set<String> selectedJids,
     @Default('') String searchQuery,
     @Default(false) bool searchActive,
-    @Default(ChatListFilter.all) ChatListFilter searchFilter,
+    SearchFilterId? searchFilter,
     @Default(SearchSortOrder.newestFirst) SearchSortOrder searchSortOrder,
     @Default(<String>{}) Set<String> rosterContacts,
     @Default(<Chat>[]) List<Chat> visibleItems,

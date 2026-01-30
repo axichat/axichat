@@ -6,10 +6,8 @@ import 'dart:async';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -126,10 +124,7 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   Padding(
                     padding: horizontalPadding,
-                    child: NotificationRequest(
-                      notificationService: context.watch<NotificationService>(),
-                      capability: context.watch<Capability>(),
-                    ),
+                    child: NotificationRequest(),
                   ),
                   SizedBox(height: spacing.s),
                   Padding(

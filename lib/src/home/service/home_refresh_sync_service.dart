@@ -17,26 +17,18 @@ class HomeRefreshSyncService {
   })  : _xmppService = xmppService,
         _emailService = emailService;
 
-  static const Duration _connectionTimeout = Duration(seconds: 20);
-  static const int _mamHistoryPageSize = 50;
-  static const Duration _streamReadyTimeout = Duration(seconds: 5);
-  static const Duration _emailUnreadFetchTimeout = Duration(seconds: 8);
-  static const Duration _emailHistoryFetchTimeout = Duration(seconds: 25);
-
   final XmppService _xmppService;
   final EmailService? _emailService;
   final Logger _log = Logger('HomeRefreshSyncService');
-  bool _syncInFlight = false;
+  Future<DateTime>? _syncTask;
   DateTime? _lastSyncAt;
   StreamSubscription<ConnectionState>? _xmppConnectivitySubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   ConnectionState? _lastXmppState;
   EmailSyncStatus? _lastEmailStatus;
-  var _listenersStarted = false;
 
   void start() {
-    if (_listenersStarted) return;
-    _listenersStarted = true;
+    if (_xmppConnectivitySubscription != null) return;
     _lastXmppState = _xmppService.connectionState;
     _xmppConnectivitySubscription = _xmppService.connectivityStream.listen(
       _handleXmppConnectivity,
@@ -51,7 +43,6 @@ class HomeRefreshSyncService {
   }
 
   Future<void> close() async {
-    _listenersStarted = false;
     final xmppSub = _xmppConnectivitySubscription;
     _xmppConnectivitySubscription = null;
     await xmppSub?.cancel();
@@ -69,28 +60,18 @@ class HomeRefreshSyncService {
   }
 
   Future<DateTime> refreshUnreadOnly() async {
-    if (_syncInFlight) {
-      return _lastSyncAt ?? DateTime.timestamp();
-    }
-    _syncInFlight = true;
-    try {
+    return _enqueueSync(() async {
       await _healTransports();
       await _pullUnreadFromNewContacts();
       _lastSyncAt = DateTime.timestamp();
       return _lastSyncAt!;
-    } finally {
-      _syncInFlight = false;
-    }
+    });
   }
 
   Future<DateTime> refresh() async {
-    if (_syncInFlight) {
-      return _lastSyncAt ?? DateTime.timestamp();
-    }
-    _syncInFlight = true;
-    try {
+    return _enqueueSync(() async {
       await _healTransports();
-      await _pullUnreadFromNewContacts();
+      await _refreshXmppUnread();
       await _syncEmailContacts();
       await _refreshAntiAbuseLists();
       await _refreshConversationIndex();
@@ -102,9 +83,21 @@ class HomeRefreshSyncService {
 
       _lastSyncAt = DateTime.timestamp();
       return _lastSyncAt!;
-    } finally {
-      _syncInFlight = false;
+    });
+  }
+
+  Future<DateTime> _enqueueSync(Future<DateTime> Function() action) {
+    final pending = _syncTask;
+    if (pending != null) {
+      return pending;
     }
+    final task = action();
+    _syncTask = task;
+    return task.whenComplete(() {
+      if (_syncTask == task) {
+        _syncTask = null;
+      }
+    });
   }
 
   Future<void> _handleXmppConnectivity(ConnectionState state) async {
@@ -125,7 +118,7 @@ class HomeRefreshSyncService {
   }
 
   Future<void> _runReconnectSync() async {
-    if (_syncInFlight) {
+    if (_syncTask != null) {
       return;
     }
     try {
@@ -159,13 +152,14 @@ class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return MamGlobalSyncOutcome.failed;
     }
-    final streamReady = await _xmppService.waitForStreamReady(
-      _streamReadyTimeout,
-    );
+    const streamReadyTimeout = Duration(seconds: 5);
+    final streamReady =
+        await _xmppService.waitForStreamReady(streamReadyTimeout);
     if (streamReady?.isResumed ?? false) {
       return MamGlobalSyncOutcome.skippedResumed;
     }
-    return _xmppService.syncGlobalMamCatchUp(pageSize: _mamHistoryPageSize);
+    const mamHistoryPageSize = 50;
+    return _xmppService.syncGlobalMamCatchUp(pageSize: mamHistoryPageSize);
   }
 
   Future<void> _refreshEmailUnread() async {
@@ -176,8 +170,9 @@ class HomeRefreshSyncService {
       return;
     }
     try {
+      const emailUnreadFetchTimeout = Duration(seconds: 8);
       await emailService.performBackgroundFetch(
-        timeout: _emailUnreadFetchTimeout,
+        timeout: emailUnreadFetchTimeout,
       );
       await emailService.refreshChatlistFromCore();
     } on Exception {
@@ -189,9 +184,10 @@ class HomeRefreshSyncService {
     if (!_xmppService.hasConnectionSettings) return;
     if (_xmppService.connectionState == ConnectionState.connected) return;
     await _xmppService.requestReconnect(ReconnectTrigger.userAction);
+    const connectionTimeout = Duration(seconds: 20);
     await _xmppService.connectivityStream
         .firstWhere((state) => state == ConnectionState.connected)
-        .timeout(_connectionTimeout);
+        .timeout(connectionTimeout);
   }
 
   Future<void> _ensureEmailConnected() async {
@@ -227,8 +223,9 @@ class HomeRefreshSyncService {
       return;
     }
     try {
+      const emailHistoryFetchTimeout = Duration(seconds: 25);
       await emailService.performBackgroundFetch(
-        timeout: _emailHistoryFetchTimeout,
+        timeout: emailHistoryFetchTimeout,
       );
       await emailService.refreshChatlistFromCore();
     } on Exception {

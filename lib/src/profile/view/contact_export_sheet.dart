@@ -8,12 +8,6 @@ import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _contactExportOptionSpacing = 8.0;
-const double _contactExportIconPadding = 10.0;
-const double _contactExportIconSize = 18.0;
-const double _contactExportOptionRadius = 12.0;
-const double _contactExportIconAlpha = 0.12;
-
 Future<ContactExportFormat?> showContactExportFormatSheet(
   BuildContext context, {
   String? title,
@@ -25,6 +19,7 @@ Future<ContactExportFormat?> showContactExportFormatSheet(
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) {
       final l10n = sheetContext.l10n;
+      final spacing = sheetContext.spacing;
       final String resolvedTitle = title ?? l10n.profileExportFormatTitle;
       return AxiSheetScaffold.scroll(
         header: AxiSheetHeader(
@@ -39,7 +34,7 @@ Future<ContactExportFormat?> showContactExportFormatSheet(
               description: format.subtitle(l10n),
               onTap: () => Navigator.of(sheetContext).pop(format),
             ),
-            const SizedBox(height: _contactExportOptionSpacing),
+            SizedBox(height: spacing.s),
           ],
         ],
       );
@@ -79,24 +74,25 @@ class _ContactExportOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = ShadTheme.of(context).colorScheme;
-    final iconBackground = colors.muted.withValues(
-      alpha: _contactExportIconAlpha,
-    );
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final radii = context.radii;
+    final iconBackground = colors.muted;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: EdgeInsets.symmetric(vertical: spacing.xxs),
       child: AxiListTile(
         leading: DecoratedBox(
           decoration: BoxDecoration(
             color: iconBackground,
-            borderRadius: BorderRadius.circular(_contactExportOptionRadius),
-            border: Border.all(color: colors.border),
+            borderRadius: BorderRadius.circular(radii.squircleSm),
+            border: Border.fromBorderSide(context.borderSide),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(_contactExportIconPadding),
+            padding: EdgeInsets.all(spacing.s),
             child: Icon(
               icon,
-              size: _contactExportIconSize,
+              size: sizing.menuItemIconSize,
               color: colors.primary,
             ),
           ),

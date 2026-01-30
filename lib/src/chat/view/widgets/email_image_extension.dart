@@ -4,11 +4,15 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/network_safety.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:mime/mime.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 const Duration _emailImageDownloadTimeout = Duration(seconds: 8);
 const Duration _emailImageDecodeTimeout = Duration(seconds: 2);
@@ -219,41 +223,79 @@ bool _isRedirectStatusCode(int statusCode) => switch (statusCode) {
     };
 
 /// Placeholder widget shown when external images are blocked.
-class EmailImagePlaceholder extends StatelessWidget {
+class EmailImagePlaceholder extends StatefulWidget {
   const EmailImagePlaceholder({super.key, this.onTap, this.isError = false});
 
   final VoidCallback? onTap;
   final bool isError;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+  State<EmailImagePlaceholder> createState() => _EmailImagePlaceholderState();
+}
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(4),
+class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final label = widget.isError
+        ? context.l10n.chatEmailImageFailedLabel
+        : context.l10n.chatEmailImageBlockedLabel;
+    final shape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: context.borderSide,
+    );
+    final content = DecoratedBox(
+      decoration: ShapeDecoration(
+        color: colors.surfaceContainerHighest,
+        shape: shape,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isError ? Icons.broken_image_outlined : Icons.image_outlined,
-              size: 16,
+              widget.isError
+                  ? Icons.broken_image_outlined
+                  : Icons.image_outlined,
+              size: sizing.menuItemIconSize,
               color: colors.onSurfaceVariant,
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: spacing.xs),
             Text(
-              isError ? 'Image failed' : 'Image blocked',
-              style: theme.textTheme.bodySmall?.copyWith(
+              label,
+              style: context.textTheme.small.copyWith(
                 color: colors.onSurfaceVariant,
               ),
             ),
           ],
+        ),
+      ),
+    );
+
+    return ShadFocusable(
+      canRequestFocus: widget.onTap != null,
+      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+      child: ShadGestureDetector(
+        cursor: widget.onTap == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        hoverStrategies: mobileHoverStrategies,
+        onTap: widget.onTap,
+        onTapDown: _bounceController.handleTapDown,
+        onTapUp: _bounceController.handleTapUp,
+        onTapCancel: _bounceController.handleTapCancel,
+        child: AxiTapBounce(
+          controller: _bounceController,
+          enabled: widget.onTap != null,
+          child: content,
         ),
       ),
     );

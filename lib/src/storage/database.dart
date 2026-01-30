@@ -69,6 +69,16 @@ const int _pinnedMessagesSchemaVersion = 28;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
+class MessageDeltaSnapshot {
+  const MessageDeltaSnapshot({
+    required this.stanzaId,
+    required this.deltaMsgId,
+  });
+
+  final String stanzaId;
+  final int? deltaMsgId;
+}
+
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
     String jid, {
@@ -94,6 +104,10 @@ abstract interface class XmppDatabase implements Database {
     String jid, {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
+
+  Future<List<MessageDeltaSnapshot>> getMessageDeltaSnapshot(String jid);
+
+  Future<void> deleteMessagesByStanzaIds(Iterable<String> stanzaIds);
 
   Future<List<Message>> getPendingOutgoingDeltaMessages({
     required int deltaAccountId,
@@ -367,6 +381,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<FileMetadataData?> getFileMetadata(String id);
 
+  Future<List<FileMetadataData>> getFileMetadataForIds(Iterable<String> ids);
+
   Stream<FileMetadataData?> watchFileMetadata(String id);
 
   Future<void> deleteFileMetadata(String id);
@@ -374,6 +390,8 @@ abstract interface class XmppDatabase implements Database {
   Stream<List<Chat>> watchChats({required int start, required int end});
 
   Future<List<Chat>> getChats({required int start, required int end});
+
+  Future<List<Chat>> getChatsByJids(Iterable<String> jids);
 
   Future<List<Chat>> getDeltaChats({int? accountId});
 
@@ -1056,6 +1074,14 @@ class FileMetadataAccessor
       )..where((table) => table.id.equals(value as String)))
           .getSingleOrNull();
 
+  Future<List<FileMetadataData>> selectForIds(List<String> ids) {
+    if (ids.isEmpty) return Future.value(const []);
+    return (select(
+      table,
+    )..where((table) => table.id.isIn(ids)))
+        .get();
+  }
+
   Stream<FileMetadataData?> watchOne(String id) => (select(
         table,
       )..where((table) => table.id.equals(id)))
@@ -1102,6 +1128,14 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
         table,
       )..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
+
+  Future<List<Chat>> selectForJids(List<String> jids) {
+    if (jids.isEmpty) return Future.value(const []);
+    return (select(
+      table,
+    )..where((table) => table.jid.isIn(jids)))
+        .get();
+  }
 
   Future<Chat?> selectOpen() => (select(
         table,
@@ -1309,9 +1343,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) =>
-      AddressTools.normalizedKey(address) ?? address.trim().toLowerCase();
+      normalizeAddressdKey(address) ?? address.trim().toLowerCase();
   String? _normalizeBlocklistJid(String jid) {
-    return AddressTools.normalizedKey(jid);
+    return normalizeAddressdKey(jid);
   }
 
   String _chatTitleForIdentifier(String identifier) {
@@ -1644,6 +1678,30 @@ WHERE delta_chat_id IS NOT NULL
             OrderingTerm(expression: tbl.timestamp, mode: OrderingMode.asc),
       ]);
     return query.get();
+  }
+
+  @override
+  Future<List<MessageDeltaSnapshot>> getMessageDeltaSnapshot(String jid) async {
+    final query = selectOnly(messages)
+      ..addColumns([messages.stanzaID, messages.deltaMsgId])
+      ..where(messages.chatJid.equals(jid));
+    final rows = await query.get();
+    return rows
+        .map(
+          (row) => MessageDeltaSnapshot(
+            stanzaId: row.read(messages.stanzaID) ?? '',
+            deltaMsgId: row.read(messages.deltaMsgId),
+          ),
+        )
+        .where((snapshot) => snapshot.stanzaId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> deleteMessagesByStanzaIds(Iterable<String> stanzaIds) async {
+    final ids = stanzaIds.toList(growable: false);
+    if (ids.isEmpty) return;
+    await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(ids))).go();
   }
 
   @override
@@ -2386,12 +2444,12 @@ WHERE jid = ?
   }) async {
     const String sqlPlaceholderToken = '?';
     const String sqlPlaceholderSeparator = ', ';
-    final normalizedAddress = AddressTools.normalizedKey(resolvedAddress);
+    final normalizedAddress = normalizeAddressdKey(resolvedAddress);
     if (normalizedAddress == null || normalizedAddress.isEmpty) {
       return;
     }
     final normalizedPlaceholders = placeholderJids
-        .map(AddressTools.normalizedKey)
+        .map(normalizeAddressdKey)
         .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
@@ -2438,7 +2496,7 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     const String deltaKeySeparator = '|';
     final normalizedPlaceholders = placeholderJids
-        .map(AddressTools.normalizedKey)
+        .map(normalizeAddressdKey)
         .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
@@ -2490,7 +2548,7 @@ WHERE email_from_address IN ($placeholderClause)
       final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
       final candidates = messagesByKey[key] ?? const <Message>[];
       final hasNonPlaceholder = candidates.any((candidate) {
-        final sender = AddressTools.normalizedKey(candidate.senderJid) ?? '';
+        final sender = normalizeAddressdKey(candidate.senderJid) ?? '';
         return !normalizedPlaceholders.contains(sender);
       });
       if (hasNonPlaceholder) {
@@ -3161,6 +3219,12 @@ WHERE email_from_address IN ($placeholderClause)
       fileMetadataAccessor.selectOne(id);
 
   @override
+  Future<List<FileMetadataData>> getFileMetadataForIds(
+    Iterable<String> ids,
+  ) =>
+      fileMetadataAccessor.selectForIds(ids.toList(growable: false));
+
+  @override
   Stream<FileMetadataData?> watchFileMetadata(String id) =>
       fileMetadataAccessor.watchOne(id);
 
@@ -3463,6 +3527,11 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<List<Chat>> getChats({required int start, required int end}) {
     return chatsAccessor.selectAll();
+  }
+
+  @override
+  Future<List<Chat>> getChatsByJids(Iterable<String> jids) {
+    return chatsAccessor.selectForJids(jids.toList(growable: false));
   }
 
   @override

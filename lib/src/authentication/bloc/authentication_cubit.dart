@@ -3122,7 +3122,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   String _normalizeJid(String jid) {
-    return AddressTools.normalizedKey(jid) ?? jid.trim().toLowerCase();
+    return normalizeAddressdKey(jid) ?? jid.trim().toLowerCase();
   }
 
   String _normalizeSignupKey(String username, String host) =>
@@ -3197,7 +3197,7 @@ class _SessionEmailCredentials {
   final String address;
   final String password;
 
-  bool matches(String jid) => AddressTools.sameBare(address, jid);
+  bool matches(String jid) => sameBareAddress(address, jid);
 }
 
 class _DatabaseSecrets {

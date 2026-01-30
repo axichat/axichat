@@ -28,21 +28,20 @@ enum NotificationRequestDisplayMode {
 class NotificationRequest extends StatelessWidget {
   const NotificationRequest({
     super.key,
-    required this.notificationService,
-    required this.capability,
     this.displayMode = NotificationRequestDisplayMode.platformOnly,
   });
 
-  final NotificationService notificationService;
-  final Capability capability;
   final NotificationRequestDisplayMode displayMode;
 
   @override
   Widget build(BuildContext context) {
+    final notificationService = context.watch<NotificationService>();
+    final xmppService = context.watch<XmppService>();
+    final capability = context.watch<Capability>();
     return BlocProvider(
       create: (context) => NotificationRequestCubit(
         notificationService: notificationService,
-        xmppService: context.read<XmppService>(),
+        xmppService: xmppService,
       )..refreshPermissions(),
       child: _NotificationRequestBody(
         capability: capability,
@@ -98,12 +97,12 @@ class _NotificationRequestBody extends StatelessWidget {
                   if (!capability.canForegroundService) {
                     return;
                   }
-                  final requestCubit = context.read<NotificationRequestCubit>();
-                  final granted = await requestCubit.requestPermissions();
-                  if (!granted || !context.mounted) {
+                  if (!context.mounted) {
                     return;
                   }
-                  await requestCubit.enableForegroundService();
+                  await context
+                      .read<NotificationRequestCubit>()
+                      .enableForegroundService();
                 },
         );
       },

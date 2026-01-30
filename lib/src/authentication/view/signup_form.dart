@@ -10,11 +10,9 @@ import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.da
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -583,11 +581,7 @@ class _SignupFormState extends State<SignupForm>
                     ),
                     Padding(
                       padding: horizontalPadding,
-                      child: NotificationRequest(
-                        notificationService:
-                            context.watch<NotificationService>(),
-                        capability: context.watch<Capability>(),
-                      ),
+                      child: NotificationRequest(),
                     ),
                     SizedBox(height: spacing.s),
                     Padding(

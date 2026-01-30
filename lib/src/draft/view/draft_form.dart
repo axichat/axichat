@@ -118,8 +118,9 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
+      final draftCubit = context.read<DraftCubit>();
       Future<void>(() async {
-        await _cleanupSeedAttachmentMetadata();
+        await _cleanupSeedAttachmentMetadata(draftCubit);
       });
     }
     _autosaveTimer?.cancel();
@@ -504,7 +505,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   void _scheduleRecipientsInitialization(List<Chat> chats) {
-    if (_recipientsInitialized || chats.isEmpty) return;
+    if (_recipientsInitialized) return;
     _recipientsInitialized = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -960,11 +961,12 @@ class _DraftFormState extends State<DraftForm> {
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
     try {
+      final draftCubit = context.read<DraftCubit>();
       if (id != null) {
-        await context.read<DraftCubit>().deleteDraft(id: id!);
+        await draftCubit.deleteDraft(id: id!);
       }
       if (shouldCleanupSeedAttachments) {
-        await _cleanupSeedAttachmentMetadata();
+        await _cleanupSeedAttachmentMetadata(draftCubit);
       }
       if (!mounted) return;
       setState(() {
@@ -987,7 +989,9 @@ class _DraftFormState extends State<DraftForm> {
     }
   }
 
-  Future<void> _cleanupSeedAttachmentMetadata() async {
+  Future<void> _cleanupSeedAttachmentMetadata(
+    DraftCubit draftCubit,
+  ) async {
     if (!_shouldCleanupSeedAttachments) {
       return;
     }
@@ -998,9 +1002,7 @@ class _DraftFormState extends State<DraftForm> {
     }
     for (final metadataId in metadataIds) {
       try {
-        await context
-            .read<DraftCubit>()
-            .deleteDraftAttachmentMetadata(metadataId);
+        await draftCubit.deleteDraftAttachmentMetadata(metadataId);
       } on Exception {
         // Best-effort cleanup for share intent attachment metadata.
       }
@@ -1112,7 +1114,8 @@ class _DraftFormState extends State<DraftForm> {
       context,
     )?.show(FeedbackToast.success(title: l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata();
+      final draftCubit = context.read<DraftCubit>();
+      await _cleanupSeedAttachmentMetadata(draftCubit);
     }
     if (!mounted) {
       return;

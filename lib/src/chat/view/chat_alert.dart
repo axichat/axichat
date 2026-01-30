@@ -5,61 +5,64 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatAlert extends StatelessWidget {
-  const ChatAlert({
-    super.key,
-    this.color = Colors.orange,
-    this.iconData = LucideIcons.info,
-  });
-
-  final Color color;
-  final IconData iconData;
+  const ChatAlert({super.key});
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ChatBloc, ChatState>(
       builder: (context, state) {
         final l10n = context.l10n;
+        final colors = context.colorScheme;
+        final spacing = context.spacing;
+        final sizing = context.sizing;
         return AnimatedContainer(
           duration: context.watch<SettingsCubit>().animationDuration,
-          color: color,
+          color: colors.warning,
           alignment: Alignment.center,
           child: !state.showAlert || state.chat?.alert == null
               ? const SizedBox.shrink()
               : Padding(
-                  padding: const EdgeInsets.all(8.0),
+                  padding: EdgeInsets.all(spacing.s),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(iconData, color: Colors.white, size: 20.0),
-                      const SizedBox.square(dimension: 8.0),
+                      Icon(
+                        LucideIcons.info,
+                        color: colors.foreground,
+                        size: sizing.iconButtonIconSize,
+                      ),
+                      SizedBox.square(dimension: spacing.s),
                       Expanded(
                         child: Text(
                           state.chat!.alert!,
-                          style: const TextStyle(color: Colors.white),
+                          style: context.textTheme.bodyMedium.copyWith(
+                            color: colors.foreground,
+                          ),
                         ),
                       ),
-                      const SizedBox.square(dimension: 4.0),
-                      ShadButton.secondary(
-                        child: Text(l10n.chatAlertHide),
+                      SizedBox.square(dimension: spacing.xs),
+                      AxiButton(
+                        label: Text(l10n.chatAlertHide),
+                        size: AxiButtonSize.sm,
+                        variant: AxiButtonVariant.secondary,
                         onPressed: () => context.read<ChatBloc>().add(
                               const ChatAlertHidden(),
                             ),
-                      ).withTapBounce(),
-                      const SizedBox.square(dimension: 4.0),
-                      ShadButton.ghost(
-                        child: Text(
-                          l10n.chatAlertIgnore,
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                      ),
+                      SizedBox.square(dimension: spacing.xs),
+                      AxiButton(
+                        label: Text(l10n.chatAlertIgnore),
+                        size: AxiButtonSize.sm,
+                        variant: AxiButtonVariant.ghost,
                         onPressed: () => context.read<ChatBloc>().add(
                               const ChatAlertHidden(forever: true),
                             ),
-                      ).withTapBounce(),
+                      ),
                     ],
                   ),
                 ),

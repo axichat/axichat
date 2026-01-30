@@ -183,8 +183,10 @@ class _AxichatState extends State<Axichat> {
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
-            create: (context) =>
-                SettingsCubit(xmppService: context.read<XmppService>()),
+            create: (context) => SettingsCubit(
+              xmppService: context.read<XmppService>(),
+              capability: context.read<Capability>(),
+            ),
           ),
           BlocProvider(
             create: (context) => AuthenticationCubit(

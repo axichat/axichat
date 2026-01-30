@@ -18,16 +18,17 @@ class ProfileFingerprint extends StatefulWidget {
 }
 
 class _ProfileFingerprintState extends State<ProfileFingerprint> {
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    context.read<ProfileCubit?>()?.loadFingerprints();
-  }
-
   var _showFingerprint = false;
 
   @override
+  void initState() {
+    super.initState();
+    context.read<ProfileCubit?>()?.loadFingerprints();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         if (state.fingerprint == null) return const SizedBox.shrink();
@@ -36,7 +37,7 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
           columnCrossAxisAlignment: CrossAxisAlignment.center,
           rowMainAxisAlignment: MainAxisAlignment.center,
           columnMainAxisAlignment: MainAxisAlignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10.0),
+          padding: EdgeInsets.symmetric(horizontal: spacing.m),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -57,13 +58,15 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
             duration: context.watch<SettingsCubit>().animationDuration,
             child: _showFingerprint
                 ? Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
+                    padding: EdgeInsets.only(bottom: spacing.s),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      spacing: 12.0,
+                      spacing: spacing.m,
                       children: [
                         Text(
-                          'Device #${state.fingerprint!.deviceID}',
+                          context.l10n.verificationDeviceIdLabel(
+                            state.fingerprint!.deviceID,
+                          ),
                           style: context.textTheme.small,
                         ),
                         DisplayFingerprint(

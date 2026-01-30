@@ -3,11 +3,9 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -57,8 +55,6 @@ class EmailForwardingGuideTile extends StatelessWidget {
       builder: (dialogContext) => EmailForwardingGuideDialog(
         title: l10n.emailForwardingGuideTitle,
         forwardingAddress: forwardingAddress,
-        notificationService: context.read<NotificationService>(),
-        capability: context.read<Capability>(),
       ),
     );
     if (!context.mounted) {
@@ -96,8 +92,6 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
       builder: (dialogContext) => EmailForwardingGuideDialog(
         title: context.l10n.emailForwardingGuideTitle,
         forwardingAddress: forwardingAddress,
-        notificationService: context.read<NotificationService>(),
-        capability: context.read<Capability>(),
       ),
     );
     if (!context.mounted) {
@@ -132,14 +126,10 @@ class EmailForwardingGuideDialog extends StatelessWidget {
     super.key,
     required this.title,
     required this.forwardingAddress,
-    required this.notificationService,
-    required this.capability,
   });
 
   final String title;
   final String forwardingAddress;
-  final NotificationService notificationService;
-  final Capability capability;
 
   @override
   Widget build(BuildContext context) {
@@ -148,8 +138,6 @@ class EmailForwardingGuideDialog extends StatelessWidget {
       title: Text(title),
       content: EmailForwardingGuideContent(
         forwardingAddress: forwardingAddress,
-        notificationService: notificationService,
-        capability: capability,
       ),
       callbackText: l10n.commonDone,
       callback: () => context.pop(),
@@ -161,13 +149,9 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
   const EmailForwardingWelcomeScreen({
     super.key,
     required this.forwardingAddress,
-    required this.notificationService,
-    required this.capability,
   });
 
   final String forwardingAddress;
-  final NotificationService notificationService;
-  final Capability capability;
 
   @override
   Widget build(BuildContext context) {
@@ -203,8 +187,6 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
               padding: contentPadding,
               child: EmailForwardingGuideContent(
                 forwardingAddress: forwardingAddress,
-                notificationService: notificationService,
-                capability: capability,
               ),
             ),
             footer: EmailForwardingWelcomeFooter(
@@ -302,13 +284,9 @@ class EmailForwardingGuideContent extends StatelessWidget {
   const EmailForwardingGuideContent({
     super.key,
     required this.forwardingAddress,
-    required this.notificationService,
-    required this.capability,
   });
 
   final String forwardingAddress;
-  final NotificationService notificationService;
-  final Capability capability;
 
   @override
   Widget build(BuildContext context) {
@@ -338,8 +316,6 @@ class EmailForwardingGuideContent extends StatelessWidget {
             style: subheaderStyle),
         SizedBox(height: spacing.s),
         NotificationRequest(
-          notificationService: notificationService,
-          capability: capability,
           displayMode: NotificationRequestDisplayMode.always,
         ),
       ],
@@ -467,8 +443,6 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     _dialogShown = true;
-    final notificationService = context.read<NotificationService>();
-    final capability = context.read<Capability>();
     final forwardingAddress = _resolveForwardingAddress(
       context.read<XmppService>(),
     );
@@ -478,8 +452,6 @@ class _EmailForwardingWelcomeGateState
         fullscreenDialog: true,
         builder: (routeContext) => EmailForwardingWelcomeScreen(
           forwardingAddress: forwardingAddress,
-          notificationService: notificationService,
-          capability: capability,
         ),
       ),
     );
@@ -506,8 +478,6 @@ Future<void> showEmailForwardingGuideDialog(BuildContext context) async {
     builder: (dialogContext) => EmailForwardingGuideDialog(
       title: context.l10n.emailForwardingGuideTitle,
       forwardingAddress: forwardingAddress,
-      notificationService: context.read<NotificationService>(),
-      capability: context.read<Capability>(),
     ),
   );
   if (!context.mounted) {

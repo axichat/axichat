@@ -75,8 +75,8 @@ class ChatHistoryExporter {
       await cleanupExportFile(file);
       return const ChatExportResult.empty();
     }
-    final finalLabel =
-        fileLabel ?? _defaultFileLabel(chats, exportedChats == 1 ? chats.first : null);
+    final finalLabel = fileLabel ??
+        _defaultFileLabel(chats, exportedChats == 1 ? chats.first : null);
     final resolvedFile = finalLabel == initialLabel
         ? file
         : await _renameExportFile(file, finalLabel);
@@ -160,8 +160,7 @@ class ChatHistoryExporter {
             message: message,
             format: format,
           );
-          final content =
-              line ?? _defaultMessageLine(message, format: format);
+          final content = line ?? _defaultMessageLine(message, format: format);
           if (content == null || content.isEmpty) continue;
           sink.writeln(content);
           appended++;

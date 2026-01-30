@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -16,13 +17,22 @@ part 'settings_cubit.g.dart';
 part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
-  SettingsCubit({XmppService? xmppService})
+  SettingsCubit({XmppService? xmppService, Capability? capability})
       : _xmppService = xmppService,
+        _capability = capability,
         super(const SettingsState()) {
     _syncAttachmentAutoDownloadSettings(state);
   }
 
   final XmppService? _xmppService;
+  final Capability? _capability;
+
+  bool get canForegroundService => _capability?.canForegroundService ?? false;
+
+  Stream<bool> get mamSupportStream =>
+      _xmppService?.mamSupportStream ?? const Stream<bool>.empty();
+
+  bool get mamSupported => _xmppService?.mamSupported ?? false;
 
   Duration get animationDuration =>
       state.lowMotion ? Duration.zero : baseAnimationDuration;

@@ -12,8 +12,6 @@ const String _fileNameSeparator = '-';
 const String _fileNameExtensionSeparator = '.';
 const String _csvDelimiter = ',';
 const String _csvQuote = '"';
-const String _csvHeaderName = 'Name';
-const String _csvHeaderAddress = 'Address';
 const String _csvLineBreak = '\n';
 const String _vcardLineBreak = '\n';
 const String _vcardBegin = 'BEGIN:VCARD';
@@ -31,9 +29,7 @@ const String _vcardComma = ',';
 const String _vcardSemicolon = ';';
 const String _vcardNewline = '\n';
 const String _vcardNewlineCarriage = '\r';
-const String _csvHeaderLine = '$_csvHeaderName$_csvDelimiter$_csvHeaderAddress';
 const String _emptyValue = '';
-const String _labelFallback = 'contacts';
 const String _fileSafePattern = r'[^a-z0-9_-]';
 
 enum ContactExportFormat { csv, vcard }
@@ -61,6 +57,18 @@ class ContactExportEntry {
   final String? displayName;
 }
 
+class ContactExportLabels {
+  const ContactExportLabels({
+    required this.csvHeaderName,
+    required this.csvHeaderAddress,
+    required this.fallbackLabel,
+  });
+
+  final String csvHeaderName;
+  final String csvHeaderAddress;
+  final String fallbackLabel;
+}
+
 class ContactExporter {
   const ContactExporter._();
 
@@ -68,16 +76,21 @@ class ContactExporter {
     required List<ContactExportEntry> contacts,
     required ContactExportFormat format,
     required String fileLabel,
+    required ContactExportLabels labels,
   }) async {
     final String exportBody =
-        format.isCsv ? _buildCsv(contacts) : _buildVcard(contacts);
-    final String sanitizedLabel = _sanitizeLabel(fileLabel);
+        format.isCsv ? _buildCsv(contacts, labels) : _buildVcard(contacts);
+    final String sanitizedLabel =
+        _sanitizeLabel(fileLabel, labels.fallbackLabel);
     return _writeExportFile(exportBody, sanitizedLabel, format.fileExtension);
   }
 }
 
-String _buildCsv(List<ContactExportEntry> contacts) {
-  final StringBuffer buffer = StringBuffer()..writeln(_csvHeaderLine);
+String _buildCsv(
+    List<ContactExportEntry> contacts, ContactExportLabels labels) {
+  final String csvHeaderLine =
+      '${labels.csvHeaderName}$_csvDelimiter${labels.csvHeaderAddress}';
+  final StringBuffer buffer = StringBuffer()..writeln(csvHeaderLine);
   for (final contact in contacts) {
     final String name = contact.displayName?.trim() ?? _emptyValue;
     final String address = contact.address.trim();
@@ -132,12 +145,12 @@ String _escapeVcardValue(String value) {
       .replaceAll(_vcardComma, _vcardEscapeComma);
 }
 
-String _sanitizeLabel(String input) {
+String _sanitizeLabel(String input, String fallbackLabel) {
   final String trimmed = input.trim().toLowerCase();
   final RegExp pattern = RegExp(_fileSafePattern);
   final String sanitized = trimmed.replaceAll(pattern, '_');
   if (sanitized.isEmpty) {
-    return _labelFallback;
+    return fallbackLabel;
   }
   return sanitized;
 }

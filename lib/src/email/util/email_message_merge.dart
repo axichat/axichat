@@ -96,11 +96,11 @@ Message resolveOriginMergePrimary({
   required Message duplicate,
   required String? selfJid,
 }) {
-  final String normalizedSelf = AddressTools.normalizedKey(selfJid) ?? '';
+  final String normalizedSelf = normalizeAddressdKey(selfJid) ?? '';
   final String normalizedExisting =
-      AddressTools.normalizedKey(existing.senderJid) ?? '';
+      normalizeAddressdKey(existing.senderJid) ?? '';
   final String normalizedDuplicate =
-      AddressTools.normalizedKey(duplicate.senderJid) ?? '';
+      normalizeAddressdKey(duplicate.senderJid) ?? '';
   final bool existingIsPlaceholder = normalizedExisting.isDeltaPlaceholderJid;
   final bool duplicateIsPlaceholder = normalizedDuplicate.isDeltaPlaceholderJid;
   final bool existingIsSelf = _isSelfSender(

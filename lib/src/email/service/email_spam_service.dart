@@ -54,6 +54,6 @@ class EmailSpamService {
   }
 
   String? _normalize(String address) {
-    return AddressTools.normalizedKey(address);
+    return normalizeAddressdKey(address);
   }
 }

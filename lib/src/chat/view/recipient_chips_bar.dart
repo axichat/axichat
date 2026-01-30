@@ -757,12 +757,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   String? _extractDomain(String? raw) {
-    final domain = AddressTools.domainPart(raw)?.toLowerCase();
+    final domain = addressDomainPart(raw)?.toLowerCase();
     return domain == null || domain.isEmpty ? null : domain;
   }
 
   String? _normalizeAddress(String? raw) {
-    return AddressTools.normalizedKey(raw);
+    return normalizeAddressdKey(raw);
   }
 
   bool _isOwnAddress(String? raw) {

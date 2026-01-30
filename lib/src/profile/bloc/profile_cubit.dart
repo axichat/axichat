@@ -55,9 +55,7 @@ class ProfileCubit extends Cubit<ProfileState> {
         );
       },
     );
-    Future<void>(() async {
-      await _loadAvatar();
-    });
+    unawaited(_loadAvatar());
     if (_omemoService != null) {
       loadFingerprints();
     }

@@ -58,13 +58,13 @@ class ChatMessageDetails extends StatelessWidget {
             final emailSelfJid = emailService?.selfSenderJid;
             final String? resolvedEmailSelfJid =
                 emailSelfJid.resolveDeltaPlaceholderJid();
-            final bareSender = AddressTools.bare(message.senderJid);
+            final bareSender = bareAddress(message.senderJid);
             final bool isPlaceholderSender =
                 bareSender?.isDeltaPlaceholderJid ?? false;
             final isFromSelf = isPlaceholderSender ||
-                bareSender == AddressTools.bare(profileJid) ||
+                bareSender == bareAddress(profileJid) ||
                 (resolvedEmailSelfJid != null &&
-                    bareSender == AddressTools.bare(resolvedEmailSelfJid));
+                    bareSender == bareAddress(resolvedEmailSelfJid));
             final shareContext = state.shareContexts[message.stanzaID];
             final shareParticipants = _shareParticipants(
               shareContext?.participants ?? const <Chat>[],

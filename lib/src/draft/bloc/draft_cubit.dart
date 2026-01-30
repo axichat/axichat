@@ -428,14 +428,19 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       );
     }
     final db = await _messageService.database;
+    final chats = await db.getChatsByJids(jids);
+    final chatByJid = <String, Chat>{
+      for (final chat in chats) chat.jid: chat,
+    };
     final attachmentGroupId =
         hasAttachments && attachments.length > 1 ? uuid.v4() : null;
     final uploads = List<XmppAttachmentUpload?>.filled(
       attachments.length,
       null,
     );
-    for (final jid in jids) {
-      final chat = await db.getChat(jid);
+
+    Future<void> sendToJid(String jid, {required bool updateUploads}) async {
+      final chat = chatByJid[jid];
       final encryption = chat?.encryptionProtocol ?? EncryptionProtocol.omemo;
       final chatType = chat?.type ?? ChatType.chat;
       if (hasBody && !hasAttachments) {
@@ -445,6 +450,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           encryptionProtocol: encryption,
           chatType: chatType,
         );
+        return;
       }
       for (var index = 0; index < attachments.length; index += 1) {
         final attachment = attachments[index];
@@ -462,9 +468,26 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           attachmentOrder: index,
           upload: upload,
         );
-        uploads[index] = resolvedUpload;
+        if (updateUploads) {
+          uploads[index] = resolvedUpload;
+        }
       }
     }
+
+    if (!hasAttachments) {
+      await Future.wait(
+        jids.map((jid) => sendToJid(jid, updateUploads: false)),
+      );
+      return;
+    }
+
+    final firstJid = jids.first;
+    await sendToJid(firstJid, updateUploads: true);
+    final remaining = jids.skip(1).toList();
+    if (remaining.isEmpty) return;
+    await Future.wait(
+      remaining.map((jid) => sendToJid(jid, updateUploads: false)),
+    );
   }
 
   Future<List<EmailAttachment>> _bundleEmailAttachments({

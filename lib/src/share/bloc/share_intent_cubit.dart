@@ -33,15 +33,18 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
     if (!_isSupportedPlatform) {
       return;
     }
+    if (_subscription != null) {
+      return;
+    }
     try {
-      await _subscription?.cancel();
-      _subscription = null;
+      _subscription = _handler.sharedMediaStream.listen(_handleMedia);
       final initial = await _handler.getInitialSharedMedia();
       if (initial != null) {
         _handleMedia(initial);
       }
-      _subscription = _handler.sharedMediaStream.listen(_handleMedia);
     } on PlatformException {
+      await _subscription?.cancel();
+      _subscription = null;
       // Share handler not available on this platform; ignore.
     }
   }

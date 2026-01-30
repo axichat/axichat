@@ -1149,14 +1149,14 @@ class DeltaEventConsumer {
 
   bool _isSelfPendingSender(Message message) {
     final String normalizedSender =
-        AddressTools.normalizedKey(message.senderJid) ?? '';
+        normalizeAddressdKey(message.senderJid) ?? '';
     if (normalizedSender.isEmpty) {
       return false;
     }
     if (normalizedSender.isDeltaPlaceholderJid) {
       return true;
     }
-    final String normalizedSelf = AddressTools.normalizedKey(_selfJid) ?? '';
+    final String normalizedSelf = normalizeAddressdKey(_selfJid) ?? '';
     if (normalizedSelf.isEmpty) {
       return false;
     }

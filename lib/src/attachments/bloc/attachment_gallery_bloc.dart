@@ -190,10 +190,10 @@ class AttachmentGalleryBloc
       _xmppService.fileMetadataStream(id);
 
   bool _isSelfMessage(Message message) {
-    if (AddressTools.sameBare(message.senderJid, _xmppService.myJid)) {
+    if (sameBareAddress(message.senderJid, _xmppService.myJid)) {
       return true;
     }
-    return AddressTools.sameBare(
+    return sameBareAddress(
       message.senderJid,
       _emailService?.selfSenderJid,
     );

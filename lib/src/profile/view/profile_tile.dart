@@ -15,21 +15,15 @@ import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-const double _sessionIndicatorMaxWidth = 220.0;
-const double _sessionIndicatorWidthFraction = 0.38;
-
 class ProfileTile extends StatelessWidget {
   const ProfileTile({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (context.read<ProfileCubit?>() == null) {
-      return const SizedBox();
-    }
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
         final demoOffline =
-            context.read<XmppService?>()?.demoOfflineMode ?? false;
+            context.watch<XmppService?>()?.demoOfflineMode ?? false;
         final connectionState = _xmppStateFor(
           connectivityState,
           demoOffline: demoOffline,
@@ -41,20 +35,20 @@ class ProfileTile extends StatelessWidget {
             return BlocBuilder<ProfileCubit, ProfileState>(
               builder: (context, state) {
                 final colors = context.colorScheme;
-                const double subtitleLineHeight = 1.05;
+                final sizing = context.sizing;
                 final usernameStyle = context.textTheme.large.copyWith(
                   fontWeight: FontWeight.w800,
                   color: colors.foreground,
                 );
                 final subtitleStyle = context.textTheme.muted.copyWith(
                   color: colors.mutedForeground,
-                  height: subtitleLineHeight,
                 );
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    final indicatorMaxWidth = _sessionIndicatorWidthFor(
-                      constraints.maxWidth,
-                    );
+                    final indicatorMaxWidth =
+                        constraints.maxWidth < sizing.menuMaxWidth
+                            ? constraints.maxWidth
+                            : sizing.menuMaxWidth;
                     return ListTile(
                       tileColor: colors.background,
                       leading: Hero(
@@ -133,12 +127,4 @@ ConnectionState _xmppStateFor(
     ConnectivityError() => ConnectionState.error,
     ConnectivityNotConnected() => ConnectionState.notConnected,
   };
-}
-
-double _sessionIndicatorWidthFor(double availableWidth) {
-  final scaledWidth = availableWidth * _sessionIndicatorWidthFraction;
-  if (scaledWidth < _sessionIndicatorMaxWidth) {
-    return scaledWidth;
-  }
-  return _sessionIndicatorMaxWidth;
 }

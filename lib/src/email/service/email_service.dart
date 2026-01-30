@@ -43,10 +43,6 @@ import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 const _defaultPageSize = 50;
-const int _emailMessageTimestampFallbackMillis = 0;
-const int _sortEqual = 0;
-const int _sortBefore = -1;
-const int _sortAfter = 1;
 const _maxFanOutRecipients = 20;
 const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
@@ -1603,13 +1599,17 @@ class EmailService {
     );
     if (shareId == null) return null;
     final participants = await db.getParticipantsForShare(shareId);
-    final chats = <Chat>[];
-    for (final participant in participants) {
-      final chat = await db.getChat(participant.contactJid);
-      if (chat != null) {
-        chats.add(chat);
-      }
-    }
+    final participantJids =
+        participants.map((participant) => participant.contactJid).toList();
+    final chatList = await db.getChatsByJids(participantJids);
+    final chatByJid = {
+      for (final chat in chatList) chat.jid: chat,
+    };
+    final chats = <Chat>[
+      for (final participant in participants)
+        if (chatByJid[participant.contactJid] != null)
+          chatByJid[participant.contactJid]!,
+    ];
     final shareRecord = await db.getMessageShareById(shareId);
     return ShareContext(
       shareId: shareId,
@@ -1651,8 +1651,12 @@ class EmailService {
     final orderedIds = LinkedHashSet<String>.from(metadataIds);
     if (orderedIds.isEmpty) return const [];
     final resolved = <EmailAttachment>[];
+    final metadataList = await db.getFileMetadataForIds(orderedIds);
+    final metadataById = {
+      for (final metadata in metadataList) metadata.id: metadata,
+    };
     for (final metadataId in orderedIds) {
-      final metadata = await db.getFileMetadata(metadataId);
+      final metadata = metadataById[metadataId];
       final path = metadata?.path;
       if (metadata == null || path == null || path.isEmpty) {
         continue;
@@ -1904,10 +1908,14 @@ class EmailService {
     required XmppDatabase db,
     required Map<String, DeltaContact> contactsByAddress,
   }) async {
+    final addresses = contactsByAddress.keys.toList(growable: false);
+    if (addresses.isEmpty) return;
+    final chats = await db.getChatsByJids(addresses);
+    final chatByJid = {for (final chat in chats) chat.jid: chat};
     for (final entry in contactsByAddress.entries) {
       final address = entry.key;
       final contact = entry.value;
-      final chat = await db.getChat(address);
+      final chat = chatByJid[address];
       if (chat == null) {
         continue;
       }
@@ -2063,10 +2071,8 @@ class EmailService {
       end: end,
       filter: filter,
     );
-    yield _sortMessages(initial);
-    yield* db
-        .watchChatMessages(jid, start: start, end: end, filter: filter)
-        .map(_sortMessages);
+    yield initial;
+    yield* db.watchChatMessages(jid, start: start, end: end, filter: filter);
   }
 
   Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String jid) async* {
@@ -2092,8 +2098,8 @@ class EmailService {
   }) async* {
     await _ensureReady();
     final db = await _databaseBuilder();
-    yield _sortChats(await db.getChats(start: start, end: end));
-    yield* db.watchChats(start: start, end: end).map<List<Chat>>(_sortChats);
+    yield await db.getChats(start: start, end: end);
+    yield* db.watchChats(start: start, end: end);
   }
 
   Stream<Chat?> chatStream(String jid) async* {
@@ -3494,57 +3500,6 @@ class EmailService {
     return localPart.isEmpty ? null : localPart;
   }
 
-  DateTime _messageTimestampOrFallback(Message message) {
-    final timestamp = message.timestamp;
-    if (timestamp != null) {
-      return timestamp;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(
-      _emailMessageTimestampFallbackMillis,
-    );
-  }
-
-  int _compareDeltaIdsDesc(int? left, int? right) {
-    if (left == null && right == null) {
-      return _sortEqual;
-    }
-    if (left == null) {
-      return _sortAfter;
-    }
-    if (right == null) {
-      return _sortBefore;
-    }
-    return right.compareTo(left);
-  }
-
-  int _compareMessagesByTimestampDesc(Message left, Message right) {
-    final DateTime leftTimestamp = _messageTimestampOrFallback(left);
-    final DateTime rightTimestamp = _messageTimestampOrFallback(right);
-    final int timestampComparison = rightTimestamp.compareTo(leftTimestamp);
-    if (timestampComparison != _sortEqual) {
-      return timestampComparison;
-    }
-    final int deltaComparison = _compareDeltaIdsDesc(
-      left.deltaMsgId,
-      right.deltaMsgId,
-    );
-    if (deltaComparison != _sortEqual) {
-      return deltaComparison;
-    }
-    return right.stanzaID.compareTo(left.stanzaID);
-  }
-
-  List<Message> _sortMessages(List<Message> messages) =>
-      List<Message>.of(messages)..sort(_compareMessagesByTimestampDesc);
-
-  List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
-    ..sort((a, b) {
-      if (a.favorited == b.favorited) {
-        return b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp);
-      }
-      return (a.favorited ? 0 : 1) - (b.favorited ? 0 : 1);
-    });
-
   String _normalizeLinkedAccountAddress(String address) =>
       normalizeEmailAddress(address);
 
@@ -4350,28 +4305,22 @@ class EmailService {
   Future<List<DeltaContact>> getContacts({int flags = 0, String? query}) async {
     await _ensureReady();
     final ids = await _transport.getContactIds(flags: flags, query: query);
-    final contacts = <DeltaContact>[];
-    for (final id in ids) {
-      final contact = await _transport.getContact(id);
-      if (contact != null) {
-        contacts.add(contact);
-      }
-    }
-    return contacts;
+    final futures = [
+      for (final id in ids) _transport.getContact(id),
+    ];
+    final results = await Future.wait(futures);
+    return results.whereType<DeltaContact>().toList(growable: false);
   }
 
   /// Gets all blocked contacts from core as a list.
   Future<List<DeltaContact>> getBlockedContacts() async {
     await _ensureReady();
     final ids = await _transport.getBlockedContactIds();
-    final contacts = <DeltaContact>[];
-    for (final id in ids) {
-      final contact = await _transport.getContact(id);
-      if (contact != null) {
-        contacts.add(contact);
-      }
-    }
-    return contacts;
+    final futures = [
+      for (final id in ids) _transport.getContact(id),
+    ];
+    final results = await Future.wait(futures);
+    return results.whereType<DeltaContact>().toList(growable: false);
   }
 }
 

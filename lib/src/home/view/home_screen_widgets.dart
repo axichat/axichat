@@ -314,6 +314,8 @@ class _NexusTabViews extends StatelessWidget {
       listeners: [
         if (context.read<RosterCubit?>() != null)
           BlocListener<RosterCubit, RosterState>(
+            listenWhen: (previous, current) =>
+                previous.actionState != current.actionState,
             listener: (context, state) {
               if (toast == null) return;
               final actionState = state.actionState;

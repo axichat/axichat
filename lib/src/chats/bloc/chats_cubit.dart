@@ -196,22 +196,23 @@ class ChatsCubit extends Cubit<ChatsState> {
     required Set<String> rosterContacts,
     required String searchQuery,
     required bool searchActive,
-    required ChatListFilter searchFilter,
+    required SearchFilterId? searchFilter,
     required SearchSortOrder searchSortOrder,
     required Set<String> selectedJids,
   }) {
     final normalizedQuery =
         searchActive ? searchQuery.trim().toLowerCase() : '';
     bool matchesFilter(Chat chat) {
-      return switch (searchFilter) {
-        ChatListFilter.contacts =>
+      return switch (searchFilter ?? SearchFilterId.all) {
+        SearchFilterId.contacts =>
           !chat.hidden && rosterContacts.contains(chat.jid),
-        ChatListFilter.nonContacts =>
+        SearchFilterId.nonContacts =>
           !chat.hidden && !rosterContacts.contains(chat.jid),
-        ChatListFilter.xmpp => !chat.hidden && chat.transport.isXmpp,
-        ChatListFilter.email => !chat.hidden && chat.transport.isEmail,
-        ChatListFilter.hidden => chat.hidden,
-        ChatListFilter.all => !chat.hidden,
+        SearchFilterId.xmpp => !chat.hidden && chat.transport.isXmpp,
+        SearchFilterId.email => !chat.hidden && chat.transport.isEmail,
+        SearchFilterId.hidden => chat.hidden,
+        SearchFilterId.all => !chat.hidden,
+        SearchFilterId.attachments => !chat.hidden,
       };
     }
 

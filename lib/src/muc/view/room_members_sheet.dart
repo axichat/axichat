@@ -55,7 +55,6 @@ class RoomMembersSheet extends StatelessWidget {
     final theme = context.textTheme;
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final sizing = context.sizing;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final avatarSectionPadding = EdgeInsets.fromLTRB(
       spacing.m,
@@ -396,147 +395,19 @@ class _MemberTile extends StatefulWidget {
 class _MemberTileState extends State<_MemberTile> {
   bool _showActions = false;
 
-  static const double _avatarSize = 40.0;
-
-  late final XmppService _xmppService;
-  Future<StoredAvatar?>? _selfAvatarFuture;
-
   void _toggleActions() => setState(() => _showActions = !_showActions);
 
   void _closeActions() => setState(() => _showActions = false);
 
   @override
-  void initState() {
-    super.initState();
-    _xmppService = context.read<XmppService>();
-    if (widget.isSelf) {
-      _selfAvatarFuture = _xmppService.getOwnAvatar();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _MemberTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.isSelf && widget.isSelf) {
-      _selfAvatarFuture = _xmppService.getOwnAvatar();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final borderColor =
-        widget.isSelf ? colors.primary.withValues(alpha: 0.3) : colors.border;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final avatarKey = _avatarKey(widget.occupant);
-
-    String? resolveAvatarPath({
-      required List<RosterItem>? rosterItems,
-      required List<Chat>? chats,
-      required String? selfAvatarPath,
-    }) {
-      if (widget.isSelf) {
-        final selfPath = selfAvatarPath?.trim();
-        if (selfPath?.isNotEmpty == true) {
-          return selfPath;
-        }
-      }
-
-      final realJid = widget.occupant.realJid;
-      final normalizedBareJid = normalizeAddressdKey(realJid);
-      if (normalizedBareJid == null || normalizedBareJid.isEmpty) {
-        return null;
-      }
-
-      if (rosterItems != null) {
-        for (final item in rosterItems) {
-          final normalizedItem = item.jid.normalizedJidKey;
-          if (normalizedItem != normalizedBareJid) continue;
-          final path = item.avatarPath?.trim();
-          if (path?.isNotEmpty == true) {
-            return path;
-          }
-          break;
-        }
-      }
-
-      if (chats != null) {
-        for (final chat in chats) {
-          final candidateBare = chat.remoteJid.normalizedJidKey;
-          if (candidateBare != normalizedBareJid) continue;
-          final path = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
-          if (path?.isNotEmpty == true) {
-            return path;
-          }
-          break;
-        }
-      }
-
-      return null;
-    }
-
-    Widget avatarFromSources({
-      required List<Chat>? chats,
-      required List<RosterItem>? rosterItems,
-      required StoredAvatar? selfAvatar,
-    }) {
-      final selfAvatarPath = selfAvatar?.path;
-      final avatarPath = resolveAvatarPath(
-        rosterItems: rosterItems,
-        chats: chats,
-        selfAvatarPath: selfAvatarPath,
-      );
-      return AxiAvatar(
-        jid: avatarKey,
-        size: _avatarSize,
-        avatarPath: avatarPath,
-      );
-    }
-
-    Widget avatarBuilder({
-      required List<Chat>? chats,
-      required List<RosterItem>? rosterItems,
-    }) {
-      if (!widget.isSelf) {
-        return avatarFromSources(
-          chats: chats,
-          rosterItems: rosterItems,
-          selfAvatar: null,
-        );
-      }
-
-      final seededAvatarFuture = _selfAvatarFuture;
-      return FutureBuilder<StoredAvatar?>(
-        future: seededAvatarFuture,
-        builder: (context, snapshot) {
-          final stored = snapshot.data;
-          return StreamBuilder<StoredAvatar?>(
-            stream: _xmppService.selfAvatarStream,
-            initialData: stored,
-            builder: (context, streamSnapshot) {
-              final effectiveAvatar = streamSnapshot.data ?? stored;
-              return avatarFromSources(
-                chats: chats,
-                rosterItems: rosterItems,
-                selfAvatar: effectiveAvatar,
-              );
-            },
-          );
-        },
-      );
-    }
-
-    final avatar = BlocBuilder<ChatsCubit, ChatsState>(
-      buildWhen: (previous, current) => previous.items != current.items,
-      builder: (context, chatsState) {
-        final chats = chatsState.items;
-        return BlocBuilder<RosterCubit, RosterState>(
-          buildWhen: (previous, current) => previous.items != current.items,
-          builder: (context, rosterState) {
-            final cachedItems = rosterState.items;
-            return avatarBuilder(chats: chats, rosterItems: cachedItems);
-          },
-        );
-      },
+    final avatar = AxiAvatar(
+      jid: avatarKey,
+      size: sizing.iconButtonSize,
+      avatarPath: widget.avatarPath,
     );
 
     final tile = AxiListTile(
@@ -547,26 +418,24 @@ class _MemberTileState extends State<_MemberTile> {
       selected: widget.isSelf,
       paintSurface: true,
       tapBounce: true,
-      minTileHeight: 56,
-      surfaceColor: colors.card,
-      surfaceShape: SquircleBorder(
-        cornerRadius: 14,
-        side: BorderSide(color: borderColor, width: 1.2),
-      ),
-      contentPadding: const EdgeInsetsDirectional.fromSTEB(14, 8, 14, 8),
     );
 
     final actionsPanel = widget.actions.isEmpty
         ? const SizedBox.shrink()
         : AnimatedCrossFade(
-            duration: baseAnimationDuration,
+            duration: widget.animationDuration,
             sizeCurve: Curves.easeInOutCubic,
             crossFadeState: _showActions
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
+              padding: EdgeInsetsDirectional.fromSTEB(
+                spacing.s,
+                spacing.xs,
+                spacing.s,
+                spacing.xs,
+              ),
               child: _MemberActionPanel(
                 occupantId: widget.occupant.occupantId,
                 actions: widget.actions,
@@ -741,10 +610,10 @@ class RoomAvatarEditorSheet extends StatefulWidget {
 
 class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
   Future<void> _handleSave() async {
-    final cubit = context.read<AvatarEditorCubit>();
-    if (cubit.state.isBusy) return;
-    cubit.pauseCarousel();
-    final payload = await cubit.buildSelectedAvatarPayload();
+    if (context.read<AvatarEditorCubit>().state.isBusy) return;
+    context.read<AvatarEditorCubit>().pauseCarousel();
+    final payload =
+        await context.read<AvatarEditorCubit>().buildSelectedAvatarPayload();
     if (payload == null) return;
     widget.onSave(payload);
   }
@@ -753,7 +622,21 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
   Widget build(BuildContext context) {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final headerPadding = EdgeInsets.fromLTRB(
+      spacing.m,
+      spacing.m,
+      spacing.m,
+      spacing.s,
+    );
+    final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);
+    final actionsPadding = EdgeInsets.fromLTRB(
+      spacing.m,
+      0,
+      spacing.m,
+      spacing.m,
+    );
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
         final errorText = avatarState.errorType?.resolve(l10n);
@@ -764,15 +647,17 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
         final Widget actions = Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            ShadButton.outline(
+            AxiButton.outline(
+              size: AxiButtonSize.sm,
               onPressed: widget.onCancel,
               child: Text(l10n.commonCancel),
-            ).withTapBounce(),
-            const SizedBox(width: _actionsSpacing),
-            ShadButton(
+            ),
+            SizedBox(width: spacing.s),
+            AxiButton.primary(
+              size: AxiButtonSize.sm,
               onPressed: saveEnabled ? _handleSave : null,
               child: Text(l10n.avatarSaveAvatar),
-            ).withTapBounce(enabled: saveEnabled),
+            ),
           ],
         );
         return SafeArea(
@@ -790,7 +675,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: _headerPadding,
+                          padding: headerPadding,
                           child: Row(
                             children: [
                               Expanded(
@@ -808,7 +693,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                           ),
                         ),
                         Padding(
-                          padding: _contentPadding,
+                          padding: contentPadding,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -856,7 +741,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                 descriptionText: l10n.mucAvatarMenuDescription,
                               ),
                               if (errorText != null) ...[
-                                const SizedBox(height: _errorSpacing),
+                                SizedBox(height: spacing.s),
                                 Text(
                                   errorText,
                                   style: context.textTheme.small.copyWith(
@@ -864,7 +749,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: _panelSpacing),
+                              SizedBox(height: spacing.s),
                             ],
                           ),
                         ),
@@ -876,7 +761,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                   top: false,
                   bottom: true,
                   child: Padding(
-                    padding: _actionsPadding,
+                    padding: actionsPadding,
                     child: actions,
                   ),
                 ),
@@ -903,10 +788,6 @@ class _InviteChipsSheet extends StatefulWidget {
 }
 
 class _InviteChipsSheetState extends State<_InviteChipsSheet> {
-  static const double _inviteSheetSectionSpacing = 12.0;
-  static const EdgeInsets _inviteSheetContentPadding =
-      EdgeInsets.fromLTRB(16, 0, 16, 16);
-
   final ScrollController _scrollController = ScrollController();
   late List<ComposerRecipient> _recipients;
 
@@ -925,14 +806,23 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final contentPadding = EdgeInsets.fromLTRB(
+      spacing.m,
+      0,
+      spacing.m,
+      spacing.m,
+    );
     final Widget actions = Row(
       children: [
-        ShadButton.outline(
+        AxiButton.outline(
+          size: AxiButtonSize.sm,
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.commonCancel),
-        ).withTapBounce(),
-        const SizedBox(width: 8),
-        ShadButton(
+        ),
+        SizedBox(width: spacing.s),
+        AxiButton.primary(
+          size: AxiButtonSize.sm,
           onPressed: _recipients.isEmpty
               ? null
               : () {
@@ -948,7 +838,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                   Navigator.of(context).pop(invitees);
                 },
           child: Text(l10n.mucSendInvites),
-        ).withTapBounce(),
+        ),
       ],
     );
     return AxiSheetScaffold(
@@ -961,7 +851,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         thumbVisibility: true,
         child: ListView(
           controller: _scrollController,
-          padding: _inviteSheetContentPadding,
+          padding: contentPadding,
           children: [
             RecipientChipsBar(
               recipients: _recipients,
@@ -972,11 +862,11 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               onRecipientToggled: _toggleRecipient,
               collapsedByDefault: false,
             ),
-            const SizedBox(height: _inviteSheetSectionSpacing),
+            SizedBox(height: spacing.s),
           ],
         ),
       ),
-      footer: Padding(padding: _inviteSheetContentPadding, child: actions),
+      footer: Padding(padding: contentPadding, child: actions),
     );
   }
 

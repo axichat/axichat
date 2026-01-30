@@ -15,12 +15,14 @@ List<HomeSearchFilter> chatsSearchFilters(AppLocalizations l10n) => [
         id: SearchFilterId.nonContacts,
         label: l10n.chatsFilterNonContacts,
       ),
-      HomeSearchFilter(id: SearchFilterId.xmpp, label: l10n.chatsFilterXmppOnly),
+      HomeSearchFilter(
+          id: SearchFilterId.xmpp, label: l10n.chatsFilterXmppOnly),
       HomeSearchFilter(
         id: SearchFilterId.email,
         label: l10n.chatsFilterEmailOnly,
       ),
-      HomeSearchFilter(id: SearchFilterId.hidden, label: l10n.chatsFilterHidden),
+      HomeSearchFilter(
+          id: SearchFilterId.hidden, label: l10n.chatsFilterHidden),
     ];
 
 List<HomeSearchFilter> spamSearchFilters(AppLocalizations l10n) => [

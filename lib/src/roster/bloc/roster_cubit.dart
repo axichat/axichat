@@ -251,7 +251,8 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   ) {
     Iterable<Invite> filtered = invites;
     if (criteria.query.isNotEmpty) {
-      filtered = filtered.where((invite) => _matchesInviteQuery(invite, criteria));
+      filtered =
+          filtered.where((invite) => _matchesInviteQuery(invite, criteria));
     }
     final sorted = filtered.toList();
     sorted.sort(

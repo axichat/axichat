@@ -74,24 +74,16 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 part 'home/view/home_screen_widgets.dart';
 
 List<HomeSearchFilter> _blocklistSearchFilters(AppLocalizations l10n) => [
-      HomeSearchFilter(id: 'all', label: l10n.blocklistFilterAll),
+      HomeSearchFilter(id: SearchFilterId.all, label: l10n.blocklistFilterAll),
     ];
 
 List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
-      HomeSearchFilter(id: 'all', label: l10n.draftsFilterAll),
-      HomeSearchFilter(id: 'attachments', label: l10n.draftsFilterAttachments),
+      HomeSearchFilter(id: SearchFilterId.all, label: l10n.draftsFilterAll),
+      HomeSearchFilter(
+        id: SearchFilterId.attachments,
+        label: l10n.draftsFilterAttachments,
+      ),
     ];
-
-const double _secondaryPaneGutter = 0.0;
-const double _homeHeaderActionSpacing = 4.0;
-const double _railFooterSpacing = 12.0;
-const double _railFooterItemSpacing = 12.0;
-const double _railFooterIconSize = 20.0;
-const EdgeInsets _railFooterItemPadding = EdgeInsets.symmetric(
-  horizontal: 12,
-  vertical: 12,
-);
-const String _homeSyncTooltip = 'Sync';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -106,8 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
   bool Function(KeyEvent event)? _globalShortcutHandler;
-  ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
-  CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
 
   @override
   void initState() {
@@ -130,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void deactivate() {
-    context.read<XmppService?>()?.clearChatCalendarSyncCallback();
+    context.read<CalendarBloc?>()?.clearChatCalendarSyncHandler();
     super.deactivate();
   }
 
@@ -264,20 +254,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final storageManager = context.read<CalendarStorageManager>();
-    return ListenableBuilder(
-      listenable: storageManager,
-      builder: (context, _) => _buildContent(context, storageManager),
+    final storageManager = context.watch<CalendarStorageManager>();
+    return _HomeContent(
+      storageManager: storageManager,
+      shortcutFocusNode: _shortcutFocusNode,
+      railCollapsed: _railCollapsed,
+      onToggleNavRail: () {
+        setState(() {
+          _railCollapsed = !_railCollapsed;
+        });
+      },
+      onRailCollapsedChanged: (value) {
+        setState(() {
+          _railCollapsed = value;
+        });
+      },
+      onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
+      onHomeKeyEvent: _handleHomeKeyEvent,
     );
   }
+}
 
-  Widget _buildContent(
-    BuildContext context,
-    CalendarStorageManager storageManager,
-  ) {
+class _HomeContent extends StatelessWidget {
+  const _HomeContent({
+    required this.storageManager,
+    required this.shortcutFocusNode,
+    required this.railCollapsed,
+    required this.onToggleNavRail,
+    required this.onRailCollapsedChanged,
+    required this.onSyncHomeHistoryEntries,
+    required this.onHomeKeyEvent,
+  });
+
+  final CalendarStorageManager storageManager;
+  final FocusNode shortcutFocusNode;
+  final bool railCollapsed;
+  final VoidCallback onToggleNavRail;
+  final ValueChanged<bool> onRailCollapsedChanged;
+  final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
+  final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    final xmppService = context.read<XmppService>();
+    final xmppService = context.watch<XmppService>();
     // ignore: unnecessary_type_check
     final isRoster = xmppService is RosterService;
     // ignore: unnecessary_type_check
@@ -290,53 +311,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
-    final chatCalendarCoordinator = _chatCalendarCoordinator ??
-        (calendarStorage == null
-            ? null
-            : ChatCalendarSyncCoordinator(
-                storage: ChatCalendarStorage(storage: calendarStorage),
-                sendMessage: ({
-                  required String jid,
-                  required CalendarSyncOutbound outbound,
-                  required m.ChatType chatType,
-                }) async {
-                  await xmppService.sendCalendarSyncMessage(
-                    jid: jid,
-                    outbound: outbound,
-                    chatType: chatType,
-                  );
-                },
-                sendSnapshotFile: xmppService.uploadCalendarSnapshot,
-              ));
-    if (_chatCalendarCoordinator == null && chatCalendarCoordinator != null) {
-      _chatCalendarCoordinator = chatCalendarCoordinator;
-    }
-    if (chatCalendarCoordinator != null) {
-      xmppService.setChatCalendarSyncCallback(
-        chatCalendarCoordinator.handleInbound,
-      );
-    }
-    final availabilityShareCoordinator = _availabilityShareCoordinator ??
-        (calendarStorage == null
-            ? null
-            : CalendarAvailabilityShareCoordinator(
-                store: CalendarAvailabilityShareStore(),
-                sendMessage: ({
-                  required String jid,
-                  required CalendarAvailabilityMessage message,
-                  required m.ChatType chatType,
-                }) async {
-                  await xmppService.sendAvailabilityMessage(
-                    jid: jid,
-                    message: message,
-                    chatType: chatType,
-                  );
-                },
-              ));
-    if (_availabilityShareCoordinator == null &&
-        availabilityShareCoordinator != null) {
-      _availabilityShareCoordinator = availabilityShareCoordinator;
-    }
     final chatsFilters = chatsSearchFilters(l10n);
     final spamFilters = spamSearchFilters(l10n);
     final draftsFilters = _draftsSearchFilters(l10n);
@@ -383,20 +357,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
-    final initialTabFilters = <HomeTab, String?>{
+    final initialTabFilters = <HomeTab, SearchFilterId?>{
       for (final entry in tabs)
         if (entry.searchFilters.isNotEmpty)
           entry.id: entry.searchFilters.first.id,
     };
     final Widget mainContent = Builder(
       builder: (context) {
-        Widget constrainSecondary(Widget child) =>
-            Align(alignment: Alignment.topLeft, child: child);
         return BlocListener<ChatsCubit, ChatsState>(
           listenWhen: (previous, current) =>
               previous.openStack != current.openStack ||
               previous.openCalendar != current.openCalendar,
-          listener: (context, state) => _syncHomeHistoryEntries(state),
+          listener: (context, state) => onSyncHomeHistoryEntries(state),
           child: KeyboardPopScope(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -419,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   DefaultTabController.maybeOf(context)
                                           ?.index ??
                                       0,
-                              collapsed: _railCollapsed,
+                              collapsed: railCollapsed,
                               onDestinationSelected: (index) {
                                 final controller =
                                     DefaultTabController.maybeOf(context);
@@ -431,11 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               onCalendarSelected: () {
                                 context.read<ChatsCubit?>()?.toggleCalendar();
                               },
-                              onCollapsedChanged: (collapsed) {
-                                setState(() {
-                                  _railCollapsed = collapsed;
-                                });
-                              },
+                              onCollapsedChanged: onRailCollapsedChanged,
                             )
                           : null;
 
@@ -495,15 +463,16 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                               child: const Chat(),
                             );
-                      final Widget chatPane =
-                          constrainSecondary(chatPaneContent);
+                      final Widget chatPane = Align(
+                        alignment: Alignment.topLeft,
+                        child: chatPaneContent,
+                      );
 
                       Widget chatLayout({required bool showChatCalendar}) {
-                        final EdgeInsets secondaryPanePadding = showChatCalendar
-                            ? EdgeInsets.zero
-                            : const EdgeInsets.only(
-                                left: _secondaryPaneGutter,
-                              );
+                        final spacing = context.spacing;
+                        final zero = spacing.xxs - spacing.xxs;
+                        final EdgeInsets secondaryPanePadding =
+                            EdgeInsets.only(left: zero);
                         final Widget content = Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -523,12 +492,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   navPlacement: navPlacement,
                                   showNavigationRail:
                                       navPlacement != NavPlacement.rail,
-                                  navRailCollapsed: _railCollapsed,
-                                  onToggleNavRail: () {
-                                    setState(() {
-                                      _railCollapsed = !_railCollapsed;
-                                    });
-                                  },
+                                  navRailCollapsed: railCollapsed,
+                                  onToggleNavRail: onToggleNavRail,
                                 ),
                                 secondaryChild: chatPane,
                               ),
@@ -663,7 +628,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         });
                       return manager;
                     },
-                    availabilityCoordinator: availabilityShareCoordinator,
                     storage: storage,
                     onDispose: () {
                       xmppService
@@ -690,25 +654,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   EmailSyncCubit(emailService: context.read<EmailService>()),
             ),
           ],
-          child: EmailForwardingWelcomeGate(child: calendarAwareContent),
+          child: _HomeCoordinatorBridge(
+            storage: calendarStorage,
+            child: EmailForwardingWelcomeGate(child: calendarAwareContent),
+          ),
         ),
       ),
     );
-    Widget wrappedScaffold = scaffold;
-    if (chatCalendarCoordinator != null) {
-      wrappedScaffold = RepositoryProvider<ChatCalendarSyncCoordinator>.value(
-        value: chatCalendarCoordinator,
-        child: wrappedScaffold,
-      );
-    }
-    if (availabilityShareCoordinator != null) {
-      wrappedScaffold =
-          RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
-        value: availabilityShareCoordinator,
-        child: wrappedScaffold,
-      );
-    }
-
     final actionLayer = BlocProvider(
       create: (context) {
         final bloc = AccessibilityActionBloc(
@@ -722,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Builder(
         builder: (context) {
-          final platform = Theme.of(context).platform;
+          final platform = EnvScope.of(context).platform;
           final isApple = platform == TargetPlatform.macOS ||
               platform == TargetPlatform.iOS;
           final findActivators = findActionActivators(platform);
@@ -743,9 +695,9 @@ class _HomeScreenState extends State<HomeScreen> {
             shift: true,
           );
           return Focus(
-            focusNode: _shortcutFocusNode,
+            focusNode: shortcutFocusNode,
             autofocus: true,
-            onKeyEvent: _handleHomeKeyEvent,
+            onKeyEvent: onHomeKeyEvent,
             child: Shortcuts(
               shortcuts: {
                 composeActivator: const ComposeIntent(),
@@ -789,7 +741,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 },
                 child: Stack(
-                  children: [wrappedScaffold, const AccessibilityActionMenu()],
+                  children: [scaffold, const AccessibilityActionMenu()],
                 ),
               ),
             ),
