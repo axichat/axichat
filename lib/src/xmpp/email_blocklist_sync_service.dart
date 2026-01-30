@@ -49,6 +49,9 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   EmailBlocklistPubSubManager? get _emailBlocklistManager =>
       _connection.getManager<EmailBlocklistPubSubManager>();
 
+  String? _normalizeEmailBlocklistAddress(String? address) =>
+      AddressTools.normalizedKey(address);
+
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
@@ -124,8 +127,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       final remoteItems = snapshot.items;
       final remoteByAddress = <String, EmailBlocklistSyncPayload>{};
       for (final item in remoteItems) {
-        final normalized = item.address.trim().toLowerCase();
-        if (normalized.isEmpty) {
+        final normalized = _normalizeEmailBlocklistAddress(item.address);
+        if (normalized == null || normalized.isEmpty) {
           continue;
         }
         remoteByAddress[normalized] = item;
@@ -138,8 +141,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       );
       final localByAddress = <String, EmailBlocklistEntry>{};
       for (final item in localItems) {
-        final normalized = item.address.trim().toLowerCase();
-        if (normalized.isEmpty) {
+        final normalized = _normalizeEmailBlocklistAddress(item.address);
+        if (normalized == null || normalized.isEmpty) {
           continue;
         }
         localByAddress[normalized] = item;
@@ -232,8 +235,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     required String address,
     required bool blocked,
   }) async {
-    final normalized = address.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeEmailBlocklistAddress(address);
+    if (normalized == null || normalized.isEmpty) {
       return;
     }
     final updatedAt = DateTime.timestamp().toUtc();

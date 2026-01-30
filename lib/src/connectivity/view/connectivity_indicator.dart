@@ -13,16 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _connectivityIndicatorIconSize = 20.0;
-const double _connectivityIndicatorSpacing = 8.0;
-const EdgeInsets _connectivityIndicatorPadding = EdgeInsets.all(4.0);
-const Curve _connectivityIndicatorInCurve = Curves.easeOutCubic;
-const Curve _connectivityIndicatorOutCurve = Curves.easeInCubic;
-const Offset _connectivityIndicatorSlideOffset = Offset(0.0, -0.08);
-const Duration _connectivityConnectedSuccessDuration = Duration(
-  milliseconds: 900,
-);
-
 class ConnectivityIndicator extends StatefulWidget {
   const ConnectivityIndicator({super.key});
 
@@ -32,12 +22,20 @@ class ConnectivityIndicator extends StatefulWidget {
 
 class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
   Timer? _connectedSuccessTimer;
-  late ConnectivityState _connectivityState;
+  ConnectivityState? _connectivityState;
   bool _showConnectedSuccess = false;
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_connectivityState != null) {
+      return;
+    }
     if (kEnableDemoChats) {
       _connectivityState = const ConnectivityNotConnected();
       return;
@@ -53,6 +51,10 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
   void _handleConnectivityState(ConnectivityState state) {
     final previous = _connectivityState;
+    if (previous == null) {
+      _connectivityState = state;
+      return;
+    }
     _connectedSuccessTimer?.cancel();
     _connectedSuccessTimer = null;
 
@@ -61,7 +63,7 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
     if (nextShowConnectedSuccess) {
       _connectedSuccessTimer = Timer(
-        _connectivityConnectedSuccessDuration,
+        context.motion.statusBannerSuccessDuration,
         () {
           if (!mounted) return;
           if (_connectivityState is! ConnectivityConnected) return;
@@ -89,15 +91,20 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
       return const SizedBox.shrink();
     }
 
+    final connectivityState = _connectivityState;
+    if (connectivityState == null) {
+      return const SizedBox.shrink();
+    }
+
     final colors = context.colorScheme;
-    final brightness = Theme.of(context).brightness;
+    final brightness = ShadTheme.of(context).brightness;
     final darkForeground =
         brightness == Brightness.dark ? colors.background : colors.foreground;
     final l10n = context.l10n;
-    final presentation = switch (_connectivityState) {
+    final presentation = switch (connectivityState) {
       ConnectivityConnected() => _ConnectivityIndicatorPresentation(
           show: _showConnectedSuccess,
-          color: axiGreen,
+          color: colors.green,
           foregroundColor: darkForeground,
           iconData: LucideIcons.cloud,
           text: l10n.connectivityStatusConnected,
@@ -111,7 +118,7 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
         ),
       ConnectivityNotConnected() => _ConnectivityIndicatorPresentation(
           show: true,
-          color: axiWarning,
+          color: colors.warning,
           foregroundColor: darkForeground,
           iconData: LucideIcons.cloudOff,
           text: l10n.connectivityStatusNotConnected,
@@ -163,7 +170,7 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
     required this.iconData,
     required this.text,
     this.show = false,
-    this.duration = const Duration(milliseconds: 300),
+    required this.duration,
   });
 
   final Color color;
@@ -175,6 +182,7 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final motion = context.motion;
     final Widget child = show
         ? _ConnectivityIndicatorBanner(
             key: ValueKey<String>(text),
@@ -186,11 +194,11 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
         : const SizedBox.shrink(key: ValueKey<String>('hidden'));
     return AnimatedSwitcher(
       duration: duration,
-      switchInCurve: _connectivityIndicatorInCurve,
-      switchOutCurve: _connectivityIndicatorOutCurve,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
         final slideAnimation = Tween<Offset>(
-          begin: _connectivityIndicatorSlideOffset,
+          begin: motion.statusBannerSlideOffset,
           end: Offset.zero,
         ).animate(animation);
         return SizeTransition(
@@ -226,6 +234,9 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final textStyle = context.textTheme.p.copyWith(color: foregroundColor);
     return ColoredBox(
       color: color,
       child: SizedBox(
@@ -233,19 +244,19 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: _connectivityIndicatorPadding,
+            padding: EdgeInsets.all(spacing.xs),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   iconData,
                   color: foregroundColor,
-                  size: _connectivityIndicatorIconSize,
+                  size: sizing.iconButtonIconSize,
                 ),
-                const SizedBox.square(dimension: _connectivityIndicatorSpacing),
+                SizedBox.square(dimension: spacing.s),
                 Text(
                   text,
-                  style: TextStyle(color: foregroundColor),
+                  style: textStyle,
                 ),
               ],
             ),
