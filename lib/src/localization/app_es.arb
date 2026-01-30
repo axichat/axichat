@@ -121,6 +121,7 @@
   "chatComposerEmailAttachmentRecipientRequired": "Agrega un destinatario de correo para enviar archivos adjuntos.",
   "chatComposerDraftRecipientsUnavailable": "No se pudieron resolver los destinatarios de este borrador.",
   "chatComposerSendFailed": "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+  "chatComposerAttachmentBundleFailed": "No se pudieron agrupar los archivos adjuntos. Inténtalo de nuevo.",
   "chatEmailOfflineRetryMessage": "El correo está sin conexión. Reintenta cuando la sincronización se recupere.",
   "chatEmailOfflineDraftsFallback": "El correo está sin conexión. Los mensajes se guardarán en Borradores hasta que vuelva la conexión.",
   "chatEmailSyncRefreshing": "La sincronización de correo se está actualizando...",

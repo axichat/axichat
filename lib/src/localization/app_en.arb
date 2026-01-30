@@ -171,6 +171,7 @@
   "chatComposerEmailAttachmentRecipientRequired": "Add an email recipient to send attachments.",
   "chatComposerDraftRecipientsUnavailable": "Unable to resolve recipients for this draft.",
   "chatComposerSendFailed": "Unable to send message. Please try again.",
+  "chatComposerAttachmentBundleFailed": "Unable to bundle attachments. Please try again.",
   "chatEmailOfflineRetryMessage": "Email is offline. Retry once sync recovers.",
   "chatEmailOfflineDraftsFallback": "Email is offline. Messages will be saved to Drafts until the connection returns.",
   "chatEmailSyncRefreshing": "Email sync is refreshing...",

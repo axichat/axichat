@@ -223,8 +223,8 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
 
   Color _getTimeColor(BuildContext context) {
     if (widget.task.isCompleted) return calendarPrimaryColor;
-    if (_isOverdue()) return Colors.red;
-    if (_isDueSoon()) return Colors.orange;
+    if (_isOverdue()) return calendarDangerColor;
+    if (_isDueSoon()) return calendarWarningColor;
     return calendarTimeLabelColor;
   }
 
@@ -384,11 +384,27 @@ class _MediumTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color textColor = Colors.white;
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    final sizing = context.sizing;
     final Color backgroundColor =
         task.isCompleted ? taskCompletedColor : taskColor;
+    final Brightness textBrightness =
+        ThemeData.estimateBrightnessForColor(backgroundColor);
+    final Color textColor = textBrightness == Brightness.dark
+        ? colors.background
+        : colors.foreground;
     final Color progressTrack = textColor.withValues(alpha: 0.25);
     final bool showActions = onEdit != null || onDelete != null;
+    final TextStyle titleStyle = textTheme.p.copyWith(
+      color: textColor,
+      fontWeight: FontWeight.w600,
+      decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+    );
+    final TextStyle timeStyle = textTheme.small.copyWith(
+      color: textColor.withValues(alpha: 0.9),
+      fontWeight: timeFontWeight ?? textTheme.small.fontWeight,
+    );
     return TaskTileSurface(
       margin: margin,
       decoration: BoxDecoration(
@@ -409,13 +425,7 @@ class _MediumTaskTile extends StatelessWidget {
                     task.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: textColor,
-                      decoration:
-                          task.isCompleted ? TextDecoration.lineThrough : null,
-                    ),
+                    style: titleStyle,
                   ),
                 ),
                 const SizedBox(width: calendarGutterSm),
@@ -440,17 +450,13 @@ class _MediumTaskTile extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.access_time,
-                    size: 12,
+                    size: sizing.menuItemIconSize,
                     color: textColor.withValues(alpha: 0.8),
                   ),
                   const SizedBox(width: calendarInsetMd),
                   Text(
                     timeLabel!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: textColor.withValues(alpha: 0.9),
-                      fontWeight: timeFontWeight,
-                    ),
+                    style: timeStyle,
                   ),
                   if (showActions) ...[
                     const Spacer(),

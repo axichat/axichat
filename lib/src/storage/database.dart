@@ -136,6 +136,12 @@ abstract interface class XmppDatabase implements Database {
     String? chatJid,
   });
 
+  Future<List<Message>> getMessagesByDeltaIds(
+    Iterable<int> deltaMsgIds, {
+    int? deltaAccountId,
+    String? chatJid,
+  });
+
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
 
   Stream<List<Reaction>> watchReactionsForChat(String jid);
@@ -1363,9 +1369,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) =>
-      normalizeAddressdKey(address) ?? address.trim().toLowerCase();
+      normalizedAddressKey(address) ?? address.trim().toLowerCase();
   String? _normalizeBlocklistJid(String jid) {
-    final normalized = normalizeAddressdKey(jid);
+    final normalized = normalizedAddressKey(jid);
     if (normalized != null && normalized.isNotEmpty) {
       return normalized;
     }
@@ -1918,6 +1924,29 @@ WHERE delta_chat_id IS NOT NULL
       query.where((tbl) => tbl.chatJid.equals(chatJid));
     }
     return query.getSingleOrNull();
+  }
+
+  @override
+  Future<List<Message>> getMessagesByDeltaIds(
+    Iterable<int> deltaMsgIds, {
+    int? deltaAccountId,
+    String? chatJid,
+  }) async {
+    final normalized = deltaMsgIds.where((id) => id > 0).toSet().toList(
+          growable: false,
+        );
+    if (normalized.isEmpty) {
+      return const <Message>[];
+    }
+    final query = select(messages)
+      ..where((tbl) => tbl.deltaMsgId.isIn(normalized));
+    if (deltaAccountId != null) {
+      query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
+    }
+    if (chatJid != null) {
+      query.where((tbl) => tbl.chatJid.equals(chatJid));
+    }
+    return query.get();
   }
 
   @override
@@ -2516,12 +2545,12 @@ WHERE jid = ?
   }) async {
     const String sqlPlaceholderToken = '?';
     const String sqlPlaceholderSeparator = ', ';
-    final normalizedAddress = normalizeAddressdKey(resolvedAddress);
+    final normalizedAddress = normalizedAddressKey(resolvedAddress);
     if (normalizedAddress == null || normalizedAddress.isEmpty) {
       return;
     }
     final normalizedPlaceholders = placeholderJids
-        .map(normalizeAddressdKey)
+        .map(normalizedAddressKey)
         .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
@@ -2568,7 +2597,7 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     const String deltaKeySeparator = '|';
     final normalizedPlaceholders = placeholderJids
-        .map(normalizeAddressdKey)
+        .map(normalizedAddressKey)
         .whereType<String>()
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
@@ -2620,7 +2649,7 @@ WHERE email_from_address IN ($placeholderClause)
       final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
       final candidates = messagesByKey[key] ?? const <Message>[];
       final hasNonPlaceholder = candidates.any((candidate) {
-        final sender = normalizeAddressdKey(candidate.senderJid) ?? '';
+        final sender = normalizedAddressKey(candidate.senderJid) ?? '';
         return !normalizedPlaceholders.contains(sender);
       });
       if (hasNonPlaceholder) {

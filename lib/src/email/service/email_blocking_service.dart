@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
@@ -36,7 +37,7 @@ class EmailBlockingService {
   }
 
   Future<void> block(String address) async {
-    final normalized = normalizeAddressdKey(address);
+    final normalized = normalizedAddressKey(address);
     if (normalized == null || normalized.isEmpty) return;
     final db = await _db;
     await db.addEmailBlock(normalized);
@@ -45,7 +46,7 @@ class EmailBlockingService {
   }
 
   Future<void> unblock(String address) async {
-    final normalized = normalizeAddressdKey(address);
+    final normalized = normalizedAddressKey(address);
     if (normalized == null || normalized.isEmpty) return;
     final db = await _db;
     await db.removeEmailBlock(normalized);
@@ -54,7 +55,7 @@ class EmailBlockingService {
   }
 
   Future<bool> isBlocked(String address) async {
-    final normalized = normalizeAddressdKey(address);
+    final normalized = normalizedAddressKey(address);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }

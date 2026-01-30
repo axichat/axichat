@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double chipsBarHeight = 36.0;
 const Duration chipsBarAnimationDuration = Duration(milliseconds: 360);
@@ -36,22 +38,21 @@ const double chipsBarCountBadgeFontSize = 12.0;
 const double chipsBarCountBadgeLetterSpacing = 0.4;
 
 TextStyle chipsBarHeaderTextStyle(BuildContext context) {
-  final TextStyle? base = Theme.of(context).textTheme.labelSmall;
-  return (base ?? const TextStyle()).copyWith(
+  final textTheme = context.textTheme;
+  final colors = context.colorScheme;
+  return textTheme.small.copyWith(
     fontSize: chipsBarHeaderFontSize,
-    fontWeight: FontWeight.w600,
-    color: Theme.of(
-      context,
-    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+    color: colors.mutedForeground.withValues(alpha: 0.9),
     letterSpacing: chipsBarHeaderLetterSpacing,
   );
 }
 
-Color chipsBarBackground(ColorScheme colors) {
-  final overlay = colors.brightness == Brightness.dark
-      ? Colors.white.withValues(alpha: chipsBarDarkOverlayOpacity)
+Color chipsBarBackground(BuildContext context, ShadColorScheme colors) {
+  final brightness = context.brightness;
+  final overlay = brightness == Brightness.dark
+      ? colors.foreground.withValues(alpha: chipsBarDarkOverlayOpacity)
       : colors.primary.withValues(alpha: chipsBarLightOverlayOpacity);
-  return Color.alphaBlend(overlay, colors.surfaceContainerHigh);
+  return Color.alphaBlend(overlay, colors.card);
 }
 
 class ChipsBarSurface extends StatelessWidget {
@@ -76,10 +77,10 @@ class ChipsBarSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final Color resolvedBackground =
-        backgroundColor ?? chipsBarBackground(Theme.of(context).colorScheme);
-    final BorderSide resolvedBorder =
-        borderSide ?? BorderSide(color: Theme.of(context).colorScheme.outline);
+        backgroundColor ?? chipsBarBackground(context, colors);
+    final BorderSide resolvedBorder = borderSide ?? context.borderSide;
     final Border? border =
         includeTopBorder ? Border(top: resolvedBorder) : null;
     return AnimatedContainer(
@@ -104,14 +105,15 @@ class ChipsBarCountBadge extends StatelessWidget {
 
   final int count;
   final bool expanded;
-  final ColorScheme colors;
+  final ShadColorScheme colors;
   final Duration duration;
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
     final background =
         expanded ? colors.primary : colors.primary.withValues(alpha: 0.09);
-    final foreground = expanded ? colors.onPrimary : colors.primary;
+    final foreground = expanded ? colors.primaryForeground : colors.primary;
     return AnimatedContainer(
       duration: duration,
       padding: chipsBarCountBadgePadding,
@@ -121,9 +123,8 @@ class ChipsBarCountBadge extends StatelessWidget {
       ),
       child: Text(
         '$count',
-        style: TextStyle(
+        style: textTheme.small.copyWith(
           fontSize: chipsBarCountBadgeFontSize,
-          fontWeight: FontWeight.w600,
           color: foreground,
           letterSpacing: chipsBarCountBadgeLetterSpacing,
         ),

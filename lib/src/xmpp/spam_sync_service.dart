@@ -42,7 +42,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   SpamPubSubManager? get _spamManager =>
       _connection.getManager<SpamPubSubManager>();
 
-  String? _normalizeSpamJid(String? jid) => normalizeAddressdKey(jid);
+  String? _normalizeSpamJid(String? jid) => normalizedAddressKey(jid);
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {

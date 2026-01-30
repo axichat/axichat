@@ -848,6 +848,8 @@ extension ThemeExtension on BuildContext {
 
   ShadTextTheme get textTheme => ShadTheme.of(this).textTheme;
 
+  Brightness get brightness => ShadTheme.of(this).brightness;
+
   IconThemeData get iconTheme => IconTheme.of(this);
 
   BorderRadius get radius => ShadTheme.of(this).radius;

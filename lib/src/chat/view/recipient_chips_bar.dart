@@ -14,29 +14,10 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
-const Duration _chipMotionDuration = Duration(milliseconds: 320);
-const Curve _chipMotionCurve = Curves.easeInOutCubic;
-const int _maxAutocompleteSuggestions = 8;
-const double _suggestionTileHeight = 56;
-const double _suggestionMaxHeight = 320;
-const double _chipAvatarSize = 20.0;
-const double _chipStatusBadgeSize = 12.0;
-const double _chipStatusBadgeBorderWidth = 1.5;
-const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
-  4,
-  0,
-  8,
-  0,
-);
-const EdgeInsets _recipientChipLabelPadding = EdgeInsets.symmetric(
-  horizontal: 2,
-);
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -50,7 +31,7 @@ class RecipientChipsBar extends StatefulWidget {
     this.collapsedByDefault = false,
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
-    this.horizontalPadding = 16,
+    this.horizontalPadding = chipsBarHorizontalPadding,
     this.visibilityLabel,
     this.tapRegionGroup,
     this.allowAddressTargets = true,
@@ -85,7 +66,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final _focusNode = FocusNode();
   StreamSubscription<List<String>>? _recipientSuggestionSubscription;
   List<String> _databaseSuggestionAddresses = const [];
-  XmppService? _suggestionService;
   bool _expanded = false;
   late bool _barCollapsed;
   bool _headerFocused = false;
@@ -125,18 +105,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final service = context.read<XmppService>();
-    if (_suggestionService != service) {
-      _suggestionService = service;
-      _recipientSuggestionSubscription?.cancel();
-      _recipientSuggestionSubscription =
-          service.recipientAddressSuggestionsStream().listen((addresses) {
-        if (!mounted) return;
-        if (listEquals(addresses, _databaseSuggestionAddresses)) return;
-        setState(() => _databaseSuggestionAddresses = addresses);
-      });
-    }
-    _updateOwnJid(service.myJid);
+    _recipientSuggestionSubscription?.cancel();
+    _recipientSuggestionSubscription = context
+        .read<ChatBloc>()
+        .recipientAddressSuggestionsStream()
+        .listen((addresses) {
+      if (!mounted) return;
+      if (listEquals(addresses, _databaseSuggestionAddresses)) return;
+      setState(() => _databaseSuggestionAddresses = addresses);
+    });
+    _updateOwnJid(context.read<ChatBloc>().selfJid);
   }
 
   void _updateOwnJid(String? jid) {
@@ -174,8 +152,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final l10n = context.l10n;
     final recipients = widget.recipients;
     final rosterItems =
@@ -225,7 +201,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ),
     ];
 
-    final barBackground = chipsBarBackground(colors);
+    final barBackground = context.colorScheme.surfaceContainerHigh;
     final availableAutocompleteChats = widget.availableChats
         .where(
           (chat) => !widget.recipients.any(
@@ -237,14 +213,20 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         widget.allowAddressTargets ? _knownDomains() : const <String>{};
     final Set<String> knownAddresses =
         widget.allowAddressTargets ? _knownAddresses() : const <String>{};
-    const headerPadding = chipsBarHeaderPadding;
-    const double autocompleteFieldOuterPadding = 8.0;
-    const double autocompleteFieldInnerPadding = 12.0;
+    final headerPadding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.xs,
+    );
+    final double autocompleteFieldOuterPadding = context.spacing.s;
+    final double autocompleteFieldInnerPadding = context.spacing.m;
     final bodyPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
-      vertical: 6,
+      vertical: context.spacing.s,
     );
-    final headerStyle = chipsBarHeaderTextStyle(context);
+    final headerStyle = context.textTheme.small.copyWith(
+      fontWeight: FontWeight.w600,
+      color: context.colorScheme.onSurfaceVariant,
+    );
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
     final arrowIcon =
@@ -252,7 +234,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return ChipsBarSurface(
       backgroundColor: barBackground,
       padding: bodyPadding,
-      borderSide: BorderSide(color: context.colorScheme.border, width: 1),
+      borderSide: context.borderSide,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -287,72 +269,72 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   ? l10n.recipientsHintExpand
                   : l10n.recipientsHintCollapse,
               onTap: _toggleBarCollapsed,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
+              child: ShadFocusable(
+                canRequestFocus: true,
+                builder: (context, focused, child) =>
+                    child ?? const SizedBox.shrink(),
+                child: ShadGestureDetector(
+                  cursor: SystemMouseCursors.click,
+                  hoverStrategies: mobileHoverStrategies,
                   onTap: _toggleBarCollapsed,
-                  child: AnimatedContainer(
-                    duration: chipsBarAnimationDuration,
-                    curve: Curves.easeInOutCubic,
-                    padding: headerPadding,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(
-                        chipsBarHeaderBorderRadius,
+                  child: AxiTapBounce(
+                    child: AnimatedContainer(
+                      duration: chipsBarAnimationDuration,
+                      curve: Curves.easeInOutCubic,
+                      padding: headerPadding,
+                      decoration: ShapeDecoration(
+                        color: context.colorScheme.surfaceContainerHighest,
+                        shape: RoundedSuperellipseBorder(
+                          borderRadius: context.radius,
+                          side: _headerFocused
+                              ? context.borderSide
+                                  .copyWith(color: context.colorScheme.primary)
+                              : context.borderSide,
+                        ),
                       ),
-                      border: _headerFocused
-                          ? Border.all(color: colors.primary, width: 1.5)
-                          : null,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.recipientsHeaderTitle,
-                            style: headerStyle,
-                          ),
-                        ),
-                        if (showVisibilityBadge) ...[
-                          Container(
-                            padding: chipsBarBadgePadding,
-                            decoration: BoxDecoration(
-                              color: colors.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(
-                                chipsBarHeaderBadgeRadius,
-                              ),
-                              border: Border.all(
-                                color: context.colorScheme.border,
-                              ),
-                            ),
+                      child: Row(
+                        children: [
+                          Expanded(
                             child: Text(
-                              normalizedVisibilityLabel,
-                              style: headerStyle.copyWith(
-                                fontSize: chipsBarHeaderBadgeFontSize,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              l10n.recipientsHeaderTitle,
+                              style: headerStyle,
                             ),
                           ),
-                          const SizedBox(width: calendarInsetLg),
-                        ],
-                        const SizedBox(width: 8),
-                        ChipsBarCountBadge(
-                          count: recipients.length,
-                          expanded: !_barCollapsed,
-                          colors: colors,
-                        ),
-                        const SizedBox(width: 4),
-                        AnimatedSwitcher(
-                          duration: chipsBarAnimationDuration,
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: Icon(
-                            arrowIcon,
-                            key: ValueKey<bool>(_barCollapsed),
-                            size: 18,
-                            color: colors.onSurfaceVariant,
+                          if (showVisibilityBadge) ...[
+                            AxiModalSurface(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: context.spacing.s,
+                                vertical: context.spacing.xxs,
+                              ),
+                              child: Text(
+                                normalizedVisibilityLabel,
+                                style: headerStyle.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: context.spacing.m),
+                          ],
+                          SizedBox(width: context.spacing.s),
+                          ChipsBarCountBadge(
+                            count: recipients.length,
+                            expanded: !_barCollapsed,
+                            colors: context.colorScheme,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: context.spacing.xs),
+                          AnimatedSwitcher(
+                            duration: chipsBarAnimationDuration,
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            child: Icon(
+                              arrowIcon,
+                              key: ValueKey<bool>(_barCollapsed),
+                              size: context.sizing.menuItemIconSize,
+                              color: context.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -368,10 +350,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                 curve: Curves.easeInOutCubic,
                 alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: chipsBarContentPadding,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: spacing.m,
+                    vertical: spacing.s,
+                  ),
                   child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: spacing.s,
+                    runSpacing: spacing.s,
                     children: [
                       ...chips,
                       Builder(
@@ -648,7 +633,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void _flagEntering(String key) {
     if (_enteringKeys.contains(key)) return;
     _enteringKeys.add(key);
-    Future.delayed(_chipMotionDuration, () {
+    Future.delayed(chipsBarAnimationDuration, () {
       if (!mounted || !_enteringKeys.contains(key)) return;
       setState(() {
         _enteringKeys.remove(key);
@@ -659,7 +644,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void _flagRemoving(String key) {
     if (_removingKeys.contains(key)) return;
     _removingKeys.add(key);
-    Future.delayed(_chipMotionDuration, () {
+    Future.delayed(chipsBarAnimationDuration, () {
       if (!mounted || !_removingKeys.remove(key)) return;
       setState(() {
         _renderedRecipients.removeWhere((recipient) => recipient.key == key);
@@ -762,7 +747,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   String? _normalizeAddress(String? raw) {
-    return normalizeAddressdKey(raw);
+    return normalizedAddressKey(raw);
   }
 
   bool _isOwnAddress(String? raw) {
@@ -778,6 +763,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     Set<String> knownAddresses, {
     required bool shareTokenSignatureEnabled,
   }) {
+    const maxSuggestions = 8;
     FanOutTarget chatTarget(Chat chat) => FanOutTarget.chat(
           chat: chat,
           shareSignatureEnabled:
@@ -797,7 +783,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       if (key.isEmpty || seen.contains(key)) return false;
       results.add(target);
       seen.add(key);
-      return results.length >= _maxAutocompleteSuggestions;
+      return results.length >= maxSuggestions;
     }
 
     if (query.isEmpty) {
@@ -806,7 +792,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           return results;
         }
       }
-      if (results.length < _maxAutocompleteSuggestions) {
+      if (results.length < maxSuggestions) {
         for (final address in knownAddresses) {
           if (addTarget(addressTarget(address))) {
             return results;
@@ -818,7 +804,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
     for (final chat in candidates) {
       if (_chatMatchesQuery(chat, query) && addTarget(chatTarget(chat))) {
-        if (results.length >= _maxAutocompleteSuggestions) {
+        if (results.length >= maxSuggestions) {
           return results;
         }
       }
@@ -827,7 +813,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     for (final address in knownAddresses) {
       if (address.toLowerCase().startsWith(query) &&
           addTarget(addressTarget(address))) {
-        if (results.length >= _maxAutocompleteSuggestions) {
+        if (results.length >= maxSuggestions) {
           return results;
         }
       }
@@ -915,65 +901,79 @@ class _RecipientChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final included = recipient.included;
-    final baseColor = _chipColor(
-      context,
-      context.select<SettingsCubit, bool>(
-        (cubit) => cubit.state.colorfulAvatars,
+    final colorfulAvatars = context.select<SettingsCubit, bool>(
+      (cubit) => cubit.state.colorfulAvatars,
+    );
+    final baseBackground = _chipBackgroundColor(colors, colorfulAvatars);
+    final baseForeground = _chipForegroundColor(colors, colorfulAvatars);
+    final background = pendingRemoval
+        ? colors.destructive
+        : (included ? colors.primaryContainer : baseBackground);
+    final foreground = pendingRemoval
+        ? colors.destructiveForeground
+        : (included ? colors.onPrimaryContainer : baseForeground);
+    final borderColor =
+        pendingRemoval ? colors.destructive : context.borderSide.color;
+    final borderSide = context.borderSide.copyWith(color: borderColor);
+    final shape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: borderSide,
+    );
+    final removeButton = onRemove == null
+        ? null
+        : AxiIconButton.ghost(
+            iconData: LucideIcons.x,
+            onPressed: onRemove,
+            color: foreground,
+            iconSize: sizing.menuItemIconSize,
+            buttonSize: sizing.menuItemHeight,
+            tapTargetSize: sizing.menuItemHeight,
+          );
+    final content = DecoratedBox(
+      decoration: ShapeDecoration(
+        color: background,
+        shape: shape,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _RecipientChipAvatar(
+              target: recipient.target,
+              avatarPathsByJid: avatarPathsByJid,
+              status: status,
+            ),
+            SizedBox(width: spacing.xs),
+            Flexible(
+              child: Text(
+                _label(context),
+                style: context.textTheme.small.copyWith(color: foreground),
+              ),
+            ),
+            if (removeButton != null) ...[
+              SizedBox(width: spacing.xs),
+              removeButton,
+            ],
+          ],
+        ),
       ),
     );
-    final overlayOpacity = included ? 0.78 : 0.32;
-    final background = Color.alphaBlend(
-      baseColor.withValues(alpha: overlayOpacity),
-      colors.surface,
-    );
-    final foreground =
-        included ? _foregroundColor(background, colors) : colors.onSurface;
-    final accentColor = baseColor.withValues(alpha: 1);
-    final removalColor = colors.error;
-    final effectiveBackground = pendingRemoval
-        ? Color.alphaBlend(removalColor.withValues(alpha: 0.12), background)
-        : background;
-    final effectiveForeground = pendingRemoval ? removalColor : foreground;
-    final borderColor = pendingRemoval
-        ? removalColor
-        : (included ? accentColor : Colors.transparent);
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: chipsBarHeight),
-      child: InputChip(
-        shape: const StadiumBorder(),
-        showCheckmark: false,
-        avatar: _RecipientChipAvatar(
-          target: recipient.target,
-          avatarPathsByJid: avatarPathsByJid,
-          status: status,
-        ),
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [Flexible(child: Text(_label(context)))],
-        ),
-        onPressed: onToggle,
-        selected: included,
-        backgroundColor: effectiveBackground,
-        selectedColor: effectiveBackground,
-        labelStyle: TextStyle(color: effectiveForeground),
-        deleteIcon: onRemove == null
-            ? null
-            : Icon(Icons.close, size: 16, color: effectiveForeground),
-        onDeleted: onRemove,
-        side: BorderSide(
-          color: borderColor,
-          width: pendingRemoval || included ? 1.1 : 0,
-        ),
-        elevation: included ? 1.5 : 0,
-        shadowColor: colors.shadow,
-        selectedShadowColor: colors.shadow,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-        padding: _recipientChipPadding,
-        labelPadding: _recipientChipLabelPadding,
+    return ShadFocusable(
+      canRequestFocus: true,
+      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+      child: ShadGestureDetector(
+        cursor: SystemMouseCursors.click,
+        hoverStrategies: mobileHoverStrategies,
+        onTap: onToggle,
+        child: AxiTapBounce(child: content),
       ),
     );
   }
@@ -987,20 +987,16 @@ class _RecipientChip extends StatelessWidget {
         context.l10n.recipientsFallbackLabel;
   }
 
-  Color _chipColor(BuildContext context, bool colorfulAvatars) {
-    if (!colorfulAvatars) {
-      return Theme.of(context).colorScheme.secondary;
-    }
-    final seed =
-        recipient.target.chat?.jid ?? recipient.target.address ?? recipient.key;
-    return stringToColor(seed);
+  Color _chipBackgroundColor(ColorScheme colors, bool colorfulAvatars) {
+    return colorfulAvatars
+        ? colors.secondaryContainer
+        : colors.surfaceContainerHighest;
   }
 
-  Color _foregroundColor(Color background, ColorScheme scheme) {
-    final brightness = ThemeData.estimateBrightnessForColor(background);
-    if (brightness == Brightness.dark) return Colors.white;
-    if (brightness == Brightness.light) return scheme.onSurface;
-    return scheme.onSurface;
+  Color _chipForegroundColor(ColorScheme colors, bool colorfulAvatars) {
+    return colorfulAvatars
+        ? colors.onSecondaryContainer
+        : colors.onSurfaceVariant;
   }
 }
 
@@ -1017,44 +1013,48 @@ class _RecipientChipAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final chat = target.chat;
+    final avatarSize = sizing.iconButtonIconSize;
     final avatar = chat != null
         ? TransportAwareAvatar(
             chat: chat,
-            size: _chipAvatarSize,
+            size: avatarSize,
             showBadge: false,
           )
         : AxiAvatar(
             jid: target.address ?? target.displayName ?? '',
-            size: _chipAvatarSize,
+            size: avatarSize,
             avatarPath: avatarPathsByJid[
                 (target.address ?? target.displayName ?? '').toLowerCase()],
           );
-    final badgeIcon = _statusIcon(status, colors);
+    final badgeIcon = _statusIcon(context, status, colors);
     if (badgeIcon == null) {
-      return SizedBox.square(dimension: _chipAvatarSize, child: avatar);
+      return SizedBox.square(dimension: avatarSize, child: avatar);
     }
     final badgeBackground = colors.surface;
-    final badgeBorder = colors.surface;
+    final badgeBorder = context.borderSide;
+    final badgeSize = sizing.progressIndicatorSize;
     return SizedBox.square(
-      dimension: _chipAvatarSize,
+      dimension: avatarSize,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(child: avatar),
           Positioned(
-            right: -2,
-            bottom: -2,
+            right: -spacing.xxs,
+            bottom: -spacing.xxs,
             child: Container(
-              width: _chipStatusBadgeSize,
-              height: _chipStatusBadgeSize,
+              width: badgeSize,
+              height: badgeSize,
               decoration: BoxDecoration(
                 color: badgeBackground,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: badgeBorder,
-                  width: _chipStatusBadgeBorderWidth,
+                  color: badgeBorder.color,
+                  width: badgeBorder.width,
                 ),
               ),
               child: Center(child: badgeIcon),
@@ -1065,25 +1065,26 @@ class _RecipientChipAvatar extends StatelessWidget {
     );
   }
 
-  Widget? _statusIcon(FanOutRecipientState? state, ColorScheme colors) =>
+  Widget? _statusIcon(
+    BuildContext context,
+    FanOutRecipientState? state,
+    ColorScheme colors,
+  ) =>
       switch (state) {
         FanOutRecipientState.failed => Icon(
             Icons.warning_amber_rounded,
-            size: _chipStatusBadgeSize - 2,
-            color: colors.error,
+            size: context.sizing.menuItemIconSize,
+            color: colors.destructive,
           ),
         FanOutRecipientState.sent => Icon(
             Icons.check,
-            size: _chipStatusBadgeSize - 2,
+            size: context.sizing.menuItemIconSize,
             color: colors.primary,
           ),
         FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
-            width: _chipStatusBadgeSize - 2,
-            height: _chipStatusBadgeSize - 2,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colors.onSurfaceVariant,
-            ),
+            width: context.sizing.progressIndicatorSize,
+            height: context.sizing.progressIndicatorSize,
+            child: AxiProgressIndicator(color: colors.onSurfaceVariant),
           ),
         null => null,
       };
@@ -1102,24 +1103,12 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final foreground = colors.onSurfaceVariant;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: chipsBarHeight),
-      child: ActionChip(
-        shape: const StadiumBorder(),
-        avatar: Icon(icon, size: 14, color: foreground),
-        label: Text(label, style: TextStyle(color: foreground)),
-        onPressed: onPressed,
-        backgroundColor: Color.alphaBlend(
-          colors.primary.withValues(alpha: 0.05),
-          colors.surface,
-        ),
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        side: BorderSide.none,
-      ),
+    final sizing = context.sizing;
+    return AxiButton.secondary(
+      size: AxiButtonSize.sm,
+      leading: Icon(icon, size: sizing.menuItemIconSize),
+      onPressed: onPressed,
+      child: Text(label),
     );
   }
 }
@@ -1138,13 +1127,14 @@ class _AnimatedChipWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final keyedChild = KeyedSubtree(key: key, child: child);
     final begin = isEntering ? 0.0 : 1.0;
     final end = isRemoving ? 0.0 : 1.0;
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: begin, end: end),
-      duration: _chipMotionDuration,
-      curve: _chipMotionCurve,
+      duration: chipsBarAnimationDuration,
+      curve: Curves.easeInOutCubic,
       builder: (context, value, _) {
         final clamped = value.clamp(0.0, 1.0);
         return Align(
@@ -1154,7 +1144,10 @@ class _AnimatedChipWrapper extends StatelessWidget {
           child: Opacity(
             opacity: clamped,
             child: Transform.translate(
-              offset: Offset((1 - clamped) * (isRemoving ? 12 : -12), 0),
+              offset: Offset(
+                (1 - clamped) * (isRemoving ? spacing.m : -spacing.m),
+                0,
+              ),
               child: keyedChild,
             ),
           ),
@@ -1199,11 +1192,12 @@ class _RecipientAutocompleteField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double fieldMinWidth = 90.0;
-    const double fieldMaxWidth = 120.0;
+    final sizing = context.sizing;
+    final double fieldMinWidth = sizing.iconButtonTapTarget;
+    final double fieldMaxWidth = sizing.menuMaxWidth;
     final double fieldHorizontalPadding =
         (fieldOuterPadding + fieldInnerPadding) * 2;
-    final TextStyle? textStyle = Theme.of(context).textTheme.bodyMedium;
+    final TextStyle textStyle = context.textTheme.p;
     return AutofillGroup(
       child: _RecipientAutocompleteFieldSizer(
         controller: controller,
@@ -1318,12 +1312,6 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
 
 final class _RecipientAutocompleteOverlayState
     extends State<_RecipientAutocompleteOverlay> {
-  static const double _overlayGap = 6;
-  static const double _overlayMargin = 8;
-  static const double _overlayHorizontalMargin = 16;
-  static const double _overlayPreferredMaxWidth = 420;
-  static const double _overlayPreferredMinWidth = 180;
-
   final GlobalKey _triggerKey = GlobalKey();
   final LayerLink _layerLink = LayerLink();
   final OverlayPortalController _portalController = OverlayPortalController();
@@ -1440,26 +1428,31 @@ final class _RecipientAutocompleteOverlayState
       view.devicePixelRatio,
     );
     final fallbackScreenSize = view.physicalSize / view.devicePixelRatio;
-
     final screenSize = overlayBox?.size ?? fallbackScreenSize;
     final topSafe = viewPadding.top;
     final bottomSafe = viewPadding.bottom;
     final keyboardInset = viewInsets.bottom;
     final visibleHeight = math.max(0.0, screenSize.height - keyboardInset);
 
+    final double overlayGap = overlayContext.spacing.xs;
+    final double overlayMargin = overlayContext.spacing.m;
+    final double overlayHorizontalMargin = overlayContext.spacing.m;
+    final double suggestionTileHeight = overlayContext.sizing.listButtonHeight;
+    final double suggestionMaxHeight = overlayContext.sizing.menuMaxHeight;
+    final double overlayPreferredMaxWidth = overlayContext.sizing.menuMaxWidth;
+    final double overlayPreferredMinWidth = overlayContext.sizing.menuMinWidth;
+
     final desiredHeight = math.min(
-      _suggestionMaxHeight,
-      _options.length * _suggestionTileHeight,
+      suggestionMaxHeight,
+      _options.length * suggestionTileHeight,
     );
     final belowSpace = visibleHeight -
         (triggerOrigin.dy + triggerSize.height) -
         bottomSafe -
-        _overlayMargin;
-    final aboveSpace = triggerOrigin.dy - topSafe - _overlayMargin;
-
+        overlayMargin;
+    final aboveSpace = triggerOrigin.dy - topSafe - overlayMargin;
     final normalizedBelow = math.max(0.0, belowSpace);
     final normalizedAbove = math.max(0.0, aboveSpace);
-
     final belowHeight = math.min(desiredHeight, normalizedBelow);
     final aboveHeight = math.min(desiredHeight, normalizedAbove);
     final placeBelow = belowHeight >= aboveHeight;
@@ -1467,18 +1460,19 @@ final class _RecipientAutocompleteOverlayState
 
     final maxAllowedWidth = math.max(
       0.0,
-      screenSize.width - _overlayHorizontalMargin * 2,
+      screenSize.width - overlayHorizontalMargin * 2,
     );
-    final maxWidth = math.min(_overlayPreferredMaxWidth, maxAllowedWidth);
-    final minWidth = math.min(_overlayPreferredMinWidth, maxWidth);
+    final maxWidth = math.min(overlayPreferredMaxWidth, maxAllowedWidth);
+    final minWidth = math.min(overlayPreferredMinWidth, maxWidth);
 
     final verticalOffset = placeBelow
-        ? triggerSize.height + _overlayGap
-        : -(maxHeight + _overlayGap);
+        ? triggerSize.height + overlayGap
+        : -(maxHeight + overlayGap);
 
     return _AutocompleteOverlayLimits(
       triggerOrigin: triggerOrigin,
       screenWidth: screenSize.width,
+      horizontalMargin: overlayHorizontalMargin,
       verticalOffset: verticalOffset,
       maxHeight: maxHeight,
       minWidth: minWidth,
@@ -1492,13 +1486,13 @@ final class _RecipientAutocompleteOverlayState
     required TextStyle? titleStyle,
     required TextStyle? subtitleStyle,
   }) {
-    const double tileHorizontalPadding = 14.0 * 2;
-    const double avatarSize = 32.0;
-    const double gapAfterAvatar = 12.0;
-    const double gapBeforeTrailingIcon = 12.0;
-    const double trailingIconSize = 16.0;
-    const double extraTextBreathingRoom = 8.0;
-    const double fixedWidth = tileHorizontalPadding +
+    final double tileHorizontalPadding = overlayContext.spacing.m * 2;
+    final double avatarSize = overlayContext.sizing.iconButtonSize;
+    final double gapAfterAvatar = overlayContext.spacing.s;
+    final double gapBeforeTrailingIcon = overlayContext.spacing.s;
+    final double trailingIconSize = overlayContext.sizing.menuItemIconSize;
+    final double extraTextBreathingRoom = overlayContext.spacing.s;
+    final fixedWidth = tileHorizontalPadding +
         avatarSize +
         gapAfterAvatar +
         gapBeforeTrailingIcon +
@@ -1555,13 +1549,13 @@ final class _RecipientAutocompleteOverlayState
   }) {
     double horizontalOffset = 0;
     final rightEdge = limits.triggerOrigin.dx + width;
-    final maxRight = limits.screenWidth - _overlayHorizontalMargin;
+    final maxRight = limits.screenWidth - limits.horizontalMargin;
     if (rightEdge > maxRight) {
       horizontalOffset = maxRight - rightEdge;
     }
     final adjustedLeft = limits.triggerOrigin.dx + horizontalOffset;
-    if (adjustedLeft < _overlayHorizontalMargin) {
-      horizontalOffset += _overlayHorizontalMargin - adjustedLeft;
+    if (adjustedLeft < limits.horizontalMargin) {
+      horizontalOffset += limits.horizontalMargin - adjustedLeft;
     }
     return Offset(horizontalOffset, limits.verticalOffset);
   }
@@ -1589,11 +1583,12 @@ final class _RecipientAutocompleteOverlayState
 
   @override
   Widget build(BuildContext context) {
-    final materialColors = Theme.of(context).colorScheme;
     final colors = context.colorScheme;
-    final hintColor = materialColors.onSurfaceVariant.withValues(alpha: 0.8);
-    final textStyle = Theme.of(context).textTheme.bodyMedium;
-    const double fieldVerticalPadding = 6.0;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final hintColor = colors.mutedForeground;
+    final textStyle = context.textTheme.p;
+    final double fieldVerticalPadding = spacing.xs;
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -1608,32 +1603,21 @@ final class _RecipientAutocompleteOverlayState
           if (limits.maxHeight <= 0) {
             return const SizedBox.shrink();
           }
-
-          final overlayRadius = BorderRadius.circular(20);
-          final theme = Theme.of(overlayContext).textTheme;
-          final titleStyle = theme.bodyMedium?.copyWith(
+          final titleStyle = context.textTheme.p.copyWith(
             fontWeight: FontWeight.w600,
             color: colors.foreground,
           );
-          final subtitleStyle = theme.bodySmall?.copyWith(
+          final subtitleStyle = context.textTheme.small.copyWith(
             color: colors.mutedForeground,
           );
-          final dividerColor = context.colorScheme.border.withValues(
-            alpha: 0.55,
-          );
-          final hoverColor = colors.muted.withValues(alpha: 0.08);
-          final highlightColor = colors.primary.withValues(alpha: 0.12);
-          final trailingIconColor = colors.muted.withValues(alpha: 0.9);
+          final dividerColor = context.borderSide.color;
           final overlayWidth = _computeOverlayWidth(
             overlayContext: overlayContext,
             limits: limits,
             titleStyle: titleStyle,
             subtitleStyle: subtitleStyle,
           );
-          final overlayOffset = _overlayOffsetForWidth(
-            limits: limits,
-            width: overlayWidth,
-          );
+          final overlayOffset = Offset(0, limits.verticalOffset);
 
           return Stack(
             children: [
@@ -1655,57 +1639,30 @@ final class _RecipientAutocompleteOverlayState
                         ),
                         child: SizedBox(
                           width: overlayWidth,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colors.card,
-                              borderRadius: overlayRadius,
-                              border: Border.all(
-                                color: context.colorScheme.border.withValues(
-                                  alpha: 0.9,
-                                ),
-                                width: 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.12),
-                                  blurRadius: 28,
-                                  offset: const Offset(0, 18),
-                                ),
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: overlayRadius,
-                              child: Material(
-                                color: Colors.transparent,
-                                child: ValueListenableBuilder<int?>(
-                                  valueListenable:
-                                      widget.highlightedIndexListenable,
-                                  builder: (context, highlightedIndex, _) {
-                                    return _AutocompleteOptionsList(
-                                      options: _options,
-                                      avatarPathsByJid: widget.avatarPathsByJid,
-                                      onSelected: (option) {
-                                        widget.onRecipientAdded(option);
-                                        widget.controller.clear();
-                                        _recomputeOptions();
-                                        widget.focusNode.requestFocus();
-                                      },
-                                      titleStyle: titleStyle,
-                                      subtitleStyle: subtitleStyle,
-                                      dividerColor: dividerColor,
-                                      trailingIconColor: trailingIconColor,
-                                      hoverColor: hoverColor,
-                                      highlightColor: highlightColor,
-                                      highlightedIndex: highlightedIndex,
-                                      maxHeight: limits.maxHeight,
-                                    );
-                                  },
-                                ),
+                          child: AxiModalSurface(
+                            padding: EdgeInsets.zero,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: ValueListenableBuilder<int?>(
+                                valueListenable:
+                                    widget.highlightedIndexListenable,
+                                builder: (context, highlightedIndex, _) {
+                                  return _AutocompleteOptionsList(
+                                    options: _options,
+                                    avatarPathsByJid: widget.avatarPathsByJid,
+                                    onSelected: (option) {
+                                      widget.onRecipientAdded(option);
+                                      widget.controller.clear();
+                                      _recomputeOptions();
+                                      widget.focusNode.requestFocus();
+                                    },
+                                    titleStyle: titleStyle,
+                                    subtitleStyle: subtitleStyle,
+                                    dividerColor: dividerColor,
+                                    highlightedIndex: highlightedIndex,
+                                    maxHeight: limits.maxHeight,
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -1726,7 +1683,7 @@ final class _RecipientAutocompleteOverlayState
             onPointerDown: (_) => widget.focusNode.requestFocus(),
             child: SizedBox(
               key: _triggerKey,
-              height: chipsBarHeight,
+              height: sizing.listButtonHeight,
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: widget.fieldOuterPadding,
@@ -1736,65 +1693,58 @@ final class _RecipientAutocompleteOverlayState
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: widget.backgroundColor,
-                      borderRadius: BorderRadius.circular(chipsBarHeight / 2),
+                      borderRadius: BorderRadius.circular(
+                        sizing.containerRadius,
+                      ),
                     ),
                     child: Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: widget.fieldInnerPadding,
                         vertical: fieldVerticalPadding,
                       ),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          inputDecorationTheme: const InputDecorationTheme(
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            focusedErrorBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
+                      child: AxiTextField(
+                        controller: widget.controller,
+                        groupId: widget.tapRegionGroup,
+                        focusNode: widget.focusNode,
+                        maxLines: 1,
+                        keyboardType: TextInputType.emailAddress,
+                        textCapitalization: TextCapitalization.none,
+                        autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        autofillHints: const [AutofillHints.email],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: context.l10n.recipientsAddHint,
+                          hintStyle: textStyle.copyWith(color: hintColor),
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
                         ),
-                        child: AxiTextField(
-                          controller: widget.controller,
-                          groupId: widget.tapRegionGroup,
-                          focusNode: widget.focusNode,
-                          maxLines: 1,
-                          keyboardType: TextInputType.emailAddress,
-                          textCapitalization: TextCapitalization.none,
-                          autocorrect: false,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled,
-                          autofillHints: const [AutofillHints.email],
-                          inputFormatters: [
-                            FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                          ],
-                          decoration: InputDecoration(
-                            hintText: context.l10n.recipientsAddHint,
-                            hintStyle: textStyle?.copyWith(color: hintColor),
-                          ),
-                          style: textStyle,
-                          strutStyle: textStyle == null
-                              ? null
-                              : StrutStyle.fromTextStyle(textStyle),
-                          textInputAction: TextInputAction.done,
-                          onEditingComplete: () =>
-                              widget.focusNode.requestFocus(),
-                          textAlignVertical: TextAlignVertical.center,
-                          onSubmitted: (_) {
-                            final handled = widget.onSubmitted();
-                            if (!handled) {
-                              final trimmed = widget.controller.text.trim();
-                              if (trimmed.isNotEmpty &&
-                                  widget.onManualEntry(trimmed)) {
-                                widget.controller.clear();
-                                _dismissOverlay();
-                              }
+                        strutStyle: StrutStyle.fromTextStyle(textStyle),
+                        textInputAction: TextInputAction.done,
+                        onEditingComplete: () =>
+                            widget.focusNode.requestFocus(),
+                        textAlignVertical: TextAlignVertical.center,
+                        onSubmitted: (_) {
+                          final handled = widget.onSubmitted();
+                          if (!handled) {
+                            final trimmed = widget.controller.text.trim();
+                            if (trimmed.isNotEmpty &&
+                                widget.onManualEntry(trimmed)) {
+                              widget.controller.clear();
+                              _dismissOverlay();
                             }
-                            widget.focusNode.requestFocus();
-                          },
-                        ),
+                          }
+                          widget.focusNode.requestFocus();
+                        },
                       ),
                     ),
                   ),
@@ -1838,6 +1788,7 @@ final class _AutocompleteOverlayLimits {
   const _AutocompleteOverlayLimits({
     required this.triggerOrigin,
     required this.screenWidth,
+    required this.horizontalMargin,
     required this.verticalOffset,
     required this.maxHeight,
     required this.minWidth,
@@ -1846,6 +1797,7 @@ final class _AutocompleteOverlayLimits {
 
   final Offset triggerOrigin;
   final double screenWidth;
+  final double horizontalMargin;
   final double verticalOffset;
   final double maxHeight;
   final double minWidth;
@@ -1860,9 +1812,6 @@ class _AutocompleteOptionsList extends StatefulWidget {
     required this.titleStyle,
     required this.subtitleStyle,
     required this.dividerColor,
-    required this.trailingIconColor,
-    required this.hoverColor,
-    required this.highlightColor,
     required this.highlightedIndex,
     required this.maxHeight,
   });
@@ -1873,9 +1822,6 @@ class _AutocompleteOptionsList extends StatefulWidget {
   final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
   final Color dividerColor;
-  final Color trailingIconColor;
-  final Color hoverColor;
-  final Color highlightColor;
   final int? highlightedIndex;
   final double maxHeight;
 
@@ -1895,13 +1841,15 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
 
   @override
   Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final spacing = context.spacing;
     final options = widget.options;
     if (options.isEmpty) {
       return const SizedBox.shrink();
     }
-    final height =
-        math.min(options.length * _suggestionTileHeight, widget.maxHeight);
-    final scrollable = options.length * _suggestionTileHeight > height;
+    final tileHeight = sizing.listButtonHeight;
+    final height = math.min(options.length * tileHeight, widget.maxHeight);
+    final scrollable = options.length * tileHeight > height;
     return SizedBox(
       height: height,
       child: Scrollbar(
@@ -1913,7 +1861,7 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
           physics: scrollable
               ? const ClampingScrollPhysics()
               : const NeverScrollableScrollPhysics(),
-          itemExtent: _suggestionTileHeight,
+          itemExtent: tileHeight,
           itemCount: options.length,
           itemBuilder: (context, index) {
             final option = options[index];
@@ -1930,56 +1878,47 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
                 : subtitleSource;
             final border = index == options.length - 1
                 ? BorderSide.none
-                : BorderSide(color: widget.dividerColor, width: 0.7);
+                : BorderSide(
+                    color: widget.dividerColor,
+                    width: context.borderSide.width,
+                  );
             final highlighted = widget.highlightedIndex != null &&
                 widget.highlightedIndex == index;
-            return InkWell(
-              onTap: () => widget.onSelected(option),
-              hoverColor: widget.hoverColor,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: highlighted ? widget.highlightColor : null,
-                  border: Border(bottom: border),
+            final optionContent = Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: widget.titleStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: widget.subtitleStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            );
+            return DecoratedBox(
+              decoration: BoxDecoration(border: Border(bottom: border)),
+              child: AxiListButton(
+                selected: highlighted,
+                onPressed: () => widget.onSelected(option),
+                leading: _SuggestionAvatar(
+                  option: option,
+                  avatarPathsByJid: widget.avatarPathsByJid,
                 ),
-                child: Row(
-                  children: [
-                    _SuggestionAvatar(
-                      option: option,
-                      avatarPathsByJid: widget.avatarPathsByJid,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: widget.titleStyle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (subtitle != null)
-                            Text(
-                              subtitle,
-                              style: widget.subtitleStyle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.north_east,
-                      size: 16,
-                      color: widget.trailingIconColor,
-                    ),
-                  ],
+                trailing: Icon(
+                  Icons.north_east,
+                  size: sizing.menuItemIconSize,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.only(right: spacing.xs),
+                  child: optionContent,
                 ),
               ),
             );
@@ -2001,10 +1940,11 @@ class _SuggestionAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sizing = context.sizing;
     if (option.chat != null) {
       return TransportAwareAvatar(
         chat: option.chat!,
-        size: 32,
+        size: sizing.iconButtonSize,
         showBadge: false,
       );
     }
@@ -2013,7 +1953,7 @@ class _SuggestionAvatar extends StatelessWidget {
     final avatarPath = avatarPathsByJid[jid.toLowerCase()];
     return AxiAvatar(
       jid: jid,
-      size: 32,
+      size: sizing.iconButtonSize,
       avatarPath: avatarPath,
     );
   }

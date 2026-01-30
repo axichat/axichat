@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -160,6 +161,8 @@ class EmailDeltaTransport implements ChatTransport {
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
   Future<void> _originIdHydrationQueue = Future<void>.value();
   final Set<String> _originIdHydrationPending = <String>{};
+  final Map<String, Timer> _serverOnlyTrimTimers = {};
+  final Map<String, EmailAsyncQueue> _serverOnlyTrimQueues = {};
 
   String? _databasePrefix;
   String? _databasePassphrase;
@@ -1477,9 +1480,8 @@ class EmailDeltaTransport implements ChatTransport {
     );
     await db.saveMessage(message);
     if (_messageStorageMode.isServerOnly) {
-      await db.trimChatMessages(
-        jid: resolvedChat.jid,
-        maxMessages: serverOnlyChatMessageCap,
+      _scheduleServerOnlyTrim(
+        chatJid: resolvedChat.jid,
         deltaAccountId: deltaAccountId,
       );
     }
@@ -1568,6 +1570,28 @@ class EmailDeltaTransport implements ChatTransport {
         previousMetadataId != metadata.id) {
       await db.deleteFileMetadata(previousMetadataId);
     }
+  }
+
+  void _scheduleServerOnlyTrim({
+    required String chatJid,
+    required int deltaAccountId,
+  }) {
+    const debounce = Duration(seconds: 2);
+    final key = '$deltaAccountId::$chatJid';
+    _serverOnlyTrimTimers[key]?.cancel();
+    _serverOnlyTrimTimers[key] = Timer(debounce, () {
+      _serverOnlyTrimTimers.remove(key);
+      final queue =
+          _serverOnlyTrimQueues.putIfAbsent(key, () => EmailAsyncQueue());
+      queue.run(() async {
+        final db = await _databaseBuilder();
+        await db.trimChatMessages(
+          jid: chatJid,
+          maxMessages: serverOnlyChatMessageCap,
+          deltaAccountId: deltaAccountId,
+        );
+      });
+    });
   }
 
   Future<void> _markOutgoingMessageFailed({required String stanzaId}) async {
@@ -2129,9 +2153,9 @@ class EmailDeltaTransport implements ChatTransport {
     if (consumer == null) {
       return;
     }
-    await Future.wait(
-      messageIds.map((messageId) => consumer.hydrateMessage(messageId)),
-    );
+    for (final messageId in messageIds) {
+      await consumer.hydrateMessage(messageId);
+    }
   }
 
   /// Sets the visibility of a chat (normal, archived, pinned).

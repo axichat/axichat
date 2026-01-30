@@ -31,9 +31,23 @@ const String _bundlePayloadPathKey = 'path';
 const String _bundlePayloadFilesKey = 'files';
 const String _bundleFilePathKey = 'file_path';
 const String _bundleFileNameKey = 'file_name';
-const String _bundleSymlinkErrorMessage = 'Attachment cannot be a symlink.';
-const String _bundleEntityTypeErrorMessage =
-    'Attachment must be a regular file.';
+
+enum EmailAttachmentBundleFailure {
+  emptySelection,
+  tooManyFiles,
+  tooLarge,
+  missingFile,
+  invalidEntityType,
+  symlinkNotAllowed,
+  invalidPayload,
+}
+
+class EmailAttachmentBundleException implements Exception {
+  const EmailAttachmentBundleException(this.reason, {this.path});
+
+  final EmailAttachmentBundleFailure reason;
+  final String? path;
+}
 
 final class EmailAttachmentBundler {
   const EmailAttachmentBundler();
@@ -44,11 +58,13 @@ final class EmailAttachmentBundler {
   }) async {
     final attachmentList = attachments.toList(growable: false);
     if (attachmentList.isEmpty) {
-      throw ArgumentError('Attachment bundle requires at least one file.');
+      throw const EmailAttachmentBundleException(
+        EmailAttachmentBundleFailure.emptySelection,
+      );
     }
     if (attachmentList.length > _bundleMaxFileCount) {
-      throw ArgumentError(
-        'Attachment bundle exceeds the maximum number of files.',
+      throw const EmailAttachmentBundleException(
+        EmailAttachmentBundleFailure.tooManyFiles,
       );
     }
     final tempDir = await getTemporaryDirectory();
@@ -71,17 +87,23 @@ final class EmailAttachmentBundler {
         followLinks: false,
       );
       if (entityType == FileSystemEntityType.link) {
-        throw FileSystemException(_bundleSymlinkErrorMessage, attachment.path);
+        throw EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.symlinkNotAllowed,
+          path: attachment.path,
+        );
       }
       if (entityType != FileSystemEntityType.file) {
-        throw FileSystemException(
-          _bundleEntityTypeErrorMessage,
-          attachment.path,
+        throw EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.invalidEntityType,
+          path: attachment.path,
         );
       }
       final file = File(attachment.path);
       if (!await file.exists()) {
-        throw FileSystemException('Attachment missing', attachment.path);
+        throw EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.missingFile,
+          path: attachment.path,
+        );
       }
       final attachmentSize = attachment.sizeBytes;
       final safeSize = attachmentSize < _bundleMinFileSizeBytes
@@ -89,7 +111,9 @@ final class EmailAttachmentBundler {
           : attachmentSize;
       totalBytes += safeSize;
       if (totalBytes > _bundleMaxTotalBytes) {
-        throw ArgumentError('Attachment bundle exceeds size limits.');
+        throw const EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.tooLarge,
+        );
       }
       final sanitizedName = _sanitizeBundleFileName(
         explicitName: attachment.fileName,
@@ -166,29 +190,42 @@ String _buildBundleFallbackName(int index) =>
 void _writeBundle(Map<String, Object?> payload) {
   final rawPath = payload[_bundlePayloadPathKey];
   if (rawPath is! String || rawPath.trim().isEmpty) {
-    throw const FileSystemException('Attachment bundle path missing');
+    throw const EmailAttachmentBundleException(
+      EmailAttachmentBundleFailure.invalidPayload,
+    );
   }
   final rawFiles = payload[_bundlePayloadFilesKey];
   if (rawFiles is! List) {
-    throw const FileSystemException('Attachment bundle file list missing');
+    throw const EmailAttachmentBundleException(
+      EmailAttachmentBundleFailure.invalidPayload,
+    );
   }
   final encoder = ZipFileEncoder()..create(rawPath);
   try {
     for (final entry in rawFiles) {
       if (entry is! Map) {
-        throw const FileSystemException('Attachment bundle entry invalid');
+        throw const EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.invalidPayload,
+        );
       }
       final filePath = entry[_bundleFilePathKey];
       final fileName = entry[_bundleFileNameKey];
       if (filePath is! String || filePath.trim().isEmpty) {
-        throw const FileSystemException('Attachment bundle path missing');
+        throw const EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.invalidPayload,
+        );
       }
       if (fileName is! String || fileName.trim().isEmpty) {
-        throw const FileSystemException('Attachment bundle name missing');
+        throw const EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.invalidPayload,
+        );
       }
       final file = File(filePath);
       if (!file.existsSync()) {
-        throw FileSystemException('Attachment missing', filePath);
+        throw EmailAttachmentBundleException(
+          EmailAttachmentBundleFailure.missingFile,
+          path: filePath,
+        );
       }
       encoder.addFile(file, fileName);
     }

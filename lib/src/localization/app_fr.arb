@@ -121,6 +121,7 @@
   "chatComposerEmailAttachmentRecipientRequired": "Ajoutez un destinataire e-mail pour envoyer des pièces jointes.",
   "chatComposerDraftRecipientsUnavailable": "Impossible de déterminer les destinataires de ce brouillon.",
   "chatComposerSendFailed": "Impossible d'envoyer le message. Veuillez réessayer.",
+  "chatComposerAttachmentBundleFailed": "Impossible de regrouper les pièces jointes. Veuillez réessayer.",
   "chatEmailOfflineRetryMessage": "L'e-mail est hors ligne. Réessayez une fois la synchronisation rétablie.",
   "chatEmailOfflineDraftsFallback": "L'e-mail est hors ligne. Les messages seront enregistrés dans les brouillons jusqu'au retour de la connexion.",
   "chatEmailSyncRefreshing": "La synchronisation des e-mails s'actualise...",

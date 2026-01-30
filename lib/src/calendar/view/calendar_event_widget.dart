@@ -474,9 +474,9 @@ class _CalendarEventContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     Color foregroundFor(Color background) =>
-        background.computeLuminance() > 0.65
-            ? calendarTitleColor
-            : Colors.white;
+        ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+            ? colors.primaryForeground
+            : colors.foreground;
     final BorderRadius radius = BorderRadius.circular(calendarEventRadius);
     final double blendAmount = isDragging ? 0.22 : 0.14;
     final Color blendedBackground = Color.lerp(

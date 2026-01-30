@@ -44,7 +44,7 @@ class LoadingIndicator extends StatelessWidget {
             SizedBox(height: spacing.l),
             Text(
               message!,
-              style: textTheme.bodySmall.copyWith(color: colors.foreground),
+              style: textTheme.small.copyWith(color: colors.foreground),
               textAlign: TextAlign.center,
             ),
           ],
@@ -88,7 +88,7 @@ class CalendarLoadingIndicator extends StatelessWidget {
           SizedBox(height: spacing.l),
           Text(
             resolvedMessage,
-            style: textTheme.bodyLarge.copyWith(
+            style: textTheme.p.copyWith(
               color: colors.foreground,
               fontWeight: FontWeight.w600,
             ),

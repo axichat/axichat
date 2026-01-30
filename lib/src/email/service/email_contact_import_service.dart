@@ -672,23 +672,14 @@ class EmailContactImportService {
       final int rawEnd = index + batchSize;
       final int end = rawEnd > toImport.length ? toImport.length : rawEnd;
       final batch = toImport.sublist(index, end);
-      final results = await Future.wait(
-        batch.map((contact) async {
-          try {
-            await _emailService.ensureChatForAddress(
-              address: contact.address,
-              displayName: contact.displayName,
-            );
-            return true;
-          } catch (_) {
-            return false;
-          }
-        }),
-      );
-      for (final succeeded in results) {
-        if (succeeded) {
+      for (final contact in batch) {
+        try {
+          await _emailService.ensureChatForAddress(
+            address: contact.address,
+            displayName: contact.displayName,
+          );
           imported += _nextIndex;
-        } else {
+        } on Exception {
           failed += _nextIndex;
         }
       }

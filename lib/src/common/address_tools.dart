@@ -116,6 +116,14 @@ String? addressDomainPart(String? raw) {
 }
 
 bool isAxiJid(String? raw, {String? axiDomain}) {
+  return _isAxiJidInternal(raw, axiDomain: axiDomain);
+}
+
+bool isEmailJid(String? raw, {String? axiDomain}) {
+  return _isEmailJidInternal(raw, axiDomain: axiDomain);
+}
+
+bool _isAxiJidInternal(String? raw, {String? axiDomain}) {
   final parsed = parseJid(raw);
   if (parsed == null) return false;
   final targetDomain = _normalizeDomain(axiDomain);
@@ -123,7 +131,7 @@ bool isAxiJid(String? raw, {String? axiDomain}) {
   return parsed.domain.trim().toLowerCase() == targetDomain;
 }
 
-bool isEmailJid(String? raw, {String? axiDomain}) {
+bool _isEmailJidInternal(String? raw, {String? axiDomain}) {
   final parsed = parseJid(raw);
   if (parsed == null) return false;
   final targetDomain = _normalizeDomain(axiDomain);
@@ -168,9 +176,9 @@ extension AddressStringExtensions on String {
 
   bool get isValidJid => isValidAddress(this);
 
-  bool get isAxiJid => isAxiJid(this);
+  bool get isAxiJid => _isAxiJidInternal(this);
 
-  bool get isEmailJid => isEmailJid(this);
+  bool get isEmailJid => _isEmailJidInternal(this);
 
   String? get displaySafeJid => displaySafeAddress(this);
 

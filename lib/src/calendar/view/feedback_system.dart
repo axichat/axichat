@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -167,8 +168,7 @@ class FeedbackSystem {
               Expanded(
                 child: Text(
                   feedback.message,
-                  style: textTheme.bodyMedium
-                      .copyWith(color: colorsForTone.foreground),
+                  style: textTheme.p.copyWith(color: colorsForTone.foreground),
                 ),
               ),
             ],
@@ -272,7 +272,7 @@ class InlineFeedback extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: textTheme.bodySmall.copyWith(color: colors.background),
+              style: textTheme.small.copyWith(color: colors.background),
             ),
           ),
           if (onDismiss != null) ...[
@@ -315,13 +315,13 @@ class ProgressIndicator extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: textTheme.bodySmall),
+            Text(label, style: textTheme.small),
             if (showPercentage && progress != null)
               Text(
                 context.l10n.commonPercentLabel(
                   (progress! * 100).toInt(),
                 ),
-                style: textTheme.bodySmall,
+                style: textTheme.small,
               ),
           ],
         ),

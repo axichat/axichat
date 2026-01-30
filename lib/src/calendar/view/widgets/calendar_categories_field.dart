@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'task_form_section.dart';
 
@@ -157,7 +158,7 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final colors = context.colorScheme;
     final Color barBackground = widget.surfaceColor ?? calendarContainerColor;
     final List<Widget> chipWidgets = <Widget>[
       ...widget.categories.map(
@@ -218,15 +219,19 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = Theme.of(context).textTheme.bodyMedium ??
-        const TextStyle(fontWeight: FontWeight.w600);
+    final textTheme = context.textTheme;
+    final colors = context.colorScheme;
+    final TextStyle labelStyle = textTheme.small.copyWith(
+      fontWeight: FontWeight.w600,
+      color: colors.foreground,
+    );
     return InputChip(
       shape: const StadiumBorder(),
       showCheckmark: false,
       backgroundColor: backgroundColor,
       selectedColor: backgroundColor,
-      side: BorderSide(color: calendarBorderColor),
-      labelStyle: labelStyle.copyWith(color: calendarTitleColor),
+      side: BorderSide(color: context.borderSide.color),
+      labelStyle: labelStyle,
       label: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _categoryChipMaxWidth),
         child: Text(label, overflow: TextOverflow.ellipsis),
@@ -236,7 +241,7 @@ class _CategoryChip extends StatelessWidget {
           : Icon(
               Icons.close,
               size: calendarGutterMd,
-              color: calendarSubtitleColor,
+              color: colors.mutedForeground,
             ),
       onDeleted: onRemove,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -269,9 +274,9 @@ class _CategoryInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
-    final TextStyle? textStyle = Theme.of(context).textTheme.bodyMedium;
+    final colors = context.colorScheme;
+    final Color hintColor = colors.mutedForeground.withValues(alpha: 0.8);
+    final TextStyle textStyle = context.textTheme.p;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(
@@ -287,37 +292,29 @@ class _CategoryInputField extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                inputDecorationTheme: const InputDecorationTheme(
-                  isDense: true,
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  errorBorder: InputBorder.none,
-                  focusedErrorBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
+            child: AxiTextField(
+              controller: controller,
+              focusNode: focusNode,
+              maxLines: 1,
+              enabled: enabled,
+              textInputAction: TextInputAction.done,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: textStyle.copyWith(color: hintColor),
+                isDense: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
               ),
-              child: AxiTextField(
-                controller: controller,
-                focusNode: focusNode,
-                maxLines: 1,
-                enabled: enabled,
-                textInputAction: TextInputAction.done,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  hintStyle: textStyle?.copyWith(color: hintColor),
-                ),
-                style: textStyle,
-                strutStyle: textStyle == null
-                    ? null
-                    : StrutStyle.fromTextStyle(textStyle),
-                textAlignVertical: TextAlignVertical.center,
-                onSubmitted: (_) => onSubmitted(),
-              ),
+              style: textStyle,
+              strutStyle: StrutStyle.fromTextStyle(textStyle),
+              textAlignVertical: TextAlignVertical.center,
+              onSubmitted: (_) => onSubmitted(),
             ),
           ),
         ),

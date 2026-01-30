@@ -1744,7 +1744,7 @@ class _ChatState extends State<Chat> {
     if (trimmedOwner == null || trimmedOwner.isEmpty) {
       return null;
     }
-    final String? normalizedOwner = normalizeAddressdKey(trimmedOwner);
+    final String? normalizedOwner = normalizedAddressKey(trimmedOwner);
     if (normalizedOwner == null) {
       return trimmedOwner;
     }
@@ -1777,8 +1777,8 @@ class _ChatState extends State<Chat> {
     required String senderJid,
     required String? chatJid,
   }) {
-    final senderBare = normalizeAddressdKey(senderJid);
-    final chatBare = normalizeAddressdKey(chatJid);
+    final senderBare = normalizedAddressKey(senderJid);
+    final chatBare = normalizedAddressKey(chatJid);
     if (senderBare == null || chatBare == null) {
       return false;
     }
@@ -1827,8 +1827,8 @@ class _ChatState extends State<Chat> {
       chatJid: chatJid,
     );
     if (!isMucSender) {
-      return normalizeAddressdKey(senderJid) ==
-          normalizeAddressdKey(trimmedClaimed);
+      return normalizedAddressKey(senderJid) ==
+          normalizedAddressKey(trimmedClaimed);
     }
     final String? normalizedSender = _normalizeOccupantId(senderJid);
     final String? normalizedClaimed = _normalizeOccupantId(trimmedClaimed);
@@ -1843,8 +1843,8 @@ class _ChatState extends State<Chat> {
     if (realJid == null) {
       return false;
     }
-    return normalizeAddressdKey(realJid) ==
-        normalizeAddressdKey(trimmedClaimed);
+    return normalizedAddressKey(realJid) ==
+        normalizedAddressKey(trimmedClaimed);
   }
 
   String? _availabilityActorId({
@@ -2204,7 +2204,7 @@ class _ChatState extends State<Chat> {
 
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = normalizeAddressdKey(value);
+    final normalized = normalizedAddressKey(value);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }
@@ -2264,7 +2264,7 @@ class _ChatState extends State<Chat> {
       if (candidate.isEmpty) {
         return null;
       }
-      final String? normalizedCandidate = normalizeAddressdKey(candidate);
+      final String? normalizedCandidate = normalizedAddressKey(candidate);
       if (normalizedCandidate == null || normalizedCandidate.isEmpty) {
         return null;
       }
@@ -2272,13 +2272,13 @@ class _ChatState extends State<Chat> {
         if (!entry.transport.isEmail) {
           continue;
         }
-        if (normalizeAddressdKey(entry.address) == normalizedCandidate) {
+        if (normalizedAddressKey(entry.address) == normalizedCandidate) {
           return entry;
         }
       }
       return null;
     }
-    final String? chatBareJid = normalizeAddressdKey(chat.remoteJid);
+    final String? chatBareJid = normalizedAddressKey(chat.remoteJid);
     if (chatBareJid == null || chatBareJid.isEmpty) {
       return null;
     }
@@ -2286,7 +2286,7 @@ class _ChatState extends State<Chat> {
       if (!entry.transport.isXmpp) {
         continue;
       }
-      final String? entryBareJid = normalizeAddressdKey(entry.address);
+      final String? entryBareJid = normalizedAddressKey(entry.address);
       if (entryBareJid != null && entryBareJid == chatBareJid) {
         return entry;
       }
@@ -3664,11 +3664,11 @@ class _ChatState extends State<Chat> {
                   ? resolvedProfileJid
                   : xmppSelfJid;
               final String? normalizedXmppSelfJid =
-                  normalizeAddressdKey(selfXmppJid);
+                  normalizedAddressKey(selfXmppJid);
               final String? normalizedEmailSelfJid =
-                  normalizeAddressdKey(resolvedEmailSelfJid);
+                  normalizedAddressKey(resolvedEmailSelfJid);
               final String? normalizedChatJid =
-                  normalizeAddressdKey(chatEntity?.remoteJid);
+                  normalizedAddressKey(chatEntity?.remoteJid);
               final bool isSelfChat = normalizedChatJid != null &&
                   ((normalizedXmppSelfJid != null &&
                           normalizedChatJid == normalizedXmppSelfJid) ||
@@ -3756,7 +3756,7 @@ class _ChatState extends State<Chat> {
                 }
               }
               String? avatarPathForBareJid(String jid) {
-                final normalized = normalizeAddressdKey(jid);
+                final normalized = normalizedAddressKey(jid);
                 if (normalized == null || normalized.isEmpty) return null;
                 return rosterAvatarPathsByJid[normalized] ??
                     chatAvatarPathsByJid[normalized];
@@ -3770,8 +3770,8 @@ class _ChatState extends State<Chat> {
                   return avatarPathForBareJid(trimmed);
                 }
                 final bareParticipant =
-                    normalizeAddressdKey(trimmed.substring(0, slashIndex));
-                final roomJid = normalizeAddressdKey(chatEntity?.jid);
+                    normalizedAddressKey(trimmed.substring(0, slashIndex));
+                final roomJid = normalizedAddressKey(chatEntity?.jid);
                 final isRoomParticipant =
                     bareParticipant != null && bareParticipant == roomJid;
                 if (!isRoomParticipant) {
@@ -4478,7 +4478,7 @@ class _ChatState extends State<Chat> {
                                       final senderBare =
                                           bareAddress(e.senderJid);
                                       final normalizedSenderBare =
-                                          normalizeAddressdKey(
+                                          normalizedAddressKey(
                                         e.senderJid,
                                       );
                                       final isSelfXmpp = senderBare != null &&

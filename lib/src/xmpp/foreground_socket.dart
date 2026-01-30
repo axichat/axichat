@@ -647,6 +647,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   @override
   @override
+  @override
   Future<void> closeStreams() async {
     if (!_dataStream.isClosed) {
       await _dataStream.close();

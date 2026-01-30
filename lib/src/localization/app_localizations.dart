@@ -777,6 +777,12 @@ abstract class AppLocalizations {
   /// **'Unable to send message. Please try again.'**
   String get chatComposerSendFailed;
 
+  /// No description provided for @chatComposerAttachmentBundleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to bundle attachments. Please try again.'**
+  String get chatComposerAttachmentBundleFailed;
+
   /// No description provided for @chatEmailOfflineRetryMessage.
   ///
   /// In en, this message translates to:

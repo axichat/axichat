@@ -3183,7 +3183,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   String _normalizeJid(String jid) {
-    return normalizeAddressdKey(jid) ?? jid.trim().toLowerCase();
+    return normalizedAddressKey(jid) ?? jid.trim().toLowerCase();
   }
 
   String _normalizeSignupKey(String username, String host) =>

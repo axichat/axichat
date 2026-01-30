@@ -9,6 +9,7 @@ import 'package:axichat/src/common/ui/axi_tab_bar.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
@@ -136,7 +137,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     if (!isDragSwitcherEnabled) {
       return const SizedBox.shrink();
     }
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final scheme = context.colorScheme;
     final Color base = scheme.primary;
     final Color fade = base.withValues(alpha: 0.0);
     final Color glow = base.withValues(alpha: 0.18);
@@ -183,7 +184,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     required Widget scheduleTabLabel,
     required Widget tasksTabLabel,
   }) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final scheme = context.colorScheme;
     final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
     final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
@@ -340,15 +341,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         if (candidate.isNotEmpty) {
                           _setActiveCancelPayload(candidate.first);
                         }
-                        final ColorScheme scheme = Theme.of(
-                          context,
-                        ).colorScheme;
+                        final scheme = context.colorScheme;
                         final bool hovering =
                             _cancelBucketHovering || candidate.isNotEmpty;
-                        final Color fillColor = scheme.error.withValues(
+                        final Color fillColor = scheme.destructive.withValues(
                           alpha: hovering ? 0.18 : 0.09,
                         );
-                        final Color iconColor = scheme.error.withValues(
+                        final Color iconColor = scheme.destructive.withValues(
                           alpha: hovering ? 0.95 : 0.78,
                         );
                         return Container(
@@ -832,7 +831,7 @@ class _DragTabLabel extends StatelessWidget {
   });
 
   final Widget label;
-  final ColorScheme scheme;
+  final ShadColorScheme scheme;
   final bool showCue;
 
   @override

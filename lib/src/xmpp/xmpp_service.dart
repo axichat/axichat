@@ -1986,7 +1986,7 @@ class XmppService extends XmppBase
   }
 
   ui.Color? _demoAvatarBackgroundForJid(String jid) {
-    final normalized = normalizeAddressdKey(jid);
+    final normalized = normalizedAddressKey(jid);
     if (normalized == null) {
       return null;
     }
@@ -2584,7 +2584,8 @@ class XmppService extends XmppBase
 
   Future<void> _resetStreamControllers() async {
     await _closeStreamControllers();
-    _httpUploadSupportController = StreamController<HttpUploadSupport>.broadcast();
+    _httpUploadSupportController =
+        StreamController<HttpUploadSupport>.broadcast();
     _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
     _streamReadyController = StreamController<XmppStreamReady>.broadcast();
     _databaseReloadController = StreamController<void>.broadcast();

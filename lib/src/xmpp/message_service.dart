@@ -1802,7 +1802,7 @@ mixin MessageService
           continue;
         }
         final chatJid = chat.jid.trim();
-        if (chatJid.isEmfinal pty) {
+        if (chatJid.isEmpty) {
           continue;
         }
         await syncPinnedMessagesForChat(chatJid);
@@ -1842,7 +1842,7 @@ mixin MessageService
   final Set<String> _mucJoinMamDeferredRooms = {};
   DateTime? _mamGlobalDeniedUntil;
   String? _mamGlobalDeniedUntilScope;
-  bool _mamGlobalDeniedUntilLoadefinal d = false;
+  bool _mamGlobalDeniedUntilLoaded = false;
   DateTime? _mamGlobalMaxTimestamp;
 
   final Map<String, Set<String>> _seenStableKeys = {};

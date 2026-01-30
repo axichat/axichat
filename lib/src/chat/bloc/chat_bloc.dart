@@ -385,7 +385,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = normalizeAddressdKey(value);
+    final normalized = normalizedAddressKey(value);
     if (normalized == null || normalized.isEmpty) {
       return false;
     }
@@ -403,7 +403,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final String? _chatLookupJid = jid == null
       ? null
       : _isEmailOnlyAddress(jid)
-          ? normalizeAddressdKey(jid) ?? jid!.trim().toLowerCase()
+          ? normalizedAddressKey(jid) ?? jid!.trim().toLowerCase()
           : jid;
   final MessageService _messageService;
   XmppService? _xmppService;
@@ -1486,13 +1486,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ..addAll(state.quotedMessagesById.keys);
     final missingQuoteIds =
         quoteIds.where((id) => !knownMessageIds.contains(id)).toList();
-    final loadedQuotes = missingQuoteIds.isEmpty
-        ? const <Message>[]
-        : (await Future.wait(
-            missingQuoteIds.map(_messageService.loadMessageByStanzaId),
-          ))
-            .whereType<Message>()
-            .toList();
+    final loadedQuotes = <Message>[];
+    if (missingQuoteIds.isNotEmpty) {
+      for (final quoteId in missingQuoteIds) {
+        final message = await _messageService.loadMessageByStanzaId(quoteId);
+        if (message != null) {
+          loadedQuotes.add(message);
+        }
+      }
+    }
     final updatedQuotedMessages = <String, Message>{
       ...state.quotedMessagesById,
       ...referencedQuotes,
@@ -2568,8 +2570,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             );
             emit(
               state.copyWith(
-                composerError:
-                    'Unable to bundle attachments. Please try again.',
+                composerError: _l10n.chatComposerAttachmentBundleFailed,
               ),
             );
             return;
@@ -4255,6 +4256,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final db = await _messageService.database;
     return db.getFileMetadata(metadataId);
   }
+
+  Stream<List<String>> recipientAddressSuggestionsStream() =>
+      _chatsService.recipientAddressSuggestionsStream();
+
+  String? get selfJid => _chatsService.myJid;
 
   List<String> _orderedUniqueAttachmentIds(
     Iterable<MessageAttachmentData> attachments,

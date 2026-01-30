@@ -389,6 +389,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chatComposerSendFailed =>
       'Unable to send message. Please try again.';
+  @override
+  String get chatComposerAttachmentBundleFailed =>
+      'Unable to bundle attachments. Please try again.';
 
   @override
   String get chatEmailOfflineRetryMessage =>

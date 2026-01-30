@@ -28,6 +28,7 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -225,8 +226,6 @@ class EmailService {
   static const int _emailAddressSeparatorMissingIndex = -1;
   static const int _emailLocalPartStartIndex = 0;
   static const int _emailLocalPartMinLength = 1;
-  static const String _emailDownloadLimitKey = 'download_limit';
-  static const String _emailDownloadLimitDisabledValue = '0';
   static const String _unknownEmailPassword = '';
   static const String _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
   static const String _connectionOverrideKeyPrefix =
@@ -389,9 +388,9 @@ class EmailService {
   bool _foregroundKeepaliveEnabled = false;
   bool _foregroundKeepaliveListenerAttached = false;
   bool _foregroundKeepaliveServiceAcquired = false;
-  Future<void> _foregroundKeepaliveQueue = Future<void>.value();
+  final EmailAsyncQueue _foregroundKeepaliveQueue = EmailAsyncQueue();
   int _foregroundKeepaliveOperationId = 0;
-  bool _reconnectRestartInFlight = false;
+  final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final List<_PendingNotification> _pendingNotifications = [];
   Timer? _notificationFlushTimer;
   Timer? _contactsSyncTimer;
@@ -414,14 +413,14 @@ class EmailService {
     connectionLimit: _imapConnectionLimitSingle,
     idleCutoff: _imapIdleKeepaliveInterval,
   );
-  DateTime? _imapCapabilitiesCfinal heckedAt;
+  DateTime? _imapCapabilitiesCheckedAt;
   bool _imapCapabilitiesResolved = false;
-  final Timer? _imapSyncTimer;
+  Timer? _imapSyncTimer;
   Object? _imapSyncLoopToken;
-  Future<final void> _imapSyncQueue = Future<void>.value();
-  Future<voidfinal > _reconnectCatchUpQueue = Future<void>.value();
-  Future<void> _contactsSyncQueue = Future<void>.value();
-  Future<void> _chatlistSyncQueue = Future<void>.value();
+  final EmailAsyncQueue _imapSyncQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _reconnectCatchUpQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _contactsSyncQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _chatlistSyncQueue = EmailAsyncQueue();
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
@@ -659,7 +658,7 @@ class EmailService {
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
-    final normalizedOverrideAddress = normalizeAddressdKey(
+    final normalizedOverrideAddress = normalizedAddressKey(
       addressOverride,
     );
     final preferredAddress = _preferredAddressFromJid(jid);
@@ -981,10 +980,10 @@ class EmailService {
     _running = false;
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
-    _contactsSyncQueue = Future<void>.value();
-    _chatlistSyncQueue = Future<void>.value();
-    _imapSyncQueue = Future<void>.value();
-    _reconnectCatchUpQueue = Future<void>.value();
+    _contactsSyncQueue.reset();
+    _chatlistSyncQueue.reset();
+    _imapSyncQueue.reset();
+    _reconnectCatchUpQueue.reset();
     _cancelConnectivityDowngrade();
   }
 
@@ -1447,9 +1446,10 @@ class EmailService {
       }
     }
 
-    final results = await Future.wait(
-      resolvedTargets.values.map(sendTo),
-    );
+    final results = <(FanOutRecipientStatus, int?)>[];
+    for (final target in resolvedTargets.values) {
+      results.add(await sendTo(target));
+    }
 
     for (final result in results) {
       statuses.add(result.$1);
@@ -1810,9 +1810,7 @@ class EmailService {
 
   Future<void> syncContactsFromCore() async {
     _cancelContactsSyncTimer();
-    final queued = _contactsSyncQueue.then((_) => _syncContactsFromCore());
-    _contactsSyncQueue = queued.catchError((_) {});
-    await queued;
+    await _contactsSyncQueue.run(_syncContactsFromCore);
   }
 
   Future<void> _syncContactsFromCore() async {
@@ -1846,12 +1844,10 @@ class EmailService {
   }
 
   Future<void> refreshChatlistFromCore() async {
-    final queued = _chatlistSyncQueue.then((_) async {
+    await _chatlistSyncQueue.run(() async {
       await _ensureReady();
       await _transport.refreshChatlistSnapshot();
     });
-    _chatlistSyncQueue = queued.catchError((_) {});
-    await queued;
   }
 
   Future<void> syncInboxAndSent() async {
@@ -2874,6 +2870,7 @@ class EmailService {
     }
     final existing = _bootstrapFuture;
     if (existing != null) {
+      await existing;
       return;
     }
     final operationId = ++_bootstrapOperationId;
@@ -2882,11 +2879,13 @@ class EmailService {
       bootstrapKey: bootstrapKey,
     );
     _bootstrapFuture = future;
-    future.whenComplete(() {
+    try {
+      await future;
+    } finally {
       if (identical(_bootstrapFuture, future)) {
         _bootstrapFuture = null;
       }
-    });
+    }
   }
 
   Future<void> _runBootstrapFromCore({
@@ -2934,7 +2933,7 @@ class EmailService {
       return;
     }
     _foregroundKeepaliveEnabled = false;
-    _foregroundKeepaliveQueue = Future<void>.value();
+    _foregroundKeepaliveQueue.reset();
     final bridge = _foregroundBridge;
     if (bridge != null && _foregroundKeepaliveServiceAcquired) {
       try {
@@ -3003,13 +3002,12 @@ class EmailService {
   }
 
   void _enqueueForegroundKeepaliveTick() {
-    final queued = _foregroundKeepaliveQueue.then((_) async {
+    _foregroundKeepaliveQueue.run(() async {
       if (!_foregroundKeepaliveEnabled) {
         return;
       }
       await _foregroundKeepaliveTick();
     });
-    _foregroundKeepaliveQueue = queued.catchError((_) {});
   }
 
   void _startImapSyncLoop() {
@@ -3063,7 +3061,7 @@ class EmailService {
   }
 
   Future<void> _enqueueImapSync(Object token) async {
-    final queued = _imapSyncQueue.then((_) async {
+    await _imapSyncQueue.run(() async {
       if (_imapSyncLoopToken != token || _foregroundKeepaliveEnabled) {
         return;
       }
@@ -3071,8 +3069,6 @@ class EmailService {
       await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
       await refreshChatlistFromCore();
     });
-    _imapSyncQueue = queued.catchError((_) {});
-    await queued;
   }
 
   Duration _imapSyncInterval() {
@@ -3174,7 +3170,7 @@ class EmailService {
     if (!_running) {
       return;
     }
-    final queued = _reconnectCatchUpQueue.then((_) async {
+    await _reconnectCatchUpQueue.run(() async {
       if (!_running) {
         return;
       }
@@ -3188,35 +3184,31 @@ class EmailService {
       }
       await refreshChatlistFromCore();
     });
-    _reconnectCatchUpQueue = queued.catchError((_) {});
-    await queued;
   }
 
   Future<void> _scheduleReconnectRestartIfOffline() async {
-    if (_reconnectRestartInFlight) {
-      return;
-    }
-    _reconnectRestartInFlight = true;
-    try {
-      await Future.delayed(_reconnectRestartDelay);
-      final connectivity = await _transport.connectivity();
-      if (connectivity == null || connectivity >= _connectivityConnectingMin) {
-        return;
+    await _reconnectRestartQueue.run(() async {
+      try {
+        await Future.delayed(_reconnectRestartDelay);
+        final connectivity = await _transport.connectivity();
+        if (connectivity == null ||
+            connectivity >= _connectivityConnectingMin) {
+          return;
+        }
+        _log.warning(
+          'Email transport still offline after network available; restarting.',
+        );
+        await stop();
+        await start();
+        await _transport.notifyNetworkAvailable();
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Email transport restart failed', error, stackTrace);
+      } finally {
+        await _refreshConnectivityState(
+          source: _EmailSyncSource.reconnectRestart,
+        );
       }
-      _log.warning(
-        'Email transport still offline after network available; restarting.',
-      );
-      await stop();
-      await start();
-      await _transport.notifyNetworkAvailable();
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Email transport restart failed', error, stackTrace);
-    } finally {
-      _reconnectRestartInFlight = false;
-      await _refreshConnectivityState(
-        source: _EmailSyncSource.reconnectRestart,
-      );
-    }
+    });
   }
 
   Future<void> _ensureReady() async {
@@ -3384,22 +3376,27 @@ class EmailService {
   Future<Map<String, Chat>> _resolveFanOutTargets(
     List<FanOutTarget> targets,
   ) async {
-    final futures = targets.map((target) async {
-      if (target.chat != null) {
-        return ensureChatForEmailChat(target.chat!);
-      }
-      final address = target.address;
-      if (address == null || address.isEmpty) {
-        return null;
-      }
-      return ensureChatForAddress(
-        address: address,
-        displayName: target.displayName ?? address,
-      );
-    });
-    final resolved = await Future.wait(futures);
     final resolvedByJid = <String, Chat>{};
-    for (final chat in resolved.whereType<Chat>()) {
+    for (final target in targets) {
+      final Chat? chat;
+      if (target.chat != null) {
+        chat = await ensureChatForEmailChat(target.chat!);
+      } else {
+        final address = target.address;
+        if (address == null || address.isEmpty) {
+          continue;
+        }
+        chat = await ensureChatForAddress(
+          address: address,
+          displayName: target.displayName ?? address,
+        );
+      }
+      if (chat == null) {
+        continue;
+      }
+      if (resolvedByJid.containsKey(chat.jid)) {
+        continue;
+      }
       resolvedByJid.putIfAbsent(chat.jid, () => chat);
     }
     return resolvedByJid;
@@ -3467,7 +3464,7 @@ class EmailService {
   }
 
   String? _preferredAddressFromJid(String jid) {
-    final normalized = normalizeAddressdKey(jid);
+    final normalized = normalizedAddressKey(jid);
     if (normalized == null) {
       return null;
     }
@@ -3639,7 +3636,7 @@ class EmailService {
   }
 
   String _scopeForJid(String jid) =>
-      normalizeAddressdKey(jid) ?? jid.trim().toLowerCase();
+      normalizedAddressKey(jid) ?? jid.trim().toLowerCase();
 
   String? _scopeForOptionalJid(String? jid) =>
       jid == null ? _activeCredentialScope : _scopeForJid(jid);
@@ -4029,8 +4026,12 @@ class EmailService {
     }
     if (success) {
       final db = await _databaseBuilder();
-      for (final message in deltaMessages) {
-        await db.deleteMessage(message.stanzaID);
+      final stanzaIds = deltaMessages
+          .map((message) => message.stanzaID.trim())
+          .where((stanzaId) => stanzaId.isNotEmpty)
+          .toSet();
+      if (stanzaIds.isNotEmpty) {
+        await db.deleteMessagesByStanzaIds(stanzaIds);
       }
     }
     return success;
@@ -4094,29 +4095,66 @@ class EmailService {
     final db = await _databaseBuilder();
     final int deltaAccountId = account.deltaAccountId;
     final messagesByDeltaId = <int, Message>{};
-    final missingIds = <int>[];
-    for (final deltaId in deltaIds) {
-      final stanzaId = _stanzaId(deltaId, accountId: deltaAccountId);
-      final message = await db.getMessageByDeltaId(
-            deltaId,
-            deltaAccountId: deltaAccountId,
-          ) ??
-          await db.getMessageByStanzaID(stanzaId);
-      if (message != null) {
+    final deltaIdSet = deltaIds.toSet();
+    final existing = await db.getMessagesByDeltaIds(
+      deltaIdSet,
+      deltaAccountId: deltaAccountId,
+    );
+    for (final message in existing) {
+      final deltaId = message.deltaMsgId;
+      if (deltaId != null) {
         messagesByDeltaId[deltaId] = message;
-      } else {
-        missingIds.add(deltaId);
       }
     }
+
+    final missingIds = deltaIdSet
+        .where((deltaId) => !messagesByDeltaId.containsKey(deltaId))
+        .toList(growable: false);
     if (missingIds.isNotEmpty) {
-      await _transport.hydrateMessages(missingIds, accountId: deltaAccountId);
+      final stanzaIds = missingIds
+          .map((deltaId) => _stanzaId(deltaId, accountId: deltaAccountId))
+          .toList(growable: false);
+      final stanzaMatches = await db.getMessagesByStanzaIds(stanzaIds);
+      final messagesByStanzaId = <String, Message>{
+        for (final message in stanzaMatches) message.stanzaID: message,
+      };
       for (final deltaId in missingIds) {
         final stanzaId = _stanzaId(deltaId, accountId: deltaAccountId);
-        final message = await db.getMessageByDeltaId(
-              deltaId,
-              deltaAccountId: deltaAccountId,
-            ) ??
-            await db.getMessageByStanzaID(stanzaId);
+        final message = messagesByStanzaId[stanzaId];
+        if (message != null) {
+          messagesByDeltaId[deltaId] = message;
+        }
+      }
+    }
+
+    final remainingIds = deltaIdSet
+        .where((deltaId) => !messagesByDeltaId.containsKey(deltaId))
+        .toList(growable: false);
+    if (remainingIds.isNotEmpty) {
+      await _transport.hydrateMessages(remainingIds, accountId: deltaAccountId);
+      final hydrated = await db.getMessagesByDeltaIds(
+        remainingIds,
+        deltaAccountId: deltaAccountId,
+      );
+      for (final message in hydrated) {
+        final deltaId = message.deltaMsgId;
+        if (deltaId != null) {
+          messagesByDeltaId[deltaId] = message;
+        }
+      }
+      final stanzaIds = remainingIds
+          .map((deltaId) => _stanzaId(deltaId, accountId: deltaAccountId))
+          .toList(growable: false);
+      final stanzaMatches = await db.getMessagesByStanzaIds(stanzaIds);
+      final messagesByStanzaId = <String, Message>{
+        for (final message in stanzaMatches) message.stanzaID: message,
+      };
+      for (final deltaId in remainingIds) {
+        if (messagesByDeltaId.containsKey(deltaId)) {
+          continue;
+        }
+        final stanzaId = _stanzaId(deltaId, accountId: deltaAccountId);
+        final message = messagesByStanzaId[stanzaId];
         if (message != null) {
           messagesByDeltaId[deltaId] = message;
         }
@@ -4371,22 +4409,28 @@ class EmailService {
   Future<List<DeltaContact>> getContacts({int flags = 0, String? query}) async {
     await _ensureReady();
     final ids = await _transport.getContactIds(flags: flags, query: query);
-    final futures = [
-      for (final id in ids) _transport.getContact(id),
-    ];
-    final results = await Future.wait(futures);
-    return results.whereType<DeltaContact>().toList(growable: false);
+    final contacts = <DeltaContact>[];
+    for (final id in ids) {
+      final contact = await _transport.getContact(id);
+      if (contact != null) {
+        contacts.add(contact);
+      }
+    }
+    return contacts;
   }
 
   /// Gets all blocked contacts from core as a list.
   Future<List<DeltaContact>> getBlockedContacts() async {
     await _ensureReady();
     final ids = await _transport.getBlockedContactIds();
-    final futures = [
-      for (final id in ids) _transport.getContact(id),
-    ];
-    final results = await Future.wait(futures);
-    return results.whereType<DeltaContact>().toList(growable: false);
+    final contacts = <DeltaContact>[];
+    for (final id in ids) {
+      final contact = await _transport.getContact(id);
+      if (contact != null) {
+        contacts.add(contact);
+      }
+    }
+    return contacts;
   }
 }
 

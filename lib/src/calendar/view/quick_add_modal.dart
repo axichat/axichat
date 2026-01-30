@@ -920,9 +920,8 @@ class _QuickAddModalContent extends StatelessWidget {
     final BorderRadius borderRadius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(calendarBorderRadius);
-    final Color background = isSheet
-        ? Theme.of(context).colorScheme.surface
-        : calendarContainerColor;
+    final Color background =
+        isSheet ? context.colorScheme.card : calendarContainerColor;
     final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
     final Widget header = ValueListenableBuilder<TextEditingValue>(
       valueListenable: taskNameController,
@@ -1604,13 +1603,14 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux);
   final bool useSheet = !isDesktop && commandSurface == CommandSurface.sheet;
+  final Color scrimColor = colors.foreground.withValues(alpha: 0.5);
   final surface =
       useSheet ? QuickAddModalSurface.bottomSheet : QuickAddModalSurface.dialog;
 
   if (!useSheet) {
     return showFadeScaleDialog<void>(
       context: context,
-      barrierColor: colors.scrim,
+      barrierColor: scrimColor,
       useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) {
         final B? resolvedBloc = resolveBloc();
@@ -1641,7 +1641,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,
-    barrierColor: colors.scrim,
+    barrierColor: scrimColor,
     backgroundColor: Colors.transparent,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth: 760,

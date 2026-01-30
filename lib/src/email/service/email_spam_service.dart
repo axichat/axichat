@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
 /// Callback type for syncing spam state to DeltaChat core blocking.
-typedef DeltaChatSpamCallback = Future<bool> Function(String address);
+final class DeltaChatSpamCallback {
+  const DeltaChatSpamCallback(this._callback);
+
+  final Future<bool> Function(String address) _callback;
+
+  Future<bool> call(String address) => _callback(address);
+}
 
 class EmailSpamService {
   EmailSpamService({
@@ -53,6 +60,6 @@ class EmailSpamService {
   }
 
   String? _normalize(String address) {
-    return normalizeAddressdKey(address);
+    return normalizedAddressKey(address);
   }
 }

@@ -395,6 +395,9 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get chatComposerSendFailed =>
       'No se pudo enviar el mensaje. Inténtalo de nuevo.';
+  @override
+  String get chatComposerAttachmentBundleFailed =>
+      'No se pudieron agrupar los archivos adjuntos. Inténtalo de nuevo.';
 
   @override
   String get chatEmailOfflineRetryMessage =>

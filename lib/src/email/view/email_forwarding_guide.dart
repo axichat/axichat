@@ -15,16 +15,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const bool _forceShowEmailForwardingWelcome = false;
-
-const String _gmailForwardingUrl =
-    'https://support.google.com/mail/answer/10957';
-const String _outlookForwardingUrl =
-    'https://support.microsoft.com/en-us/office/turn-on-automatic-forwarding-in-outlook-7f2670a1-7fff-4475-8a3c-5822d63b0c8e';
-
 enum EmailForwardingProvider { gmail, outlook }
 
 extension EmailForwardingProviderMetadata on EmailForwardingProvider {
+  static const String _gmailForwardingUrl =
+      'https://support.google.com/mail/answer/10957';
+  static const String _outlookForwardingUrl =
+      'https://support.microsoft.com/en-us/office/turn-on-automatic-forwarding-in-outlook-7f2670a1-7fff-4475-8a3c-5822d63b0c8e';
+
   String label(AppLocalizations l10n) {
     switch (this) {
       case EmailForwardingProvider.gmail:
@@ -292,8 +290,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final smallStyle = context.textTheme.small;
-    final subheaderStyle =
-        context.textTheme.large.copyWith(fontWeight: FontWeight.w600);
+    final subheaderStyle = context.textTheme.large;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,6 +404,7 @@ class EmailForwardingWelcomeGate extends StatefulWidget {
 
 class _EmailForwardingWelcomeGateState
     extends State<EmailForwardingWelcomeGate> {
+  static const bool _forceShowEmailForwardingWelcome = false;
   bool _dialogShown = false;
 
   @override

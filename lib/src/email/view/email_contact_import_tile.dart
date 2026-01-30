@@ -17,14 +17,13 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const EmailContactImportFormat _defaultFormat = EmailContactImportFormat.gmail;
-
 class EmailContactImportTile extends StatelessWidget {
   const EmailContactImportTile({super.key});
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final rootContext = context;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
@@ -37,7 +36,7 @@ class EmailContactImportTile extends StatelessWidget {
                 ? null
                 : () {
                     showFadeScaleDialog(
-                      context: context,
+                      context: rootContext,
                       builder: (dialogContext) => EmailContactImportDialog(
                         cubit: context.read<EmailContactImportCubit>()..reset(),
                       ),
@@ -61,6 +60,7 @@ class EmailContactImportActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final rootContext = context;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
@@ -76,7 +76,7 @@ class EmailContactImportActionButton extends StatelessWidget {
                 ? null
                 : () {
                     showFadeScaleDialog(
-                      context: context,
+                      context: rootContext,
                       builder: (dialogContext) => EmailContactImportDialog(
                         cubit: context.read<EmailContactImportCubit>()..reset(),
                       ),
@@ -104,7 +104,7 @@ class EmailContactImportDialog extends StatefulWidget {
 }
 
 class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
-  EmailContactImportFormat _format = _defaultFormat;
+  EmailContactImportFormat _format = EmailContactImportFormat.gmail;
   File? _selectedFile;
   String? _selectedFileName;
 

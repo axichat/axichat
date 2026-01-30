@@ -121,6 +121,7 @@
   "chatComposerEmailAttachmentRecipientRequired": "請新增電郵收件人以傳送附件。",
   "chatComposerDraftRecipientsUnavailable": "無法解析此草稿的收件人。",
   "chatComposerSendFailed": "無法傳送訊息。請再試一次。",
+  "chatComposerAttachmentBundleFailed": "無法打包附件，請再試一次。",
   "chatEmailOfflineRetryMessage": "電郵離線。同步恢復後再試。",
   "chatEmailOfflineDraftsFallback": "電郵離線。訊息將儲存到草稿，直到連線恢復。",
   "chatEmailSyncRefreshing": "電郵同步正在更新...",

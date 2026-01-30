@@ -121,6 +121,7 @@
   "chatComposerEmailAttachmentRecipientRequired": "Füge einen E-Mail-Empfänger hinzu, um Anhänge zu senden.",
   "chatComposerDraftRecipientsUnavailable": "Empfänger für diesen Entwurf konnten nicht ermittelt werden.",
   "chatComposerSendFailed": "Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.",
+  "chatComposerAttachmentBundleFailed": "Anhänge konnten nicht gebündelt werden. Bitte erneut versuchen.",
   "chatEmailOfflineRetryMessage": "E-Mail ist offline. Versuche es erneut, sobald die Synchronisierung wiederhergestellt ist.",
   "chatEmailOfflineDraftsFallback": "E-Mail ist offline. Nachrichten werden in Entwürfen gespeichert, bis die Verbindung zurückkehrt.",
   "chatEmailSyncRefreshing": "E-Mail-Synchronisierung wird aktualisiert...",

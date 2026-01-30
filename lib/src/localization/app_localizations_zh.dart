@@ -375,6 +375,8 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatComposerSendFailed => '消息发送失败，请重试。';
+  @override
+  String get chatComposerAttachmentBundleFailed => '无法打包附件，请重试。';
 
   @override
   String get chatEmailOfflineRetryMessage => '邮件离线。同步恢复后再试。';
@@ -6037,6 +6039,8 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatComposerSendFailed => '無法傳送訊息。請再試一次。';
+  @override
+  String get chatComposerAttachmentBundleFailed => '無法打包附件，請再試一次。';
 
   @override
   String get chatEmailOfflineRetryMessage => '電郵離線。同步恢復後再試。';
