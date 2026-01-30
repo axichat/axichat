@@ -7,12 +7,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-extension ValidJid on String {
-  bool get isValidJid => RegExp(
-        r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
-      ).hasMatch(this);
-}
-
 class JidInput extends StatelessWidget {
   const JidInput({
     super.key,

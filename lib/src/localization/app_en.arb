@@ -1033,6 +1033,35 @@
   "blocklistUnblock": "Unblock",
   "blocklistBlock": "Block",
   "blocklistAddTooltip": "Add to blocklist",
+  "blocklistInvalidJid": "Enter a valid address.",
+  "blocklistBlockFailed": "Failed to block {address}. Try again later.",
+  "@blocklistBlockFailed": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistUnblockFailed": "Failed to unblock {address}. Try again later.",
+  "@blocklistUnblockFailed": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistBlocked": "Blocked {address}.",
+  "@blocklistBlocked": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistUnblocked": "Unblocked {address}.",
+  "@blocklistUnblocked": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistBlockingUnsupported": "Server does not support blocking.",
+  "blocklistUnblockingUnsupported": "Server does not support unblocking.",
+  "blocklistUnblockAllFailed": "Failed to unblock users. Try again later.",
+  "blocklistUnblockAllSuccess": "Unblocked all.",
   "mucChangeNickname": "Change nickname",
   "mucChangeNicknameWithCurrent": "Change nickname (current: {current})",
   "@mucChangeNicknameWithCurrent": {

@@ -744,18 +744,15 @@ class _SignupFormState extends State<SignupForm>
                                                       .pauseCarousel(),
                                                   useActionEnabled: avatarState
                                                       .canUseCarouselAvatar,
-                                                  canShuffleBackground: avatarState
-                                                          .hasCarouselPreview &&
+                                                  canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,
                                                   onShuffleBackground: avatarState
-                                                              .hasCarouselPreview &&
-                                                          avatarState
-                                                              .canShuffleBackground
+                                                          .canShuffleBackground
                                                       ? () => context
                                                           .read<
                                                               SignupAvatarCubit>()
-                                                          .shuffleCarouselBackground(
+                                                          .shuffleBackground(
                                                             context.colorScheme,
                                                           )
                                                       : null,

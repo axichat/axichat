@@ -7,7 +7,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -61,11 +60,7 @@ class _LoginFormState extends State<LoginForm> {
   void _onPressed(BuildContext context) async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    await context.read<EndpointConfigCubit>().restore();
-    if (!context.mounted) return;
-    await context
-        .read<AuthenticationCubit>()
-        .updateEndpointConfig(context.read<EndpointConfigCubit>().state);
+    await context.read<AuthenticationCubit>().restoreEndpointConfig();
     if (!context.mounted) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().login(

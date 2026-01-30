@@ -1413,7 +1413,7 @@ class _AccessibilityChatScope extends StatelessWidget {
       create: (context) => AccessibilityChatBloc(
         jid: chatJid,
         messageService: context.read<XmppService>(),
-        emailService: RepositoryProvider.of<EmailService?>(context),
+        emailService: context.read<EmailService?>(),
         initialLocalization: context.l10n,
         contacts: state.contacts,
         myJid: state.myJid,
@@ -1476,26 +1476,29 @@ class _AccessibilityChatSyncState extends State<_AccessibilityChatSync> {
   @override
   void didUpdateWidget(covariant _AccessibilityChatSync oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final bloc = context.read<AccessibilityChatBloc>();
     if (!identical(_contacts, widget.state.contacts) ||
         _myJid != widget.state.myJid) {
       _contacts = widget.state.contacts;
       _myJid = widget.state.myJid;
-      bloc.add(
-        AccessibilityChatContactsUpdated(
-          contacts: widget.state.contacts,
-          myJid: widget.state.myJid,
-        ),
-      );
+      context.read<AccessibilityChatBloc>().add(
+            AccessibilityChatContactsUpdated(
+              contacts: widget.state.contacts,
+              myJid: widget.state.myJid,
+            ),
+          );
     }
     if (_unreadCount != widget.unreadCount) {
       _unreadCount = widget.unreadCount;
-      bloc.add(AccessibilityChatUnreadUpdated(widget.unreadCount));
+      context
+          .read<AccessibilityChatBloc>()
+          .add(AccessibilityChatUnreadUpdated(widget.unreadCount));
     }
     final draftId = widget.state.currentEntry.draftId;
     if (_draftId != draftId) {
       _draftId = draftId;
-      bloc.add(AccessibilityChatDraftIdUpdated(draftId));
+      context
+          .read<AccessibilityChatBloc>()
+          .add(AccessibilityChatDraftIdUpdated(draftId));
     }
   }
 
@@ -1766,7 +1769,8 @@ class _AccessibilityActionContent extends StatelessWidget {
                       AccessibilityChatSaveDraftRequested(
                         body: state.composerText,
                         recipients: currentRecipients,
-                        draftId: state.currentEntry.draftId,
+                        draftId:
+                            chatState?.draftId ?? state.currentEntry.draftId,
                       ),
                     ),
                 onSend: () => context.read<AccessibilityChatBloc>().add(

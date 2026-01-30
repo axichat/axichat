@@ -19,7 +19,6 @@ import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -80,11 +79,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _bootstrap() async {
-    await context.read<EndpointConfigCubit>().restore();
-    if (!mounted) return;
-    await context
-        .read<AuthenticationCubit>()
-        .updateEndpointConfig(context.read<EndpointConfigCubit>().state);
+    await context.read<AuthenticationCubit>().restoreEndpointConfig();
     if (!mounted) return;
     final bootstrap = context.read<AuthBootstrap>();
     final preferredFlow = bootstrap.hasStoredLoginCredentials

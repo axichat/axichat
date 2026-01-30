@@ -3,9 +3,9 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -78,10 +78,8 @@ class _EmailBlockButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final XmppService? xmppService = context.read<XmppService?>();
     final String? address = emailAddress?.trim();
-    final disabled = xmppService == null || address == null || address.isEmpty;
-    if (disabled) {
+    if (address == null || address.isEmpty) {
       return ShadButton.ghost(
         width: double.infinity,
         mainAxisAlignment: mainAxisAlignment,
@@ -91,18 +89,29 @@ class _EmailBlockButton extends StatelessWidget {
         child: Text(context.l10n.blocklistBlock),
       ).withTapBounce(enabled: false);
     }
-    Future<void> handleBlock() async {
-      await xmppService.setEmailBlockStatus(address: address, blocked: true);
-      callback?.call();
-    }
-
-    return ShadButton.ghost(
-      width: double.infinity,
-      mainAxisAlignment: mainAxisAlignment,
-      onPressed: handleBlock,
-      foregroundColor: context.colorScheme.destructive,
-      leading: showIcon ? const Icon(LucideIcons.userX) : null,
-      child: Text(context.l10n.blocklistBlock),
-    ).withTapBounce(enabled: true);
+    return BlocSelector<BlocklistCubit, BlocklistState, bool>(
+      selector: (state) =>
+          state is BlocklistLoading &&
+          (state.jid == address || state.jid == null),
+      builder: (context, disabled) {
+        VoidCallback? onPressed = disabled
+            ? null
+            : () {
+                context.read<BlocklistCubit>().block(
+                      address: address,
+                      transport: MessageTransport.email,
+                    );
+                callback?.call();
+              };
+        return ShadButton.ghost(
+          width: double.infinity,
+          mainAxisAlignment: mainAxisAlignment,
+          onPressed: onPressed,
+          foregroundColor: context.colorScheme.destructive,
+          leading: showIcon ? const Icon(LucideIcons.userX) : null,
+          child: Text(context.l10n.blocklistBlock),
+        ).withTapBounce(enabled: onPressed != null);
+      },
+    );
   }
 }

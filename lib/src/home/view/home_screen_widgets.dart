@@ -323,17 +323,24 @@ class _NexusTabViews extends StatelessWidget {
               }
             },
           ),
-        if (context.read<BlocklistCubit?>() != null)
-          BlocListener<BlocklistCubit, BlocklistState>(
-            listener: (context, state) {
-              if (toast == null) return;
-              if (state is BlocklistFailure) {
-                toast(FeedbackToast.error(message: state.message));
-              } else if (state is BlocklistSuccess) {
-                toast(FeedbackToast.success(message: state.message));
-              }
-            },
-          ),
+        BlocListener<BlocklistCubit, BlocklistState>(
+          listener: (context, state) {
+            if (toast == null) return;
+            if (state is BlocklistFailure) {
+              toast(
+                FeedbackToast.error(
+                  message: state.notice.resolve(context.l10n),
+                ),
+              );
+            } else if (state is BlocklistSuccess) {
+              toast(
+                FeedbackToast.success(
+                  message: state.notice.resolve(context.l10n),
+                ),
+              );
+            }
+          },
+        ),
       ],
       child: Container(
         decoration: BoxDecoration(

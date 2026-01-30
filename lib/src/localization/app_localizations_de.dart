@@ -2433,6 +2433,44 @@ class AppLocalizationsDe extends AppLocalizations {
   String get blocklistAddTooltip => 'Zur Blockliste hinzufügen';
 
   @override
+  String get blocklistInvalidJid => 'Enter a valid address.';
+
+  @override
+  String blocklistBlockFailed(Object address) {
+    return 'Failed to block $address. Try again later.';
+  }
+
+  @override
+  String blocklistUnblockFailed(Object address) {
+    return 'Failed to unblock $address. Try again later.';
+  }
+
+  @override
+  String blocklistBlocked(Object address) {
+    return 'Blocked $address.';
+  }
+
+  @override
+  String blocklistUnblocked(Object address) {
+    return 'Unblocked $address.';
+  }
+
+  @override
+  String get blocklistBlockingUnsupported =>
+      'Server does not support blocking.';
+
+  @override
+  String get blocklistUnblockingUnsupported =>
+      'Server does not support unblocking.';
+
+  @override
+  String get blocklistUnblockAllFailed =>
+      'Failed to unblock users. Try again later.';
+
+  @override
+  String get blocklistUnblockAllSuccess => 'Unblocked all.';
+
+  @override
   String get mucChangeNickname => 'Spitznamen ändern';
 
   @override

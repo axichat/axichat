@@ -387,9 +387,31 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
     }
-    _avatarCarouselTimer = Timer.periodic(_avatarCarouselInterval, (_) async {
-      await _advanceCarousel();
+    _scheduleCarouselTick();
+  }
+
+  void _scheduleCarouselTick() {
+    if (_avatarCarouselTimer != null || _isCarouselBlocked()) return;
+    _avatarCarouselTimer = Timer(_avatarCarouselInterval, () async {
+      await _handleCarouselTick();
     });
+  }
+
+  Future<void> _handleCarouselTick() async {
+    if (_isCarouselBlocked()) {
+      _stopAvatarCarousel();
+      return;
+    }
+    try {
+      await _advanceCarousel();
+    } finally {
+      _avatarCarouselTimer = null;
+    }
+    if (_isCarouselBlocked()) {
+      _stopAvatarCarousel();
+      return;
+    }
+    _scheduleCarouselTick();
   }
 
   Future<void> _advanceCarousel() async {
@@ -522,7 +544,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     emit(state.copyWith(publishing: true, errorType: null));
     try {
       final refreshed = await _refreshDraftPayload(draftAvatar);
-      final payload = refreshed?.payload ?? draftAvatar.payload;
+      if (refreshed == null) {
+        emit(state.copyWith(publishing: false));
+        return;
+      }
+      final payload = refreshed.payload;
       final result = await _xmppService.publishAvatar(payload);
       emit(
         state.copyWith(

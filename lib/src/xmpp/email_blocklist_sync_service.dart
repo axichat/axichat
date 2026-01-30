@@ -81,6 +81,13 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
         getFunction: (db) => db.getEmailBlocklist(),
       );
 
+  Future<void> setBlockStatus({
+    required String address,
+    required bool blocked,
+  }) async {
+    await setEmailBlockStatus(address: address, blocked: blocked);
+  }
+
   Future<void> syncEmailBlocklistSnapshot() async {
     if (_emailBlocklistSnapshotInFlight) {
       return;

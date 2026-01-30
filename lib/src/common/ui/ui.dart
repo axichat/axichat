@@ -58,6 +58,7 @@ export 'dynamic_inline_text.dart';
 export 'fade_scale_dialog.dart';
 export 'in_bounds_fade_scale.dart';
 export 'jid_input.dart';
+export 'package:axichat/src/common/jid_validation.dart';
 export 'link_action_dialog.dart';
 export 'list_item_padding.dart';
 export 'password_input.dart';

@@ -5057,6 +5057,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     final VoidCallback? onTapOverride = widget.onTapOverride;
     final bool allowContextMenu = widget.allowContextMenu;
     final BorderSide borderSide = context.borderSide;
+    final double stripWidth = context.sizing.progressIndicatorBarHeight;
 
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverAnchorToken == _anchorToken;
@@ -5082,7 +5083,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                 alignment: Alignment.centerLeft,
                 child: ColoredBox(
                   color: borderColor,
-                  child: SizedBox(width: borderSide.width),
+                  child: SizedBox(width: stripWidth),
                 ),
               ),
             ),

@@ -13,7 +13,6 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -56,7 +55,6 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'common/endpoint_config.dart';
 import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
@@ -185,23 +183,17 @@ class _AxichatState extends State<Axichat> {
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
-            create: (context) => EndpointConfigCubit(
-              credentialStore: context.read<CredentialStore>(),
-            )..restore(),
-          ),
-          BlocProvider(
             create: (context) =>
                 SettingsCubit(xmppService: context.read<XmppService>()),
           ),
           BlocProvider(
             create: (context) => AuthenticationCubit(
               credentialStore: context.read<CredentialStore>(),
-              initialEndpointConfig: context.read<EndpointConfigCubit>().state,
               xmppService: context.read<XmppService>(),
               emailService: context.read<EmailService>(),
               homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
               notificationService: context.read<NotificationService>(),
-            ),
+            )..restoreEndpointConfig(),
           ),
           BlocProvider(
             create: (context) =>
@@ -238,13 +230,6 @@ class _AxichatState extends State<Axichat> {
         ],
         child: MultiBlocListener(
           listeners: [
-            BlocListener<EndpointConfigCubit, EndpointConfig>(
-              listener: (context, config) {
-                context
-                    .read<AuthenticationCubit>()
-                    .updateEndpointConfig(config);
-              },
-            ),
             BlocListener<SettingsCubit, SettingsState>(
               listenWhen: (previous, current) =>
                   previous.shareTokenSignatureEnabled !=

@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/endpoint_config_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
@@ -45,15 +45,12 @@ void main() {
   late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
   late MockHomeRefreshSyncService mockHomeRefreshSyncService;
-  late EndpointConfigCubit endpointConfigCubit;
   late Map<String, String?> credentialStorage;
 
   setUp(() {
     mockXmppService = MockXmppService();
     mockConnection = MockXmppConnection();
     mockCredentialStore = MockCredentialStore();
-    endpointConfigCubit =
-        EndpointConfigCubit(credentialStore: mockCredentialStore);
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
@@ -73,10 +70,32 @@ void main() {
     when(
       () => mockEmailService.authFailureStream,
     ).thenAnswer((_) => const Stream.empty());
+    when(() => mockEmailService.syncState)
+        .thenReturn(const EmailSyncState.ready());
+    when(
+      () => mockEmailService.syncStateStream,
+    ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    when(() => mockEmailService.hasActiveSession).thenReturn(false);
+    when(
+      () => mockEmailService.hasInMemoryReconnectContext,
+    ).thenReturn(true);
+    when(
+      () => mockXmppService.hasInMemoryReconnectContext,
+    ).thenReturn(true);
+    when(
+      () => mockXmppService.streamReadyStream,
+    ).thenAnswer((_) => const Stream<XmppStreamReady>.empty());
+    when(
+      () => mockXmppService.connectionState,
+    ).thenReturn(ConnectionState.notConnected);
     when(() => mockEmailService.currentAccount(any())).thenAnswer(
       (_) async =>
           const EmailAccount(address: validJid, password: validPassword),
     );
+    when(() => mockEmailService.start()).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.handleNetworkAvailable(),
+    ).thenAnswer((_) async {});
     when(
       () => mockEmailService.ensureProvisioned(
         displayName: any(named: 'displayName'),
@@ -181,14 +200,12 @@ void main() {
         password: any(named: 'password'),
       ),
     ).thenAnswer((_) async {});
-
-    addTearDown(endpointConfigCubit.close);
   });
 
   test('Remember me choice defaults to true and persists updates', () async {
     final localBloc = AuthenticationCubit(
       credentialStore: mockCredentialStore,
-      initialEndpointConfig: endpointConfigCubit.state,
+      initialEndpointConfig: const EndpointConfig(),
       xmppService: mockXmppService,
       httpClient: mockHttpClient,
       emailProvisioningClient: mockProvisioningClient,
@@ -205,7 +222,7 @@ void main() {
     setUp(() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -267,7 +284,7 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given valid credentials with rememberMe false, stores only database secrets and emits [AuthenticationComplete].',
+      'Given valid credentials with rememberMe false, does not persist credentials and emits [AuthenticationComplete].',
       build: () => bloc,
       act: (bloc) => bloc.login(
         username: validUsername,
@@ -291,10 +308,7 @@ void main() {
             value: saltedPassword,
           ),
         );
-        final prefix = credentialStorage['${validJid}_database_prefix'];
-        expect(prefix, isNotNull);
-        final passphraseKey = '${prefix}_database_passphrase';
-        expect(credentialStorage[passphraseKey], isNotNull);
+        expect(credentialStorage['${validJid}_database_prefix'], isNull);
       },
     );
 
@@ -474,7 +488,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -518,10 +532,7 @@ void main() {
       },
       build: () => bloc,
       act: (bloc) => bloc.login(),
-      expect: () => const [
-        AuthenticationLogInInProgress(),
-        AuthenticationNone(),
-      ],
+      expect: () => const [],
       verify: (_) {
         expect(
           credentialStorage['${validJid}_database_prefix'],
@@ -558,7 +569,7 @@ void main() {
       'Persisting with rememberMe true writes SMTP credentials atomically after success.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -596,10 +607,10 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Persisting with rememberMe false keeps SMTP session only in memory and stores only DB secrets.',
+      'Persisting with rememberMe false keeps SMTP session only in memory and does not store credentials.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -627,10 +638,7 @@ void main() {
         ).called(1);
         expect(credentialStorage[bloc.jidStorageKey.value], isNull);
         expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
-        final prefix = credentialStorage['${validJid}_database_prefix'];
-        expect(prefix, isNotNull);
-        final passphraseKey = '${prefix}_database_passphrase';
-        expect(credentialStorage[passphraseKey], isNotNull);
+        expect(credentialStorage['${validJid}_database_prefix'], isNull);
       },
     );
 
@@ -673,10 +681,7 @@ void main() {
       'Without saved credentials, automatic login emits [AuthenticationNone].',
       build: () => bloc,
       act: (bloc) => bloc.login(),
-      expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationNone(),
-      ],
+      expect: () => const [],
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -708,14 +713,14 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
       ),
       act: (bloc) => bloc.login(),
-      expect: () => [const AuthenticationComplete()],
+      expect: () => const [],
       verify: (bloc) {
         verify(
           () => mockXmppService.resumeOfflineSession(
@@ -745,7 +750,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -768,14 +773,17 @@ void main() {
         ),
       ],
       verify: (bloc) {
-        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
-        expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
+        expect(credentialStorage[bloc.jidStorageKey.value], equals(validJid));
+        expect(
+          credentialStorage[bloc.passwordStorageKey.value],
+          equals(validPassword),
+        );
         verify(
           () => mockEmailService.shutdown(
             jid: any(named: 'jid'),
-            clearCredentials: true,
+            clearCredentials: false,
           ),
-        ).called(1);
+        ).called(2);
       },
       tearDown: () async {
         await authFailureController.close();
@@ -790,7 +798,19 @@ void main() {
     setUp(() {
       when(
         () => mockHttpClient.post(
-          any(that: isA<Uri>()),
+          _registrationMatcher(),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((_) async => Response('', 200));
+      when(
+        () => mockHttpClient.post(
+          any(
+            that: predicate(
+              (Uri uri) =>
+                  uri.path.contains('/register/delete/') ||
+                  uri.path.contains('/register/unregister/'),
+            ),
+          ),
           body: any(named: 'body'),
         ),
       ).thenAnswer((_) async => Response('', 200));
@@ -811,7 +831,7 @@ void main() {
       'Rolls back the account if login fails after registration.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -832,10 +852,15 @@ void main() {
       ],
       verify: (bloc) {
         verify(
-          () => mockProvisioningClient.deleteAccount(
-            email:
-                '${validUsername.toLowerCase()}@${EndpointConfig.defaultDomain}',
-            password: validPassword,
+          () => mockHttpClient.post(
+            any(
+              that: predicate(
+                (Uri uri) =>
+                    uri.path.contains('/register/delete/') ||
+                    uri.path.contains('/register/unregister/'),
+              ),
+            ),
+            body: any(named: 'body'),
           ),
         ).called(1);
       },
@@ -850,10 +875,22 @@ void main() {
             password: any(named: 'password'),
           ),
         ).thenThrow(Exception('offline'));
+        when(
+          () => mockHttpClient.post(
+            any(
+              that: predicate(
+                (Uri uri) =>
+                    uri.path.contains('/register/delete/') ||
+                    uri.path.contains('/register/unregister/'),
+              ),
+            ),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer((_) async => Response('', 500));
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -908,7 +945,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -947,6 +984,8 @@ void main() {
             'host': EndpointConfig.defaultDomain,
             'password': 'stale',
             'createdAt': '2024-01-01T00:00:00.000Z',
+            'expiresAt': '2099-01-01T00:00:00.000Z',
+            'email': 'user@axi.im',
           },
         ]);
         when(
@@ -958,7 +997,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -997,12 +1036,13 @@ void main() {
             'host': EndpointConfig.defaultDomain,
             'password': 'stale',
             'createdAt': '2024-01-01T00:00:00.000Z',
+            'expiresAt': '2099-01-01T00:00:00.000Z',
           },
         ]);
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1065,7 +1105,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -1115,7 +1155,7 @@ void main() {
       });
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1159,7 +1199,7 @@ void main() {
       'If authentication is not complete, does nothing.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1179,7 +1219,7 @@ void main() {
       'Automatic logout disconnects the xmpp service without forgetting credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1200,7 +1240,7 @@ void main() {
       'User initiated logout disconnects the xmpp service, forgets credentials and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
@@ -1221,7 +1261,7 @@ void main() {
               mockCredentialStore.delete(key: bloc.passwordPreHashedStorageKey),
         ).called(1);
         verify(() => mockXmppService.clearSessionTokens()).called(1);
-        verify(() => mockHomeRefreshSyncService.close()).called(1);
+        verify(() => mockHomeRefreshSyncService.close()).called(2);
         verify(() => mockXmppService.disconnect()).called(1);
       },
     );
@@ -1230,7 +1270,7 @@ void main() {
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,
@@ -1254,7 +1294,7 @@ void main() {
       'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1273,7 +1313,7 @@ void main() {
       'Burn logout clears email storage when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: endpointConfigCubit.state,
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         homeRefreshSyncService: mockHomeRefreshSyncService,

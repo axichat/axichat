@@ -4,7 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
-import 'package:axichat/src/common/ui/jid_input.dart';
+import 'package:axichat/src/common/jid_validation.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -287,7 +287,10 @@ class AccessibilityActionBloc
   ) {
     final nextStack = List<AccessibilityStepEntry>.of(state.stack);
     final index = nextStack.lastIndexWhere(
-      (entry) => entry.kind == AccessibilityStepKind.composer,
+      (entry) =>
+          entry.kind == AccessibilityStepKind.composer ||
+          entry.kind == AccessibilityStepKind.chatMessages ||
+          entry.kind == AccessibilityStepKind.conversation,
     );
     if (index == -1) return;
     if (nextStack[index].draftId == event.draftId) return;

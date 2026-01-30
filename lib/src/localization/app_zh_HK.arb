@@ -956,6 +956,35 @@
   "blocklistUnblock": "解除封鎖",
   "blocklistBlock": "封鎖",
   "blocklistAddTooltip": "加入封鎖清單",
+  "blocklistInvalidJid": "Enter a valid address.",
+  "blocklistBlockFailed": "Failed to block {address}. Try again later.",
+  "@blocklistBlockFailed": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistUnblockFailed": "Failed to unblock {address}. Try again later.",
+  "@blocklistUnblockFailed": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistBlocked": "Blocked {address}.",
+  "@blocklistBlocked": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistUnblocked": "Unblocked {address}.",
+  "@blocklistUnblocked": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "blocklistBlockingUnsupported": "Server does not support blocking.",
+  "blocklistUnblockingUnsupported": "Server does not support unblocking.",
+  "blocklistUnblockAllFailed": "Failed to unblock users. Try again later.",
+  "blocklistUnblockAllSuccess": "Unblocked all.",
   "mucChangeNickname": "更改暱稱",
   "mucChangeNicknameWithCurrent": "更改暱稱（目前：{current}）",
   "@mucChangeNicknameWithCurrent": {

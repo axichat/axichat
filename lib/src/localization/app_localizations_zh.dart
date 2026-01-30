@@ -2316,6 +2316,44 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blocklistAddTooltip => '添加到屏蔽列表';
 
   @override
+  String get blocklistInvalidJid => 'Enter a valid address.';
+
+  @override
+  String blocklistBlockFailed(Object address) {
+    return 'Failed to block $address. Try again later.';
+  }
+
+  @override
+  String blocklistUnblockFailed(Object address) {
+    return 'Failed to unblock $address. Try again later.';
+  }
+
+  @override
+  String blocklistBlocked(Object address) {
+    return 'Blocked $address.';
+  }
+
+  @override
+  String blocklistUnblocked(Object address) {
+    return 'Unblocked $address.';
+  }
+
+  @override
+  String get blocklistBlockingUnsupported =>
+      'Server does not support blocking.';
+
+  @override
+  String get blocklistUnblockingUnsupported =>
+      'Server does not support unblocking.';
+
+  @override
+  String get blocklistUnblockAllFailed =>
+      'Failed to unblock users. Try again later.';
+
+  @override
+  String get blocklistUnblockAllSuccess => 'Unblocked all.';
+
+  @override
   String get mucChangeNickname => '更改昵称';
 
   @override
@@ -7756,6 +7794,44 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get blocklistAddTooltip => '加入封鎖清單';
+
+  @override
+  String get blocklistInvalidJid => 'Enter a valid address.';
+
+  @override
+  String blocklistBlockFailed(Object address) {
+    return 'Failed to block $address. Try again later.';
+  }
+
+  @override
+  String blocklistUnblockFailed(Object address) {
+    return 'Failed to unblock $address. Try again later.';
+  }
+
+  @override
+  String blocklistBlocked(Object address) {
+    return 'Blocked $address.';
+  }
+
+  @override
+  String blocklistUnblocked(Object address) {
+    return 'Unblocked $address.';
+  }
+
+  @override
+  String get blocklistBlockingUnsupported =>
+      'Server does not support blocking.';
+
+  @override
+  String get blocklistUnblockingUnsupported =>
+      'Server does not support unblocking.';
+
+  @override
+  String get blocklistUnblockAllFailed =>
+      'Failed to unblock users. Try again later.';
+
+  @override
+  String get blocklistUnblockAllSuccess => 'Unblocked all.';
 
   @override
   String get mucChangeNickname => '更改暱稱';

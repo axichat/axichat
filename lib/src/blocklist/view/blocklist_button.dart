@@ -47,7 +47,9 @@ class BlocklistAddButton extends StatelessWidget {
                   builder: (context, state) {
                     return JidInput(
                       enabled: state is! BlocklistLoading,
-                      error: state is! BlocklistFailure ? null : state.message,
+                      error: state is! BlocklistFailure
+                          ? null
+                          : state.notice.resolve(context.l10n),
                       jidOptions:
                           locate<RosterCubit?>()?.contacts.toList() ?? [],
                       onChanged: (value) {

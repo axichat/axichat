@@ -2290,10 +2290,11 @@ class _ChatState extends State<Chat> {
     final List<BlocklistEntry>? cachedEntries =
         switch (context.watch<BlocklistCubit?>()?.state) {
       BlocklistAvailable state => state.items ??
-          context.watch<BlocklistCubit?>()?[blocklistItemsCacheKey]
-              as List<BlocklistEntry>?,
-      _ => context.watch<BlocklistCubit?>()?[blocklistItemsCacheKey]
-          as List<BlocklistEntry>?,
+          context.watch<BlocklistCubit?>()?[
+              BlocklistCubit.blocklistItemsCacheKey] as List<BlocklistEntry>?,
+      _ =>
+        context.watch<BlocklistCubit?>()?[BlocklistCubit.blocklistItemsCacheKey]
+            as List<BlocklistEntry>?,
     };
     return cachedEntries ?? _emptyBlocklistEntries;
   }

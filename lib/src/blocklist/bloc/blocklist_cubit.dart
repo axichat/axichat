@@ -6,10 +6,11 @@ import 'dart:async';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/email_validation.dart';
+import 'package:axichat/src/common/jid_validation.dart';
 import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -17,28 +18,9 @@ import 'package:equatable/equatable.dart';
 
 part 'blocklist_state.dart';
 
-const String blocklistItemsCacheKey = 'items';
-const String _invalidJidMessage = 'Enter a valid jid';
-const String _blockingUnsupportedMessage = 'Server does not support blocking.';
-const String _unblockingUnsupportedMessage =
-    'Server does not support unblocking.';
-const String _unblockAllFailedMessage =
-    'Failed to unblock users. Try again later.';
-const String _unblockAllSuccessMessage = 'Unblocked all.';
-
-String _blockFailedMessage(String address) =>
-    'Failed to block $address. Try again later.';
-
-String _unblockFailedMessage(String address) =>
-    'Failed to unblock $address. Try again later.';
-
-String _blockedMessage(String address) => 'Blocked $address';
-
-String _unblockedMessage(String address) => 'Unblocked $address';
-
 class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {
-  static const String visibleItemsCacheKey = 'visibleItems';
+  static const String blocklistItemsCacheKey = 'items';
 
   BlocklistCubit({required XmppService xmppService})
       : _xmppService = xmppService,
@@ -67,7 +49,6 @@ class BlocklistCubit extends Cubit<BlocklistState>
     final current = change.currentState;
     if (current is BlocklistAvailable) {
       cache[blocklistItemsCacheKey] = current.items;
-      cache[visibleItemsCacheKey] = current.visibleItems;
     }
   }
 
@@ -85,42 +66,64 @@ class BlocklistCubit extends Cubit<BlocklistState>
   }) async {
     final normalized = address.trim();
     if (normalized.isEmpty) {
-      emit(const BlocklistFailure(_invalidJidMessage));
+      _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
       return;
     }
     final resolvedTransport = transport ?? normalized.inferredTransport;
-    emit(BlocklistLoading(jid: normalized));
+    _emitLoading(jid: normalized);
     if (resolvedTransport.isEmail) {
       if (!normalized.isValidEmailAddress) {
-        emit(const BlocklistFailure(_invalidJidMessage));
+        _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
         return;
       }
       try {
-        await _xmppService.setEmailBlockStatus(
+        await _xmppService.setBlockStatus(
           address: normalized,
           blocked: true,
         );
-      } on Exception {
-        emit(BlocklistFailure(_blockFailedMessage(normalized)));
+      } on XmppException {
+        _emitFailure(
+          BlocklistNotice(
+            BlocklistNoticeType.blockFailed,
+            address: normalized,
+          ),
+        );
         return;
       }
-      emit(BlocklistSuccess(_blockedMessage(normalized)));
+      _emitSuccess(
+        BlocklistNotice(
+          BlocklistNoticeType.blocked,
+          address: normalized,
+        ),
+      );
       return;
     }
     if (!normalized.isValidJid) {
-      emit(const BlocklistFailure(_invalidJidMessage));
+      _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
       return;
     }
     try {
       await _blockXmpp(address: normalized, reportReason: reportReason);
     } on XmppBlockUnsupportedException catch (_) {
-      emit(const BlocklistFailure(_blockingUnsupportedMessage));
+      _emitFailure(
+        const BlocklistNotice(BlocklistNoticeType.blockUnsupported),
+      );
       return;
     } on XmppBlocklistException catch (_) {
-      emit(BlocklistFailure(_blockFailedMessage(normalized)));
+      _emitFailure(
+        BlocklistNotice(
+          BlocklistNoticeType.blockFailed,
+          address: normalized,
+        ),
+      );
       return;
     }
-    emit(BlocklistSuccess(_blockedMessage(normalized)));
+    _emitSuccess(
+      BlocklistNotice(
+        BlocklistNoticeType.blocked,
+        address: normalized,
+      ),
+    );
   }
 
   Future<void> _blockXmpp({
@@ -145,34 +148,56 @@ class BlocklistCubit extends Cubit<BlocklistState>
     if (normalized.isEmpty) {
       return;
     }
-    emit(BlocklistLoading(jid: normalized));
+    _emitLoading(jid: normalized);
     if (entry.transport.isEmail) {
       try {
-        await _xmppService.setEmailBlockStatus(
+        await _xmppService.setBlockStatus(
           address: normalized,
           blocked: false,
         );
-      } on Exception {
-        emit(BlocklistFailure(_unblockFailedMessage(normalized)));
+      } on XmppException {
+        _emitFailure(
+          BlocklistNotice(
+            BlocklistNoticeType.unblockFailed,
+            address: normalized,
+          ),
+        );
         return;
       }
-      emit(BlocklistSuccess(_unblockedMessage(normalized)));
+      _emitSuccess(
+        BlocklistNotice(
+          BlocklistNoticeType.unblocked,
+          address: normalized,
+        ),
+      );
       return;
     }
     try {
       await _xmppService.unblock(jid: normalized);
     } on XmppBlockUnsupportedException catch (_) {
-      emit(const BlocklistFailure(_unblockingUnsupportedMessage));
+      _emitFailure(
+        const BlocklistNotice(BlocklistNoticeType.unblockUnsupported),
+      );
       return;
     } on XmppBlocklistException catch (_) {
-      emit(BlocklistFailure(_unblockFailedMessage(normalized)));
+      _emitFailure(
+        BlocklistNotice(
+          BlocklistNoticeType.unblockFailed,
+          address: normalized,
+        ),
+      );
       return;
     }
-    emit(BlocklistSuccess(_unblockedMessage(normalized)));
+    _emitSuccess(
+      BlocklistNotice(
+        BlocklistNoticeType.unblocked,
+        address: normalized,
+      ),
+    );
   }
 
   Future<void> unblockAll() async {
-    emit(const BlocklistLoading(jid: null));
+    _emitLoading(jid: null);
     var failed = false;
     try {
       await _xmppService.unblockAll();
@@ -187,10 +212,14 @@ class BlocklistCubit extends Cubit<BlocklistState>
       failed = true;
     }
     if (failed) {
-      emit(const BlocklistFailure(_unblockAllFailedMessage));
+      _emitFailure(
+        const BlocklistNotice(BlocklistNoticeType.unblockAllFailed),
+      );
       return;
     }
-    emit(const BlocklistSuccess(_unblockAllSuccessMessage));
+    _emitSuccess(
+      const BlocklistNotice(BlocklistNoticeType.unblockAllSuccess),
+    );
   }
 
   void updateFilter({
@@ -203,7 +232,12 @@ class BlocklistCubit extends Cubit<BlocklistState>
     }
     _filterQuery = normalizedQuery;
     _filterSortOrder = sortOrder;
-    _rebuildVisibleItems();
+    final items = state.items;
+    if (items == null) {
+      return;
+    }
+    final visibleItems = _applyFilters(items);
+    emit(_stateWithVisible(state, visibleItems));
   }
 
   void _handleXmppBlocklist(List<BlocklistData> items) {
@@ -218,7 +252,6 @@ class BlocklistCubit extends Cubit<BlocklistState>
 
   void _emitMerged() {
     if (_xmppBlocklist == null && _emailBlocklist == null) {
-      cache[visibleItemsCacheKey] = null;
       emit(const BlocklistAvailable(items: null, visibleItems: null));
       return;
     }
@@ -239,39 +272,35 @@ class BlocklistCubit extends Cubit<BlocklistState>
           ),
     ];
     final visibleItems = _applyFilters(entries);
-    cache[visibleItemsCacheKey] = visibleItems;
     emit(BlocklistAvailable(items: entries, visibleItems: visibleItems));
   }
 
-  void _rebuildVisibleItems() {
-    final items = _resolveCachedItems();
-    if (items == null) {
-      cache[visibleItemsCacheKey] = null;
-      return;
-    }
-    final visibleItems = _applyFilters(items);
-    cache[visibleItemsCacheKey] = visibleItems;
-    final current = state;
-    if (current is BlocklistAvailable) {
-      emit(
-        BlocklistAvailable(
-          items: current.items,
+  BlocklistState _stateWithVisible(
+    BlocklistState current,
+    List<BlocklistEntry> visibleItems,
+  ) {
+    final items = current.items;
+    return switch (current) {
+      BlocklistAvailable() => BlocklistAvailable(
+          items: items,
           visibleItems: visibleItems,
         ),
-      );
-    }
-  }
-
-  List<BlocklistEntry>? _resolveCachedItems() {
-    final current = state;
-    if (current is BlocklistAvailable && current.items != null) {
-      return current.items;
-    }
-    final cached = cache[blocklistItemsCacheKey];
-    if (cached is List<BlocklistEntry>) {
-      return cached;
-    }
-    return null;
+      BlocklistLoading() => BlocklistLoading(
+          jid: current.jid,
+          items: items,
+          visibleItems: visibleItems,
+        ),
+      BlocklistSuccess() => BlocklistSuccess(
+          current.notice,
+          items: items,
+          visibleItems: visibleItems,
+        ),
+      BlocklistFailure() => BlocklistFailure(
+          current.notice,
+          items: items,
+          visibleItems: visibleItems,
+        ),
+    };
   }
 
   List<BlocklistEntry> _applyFilters(List<BlocklistEntry> items) {
@@ -289,5 +318,35 @@ class BlocklistCubit extends Cubit<BlocklistState>
           : a.blockedAt.compareTo(b.blockedAt),
     );
     return visibleItems;
+  }
+
+  void _emitLoading({required String? jid}) {
+    emit(
+      BlocklistLoading(
+        jid: jid,
+        items: state.items,
+        visibleItems: state.visibleItems,
+      ),
+    );
+  }
+
+  void _emitSuccess(BlocklistNotice notice) {
+    emit(
+      BlocklistSuccess(
+        notice,
+        items: state.items,
+        visibleItems: state.visibleItems,
+      ),
+    );
+  }
+
+  void _emitFailure(BlocklistNotice notice) {
+    emit(
+      BlocklistFailure(
+        notice,
+        items: state.items,
+        visibleItems: state.visibleItems,
+      ),
+    );
   }
 }

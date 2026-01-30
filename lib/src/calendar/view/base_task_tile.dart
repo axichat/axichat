@@ -296,6 +296,7 @@ class _CompactTaskTile extends StatelessWidget {
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : taskColor;
     final bool showActions = onEdit != null || onDelete != null;
+    final double stripWidth = context.sizing.progressIndicatorBarHeight;
     final l10n = context.l10n;
     final String? scheduleLabel = _compactTaskScheduleLabel(
       l10n,
@@ -305,25 +306,24 @@ class _CompactTaskTile extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: context.radius,
         boxShadow: calendarLightShadow,
         border: Border.all(color: calendarBorderColor, width: 1),
       ),
       onTap: onTap,
       child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Stack(
           children: [
-            Container(
-              width: 4,
-              decoration: BoxDecoration(
-                color: indicatorColor,
-                borderRadius: BorderRadius.horizontal(
-                  left: Radius.circular(context.radius.topLeft.x),
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ColoredBox(
+                  color: indicatorColor,
+                  child: SizedBox(width: stripWidth),
                 ),
               ),
             ),
-            Expanded(
+            Padding(
+              padding: EdgeInsets.only(left: context.spacing.s),
               child: CalendarTaskListTile(
                 task: task,
                 scheduleLabel: scheduleLabel,
@@ -526,22 +526,27 @@ class _FullTaskTile extends StatelessWidget {
         task.isCompleted ? taskCompletedColor : task.priorityColor;
     final Color progressTrack = colors.muted.withValues(alpha: 0.2);
     final bool showActions = onEdit != null || onDelete != null;
+    final double stripWidth = context.sizing.progressIndicatorBarHeight;
     return TaskTileSurface(
       margin: margin,
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: context.radius,
         boxShadow: calendarLightShadow,
         border: Border.all(color: calendarBorderColor, width: 1),
       ),
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: context.radius,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: indicatorColor, width: 4)),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ColoredBox(
+                color: indicatorColor,
+                child: SizedBox(width: stripWidth),
+              ),
+            ),
           ),
-          child: Padding(
+          Padding(
             padding: calendarPaddingXl,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -662,7 +667,7 @@ class _FullTaskTile extends StatelessWidget {
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

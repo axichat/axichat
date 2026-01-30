@@ -9,6 +9,7 @@ import 'package:axichat/src/blocklist/view/blocklist_tile.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -21,9 +22,12 @@ class BlocklistList extends StatefulWidget {
 
 class _BlocklistListState extends State<BlocklistList> {
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _syncSearchState(context, context.read<HomeSearchCubit>().state);
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncSearchState(context, context.read<HomeSearchCubit>().state);
+    });
   }
 
   void _syncSearchState(BuildContext context, HomeSearchState searchState) {
@@ -39,34 +43,34 @@ class _BlocklistListState extends State<BlocklistList> {
   Widget build(BuildContext context) {
     return BlocListener<HomeSearchCubit, HomeSearchState>(
       listener: _syncSearchState,
-      child: BlocBuilder<HomeSearchCubit, HomeSearchState>(
-        builder: (context, _) {
-          return BlocBuilder<BlocklistCubit, BlocklistState>(
-            builder: (context, state) {
-              final cachedItems =
-                  context.select<BlocklistCubit, List<BlocklistEntry>?>(
-                (cubit) =>
-                    cubit[blocklistItemsCacheKey] as List<BlocklistEntry>?,
-              );
-              final cachedVisibleItems =
-                  context.select<BlocklistCubit, List<BlocklistEntry>?>(
-                (cubit) => cubit[BlocklistCubit.visibleItemsCacheKey]
-                    as List<BlocklistEntry>?,
-              );
-              final items = state is BlocklistAvailable
-                  ? (state.items ?? cachedItems)
-                  : cachedItems;
-              if (items == null) {
-                return Center(
-                  child: AxiProgressIndicator(
-                    color: context.colorScheme.foreground,
-                  ),
-                );
+      child: BlocBuilder<BlocklistCubit, BlocklistState>(
+        builder: (context, state) {
+          final items = state.items;
+          if (items == null) {
+            return Center(
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
+              ),
+            );
+          }
+          final visibleItems = state.visibleItems ?? items;
+          return BlocBuilder<RosterCubit, RosterState>(
+            buildWhen: (_, current) => current is RosterAvailable,
+            builder: (context, rosterState) {
+              final cachedRosterItems =
+                  rosterState is RosterAvailable ? rosterState.items : null;
+              final avatarPathsByJid = <String, String>{};
+              if (cachedRosterItems != null) {
+                for (final item in cachedRosterItems) {
+                  final path = item.avatarPath?.trim();
+                  if (path == null || path.isEmpty) continue;
+                  avatarPathsByJid[item.jid.toLowerCase()] = path;
+                }
               }
-              final visibleItems = state is BlocklistAvailable
-                  ? (state.visibleItems ?? cachedVisibleItems ?? items)
-                  : (cachedVisibleItems ?? items);
-              return _BlocklistListBody(items: visibleItems);
+              return _BlocklistListBody(
+                items: visibleItems,
+                avatarPathsByJid: avatarPathsByJid,
+              );
             },
           );
         },
@@ -76,9 +80,10 @@ class _BlocklistListState extends State<BlocklistList> {
 }
 
 class _BlocklistListBody extends StatelessWidget {
-  const _BlocklistListBody({required this.items});
+  const _BlocklistListBody({required this.items, this.avatarPathsByJid});
 
   final List<BlocklistEntry> items;
+  final Map<String, String>? avatarPathsByJid;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +108,12 @@ class _BlocklistListBody extends StatelessWidget {
             );
           }
           final item = items[index - 1];
-          return ListItemPadding(child: BlocklistTile(entry: item));
+          return ListItemPadding(
+            child: BlocklistTile(
+              entry: item,
+              avatarPathsByJid: avatarPathsByJid,
+            ),
+          );
         },
       ),
     );

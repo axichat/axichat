@@ -4364,6 +4364,60 @@ abstract class AppLocalizations {
   /// **'Add to blocklist'**
   String get blocklistAddTooltip;
 
+  /// No description provided for @blocklistInvalidJid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid address.'**
+  String get blocklistInvalidJid;
+
+  /// No description provided for @blocklistBlockFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to block {address}. Try again later.'**
+  String blocklistBlockFailed(Object address);
+
+  /// No description provided for @blocklistUnblockFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to unblock {address}. Try again later.'**
+  String blocklistUnblockFailed(Object address);
+
+  /// No description provided for @blocklistBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked {address}.'**
+  String blocklistBlocked(Object address);
+
+  /// No description provided for @blocklistUnblocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblocked {address}.'**
+  String blocklistUnblocked(Object address);
+
+  /// No description provided for @blocklistBlockingUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Server does not support blocking.'**
+  String get blocklistBlockingUnsupported;
+
+  /// No description provided for @blocklistUnblockingUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Server does not support unblocking.'**
+  String get blocklistUnblockingUnsupported;
+
+  /// No description provided for @blocklistUnblockAllFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to unblock users. Try again later.'**
+  String get blocklistUnblockAllFailed;
+
+  /// No description provided for @blocklistUnblockAllSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblocked all.'**
+  String get blocklistUnblockAllSuccess;
+
   /// No description provided for @mucChangeNickname.
   ///
   /// In en, this message translates to:
