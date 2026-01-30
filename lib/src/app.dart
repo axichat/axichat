@@ -193,7 +193,9 @@ class _AxichatState extends State<Axichat> {
               emailService: context.read<EmailService>(),
               homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
               notificationService: context.read<NotificationService>(),
-            )..restoreEndpointConfig(),
+              initialEndpointConfig:
+                  context.read<SettingsCubit>().state.endpointConfig,
+            ),
           ),
           BlocProvider(
             create: (context) =>
@@ -230,6 +232,15 @@ class _AxichatState extends State<Axichat> {
         ],
         child: MultiBlocListener(
           listeners: [
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.endpointConfig != current.endpointConfig,
+              listener: (context, settings) {
+                context
+                    .read<AuthenticationCubit>()
+                    .updateEndpointConfig(settings.endpointConfig);
+              },
+            ),
             BlocListener<SettingsCubit, SettingsState>(
               listenWhen: (previous, current) =>
                   previous.shareTokenSignatureEnabled !=

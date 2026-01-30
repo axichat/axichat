@@ -24,6 +24,7 @@ class SettingsState with _$SettingsState {
     @Default(AppLanguage.system) AppLanguage language,
     @Default(ThemeMode.dark) ThemeMode themeMode,
     @Default(ShadColor.blue) ShadColor shadColor,
+    @Default(EndpointConfig()) EndpointConfig endpointConfig,
     @Default(false) bool mute,
     @Default(false) bool notificationPreviewsEnabled,
     @Default(true) bool chatReadReceipts,

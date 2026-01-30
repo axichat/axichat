@@ -17,6 +17,8 @@ class TaskTileSurface extends StatelessWidget {
     this.highlightColor,
     this.focusColor,
     this.mouseCursor,
+    this.leadingStripeColor,
+    this.leadingStripeWidth,
   });
 
   final EdgeInsets margin;
@@ -28,6 +30,8 @@ class TaskTileSurface extends StatelessWidget {
   final Color? highlightColor;
   final Color? focusColor;
   final MouseCursor? mouseCursor;
+  final Color? leadingStripeColor;
+  final double? leadingStripeWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +54,20 @@ class TaskTileSurface extends StatelessWidget {
       shape: decoratedShape,
       shadows: decoration.boxShadow,
     );
+    final double? stripeWidth = leadingStripeWidth;
+    final Color? stripeColor = leadingStripeColor;
+    final Widget content = stripeColor != null &&
+            stripeWidth != null &&
+            stripeWidth > 0
+        ? CustomPaint(
+            painter: _TaskTileStripePainter(
+              shape: decoratedShape,
+              color: stripeColor,
+              width: stripeWidth,
+            ),
+            child: child,
+          )
+        : child;
 
     return Container(
       margin: margin,
@@ -68,11 +86,44 @@ class TaskTileSurface extends StatelessWidget {
               splashColor: splashColor ?? Colors.transparent,
               highlightColor: highlightColor ?? Colors.transparent,
               focusColor: focusColor ?? Colors.transparent,
-              child: child,
+              child: content,
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class _TaskTileStripePainter extends CustomPainter {
+  _TaskTileStripePainter({
+    required this.shape,
+    required this.color,
+    required this.width,
+  });
+
+  final ShapeBorder shape;
+  final Color color;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect bounds = Offset.zero & size;
+    final Path shapePath = shape.getOuterPath(bounds);
+    final Rect stripeRect = Rect.fromLTWH(0, 0, width, size.height);
+    final Path stripePath = Path.combine(
+      PathOperation.intersect,
+      shapePath,
+      Path()..addRect(stripeRect),
+    );
+    final Paint paint = Paint()..color = color;
+    canvas.drawPath(stripePath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TaskTileStripePainter oldDelegate) {
+    return oldDelegate.shape != shape ||
+        oldDelegate.color != color ||
+        oldDelegate.width != width;
   }
 }

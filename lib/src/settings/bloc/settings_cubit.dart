@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -13,6 +14,19 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 part 'settings_cubit.freezed.dart';
 part 'settings_cubit.g.dart';
 part 'settings_state.dart';
+
+EndpointConfig _endpointConfigFromJson(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return EndpointConfig.fromJson(value);
+  }
+  if (value is Map) {
+    return EndpointConfig.fromJson(value.cast<String, dynamic>());
+  }
+  return const EndpointConfig();
+}
+
+Map<String, dynamic> _endpointConfigToJson(EndpointConfig config) =>
+    config.toJson();
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsCubit({XmppService? xmppService})
@@ -41,6 +55,14 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   void updateColorScheme(ShadColor? shadColor) {
     if (shadColor == null) return;
     emit(state.copyWith(shadColor: shadColor));
+  }
+
+  void updateEndpointConfig(EndpointConfig config) {
+    emit(state.copyWith(endpointConfig: config));
+  }
+
+  void resetEndpointConfig() {
+    updateEndpointConfig(const EndpointConfig());
   }
 
   void toggleMute(bool mute) {

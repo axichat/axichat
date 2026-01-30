@@ -956,35 +956,35 @@
   "blocklistUnblock": "解除封鎖",
   "blocklistBlock": "封鎖",
   "blocklistAddTooltip": "加入封鎖清單",
-  "blocklistInvalidJid": "Enter a valid address.",
-  "blocklistBlockFailed": "Failed to block {address}. Try again later.",
+  "blocklistInvalidJid": "請輸入有效的地址。",
+  "blocklistBlockFailed": "無法封鎖 {address}。請稍後再試。",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistUnblockFailed": "Failed to unblock {address}. Try again later.",
+  "blocklistUnblockFailed": "無法解除封鎖 {address}。請稍後再試。",
   "@blocklistUnblockFailed": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistBlocked": "Blocked {address}.",
+  "blocklistBlocked": "已封鎖 {address}。",
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistUnblocked": "Unblocked {address}.",
+  "blocklistUnblocked": "已解除封鎖 {address}。",
   "@blocklistUnblocked": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistBlockingUnsupported": "Server does not support blocking.",
-  "blocklistUnblockingUnsupported": "Server does not support unblocking.",
-  "blocklistUnblockAllFailed": "Failed to unblock users. Try again later.",
-  "blocklistUnblockAllSuccess": "Unblocked all.",
+  "blocklistBlockingUnsupported": "伺服器不支援封鎖。",
+  "blocklistUnblockingUnsupported": "伺服器不支援解除封鎖。",
+  "blocklistUnblockAllFailed": "無法解除封鎖用戶。請稍後再試。",
+  "blocklistUnblockAllSuccess": "已解除全部封鎖。",
   "mucChangeNickname": "更改暱稱",
   "mucChangeNicknameWithCurrent": "更改暱稱（目前：{current}）",
   "@mucChangeNicknameWithCurrent": {

@@ -60,8 +60,6 @@ class _LoginFormState extends State<LoginForm> {
   void _onPressed(BuildContext context) async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    await context.read<AuthenticationCubit>().restoreEndpointConfig();
-    if (!context.mounted) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,

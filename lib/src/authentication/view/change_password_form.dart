@@ -7,6 +7,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -44,7 +45,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     await context.read<AuthenticationCubit>().changePassword(
           username: context.read<ProfileCubit>().state.username,
-          host: context.read<AuthenticationCubit>().state.config.domain,
+          host: context.read<SettingsCubit>().state.endpointConfig.domain,
           oldPassword: _passwordTextController.value.text,
           password: _newPasswordTextController.value.text,
           password2: _newPassword2TextController.value.text,

@@ -956,35 +956,35 @@
   "blocklistUnblock": "Débloquer",
   "blocklistBlock": "Bloquer",
   "blocklistAddTooltip": "Ajouter à la liste bloquée",
-  "blocklistInvalidJid": "Enter a valid address.",
-  "blocklistBlockFailed": "Failed to block {address}. Try again later.",
+  "blocklistInvalidJid": "Saisissez une adresse valide.",
+  "blocklistBlockFailed": "Échec du blocage de {address}. Réessayez plus tard.",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistUnblockFailed": "Failed to unblock {address}. Try again later.",
+  "blocklistUnblockFailed": "Échec du déblocage de {address}. Réessayez plus tard.",
   "@blocklistUnblockFailed": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistBlocked": "Blocked {address}.",
+  "blocklistBlocked": "{address} bloqué.",
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistUnblocked": "Unblocked {address}.",
+  "blocklistUnblocked": "{address} débloqué.",
   "@blocklistUnblocked": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistBlockingUnsupported": "Server does not support blocking.",
-  "blocklistUnblockingUnsupported": "Server does not support unblocking.",
-  "blocklistUnblockAllFailed": "Failed to unblock users. Try again later.",
-  "blocklistUnblockAllSuccess": "Unblocked all.",
+  "blocklistBlockingUnsupported": "Le serveur ne prend pas en charge le blocage.",
+  "blocklistUnblockingUnsupported": "Le serveur ne prend pas en charge le déblocage.",
+  "blocklistUnblockAllFailed": "Impossible de débloquer les utilisateurs. Réessayez plus tard.",
+  "blocklistUnblockAllSuccess": "Tout a été débloqué.",
   "mucChangeNickname": "Changer de pseudo",
   "mucChangeNicknameWithCurrent": "Changer de pseudo (actuel : {current})",
   "@mucChangeNicknameWithCurrent": {

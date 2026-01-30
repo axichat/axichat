@@ -956,35 +956,35 @@
   "blocklistUnblock": "Entsperren",
   "blocklistBlock": "Blockieren",
   "blocklistAddTooltip": "Zur Blockliste hinzufügen",
-  "blocklistInvalidJid": "Enter a valid address.",
-  "blocklistBlockFailed": "Failed to block {address}. Try again later.",
+  "blocklistInvalidJid": "Gib eine gültige Adresse ein.",
+  "blocklistBlockFailed": "Blockieren von {address} fehlgeschlagen. Bitte später erneut versuchen.",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistUnblockFailed": "Failed to unblock {address}. Try again later.",
+  "blocklistUnblockFailed": "Entsperren von {address} fehlgeschlagen. Bitte später erneut versuchen.",
   "@blocklistUnblockFailed": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistBlocked": "Blocked {address}.",
+  "blocklistBlocked": "{address} blockiert.",
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistUnblocked": "Unblocked {address}.",
+  "blocklistUnblocked": "{address} entsperrt.",
   "@blocklistUnblocked": {
     "placeholders": {
       "address": {}
     }
   },
-  "blocklistBlockingUnsupported": "Server does not support blocking.",
-  "blocklistUnblockingUnsupported": "Server does not support unblocking.",
-  "blocklistUnblockAllFailed": "Failed to unblock users. Try again later.",
-  "blocklistUnblockAllSuccess": "Unblocked all.",
+  "blocklistBlockingUnsupported": "Der Server unterstützt das Blockieren nicht.",
+  "blocklistUnblockingUnsupported": "Der Server unterstützt das Entsperren nicht.",
+  "blocklistUnblockAllFailed": "Benutzer konnten nicht entsperrt werden. Bitte später erneut versuchen.",
+  "blocklistUnblockAllSuccess": "Alle entsperrt.",
   "mucChangeNickname": "Spitznamen ändern",
   "mucChangeNicknameWithCurrent": "Spitznamen ändern (aktuell: {current})",
   "@mucChangeNicknameWithCurrent": {

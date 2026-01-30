@@ -292,9 +292,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final completedSignupAccountsKey = CredentialStore.registerKey(
     'completed_signup_accounts_v1',
   );
-  final endpointConfigStorageKey = CredentialStore.registerKey(
-    'endpoint_config_v1',
-  );
   final _legacySignupDraftStorageKey = CredentialStore.registerKey(
     'signup_draft_v1',
   );
@@ -330,8 +327,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
   final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
-  Future<void>? _endpointConfigRestoreFuture;
-  var _endpointConfigMutationId = 0;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -343,48 +338,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> updateEndpointConfig(EndpointConfig config) async {
-    _endpointConfigMutationId++;
     _handleEndpointConfigUpdated(config);
-    try {
-      await _credentialStore.write(
-        key: endpointConfigStorageKey,
-        value: jsonEncode(config.toJson()),
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to persist endpoint config', error, stackTrace);
-    }
   }
 
   Future<void> resetEndpointConfig() async {
     await updateEndpointConfig(const EndpointConfig());
-  }
-
-  Future<void> restoreEndpointConfig() {
-    final existing = _endpointConfigRestoreFuture;
-    if (existing != null) {
-      return existing;
-    }
-    final mutationAtStart = _endpointConfigMutationId;
-    final future = _restoreEndpointConfig(mutationAtStart);
-    _endpointConfigRestoreFuture = future;
-    return future;
-  }
-
-  Future<void> _restoreEndpointConfig(int mutationAtStart) async {
-    try {
-      final stored =
-          await _credentialStore.read(key: endpointConfigStorageKey) ?? '';
-      if (stored.trim().isEmpty) {
-        return;
-      }
-      final decoded = jsonDecode(stored) as Map<String, dynamic>;
-      if (_endpointConfigMutationId != mutationAtStart) {
-        return;
-      }
-      _handleEndpointConfigUpdated(EndpointConfig.fromJson(decoded));
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to restore endpoint config', error, stackTrace);
-    }
   }
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {

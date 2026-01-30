@@ -2,11 +2,11 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -71,7 +71,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_draftConfig != null) return;
-    final config = context.read<AuthenticationCubit>().state.config;
+    final config = context.read<SettingsCubit>().state.endpointConfig;
     _draftConfig = config;
     _domainController.text = config.domain;
     _xmppHostController.text = config.xmppHost ?? '';
@@ -157,15 +157,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
   Future<void> _save() async {
     final baseConfig =
-        _draftConfig ?? context.read<AuthenticationCubit>().state.config;
+        _draftConfig ?? context.read<SettingsCubit>().state.endpointConfig;
     final updated = _resolveConfig(baseConfig);
-    await context.read<AuthenticationCubit>().updateEndpointConfig(updated);
+    context.read<SettingsCubit>().updateEndpointConfig(updated);
     if (!mounted) return;
     Navigator.of(context).pop();
   }
 
   Future<void> _reset() async {
-    await context.read<AuthenticationCubit>().resetEndpointConfig();
+    context.read<SettingsCubit>().resetEndpointConfig();
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -178,7 +178,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final sizing = context.sizing;
     final portFieldWidth = sizing.listButtonHeight;
     final config =
-        _draftConfig ?? context.watch<AuthenticationCubit>().state.config;
+        _draftConfig ?? context.watch<SettingsCubit>().state.endpointConfig;
     final placeholderStyle = textTheme.muted;
     final inputStyle = textTheme.p;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(

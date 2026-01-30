@@ -2428,42 +2428,42 @@ class AppLocalizationsEs extends AppLocalizations {
   String get blocklistAddTooltip => 'Agregar a la lista bloqueada';
 
   @override
-  String get blocklistInvalidJid => 'Enter a valid address.';
+  String get blocklistInvalidJid => 'Introduce una dirección válida.';
 
   @override
   String blocklistBlockFailed(Object address) {
-    return 'Failed to block $address. Try again later.';
+    return 'Error al bloquear $address. Inténtalo de nuevo más tarde.';
   }
 
   @override
   String blocklistUnblockFailed(Object address) {
-    return 'Failed to unblock $address. Try again later.';
+    return 'Error al desbloquear $address. Inténtalo de nuevo más tarde.';
   }
 
   @override
   String blocklistBlocked(Object address) {
-    return 'Blocked $address.';
+    return '$address bloqueado.';
   }
 
   @override
   String blocklistUnblocked(Object address) {
-    return 'Unblocked $address.';
+    return '$address desbloqueado.';
   }
 
   @override
   String get blocklistBlockingUnsupported =>
-      'Server does not support blocking.';
+      'El servidor no admite el bloqueo.';
 
   @override
   String get blocklistUnblockingUnsupported =>
-      'Server does not support unblocking.';
+      'El servidor no admite el desbloqueo.';
 
   @override
   String get blocklistUnblockAllFailed =>
-      'Failed to unblock users. Try again later.';
+      'No se pudieron desbloquear los usuarios. Inténtalo de nuevo más tarde.';
 
   @override
-  String get blocklistUnblockAllSuccess => 'Unblocked all.';
+  String get blocklistUnblockAllSuccess => 'Todos desbloqueados.';
 
   @override
   String get mucChangeNickname => 'Cambiar apodo';
