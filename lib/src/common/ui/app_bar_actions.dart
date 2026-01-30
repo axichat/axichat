@@ -102,7 +102,6 @@ class AppBarActions extends StatelessWidget {
               actions: menuActions,
               enabled: hasEnabledAction,
               ghost: true,
-              selected: true,
             );
           }
           return AxiMore(
@@ -110,7 +109,6 @@ class AppBarActions extends StatelessWidget {
             tooltip: moreTooltip!,
             enabled: hasEnabledAction,
             ghost: true,
-            selected: true,
           );
         }
 

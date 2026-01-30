@@ -589,6 +589,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
     return RawScrollbar(
       interactive: true,
       controller: _scrollController,
+      thumbVisibility: true,
       crossAxisMargin: scrollbarInset,
       thickness: scrollbarThickness,
       radius: Radius.circular(context.radii.squircle),
