@@ -29,6 +29,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -48,15 +49,116 @@ class ChatsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final showToast = ShadToaster.maybeOf(context)?.show;
     final bool isDesktopPlatform =
         EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
-    const refreshSpinnerExtent = 56.0;
-    const refreshSpinnerDimension = 20.0;
-    const refreshOffsetToArmed = 96.0;
-    const refreshRevealThreshold = 0.02;
-    const refreshIndicatorPadding = 16.0;
+    return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+      builder: (context, searchState) {
+        return BlocBuilder<RosterCubit, RosterState>(
+          builder: (context, rosterState) {
+            final rosterContacts = rosterState is RosterAvailable
+                ? (rosterState.items ?? const <RosterItem>[])
+                    .map((item) => item.jid)
+                    .toSet()
+                : const <String>{};
+            return _ChatsListSync(
+              searchState: searchState,
+              rosterContacts: rosterContacts,
+              showCalendarShortcut: showCalendarShortcut,
+              calendarAvailable: calendarAvailable,
+              isDesktopPlatform: isDesktopPlatform,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ChatsListSync extends StatefulWidget {
+  const _ChatsListSync({
+    required this.searchState,
+    required this.rosterContacts,
+    required this.showCalendarShortcut,
+    required this.calendarAvailable,
+    required this.isDesktopPlatform,
+  });
+
+  final HomeSearchState searchState;
+  final Set<String> rosterContacts;
+  final bool showCalendarShortcut;
+  final bool calendarAvailable;
+  final bool isDesktopPlatform;
+
+  @override
+  State<_ChatsListSync> createState() => _ChatsListSyncState();
+}
+
+class _ChatsListSyncState extends State<_ChatsListSync> {
+  @override
+  void initState() {
+    super.initState();
+    _syncSearch();
+    _syncRoster();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatsListSync oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchState != widget.searchState) {
+      _syncSearch();
+    }
+    if (!setEquals(oldWidget.rosterContacts, widget.rosterContacts)) {
+      _syncRoster();
+    }
+  }
+
+  void _syncSearch() {
+    final tabState = widget.searchState.stateFor(HomeTab.chats);
+    final query = widget.searchState.active ? tabState.query : '';
+    context.read<ChatsCubit>().updateSearchSnapshot(
+          active: widget.searchState.active,
+          query: query,
+          filterId: tabState.filterId,
+          sortOrder: tabState.sort,
+        );
+  }
+
+  void _syncRoster() {
+    context.read<ChatsCubit>().updateRosterContacts(widget.rosterContacts);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChatsListBody(
+      showCalendarShortcut: widget.showCalendarShortcut,
+      calendarAvailable: widget.calendarAvailable,
+      isDesktopPlatform: widget.isDesktopPlatform,
+    );
+  }
+}
+
+class _ChatsListBody extends StatelessWidget {
+  const _ChatsListBody({
+    required this.showCalendarShortcut,
+    required this.calendarAvailable,
+    required this.isDesktopPlatform,
+  });
+
+  final bool showCalendarShortcut;
+  final bool calendarAvailable;
+  final bool isDesktopPlatform;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final refreshSpinnerExtent = sizing.buttonHeightLg + spacing.s;
+    final refreshSpinnerDimension = sizing.progressIndicatorSize + spacing.xs;
+    final refreshOffsetToArmed = spacing.xl + spacing.l;
+    final refreshRevealThreshold = context.motion.tapHoverAlpha;
+    final refreshIndicatorPadding = spacing.m;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.creationStatus != current.creationStatus ||
@@ -82,13 +184,9 @@ class ChatsList extends StatelessWidget {
           context.read<ChatsCubit>().clearRefreshStatus();
         }
       },
-      child: BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
-        selector: (state) {
+      child: BlocBuilder<ChatsCubit, ChatsState>(
+        builder: (context, state) {
           final items = state.items;
-          if (items == null) return null;
-          return items.where((chat) => !chat.archived && !chat.spam).toList();
-        },
-        builder: (context, items) {
           Widget child;
           if (items == null) {
             child = KeyedSubtree(
@@ -100,150 +198,103 @@ class ChatsList extends StatelessWidget {
               ),
             );
           } else {
-            child = BlocBuilder<HomeSearchCubit, HomeSearchState>(
-              builder: (context, searchState) {
-                final tabState = searchState.stateFor(HomeTab.chats);
-                final query = searchState.active
-                    ? tabState.query.trim().toLowerCase()
-                    : '';
-                final filterId = tabState.filterId;
-                final sortOrder = tabState.sort;
-                return BlocBuilder<RosterCubit, RosterState>(
-                  builder: (context, rosterState) {
-                    final rosterContacts = rosterState is RosterAvailable
-                        ? (rosterState.items ?? const <RosterItem>[])
-                            .map((item) => item.jid)
-                            .toSet()
-                        : const <String>{};
-                    final includeCalendarShortcut = showCalendarShortcut &&
-                        calendarAvailable &&
-                        !isDesktopPlatform;
-
-                    var visibleItems = items
-                        .where(
-                          (chat) => _chatMatchesFilter(
-                            chat,
-                            filterId,
-                            rosterContacts,
+            final includeCalendarShortcut = showCalendarShortcut &&
+                calendarAvailable &&
+                !isDesktopPlatform;
+            final visibleItems = state.visibleItems;
+            Widget body;
+            if (visibleItems.isEmpty) {
+              body = Column(
+                children: [
+                  if (includeCalendarShortcut)
+                    ListItemPadding(
+                      child: BlocBuilder<CalendarBloc, CalendarState>(
+                        builder: (context, state) {
+                          final currentTask = state.currentTaskAt(
+                            DateTime.now(),
+                          );
+                          return CalendarTile(
+                            onTap: () =>
+                                context.read<ChatsCubit>().toggleCalendar(),
+                            currentTask: currentTask,
+                            nextTask: state.nextTask,
+                            dueReminderCount: state.dueReminders?.length ?? 0,
+                          );
+                        },
+                      ),
+                    ),
+                  Center(
+                    child: Text(
+                      l10n.chatsEmptyList,
+                      style: context.textTheme.muted,
+                    ),
+                  ),
+                ],
+              );
+            } else {
+              final scrollPhysics = AlwaysScrollableScrollPhysics(
+                parent: ScrollConfiguration.of(
+                  context,
+                ).getScrollPhysics(context),
+              );
+              body = ColoredBox(
+                color: context.colorScheme.background,
+                child: AnimatedChatsListView(
+                  items: visibleItems,
+                  includeCalendarShortcut: includeCalendarShortcut,
+                  animationDuration:
+                      context.watch<SettingsCubit>().animationDuration,
+                  scrollPhysics: scrollPhysics,
+                  selectedJids: state.selectedJids,
+                  openJid: state.openJid,
+                  calendarShortcut: includeCalendarShortcut
+                      ? ListItemPadding(
+                          child: BlocBuilder<CalendarBloc, CalendarState>(
+                            builder: (context, state) {
+                              final currentTask = state.currentTaskAt(
+                                DateTime.now(),
+                              );
+                              return CalendarTile(
+                                onTap: () =>
+                                    context.read<ChatsCubit>().toggleCalendar(),
+                                currentTask: currentTask,
+                                nextTask: state.nextTask,
+                                dueReminderCount:
+                                    state.dueReminders?.length ?? 0,
+                              );
+                            },
                           ),
                         )
-                        .toList();
+                      : null,
+                ),
+              );
+            }
 
-                    if (query.isNotEmpty) {
-                      visibleItems = visibleItems
-                          .where((chat) => _chatMatchesQuery(chat, query))
-                          .toList();
-                    }
-
-                    visibleItems.sort(
-                      (a, b) => sortOrder.isNewestFirst
-                          ? b.lastChangeTimestamp.compareTo(
-                              a.lastChangeTimestamp,
-                            )
-                          : a.lastChangeTimestamp.compareTo(
-                              b.lastChangeTimestamp,
-                            ),
-                    );
-                    Widget body;
-                    if (visibleItems.isEmpty) {
-                      body = Column(
-                        children: [
-                          if (includeCalendarShortcut)
-                            ListItemPadding(
-                              child: BlocBuilder<CalendarBloc, CalendarState>(
-                                builder: (context, state) {
-                                  final currentTask = state.currentTaskAt(
-                                    DateTime.now(),
-                                  );
-                                  return CalendarTile(
-                                    onTap: () => context
-                                        .read<ChatsCubit>()
-                                        .toggleCalendar(),
-                                    currentTask: currentTask,
-                                    nextTask: state.nextTask,
-                                    dueReminderCount:
-                                        state.dueReminders?.length ?? 0,
-                                  );
-                                },
+            child = KeyedSubtree(
+              key: const ValueKey('chats-loaded'),
+              child: visibleItems.isEmpty
+                  ? ColoredBox(
+                      color: context.colorScheme.background,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final scrollPhysics = AlwaysScrollableScrollPhysics(
+                            parent: ScrollConfiguration.of(
+                              context,
+                            ).getScrollPhysics(context),
+                          );
+                          return ListView(
+                            physics: scrollPhysics,
+                            children: [
+                              SizedBox(
+                                height: constraints.maxHeight,
+                                child: body,
                               ),
-                            ),
-                          Center(
-                            child: Text(
-                              l10n.chatsEmptyList,
-                              style: context.textTheme.muted,
-                            ),
-                          ),
-                        ],
-                      );
-                    } else {
-                      final scrollPhysics = AlwaysScrollableScrollPhysics(
-                        parent: ScrollConfiguration.of(
-                          context,
-                        ).getScrollPhysics(context),
-                      );
-                      body = ColoredBox(
-                        color: context.colorScheme.background,
-                        child: AnimatedChatsListView(
-                          items: visibleItems,
-                          includeCalendarShortcut: includeCalendarShortcut,
-                          animationDuration:
-                              context.watch<SettingsCubit>().animationDuration,
-                          scrollPhysics: scrollPhysics,
-                          calendarShortcut: includeCalendarShortcut
-                              ? ListItemPadding(
-                                  child:
-                                      BlocBuilder<CalendarBloc, CalendarState>(
-                                    builder: (context, state) {
-                                      final currentTask = state.currentTaskAt(
-                                        DateTime.now(),
-                                      );
-                                      return CalendarTile(
-                                        onTap: () => context
-                                            .read<ChatsCubit>()
-                                            .toggleCalendar(),
-                                        currentTask: currentTask,
-                                        nextTask: state.nextTask,
-                                        dueReminderCount:
-                                            state.dueReminders?.length ?? 0,
-                                      );
-                                    },
-                                  ),
-                                )
-                              : null,
-                        ),
-                      );
-                    }
-
-                    return KeyedSubtree(
-                      key: const ValueKey('chats-loaded'),
-                      child: visibleItems.isEmpty
-                          ? ColoredBox(
-                              color: context.colorScheme.background,
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final scrollPhysics =
-                                      AlwaysScrollableScrollPhysics(
-                                    parent: ScrollConfiguration.of(
-                                      context,
-                                    ).getScrollPhysics(context),
-                                  );
-                                  return ListView(
-                                    physics: scrollPhysics,
-                                    children: [
-                                      SizedBox(
-                                        height: constraints.maxHeight,
-                                        child: body,
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            )
-                          : body,
-                    );
-                  },
-                );
-              },
+                            ],
+                          );
+                        },
+                      ),
+                    )
+                  : body,
             );
           }
 
@@ -306,15 +357,13 @@ class ChatsList extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: context.colorScheme.card,
                                 border: Border(
-                                  bottom: BorderSide(
-                                    color: context.colorScheme.border,
-                                  ),
+                                  bottom: context.borderSide,
                                 ),
                               ),
                               child: Align(
                                 alignment: Alignment.bottomCenter,
                                 child: Padding(
-                                  padding: const EdgeInsets.only(
+                                  padding: EdgeInsets.only(
                                     bottom: refreshIndicatorPadding,
                                   ),
                                   child: indicatorContent,
@@ -341,35 +390,6 @@ class ChatsList extends StatelessWidget {
   }
 }
 
-bool _chatMatchesFilter(Chat chat, String? filterId, Set<String> contacts) {
-  final normalized = filterId ?? 'all';
-  switch (normalized) {
-    case 'contacts':
-      return !chat.hidden && contacts.contains(chat.jid);
-    case 'nonContacts':
-      return !chat.hidden && !contacts.contains(chat.jid);
-    case 'xmpp':
-      return !chat.hidden && chat.transport.isXmpp;
-    case 'email':
-      return !chat.hidden && chat.transport.isEmail;
-    case 'hidden':
-      return chat.hidden;
-    default:
-      return !chat.hidden;
-  }
-}
-
-bool _chatMatchesQuery(Chat chat, String query) {
-  if (query.isEmpty) return true;
-  final lower = query.toLowerCase();
-  final alias = chat.contactDisplayName?.toLowerCase() ?? '';
-  return chat.title.toLowerCase().contains(lower) ||
-      alias.contains(lower) ||
-      chat.jid.toLowerCase().contains(lower) ||
-      (chat.lastMessage?.toLowerCase().contains(lower) ?? false) ||
-      (chat.alert?.toLowerCase().contains(lower) ?? false);
-}
-
 class ChatListTile extends StatefulWidget {
   const ChatListTile({
     super.key,
@@ -392,6 +412,8 @@ class AnimatedChatsListView extends StatefulWidget {
     required this.items,
     required this.animationDuration,
     required this.scrollPhysics,
+    required this.selectedJids,
+    required this.openJid,
     this.includeCalendarShortcut = false,
     this.calendarShortcut,
   });
@@ -399,6 +421,8 @@ class AnimatedChatsListView extends StatefulWidget {
   final List<Chat> items;
   final Duration animationDuration;
   final ScrollPhysics scrollPhysics;
+  final Set<String> selectedJids;
+  final String? openJid;
   final bool includeCalendarShortcut;
   final Widget? calendarShortcut;
 
@@ -410,17 +434,25 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   final GlobalKey<SliverAnimatedListState> _listKey =
       GlobalKey<SliverAnimatedListState>();
   final ScrollController _scrollController = ScrollController();
+  late final ValueNotifier<DateTime> _timestampNow;
+  Timer? _timestampTicker;
   late List<Chat> _displayedItems;
-  bool _diffScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _displayedItems = List<Chat>.from(widget.items);
+    _timestampNow = ValueNotifier<DateTime>(_resolveNow());
+    _timestampTicker = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _timestampNow.value = _resolveNow(),
+    );
   }
 
   @override
   void dispose() {
+    _timestampTicker?.cancel();
+    _timestampNow.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -428,32 +460,21 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   @override
   void didUpdateWidget(covariant AnimatedChatsListView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _scheduleDiff();
+    _updateDisplayedItems(widget.items);
   }
 
-  void _scheduleDiff() {
-    if (_diffScheduled) return;
-    _diffScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _diffScheduled = false;
-      if (!mounted) return;
-      _updateDisplayedItems(widget.items);
-    });
+  DateTime _resolveNow() => kEnableDemoChats ? demoNow() : DateTime.now();
   }
 
   void _updateDisplayedItems(List<Chat> newItems) {
     final listState = _listKey.currentState;
     if (listState == null) {
-      _displayedItems = List<Chat>.from(newItems);
+      setState(() {
+        _displayedItems = List<Chat>.from(newItems);
+      });
       return;
     }
-    if (_hasSameJidOrder(newItems)) {
-      for (var i = 0; i < newItems.length; i++) {
-        _displayedItems[i] = newItems[i];
-      }
-      return;
-    }
-
+    var mutated = false;
     final newJids = newItems.map((chat) => chat.jid).toSet();
     for (int i = _displayedItems.length - 1; i >= 0; i--) {
       final chat = _displayedItems[i];
@@ -461,60 +482,51 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         final removedChat = _displayedItems.removeAt(i);
         listState.removeItem(
           i,
-          (context, animation) => _buildAnimatedTile(
-            removedChat,
-            animation,
+          (context, animation) => _AnimatedChatTile(
+            chat: removedChat,
+            animation: animation,
             entering: false,
             fromTop: i == 0,
+            archivedContext: false,
+            onArchivedTap: null,
+            selectionActive: widget.selectedJids.isNotEmpty,
+            isSelected: widget.selectedJids.contains(removedChat.jid),
+            isOpen: widget.openJid == removedChat.jid,
+            timestampNowListenable: _timestampNow,
           ),
           duration: widget.animationDuration,
         );
+        mutated = true;
       }
     }
 
+    final existingJids = _displayedItems.map((chat) => chat.jid).toSet();
     for (int targetIndex = 0; targetIndex < newItems.length; targetIndex++) {
       final chat = newItems[targetIndex];
-      final currentIndex =
-          _displayedItems.indexWhere((existing) => existing.jid == chat.jid);
-      if (currentIndex == -1) {
-        _displayedItems.insert(targetIndex, chat);
-        listState.insertItem(
-          targetIndex,
-          duration: widget.animationDuration,
-        );
+      if (existingJids.contains(chat.jid)) {
         continue;
       }
-      if (currentIndex != targetIndex) {
-        final movingChat = _displayedItems.removeAt(currentIndex);
-        listState.removeItem(
-          currentIndex,
-          (context, animation) => _buildAnimatedTile(
-            movingChat,
-            animation,
-            entering: false,
-            fromTop: currentIndex > targetIndex,
-          ),
-          duration: widget.animationDuration,
-        );
-        final provisionalIndex =
-            currentIndex > targetIndex ? targetIndex : targetIndex - 1;
-        final normalizedIndex = provisionalIndex.clamp(
-          0,
-          _displayedItems.length,
-        );
-        _displayedItems.insert(normalizedIndex, movingChat);
-        listState.insertItem(
-          normalizedIndex,
-          duration: widget.animationDuration,
-        );
-      }
+      _displayedItems.insert(targetIndex, chat);
+      existingJids.add(chat.jid);
+      listState.insertItem(
+        targetIndex,
+        duration: widget.animationDuration,
+      );
+      mutated = true;
+    }
+
+    if (!_hasSameJidOrder(newItems)) {
+      setState(() {
+        _displayedItems = List<Chat>.from(newItems);
+      });
+      return;
     }
 
     for (var i = 0; i < _displayedItems.length; i++) {
-      final replacement = newItems[i];
-      if (_displayedItems[i].jid == replacement.jid) {
-        _displayedItems[i] = replacement;
-      }
+      _displayedItems[i] = newItems[i];
+    }
+    if (mutated) {
+      setState(() {});
     }
   }
 

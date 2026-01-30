@@ -12,15 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _composeHeaderHeight = 48;
-const double _composeWindowPadding = 12;
-const double _composeWindowWidth = 520;
-const double _composeWindowExpandedWidth = 720;
-const double _composeWindowHeight = 560;
-const double _composeWindowExpandedHeight = 640;
-const double _composeWindowMinWidth = 360;
-const double _composeWindowMinHeight = 260;
-
 class ComposeWindowOverlay extends StatelessWidget {
   const ComposeWindowOverlay({super.key});
 
@@ -79,6 +70,12 @@ class _ComposeWindowHeader extends StatelessWidget {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final headerHeight = sizing.buttonHeightLg;
+    final horizontalPadding = spacing.s + spacing.xs;
+    final gapSm = spacing.xs + spacing.xxs;
+    final gapMd = spacing.s + spacing.xxs;
     final subject = seed.subject.trim();
     final recipients =
         seed.jids.where((jid) => jid.trim().isNotEmpty).take(3).join(', ');
@@ -94,16 +91,25 @@ class _ComposeWindowHeader extends StatelessWidget {
       onPanEnd: onDragEnd,
       behavior: HitTestBehavior.translucent,
       child: Container(
-        height: _composeHeaderHeight,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: headerHeight,
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         decoration: BoxDecoration(
-          color: colors.muted.withValues(alpha: 0.05),
-          border: Border(bottom: BorderSide(color: colors.border)),
+          color: colors.muted.withValues(alpha: context.motion.tapHoverAlpha),
+          border: Border(
+            bottom: BorderSide(
+              color: colors.border,
+              width: context.borderSide.width,
+            ),
+          ),
         ),
         child: Row(
           children: [
-            Icon(LucideIcons.pencilLine, size: 18, color: colors.foreground),
-            const SizedBox(width: 10),
+            Icon(
+              LucideIcons.pencilLine,
+              size: sizing.iconButtonIconSize,
+              color: colors.foreground,
+            ),
+            SizedBox(width: gapMd),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -113,11 +119,10 @@ class _ComposeWindowHeader extends StatelessWidget {
                     l10n.composeTitle,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.small.copyWith(
-                      fontWeight: FontWeight.w700,
                       color: colors.foreground,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: spacing.xxs),
                   Text(
                     detailLabel,
                     overflow: TextOverflow.ellipsis,
@@ -133,13 +138,13 @@ class _ComposeWindowHeader extends StatelessWidget {
               icon: minimizeIcon,
               onPressed: onMinimize,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: gapSm),
             _ComposeHeaderButton(
               tooltip: expanded ? l10n.draftExitFullscreen : l10n.draftExpand,
               icon: expandIcon,
               onPressed: onToggleExpanded,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: gapSm),
             _ComposeHeaderButton(
               tooltip: l10n.draftCloseComposer,
               icon: LucideIcons.x,
@@ -170,6 +175,7 @@ class _ComposeHeaderButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final foreground = destructive ? colors.destructive : colors.foreground;
+    final sizing = context.sizing;
     return AxiTooltip(
       builder: (_) => Text(tooltip),
       child: AxiIconButton(
@@ -179,11 +185,11 @@ class _ComposeHeaderButton extends StatelessWidget {
         color: foreground,
         backgroundColor: colors.card,
         borderColor: colors.border,
-        borderWidth: 1.2,
-        buttonSize: 34,
-        tapTargetSize: 36,
-        iconSize: 18,
-        cornerRadius: 12,
+        borderWidth: context.borderSide.width,
+        buttonSize: sizing.iconButtonSize,
+        tapTargetSize: sizing.iconButtonTapTarget,
+        iconSize: sizing.iconButtonIconSize,
+        cornerRadius: context.radii.squircle,
       ),
     );
   }
@@ -244,37 +250,50 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final entry = widget.entry;
     final mediaSize = widget.viewportSize;
     final colors = context.colorScheme;
-    final cardRadius = context.radius;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final containerRadius =
+        BorderRadius.circular(context.sizing.containerRadius);
     final isMinimized = entry.isMinimized;
     final isExpanded = entry.isExpanded;
 
+    final windowPadding = spacing.s + spacing.xs;
+    final headerHeight = sizing.buttonHeightLg;
+    final baseWidth = sizing.dialogMaxWidth - spacing.l;
+    final expandedWidth = sizing.dialogMaxWidth + spacing.xl;
+    final minWidth = sizing.menuMaxWidth + spacing.m;
+    final maxHeight = mediaSize.height * sizing.dialogMaxHeightFraction;
+    final baseHeight = sizing.dialogMaxWidth - spacing.l;
+    final expandedHeight = sizing.dialogMaxWidth + spacing.s;
+    final minHeight = sizing.buttonHeightLg * 5;
+
     final double availableWidth = math.max(
-      mediaSize.width - (_composeWindowPadding * 2),
+      mediaSize.width - (windowPadding * 2),
       0,
     );
     final double targetWidth = math.max(
       math.min(
-        isExpanded ? _composeWindowExpandedWidth : _composeWindowWidth,
+        isExpanded ? expandedWidth : baseWidth,
         availableWidth,
       ),
-      math.min(availableWidth, _composeWindowMinWidth),
+      math.min(availableWidth, minWidth),
     );
 
     final double availableHeight = math.max(
-      mediaSize.height - (_composeWindowPadding * 2),
+      mediaSize.height - (windowPadding * 2),
       0,
     );
     final double normalHeight = math.max(
       math.min(
-        isExpanded ? _composeWindowExpandedHeight : _composeWindowHeight,
-        availableHeight,
+        isExpanded ? expandedHeight : baseHeight,
+        math.min(availableHeight, maxHeight),
       ),
-      math.min(availableHeight, _composeWindowMinHeight),
+      math.min(availableHeight, minHeight),
     );
     final double targetHeight =
-        isMinimized ? _composeHeaderHeight : normalHeight;
+        isMinimized ? headerHeight : normalHeight;
     final double collapseOffset = isMinimized ? normalHeight - targetHeight : 0;
-    final double bodyHeight = math.max(targetHeight - _composeHeaderHeight, 0);
+    final double bodyHeight = math.max(targetHeight - headerHeight, 0);
 
     final resolvedOffset = _resolveOffset(
       entry: entry,
@@ -283,6 +302,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       targetWidth: targetWidth,
       targetHeight: normalHeight,
       index: widget.index,
+      windowPadding: windowPadding,
     );
 
     return AnimatedPositioned(
@@ -300,8 +320,8 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
               color: colors.card,
               shadows: calendarMediumShadow,
               shape: ContinuousRectangleBorder(
-                borderRadius: cardRadius,
-                side: BorderSide(color: colors.border),
+                borderRadius: containerRadius,
+                side: context.borderSide,
               ),
             ),
             child: Column(
@@ -322,7 +342,12 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
                   onDragStart: (details) =>
                       _handleDragStart(details, resolvedOffset),
                   onDragUpdate: (details) =>
-                      _handleDragUpdate(details, targetWidth, normalHeight),
+                      _handleDragUpdate(
+                        details,
+                        targetWidth,
+                        normalHeight,
+                        windowPadding,
+                      ),
                   onDragEnd: _handleDragEnd,
                 ),
                 Expanded(
@@ -356,21 +381,22 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required double targetWidth,
     required double targetHeight,
     required int index,
+    required double windowPadding,
   }) {
     final defaultOffset = Offset(
       math.max(
-        _composeWindowPadding + viewPadding.left,
+        windowPadding + viewPadding.left,
         viewportSize.width -
             targetWidth -
-            _composeWindowPadding -
+            windowPadding -
             viewPadding.right -
             (index * 20),
       ),
       math.max(
-        _composeWindowPadding + viewPadding.top,
+        windowPadding + viewPadding.top,
         viewportSize.height -
             targetHeight -
-            _composeWindowPadding -
+            windowPadding -
             viewPadding.bottom -
             (index * 20),
       ),
@@ -381,6 +407,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       viewPadding: viewPadding,
       targetWidth: targetWidth,
       targetHeight: targetHeight,
+      windowPadding: windowPadding,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ComposeWindowCubit>().initializeOffset(entry.id, clamped);
@@ -400,6 +427,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     DragUpdateDetails details,
     double targetWidth,
     double targetHeight,
+    double windowPadding,
   ) {
     final dragStart = _dragStartPosition;
     final pointerStart = _pointerStart;
@@ -413,6 +441,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       viewPadding: widget.viewPadding,
       targetWidth: targetWidth,
       targetHeight: targetHeight,
+      windowPadding: windowPadding,
     );
     context.read<ComposeWindowCubit>().updateOffset(widget.entry.id, clamped);
   }
@@ -431,23 +460,24 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required EdgeInsets viewPadding,
     required double targetWidth,
     required double targetHeight,
+    required double windowPadding,
   }) {
     final maxX = math.max(
-      _composeWindowPadding + viewPadding.left,
+      windowPadding + viewPadding.left,
       viewportSize.width -
           targetWidth -
-          _composeWindowPadding -
+          windowPadding -
           viewPadding.right,
     );
     final maxY = math.max(
-      _composeWindowPadding + viewPadding.top,
+      windowPadding + viewPadding.top,
       viewportSize.height -
           targetHeight -
-          _composeWindowPadding -
+          windowPadding -
           viewPadding.bottom,
     );
-    final dx = offset.dx.clamp(_composeWindowPadding + viewPadding.left, maxX);
-    final dy = offset.dy.clamp(_composeWindowPadding + viewPadding.top, maxY);
+    final dx = offset.dx.clamp(windowPadding + viewPadding.left, maxX);
+    final dy = offset.dy.clamp(windowPadding + viewPadding.top, maxY);
     return Offset(dx, dy);
   }
 }

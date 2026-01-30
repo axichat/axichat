@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -20,30 +19,36 @@ class RosterList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<RosterCubit, RosterState>(
-      buildWhen: (_, current) => current is RosterAvailable,
-      builder: (context, state) {
-        final List<RosterItem>? items = (state as RosterAvailable).items;
-
-        if (items == null) {
-          return Center(
-            child: AxiProgressIndicator(color: context.colorScheme.foreground),
-          );
-        }
-
-        return BlocBuilder<ChatsCubit, ChatsState>(
-          builder: (context, chatsState) {
-            return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-              builder: (context, searchState) => _RosterListBody(
-                items: items,
-                rosterState: state,
-                searchState: searchState,
-                chatsState: chatsState,
-              ),
+    return BlocListener<HomeSearchCubit, HomeSearchState>(
+      listener: (context, searchState) {
+        final tabState = searchState.stateFor(HomeTab.contacts);
+        final query = searchState.active ? tabState.query : '';
+        context.read<RosterCubit>().updateContactsCriteria(
+              query: query,
+              sort: tabState.sort,
+              filter: RosterFilter.fromId(tabState.filterId),
             );
-          },
-        );
       },
+      child: BlocBuilder<RosterCubit, RosterState>(
+        buildWhen: (previous, current) =>
+            previous.visibleItems != current.visibleItems,
+        builder: (context, state) {
+          final items = state.visibleItems;
+
+          if (items == null) {
+            return Center(
+              child: AxiProgressIndicator(color: context.colorScheme.foreground),
+            );
+          }
+
+          return BlocBuilder<ChatsCubit, ChatsState>(
+            builder: (context, chatsState) => _RosterListBody(
+              items: items,
+              chatsState: chatsState,
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -51,46 +56,16 @@ class RosterList extends StatelessWidget {
 class _RosterListBody extends StatelessWidget {
   const _RosterListBody({
     required this.items,
-    required this.rosterState,
-    this.searchState,
     this.chatsState,
   });
 
   final List<RosterItem> items;
-  final RosterState rosterState;
-  final HomeSearchState? searchState;
   final ChatsState? chatsState;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    var visibleItems = List<RosterItem>.from(items);
-    final tabState = searchState?.stateFor(HomeTab.contacts);
-    final searchActive = searchState?.active ?? false;
-    final query =
-        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-    final filterId = tabState?.filterId;
-    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-
-    if (filterId != null) {
-      visibleItems = visibleItems
-          .where((item) => _rosterMatchesFilter(item, filterId))
-          .toList();
-    }
-
-    if (visibleItems.isNotEmpty && query.isNotEmpty) {
-      visibleItems = visibleItems
-          .where((item) => _rosterMatchesQuery(item, query))
-          .toList();
-    }
-
-    visibleItems.sort(
-      (a, b) => sortOrder.isNewestFirst
-          ? a.title.toLowerCase().compareTo(b.title.toLowerCase())
-          : b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-    );
-
-    if (visibleItems.isEmpty) {
+    if (items.isEmpty) {
       return Center(
         child: Text(l10n.rosterEmpty, style: context.textTheme.muted),
       );
@@ -101,80 +76,69 @@ class _RosterListBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
-        itemCount: visibleItems.length,
+        itemCount: items.length,
         itemBuilder: (context, index) {
-          final item = visibleItems[index];
-          final open = openJid == item.jid;
-          return ListItemPadding(
-            child: AxiListTile(
-              key: Key(item.jid),
-              onTap: () => context.read<ChatsCubit?>()?.openChat(jid: item.jid),
-              menuItems: [
-                ShadContextMenuItem(
-                  leading: const Icon(LucideIcons.pencilLine),
-                  child: Text(l10n.rosterCompose),
-                  onPressed: () => openComposeDraft(
-                    context,
-                    jids: [item.jid],
-                    attachmentMetadataIds: const <String>[],
+          final item = items[index];
+          return BlocSelector<RosterCubit, RosterState, bool>(
+            selector: (state) {
+              final actionState = state.actionState;
+              return actionState is RosterActionLoading &&
+                  actionState.action == RosterActionType.remove &&
+                  actionState.jid == item.jid;
+            },
+            builder: (context, isLoading) {
+              final open = openJid == item.jid;
+              return ListItemPadding(
+                child: AxiListTile(
+                  key: Key(item.jid),
+                  onTap: () =>
+                      context.read<ChatsCubit?>()?.openChat(jid: item.jid),
+                  menuItems: [
+                    ShadContextMenuItem(
+                      leading: const Icon(LucideIcons.pencilLine),
+                      child: Text(l10n.rosterCompose),
+                      onPressed: () => openComposeDraft(
+                        context,
+                        jids: [item.jid],
+                        attachmentMetadataIds: const <String>[],
+                      ),
+                    ),
+                    BlockMenuItem(jid: item.jid),
+                    ReportSpamMenuItem(jid: item.jid),
+                    AxiDeleteMenuItem(
+                      onPressed: () async {
+                        if (!isLoading &&
+                            await confirm(
+                                  context,
+                                  text: l10n.rosterRemoveConfirm(item.jid),
+                                ) ==
+                                true &&
+                            context.mounted) {
+                          context.read<RosterCubit?>()?.removeContact(
+                                jid: item.jid,
+                              );
+                        }
+                      },
+                    ),
+                  ],
+                  selected: open,
+                  leading: AxiAvatar(
+                    jid: item.jid,
+                    subscription: item.subscription,
+                    // Presence is parsed for MUC/identity purposes but not shown
+                    // in the contacts UI because it is unreliable across servers.
+                    presence: null,
+                    status: item.status,
+                    avatarPath: item.avatarPath,
                   ),
+                  title: item.title,
+                  subtitle: item.jid,
                 ),
-                BlockMenuItem(jid: item.jid),
-                ReportSpamMenuItem(jid: item.jid),
-                AxiDeleteMenuItem(
-                  onPressed: () async {
-                    final isLoading = switch (rosterState) {
-                      RosterLoading(:final jid) => jid == item.jid,
-                      _ => false,
-                    };
-                    if (!isLoading &&
-                        await confirm(
-                              context,
-                              text: l10n.rosterRemoveConfirm(item.jid),
-                            ) ==
-                            true &&
-                        context.mounted) {
-                      context.read<RosterCubit?>()?.removeContact(
-                            jid: item.jid,
-                          );
-                    }
-                  },
-                ),
-              ],
-              selected: open,
-              leading: AxiAvatar(
-                jid: item.jid,
-                subscription: item.subscription,
-                // Presence is parsed for MUC/identity purposes but not shown
-                // in the contacts UI because it is unreliable across servers.
-                presence: null,
-                status: item.status,
-                avatarPath: item.avatarPath,
-              ),
-              title: item.title,
-              subtitle: item.jid,
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
-}
-
-bool _rosterMatchesFilter(RosterItem item, String? filterId) {
-  switch (filterId) {
-    case 'online':
-      return !item.presence.isUnavailable;
-    case 'offline':
-      return item.presence.isUnavailable;
-    default:
-      return true;
-  }
-}
-
-bool _rosterMatchesQuery(RosterItem item, String query) {
-  final lower = query.toLowerCase();
-  return item.title.toLowerCase().contains(lower) ||
-      item.jid.toLowerCase().contains(lower) ||
-      (item.status?.toLowerCase().contains(lower) ?? false);
 }

@@ -277,6 +277,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatAlertHidden>(_onChatAlertHidden);
+    on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
+    on<ChatContactAddRequested>(_onChatContactAddRequested);
+    on<ChatRecipientEmailChatRequested>(_onChatRecipientEmailChatRequested);
     on<ChatQuoteRequested>(_onChatQuoteRequested);
     on<ChatQuoteCleared>(_onChatQuoteCleared);
     on<ChatMessagePinRequested>(_onChatMessagePinRequested);
@@ -304,7 +307,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatRoomMembersOpened>(_onChatRoomMembersOpened);
     on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
-    on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
       if (chatLookupJid == null) return;
@@ -403,7 +405,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ? AddressTools.normalizedKey(jid) ?? jid!.trim().toLowerCase()
           : jid;
   final MessageService _messageService;
-  XmppService? _xmppService;
+  final XmppService? _xmppService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
   final EmailService? _emailService;

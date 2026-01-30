@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -19,7 +20,7 @@ void openComposeDraft(
   List<String> attachmentMetadataIds = const <String>[],
 }) {
   final env = EnvScope.maybeOf(context);
-  final platform = Theme.of(context).platform;
+  final platform = env?.platform ?? defaultTargetPlatform;
   final bool isDesktopPlatform = env?.isDesktopPlatform ??
       (platform == TargetPlatform.macOS ||
           platform == TargetPlatform.linux ||

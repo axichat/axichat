@@ -17,9 +17,6 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _dialogSectionSpacing = 12.0;
-const double _dialogFieldSpacing = 8.0;
-const double _dialogRowSpacing = 10.0;
 const EmailContactImportFormat _defaultFormat = EmailContactImportFormat.gmail;
 
 class EmailContactImportTile extends StatelessWidget {
@@ -63,54 +60,32 @@ class EmailContactImportActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final spacing = context.spacing;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
         return Padding(
           padding: padding ??
-              const EdgeInsets.symmetric(
-                horizontal: _dialogFieldSpacing * 2,
-                vertical: _dialogFieldSpacing / 2,
+              EdgeInsets.symmetric(
+                horizontal: spacing.l,
+                vertical: spacing.xs,
               ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              width: double.infinity,
-              expands: true,
-              mainAxisAlignment: MainAxisAlignment.start,
-              foregroundColor: colors.foreground,
-              hoverForegroundColor: colors.foreground,
-              onPressed: loading
-                  ? null
-                  : () {
-                      showFadeScaleDialog(
-                        context: context,
-                        builder: (dialogContext) => EmailContactImportDialog(
-                          cubit: context.read<EmailContactImportCubit>()
-                            ..reset(),
-                        ),
-                      );
-                    },
-              child: Row(
-                children: [
-                  Icon(
-                    LucideIcons.userRoundPlus,
-                    color: colors.foreground,
-                  ),
-                  const SizedBox(width: _dialogFieldSpacing),
-                  Expanded(
-                    child: Text(
-                      context.l10n.emailContactsImportTitle,
-                      style: context.textTheme.small.copyWith(
-                        color: colors.foreground,
+          child: AxiListButton(
+            leading: const Icon(LucideIcons.userRoundPlus),
+            onPressed: loading
+                ? null
+                : () {
+                    showFadeScaleDialog(
+                      context: context,
+                      builder: (dialogContext) => EmailContactImportDialog(
+                        cubit: context.read<EmailContactImportCubit>()..reset(),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ).withTapBounce(enabled: !loading),
+                    );
+                  },
+            child: Text(
+              context.l10n.emailContactsImportTitle,
+              style: context.textTheme.small,
+            ),
           ),
         );
       },
@@ -176,6 +151,7 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return BlocConsumer<EmailContactImportCubit, EmailContactImportState>(
       bloc: widget.cubit,
       listener: (context, state) {
@@ -237,12 +213,12 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                 l10n.emailContactsImportSubtitle,
                 style: context.textTheme.muted,
               ),
-              const SizedBox(height: _dialogSectionSpacing),
+              SizedBox(height: spacing.m),
               Text(
                 l10n.emailContactsImportFormatLabel,
                 style: context.textTheme.small,
               ),
-              const SizedBox(height: _dialogFieldSpacing),
+              SizedBox(height: spacing.s),
               AxiSelect<EmailContactImportFormat>(
                 initialValue: _format,
                 onChanged: loading
@@ -271,12 +247,12 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                 selectedOptionBuilder: (context, format) =>
                     Text(format.label(l10n), style: selectTextStyle),
               ),
-              const SizedBox(height: _dialogRowSpacing),
+              SizedBox(height: spacing.m),
               Text(
                 l10n.emailContactsImportFileLabel,
                 style: context.textTheme.small,
               ),
-              const SizedBox(height: _dialogFieldSpacing),
+              SizedBox(height: spacing.s),
               Row(
                 children: [
                   Expanded(
@@ -286,14 +262,14 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  ShadButton.outline(
+                  AxiButton.outline(
                     onPressed: loading ? null : _pickFile,
                     child: Text(l10n.emailContactsImportChooseFile),
-                  ).withTapBounce(enabled: !loading),
+                  ),
                 ],
               ),
               if (failureReason != null) ...[
-                const SizedBox(height: _dialogRowSpacing),
+                SizedBox(height: spacing.m),
                 Text(
                   _failureMessage(l10n, failureReason),
                   style: context.textTheme.small.copyWith(

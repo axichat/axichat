@@ -38,20 +38,31 @@ class RosterAddButton extends StatelessWidget {
                   children: [
                     BlocConsumer<RosterCubit, RosterState>(
                       listener: (context, state) {
-                        if (state is RosterSuccess && context.canPop()) {
+                        final actionState = state.actionState;
+                        if (actionState is RosterActionSuccess &&
+                            actionState.action == RosterActionType.add &&
+                            context.canPop()) {
                           context.pop();
                         }
                       },
                       builder: (context, state) {
+                        final actionState = state.actionState;
+                        final errorMessage = switch (actionState) {
+                          RosterActionFailure(:final reason)
+                              when actionState.action ==
+                                  RosterActionType.add =>
+                            _rosterFailureMessage(context, reason),
+                          _ => null,
+                        };
+                        final isLoading = actionState is RosterActionLoading &&
+                            actionState.action == RosterActionType.add;
                         return BlocSelector<AuthenticationCubit,
                             AuthenticationState, String>(
                           selector: (authState) => authState.server,
                           builder: (context, server) {
                             return JidInput(
-                              enabled: state is! RosterLoading,
-                              error: state is! RosterFailure
-                                  ? null
-                                  : state.message,
+                              enabled: !isLoading,
+                              error: errorMessage,
                               jidOptions: ['${jid.split('@').first}@$server'],
                               onChanged: (value) {
                                 setState(() => jid = value);
@@ -76,4 +87,18 @@ class RosterAddButton extends StatelessWidget {
       },
     );
   }
+}
+
+String _rosterFailureMessage(
+  BuildContext context,
+  RosterFailureReason reason,
+) {
+  final l10n = context.l10n;
+  return switch (reason) {
+    RosterFailureReason.invalidJid => l10n.jidInputInvalid,
+    RosterFailureReason.addFailed ||
+    RosterFailureReason.removeFailed ||
+    RosterFailureReason.rejectFailed =>
+      l10n.authGenericError,
+  };
 }

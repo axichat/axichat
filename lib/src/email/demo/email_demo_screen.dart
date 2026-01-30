@@ -21,14 +21,12 @@ class EmailDemoScreen extends StatefulWidget {
 class _EmailDemoScreenState extends State<EmailDemoScreen> {
   final _messageController = TextEditingController();
 
-  bool _requestedInitialLoad = false;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_requestedInitialLoad) return;
-    _requestedInitialLoad = true;
-    _messageController.text = context.l10n.emailDemoDefaultMessage;
+    if (_messageController.text.isEmpty) {
+      _messageController.text = context.l10n.emailDemoDefaultMessage;
+    }
   }
 
   @override
@@ -85,6 +83,8 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     return BlocProvider(
       create: (context) => EmailDemoCubit(
         emailService: context.read<EmailService>(),
@@ -107,17 +107,17 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                   scrolledUnderElevation: 0,
                   forceMaterialTransparency: true,
                   shape: Border(
-                    bottom: BorderSide(color: context.colorScheme.border),
+                    bottom: context.borderSide,
                   ),
-                  leadingWidth: AxiIconButton.kDefaultSize + 24,
+                  leadingWidth: sizing.iconButtonTapTarget + spacing.m,
                   leading: Navigator.canPop(context)
                       ? Padding(
-                          padding: const EdgeInsets.only(left: 12),
+                          padding: EdgeInsets.only(left: spacing.s),
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: SizedBox(
-                              width: AxiIconButton.kDefaultSize,
-                              height: AxiIconButton.kDefaultSize,
+                              width: sizing.iconButtonSize,
+                              height: sizing.iconButtonSize,
                               child: AxiIconButton.ghost(
                                 iconData: LucideIcons.arrowLeft,
                                 tooltip: context.l10n.commonBack,
@@ -130,12 +130,12 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                   title: Text(context.l10n.emailDemoTitle),
                 ),
                 body: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(spacing.m),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(context.l10n.emailDemoStatusLabel(statusLabel)),
-                      const SizedBox(height: 8),
+                      SizedBox(height: spacing.s),
                       Text(
                         context.l10n.emailDemoAccountLabel(
                           accountLabel.isEmpty
@@ -143,26 +143,28 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                               : accountLabel,
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: spacing.m),
                       AxiTextField(
                         controller: _messageController,
                         decoration: InputDecoration(
                           labelText: context.l10n.emailDemoMessageLabel,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: spacing.l),
                       Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
+                        spacing: spacing.m,
+                        runSpacing: spacing.m,
                         children: [
-                          ElevatedButton(
+                          AxiButton.primary(
                             onPressed: isBusy
                                 ? null
                                 : () =>
                                     context.read<EmailDemoCubit>().provision(),
+                            loading: state.status ==
+                                EmailDemoStatus.provisioning,
                             child: Text(context.l10n.emailDemoProvisionButton),
                           ),
-                          ElevatedButton(
+                          AxiButton.secondary(
                             onPressed: isBusy
                                 ? null
                                 : () => context
@@ -172,6 +174,8 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                                       displayName:
                                           context.l10n.emailDemoDisplayNameSelf,
                                     ),
+                            loading:
+                                state.status == EmailDemoStatus.sending,
                             child: Text(context.l10n.emailDemoSendButton),
                           ),
                         ],

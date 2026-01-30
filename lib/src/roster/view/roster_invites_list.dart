@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
-import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -18,56 +17,43 @@ class RosterInvitesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<RosterCubit, RosterState>(
-      buildWhen: (_, current) => current is RosterInvitesAvailable,
-      builder: (context, state) {
-        final List<Invite>? invites = (state as RosterInvitesAvailable).invites;
-
-        if (invites == null) {
-          return Center(
-            child: AxiProgressIndicator(color: context.colorScheme.foreground),
-          );
-        }
-
-        return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-          builder: (context, searchState) =>
-              _RosterInvitesBody(invites: invites, searchState: searchState),
-        );
+    return BlocListener<HomeSearchCubit, HomeSearchState>(
+      listener: (context, searchState) {
+        final tabState = searchState.stateFor(HomeTab.invites);
+        final query = searchState.active ? tabState.query : '';
+        context.read<RosterCubit>().updateInvitesCriteria(
+              query: query,
+              sort: tabState.sort,
+            );
       },
+      child: BlocBuilder<RosterCubit, RosterState>(
+        buildWhen: (previous, current) =>
+            previous.visibleInvites != current.visibleInvites,
+        builder: (context, state) {
+          final invites = state.visibleInvites;
+
+          if (invites == null) {
+            return Center(
+              child: AxiProgressIndicator(color: context.colorScheme.foreground),
+            );
+          }
+
+          return _RosterInvitesBody(invites: invites);
+        },
+      ),
     );
   }
 }
 
 class _RosterInvitesBody extends StatelessWidget {
-  const _RosterInvitesBody({required this.invites, this.searchState});
+  const _RosterInvitesBody({required this.invites});
 
   final List<Invite> invites;
-  final HomeSearchState? searchState;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final tabState = searchState?.stateFor(HomeTab.invites);
-    final searchActive = searchState?.active ?? false;
-    final query =
-        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-
-    var visibleInvites = List<Invite>.from(invites);
-
-    if (query.isNotEmpty) {
-      visibleInvites = visibleInvites
-          .where((invite) => _inviteMatchesQuery(invite, query))
-          .toList();
-    }
-
-    visibleInvites.sort(
-      (a, b) => sortOrder.isNewestFirst
-          ? a.title.toLowerCase().compareTo(b.title.toLowerCase())
-          : b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-    );
-
-    if (visibleInvites.isEmpty) {
+    if (invites.isEmpty) {
       return Center(
         child: Text(l10n.rosterInvitesEmpty, style: context.textTheme.muted),
       );
@@ -76,12 +62,15 @@ class _RosterInvitesBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
-        itemCount: visibleInvites.length,
+        itemCount: invites.length,
         itemBuilder: (context, index) {
-          final invite = visibleInvites[index];
+          final invite = invites[index];
           return BlocSelector<RosterCubit, RosterState, bool>(
-            selector: (state) =>
-                state is RosterLoading && state.jid == invite.jid,
+            selector: (state) {
+              final actionState = state.actionState;
+              return actionState is RosterActionLoading &&
+                  actionState.jid == invite.jid;
+            },
             builder: (context, disabled) {
               return ListItemPadding(
                 child: AxiListTile(
@@ -133,10 +122,4 @@ class _RosterInvitesBody extends StatelessWidget {
       ),
     );
   }
-}
-
-bool _inviteMatchesQuery(Invite invite, String query) {
-  final lower = query.toLowerCase();
-  return invite.title.toLowerCase().contains(lower) ||
-      invite.jid.toLowerCase().contains(lower);
 }

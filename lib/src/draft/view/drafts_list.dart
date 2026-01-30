@@ -14,37 +14,77 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
-const EdgeInsets _draftListItemPadding = EdgeInsets.symmetric(
-  horizontal: 16,
-  vertical: 6,
-);
-const double _draftTileHeight = 56.0;
-
-class DraftsList extends StatelessWidget {
+class DraftsList extends StatefulWidget {
   const DraftsList({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<DraftCubit, DraftState>(
-      buildWhen: (_, current) => current is DraftsAvailable,
-      builder: (context, state) {
-        final l10n = context.l10n;
-        final List<Draft>? items = state.items;
+  State<DraftsList> createState() => _DraftsListState();
+}
 
-        if (items == null) {
-          return Center(
-            child: AxiProgressIndicator(color: context.colorScheme.foreground),
-          );
-        }
+class _DraftsListState extends State<DraftsList> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncSearchSnapshot(context.read<HomeSearchCubit>().state);
+    });
+  }
 
-        return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-          builder: (context, searchState) => _DraftsListBody(
-            items: items,
-            l10n: l10n,
-            searchState: searchState,
+  void _syncSearchSnapshot(HomeSearchState searchState) {
+    final tabState = searchState.stateFor(HomeTab.drafts);
+    final query =
+        searchState.active ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+    final filterAttachmentsOnly = tabState?.filterId == 'attachments';
+    final sortOrder = switch (tabState?.sort) {
+      SearchSortOrder.oldestFirst => DraftSortOrder.oldestFirst,
+      _ => DraftSortOrder.newestFirst,
+    };
+    context.read<DraftCubit>().updateSearchSnapshot(
+          DraftSearchSnapshot(
+            query: query,
+            filterAttachmentsOnly: filterAttachmentsOnly,
+            sortOrder: sortOrder,
           ),
         );
-      },
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<HomeSearchCubit, HomeSearchState>(
+      listener: (context, searchState) => _syncSearchSnapshot(searchState),
+      child: BlocBuilder<DraftCubit, DraftState>(
+        buildWhen: (_, current) => current is DraftsAvailable,
+        builder: (context, state) {
+          final l10n = context.l10n;
+          final List<Draft>? items = state.items;
+
+          if (items == null) {
+            return Center(
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
+              ),
+            );
+          }
+
+          return BlocBuilder<RosterCubit, RosterState>(
+            buildWhen: (previous, current) => previous.items != current.items,
+            builder: (context, rosterState) {
+              final rosterItems = rosterState.items ?? const <RosterItem>[];
+              final avatarByJid = <String, String?>{
+                for (final item in rosterItems)
+                  item.jid.normalizedJidKey ?? item.jid.toLowerCase():
+                      item.avatarPath,
+              };
+              return _DraftsListBody(
+                items: state.visibleItems ?? items,
+                l10n: l10n,
+                avatarByJid: avatarByJid,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -53,84 +93,47 @@ class _DraftsListBody extends StatelessWidget {
   const _DraftsListBody({
     required this.items,
     required this.l10n,
-    this.searchState,
+    required this.avatarByJid,
   });
 
   final List<Draft> items;
   final AppLocalizations l10n;
-  final HomeSearchState? searchState;
+  final Map<String, String?> avatarByJid;
 
   @override
   Widget build(BuildContext context) {
-    var visibleItems = List<Draft>.from(items);
-
-    final tabState = searchState?.stateFor(HomeTab.drafts);
-    final searchActive = searchState?.active ?? false;
-    final query =
-        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-    final filterId = tabState?.filterId;
-    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-
-    if (filterId == 'attachments') {
-      visibleItems = visibleItems
-          .where((draft) => draft.attachmentMetadataIds.isNotEmpty)
-          .toList();
-    }
-
-    if (query.isNotEmpty) {
-      visibleItems = visibleItems
-          .where((draft) => _draftMatchesQuery(draft, query))
-          .toList();
-    }
-
-    visibleItems.sort(
-      (a, b) =>
-          sortOrder.isNewestFirst ? b.id.compareTo(a.id) : a.id.compareTo(b.id),
-    );
-
-    if (visibleItems.isEmpty) {
+    if (items.isEmpty) {
       return Center(
         child: Text(l10n.draftsEmpty, style: context.textTheme.muted),
       );
     }
 
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final listItemPadding = EdgeInsets.symmetric(
+      horizontal: spacing.m,
+      vertical: spacing.xs,
+    );
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
-        itemCount: visibleItems.length,
+        itemCount: items.length,
         itemBuilder: (context, index) {
-          final item = visibleItems[index];
+          final item = items[index];
           final recipients = item.jids.length;
-          final Widget leadingAvatar = recipients == 1
-              ? context.read<RosterCubit?>() == null
-                  ? AxiAvatar(jid: item.jids[0])
-                  : BlocBuilder<RosterCubit, RosterState>(
-                      buildWhen: (_, current) => current is RosterAvailable,
-                      builder: (context, rosterState) {
-                        final cachedItems = rosterState is RosterAvailable
-                            ? rosterState.items
-                            : context.read<RosterCubit>()['items']
-                                as List<RosterItem>?;
-                        final normalizedJid = item.jids[0].normalizedJidKey;
-                        String? avatarPath;
-                        if (cachedItems != null && normalizedJid != null) {
-                          for (final rosterItem in cachedItems) {
-                            if (rosterItem.jid.normalizedJidKey ==
-                                normalizedJid) {
-                              avatarPath = rosterItem.avatarPath;
-                              break;
-                            }
-                          }
-                        }
-                        return AxiAvatar(
-                          jid: item.jids[0],
-                          avatarPath: avatarPath,
-                        );
-                      },
-                    )
-              : AxiAvatar(jid: recipients.toString());
+          final Widget leadingAvatar;
+          if (recipients == 1) {
+            final normalizedJid = item.jids[0].normalizedJidKey;
+            final resolvedKey = normalizedJid ?? item.jids[0].toLowerCase();
+            leadingAvatar = AxiAvatar(
+              jid: item.jids[0],
+              avatarPath: avatarByJid[resolvedKey],
+            );
+          } else {
+            leadingAvatar = AxiAvatar(jid: recipients.toString());
+          }
           return ListItemPadding(
-            padding: _draftListItemPadding,
+            padding: listItemPadding,
             child: AxiListTile(
               key: Key(item.id.toString()),
               onTap: () => openComposeDraft(
@@ -158,7 +161,7 @@ class _DraftsListBody extends StatelessWidget {
               leading: leadingAvatar,
               title:
                   '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
-              minTileHeight: _draftTileHeight,
+              minTileHeight: sizing.listButtonHeight,
               subtitle: item.body?.isNotEmpty == true
                   ? item.body
                   : item.jids.join(', '),
@@ -168,14 +171,6 @@ class _DraftsListBody extends StatelessWidget {
       ),
     );
   }
-}
-
-bool _draftMatchesQuery(Draft draft, String query) {
-  final lower = query.toLowerCase();
-  final recipients = draft.jids.join(', ').toLowerCase();
-  return recipients.contains(lower) ||
-      (draft.body?.toLowerCase().contains(lower) ?? false) ||
-      (draft.subject?.toLowerCase().contains(lower) ?? false);
 }
 
 String _subjectLabel(BuildContext context, Draft draft) {

@@ -5,7 +5,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class DraftButton extends StatelessWidget {
   const DraftButton({super.key, this.compact = false});
@@ -20,14 +19,11 @@ class DraftButton extends StatelessWidget {
     }
 
     if (compact) {
-      final button = ShadButton.secondary(
-        size: ShadButtonSize.sm,
+      return AxiIconButton.secondary(
+        iconData: LucideIcons.pencilLine,
+        tooltip: l10n.draftComposeMessage,
+        semanticLabel: l10n.draftComposeMessage,
         onPressed: handleCompose,
-        child: const Icon(LucideIcons.pencilLine, size: 16),
-      ).withTapBounce();
-      return AxiTooltip(
-        builder: (_) => Text(l10n.draftComposeMessage),
-        child: button,
       );
     }
     return AxiFab(

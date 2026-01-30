@@ -17,12 +17,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _guideItemSpacing = 8.0;
-const double _guideLinkSpacing = 12.0;
-const double _guideLinkRunSpacing = 8.0;
-const double _guideAddressPadding = 12.0;
 const bool _forceShowEmailForwardingWelcome = false;
-const String _emptyForwardingAddress = '';
 
 const String _gmailForwardingUrl =
     'https://support.google.com/mail/answer/10957';
@@ -113,38 +108,20 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final spacing = context.spacing;
     return Padding(
       padding: padding ??
-          const EdgeInsets.symmetric(
-            horizontal: _guideItemSpacing * 2,
-            vertical: _guideItemSpacing / 2,
+          EdgeInsets.symmetric(
+            horizontal: spacing.l,
+            vertical: spacing.xs,
           ),
-      child: SizedBox(
-        width: double.infinity,
-        child: ShadButton.ghost(
-          size: ShadButtonSize.sm,
-          width: double.infinity,
-          expands: true,
-          mainAxisAlignment: MainAxisAlignment.start,
-          foregroundColor: colors.foreground,
-          hoverForegroundColor: colors.foreground,
-          onPressed: () async => await _showGuideDialog(context),
-          child: Row(
-            children: [
-              Icon(LucideIcons.mail, color: colors.foreground),
-              const SizedBox(width: _guideItemSpacing),
-              Expanded(
-                child: Text(
-                  context.l10n.emailForwardingGuideTitle,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.foreground,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ).withTapBounce(),
+      child: AxiListButton(
+        leading: const Icon(LucideIcons.mail),
+        onPressed: () async => await _showGuideDialog(context),
+        child: Text(
+          context.l10n.emailForwardingGuideTitle,
+          style: context.textTheme.small,
+        ),
       ),
     );
   }
@@ -181,17 +158,34 @@ class EmailForwardingGuideDialog extends StatelessWidget {
 }
 
 class EmailForwardingWelcomeScreen extends StatelessWidget {
-  const EmailForwardingWelcomeScreen({super.key});
+  const EmailForwardingWelcomeScreen({
+    super.key,
+    required this.forwardingAddress,
+    required this.notificationService,
+    required this.capability,
+  });
+
+  final String forwardingAddress;
+  final NotificationService notificationService;
+  final Capability capability;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final forwardingAddress = _resolveForwardingAddress(context);
-    final notificationService = context.read<NotificationService>();
-    final capability = context.read<Capability>();
-    const EdgeInsets headerPadding = EdgeInsets.fromLTRB(24, 24, 24, 12);
-    const EdgeInsets contentPadding = EdgeInsets.fromLTRB(24, 0, 24, 24);
+    final spacing = context.spacing;
+    final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
+      spacing.l,
+      spacing.l,
+      spacing.l,
+      spacing.s,
+    );
+    final EdgeInsets contentPadding = EdgeInsets.fromLTRB(
+      spacing.l,
+      spacing.zero,
+      spacing.l,
+      spacing.l,
+    );
     return Scaffold(
       backgroundColor: colors.background,
       body: ColoredBox(
@@ -239,7 +233,7 @@ class EmailForwardingWelcomeLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double maxWidth = 500;
+    final maxWidth = context.sizing.dialogMaxWidth;
     return LayoutBuilder(
       builder: (context, constraints) => Align(
         alignment: Alignment.topCenter,
@@ -280,7 +274,13 @@ class EmailForwardingWelcomeFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const EdgeInsets padding = EdgeInsets.fromLTRB(24, 12, 24, 24);
+    final spacing = context.spacing;
+    final EdgeInsets padding = EdgeInsets.fromLTRB(
+      spacing.l,
+      spacing.s,
+      spacing.l,
+      spacing.l,
+    );
     return Padding(
       padding: padding,
       child: Row(
@@ -288,10 +288,10 @@ class EmailForwardingWelcomeFooter extends StatelessWidget {
           Expanded(
             child: Text(hint, style: context.textTheme.muted),
           ),
-          ShadButton.outline(
+          AxiButton.outline(
             onPressed: onPressed,
             child: Text(actionLabel),
-          ).withTapBounce(),
+          ),
         ],
       ),
     );
@@ -313,6 +313,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final smallStyle = context.textTheme.small;
     final subheaderStyle =
         context.textTheme.large.copyWith(fontWeight: FontWeight.w600);
@@ -324,18 +325,18 @@ class EmailForwardingGuideContent extends StatelessWidget {
           l10n.emailForwardingGuideLinkExistingEmailTitle,
           style: subheaderStyle,
         ),
-        const SizedBox(height: _guideItemSpacing),
+        SizedBox(height: spacing.s),
         Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
-        const SizedBox(height: _guideItemSpacing),
+        SizedBox(height: spacing.s),
         EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
-        const SizedBox(height: _guideItemSpacing),
+        SizedBox(height: spacing.s),
         Text(l10n.emailForwardingGuideLinksTitle, style: smallStyle),
-        const SizedBox(height: _guideItemSpacing),
+        SizedBox(height: spacing.s),
         const EmailForwardingLinkRow(),
         const EmailForwardingSectionDivider(),
         Text(l10n.emailForwardingGuideNotificationsTitle,
             style: subheaderStyle),
-        const SizedBox(height: _guideItemSpacing),
+        SizedBox(height: spacing.s),
         NotificationRequest(
           notificationService: notificationService,
           capability: capability,
@@ -351,10 +352,9 @@ class EmailForwardingSectionDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const EdgeInsets padding = EdgeInsets.symmetric(vertical: 24);
-    return const Padding(
-      padding: padding,
-      child: AxiListDivider(),
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: context.spacing.l),
+      child: const AxiListDivider(),
     );
   }
 }
@@ -374,7 +374,7 @@ class EmailForwardingAddressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final radius = context.radius;
+    final spacing = context.spacing;
     final l10n = context.l10n;
     final resolved = forwardingAddress.bareJid?.trim() ?? '';
     final hasAddress = resolved.isNotEmpty;
@@ -388,23 +388,15 @@ class EmailForwardingAddressCard extends StatelessWidget {
       onPressed: hasAddress ? () => _copyForwardingAddress(resolved) : null,
       color: hasAddress ? colors.foreground : colors.mutedForeground,
     );
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.muted,
-        shape: RoundedRectangleBorder(
-          borderRadius: radius,
-          side: BorderSide(color: colors.border),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(_guideAddressPadding),
-        child: Row(
-          children: [
-            Expanded(child: SelectableText(addressLabel, style: textStyle)),
-            const SizedBox(width: _guideItemSpacing),
-            copyButton,
-          ],
-        ),
+    return AxiModalSurface(
+      backgroundColor: colors.muted,
+      padding: EdgeInsets.all(spacing.m),
+      child: Row(
+        children: [
+          Expanded(child: SelectableText(addressLabel, style: textStyle)),
+          SizedBox(width: spacing.s),
+          copyButton,
+        ],
       ),
     );
   }
@@ -416,9 +408,10 @@ class EmailForwardingLinkRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return Wrap(
-      spacing: _guideLinkSpacing,
-      runSpacing: _guideLinkRunSpacing,
+      spacing: spacing.m,
+      runSpacing: spacing.s,
       children: [
         for (final provider in EmailForwardingProvider.values)
           AxiLink(text: provider.label(l10n), link: provider.helpUrl),
@@ -442,14 +435,9 @@ class _EmailForwardingWelcomeGateState
   bool _dialogShown = false;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _showWelcomeDialog();
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _showWelcomeDialog();
   }
 
   @override
@@ -479,11 +467,20 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     _dialogShown = true;
+    final notificationService = context.read<NotificationService>();
+    final capability = context.read<Capability>();
+    final forwardingAddress = _resolveForwardingAddress(
+      context.read<XmppService>(),
+    );
     await Navigator.of(context).push<void>(
       AxiFadePageRoute(
         duration: baseAnimationDuration,
         fullscreenDialog: true,
-        builder: (routeContext) => const EmailForwardingWelcomeScreen(),
+        builder: (routeContext) => EmailForwardingWelcomeScreen(
+          forwardingAddress: forwardingAddress,
+          notificationService: notificationService,
+          capability: capability,
+        ),
       ),
     );
     if (!mounted) {
@@ -493,10 +490,13 @@ class _EmailForwardingWelcomeGateState
   }
 }
 
-String _resolveForwardingAddress(BuildContext context) {
-  final String? jid = context.read<XmppService>().myJid;
-  final bare = (jid ?? _emptyForwardingAddress).bareJid?.trim();
-  return bare == null || bare.isEmpty ? _emptyForwardingAddress : bare;
+String _resolveForwardingAddress(XmppService service) {
+  final String? jid = service.myJid;
+  final bare = jid?.bareJid?.trim();
+  if (bare == null || bare.isEmpty) {
+    return '';
+  }
+  return bare;
 }
 
 Future<void> showEmailForwardingGuideDialog(BuildContext context) async {
