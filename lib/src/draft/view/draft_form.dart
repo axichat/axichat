@@ -657,7 +657,6 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleAttachmentAdded() async {
-    final l10n = context.l10n;
     if (_addingAttachment) return;
     setState(() => _addingAttachment = true);
     try {
@@ -671,7 +670,7 @@ class _DraftFormState extends State<DraftForm> {
       final file = result.files.single;
       final path = file.path;
       if (path == null) {
-        _showToast(l10n.draftAttachmentInaccessible);
+        _showToast(context.l10n.draftAttachmentInaccessible);
         return;
       }
       final pendingId = _nextPendingAttachmentId();
@@ -725,7 +724,7 @@ class _DraftFormState extends State<DraftForm> {
               .toList();
         });
       }
-      _showToast(error.message ?? l10n.draftAttachmentFailed);
+      _showToast(error.message ?? context.l10n.draftAttachmentFailed);
     } on Exception {
       if (mounted) {
         setState(() {
@@ -734,7 +733,7 @@ class _DraftFormState extends State<DraftForm> {
               .toList();
         });
       }
-      _showToast(l10n.draftAttachmentFailed);
+      _showToast(context.l10n.draftAttachmentFailed);
     } finally {
       if (mounted) {
         setState(() => _addingAttachment = false);
@@ -953,7 +952,6 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleDiscard() async {
-    final l10n = context.l10n;
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     if (_discardingDraft) return;
     setState(() => _discardingDraft = true);
@@ -978,7 +976,7 @@ class _DraftFormState extends State<DraftForm> {
         _lastAutosaveAt = null;
         _lastSavedSignature = null;
       });
-      _showToast(l10n.draftDiscarded);
+      _showToast(context.l10n.draftDiscarded);
       widget.onDiscarded?.call();
     } finally {
       if (mounted) {
@@ -1008,7 +1006,6 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleSendDraft() async {
-    final l10n = context.l10n;
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
     setState(() {
@@ -1094,7 +1091,6 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleSendComplete() async {
-    final l10n = context.l10n;
     if (_sendCompletionHandled) {
       return;
     }
@@ -1110,7 +1106,7 @@ class _DraftFormState extends State<DraftForm> {
     });
     ShadToaster.maybeOf(
       context,
-    )?.show(FeedbackToast.success(title: l10n.draftSent));
+    )?.show(FeedbackToast.success(title: context.l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
       await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
     }
@@ -1275,13 +1271,12 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
-    final l10n = context.l10n;
     final spacing = context.spacing;
     if (!mounted) return;
     final attachment = pending.attachment;
     final file = File(attachment.path);
     if (!await file.exists()) {
-      _showToast(l10n.draftFileMissing(attachment.path));
+      _showToast(context.l10n.draftFileMissing(attachment.path));
       return;
     }
     if (!mounted) return;
@@ -1299,7 +1294,7 @@ class _DraftFormState extends State<DraftForm> {
                   right: spacing.s,
                   child: AxiIconButton(
                     iconData: LucideIcons.x,
-                    tooltip: l10n.commonClose,
+                    tooltip: dialogContext.l10n.commonClose,
                     onPressed: () => Navigator.of(dialogContext).pop(),
                   ),
                 ),
@@ -1313,7 +1308,6 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
     if (!mounted) return;
-    final l10n = context.l10n;
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1326,7 +1320,7 @@ class _DraftFormState extends State<DraftForm> {
         final spacing = sheetContext.spacing;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
-            title: Text(l10n.chatAttachmentTooltip),
+            title: Text(sheetContext.l10n.chatAttachmentTooltip),
             onClose: () => Navigator.of(sheetContext).maybePop(),
             padding: EdgeInsets.fromLTRB(
               spacing.m,
@@ -1355,7 +1349,7 @@ class _DraftFormState extends State<DraftForm> {
                   Navigator.of(sheetContext).pop();
                   _showAttachmentPreview(pending);
                 },
-                child: Text(l10n.draftAttachmentPreview),
+                child: Text(sheetContext.l10n.draftAttachmentPreview),
               ),
             AxiListButton.destructive(
               leading: const Icon(LucideIcons.trash2),
@@ -1363,7 +1357,7 @@ class _DraftFormState extends State<DraftForm> {
                 Navigator.of(sheetContext).pop();
                 _handlePendingAttachmentRemoved(pending.id);
               },
-              child: Text(l10n.draftRemoveAttachment),
+              child: Text(sheetContext.l10n.draftRemoveAttachment),
             ),
           ],
         );
@@ -1547,16 +1541,15 @@ class _DraftTaskDragGhost extends StatelessWidget {
     final CalendarTask task = payload.snapshot;
     final DateTime? start = task.scheduledTime;
     final DateTime? deadline = task.deadline;
-    final l10n = context.l10n;
     if (start != null) {
       return TimeFormatter.formatFriendlyDateTime(context.l10n, start);
     }
     if (deadline != null) {
-      return l10n.draftTaskDue(
+      return context.l10n.draftTaskDue(
         TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
       );
     }
-    return l10n.draftTaskNoSchedule;
+    return context.l10n.draftTaskNoSchedule;
   }
 
   @override

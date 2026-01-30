@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
+import 'dart:io';
 
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
@@ -32,6 +32,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final iconSize = sizing.menuItemIconSize;
     final count = widget.selectedChats.length;
     final allFavorited = widget.selectedChats.every((chat) => chat.favorited);
     final allArchived = widget.selectedChats.every((chat) => chat.archived);
@@ -41,7 +44,12 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     final shouldHide = !allHidden;
 
     return SelectionPanelShell(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        spacing.m,
+        spacing.m,
+        spacing.m,
+        spacing.s,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -50,16 +58,16 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
             count: count,
             onClear: () => context.read<ChatsCubit>().clearSelection(),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.s),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: spacing.s,
+            runSpacing: spacing.s,
             alignment: WrapAlignment.center,
             children: [
               ContextActionButton(
                 icon: Icon(
                   shouldFavorite ? LucideIcons.star : LucideIcons.starOff,
-                  size: 16,
+                  size: iconSize,
                 ),
                 label: shouldFavorite
                     ? l10n.commonFavorite
@@ -74,7 +82,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ContextActionButton(
                 icon: Icon(
                   shouldArchive ? LucideIcons.archive : LucideIcons.undo2,
-                  size: 16,
+                  size: iconSize,
                 ),
                 label:
                     shouldArchive ? l10n.commonArchive : l10n.commonUnarchive,
@@ -88,7 +96,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ContextActionButton(
                 icon: Icon(
                   shouldHide ? LucideIcons.eyeOff : LucideIcons.eye,
-                  size: 16,
+                  size: iconSize,
                 ),
                 label: shouldHide ? l10n.commonHide : l10n.commonShow,
                 onPressed: () async {
@@ -100,10 +108,11 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ),
               ChatExportActionButton(
                 exporting: _exporting,
+                readyLabel: l10n.commonExport,
                 onPressed: () => _exportSelectedChats(context),
               ),
               ContextActionButton(
-                icon: const Icon(LucideIcons.trash2, size: 16),
+                icon: Icon(LucideIcons.trash2, size: iconSize),
                 label: l10n.commonDelete,
                 destructive: true,
                 onPressed: _confirmDelete,
@@ -127,14 +136,17 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     setState(() {
       _exporting = true;
     });
+    File? exportFile;
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: widget.selectedChats,
         loadHistory: context.read<ChatsCubit>().loadChatHistory,
+        countHistory: context.read<ChatsCubit>().countChatHistoryMessages,
+        loadHistoryPage: context.read<ChatsCubit>().loadChatHistoryPage,
         fileLabel: fileLabel,
       );
-      final file = result.file;
-      if (file == null) {
+      exportFile = result.file;
+      if (exportFile == null) {
         showToast?.call(
           FeedbackToast.info(
             title: l10n.chatSelectionExportEmptyTitle,
@@ -144,7 +156,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         return;
       }
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [XFile(exportFile.path)],
         text: l10n.chatSelectionExportShareText,
         subject: l10n.chatSelectionExportShareSubject,
       );
@@ -164,6 +176,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         ),
       );
     } finally {
+      if (exportFile != null) {
+        context.read<ChatsCubit>().scheduleExportCleanup(exportFile);
+      }
       if (mounted) {
         setState(() {
           _exporting = false;

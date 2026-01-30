@@ -22,6 +22,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -275,6 +276,137 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _HomeCoordinatorBridge extends StatefulWidget {
+  const _HomeCoordinatorBridge({
+    required this.storage,
+    required this.child,
+  });
+
+  final Storage? storage;
+  final Widget child;
+
+  @override
+  State<_HomeCoordinatorBridge> createState() => _HomeCoordinatorBridgeState();
+}
+
+class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
+  ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
+  CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
+  Storage? _storage;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureCoordinators();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeCoordinatorBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.storage != widget.storage) {
+      _storage = null;
+      _chatCalendarCoordinator = null;
+      _availabilityCoordinator = null;
+    }
+    _ensureCoordinators();
+  }
+
+  void _ensureCoordinators() {
+    final storage = widget.storage;
+    if (storage == null) {
+      context.read<CalendarBloc?>()?.clearChatCalendarSyncHandler();
+      _chatCalendarCoordinator = null;
+      _availabilityCoordinator = null;
+      return;
+    }
+    if (_storage == storage &&
+        _chatCalendarCoordinator != null &&
+        _availabilityCoordinator != null) {
+      final calendarBloc = context.read<CalendarBloc?>();
+      if (calendarBloc != null) {
+        calendarBloc
+          ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
+          ..attachAvailabilityCoordinator(_availabilityCoordinator!);
+      }
+      return;
+    }
+    _storage = storage;
+    final calendarBloc = context.read<CalendarBloc?>();
+    if (calendarBloc == null) {
+      return;
+    }
+    final chatStorage = ChatCalendarStorage(storage: storage);
+    _chatCalendarCoordinator = ChatCalendarSyncCoordinator(
+      storage: chatStorage,
+      sendMessage: ({
+        required String jid,
+        required CalendarSyncOutbound outbound,
+        required ChatType chatType,
+      }) {
+        return calendarBloc.sendCalendarSyncMessage(
+          jid: jid,
+          outbound: outbound,
+          chatType: chatType,
+        );
+      },
+      sendSnapshotFile: calendarBloc.uploadCalendarSnapshot,
+    );
+    _availabilityCoordinator = CalendarAvailabilityShareCoordinator(
+      store: CalendarAvailabilityShareStore(),
+      sendMessage: ({
+        required String jid,
+        required CalendarAvailabilityMessage message,
+        required ChatType chatType,
+      }) {
+        return calendarBloc.sendAvailabilityMessage(
+          jid: jid,
+          message: message,
+          chatType: chatType,
+        );
+      },
+    );
+    calendarBloc
+      ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
+      ..attachAvailabilityCoordinator(_availabilityCoordinator!);
+  }
+
+  Future<void> _handleChatCalendarSync(
+    ChatCalendarSyncEnvelope envelope,
+  ) async {
+    final coordinator = _chatCalendarCoordinator;
+    if (coordinator == null) {
+      return;
+    }
+    await coordinator.handleInbound(envelope);
+  }
+
+  @override
+  void dispose() {
+    context.read<CalendarBloc?>()?.clearChatCalendarSyncHandler();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chatCoordinator = _chatCalendarCoordinator;
+    final availabilityCoordinator = _availabilityCoordinator;
+    if (chatCoordinator == null || availabilityCoordinator == null) {
+      return widget.child;
+    }
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+          value: chatCoordinator,
+        ),
+        RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
+          value: availabilityCoordinator,
+        ),
+      ],
+      child: widget.child,
+    );
+  }
+}
+
 class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.storageManager,
@@ -514,7 +646,7 @@ class _HomeContent extends StatelessWidget {
                       }
 
                       final bool demoOffline =
-                          context.read<XmppService?>()?.demoOfflineMode ??
+                          context.watch<XmppService?>()?.demoOfflineMode ??
                               false;
 
                       final bool showChatCalendar =

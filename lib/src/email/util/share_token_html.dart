@@ -33,6 +33,7 @@ class ShareTokenHtmlCodec {
     required String? html,
     required String token,
     bool asSignature = false,
+    String? footerLabel,
   }) {
     final normalized = HtmlContentCodec.normalizeHtml(html);
     if (normalized == null) return null;
@@ -48,6 +49,7 @@ class ShareTokenHtmlCodec {
             token: token,
             body: _emptyBody,
             asSignature: true,
+            footerLabel: footerLabel,
           )
         : ShareTokenCodec.decorateToken(token);
     final role = asSignature ? _tokenRoleFooter : _tokenRolePrefix;

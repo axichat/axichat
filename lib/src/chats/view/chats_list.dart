@@ -772,7 +772,6 @@ class _ChatListTileState extends State<ChatListTile> {
         showUnreadBadge ? _resolveUnreadWidth(context, unreadCount) : 0.0;
     final double unreadHeight =
         showUnreadBadge ? _resolveUnreadHeight(context, unreadCount) : 0.0;
-    final unreadCutoutClearance = spacing.xs;
     final unreadCutoutVerticalClearance = spacing.xs;
     final unreadMinDepth = spacing.s + spacing.xs;
     final double unreadDepth = showUnreadBadge
@@ -1366,6 +1365,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           exporting: _exporting,
           onPressed: _exportChat,
           iconSize: iconSize,
+          readyLabel: l10n.commonExport,
         ),
         ContextActionButton(
           icon: Icon(
@@ -1544,10 +1544,10 @@ class _UnreadBadge extends StatelessWidget {
       }
       return scaledValue;
     }
-    final Color background =
-        highlight
-            ? colors.primary
-            : colors.secondary.withValues(alpha: motion.tapSplashAlpha);
+
+    final Color background = highlight
+        ? colors.primary
+        : colors.secondary.withValues(alpha: motion.tapSplashAlpha);
     final Color borderColor = highlight ? colors.background : colors.border;
     final Color textColor =
         highlight ? colors.primaryForeground : colors.mutedForeground;

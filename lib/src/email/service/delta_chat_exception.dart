@@ -75,17 +75,23 @@ class DeltaChatExceptionMapper {
   static DeltaChatException fromDeltaSafe(
     DeltaSafeException error, {
     required String operation,
+    String? fallbackMessage,
   }) {
-    return fromCoreMessage(operation: operation, message: error.message);
+    return fromCoreMessage(
+      operation: operation,
+      message: error.message,
+      fallbackMessage: fallbackMessage,
+    );
   }
 
   static DeltaChatException fromCoreMessage({
     required String operation,
     String? message,
+    String? fallbackMessage,
   }) {
-    const fallback = 'Email operation failed.';
     final normalized = (message ?? '').trim();
-    final resolvedMessage = normalized.isEmpty ? fallback : normalized;
+    final resolvedMessage =
+        normalized.isEmpty ? (fallbackMessage ?? '') : normalized;
     final lower = resolvedMessage.toLowerCase();
     if (_matchesAny(lower, const ['network', 'disconnect', 'offline', 'dns'])) {
       return DeltaNetworkException(

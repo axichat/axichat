@@ -8,7 +8,6 @@ import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/routes.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -38,27 +37,22 @@ class _ArchivesView extends StatelessWidget {
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
         final l10n = context.l10n;
-        final selectedJids = chatsState.selectedJids;
-        final selectedChats = selectedJids.isEmpty
-            ? const <Chat>[]
-            : (chatsState.items ?? const <Chat>[])
-                .where((chat) => selectedJids.contains(chat.jid))
-                .toList();
+        final spacing = context.spacing;
+        final sizing = context.sizing;
+        final selectedChats = chatsState.selectedChats;
         final selectionActive = selectedChats.isNotEmpty;
-        final archivedItems = chatsState.items
-            ?.where((chat) => chat.archived)
-            .toList(growable: false);
+        final archivedItems = chatsState.archivedItems;
+        final timestampNow = DateTime.now();
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.chatsArchiveTitle),
-            leadingWidth: AxiIconButton.kDefaultSize + 24,
+            leadingWidth: sizing.iconButtonTapTarget + spacing.m,
             leading: Padding(
-              padding: const EdgeInsets.only(left: 12),
+              padding: EdgeInsets.only(left: spacing.s),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  width: AxiIconButton.kDefaultSize,
-                  height: AxiIconButton.kDefaultSize,
+                child: SizedBox.square(
+                  dimension: sizing.iconButtonTapTarget,
                   child: AxiIconButton.ghost(
                     iconData: LucideIcons.arrowLeft,
                     tooltip: l10n.commonBack,
@@ -68,15 +62,15 @@ class _ArchivesView extends StatelessWidget {
               ),
             ),
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
+              preferredSize: Size.fromHeight(context.borderSide.width),
               child: Divider(
-                height: 1,
-                thickness: 1,
-                color: context.colorScheme.border,
+                height: context.borderSide.width,
+                thickness: context.borderSide.width,
+                color: context.borderSide.color,
               ),
             ),
           ),
-          body: archivedItems == null
+          body: chatsState.items == null
               ? Center(
                   child: AxiProgressIndicator(
                     color: context.colorScheme.foreground,
@@ -94,6 +88,12 @@ class _ArchivesView extends StatelessWidget {
                       itemBuilder: (context, index) => ListItemPadding(
                         child: ChatListTile(
                           item: archivedItems[index],
+                          selectionActive: selectionActive,
+                          isSelected: chatsState.selectedJids
+                              .contains(archivedItems[index].jid),
+                          isOpen:
+                              chatsState.openJid == archivedItems[index].jid,
+                          timestampNow: timestampNow,
                           archivedContext: true,
                           onArchivedTap: (chat) => GoRouter.of(context).push(
                             ArchivedChatRoute(jid: chat.jid).location,

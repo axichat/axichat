@@ -35,69 +35,64 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
 
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
-    final l10n = context.l10n;
-    final filters = chatsSearchFilters(l10n);
-    final selectedFilterId = context
-            .watch<HomeSearchCubit?>()
-            ?.state
-            .stateFor(HomeTab.chats)
-            .filterId ??
-        filters.first.id;
-    final selectedFilter = filters.firstWhere(
-      (filter) => filter.id == selectedFilterId,
-      orElse: () => filters.first,
-    );
-    Widget trigger;
-    if (widget.compact) {
-      trigger = ShadButton.secondary(
-        size: ShadButtonSize.sm,
-        onPressed: popoverController.toggle,
-        child: const Icon(LucideIcons.listFilter, size: 16),
-      ).withTapBounce();
-      trigger = AxiTooltip(
-        builder: (_) => Text(l10n.filterTooltip(selectedFilter.label)),
-        child: trigger,
-      );
-    } else {
-      trigger = AxiTooltip(
-        builder: (_) => Text(l10n.filterTooltip(selectedFilter.label)),
-        child: ShadButton.secondary(
-          onPressed: popoverController.toggle,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(LucideIcons.listFilter, size: 16),
-              const SizedBox(width: 8),
-              Text(selectedFilter.label),
-            ],
-          ),
-        ).withTapBounce(),
-      );
-    }
-    return AxiPopover(
-      controller: popoverController,
-      closeOnTapOutside: true,
-      padding: EdgeInsets.zero,
-      popover: (context) {
-        return AxiMenu(
-          actions: [
-            for (final option in filters)
-              AxiMenuAction(
-                icon: option.id == selectedFilter.id ? LucideIcons.check : null,
-                label: option.label,
-                onPressed: () {
-                  locate<HomeSearchCubit?>()?.updateFilter(
-                    option.id,
-                    tab: HomeTab.chats,
-                  );
-                  popoverController.hide();
-                },
-              ),
-          ],
+    return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+      builder: (context, searchState) {
+        final l10n = context.l10n;
+        final sizing = context.sizing;
+        final filters = chatsSearchFilters(l10n);
+        final selectedFilterId =
+            searchState.stateFor(HomeTab.chats).filterId ?? filters.first.id;
+        final selectedFilter = filters.firstWhere(
+          (filter) => filter.id == selectedFilterId,
+          orElse: () => filters.first,
+        );
+        final tooltip = l10n.filterTooltip(selectedFilter.label);
+        final iconSize = sizing.menuItemIconSize;
+        Widget trigger;
+        if (widget.compact) {
+          trigger = AxiIconButton.secondary(
+            iconData: LucideIcons.listFilter,
+            iconSize: iconSize,
+            tooltip: tooltip,
+            onPressed: popoverController.toggle,
+          );
+        } else {
+          trigger = AxiTooltip(
+            builder: (_) => Text(tooltip),
+            child: AxiButton.secondary(
+              onPressed: popoverController.toggle,
+              leading: Icon(LucideIcons.listFilter, size: iconSize),
+              child: Text(selectedFilter.label),
+            ),
+          );
+        }
+        return AxiPopover(
+          controller: popoverController,
+          closeOnTapOutside: true,
+          padding: EdgeInsets.zero,
+          popover: (context) {
+            return AxiMenu(
+              actions: [
+                for (final option in filters)
+                  AxiMenuAction(
+                    icon: option.id == selectedFilter.id
+                        ? LucideIcons.check
+                        : null,
+                    label: option.label,
+                    onPressed: () {
+                      context.read<HomeSearchCubit>().updateFilter(
+                            option.id,
+                            tab: HomeTab.chats,
+                          );
+                      popoverController.hide();
+                    },
+                  ),
+              ],
+            );
+          },
+          child: trigger,
         );
       },
-      child: trigger,
     );
   }
 }

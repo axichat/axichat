@@ -20,7 +20,6 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
         super(const ShareIntentState.idle());
 
   final ShareHandlerPlatform _handler;
-  Future<void>? _initialization;
   StreamSubscription<SharedMedia>? _subscription;
 
   Future<void> initialize() async {
@@ -30,19 +29,28 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
     if (_subscription != null) {
       return;
     }
-    final Future<void>? pending = _initialization;
-    if (pending != null) {
-      await pending;
-      return;
-    }
-    final Future<void> initialization = _initializeInternal();
-    _initialization = initialization;
     try {
-      await initialization;
-    } finally {
-      if (_initialization == initialization) {
-        _initialization = null;
+      _subscription = _handler.sharedMediaStream.listen(
+        _handleMedia,
+        onDone: () {
+          _subscription = null;
+        },
+      );
+      final SharedMedia? initial = await _handler.getInitialSharedMedia();
+      if (initial != null) {
+        final SharePayload? payload = _sanitizePayload(initial);
+        if (payload == null) {
+          return;
+        }
+        if (state.payload != null) {
+          return;
+        }
+        emit(ShareIntentState.ready(payload));
       }
+    } on PlatformException {
+      await _subscription?.cancel();
+      _subscription = null;
+      // Share handler not available on this platform; ignore.
     }
   }
 
@@ -65,6 +73,19 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   }
 
   void _handleMedia(SharedMedia media) {
+    final SharePayload? payload = _sanitizePayload(media);
+    if (payload == null) {
+      return;
+    }
+    emit(ShareIntentState.ready(payload));
+  }
+
+  bool get _isSupportedPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  SharePayload? _sanitizePayload(SharedMedia media) {
     final String? sanitizedText = _sanitizeSharedText(
       media.content ?? '',
     );
@@ -72,38 +93,10 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
       media.attachments,
     );
     if (sanitizedText == null && attachments.isEmpty) {
-      return;
+      return null;
     }
-    emit(
-      ShareIntentState.ready(
-        SharePayload(text: sanitizedText, attachments: attachments),
-      ),
-    );
+    return SharePayload(text: sanitizedText, attachments: attachments);
   }
-
-  Future<void> _initializeInternal() async {
-    try {
-      final SharedMedia? initial = await _handler.getInitialSharedMedia();
-      if (initial != null) {
-        _handleMedia(initial);
-      }
-      _subscription = _handler.sharedMediaStream.listen(
-        _handleMedia,
-        onDone: () {
-          _subscription = null;
-        },
-      );
-    } on PlatformException {
-      await _subscription?.cancel();
-      _subscription = null;
-      // Share handler not available on this platform; ignore.
-    }
-  }
-
-  bool get _isSupportedPlatform =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
 
   String? _sanitizeSharedText(String text) {
     final String normalized = text.replaceAll('\u0000', '').trim();
@@ -142,6 +135,7 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   @override
   Future<void> close() async {
     await _subscription?.cancel();
+    _subscription = null;
     return super.close();
   }
 }

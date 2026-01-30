@@ -10,14 +10,13 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 class TransportAwareAvatar extends StatelessWidget {
   const TransportAwareAvatar({
     super.key,
     required this.chat,
-    this.size = 46.0,
-    this.badgeOffset = const Offset(-6, -4),
+    this.size,
+    this.badgeOffset,
     this.showBadge = true,
     this.presence,
     this.status,
@@ -25,8 +24,8 @@ class TransportAwareAvatar extends StatelessWidget {
   });
 
   final Chat chat;
-  final double size;
-  final Offset badgeOffset;
+  final double? size;
+  final Offset? badgeOffset;
   final bool showBadge;
   final Presence? presence;
   final String? status;
@@ -34,42 +33,20 @@ class TransportAwareAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ProfileState? profile;
-    try {
-      profile = context.watch<ProfileCubit?>()?.state;
-    } on Exception {
-      profile = null;
-    }
-    EmailService? emailService;
-    try {
-      emailService = RepositoryProvider.of<EmailService>(
-        context,
-        listen: false,
-      );
-    } on Exception {
-      emailService = null;
-    }
-    XmppService? xmppService;
-    try {
-      xmppService = RepositoryProvider.of<XmppService>(context, listen: false);
-    } on Exception {
-      xmppService = null;
-    }
-    final String? normalizedChatJid = _normalizeBareJid(chat.remoteJid);
-    final resolvedProfileJid = profile?.jid.trim();
-    final String? selfXmppJid = resolvedProfileJid?.isNotEmpty == true
-        ? resolvedProfileJid
-        : xmppService?.myJid;
-    final String? normalizedXmppSelfJid = _normalizeBareJid(selfXmppJid);
-    final String? normalizedEmailSelfJid = _normalizeBareJid(
-      emailService?.selfSenderJid,
-    );
-    final bool isSelfChat = normalizedChatJid != null &&
-        ((normalizedXmppSelfJid != null &&
-                normalizedChatJid == normalizedXmppSelfJid) ||
-            (normalizedEmailSelfJid != null &&
-                normalizedChatJid == normalizedEmailSelfJid));
-    final String? selfAvatarPath = profile?.avatarPath?.trim();
+    final profile = context.watch<ProfileCubit>().state;
+    final emailService = context.watch<EmailService>();
+    final xmppService = context.watch<XmppService>();
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    final resolvedSize = size ?? sizing.iconButtonTapTarget;
+    final resolvedBadgeOffset = badgeOffset ?? Offset(-spacing.s, -spacing.xs);
+    final resolvedProfileJid = profile.jid.trim();
+    final String? selfXmppJid =
+        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : xmppService.myJid;
+    final String? selfEmailJid = emailService.selfSenderJid;
+    final bool isSelfChat = chat.remoteJid.sameBare(selfXmppJid) ||
+        chat.remoteJid.sameBare(selfEmailJid);
+    final String? selfAvatarPath = profile.avatarPath?.trim();
     final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
     final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
@@ -100,14 +77,14 @@ class TransportAwareAvatar extends StatelessWidget {
     }
 
     return SizedBox.square(
-      dimension: size,
+      dimension: resolvedSize,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
             child: AxiAvatar(
               jid: avatarIdentifier,
-              size: size,
+              size: resolvedSize,
               presence: presence,
               status: status,
               subscription: effectiveSubscription,
@@ -118,24 +95,12 @@ class TransportAwareAvatar extends StatelessWidget {
           ),
           if (badge != null)
             Positioned(
-              right: badgeOffset.dx,
-              bottom: badgeOffset.dy,
+              right: resolvedBadgeOffset.dx,
+              bottom: resolvedBadgeOffset.dy,
               child: badge,
             ),
         ],
       ),
     );
-  }
-}
-
-String? _normalizeBareJid(String? jid) {
-  final trimmed = jid?.trim();
-  if (trimmed == null || trimmed.isEmpty) {
-    return null;
-  }
-  try {
-    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
-  } on Exception {
-    return trimmed.toLowerCase();
   }
 }

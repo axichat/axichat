@@ -83,21 +83,11 @@ const int _emailLocalPartMinLength = 1;
 const _emailDownloadLimitKey = 'download_limit';
 const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
-const String _emailAccountMissingAddressError =
-    'Failed to resolve email address.';
-const String _emailAccountMissingPasswordError =
-    'Failed to resolve email password.';
-const String _emailAccountUnavailableError = 'Email account is unavailable.';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
 const _connectionOverrideKeyPrefix = 'email_connection_overrides_v1';
 const _credentialTrueValue = 'true';
 const _credentialFalseValue = 'false';
 const _connectionOverrideClearedValue = '';
-const _notificationAttachmentLabel = 'Attachment';
-const _notificationAttachmentPrefix = 'Attachment: ';
-const _reactionNotificationFallback = 'New reaction';
-const _reactionNotificationPrefix = 'Reaction: ';
-const _webxdcNotificationFallback = 'New update';
 const _showEmailsConfigKey = 'show_emails';
 const _showEmailsAllValue = '2';
 const _mdnsEnabledConfigKey = 'mdns_enabled';
@@ -219,19 +209,29 @@ class EmailImapCapabilities {
   int get hashCode => Object.hash(idleSupported, connectionLimit, idleCutoff);
 }
 
+enum EmailProvisioningFailure {
+  missingAddress,
+  missingPassword,
+  accountUnavailable,
+  timeout,
+  networkUnavailable,
+  authFailed,
+  configurationFailed,
+}
+
 class EmailProvisioningException implements Exception {
   const EmailProvisioningException(
-    this.message, {
+    this.failure, {
     this.isRecoverable = false,
     this.shouldWipeCredentials = false,
   });
 
-  final String message;
+  final EmailProvisioningFailure failure;
   final bool isRecoverable;
   final bool shouldWipeCredentials;
 
   @override
-  String toString() => 'EmailProvisioningException: $message';
+  String toString() => 'EmailProvisioningException($failure)';
 }
 
 enum FanOutValidationFailure {
@@ -333,10 +333,17 @@ class EmailService {
   final NotificationService? _notificationService;
   final MessageService? _messageService;
   final ForegroundTaskBridge? _foregroundBridge;
+  AppLocalizations? _localizations;
 
   AppLocalizations get _l10n =>
+      _localizations ??
       _notificationService?.localizations ??
       lookupAppLocalizations(const Locale('en'));
+
+  void updateLocalizations(AppLocalizations localizations) {
+    _localizations = localizations;
+  }
+
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
@@ -647,7 +654,9 @@ class EmailService {
             ? address
             : preferredAddress);
     if (resolvedAddress == null || resolvedAddress.isEmpty) {
-      throw StateError('Failed to resolve email address.');
+      throw const EmailProvisioningException(
+        EmailProvisioningFailure.missingAddress,
+      );
     }
     if (address == null || address != resolvedAddress) {
       address = resolvedAddress;
@@ -753,7 +762,9 @@ class EmailService {
 
     final normalizedAddress = address;
     if (needsProvisioning && !hasPassword) {
-      throw StateError('Failed to resolve email password.');
+      throw const EmailProvisioningException(
+        EmailProvisioningFailure.missingPassword,
+      );
     }
     final normalizedPassword = password;
 
@@ -809,22 +820,24 @@ class EmailService {
         }
         if (isTimeout) {
           throw const EmailProvisioningException(
-            'Setting up email is taking longer than expected. '
-            'Please leave Axichat open—we will keep retrying in the background.',
+            EmailProvisioningFailure.timeout,
             isRecoverable: true,
           );
         }
         if (mapped.code == DeltaChatErrorCode.network ||
             mapped.code == DeltaChatErrorCode.server) {
           throw const EmailProvisioningException(
-            'Unable to reach the email service. Please try again.',
+            EmailProvisioningFailure.networkUnavailable,
             isRecoverable: true,
           );
         }
+        final isAuthFailure = mapped.code == DeltaChatErrorCode.permission ||
+            mapped.code == DeltaChatErrorCode.auth;
         throw EmailProvisioningException(
-          'Unable to configure email. Please check your credentials.',
-          shouldWipeCredentials: mapped.code == DeltaChatErrorCode.permission ||
-              mapped.code == DeltaChatErrorCode.auth,
+          isAuthFailure
+              ? EmailProvisioningFailure.authFailed
+              : EmailProvisioningFailure.configurationFailed,
+          shouldWipeCredentials: isAuthFailure,
         );
       }
     } else {
@@ -869,7 +882,9 @@ class EmailService {
 
     if (_transport.accountsActive) {
       if (!createIfMissing) {
-        throw StateError(_emailAccountUnavailableError);
+        throw const EmailProvisioningException(
+          EmailProvisioningFailure.accountUnavailable,
+        );
       }
       final deltaAccountId = await _transport.createAccount();
       await _transport.ensureAccountSession(deltaAccountId);
@@ -1283,6 +1298,7 @@ class EmailService {
             html: normalizedHtmlBody,
             token: resolvedToken,
             asSignature: tokenAsSignature,
+            footerLabel: _l10n.shareTokenFooterLabel,
           );
     final resolvedHtmlCaption = resolvedToken == null
         ? normalizedHtmlCaption
@@ -1290,6 +1306,7 @@ class EmailService {
             html: normalizedHtmlCaption,
             token: resolvedToken,
             asSignature: tokenAsSignature,
+            footerLabel: _l10n.shareTokenFooterLabel,
           );
 
     final transmitBody = resolvedToken != null
@@ -1300,6 +1317,7 @@ class EmailService {
               body: resolvedBodyText,
             ),
             asSignature: tokenAsSignature,
+            footerLabel: _l10n.shareTokenFooterLabel,
           )
         : _composeSubjectEnvelope(
             subject: resolvedSubject,
@@ -1319,6 +1337,7 @@ class EmailService {
               body: captionText,
             ),
             asSignature: tokenAsSignature,
+            footerLabel: _l10n.shareTokenFooterLabel,
           )
         : _composeSubjectEnvelope(subject: resolvedSubject, body: captionText);
     final sanitizedCaption = captionText;
@@ -2410,9 +2429,11 @@ class EmailService {
       if (context == null) {
         return;
       }
+      final l10n = notificationService.localizations;
       final notificationBody = await _notificationBody(
         db: db,
         message: context.message,
+        l10n: l10n,
       );
       if (notificationBody == null) {
         return;
@@ -2462,10 +2483,11 @@ class EmailService {
       if (context == null) {
         return;
       }
+      final l10n = notificationService.localizations;
       final normalizedReaction = reaction?.trim();
       final body = normalizedReaction == null || normalizedReaction.isEmpty
-          ? _reactionNotificationFallback
-          : '$_reactionNotificationPrefix$normalizedReaction';
+          ? l10n.notificationReactionFallback
+          : l10n.notificationReactionLabel(normalizedReaction);
       final previewSetting = context.chat?.notificationPreviewSetting;
       final showPreview = NotificationPreviewSetting.resolveOverride(
         previewSetting,
@@ -2511,9 +2533,10 @@ class EmailService {
       if (context == null) {
         return;
       }
+      final l10n = notificationService.localizations;
       final normalizedText = text?.trim();
       final body = normalizedText == null || normalizedText.isEmpty
-          ? _webxdcNotificationFallback
+          ? l10n.notificationWebxdcFallback
           : normalizedText;
       final previewSetting = context.chat?.notificationPreviewSetting;
       final showPreview = NotificationPreviewSetting.resolveOverride(
@@ -2551,15 +2574,18 @@ class EmailService {
         exception.code == DeltaChatErrorCode.permission) {
       _authFailureController.add(exception);
     }
+    final syncMessage = exception.code == DeltaChatErrorCode.network
+        ? _l10n.emailSyncMessageDisconnected
+        : _l10n.emailSyncMessageRetrying;
     if (exception.code == DeltaChatErrorCode.network) {
       _updateSyncState(
-        EmailSyncState.offline(exception.message, exception: exception),
+        EmailSyncState.offline(syncMessage, exception: exception),
         source: _EmailSyncSource.coreError,
       );
       return;
     }
     _updateSyncState(
-      EmailSyncState.error(exception.message, exception: exception),
+      EmailSyncState.error(syncMessage, exception: exception),
       source: _EmailSyncSource.coreError,
     );
   }
@@ -3277,6 +3303,7 @@ class EmailService {
   Future<String?> _notificationBody({
     required XmppDatabase db,
     required Message message,
+    required AppLocalizations l10n,
   }) async {
     final trimmed = message.body?.trim();
     if (trimmed?.isNotEmpty == true) {
@@ -3297,12 +3324,12 @@ class EmailService {
             )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
         final metadata = await db.getFileMetadata(ordered.first.fileMetadataId);
         if (metadata == null) {
-          return _notificationAttachmentLabel;
+          return l10n.notificationAttachmentLabel;
         }
         final filename = metadata.filename.trim();
         return filename.isEmpty
-            ? _notificationAttachmentLabel
-            : '$_notificationAttachmentPrefix$filename';
+            ? l10n.notificationAttachmentLabel
+            : l10n.notificationAttachmentLabelWithName(filename);
       }
     }
     final metadataId = message.fileMetadataID;
@@ -3311,12 +3338,12 @@ class EmailService {
     }
     final metadata = await db.getFileMetadata(metadataId);
     if (metadata == null) {
-      return _notificationAttachmentLabel;
+      return l10n.notificationAttachmentLabel;
     }
     final filename = metadata.filename.trim();
     return filename.isEmpty
-        ? _notificationAttachmentLabel
-        : '$_notificationAttachmentPrefix$filename';
+        ? l10n.notificationAttachmentLabel
+        : l10n.notificationAttachmentLabelWithName(filename);
   }
 
   String? get selfSenderJid => _transport.selfJid;
@@ -3327,24 +3354,25 @@ class EmailService {
   Future<Map<String, Chat>> _resolveFanOutTargets(
     List<FanOutTarget> targets,
   ) async {
-    final resolved = <String, Chat>{};
-    for (final target in targets) {
-      Chat chat;
+    final futures = targets.map((target) async {
       if (target.chat != null) {
-        chat = await ensureChatForEmailChat(target.chat!);
-      } else {
-        final address = target.address;
-        if (address == null || address.isEmpty) {
-          continue;
-        }
-        chat = await ensureChatForAddress(
-          address: address,
-          displayName: target.displayName ?? address,
-        );
+        return ensureChatForEmailChat(target.chat!);
       }
-      resolved.putIfAbsent(chat.jid, () => chat);
+      final address = target.address;
+      if (address == null || address.isEmpty) {
+        return null;
+      }
+      return ensureChatForAddress(
+        address: address,
+        displayName: target.displayName ?? address,
+      );
+    });
+    final resolved = await Future.wait(futures);
+    final resolvedByJid = <String, Chat>{};
+    for (final chat in resolved.whereType<Chat>()) {
+      resolvedByJid.putIfAbsent(chat.jid, () => chat);
     }
-    return resolved;
+    return resolvedByJid;
   }
 
   Future<List<MessageParticipantData>> _shareParticipants({
@@ -3643,7 +3671,9 @@ class EmailService {
       resolved = _normalizeLinkedAccountAddress(storedAddress ?? '');
     }
     if (resolved.isEmpty) {
-      throw StateError(_emailAccountMissingAddressError);
+      throw const EmailProvisioningException(
+        EmailProvisioningFailure.missingAddress,
+      );
     }
     final deltaAccountId =
         await _ensureEmailAccountSession(createIfMissing: false);
@@ -3681,7 +3711,9 @@ class EmailService {
     }
     final EmailAccount? credentials = await _accountForScope(scope);
     if (credentials == null || credentials.password.isEmpty) {
-      throw StateError(_emailAccountMissingPasswordError);
+      throw const EmailProvisioningException(
+        EmailProvisioningFailure.missingPassword,
+      );
     }
     final String displayName = _displayNameForAddress(account.address);
     final Map<String, String> connectionOverrides = _buildConnectionConfig(
@@ -3713,14 +3745,17 @@ class EmailService {
       if (mapped.code == DeltaChatErrorCode.network ||
           mapped.code == DeltaChatErrorCode.server) {
         throw const EmailProvisioningException(
-          'Unable to reach the email service. Please try again.',
+          EmailProvisioningFailure.networkUnavailable,
           isRecoverable: true,
         );
       }
+      final isAuthFailure = mapped.code == DeltaChatErrorCode.permission ||
+          mapped.code == DeltaChatErrorCode.auth;
       throw EmailProvisioningException(
-        'Unable to configure email. Please check your credentials.',
-        shouldWipeCredentials: mapped.code == DeltaChatErrorCode.permission ||
-            mapped.code == DeltaChatErrorCode.auth,
+        isAuthFailure
+            ? EmailProvisioningFailure.authFailed
+            : EmailProvisioningFailure.configurationFailed,
+        shouldWipeCredentials: isAuthFailure,
       );
     }
   }

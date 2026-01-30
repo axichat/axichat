@@ -150,7 +150,6 @@ class _CapabilityChip extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final radii = context.radii;
-    const separator = ' • ';
     final chipPadding = compact
         ? EdgeInsets.symmetric(
             horizontal: spacing.s,
@@ -202,10 +201,7 @@ class _CapabilityChip extends StatelessWidget {
                       ],
                     _ => [
                         TextSpan(text: data.label, style: labelStyle),
-                        TextSpan(
-                          text: separator,
-                          style: separatorStyle,
-                        ),
+                        TextSpan(text: ' • ', style: separatorStyle),
                         TextSpan(text: data.status, style: statusStyle),
                       ],
                   },

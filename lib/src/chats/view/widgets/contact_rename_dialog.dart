@@ -58,31 +58,32 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return ShadDialog(
       title: Text(
         l10n.chatContactRenameTitle,
         style: context.modalHeaderTextStyle,
       ),
       actions: [
-        ShadButton.outline(
+        AxiButton.outline(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.commonCancel),
-        ).withTapBounce(),
-        ShadButton.outline(
+        ),
+        AxiButton.outline(
           onPressed: _reset,
           child: Text(l10n.chatContactRenameReset),
-        ).withTapBounce(),
-        ShadButton(
+        ),
+        AxiButton.primary(
           onPressed: _canSubmit ? _submit : null,
           child: Text(l10n.chatContactRenameSave),
-        ).withTapBounce(enabled: _canSubmit),
+        ),
       ],
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(l10n.chatContactRenameDescription),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.s),
           AxiTextFormField(
             controller: _controller,
             focusNode: _focusNode,

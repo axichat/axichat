@@ -35,29 +35,16 @@ class ArchivedChatScreen extends StatelessWidget {
     final emailService = locate<EmailService>();
     final chatsCubit = locate<ChatsCubit>();
     final settingsCubit = locate<SettingsCubit>();
+    final profileCubit = locate<ProfileCubit>();
+    final rosterCubit = locate<RosterCubit>();
     final OmemoService? omemoService =
         xmppService is OmemoService ? xmppService as OmemoService : null;
-    ProfileCubit? profileCubit;
-    RosterCubit? rosterCubit;
-    try {
-      profileCubit = locate<ProfileCubit>();
-    } catch (_) {
-      profileCubit = null;
-    }
-    try {
-      rosterCubit = locate<RosterCubit>();
-    } catch (_) {
-      rosterCubit = null;
-    }
 
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: chatsCubit),
-        if (profileCubit != null) BlocProvider.value(value: profileCubit),
-        if (rosterCubit != null)
-          BlocProvider.value(value: rosterCubit)
-        else
-          BlocProvider(create: (_) => RosterCubit(rosterService: xmppService)),
+        BlocProvider.value(value: profileCubit),
+        BlocProvider.value(value: rosterCubit),
         BlocProvider(
           create: (_) => ChatBloc(
             jid: jid,
@@ -94,19 +81,19 @@ class _ArchivedChatBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.chatsArchiveTitle),
-        leadingWidth: AxiIconButton.kDefaultSize + 24,
+        leadingWidth: sizing.iconButtonTapTarget + spacing.m,
         leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
+          padding: EdgeInsets.only(left: spacing.s),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: SizedBox(
-              width: AxiIconButton.kDefaultSize,
-              height: AxiIconButton.kDefaultSize,
+            child: SizedBox.square(
+              dimension: sizing.iconButtonTapTarget,
               child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
@@ -116,8 +103,12 @@ class _ArchivedChatBody extends StatelessWidget {
           ),
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, thickness: 1, color: colors.border),
+          preferredSize: Size.fromHeight(context.borderSide.width),
+          child: Divider(
+            height: context.borderSide.width,
+            thickness: context.borderSide.width,
+            color: context.borderSide.color,
+          ),
         ),
       ),
       body: const SafeArea(child: Chat(readOnly: true)),

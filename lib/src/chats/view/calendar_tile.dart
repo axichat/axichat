@@ -10,7 +10,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class CalendarTile extends StatelessWidget {
+class CalendarTile extends StatefulWidget {
   const CalendarTile({
     super.key,
     required this.onTap,
@@ -25,29 +25,44 @@ class CalendarTile extends StatelessWidget {
   final int dueReminderCount;
 
   @override
+  State<CalendarTile> createState() => _CalendarTileState();
+}
+
+class _CalendarTileState extends State<CalendarTile> {
+  double _cachedBadgeWidth = 0;
+  int? _cachedBadgeCount;
+  double _textScaleFactor = 1;
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
-    final showBadge = dueReminderCount > 0;
-    final badgeWidth =
-        showBadge ? _measureBadgeWidth(context, dueReminderCount) : 0.0;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final showBadge = widget.dueReminderCount > 0;
+    final badgeWidth = showBadge
+        ? _resolveBadgeWidth(
+            context,
+            widget.dueReminderCount,
+          )
+        : 0.0;
     final cutouts = <CutoutSpec>[
       if (showBadge)
         CutoutSpec(
           edge: CutoutEdge.top,
-          alignment: const Alignment(0.86, -1),
-          depth: 14,
+          alignment: Alignment.topRight,
+          depth: spacing.m,
           thickness: badgeWidth,
-          cornerRadius: context.sizing.containerRadius,
-          child: _ReminderBadge(count: dueReminderCount),
+          cornerRadius: sizing.containerRadius,
+          child: _ReminderBadge(count: widget.dueReminderCount),
         ),
     ];
 
-    final CalendarTask? displayTask = currentTask ?? nextTask;
-    final String subtitleText = currentTask != null
-        ? l10n.calendarTileNow(currentTask!.title)
-        : nextTask != null
-            ? l10n.calendarTileNext(nextTask!.title)
+    final CalendarTask? displayTask = widget.currentTask ?? widget.nextTask;
+    final String subtitleText = widget.currentTask != null
+        ? l10n.calendarTileNow(widget.currentTask!.title)
+        : widget.nextTask != null
+            ? l10n.calendarTileNext(widget.nextTask!.title)
             : l10n.calendarTileNone;
 
     final scheduledTime = displayTask?.scheduledTime;
@@ -56,15 +71,21 @@ class CalendarTile extends StatelessWidget {
         : <Widget>[_TaskTimestamp(dateTime: scheduledTime)];
 
     final tile = AxiListTile(
-      onTap: onTap,
+      onTap: widget.onTap,
       paintSurface: false,
-      leadingConstraints: const BoxConstraints(maxHeight: 56, maxWidth: 56),
+      leadingConstraints: BoxConstraints(
+        maxHeight: sizing.iconButtonTapTarget,
+        maxWidth: sizing.iconButtonTapTarget,
+      ),
       leading: _CalendarAvatar(highlight: showBadge),
       title: l10n.homeRailCalendar,
       subtitle: subtitleText,
       subtitlePlaceholder: l10n.calendarTileNone,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      minTileHeight: 60,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.xs,
+      ),
+      minTileHeight: sizing.listButtonHeight + spacing.s,
       actions: trailingActions,
     );
 
@@ -76,6 +97,34 @@ class CalendarTile extends StatelessWidget {
       child: tile,
     ).withTapBounce();
   }
+
+  double _resolveBadgeWidth(BuildContext context, int count) {
+    final textScaler = MediaQuery.of(context).textScaler;
+    final scaleFactor = textScaler.scale(1);
+    if (_cachedBadgeCount == count &&
+        _cachedBadgeWidth > 0 &&
+        _textScaleFactor == scaleFactor) {
+      return _cachedBadgeWidth;
+    }
+    final spacing = context.spacing;
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$count',
+        style: context.textTheme.small.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: textScaler,
+    )..layout();
+    final horizontalPadding = spacing.s + spacing.xs;
+    final minWidth = spacing.l + spacing.s;
+    _cachedBadgeCount = count;
+    _textScaleFactor = scaleFactor;
+    _cachedBadgeWidth =
+        math.max(minWidth, textPainter.width + (horizontalPadding * 2));
+    return _cachedBadgeWidth;
+  }
 }
 
 class _CalendarAvatar extends StatelessWidget {
@@ -86,28 +135,32 @@ class _CalendarAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final sizing = context.sizing;
     final background = highlight
-        ? colors.primary.withValues(alpha: 0.12)
-        : colors.secondary.withValues(alpha: 0.18);
-    final borderColor =
-        highlight ? colors.primary : colors.secondary.withValues(alpha: 0.45);
+        ? colors.primary.withValues(alpha: motion.tapSplashAlpha)
+        : colors.secondary.withValues(alpha: motion.tapHoverAlpha);
+    final borderColor = highlight ? colors.primary : colors.secondary;
 
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: background,
         shape: SquircleBorder(
           cornerRadius: context.radii.squircle,
-          side: BorderSide(color: borderColor, width: 1.2),
+          side: BorderSide(
+            color: borderColor,
+            width: context.borderSide.width,
+          ),
         ),
       ),
       child: SizedBox(
-        width: 46,
-        height: 46,
+        width: sizing.iconButtonTapTarget,
+        height: sizing.iconButtonTapTarget,
         child: Center(
           child: Icon(
             LucideIcons.calendarClock,
             color: highlight ? colors.primary : colors.secondaryForeground,
-            size: 22,
+            size: sizing.iconButtonIconSize,
           ),
         ),
       ),
@@ -123,23 +176,29 @@ class _ReminderBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.primary,
         shape: SquircleBorder(
           cornerRadius: context.sizing.containerRadius,
-          side: BorderSide(color: colors.card, width: 2),
+          side: BorderSide(
+            color: colors.card,
+            width: context.borderSide.width,
+          ),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s + spacing.xs,
+          vertical: spacing.xs,
+        ),
         child: Text(
           '$count',
           maxLines: 1,
           style: context.textTheme.small.copyWith(
             color: colors.primaryForeground,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
           ),
         ),
       ),
@@ -155,15 +214,21 @@ class _TaskTimestamp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final label = TimeOfDay.fromDateTime(dateTime).format(context);
 
     return DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.secondary.withValues(alpha: 0.2),
+        color: colors.secondary.withValues(
+          alpha: context.motion.tapSplashAlpha,
+        ),
         shape: SquircleBorder(cornerRadius: context.sizing.containerRadius),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
+        ),
         child: Text(
           label,
           style: context.textTheme.small.copyWith(
@@ -174,16 +239,4 @@ class _TaskTimestamp extends StatelessWidget {
       ),
     );
   }
-}
-
-double _measureBadgeWidth(BuildContext context, int count) {
-  final painter = TextPainter(
-    text: TextSpan(
-      text: '$count',
-      style: context.textTheme.small.copyWith(fontWeight: FontWeight.w700),
-    ),
-    textDirection: Directionality.of(context),
-  )..layout();
-
-  return math.max(44, painter.width + 24);
 }

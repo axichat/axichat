@@ -523,6 +523,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             context.read<NotificationService>().updateLocalizations(
                   AppLocalizations.of(context)!,
                 );
+            context.read<EmailService>().updateLocalizations(
+                  AppLocalizations.of(context)!,
+                );
             final shadTheme = ShadTheme.of(context);
             final brightness = Theme.of(context).brightness;
             CalendarPalette.update(

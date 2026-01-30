@@ -526,9 +526,16 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                 creating = true;
                               });
                               Navigator.of(dialogContext).pop();
+                              final recipientName =
+                                  recipient.contactDisplayName ??
+                                      recipient.title;
                               context.read<ChatBloc>().add(
                                     ChatRecipientEmailChatRequested(
                                       recipient: recipient,
+                                      failureMessage: context.l10n
+                                          .chatMessageCreateChatFailure(
+                                        recipientName,
+                                      ),
                                     ),
                                   );
                             },

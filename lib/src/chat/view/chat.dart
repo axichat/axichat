@@ -53,7 +53,6 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart'
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
-import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
@@ -104,7 +103,6 @@ import 'package:flutter/rendering.dart'
         RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -700,16 +698,7 @@ class _UnknownSenderBanner extends StatelessWidget {
             if (!showBanner) {
               return const SizedBox.shrink();
             }
-            EmailService? emailService;
-            try {
-              emailService = RepositoryProvider.of<EmailService>(
-                context,
-                listen: false,
-              );
-            } on Exception {
-              emailService = null;
-            }
-            final canAddContact = !isEmailChat || emailService != null;
+            final canAddContact = !isEmailChat || state.emailServiceAvailable;
             final l10n = context.l10n;
             final actions = <Widget>[
               if (onAddContact != null && canAddContact)
@@ -1013,6 +1002,7 @@ class _ChatState extends State<Chat> {
   String? _chatCalendarJid;
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
+  final _loadedEmailImageMessageIds = <String>{};
   final _fileMetadataStreamEntries = <String, _FileMetadataStreamEntry>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
@@ -1109,6 +1099,13 @@ class _ChatState extends State<Chat> {
       return;
     }
     _clearOutsideTapTracking();
+  }
+
+  void _handleEmailImagesApproved(String messageId) {
+    if (!_loadedEmailImageMessageIds.add(messageId)) return;
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _typingListener() {
@@ -2002,6 +1999,7 @@ class _ChatState extends State<Chat> {
     final rootContext = context;
     final locate = context.read;
     final sizing = context.sizing;
+    final spacing = context.spacing;
     final Duration animationDuration =
         context.read<SettingsCubit>().animationDuration;
     final colors = context.colorScheme;
@@ -2014,42 +2012,45 @@ class _ChatState extends State<Chat> {
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final drawerWidth = math.min(
-                  constraints.maxWidth,
-                  sizing.dialogMaxWidth,
-                );
-                return SizedBox(
-                  width: drawerWidth,
-                  child: BlocProvider.value(
-                    value: locate<ChatBloc>(),
-                    child: Builder(
-                      builder: (dialogContext) => _RoomMembersDrawerContent(
-                        onInvite: (jid) =>
-                            locate<ChatBloc>().add(ChatInviteRequested(jid)),
-                        onAction: (occupantId, action) =>
-                            locate<ChatBloc>().add(
-                          ChatModerationActionRequested(
-                            occupantId: occupantId,
-                            action: action,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: spacing.m),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final drawerWidth = math.min(
+                    constraints.maxWidth,
+                    sizing.dialogMaxWidth,
+                  );
+                  return SizedBox(
+                    width: drawerWidth,
+                    child: BlocProvider.value(
+                      value: locate<ChatBloc>(),
+                      child: Builder(
+                        builder: (dialogContext) => _RoomMembersDrawerContent(
+                          onInvite: (jid) =>
+                              locate<ChatBloc>().add(ChatInviteRequested(jid)),
+                          onAction: (occupantId, action) =>
+                              locate<ChatBloc>().add(
+                            ChatModerationActionRequested(
+                              occupantId: occupantId,
+                              action: action,
+                            ),
                           ),
+                          onChangeNickname: (nick) => locate<ChatBloc>().add(
+                            ChatNicknameChangeRequested(nick),
+                          ),
+                          onLeaveRoom: () => locate<ChatBloc>().add(
+                            const ChatLeaveRoomRequested(),
+                          ),
+                          onClose: navigator.pop,
+                          rootContext: rootContext,
                         ),
-                        onChangeNickname: (nick) => locate<ChatBloc>().add(
-                          ChatNicknameChangeRequested(nick),
-                        ),
-                        onLeaveRoom: () => locate<ChatBloc>().add(
-                          const ChatLeaveRoomRequested(),
-                        ),
-                        onClose: navigator.pop,
-                        rootContext: rootContext,
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         );
@@ -2099,33 +2100,20 @@ class _ChatState extends State<Chat> {
         context.read<ChatBloc>().state.chat?.jid == null) {
       return;
     }
-    final xmppService = context.read<XmppService>();
     final l10n = context.l10n;
-    try {
-      await xmppService.setSpamStatus(
-        jid: context.read<ChatBloc>().state.chat!.jid,
-        spam: sendToSpam,
-      );
-    } on Exception {
-      if (mounted) {
-        _showSnackbar(l10n.chatSpamUpdateFailed);
-      }
-      return;
-    }
-    if (!mounted) return;
-    final toastMessage = sendToSpam
-        ? l10n.chatSpamSent(context.read<ChatBloc>().state.chat!.displayName)
-        : l10n.chatSpamRestored(
-            context.read<ChatBloc>().state.chat!.displayName,
-          );
-    ShadToaster.maybeOf(context)?.show(
-      FeedbackToast.info(
-        title: sendToSpam
-            ? l10n.chatSpamReportedTitle
-            : l10n.chatSpamRestoredTitle,
-        message: toastMessage,
-      ),
-    );
+    final chatTitle = context.read<ChatBloc>().state.chat!.displayName;
+    context.read<ChatBloc>().add(
+          ChatSpamStatusRequested(
+            sendToSpam: sendToSpam,
+            successTitle: sendToSpam
+                ? l10n.chatSpamReportedTitle
+                : l10n.chatSpamRestoredTitle,
+            successMessage: sendToSpam
+                ? l10n.chatSpamSent(chatTitle)
+                : l10n.chatSpamRestored(chatTitle),
+            failureMessage: l10n.chatSpamUpdateFailed,
+          ),
+        );
   }
 
   Future<void> _handleAddContact() async {
@@ -2134,46 +2122,12 @@ class _ChatState extends State<Chat> {
       return;
     }
     final l10n = context.l10n;
-    final showToast = ShadToaster.maybeOf(context)?.show;
-    final rosterTitle = context
-                .read<ChatBloc>()
-                .state
-                .chat!
-                .contactDisplayName
-                ?.trim()
-                .isNotEmpty ==
-            true
-        ? context.read<ChatBloc>().state.chat!.contactDisplayName!.trim()
-        : context.read<ChatBloc>().state.chat!.title;
-    try {
-      if (context.read<ChatBloc>().state.chat!.isEmailBacked) {
-        EmailService? emailService;
-        try {
-          emailService = RepositoryProvider.of<EmailService>(
-            context,
-            listen: false,
-          );
-        } on Exception {
-          emailService = null;
-        }
-        if (emailService == null) return;
-        await emailService.ensureChatForAddress(
-          address: context.read<ChatBloc>().state.chat!.remoteJid.trim(),
-          displayName: rosterTitle,
+    context.read<ChatBloc>().add(
+          ChatContactAddRequested(
+            successTitle: l10n.rosterAddTitle,
+            failureTitle: l10n.rosterAddTitle,
+          ),
         );
-      } else {
-        await context.read<XmppService>().addToRoster(
-              jid: context.read<ChatBloc>().state.chat!.remoteJid.trim(),
-              title: rosterTitle.isNotEmpty ? rosterTitle : null,
-            );
-      }
-    } on Exception {
-      if (!mounted) return;
-      showToast?.call(FeedbackToast.error(title: l10n.rosterAddTitle));
-      return;
-    }
-    if (!mounted) return;
-    showToast?.call(FeedbackToast.success(title: l10n.rosterAddTitle));
   }
 
   void _handleSubjectChanged() {
@@ -2235,7 +2189,7 @@ class _ChatState extends State<Chat> {
   _FileMetadataStreamEntry _metadataEntryFor(String id) {
     return _fileMetadataStreamEntries.putIfAbsent(id, () {
       final entry = _FileMetadataStreamEntry();
-      entry.attach(context.read<XmppService>().fileMetadataStream(id));
+      entry.attach(context.read<ChatBloc>().fileMetadataStreamFor(id));
       return entry;
     });
   }
@@ -2409,16 +2363,13 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     if (decision == null || !decision.approved) return;
 
-    final emailService = RepositoryProvider.of<EmailService?>(context);
     if (decision.alwaysAllow && canTrustChat) {
       context.read<ChatBloc>().add(
             const ChatAttachmentAutoDownloadToggled(true),
           );
     }
     if (isEmailChat) {
-      if (emailService != null) {
-        await emailService.downloadFullMessage(message);
-      }
+      await context.read<ChatBloc>().downloadFullEmailMessage(message);
     }
 
     if (mounted) {
@@ -3561,27 +3512,44 @@ class _ChatState extends State<Chat> {
                 final l10n = context.l10n;
                 const actionLabel = null;
                 const VoidCallback? onAction = null;
+                final resolvedTitle = toast.title ??
+                    switch (toast.variant) {
+                      ChatToastVariant.destructive => l10n.toastWhoopsTitle,
+                      ChatToastVariant.warning => l10n.toastHeadsUpTitle,
+                      ChatToastVariant.info => l10n.toastAllSetTitle,
+                    };
                 final toastWidget = switch (toast.variant) {
                   ChatToastVariant.destructive => FeedbackToast.error(
-                      title: l10n.toastWhoopsTitle,
+                      title: resolvedTitle,
                       message: toast.message,
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                   ChatToastVariant.warning => FeedbackToast.warning(
-                      title: l10n.toastHeadsUpTitle,
+                      title: resolvedTitle,
                       message: toast.message,
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                   ChatToastVariant.info => FeedbackToast.success(
-                      title: l10n.toastAllSetTitle,
+                      title: resolvedTitle,
                       message: toast.message,
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                 };
                 show(toastWidget);
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.openChatRequestId != current.openChatRequestId,
+              listener: (context, state) {
+                final targetJid = state.openChatJid;
+                if (targetJid == null || targetJid.trim().isEmpty) {
+                  return;
+                }
+                context.read<ChatsCubit?>()?.openChat(jid: targetJid);
               },
             ),
             BlocListener<ChatBloc, ChatState>(
@@ -3664,12 +3632,8 @@ class _ChatState extends State<Chat> {
                   context.watch<ProfileCubit?>()?.state;
               ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
               final readOnly = widget.readOnly;
-              final emailService = RepositoryProvider.of<EmailService?>(
-                context,
-                listen: false,
-              );
               final xmppService = context.read<XmppService>();
-              final emailSelfJid = emailService?.selfSenderJid;
+              final emailSelfJid = state.emailSelfJid;
               final String? resolvedEmailSelfJid =
                   emailSelfJid.resolveDeltaPlaceholderJid();
               final xmppSelfJid = xmppService.myJid;
@@ -6494,86 +6458,47 @@ class _ChatState extends State<Chat> {
                                                                 !shouldPreferPlainTextHtml) {
                                                               // Render HTML email content
                                                               final shouldLoadImages = context
-                                                                      .read<
+                                                                      .watch<
                                                                           SettingsCubit>()
                                                                       .state
                                                                       .autoLoadEmailImages ||
-                                                                  state
-                                                                      .loadedImageMessageIds
-                                                                      .contains(
-                                                                    messageModel
-                                                                        .id,
-                                                                  );
+                                                                  (messageModel
+                                                                              .id !=
+                                                                          null &&
+                                                                      _loadedEmailImageMessageIds
+                                                                          .contains(
+                                                                        messageModel
+                                                                            .id,
+                                                                      ));
                                                               bubbleTextChildren
                                                                   .add(
-                                                                html_widget
-                                                                    .Html(
+                                                                _MessageHtmlBody(
                                                                   key: ValueKey(
                                                                     bubbleContentKey,
                                                                   ),
-                                                                  data: HtmlContentCodec
-                                                                      .sanitizeHtml(
-                                                                    normalizedHtmlBody,
-                                                                  ),
-                                                                  extensions: [
-                                                                    createEmailImageExtension(
-                                                                      shouldLoad:
-                                                                          shouldLoadImages,
-                                                                      onLoadRequested: messageModel.id ==
+                                                                  html:
+                                                                      normalizedHtmlBody,
+                                                                  textStyle:
+                                                                      baseTextStyle,
+                                                                  textColor:
+                                                                      textColor,
+                                                                  linkColor: self
+                                                                      ? colors
+                                                                          .primaryForeground
+                                                                      : colors
+                                                                          .primary,
+                                                                  shouldLoadImages:
+                                                                      shouldLoadImages,
+                                                                  onLoadRequested:
+                                                                      messageModel.id ==
                                                                               null
                                                                           ? null
-                                                                          : () {
-                                                                              context.read<ChatBloc>().add(
-                                                                                    ChatEmailImagesLoaded(
-                                                                                      messageModel.id!,
-                                                                                    ),
-                                                                                  );
-                                                                            },
-                                                                    ),
-                                                                  ],
-                                                                  style: {
-                                                                    'body':
-                                                                        html_widget
-                                                                            .Style(
-                                                                      margin: html_widget
-                                                                          .Margins
-                                                                          .zero,
-                                                                      padding: html_widget
-                                                                          .HtmlPaddings
-                                                                          .zero,
-                                                                      color:
-                                                                          textColor,
-                                                                      fontSize:
-                                                                          html_widget
-                                                                              .FontSize(
-                                                                        baseTextStyle.fontSize ??
-                                                                            14.0,
-                                                                      ),
-                                                                    ),
-                                                                    'a': html_widget
-                                                                        .Style(
-                                                                      color: self
-                                                                          ? colors
-                                                                              .primaryForeground
-                                                                          : colors
-                                                                              .primary,
-                                                                      textDecoration:
-                                                                          TextDecoration
-                                                                              .underline,
-                                                                    ),
-                                                                  },
-                                                                  onLinkTap: (
-                                                                    url,
-                                                                    _,
-                                                                    __,
-                                                                  ) {
-                                                                    if (url !=
-                                                                        null) {
-                                                                      _handleLinkTap(
-                                                                        url,
-                                                                      );
-                                                                    }
-                                                                  },
+                                                                          : () =>
+                                                                              _handleEmailImagesApproved(
+                                                                                messageModel.id!,
+                                                                              ),
+                                                                  onLinkTap:
+                                                                      _handleLinkTap,
                                                                 ),
                                                               );
                                                               // Add details row below HTML content
@@ -6581,9 +6506,11 @@ class _ChatState extends State<Chat> {
                                                                   .add(
                                                                 Padding(
                                                                   padding:
-                                                                      const EdgeInsets
+                                                                      EdgeInsets
                                                                           .only(
-                                                                    top: 4,
+                                                                    top: context
+                                                                        .spacing
+                                                                        .xs,
                                                                   ),
                                                                   child:
                                                                       Text.rich(
@@ -6713,19 +6640,14 @@ class _ChatState extends State<Chat> {
                                                             final autoDownloadAllowed =
                                                                 allowAttachment &&
                                                                     chatAutoDownloadAllowed;
-                                                            final emailService =
-                                                                RepositoryProvider
-                                                                    .of<EmailService?>(
-                                                                        context);
                                                             final emailDownloadDelegate =
-                                                                isEmailChat &&
-                                                                        emailService !=
-                                                                            null
+                                                                isEmailChat
                                                                     ? AttachmentDownloadDelegate(
-                                                                        () => emailService
-                                                                            .downloadFullMessage(
-                                                                          messageModel,
-                                                                        ),
+                                                                        () => context
+                                                                            .read<ChatBloc>()
+                                                                            .downloadFullEmailMessage(
+                                                                              messageModel,
+                                                                            ),
                                                                       )
                                                                     : null;
                                                             final autoDownloadUserInitiated =
@@ -8056,6 +7978,9 @@ class _ChatState extends State<Chat> {
                             ),
                           ChatRouteIndex.details => _ChatDetailsOverlay(
                               onAddRecipient: _handleRecipientAddedFromChat,
+                              loadedEmailImageMessageIds:
+                                  _loadedEmailImageMessageIds,
+                              onEmailImagesApproved: _handleEmailImagesApproved,
                             ),
                           ChatRouteIndex.settings => _ChatSettingsOverlay(
                               state: state,
@@ -9521,10 +9446,9 @@ class _PinnedMessageTile extends StatelessWidget {
                   .defaultChatAttachmentAutoDownload)
           .isAllowed;
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
-      final emailService = RepositoryProvider.of<EmailService?>(context);
-      final emailDownloadDelegate = isEmailBacked && emailService != null
+      final emailDownloadDelegate = isEmailBacked
           ? AttachmentDownloadDelegate(
-              () => emailService.downloadFullMessage(message),
+              () => context.read<ChatBloc>().downloadFullEmailMessage(message),
             )
           : null;
       final autoDownloadUserInitiated = allowAttachmentOnce;
@@ -9610,9 +9534,15 @@ class _ChatCalendarPanel extends StatelessWidget {
 }
 
 class _ChatDetailsOverlay extends StatelessWidget {
-  const _ChatDetailsOverlay({required this.onAddRecipient});
+  const _ChatDetailsOverlay({
+    required this.onAddRecipient,
+    required this.loadedEmailImageMessageIds,
+    required this.onEmailImagesApproved,
+  });
 
   final ValueChanged<chat_models.Chat> onAddRecipient;
+  final Set<String> loadedEmailImageMessageIds;
+  final ValueChanged<String> onEmailImagesApproved;
 
   @override
   Widget build(BuildContext context) {
@@ -9620,7 +9550,11 @@ class _ChatDetailsOverlay extends StatelessWidget {
       color: context.colorScheme.background,
       child: SafeArea(
         top: false,
-        child: ChatMessageDetails(onAddRecipient: onAddRecipient),
+        child: ChatMessageDetails(
+          onAddRecipient: onAddRecipient,
+          loadedEmailImageMessageIds: loadedEmailImageMessageIds,
+          onEmailImagesApproved: onEmailImagesApproved,
+        ),
       ),
     );
   }
@@ -9695,7 +9629,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: context.read<XmppService>(),
-        emailService: RepositoryProvider.of<EmailService?>(context),
+        emailService: context.read<EmailService?>(),
         chatJid: resolvedChat.jid,
         chatOverride: resolvedChat,
         showChatLabel: false,
@@ -13102,6 +13036,88 @@ class _QuoteBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MessageHtmlBody extends StatefulWidget {
+  const _MessageHtmlBody({
+    super.key,
+    required this.html,
+    required this.textStyle,
+    required this.textColor,
+    required this.linkColor,
+    required this.shouldLoadImages,
+    required this.onLinkTap,
+    this.onLoadRequested,
+  });
+
+  final String html;
+  final TextStyle textStyle;
+  final Color textColor;
+  final Color linkColor;
+  final bool shouldLoadImages;
+  final ValueChanged<String> onLinkTap;
+  final VoidCallback? onLoadRequested;
+
+  @override
+  State<_MessageHtmlBody> createState() => _MessageHtmlBodyState();
+}
+
+class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
+  String? _sanitizedHtml;
+  String? _rawHtml;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSanitizedHtml();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageHtmlBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.html != widget.html) {
+      _refreshSanitizedHtml();
+    }
+  }
+
+  void _refreshSanitizedHtml() {
+    _rawHtml = widget.html;
+    _sanitizedHtml = HtmlContentCodec.sanitizeHtml(widget.html);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fallbackFontSize = widget.textStyle.fontSize ??
+        context.textTheme.bodyMedium.fontSize ??
+        context.textTheme.bodyLarge.fontSize ??
+        context.textTheme.bodySmall.fontSize ??
+        context.sizing.menuItemIconSize;
+    return html_widget.Html(
+      data: _sanitizedHtml ?? _rawHtml ?? '',
+      extensions: [
+        createEmailImageExtension(
+          shouldLoad: widget.shouldLoadImages,
+          onLoadRequested: widget.onLoadRequested,
+        ),
+      ],
+      style: {
+        'body': html_widget.Style(
+          margin: html_widget.Margins.zero,
+          padding: html_widget.HtmlPaddings.zero,
+          color: widget.textColor,
+          fontSize: html_widget.FontSize(fallbackFontSize),
+        ),
+        'a': html_widget.Style(
+          color: widget.linkColor,
+          textDecoration: TextDecoration.underline,
+        ),
+      },
+      onLinkTap: (url, _, __) {
+        if (url == null) return;
+        widget.onLinkTap(url);
+      },
     );
   }
 }

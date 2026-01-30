@@ -54,13 +54,6 @@ class _ChatRoomCreateDialog extends StatefulWidget {
 
 class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
   static const _restrictedRoomNameCharacter = '+';
-  static const _fieldPadding = EdgeInsets.all(8.0);
-  static const _errorPadding = EdgeInsets.fromLTRB(8, 0, 8, 8);
-  static const _avatarRowSpacing = 12.0;
-  static const _avatarEditorTopPadding = 12.0;
-  static const _avatarEditorMaxWidth = 960.0;
-  static const _avatarEditorCloseInset = 6.0;
-  static const _dialogMaxHeightRatio = 0.8;
 
   String _title = '';
   String? _validationError;
@@ -128,6 +121,14 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final fieldPadding = EdgeInsets.all(spacing.s);
+    final errorPadding = EdgeInsets.only(
+      left: spacing.s,
+      right: spacing.s,
+      bottom: spacing.s,
+    );
     return BlocConsumer<ChatsCubit, ChatsState>(
       listener: (context, state) {
         if (state.creationStatus.isSuccess) {
@@ -145,10 +146,10 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
             final useActionEnabled = avatarState.canUseCarouselAvatar;
             final previewWidth = math.min(
               MediaQuery.sizeOf(context).width,
-              _avatarEditorMaxWidth,
+              sizing.dialogMaxWidth,
             );
-            final dialogMaxHeight =
-                MediaQuery.sizeOf(context).height * _dialogMaxHeightRatio;
+            final dialogMaxHeight = MediaQuery.sizeOf(context).height *
+                sizing.dialogMaxHeightFraction;
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             return AxiInputDialog(
               title: Text(l10n.chatsCreateChatRoomTitle),
@@ -163,7 +164,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Padding(
-                          padding: _fieldPadding,
+                          padding: fieldPadding,
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
@@ -176,7 +177,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                   onTap: _openAvatarEditor,
                                 ),
                               ),
-                              const SizedBox(width: _avatarRowSpacing),
+                              SizedBox(width: spacing.s),
                               Expanded(
                                 child: AxiTextFormField(
                                   placeholder:
@@ -190,7 +191,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                         ),
                         if (avatarErrorText != null)
                           Padding(
-                            padding: _errorPadding,
+                            padding: errorPadding,
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
@@ -203,7 +204,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                           ),
                         if (_validationError != null)
                           Padding(
-                            padding: _errorPadding,
+                            padding: errorPadding,
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
@@ -216,9 +217,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                           ),
                         if (_showAvatarEditor)
                           Padding(
-                            padding: const EdgeInsets.only(
-                              top: _avatarEditorTopPadding,
-                            ),
+                            padding: EdgeInsets.only(top: spacing.s),
                             child: Center(
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
@@ -279,8 +278,8 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                       ),
                                     ),
                                     Positioned(
-                                      top: _avatarEditorCloseInset,
-                                      right: _avatarEditorCloseInset,
+                                      top: spacing.xs,
+                                      right: spacing.xs,
                                       child: AxiIconButton(
                                         iconData: LucideIcons.x,
                                         tooltip: l10n.commonClose,

@@ -32,7 +32,7 @@ class SelectionPanelShell extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.background,
-          border: Border(top: BorderSide(color: colors.border, width: 1)),
+          border: Border(top: context.borderSide),
         ),
         child: Padding(padding: padding, child: child),
       ),

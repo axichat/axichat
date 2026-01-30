@@ -66,7 +66,7 @@ class ProfileTile extends StatelessWidget {
                       title: Hero(
                         tag: 'title',
                         child: Material(
-                          color: Colors.transparent,
+                          type: MaterialType.transparency,
                           child: Text(
                             state.username,
                             style: usernameStyle,
@@ -77,7 +77,7 @@ class ProfileTile extends StatelessWidget {
                       subtitle: Hero(
                         tag: 'subtitle',
                         child: Material(
-                          color: Colors.transparent,
+                          type: MaterialType.transparency,
                           child: Text(
                             state.jid,
                             style: subtitleStyle,

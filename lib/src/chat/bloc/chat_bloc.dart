@@ -160,13 +160,15 @@ enum ChatToastAction { restoreDraft }
 
 class ChatToast extends Equatable {
   const ChatToast({
-    required this.message,
+    this.title,
+    this.message,
     this.variant = ChatToastVariant.info,
     this.action,
     this.actionDraftId,
   });
 
-  final String message;
+  final String? title;
+  final String? message;
   final ChatToastVariant variant;
   final ChatToastAction? action;
   final int? actionDraftId;
@@ -174,7 +176,7 @@ class ChatToast extends Equatable {
   bool get isDestructive => variant == ChatToastVariant.destructive;
 
   @override
-  List<Object?> get props => [message, variant, action, actionDraftId];
+  List<Object?> get props => [title, message, variant, action, actionDraftId];
 }
 
 class ChatSettingsSnapshot extends Equatable {
@@ -237,7 +239,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _omemoService = omemoService,
         _mucService = mucService,
         _settingsSnapshot = settings,
-        super(const ChatState(items: [])) {
+        super(
+          ChatState(
+            items: const [],
+            emailServiceAvailable: emailService != null,
+            emailSelfJid: emailService?.selfSenderJid,
+          ),
+        ) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
@@ -270,6 +278,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatAlertHidden>(_onChatAlertHidden);
+    on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
+    on<ChatContactAddRequested>(_onChatContactAddRequested);
+    on<ChatRecipientEmailChatRequested>(_onChatRecipientEmailChatRequested);
     on<ChatQuoteRequested>(_onChatQuoteRequested);
     on<ChatQuoteCleared>(_onChatQuoteCleared);
     on<ChatMessagePinRequested>(_onChatMessagePinRequested);
@@ -297,7 +308,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatRoomMembersOpened>(_onChatRoomMembersOpened);
     on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
-    on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
       if (chatLookupJid == null) return;
@@ -2068,20 +2078,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _onEmailImagesLoaded(
-    ChatEmailImagesLoaded event,
-    Emitter<ChatState> emit,
-  ) {
-    emit(
-      state.copyWith(
-        loadedImageMessageIds: {
-          ...state.loadedImageMessageIds,
-          event.messageId,
-        },
-      ),
-    );
-  }
-
   Future<void> _onChatModerationActionRequested(
     ChatModerationActionRequested event,
     Emitter<ChatState> emit,
@@ -2937,6 +2933,128 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(showAlert: false));
     if (event.forever) {
       await _chatsService.clearChatAlert(jid: jid!);
+    }
+  }
+
+  Future<void> _onChatSpamStatusRequested(
+    ChatSpamStatusRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    final xmppService = _xmppService;
+    if (chat == null || xmppService == null) return;
+    try {
+      await xmppService.setSpamStatus(jid: chat.jid, spam: event.sendToSpam);
+    } on Exception catch (error, stackTrace) {
+      _log.safeWarning('Failed to update spam status', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          ChatToast(
+            message: event.failureMessage,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      _attachToast(
+        state,
+        ChatToast(
+          title: event.successTitle,
+          message: event.successMessage,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onChatContactAddRequested(
+    ChatContactAddRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    final remoteJid = chat.remoteJid.trim();
+    if (remoteJid.isEmpty) return;
+    final rosterTitle = chat.contactDisplayName?.trim().isNotEmpty == true
+        ? chat.contactDisplayName!.trim()
+        : chat.title;
+    try {
+      if (chat.isEmailBacked) {
+        final emailService = _emailService;
+        if (emailService == null) return;
+        await emailService.ensureChatForAddress(
+          address: remoteJid,
+          displayName: rosterTitle,
+        );
+      } else {
+        final xmppService = _xmppService;
+        if (xmppService == null) return;
+        await xmppService.addToRoster(
+          jid: remoteJid,
+          title: rosterTitle.isNotEmpty ? rosterTitle : null,
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.safeWarning('Failed to add contact', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          ChatToast(
+            title: event.failureTitle,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      _attachToast(
+        state,
+        ChatToast(title: event.successTitle),
+      ),
+    );
+  }
+
+  Future<void> _onChatRecipientEmailChatRequested(
+    ChatRecipientEmailChatRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      emit(
+        _attachToast(
+          state,
+          ChatToast(
+            message: event.failureMessage,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
+      return;
+    }
+    try {
+      final ensured = await emailService.ensureChatForEmailChat(
+        event.recipient,
+      );
+      emit(
+        state.copyWith(
+          openChatJid: ensured.jid,
+          openChatRequestId: state.openChatRequestId + 1,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeWarning('Failed to create email chat', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          ChatToast(
+            message: event.failureMessage,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
     }
   }
 
@@ -4110,6 +4228,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String _messageKey(Message message) => message.id ?? message.stanzaID;
+
+  Stream<FileMetadataData?> fileMetadataStreamFor(String id) =>
+      _messageService.fileMetadataStream(id);
+
+  Future<void> downloadFullEmailMessage(Message message) async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    await emailService.downloadFullMessage(message);
+  }
 
   List<String> _orderedUniqueAttachmentIds(
     Iterable<MessageAttachmentData> attachments,

@@ -578,33 +578,43 @@ class RoomAvatarEditorSheet extends StatefulWidget {
   static Future<AvatarUploadPayload?> show(
     BuildContext context, {
     String? avatarPath,
-  }) {
+  }) async {
     final dialogMaxWidth = context.sizing.dialogMaxWidth;
-    return showAdaptiveBottomSheet<AvatarUploadPayload>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: false,
-      showCloseButton: false,
-      dialogMaxWidth: dialogMaxWidth,
-      builder: (sheetContext) {
-        final pop = Navigator.of(sheetContext).pop;
-        final colors = sheetContext.colorScheme;
-        return BlocProvider(
-          create: (_) => AvatarEditorCubit(
-            xmppService: sheetContext.read<XmppService>(),
-            templates: buildDefaultAvatarTemplates(),
-          )
-            ..initialize(colors)
-            ..setCarouselEnabled(true, colors)
-            ..seedFromAvatarPath(avatarPath),
-          child: RoomAvatarEditorSheet(
-            avatarPath: avatarPath,
-            onCancel: () => pop(),
-            onSave: (payload) => pop(payload),
-          ),
-        );
-      },
+    final xmppService = context.read<XmppService>();
+    final colors = context.colorScheme;
+    final cubit = AvatarEditorCubit(
+      xmppService: xmppService,
+      templates: buildDefaultAvatarTemplates(),
     );
+    await cubit.initialize(colors);
+    await cubit.setCarouselEnabled(true, colors);
+    await cubit.seedFromAvatarPath(avatarPath);
+    if (!context.mounted) {
+      await cubit.close();
+      return null;
+    }
+    try {
+      return await showAdaptiveBottomSheet<AvatarUploadPayload>(
+        context: context,
+        isScrollControlled: true,
+        useRootNavigator: false,
+        showCloseButton: false,
+        dialogMaxWidth: dialogMaxWidth,
+        builder: (sheetContext) {
+          final pop = Navigator.of(sheetContext).pop;
+          return BlocProvider.value(
+            value: cubit,
+            child: RoomAvatarEditorSheet(
+              avatarPath: avatarPath,
+              onCancel: () => pop(),
+              onSave: (payload) => pop(payload),
+            ),
+          );
+        },
+      );
+    } finally {
+      await cubit.close();
+    }
   }
 }
 

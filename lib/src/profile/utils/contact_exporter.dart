@@ -60,7 +60,8 @@ class ContactExporter {
   }
 }
 
-String _buildCsv(List<ContactExportEntry> contacts, ContactExportLabels labels) {
+String _buildCsv(
+    List<ContactExportEntry> contacts, ContactExportLabels labels) {
   final String csvHeaderLine =
       '${labels.csvHeaderName},${labels.csvHeaderAddress}';
   final StringBuffer buffer = StringBuffer()..writeln(csvHeaderLine);
@@ -134,8 +135,7 @@ Future<File> _writeExportFile(
 ) async {
   final Directory tempDir = await getTemporaryDirectory();
   final int timestamp = DateTime.now().millisecondsSinceEpoch;
-  final String fileName =
-      '$label-$timestamp.$extension';
+  final String fileName = '$label-$timestamp.$extension';
   final File file = File('${tempDir.path}/$fileName');
   await file.writeAsString(text);
   return file;

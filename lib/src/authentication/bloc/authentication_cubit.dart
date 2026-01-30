@@ -868,7 +868,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final fatalError = _lastEmailProvisioningError;
     if (fatalError != null && !fatalError.isRecoverable && _stickyAuthActive) {
       await logout(severity: LogoutSeverity.auto);
-      _emit(AuthenticationFailure(AuthRawMessage(fatalError.message)));
+      _emit(
+        AuthenticationFailure(
+          AuthKeyMessage(
+            _authMessageKeyForEmailProvisioningFailure(fatalError.failure),
+          ),
+        ),
+      );
     }
   }
 
@@ -1518,8 +1524,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             state is! AuthenticationSignupFailure) {
           _emit(
             AuthenticationFailure(
-              _lastEmailProvisioningError?.message != null
-                  ? AuthRawMessage(_lastEmailProvisioningError!.message)
+              _lastEmailProvisioningError != null
+                  ? AuthKeyMessage(
+                      _authMessageKeyForEmailProvisioningFailure(
+                        _lastEmailProvisioningError!.failure,
+                      ),
+                    )
                   : AuthKeyMessage(
                       provisioningStatus == _ProvisioningStatus.blockedTransient
                           ? AuthMessageKey.emailServerUnreachable
@@ -1806,7 +1816,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on EmailProvisioningException catch (error) {
       if (!enforceProvisioning && allowOfflineOnRecoverable) {
         _log.warning(
-          'Email provisioning deferred; continuing offline: ${error.message}',
+          'Email provisioning deferred; continuing offline: ${error.failure}',
         );
         _lastEmailProvisioningError = error;
         return _ProvisioningStatus.pendingRecoverable;
@@ -1817,16 +1827,24 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (shouldAbort) {
         if (!shouldWipeCredentials && allowOfflineOnRecoverable) {
           _log.warning(
-            'Email provisioning deferred; continuing offline: ${error.message}',
+            'Email provisioning deferred; continuing offline: ${error.failure}',
           );
           _lastEmailProvisioningError = error;
           return _ProvisioningStatus.pendingRecoverable;
         }
         _lastEmailProvisioningError = error;
         if (mode.isBlocking && !_stickyAuthActive) {
-          _emit(AuthenticationFailure(AuthRawMessage(error.message)));
+          _emit(
+            AuthenticationFailure(
+              AuthKeyMessage(
+                _authMessageKeyForEmailProvisioningFailure(error.failure),
+              ),
+            ),
+          );
         } else {
-          _log.warning('Email provisioning failed silently: ${error.message}');
+          _log.warning(
+            'Email provisioning failed silently: ${error.failure}',
+          );
         }
         await _cancelPendingEmailProvisioning(
           null,
@@ -1840,7 +1858,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             ? _ProvisioningStatus.blockedFatal
             : _ProvisioningStatus.blockedTransient;
       }
-      _log.warning('Email provisioning pending: ${error.message}');
+      _log.warning('Email provisioning pending: ${error.failure}');
       _lastEmailProvisioningError = null;
       return _ProvisioningStatus.pendingRecoverable;
     } catch (error, stackTrace) {
@@ -1882,6 +1900,24 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return _ProvisioningStatus.blockedTransient;
       }
       return _ProvisioningStatus.pendingRecoverable;
+    }
+  }
+
+  AuthMessageKey _authMessageKeyForEmailProvisioningFailure(
+    EmailProvisioningFailure failure,
+  ) {
+    switch (failure) {
+      case EmailProvisioningFailure.missingPassword:
+        return AuthMessageKey.emailPasswordMissing;
+      case EmailProvisioningFailure.networkUnavailable:
+      case EmailProvisioningFailure.timeout:
+        return AuthMessageKey.emailServerUnreachable;
+      case EmailProvisioningFailure.authFailed:
+        return AuthMessageKey.emailAuthFailed;
+      case EmailProvisioningFailure.missingAddress:
+      case EmailProvisioningFailure.accountUnavailable:
+      case EmailProvisioningFailure.configurationFailed:
+        return AuthMessageKey.emailSetupFailed;
     }
   }
 
@@ -2151,7 +2187,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      _emit(AuthenticationSignupFailure(AuthRawMessage(error.message)));
+      final messageKey =
+          error.code == provisioning.EmailProvisioningApiErrorCode.network ||
+                  error.code ==
+                      provisioning.EmailProvisioningApiErrorCode.unavailable
+              ? AuthMessageKey.emailServerUnreachable
+              : AuthMessageKey.signupFailedTryAgain;
+      _emit(AuthenticationSignupFailure(AuthKeyMessage(messageKey)));
       return;
     } on Exception catch (error, stackTrace) {
       _log.warning('Signup failed', error, stackTrace);
@@ -2535,7 +2577,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
         return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
       }
-      return AuthRawMessage(error.message);
+      if (error.code == provisioning.EmailProvisioningApiErrorCode.network ||
+          error.code == provisioning.EmailProvisioningApiErrorCode.unavailable) {
+        return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
+      }
+      return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
     } on Exception catch (error, stackTrace) {
       _log.warning('Email password change failed', error, stackTrace);
       return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
@@ -2818,7 +2864,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
       }
       if (error.isRecoverable) {
-        return AuthRawMessage(error.message);
+        final recoverableKey =
+            error.code == provisioning.EmailProvisioningApiErrorCode.network ||
+                    error.code ==
+                        provisioning.EmailProvisioningApiErrorCode.unavailable
+                ? AuthMessageKey.emailServerUnreachable
+                : AuthMessageKey.accountDeletionFailed;
+        return AuthKeyMessage(recoverableKey);
       }
       return null;
     } on Exception catch (error, stackTrace) {

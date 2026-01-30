@@ -35,16 +35,13 @@ class NotificationRequest extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final notificationService = context.watch<NotificationService>();
-    final xmppService = context.watch<XmppService>();
-    final capability = context.watch<Capability>();
     return BlocProvider(
       create: (context) => NotificationRequestCubit(
-        notificationService: notificationService,
-        xmppService: xmppService,
+        notificationService: context.watch<NotificationService>(),
+        xmppService: context.watch<XmppService>(),
       )..refreshPermissions(),
       child: _NotificationRequestBody(
-        capability: capability,
+        capability: context.watch<Capability>(),
         displayMode: displayMode,
       ),
     );

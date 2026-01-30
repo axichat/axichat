@@ -308,42 +308,37 @@ String? _formatEmailMessageLine({
   required intl.DateFormat format,
   required EmailMessageLineLabels labels,
 }) {
-  const String messageLineTimestampPrefix = '[';
-  const String messageLineTimestampSuffix = ']';
-  const String messageLineSpacer = ' ';
-  const String messageLineSeparator = ': ';
-  const String messageSubjectSeparator = ': ';
-  const String messageSubjectSuffix = ')';
-  final String messageSubjectPrefix =
-      ' (${labels.subjectLabel}$messageSubjectSeparator';
-  final String subjectOnlyPrefix =
-      '${labels.subjectLabel}$messageSubjectSeparator';
+  final DateTime fallbackTimestamp = DateTime.fromMillisecondsSinceEpoch(
+    0,
+    isUtc: true,
+  );
   final String? body = message.body?.trim();
   final String? subject = message.subject?.trim();
   if ((body == null || body.isEmpty) && (subject == null || subject.isEmpty)) {
     return null;
   }
-  final DateTime timestampValue = message.timestamp ?? _fallbackTimestamp;
+  final DateTime timestampValue = message.timestamp ?? fallbackTimestamp;
   final String timestamp = format.format(timestampValue);
   final String sender = _resolveEmailSender(chat, message);
-  final String content =
-      (body == null || body.isEmpty) ? '$subjectOnlyPrefix$subject' : body;
+  final String content = (body == null || body.isEmpty)
+      ? '${labels.subjectLabel}: $subject'
+      : body;
   final StringBuffer buffer = StringBuffer()
-    ..write(messageLineTimestampPrefix)
+    ..write('[')
     ..write(timestamp)
-    ..write(messageLineTimestampSuffix)
-    ..write(messageLineSpacer)
+    ..write(']')
+    ..write(' ')
     ..write(sender)
-    ..write(messageLineSeparator)
+    ..write(': ')
     ..write(content);
   if (subject != null &&
       subject.isNotEmpty &&
       body != null &&
       body.isNotEmpty) {
     buffer
-      ..write(messageSubjectPrefix)
+      ..write(' (${labels.subjectLabel}: ')
       ..write(subject)
-      ..write(messageSubjectSuffix);
+      ..write(')');
   }
   return buffer.toString();
 }

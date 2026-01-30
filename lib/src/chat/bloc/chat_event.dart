@@ -278,28 +278,51 @@ final class ChatAlertHidden extends ChatEvent {
 }
 
 final class ChatSpamStatusRequested extends ChatEvent {
-  const ChatSpamStatusRequested({required this.sendToSpam});
+  const ChatSpamStatusRequested({
+    required this.sendToSpam,
+    required this.successTitle,
+    required this.successMessage,
+    required this.failureMessage,
+  });
 
   final bool sendToSpam;
+  final String successTitle;
+  final String successMessage;
+  final String failureMessage;
 
   @override
-  List<Object?> get props => [sendToSpam];
+  List<Object?> get props => [
+        sendToSpam,
+        successTitle,
+        successMessage,
+        failureMessage,
+      ];
 }
 
 final class ChatContactAddRequested extends ChatEvent {
-  const ChatContactAddRequested();
+  const ChatContactAddRequested({
+    required this.successTitle,
+    required this.failureTitle,
+  });
+
+  final String successTitle;
+  final String failureTitle;
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [successTitle, failureTitle];
 }
 
 final class ChatRecipientEmailChatRequested extends ChatEvent {
-  const ChatRecipientEmailChatRequested({required this.recipient});
+  const ChatRecipientEmailChatRequested({
+    required this.recipient,
+    required this.failureMessage,
+  });
 
   final Chat recipient;
+  final String failureMessage;
 
   @override
-  List<Object?> get props => [recipient];
+  List<Object?> get props => [recipient, failureMessage];
 }
 
 final class ChatQuoteRequested extends ChatEvent {

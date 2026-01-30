@@ -81,7 +81,9 @@ class SettingsControls extends StatelessWidget {
           horizontal: spacing.m,
           vertical: spacing.s,
         );
-        final exportState = context.watch<ProfileExportCubit>().state;
+        final exportBusy = context.select<ProfileExportCubit, bool>(
+          (cubit) => cubit.state.isBusy,
+        );
         final selectTextStyle = context.textTheme.small;
         final double dividerIndent = fullWidthDividers
             ? sectionHeaderPadding.horizontal - sectionHeaderPadding.horizontal
@@ -180,7 +182,7 @@ class SettingsControls extends StatelessWidget {
               label: context.l10n.profileExportActionLabel(
                 ProfileExportKind.xmppMessages.label(context.l10n),
               ),
-              onPressed: exportState.isBusy
+              onPressed: exportBusy
                   ? null
                   : () async => await _handleXmppMessageExport(context),
             ),
@@ -189,7 +191,7 @@ class SettingsControls extends StatelessWidget {
               label: context.l10n.profileExportActionLabel(
                 ProfileExportKind.xmppContacts.label(context.l10n),
               ),
-              onPressed: exportState.isBusy
+              onPressed: exportBusy
                   ? null
                   : () async => await _handleXmppContactsExport(context),
             ),
@@ -198,7 +200,7 @@ class SettingsControls extends StatelessWidget {
               label: context.l10n.profileExportActionLabel(
                 ProfileExportKind.emailMessages.label(context.l10n),
               ),
-              onPressed: exportState.isBusy
+              onPressed: exportBusy
                   ? null
                   : () async => await _handleEmailMessageExport(context),
             ),
@@ -207,7 +209,7 @@ class SettingsControls extends StatelessWidget {
               label: context.l10n.profileExportActionLabel(
                 ProfileExportKind.emailContacts.label(context.l10n),
               ),
-              onPressed: exportState.isBusy
+              onPressed: exportBusy
                   ? null
                   : () async => await _handleEmailContactsExport(context),
             ),

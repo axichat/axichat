@@ -28,16 +28,13 @@ class Nexus extends StatefulWidget {
 class _NexusState extends State<Nexus> {
   TabController? _tabController;
   _HomeDemoPhase _demoPhase = _HomeDemoPhase.idle;
-  XmppService? _demoResetService;
+  Stream<void>? _demoResetStream;
   StreamSubscription<void>? _demoResetSubscription;
 
   void _triggerDemoInteractivePhase() {
     if (_demoPhase != _HomeDemoPhase.idle) return;
     setState(() => _demoPhase = _HomeDemoPhase.triggered);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<XmppService?>()?.startDemoInteractivePhase();
-    });
+    context.read<ChatsCubit?>()?.startDemoInteractivePhase();
   }
 
   @override
@@ -48,22 +45,19 @@ class _NexusState extends State<Nexus> {
       _tabController?.removeListener(_handleTabChanged);
       _tabController = controller;
       _tabController?.addListener(_handleTabChanged);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _notifyTabIndex(controller.index);
-      });
+      _notifyTabIndex(controller.index);
     }
     if (!kEnableDemoChats) {
       _teardownDemoResetSubscription();
       return;
     }
-    final xmppService = context.read<XmppService?>();
-    if (xmppService == null || xmppService == _demoResetService) {
+    final demoResetStream = context.read<ChatsCubit?>()?.demoResetStream;
+    if (demoResetStream == null || demoResetStream == _demoResetStream) {
       return;
     }
     _teardownDemoResetSubscription();
-    _demoResetService = xmppService;
-    _demoResetSubscription = xmppService.demoResetStream.listen((_) {
+    _demoResetStream = demoResetStream;
+    _demoResetSubscription = demoResetStream.listen((_) {
       if (!mounted) return;
       setState(() => _demoPhase = _HomeDemoPhase.idle);
     });
@@ -90,7 +84,7 @@ class _NexusState extends State<Nexus> {
   void _teardownDemoResetSubscription() {
     _demoResetSubscription?.cancel();
     _demoResetSubscription = null;
-    _demoResetService = null;
+    _demoResetStream = null;
   }
 
   @override
@@ -155,6 +149,7 @@ class _NexusScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final selectedChats = chatsState.selectedJids.isEmpty
@@ -174,14 +169,14 @@ class _NexusScaffold extends StatelessWidget {
     final headerActions = <AppBarActionItem>[
       if (kEnableDemoChats && demoPhase == _HomeDemoPhase.idle)
         AppBarActionItem(
-          label: context.l10n.commonStart,
+          label: l10n.commonStart,
           iconData: LucideIcons.play,
           onPressed: onTriggerDemoInteractivePhase,
         ),
       if (navPlacement != NavPlacement.rail &&
           context.watch<AccessibilityActionBloc?>() != null)
         AppBarActionItem(
-          label: context.l10n.accessibilityActionsLabel,
+          label: l10n.accessibilityActionsLabel,
           iconData: LucideIcons.lifeBuoy,
           inline: const _FindActionIconButton(),
           onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
@@ -189,9 +184,9 @@ class _NexusScaffold extends StatelessWidget {
               ),
         ),
       if (EnvScope.of(context).isDesktopPlatform &&
-          context.read<ChatsCubit?>() != null)
+          context.watch<ChatsCubit?>() != null)
         AppBarActionItem(
-          label: _homeSyncTooltip,
+          label: l10n.homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
           inline: const _DesktopHomeRefreshButton(),
           onPressed: () async {
@@ -201,8 +196,8 @@ class _NexusScaffold extends StatelessWidget {
         ),
       AppBarActionItem(
         label: searchState.active
-            ? context.l10n.chatSearchClose
-            : context.l10n.commonSearch,
+            ? l10n.chatSearchClose
+            : l10n.commonSearch,
         iconData: LucideIcons.search,
         inline: _SearchToggleButton(
           active: searchState.active,
@@ -277,6 +272,7 @@ class _NexusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -284,7 +280,7 @@ class _NexusHeader extends StatelessWidget {
           showTitle: navPlacement != NavPlacement.rail,
           trailing: AppBarActions(
             actions: headerActions,
-            spacing: _homeHeaderActionSpacing,
+            spacing: spacing.s,
             overflowBreakpoint: 0,
           ),
         ),
@@ -355,7 +351,7 @@ class _NexusTabViews extends StatelessWidget {
       ],
       child: Container(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.colorScheme.border)),
+          border: Border(bottom: context.borderSide),
         ),
         child: TabBarView(
           physics: tabViewPhysics,
@@ -393,14 +389,15 @@ class _NexusBottomArea extends StatelessWidget {
       return ChatSelectionActionBar(selectedChats: selectedChats);
     }
     if (navPlacement == NavPlacement.bottom) {
+      final badgeOffset = Offset(0, -context.spacing.s);
       final tabBar = Container(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.colorScheme.border)),
+          border: Border(bottom: context.borderSide),
         ),
         child: AxiTabBar(
           backgroundColor: context.colorScheme.background,
           badges: tabs.map((tab) => badgeCounts[tab.id] ?? 0).toList(),
-          badgeOffset: const Offset(0, -12),
+          badgeOffset: badgeOffset,
           tabs: tabs.map((tab) {
             return Tab(child: Text(tab.label));
           }).toList(),
@@ -426,6 +423,7 @@ class _TabActionGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final actions = <Widget>[];
     if (includePrimaryActions) {
       actions.addAll(const [
@@ -438,7 +436,7 @@ class _TabActionGroup extends StatelessWidget {
     if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Wrap(spacing: 8, runSpacing: 8, children: actions);
+    return Wrap(spacing: spacing.s, runSpacing: spacing.s, children: actions);
   }
 }
 
@@ -449,10 +447,10 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.read<AccessibilityActionBloc?>() == null) {
+    if (context.watch<AccessibilityActionBloc?>() == null) {
       return const SizedBox.shrink();
     }
-    final shortcut = findActionShortcut(Theme.of(context).platform);
+    final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     if (collapsed) {
@@ -464,44 +462,17 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
             ),
       );
     }
-    final colors = context.colorScheme;
-    final radius = context.radius;
     final label = l10n.accessibilityActionsLabel;
-    return Semantics(
-      label: label,
-      button: true,
-      child: Material(
-        color: colors.background,
-        shape: SquircleBorder(
-          cornerRadius: radius.topLeft.x,
-          side: BorderSide(color: colors.border),
-        ),
-        child: InkWell(
-          borderRadius: radius,
-          onTap: () => context.read<AccessibilityActionBloc?>()?.add(
-                const AccessibilityMenuOpened(),
-              ),
-          child: Padding(
-            padding: _railFooterItemPadding,
-            child: Row(
-              children: [
-                const Icon(LucideIcons.lifeBuoy, size: _railFooterIconSize),
-                const SizedBox(width: _railFooterItemSpacing),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.foreground,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+    return AxiListButton(
+      collapsed: collapsed,
+      collapsedIconData: LucideIcons.lifeBuoy,
+      collapsedTooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
+      collapsedSemanticLabel: label,
+      leading: const Icon(LucideIcons.lifeBuoy),
+      child: Text(label, overflow: TextOverflow.ellipsis),
+      onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+            const AccessibilityMenuOpened(),
           ),
-        ),
-      ),
     );
   }
 }
@@ -514,11 +485,11 @@ class _HomeNavigationRailFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[];
-    if (context.read<AccessibilityActionBloc?>() != null) {
+    if (context.watch<AccessibilityActionBloc?>() != null) {
       items.add(_AccessibilityFindActionRailItem(collapsed: collapsed));
     }
     if (items.isNotEmpty) {
-      items.add(const SizedBox(height: _railFooterSpacing));
+      items.add(SizedBox(height: context.spacing.m));
     }
     items.add(_SettingsRailItem(collapsed: collapsed));
     return Column(mainAxisSize: MainAxisSize.min, children: items);
@@ -545,41 +516,14 @@ class _SettingsRailItem extends StatelessWidget {
         onPressed: () => _openSettings(context),
       );
     }
-    final colors = context.colorScheme;
-    final radius = context.radius;
-    return Semantics(
-      label: label,
-      button: true,
-      child: Material(
-        color: colors.background,
-        shape: SquircleBorder(
-          cornerRadius: radius.topLeft.x,
-          side: BorderSide(color: colors.border),
-        ),
-        child: InkWell(
-          borderRadius: radius,
-          onTap: () => _openSettings(context),
-          child: Padding(
-            padding: _railFooterItemPadding,
-            child: Row(
-              children: [
-                const Icon(LucideIcons.settings, size: _railFooterIconSize),
-                const SizedBox(width: _railFooterItemSpacing),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.foreground,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return AxiListButton(
+      collapsed: collapsed,
+      collapsedIconData: LucideIcons.settings,
+      collapsedTooltip: label,
+      collapsedSemanticLabel: label,
+      leading: const Icon(LucideIcons.settings),
+      child: Text(label, overflow: TextOverflow.ellipsis),
+      onPressed: () => _openSettings(context),
     );
   }
 }
@@ -589,10 +533,10 @@ class _FindActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.read<AccessibilityActionBloc?>() == null) {
+    if (context.watch<AccessibilityActionBloc?>() == null) {
       return const SizedBox.shrink();
     }
-    final shortcut = findActionShortcut(Theme.of(context).platform);
+    final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     return AxiIconButton.outline(
@@ -632,30 +576,34 @@ class _DesktopHomeRefreshButton extends StatefulWidget {
 
 class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
     with SingleTickerProviderStateMixin {
-  static const _spinDuration = Duration(milliseconds: 900);
-
-  @override
-  void initState() {
-    super.initState();
-    _spinController = AnimationController(vsync: this, duration: _spinDuration);
-  }
-
-  late final AnimationController _spinController;
+  AnimationController? _spinController;
   bool _spinning = false;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final duration = context.motion.statusBannerSuccessDuration;
+    _spinController ??= AnimationController(vsync: this, duration: duration);
+    if (_spinController?.duration != duration) {
+      _spinController?.duration = duration;
+    }
+  }
+
+  @override
   void dispose() {
-    _spinController.dispose();
+    _spinController?.dispose();
     super.dispose();
   }
 
   void _setSpinning(bool spinning) {
     if (_spinning == spinning) return;
     _spinning = spinning;
+    final controller = _spinController;
+    if (controller == null) return;
     if (spinning) {
-      _spinController.repeat();
+      controller.repeat();
     } else {
-      _spinController
+      controller
         ..stop()
         ..value = 0.0;
     }
@@ -671,9 +619,10 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
         selector: (state) => state.refreshStatus,
         builder: (context, status) {
           final spinning = status.isLoading;
+          final l10n = context.l10n;
           return AxiIconButton.ghost(
             iconData: LucideIcons.refreshCw,
-            tooltip: _homeSyncTooltip,
+            tooltip: l10n.homeSyncTooltip,
             onPressed: spinning
                 ? null
                 : () async {
@@ -681,7 +630,7 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
                     await chatsCubit.refreshHomeSync();
                   },
             icon: RotationTransition(
-              turns: _spinController,
+              turns: _spinController ?? const AlwaysStoppedAnimation<double>(0),
               child: Icon(
                 LucideIcons.refreshCw,
                 color: context.colorScheme.primary,
@@ -768,7 +717,6 @@ class _HomeNavigationRail extends StatefulWidget {
 class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   TabController? _tabController;
   int _controllerIndex = 0;
-  late final AppLocalizations l10n = context.l10n;
 
   @override
   void initState() {
@@ -813,6 +761,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
+        final l10n = context.l10n;
         final selectedIndex = _tabController?.index ?? _controllerIndex;
         if (widget.tabs.isEmpty) {
           return const SizedBox.shrink();
@@ -1034,16 +983,15 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         final query = state.currentTabState?.query ?? '';
         _syncController(query);
         if (state.active) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || _focusNode.hasFocus) return;
-            _focusNode.requestFocus();
-          });
+          if (!mounted || _focusNode.hasFocus) return;
+          _focusNode.requestFocus();
         } else if (_focusNode.hasFocus) {
           _focusNode.unfocus();
         }
       },
       builder: (context, state) {
         final l10n = context.l10n;
+        final spacing = context.spacing;
         final active = state.active;
         final tab = state.activeTab;
         final entry = tab == null
@@ -1072,11 +1020,14 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
           firstChild: const SizedBox.shrink(),
           secondChild: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.m,
+              vertical: spacing.s,
+            ),
             decoration: BoxDecoration(
               color: context.colorScheme.card,
               border: Border(
-                bottom: BorderSide(color: context.colorScheme.border),
+                bottom: context.borderSide,
               ),
             ),
             child: Column(
@@ -1096,9 +1047,9 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                                 ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    ShadButton.ghost(
-                      size: ShadButtonSize.sm,
+                    SizedBox(width: spacing.s),
+                    AxiButton.ghost(
+                      size: AxiButtonSize.sm,
                       onPressed: () => context
                           .read<HomeSearchCubit?>()
                           ?.setSearchActive(false),
@@ -1106,7 +1057,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: spacing.s),
                 Row(
                   children: [
                     Expanded(
@@ -1131,7 +1082,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                       ),
                     ),
                     if (filters.length > 1 && effectiveFilterId != null) ...[
-                      const SizedBox(width: 12),
+                      SizedBox(width: spacing.s),
                       Expanded(
                         child: AxiSelect<SearchFilterId>(
                           initialValue: effectiveFilterId,
@@ -1160,7 +1111,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 8),
+                      padding: EdgeInsets.only(top: spacing.s),
                       child: Text(
                         l10n.homeSearchFilterLabel(filterLabel),
                         style: context.textTheme.muted,

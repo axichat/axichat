@@ -20,7 +20,7 @@ class ShareTokenCodec {
     caseSensitive: false,
   );
   static final RegExp _footerPattern = RegExp(
-    '^(.*?)(?:\\n\\n)?(?:--\\s*\\n)?\\s*Please do not remove:\\s*\\[s:'
+    '^(.*?)(?:\\n\\n)?(?:--\\s*\\n)?\\s*.*?\\[s:'
     '([A-Z0-9]{$_minCapabilityLength,$_maxCapabilityLength})\\]\\s*\$',
     dotAll: true,
     caseSensitive: false,
@@ -75,21 +75,32 @@ class ShareTokenCodec {
 
   static String decorateToken(String token) => '[s:${token.toUpperCase()}]';
 
-  static String _decorateFooter(String token) =>
-      'Please do not remove: ${decorateToken(token)}';
+  static String _decorateFooter({
+    required String token,
+    required String footerLabel,
+  }) =>
+      '$footerLabel ${decorateToken(token)}';
 
   static String injectToken({
     required String token,
     required String body,
     bool asSignature = false,
+    String? footerLabel,
   }) {
     if (asSignature) {
+      final resolvedFooterLabel = footerLabel?.trim();
+      if (resolvedFooterLabel == null || resolvedFooterLabel.isEmpty) {
+        throw ArgumentError(
+            'footerLabel is required for share token signatures');
+      }
       final trimmed = body.trimRight();
       final buffer = StringBuffer()..write(trimmed);
       if (trimmed.isNotEmpty) {
         buffer.write('\n\n');
       }
-      buffer.writeln(_decorateFooter(token));
+      buffer.writeln(
+        _decorateFooter(token: token, footerLabel: resolvedFooterLabel),
+      );
       return buffer.toString().trimRight();
     }
     if (body.trim().isEmpty) {
