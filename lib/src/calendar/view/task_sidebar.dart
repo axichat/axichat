@@ -1050,7 +1050,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   bool _supportsDragDismiss(BuildContext context) {
-    final TargetPlatform platform = Theme.of(context).platform;
+    final TargetPlatform platform = defaultTargetPlatform;
     return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
   }
 

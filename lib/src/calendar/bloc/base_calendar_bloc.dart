@@ -3108,11 +3108,20 @@ abstract class BaseCalendarBloc
       focusedCriticalPathId: normalizedFocus,
     );
     emit(nextState);
-    _pendingReminderSync = _pendingReminderSync.then(
-      (_) => _reminderController?.syncWithTasks(
-        model.tasks.values,
-        dayEvents: model.dayEvents.values,
-      ),
+    _pendingReminderSync = _runReminderSync(
+      previous: _pendingReminderSync,
+      model: model,
+    );
+  }
+
+  Future<void> _runReminderSync({
+    required Future<void> previous,
+    required CalendarModel model,
+  }) async {
+    await previous;
+    await _reminderController?.syncWithTasks(
+      model.tasks.values,
+      dayEvents: model.dayEvents.values,
     );
   }
 

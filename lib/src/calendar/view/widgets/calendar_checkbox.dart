@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -26,12 +27,18 @@ class CalendarCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final bool? checkboxValue = isIndeterminate ? null : value;
     final bool isEnabled = onChanged != null;
     const double baseSize = 20;
     final double clampedVisualSize = visualSize.clamp(16, 22);
     final double visualScale = (clampedVisualSize / baseSize) - 1;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1.5);
+    final Brightness activeBrightness =
+        ThemeData.estimateBrightnessForColor(activeColor);
+    final Color checkColor = activeBrightness == Brightness.dark
+        ? colors.background
+        : colors.foreground;
     final fillColor = WidgetStateProperty.resolveWith<Color?>(
       (states) => states.contains(WidgetState.selected)
           ? activeColor
@@ -55,7 +62,7 @@ class CalendarCheckbox extends StatelessWidget {
           ),
           activeColor: activeColor,
           fillColor: fillColor,
-          checkColor: Colors.white,
+          checkColor: checkColor,
           mouseCursor:
               isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
           side: BorderSide(

@@ -171,6 +171,11 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       StreamController<SpamSyncUpdate>.broadcast();
   Stream<SpamSyncUpdate> get updates => _updatesController.stream;
 
+  Future<void> close() async {
+    if (_updatesController.isClosed) return;
+    await _updatesController.close();
+  }
+
   final Map<String, SpamSyncPayload> _cache = {};
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(spamSyncRateLimit);
   DateTime? _lastEnsureAttempt;

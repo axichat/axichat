@@ -610,6 +610,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
             'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
           );
           hasWarned = true;
+          return;
         }
         continue;
       }
@@ -620,6 +621,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
           'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
         );
         hasWarned = true;
+        return;
       }
       await Future.delayed(_pollInterval);
     }

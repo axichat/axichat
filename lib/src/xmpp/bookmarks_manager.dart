@@ -211,6 +211,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
       StreamController<MucBookmarkUpdate>.broadcast();
   Stream<MucBookmarkUpdate> get updates => _updatesController.stream;
 
+  Future<void> close() async {
+    if (_updatesController.isClosed) return;
+    await _updatesController.close();
+  }
+
   final Map<String, MucBookmark> _cache = {};
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;

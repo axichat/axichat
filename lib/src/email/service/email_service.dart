@@ -42,96 +42,6 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
-const _defaultPageSize = 50;
-const _maxFanOutRecipients = 20;
-const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
-const int _deltaMessageIdUnset = DeltaMessageId.none;
-const int _emptyUnreadCount = 0;
-const _foregroundKeepaliveInterval = Duration(seconds: 45);
-const _foregroundFetchTimeout = Duration(seconds: 8);
-const _notificationFlushDelay = Duration(milliseconds: 500);
-const _contactsSyncDebounce = Duration(seconds: 2);
-const _connectivityConnectedMin = 4000;
-const _connectivityWorkingMin = 3000;
-const _connectivityConnectingMin = 2000;
-const int _connectivityLogIntervalSeconds = 5;
-const _connectivityLogInterval = Duration(
-  seconds: _connectivityLogIntervalSeconds,
-);
-const _emailConnectivityLogPrefix = 'Email connectivity';
-const _emailSyncLogPrefix = 'Email sync state';
-const _emailLogSourceLabel = 'source';
-const _emailLogValueLabel = 'value';
-const _emailLogStateLabel = 'state';
-const _emailLogConnectivityLabel = 'connectivity';
-const _emailLogHasMessageLabel = 'hasMessage';
-const _emailLogUnknownValue = 'unknown';
-const _shareTokenInvalidLog =
-    'Rejected invalid share identifier for subject token.';
-const int _connectivityDowngradeGraceSeconds = 2;
-const _connectivityDowngradeGrace = Duration(
-  seconds: _connectivityDowngradeGraceSeconds,
-);
-const _coreDraftMessageId = 0;
-const int _deltaEventMessageUnset = 0;
-const String _securityModeSsl = 'ssl';
-const String _securityModeStartTls = 'starttls';
-const String _emailAddressSeparator = '@';
-const int _emailAddressSeparatorMissingIndex = -1;
-const int _emailLocalPartStartIndex = 0;
-const int _emailLocalPartMinLength = 1;
-const _emailDownloadLimitKey = 'download_limit';
-const _emailDownloadLimitDisabledValue = '0';
-const _unknownEmailPassword = '';
-const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
-const _connectionOverrideKeyPrefix = 'email_connection_overrides_v1';
-const _credentialTrueValue = 'true';
-const _credentialFalseValue = 'false';
-const _connectionOverrideClearedValue = '';
-const _showEmailsConfigKey = 'show_emails';
-const _showEmailsAllValue = '2';
-const _mdnsEnabledConfigKey = 'mdns_enabled';
-const _mdnsEnabledValue = '1';
-const _mailServerConfigKey = 'mail_server';
-const _mailPortConfigKey = 'mail_port';
-const _mailSecurityConfigKey = 'mail_security';
-const _mailUserConfigKey = 'mail_user';
-const _sendServerConfigKey = 'send_server';
-const _sendPortConfigKey = 'send_port';
-const _sendSecurityConfigKey = 'send_security';
-const _sendUserConfigKey = 'send_user';
-const String _sendPasswordConfigKey = 'send_pw';
-const _portUnsetValue = 0;
-const List<String> _connectionOverrideConfigKeys = <String>[
-  _mailServerConfigKey,
-  _mailPortConfigKey,
-  _mailSecurityConfigKey,
-  _mailUserConfigKey,
-  _sendServerConfigKey,
-  _sendPortConfigKey,
-  _sendSecurityConfigKey,
-  _sendUserConfigKey,
-];
-const List<EmailAttachment> _emptyEmailAttachments = <EmailAttachment>[];
-const _deltaContactIdPrefix = 'delta_contact_';
-const _deltaContactListFlags =
-    DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
-const _imapIdleConfigKey = 'imap_idle';
-const _imapIdleTimeoutConfigKey = 'imap_idle_timeout';
-const _imapMaxConnectionsConfigKey = 'imap_max_connections';
-const _imapIdleKeepaliveInterval = Duration(minutes: 25);
-const _imapSentPollIntervalSingleConnection = Duration(seconds: 60);
-const _imapPollIntervalNoIdle = Duration(seconds: 30);
-const _imapSyncFetchTimeout = Duration(seconds: 25);
-const _imapCapabilityRefreshInterval = Duration(minutes: 10);
-const _reconnectRestartDelay = Duration(seconds: 2);
-const _imapConnectionLimitSingle = 1;
-const _imapConnectionLimitMulti = 2;
-const Set<String> _imapConfigBoolTrueValues = {'1', 'true', 'yes', 'on'};
-const Set<String> _imapConfigBoolFalseValues = {'0', 'false', 'no', 'off'};
-const int _minimumHistoryWindow = 1;
-const bool _includePseudoMessagesInBackfill = false;
-
 enum _EmailSyncSource {
   unknown,
   coreError,
@@ -154,8 +64,15 @@ extension _EmailSyncSourceLabels on _EmailSyncSource {
   String get logLabel => name;
 }
 
-typedef EmailConnectionConfigBuilder = Map<String, String> Function(
-    String address, EndpointConfig config);
+final class EmailConnectionConfigBuilder {
+  const EmailConnectionConfigBuilder(this._builder);
+
+  final Map<String, String> Function(String address, EndpointConfig config)
+      _builder;
+
+  Map<String, String> call(String address, EndpointConfig config) =>
+      _builder(address, config);
+}
 
 class EmailAccount {
   const EmailAccount({required this.address, required this.password});
@@ -270,6 +187,108 @@ class FanOutValidationException implements Exception {
 }
 
 class EmailService {
+  static const int _defaultPageSize = 50;
+  static const int _maxFanOutRecipients = 20;
+  static const int _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
+  static const int _deltaMessageIdUnset = DeltaMessageId.none;
+  static const int _emptyUnreadCount = 0;
+  static const Duration _foregroundKeepaliveInterval = Duration(seconds: 45);
+  static const Duration _foregroundFetchTimeout = Duration(seconds: 8);
+  static const Duration _notificationFlushDelay = Duration(milliseconds: 500);
+  static const Duration _contactsSyncDebounce = Duration(seconds: 2);
+  static const int _connectivityConnectedMin = 4000;
+  static const int _connectivityWorkingMin = 3000;
+  static const int _connectivityConnectingMin = 2000;
+  static const int _connectivityLogIntervalSeconds = 5;
+  static const Duration _connectivityLogInterval = Duration(
+    seconds: _connectivityLogIntervalSeconds,
+  );
+  static const String _emailConnectivityLogPrefix = 'Email connectivity';
+  static const String _emailSyncLogPrefix = 'Email sync state';
+  static const String _emailLogSourceLabel = 'source';
+  static const String _emailLogValueLabel = 'value';
+  static const String _emailLogStateLabel = 'state';
+  static const String _emailLogConnectivityLabel = 'connectivity';
+  static const String _emailLogHasMessageLabel = 'hasMessage';
+  static const String _emailLogUnknownValue = 'unknown';
+  static const String _shareTokenInvalidLog =
+      'Rejected invalid share identifier for subject token.';
+  static const int _connectivityDowngradeGraceSeconds = 2;
+  static const Duration _connectivityDowngradeGrace = Duration(
+    seconds: _connectivityDowngradeGraceSeconds,
+  );
+  static const int _coreDraftMessageId = 0;
+  static const int _deltaEventMessageUnset = 0;
+  static const String _securityModeSsl = 'ssl';
+  static const String _securityModeStartTls = 'starttls';
+  static const String _emailAddressSeparator = '@';
+  static const int _emailAddressSeparatorMissingIndex = -1;
+  static const int _emailLocalPartStartIndex = 0;
+  static const int _emailLocalPartMinLength = 1;
+  static const String _emailDownloadLimitKey = 'download_limit';
+  static const String _emailDownloadLimitDisabledValue = '0';
+  static const String _unknownEmailPassword = '';
+  static const String _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
+  static const String _connectionOverrideKeyPrefix =
+      'email_connection_overrides_v1';
+  static const String _credentialTrueValue = 'true';
+  static const String _credentialFalseValue = 'false';
+  static const String _connectionOverrideClearedValue = '';
+  static const String _showEmailsConfigKey = 'show_emails';
+  static const String _showEmailsAllValue = '2';
+  static const String _mdnsEnabledConfigKey = 'mdns_enabled';
+  static const String _mdnsEnabledValue = '1';
+  static const String _mailServerConfigKey = 'mail_server';
+  static const String _mailPortConfigKey = 'mail_port';
+  static const String _mailSecurityConfigKey = 'mail_security';
+  static const String _mailUserConfigKey = 'mail_user';
+  static const String _sendServerConfigKey = 'send_server';
+  static const String _sendPortConfigKey = 'send_port';
+  static const String _sendSecurityConfigKey = 'send_security';
+  static const String _sendUserConfigKey = 'send_user';
+  static const String _sendPasswordConfigKey = 'send_pw';
+  static const int _portUnsetValue = 0;
+  static const List<String> _connectionOverrideConfigKeys = <String>[
+    _mailServerConfigKey,
+    _mailPortConfigKey,
+    _mailSecurityConfigKey,
+    _mailUserConfigKey,
+    _sendServerConfigKey,
+    _sendPortConfigKey,
+    _sendSecurityConfigKey,
+    _sendUserConfigKey,
+  ];
+  static const List<EmailAttachment> _emptyEmailAttachments =
+      <EmailAttachment>[];
+  static const String _deltaContactIdPrefix = 'delta_contact_';
+  static const int _deltaContactListFlags =
+      DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
+  static const String _imapIdleConfigKey = 'imap_idle';
+  static const String _imapIdleTimeoutConfigKey = 'imap_idle_timeout';
+  static const String _imapMaxConnectionsConfigKey = 'imap_max_connections';
+  static const Duration _imapIdleKeepaliveInterval = Duration(minutes: 25);
+  static const Duration _imapSentPollIntervalSingleConnection =
+      Duration(seconds: 60);
+  static const Duration _imapPollIntervalNoIdle = Duration(seconds: 30);
+  static const Duration _imapSyncFetchTimeout = Duration(seconds: 25);
+  static const Duration _imapCapabilityRefreshInterval = Duration(minutes: 10);
+  static const Duration _reconnectRestartDelay = Duration(seconds: 2);
+  static const int _imapConnectionLimitSingle = 1;
+  static const int _imapConnectionLimitMulti = 2;
+  static const Set<String> _imapConfigBoolTrueValues = {
+    '1',
+    'true',
+    'yes',
+    'on',
+  };
+  static const Set<String> _imapConfigBoolFalseValues = {
+    '0',
+    'false',
+    'no',
+    'off',
+  };
+  static const int _minimumHistoryWindow = 1;
+  static const bool _includePseudoMessagesInBackfill = false;
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
 
@@ -299,21 +318,21 @@ class EmailService {
               logger: logger,
               localizationsProvider: () => _l10n,
             ),
-        _connectionConfigBuilder =
-            connectionConfigBuilder ?? _defaultConnectionConfig,
+        _connectionConfigBuilder = connectionConfigBuilder ??
+            const EmailConnectionConfigBuilder(_defaultConnectionConfig),
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
         _messageService = messageService,
         _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     blocking = EmailBlockingService(
       databaseBuilder: databaseBuilder,
-      onBlock: _transport.blockContact,
-      onUnblock: _transport.unblockContact,
+      onBlock: DeltaChatBlockCallback(_transport.blockContact),
+      onUnblock: DeltaChatBlockCallback(_transport.unblockContact),
     );
     spam = EmailSpamService(
       databaseBuilder: databaseBuilder,
-      onMarkSpam: _transport.blockContact,
-      onUnmarkSpam: _transport.unblockContact,
+      onMarkSpam: DeltaChatSpamCallback(_transport.blockContact),
+      onUnmarkSpam: DeltaChatSpamCallback(_transport.unblockContact),
     );
     _eventListener = (event) {
       _enqueueDeltaOperation(
@@ -370,7 +389,7 @@ class EmailService {
   bool _foregroundKeepaliveEnabled = false;
   bool _foregroundKeepaliveListenerAttached = false;
   bool _foregroundKeepaliveServiceAcquired = false;
-  bool _foregroundKeepaliveTickScheduled = false;
+  Future<void> _foregroundKeepaliveQueue = Future<void>.value();
   int _foregroundKeepaliveOperationId = 0;
   bool _reconnectRestartInFlight = false;
   final List<_PendingNotification> _pendingNotifications = [];
@@ -395,15 +414,14 @@ class EmailService {
     connectionLimit: _imapConnectionLimitSingle,
     idleCutoff: _imapIdleKeepaliveInterval,
   );
-  DateTime? _imapCapabilitiesCheckedAt;
+  DateTime? _imapCapabilitiesCfinal heckedAt;
   bool _imapCapabilitiesResolved = false;
-  Timer? _imapSyncTimer;
-  var _imapSyncLoopActive = false;
-  var _imapSyncInFlight = false;
-  var _reconnectCatchUpInFlight = false;
-  var _contactsSyncInFlight = false;
-  var _contactsSyncPending = false;
-  var _chatlistSyncInFlight = false;
+  final Timer? _imapSyncTimer;
+  Object? _imapSyncLoopToken;
+  Future<final void> _imapSyncQueue = Future<void>.value();
+  Future<voidfinal > _reconnectCatchUpQueue = Future<void>.value();
+  Future<void> _contactsSyncQueue = Future<void>.value();
+  Future<void> _chatlistSyncQueue = Future<void>.value();
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
@@ -963,7 +981,10 @@ class EmailService {
     _running = false;
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
-    _contactsSyncPending = false;
+    _contactsSyncQueue = Future<void>.value();
+    _chatlistSyncQueue = Future<void>.value();
+    _imapSyncQueue = Future<void>.value();
+    _reconnectCatchUpQueue = Future<void>.value();
     _cancelConnectivityDowngrade();
   }
 
@@ -1788,58 +1809,49 @@ class EmailService {
   }
 
   Future<void> syncContactsFromCore() async {
-    if (_contactsSyncInFlight) {
-      _contactsSyncPending = true;
-      return;
-    }
     _cancelContactsSyncTimer();
-    _contactsSyncInFlight = true;
-    try {
-      await _ensureReady();
-      final contacts = await getContacts(flags: _deltaContactListFlags);
-      final blocked = await getBlockedContacts();
-      final db = await _databaseBuilder();
-      final contactsByNativeId = <String, String>{};
-      final contactsByAddress = <String, DeltaContact>{};
+    final queued = _contactsSyncQueue.then((_) => _syncContactsFromCore());
+    _contactsSyncQueue = queued.catchError((_) {});
+    await queued;
+  }
 
-      for (final contact in contacts) {
-        final address = contact.address;
-        if (address == null || address.trim().isEmpty) {
-          continue;
-        }
-        final normalized = normalizeEmailAddress(address);
-        if (normalized.isEmpty) {
-          continue;
-        }
-        final nativeId = '$_deltaContactIdPrefix${contact.id}';
-        contactsByNativeId[nativeId] = normalized;
-        contactsByAddress.putIfAbsent(normalized, () => contact);
-      }
+  Future<void> _syncContactsFromCore() async {
+    await _ensureReady();
+    final contacts = await getContacts(flags: _deltaContactListFlags);
+    final blocked = await getBlockedContacts();
+    final db = await _databaseBuilder();
+    final contactsByNativeId = <String, String>{};
+    final contactsByAddress = <String, DeltaContact>{};
 
-      await db.replaceContacts(contactsByNativeId);
-      await _syncEmailBlocklist(db: db, blockedContacts: blocked);
-      await _syncEmailChatMetadata(
-        db: db,
-        contactsByAddress: contactsByAddress,
-      );
-    } finally {
-      _contactsSyncInFlight = false;
-      if (_contactsSyncPending) {
-        _contactsSyncPending = false;
-        _scheduleContactsSyncFromCore();
+    for (final contact in contacts) {
+      final address = contact.address;
+      if (address == null || address.trim().isEmpty) {
+        continue;
       }
+      final normalized = normalizeEmailAddress(address);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final nativeId = '$_deltaContactIdPrefix${contact.id}';
+      contactsByNativeId[nativeId] = normalized;
+      contactsByAddress.putIfAbsent(normalized, () => contact);
     }
+
+    await db.replaceContacts(contactsByNativeId);
+    await _syncEmailBlocklist(db: db, blockedContacts: blocked);
+    await _syncEmailChatMetadata(
+      db: db,
+      contactsByAddress: contactsByAddress,
+    );
   }
 
   Future<void> refreshChatlistFromCore() async {
-    if (_chatlistSyncInFlight) return;
-    _chatlistSyncInFlight = true;
-    try {
+    final queued = _chatlistSyncQueue.then((_) async {
       await _ensureReady();
       await _transport.refreshChatlistSnapshot();
-    } finally {
-      _chatlistSyncInFlight = false;
-    }
+    });
+    _chatlistSyncQueue = queued.catchError((_) {});
+    await queued;
   }
 
   Future<void> syncInboxAndSent() async {
@@ -2273,19 +2285,34 @@ class EmailService {
     String? operationName,
   }) {
     final int epoch = _deltaOperationQueueEpoch;
-    _deltaOperationQueue = _deltaOperationQueue.then((_) async {
+    _deltaOperationQueue = _runDeltaOperation(
+      previous: _deltaOperationQueue,
+      epoch: epoch,
+      operation: operation,
+      operationName: operationName,
+    );
+  }
+
+  Future<void> _runDeltaOperation({
+    required Future<void> previous,
+    required int epoch,
+    required Future<void> Function() operation,
+    String? operationName,
+  }) async {
+    try {
+      await previous;
       if (epoch != _deltaOperationQueueEpoch) {
         return;
       }
       await operation();
-    }).catchError((Object error, StackTrace stackTrace) {
+    } on Exception catch (error, stackTrace) {
       final operationLabel = operationName ?? 'delta operation';
       _log.warning(
         'Unhandled $operationLabel failure (${error.runtimeType}).',
         error.runtimeType,
         stackTrace,
       );
-    });
+    }
   }
 
   void _resetDeltaOperationQueue() {
@@ -2311,10 +2338,6 @@ class EmailService {
   }
 
   void _scheduleContactsSyncFromCore() {
-    if (_contactsSyncInFlight) {
-      _contactsSyncPending = true;
-      return;
-    }
     if (_contactsSyncTimer != null) {
       return;
     }
@@ -2911,7 +2934,7 @@ class EmailService {
       return;
     }
     _foregroundKeepaliveEnabled = false;
-    _foregroundKeepaliveTickScheduled = false;
+    _foregroundKeepaliveQueue = Future<void>.value();
     final bridge = _foregroundBridge;
     if (bridge != null && _foregroundKeepaliveServiceAcquired) {
       try {
@@ -2959,19 +2982,10 @@ class EmailService {
     if (!data.startsWith('$emailKeepaliveTickPrefix$join')) {
       return;
     }
-    if (!_foregroundKeepaliveEnabled || _foregroundKeepaliveTickScheduled) {
+    if (!_foregroundKeepaliveEnabled) {
       return;
     }
-    _foregroundKeepaliveTickScheduled = true;
-    await _runForegroundKeepaliveTick();
-  }
-
-  Future<void> _runForegroundKeepaliveTick() async {
-    try {
-      await _foregroundKeepaliveTick();
-    } finally {
-      _foregroundKeepaliveTickScheduled = false;
-    }
+    _enqueueForegroundKeepaliveTick();
   }
 
   Future<void> _foregroundKeepaliveTick() async {
@@ -2988,6 +3002,16 @@ class EmailService {
     }
   }
 
+  void _enqueueForegroundKeepaliveTick() {
+    final queued = _foregroundKeepaliveQueue.then((_) async {
+      if (!_foregroundKeepaliveEnabled) {
+        return;
+      }
+      await _foregroundKeepaliveTick();
+    });
+    _foregroundKeepaliveQueue = queued.catchError((_) {});
+  }
+
   void _startImapSyncLoop() {
     if (!hasActiveSession) {
       return;
@@ -2995,21 +3019,22 @@ class EmailService {
     if (_transport.isIoRunning) {
       return;
     }
-    if (_imapSyncLoopActive) {
+    if (_imapSyncLoopToken != null) {
       return;
     }
-    _imapSyncLoopActive = true;
-    _scheduleNextImapSync();
+    final token = Object();
+    _imapSyncLoopToken = token;
+    _scheduleNextImapSync(token);
   }
 
   void _stopImapSyncLoop() {
-    _imapSyncLoopActive = false;
+    _imapSyncLoopToken = null;
     _imapSyncTimer?.cancel();
     _imapSyncTimer = null;
   }
 
-  void _scheduleNextImapSync() {
-    if (!_imapSyncLoopActive ||
+  void _scheduleNextImapSync(Object token) {
+    if (_imapSyncLoopToken != token ||
         _foregroundKeepaliveEnabled ||
         !hasActiveSession) {
       return;
@@ -3017,12 +3042,12 @@ class EmailService {
     final interval = _imapSyncInterval();
     _imapSyncTimer?.cancel();
     _imapSyncTimer = Timer(interval, () async {
-      await _runImapSyncTick();
+      await _runImapSyncTick(token);
     });
   }
 
-  Future<void> _runImapSyncTick() async {
-    if (!_imapSyncLoopActive || _foregroundKeepaliveEnabled) {
+  Future<void> _runImapSyncTick(Object token) async {
+    if (_imapSyncLoopToken != token || _foregroundKeepaliveEnabled) {
       return;
     }
     if (!hasActiveSession) {
@@ -3033,19 +3058,21 @@ class EmailService {
       _stopImapSyncLoop();
       return;
     }
-    if (_imapSyncInFlight) {
-      _scheduleNextImapSync();
-      return;
-    }
-    _imapSyncInFlight = true;
-    try {
+    await _enqueueImapSync(token);
+    _scheduleNextImapSync(token);
+  }
+
+  Future<void> _enqueueImapSync(Object token) async {
+    final queued = _imapSyncQueue.then((_) async {
+      if (_imapSyncLoopToken != token || _foregroundKeepaliveEnabled) {
+        return;
+      }
       await _refreshImapCapabilities();
       await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
       await refreshChatlistFromCore();
-    } finally {
-      _imapSyncInFlight = false;
-      _scheduleNextImapSync();
-    }
+    });
+    _imapSyncQueue = queued.catchError((_) {});
+    await queued;
   }
 
   Duration _imapSyncInterval() {
@@ -3144,11 +3171,13 @@ class EmailService {
   }
 
   Future<void> _runReconnectCatchUp() async {
-    if (_reconnectCatchUpInFlight || !_running) {
+    if (!_running) {
       return;
     }
-    _reconnectCatchUpInFlight = true;
-    try {
+    final queued = _reconnectCatchUpQueue.then((_) async {
+      if (!_running) {
+        return;
+      }
       await _refreshImapCapabilities();
       if (!_running) {
         return;
@@ -3158,9 +3187,9 @@ class EmailService {
         return;
       }
       await refreshChatlistFromCore();
-    } finally {
-      _reconnectCatchUpInFlight = false;
-    }
+    });
+    _reconnectCatchUpQueue = queued.catchError((_) {});
+    await queued;
   }
 
   Future<void> _scheduleReconnectRestartIfOffline() async {

@@ -276,14 +276,7 @@ class AxiTextSelectionGestureDetectorBuilder {
             _ => false,
           };
           if (stylusEnabled) {
-            Scribe.isFeatureAvailable().then((bool isAvailable) {
-              if (isAvailable) {
-                renderEditable.selectPosition(
-                  cause: SelectionChangedCause.stylusHandwriting,
-                );
-                Scribe.startStylusHandwriting();
-              }
-            });
+            _maybeStartStylusHandwriting();
           }
         }
       case TargetPlatform.fuchsia:
@@ -319,6 +312,17 @@ class AxiTextSelectionGestureDetectorBuilder {
         }
         renderEditable.selectPosition(cause: SelectionChangedCause.tap);
     }
+  }
+
+  Future<void> _maybeStartStylusHandwriting() async {
+    final bool isAvailable = await Scribe.isFeatureAvailable();
+    if (!isAvailable) {
+      return;
+    }
+    renderEditable.selectPosition(
+      cause: SelectionChangedCause.stylusHandwriting,
+    );
+    Scribe.startStylusHandwriting();
   }
 
   @protected

@@ -852,20 +852,20 @@ mixin MessageService
     int end = 50,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) {
-    List<Message> filteredMessagesForChat(List<Message> messages) {
-      final filtered = messages.where((message) {
-        return !_isInternalSyncEnvelope(message.body);
-      }).toList(growable: false);
-
-      return List<Message>.unmodifiable(filtered);
-    }
-
     return _localMessageStreamForChat(
       jid: jid,
       start: start,
       end: end,
       filter: filter,
-    ).map(filteredMessagesForChat);
+    ).map((messages) {
+      if (messages.isEmpty || !_internalEnvelopeChats.contains(jid)) {
+        return messages;
+      }
+      final filtered = messages
+          .where((message) => !_isInternalSyncEnvelope(message.body))
+          .toList(growable: false);
+      return List<Message>.unmodifiable(filtered);
+    });
   }
 
   void notifyDemoOutboundTextMessage({
@@ -925,19 +925,30 @@ mixin MessageService
           end: end,
           filter: filter,
         );
-        final reactionsStream = db.watchReactionsForChat(jid);
         final initialMessages = await db.getChatMessages(
           jid,
           start: start,
           end: end,
           filter: filter,
         );
-        final initialReactions = await db.getReactionsForChat(jid);
+        if (!_internalEnvelopeChats.contains(jid) &&
+            initialMessages.any(
+              (message) => _isInternalSyncEnvelope(message.body),
+            )) {
+          _internalEnvelopeChats.add(jid);
+        }
+        final initialMessageIds = initialMessages
+            .map((message) => message.stanzaID)
+            .where((id) => id.isNotEmpty)
+            .toSet();
+        final initialReactions =
+            await db.getReactionsForMessages(initialMessageIds);
         return _combineMessageAndReactionStreams(
           messageStream: messagesStream,
-          reactionStream: reactionsStream,
           initialMessages: initialMessages,
           initialReactions: initialReactions,
+          reactionStreamFactory: db.watchReactionsForMessages,
+          reactionSnapshotLoader: db.getReactionsForMessages,
         );
       },
     );
@@ -947,15 +958,46 @@ mixin MessageService
     Message message, {
     required ChatType chatType,
   }) async {
+    if (_isInternalSyncEnvelope(message.body)) {
+      _internalEnvelopeChats.add(message.chatJid);
+    }
     await _dbOp<XmppDatabase>((db) async {
       await db.saveMessage(message, chatType: chatType);
       if (messageStorageMode.isServerOnly) {
-        await db.trimChatMessages(
-          jid: message.chatJid,
-          maxMessages: serverOnlyChatMessageCap,
-        );
+        await _queueServerTrim(db: db, jid: message.chatJid);
       }
     });
+  }
+
+  Future<void> _queueServerTrim({
+    required XmppDatabase db,
+    required String jid,
+  }) {
+    _pendingServerTrimJids.add(jid);
+    final pending = _pendingServerTrimTask;
+    if (pending != null) {
+      return pending;
+    }
+    final task = _drainServerTrimQueue(db);
+    _pendingServerTrimTask = task;
+    return task;
+  }
+
+  Future<void> _drainServerTrimQueue(XmppDatabase db) async {
+    try {
+      while (_pendingServerTrimJids.isNotEmpty) {
+        final batch = _pendingServerTrimJids.toList(growable: false);
+        _pendingServerTrimJids.clear();
+        for (final jid in batch) {
+          await db.trimChatMessages(
+            jid: jid,
+            maxMessages: serverOnlyChatMessageCap,
+          );
+        }
+      }
+    } finally {
+      _pendingServerTrimTask = null;
+    }
   }
 
   Future<DateTime> _resolveDemoTimestampForChat(
@@ -1760,7 +1802,7 @@ mixin MessageService
           continue;
         }
         final chatJid = chat.jid.trim();
-        if (chatJid.isEmpty) {
+        if (chatJid.isEmfinal pty) {
           continue;
         }
         await syncPinnedMessagesForChat(chatJid);
@@ -1773,8 +1815,11 @@ mixin MessageService
   }
 
   final _log = Logger('MessageService');
+  final Set<String> _pendingServerTrimJids = <String>{};
+  Future<void>? _pendingServerTrimTask;
 
-  final _messageStream = StreamController<Message>.broadcast();
+  StreamController<Message> _messageStream =
+      StreamController<Message>.broadcast();
 
   final Map<String, _OutboundMessageSummary> _outboundMessageSummaries =
       <String, _OutboundMessageSummary>{};
@@ -1797,7 +1842,7 @@ mixin MessageService
   final Set<String> _mucJoinMamDeferredRooms = {};
   DateTime? _mamGlobalDeniedUntil;
   String? _mamGlobalDeniedUntilScope;
-  bool _mamGlobalDeniedUntilLoaded = false;
+  bool _mamGlobalDeniedUntilLoadefinal d = false;
   DateTime? _mamGlobalMaxTimestamp;
 
   final Map<String, Set<String>> _seenStableKeys = {};
@@ -1806,7 +1851,7 @@ mixin MessageService
   MessageStorageMode _messageStorageMode = MessageStorageMode.local;
   bool _mamSupported = false;
   bool? _mamSupportOverride;
-  final StreamController<bool> _mamSupportController =
+  StreamController<bool> _mamSupportController =
       StreamController<bool>.broadcast();
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
@@ -1814,6 +1859,8 @@ mixin MessageService
   final Map<String, Map<String, String>> _readOnlyTaskOwnersByChat =
       <String, Map<String, String>>{};
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
+  final Set<String> _internalEnvelopeChats = <String>{};
+  int? _attachmentCacheBytes;
   Directory? _attachmentDirectory;
   String? _attachmentCacheSessionPrefix;
   final WindowRateLimiter _inboundAttachmentAutoDownloadGlobalLimiter =
@@ -4592,6 +4639,7 @@ mixin MessageService
   Future<void> _reset() async {
     await super._reset();
 
+    await _resetMessageStreams();
     _mamLoginSyncInFlight = false;
     _mamGlobalSyncInFlight = false;
     _mamGlobalSyncCompletedAt = null;
@@ -4610,6 +4658,19 @@ mixin MessageService
     _inboundAttachmentAutoDownloadChatLimiter.reset();
     _attachmentDirectory = null;
     _attachmentCacheSessionPrefix = null;
+    _attachmentCacheBytes = null;
+    _internalEnvelopeChats.clear();
+  }
+
+  Future<void> _resetMessageStreams() async {
+    if (!_messageStream.isClosed) {
+      await _messageStream.close();
+    }
+    if (!_mamSupportController.isClosed) {
+      await _mamSupportController.close();
+    }
+    _messageStream = StreamController<Message>.broadcast();
+    _mamSupportController = StreamController<bool>.broadcast();
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {
@@ -5779,9 +5840,12 @@ mixin MessageService
 
   Stream<List<Message>> _combineMessageAndReactionStreams({
     required Stream<List<Message>> messageStream,
-    required Stream<List<Reaction>> reactionStream,
     required List<Message> initialMessages,
     required List<Reaction> initialReactions,
+    required Stream<List<Reaction>> Function(Iterable<String> messageIds)
+        reactionStreamFactory,
+    required Future<List<Reaction>> Function(Iterable<String> messageIds)
+        reactionSnapshotLoader,
   }) {
     final controller = StreamController<List<Message>>.broadcast();
     StreamSubscription<List<Message>>? messageSubscription;
@@ -5790,20 +5854,72 @@ mixin MessageService
     var closed = false;
     var currentMessages = initialMessages;
     var currentReactions = initialReactions;
+    var currentMessageIds = initialMessages
+        .map((message) => message.stanzaID)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    var reactionReset = Future.value();
+    var reactionGeneration = 0;
 
     void emit() {
       if (!controller.hasListener) return;
       controller.add(_applyReactionPreviews(currentMessages, currentReactions));
     }
 
-    void start() {
+    bool matchesIds(Set<String> nextIds) {
+      if (nextIds.length != currentMessageIds.length) return false;
+      for (final id in nextIds) {
+        if (!currentMessageIds.contains(id)) return false;
+      }
+      return true;
+    }
+
+    Future<void> resetReactions(Set<String> nextIds) async {
+      reactionGeneration += 1;
+      final generation = reactionGeneration;
+      await reactionSubscription?.cancel();
+      reactionSubscription = null;
+      if (nextIds.isEmpty) {
+        currentReactions = const <Reaction>[];
+        emit();
+        return;
+      }
+      final snapshot = await reactionSnapshotLoader(nextIds);
+      if (closed || generation != reactionGeneration) {
+        return;
+      }
+      currentReactions = snapshot;
       emit();
-      messageSubscription = messageStream.listen((messages) {
-        currentMessages = messages;
+      reactionSubscription = reactionStreamFactory(nextIds).listen((reactions) {
+        currentReactions = reactions;
         emit();
       });
-      reactionSubscription = reactionStream.listen((reactions) {
-        currentReactions = reactions;
+    }
+
+    Future<void> queueReactionReset(Set<String> nextIds) async {
+      await reactionReset;
+      await resetReactions(nextIds);
+    }
+
+    void start() {
+      emit();
+      if (currentMessageIds.isNotEmpty) {
+        reactionSubscription =
+            reactionStreamFactory(currentMessageIds).listen((reactions) {
+          currentReactions = reactions;
+          emit();
+        });
+      }
+      messageSubscription = messageStream.listen((messages) {
+        currentMessages = messages;
+        final nextIds = messages
+            .map((message) => message.stanzaID)
+            .where((id) => id.isNotEmpty)
+            .toSet();
+        if (!matchesIds(nextIds)) {
+          currentMessageIds = nextIds;
+          reactionReset = queueReactionReset(nextIds);
+        }
         emit();
       });
     }
@@ -5811,6 +5927,7 @@ mixin MessageService
     Future<void> stop() async {
       if (closed) return;
       closed = true;
+      await reactionReset;
       await messageSubscription?.cancel();
       await reactionSubscription?.cancel();
       await controller.close();
@@ -5840,11 +5957,7 @@ mixin MessageService
     List<Reaction> reactions,
   ) {
     if (messages.isEmpty) return messages;
-    final allowedIds = <String>{};
-    for (final message in messages) {
-      allowedIds.add(message.stanzaID);
-    }
-    if (allowedIds.isEmpty || reactions.isEmpty) {
+    if (reactions.isEmpty) {
       return messages
           .map(
             (message) => message.reactionsPreview.isEmpty
@@ -5856,7 +5969,6 @@ mixin MessageService
     final grouped = <String, Map<String, _ReactionBucket>>{};
     final selfJid = myJid;
     for (final reaction in reactions) {
-      if (!allowedIds.contains(reaction.messageID)) continue;
       final buckets = grouped.putIfAbsent(
         reaction.messageID,
         () => <String, _ReactionBucket>{},
@@ -5882,6 +5994,9 @@ mixin MessageService
               if (countCompare != 0) return countCompare;
               return a.emoji.compareTo(b.emoji);
             });
+      if (listEquals(message.reactionsPreview, previews)) {
+        return message;
+      }
       return message.copyWith(reactionsPreview: previews);
     }).toList();
   }
@@ -6198,7 +6313,10 @@ mixin MessageService
         awaitDatabase: true,
       );
       fireAndForget(
-        () => _enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}),
+        () => _enforceAttachmentCacheLimit(
+          exemptPaths: {finalFile.path},
+          addedBytes: resolvedSizeBytes,
+        ),
         operationName: 'MessageService.enforceAttachmentCacheLimit',
       );
       return finalFile.path;
@@ -6283,9 +6401,18 @@ mixin MessageService
 
   Future<void> _enforceAttachmentCacheLimit({
     Set<String> exemptPaths = const <String>{},
+    int? addedBytes,
   }) async {
     if (_attachmentCacheMaxBytes <= _attachmentCacheEmptyByteCount) {
       return;
+    }
+    final cachedBytes = _attachmentCacheBytes;
+    if (cachedBytes != null && addedBytes != null) {
+      final updatedBytes = cachedBytes + addedBytes;
+      _attachmentCacheBytes = updatedBytes;
+      if (updatedBytes <= _attachmentCacheMaxBytes) {
+        return;
+      }
     }
     final Directory directory;
     try {
@@ -6335,6 +6462,7 @@ mixin MessageService
       );
     }
     if (totalBytes <= _attachmentCacheMaxBytes) {
+      _attachmentCacheBytes = totalBytes;
       return;
     }
     entries.sort((a, b) => a.lastModified.compareTo(b.lastModified));
@@ -6350,6 +6478,7 @@ mixin MessageService
         continue;
       }
     }
+    _attachmentCacheBytes = remainingBytes;
   }
 
   String _attachmentFileName(FileMetadataData metadata) {

@@ -1598,6 +1598,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
   }
 
   final commandSurface = resolveCommandSurface(context);
+  final colors = context.colorScheme;
   final bool isDesktop = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.windows ||
@@ -1609,7 +1610,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
   if (!useSheet) {
     return showFadeScaleDialog<void>(
       context: context,
-      barrierColor: Colors.black54,
+      barrierColor: colors.scrim,
       useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) {
         final B? resolvedBloc = resolveBloc();
@@ -1640,7 +1641,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,
-    barrierColor: Colors.black54,
+    barrierColor: colors.scrim,
     backgroundColor: Colors.transparent,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth: 760,

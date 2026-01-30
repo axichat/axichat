@@ -175,6 +175,11 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       StreamController<EmailBlocklistSyncUpdate>.broadcast();
   Stream<EmailBlocklistSyncUpdate> get updates => _updatesController.stream;
 
+  Future<void> close() async {
+    if (_updatesController.isClosed) return;
+    await _updatesController.close();
+  }
+
   final Map<String, EmailBlocklistSyncPayload> _cache = {};
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(
     emailBlocklistSyncRateLimit,

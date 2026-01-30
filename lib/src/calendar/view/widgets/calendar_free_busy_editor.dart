@@ -808,22 +808,15 @@ class _FreeBusyGridFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(calendarBorderRadius),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: calendarBackgroundColor,
-          border: Border.all(
-            color: calendarBorderColor,
-            width: calendarBorderStroke,
-          ),
-        ),
-        child: SizedBox(
-          width: width,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [header, body],
-          ),
+    final colors = context.colorScheme;
+    return AxiModalSurface(
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      child: SizedBox(
+        width: width,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [header, body],
         ),
       ),
     );

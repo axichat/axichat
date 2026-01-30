@@ -1610,13 +1610,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool clearCredentials,
   }) async {
     if (provisioningFuture != null) {
-      provisioningFuture.catchError((Object error, StackTrace stackTrace) {
-        _log.fine(
-          'Cancelled email provisioning after login failed',
-          error,
-          stackTrace,
-        );
-      });
+      _logCancelledEmailProvisioningFailure(provisioningFuture);
     }
     final emailService = _emailService;
     if (emailService == null) {
@@ -1627,6 +1621,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to clean up email provisioning after aborted login',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _logCancelledEmailProvisioningFailure(
+    Future<void> provisioningFuture,
+  ) async {
+    try {
+      await provisioningFuture;
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Cancelled email provisioning after login failed',
         error,
         stackTrace,
       );

@@ -482,6 +482,11 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       StreamController<DraftSyncUpdate>.broadcast();
   Stream<DraftSyncUpdate> get updates => _updatesController.stream;
 
+  Future<void> close() async {
+    if (_updatesController.isClosed) return;
+    await _updatesController.close();
+  }
+
   final Map<String, DraftSyncPayload> _cache = {};
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(draftSyncRateLimit);
   DateTime? _lastEnsureAttempt;

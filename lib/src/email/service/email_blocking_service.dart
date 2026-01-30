@@ -7,7 +7,13 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
 /// Callback type for syncing blocking state to DeltaChat core.
-typedef DeltaChatBlockCallback = Future<bool> Function(String address);
+final class DeltaChatBlockCallback {
+  const DeltaChatBlockCallback(this._callback);
+
+  final Future<bool> Function(String address) _callback;
+
+  Future<bool> call(String address) => _callback(address);
+}
 
 class EmailBlockingService {
   EmailBlockingService({

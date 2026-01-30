@@ -68,9 +68,16 @@ class NlScheduleParserService {
     if (result.parseNotes == null) return;
   }
 
-  Future<void> _ensureTimezonesInitialized() {
+  Future<void> _ensureTimezonesInitialized() async {
     final current = _timezoneInit;
-    if (current != null) return current.future;
+    if (current != null) {
+      try {
+        await current.future;
+      } on Exception {
+        // Swallow init errors so parsing can proceed with the fallback timezone.
+      }
+      return;
+    }
     final completer = Completer<void>();
     _timezoneInit = completer;
     try {
@@ -80,9 +87,11 @@ class NlScheduleParserService {
       _timezoneInit = null;
       completer.completeError(error, stackTrace);
     }
-    return completer.future.catchError((_) {
+    try {
+      await completer.future;
+    } on Exception {
       // Swallow init errors so parsing can proceed with the fallback timezone.
-    });
+    }
   }
 
   Future<String> _resolveTimezone() async {

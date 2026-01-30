@@ -142,6 +142,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Reaction>> getReactionsForChat(String jid);
 
+  Stream<List<Reaction>> watchReactionsForMessages(Iterable<String> messageIds);
+
+  Future<List<Reaction>> getReactionsForMessages(Iterable<String> messageIds);
+
   Future<List<Reaction>> getReactionsForMessageSender({
     required String messageId,
     required String senderJid,
@@ -731,6 +735,15 @@ class MessageAttachmentsAccessor
         .get();
   }
 
+  Future<void> deleteForMessages(Iterable<String> messageIds) {
+    final ids = messageIds.toList(growable: false);
+    if (ids.isEmpty) return Future.value();
+    return (delete(
+      table,
+    )..where((tbl) => tbl.messageId.isIn(ids)))
+        .go();
+  }
+
   Future<List<MessageAttachmentData>> selectForGroup(String transportGroupId) =>
       (select(table)
             ..where((tbl) => tbl.transportGroupId.equals(transportGroupId))
@@ -886,9 +899,14 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
       innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
     ])
       ..where(messages.chatJid.equals(jid));
-    return query.get().then(
-          (rows) => rows.map((row) => row.readTable(reactions)).toList(),
-        );
+    return _mapReactions(query);
+  }
+
+  Future<List<Reaction>> _mapReactions(
+    JoinedSelectStatement<$ReactionsTable, Reaction> query,
+  ) async {
+    final rows = await query.get();
+    return rows.map((row) => row.readTable(reactions)).toList();
   }
 
   Future<List<Reaction>> selectByMessageAndSender({
@@ -1764,16 +1782,19 @@ WHERE delta_chat_id IS NOT NULL
     final hasQuery = normalizedQuery.isNotEmpty;
     final hasSubject = normalizedSubject.isNotEmpty;
     if (!hasQuery && !hasSubject) return const [];
+    final ftsQuery = hasQuery ? _escapeFtsQuery(normalizedQuery) : '';
     final filterValue = filter.index;
     final orderClause = ascending ? 'ASC' : 'DESC';
-    final likePattern =
-        hasQuery ? '%${_escapeLikePattern(normalizedQuery)}%' : '%';
     final subjectPattern =
         hasSubject ? '%${_escapeLikePattern(normalizedSubject)}%' : '%';
+    final ftsJoin =
+        hasQuery ? 'JOIN messages_fts fts ON fts.rowid = m.rowid' : '';
+    final ftsClause = hasQuery ? 'AND fts.body MATCH ?' : '';
     final selectable = customSelect(
       '''
       SELECT m.*
       FROM messages m
+      $ftsJoin
       LEFT JOIN message_copies mc
         ON mc.dc_msg_id = m.delta_msg_id
        AND mc.dc_account_id = m.delta_account_id
@@ -1781,11 +1802,7 @@ WHERE delta_chat_id IS NOT NULL
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
-        AND (
-          CASE WHEN ? = 0 THEN 1
-               ELSE LOWER(COALESCE(m.body, '')) LIKE ? ESCAPE '\\'
-          END
-        )
+        $ftsClause
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
@@ -1807,8 +1824,7 @@ WHERE delta_chat_id IS NOT NULL
       variables: [
         Variable<String>(jid),
         Variable<String>(jid),
-        Variable<int>(hasQuery ? 1 : 0),
-        Variable<String>(likePattern),
+        if (hasQuery) Variable<String>(ftsQuery),
         Variable<int>(filterValue),
         Variable<int>(hasSubject ? 1 : 0),
         Variable<int>(excludeSubject ? 1 : 0),
@@ -1928,6 +1944,36 @@ WHERE delta_chat_id IS NOT NULL
   @override
   Future<List<Reaction>> getReactionsForChat(String jid) =>
       reactionsAccessor.selectByChat(jid);
+
+  @override
+  Stream<List<Reaction>> watchReactionsForMessages(
+    Iterable<String> messageIds,
+  ) {
+    final ids = messageIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) {
+      return Stream.value(const <Reaction>[]);
+    }
+    return (select(reactions)..where((tbl) => tbl.messageID.isIn(ids))).watch();
+  }
+
+  @override
+  Future<List<Reaction>> getReactionsForMessages(
+    Iterable<String> messageIds,
+  ) async {
+    final ids = messageIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) {
+      return const <Reaction>[];
+    }
+    return (select(reactions)..where((tbl) => tbl.messageID.isIn(ids))).get();
+  }
 
   @override
   Future<List<Reaction>> getReactionsForMessageSender({
@@ -2565,7 +2611,7 @@ WHERE email_from_address IN ($placeholderClause)
       entries.add(message);
       messagesByKey[key] = entries;
     }
-    final messagesToDelete = <String>{};
+    final messagesToDelete = <Message>[];
     for (final message in placeholderMessages) {
       final deltaMsgId = message.deltaMsgId;
       if (deltaMsgId == null) {
@@ -2578,11 +2624,85 @@ WHERE email_from_address IN ($placeholderClause)
         return !normalizedPlaceholders.contains(sender);
       });
       if (hasNonPlaceholder) {
-        messagesToDelete.add(message.stanzaID);
+        messagesToDelete.add(message);
       }
     }
-    for (final stanzaId in messagesToDelete) {
-      await deleteMessage(stanzaId);
+    if (messagesToDelete.isEmpty) {
+      return;
+    }
+    final stanzaIds = messagesToDelete
+        .map((message) => message.stanzaID)
+        .toSet()
+        .toList(growable: false);
+    final messageIds = messagesToDelete
+        .map((message) => message.id)
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+    final metadataIds = <String>{};
+    for (final message in messagesToDelete) {
+      final directMetadataId = message.fileMetadataID?.trim();
+      if (directMetadataId != null && directMetadataId.isNotEmpty) {
+        metadataIds.add(directMetadataId);
+      }
+    }
+    if (messageIds.isNotEmpty) {
+      final attachments =
+          await messageAttachmentsAccessor.selectForMessages(messageIds);
+      for (final attachment in attachments) {
+        final metadataId = attachment.fileMetadataId;
+        if (metadataId.isNotEmpty) {
+          metadataIds.add(metadataId);
+        }
+      }
+    }
+    final unreadDecrements = <String, int>{};
+    for (final message in messagesToDelete) {
+      final trimmedBody = message.body?.trim();
+      final hasBody = trimmedBody?.isNotEmpty == true;
+      final hasAttachment = message.fileMetadataID?.trim().isNotEmpty == true;
+      final shouldDecrement = (hasBody || hasAttachment) &&
+          !message.displayed &&
+          message.pseudoMessageType == null;
+      if (!shouldDecrement) {
+        continue;
+      }
+      unreadDecrements.update(
+        message.chatJid,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    await transaction(() async {
+      for (final batch in _chunked(stanzaIds, batchSize: 900)) {
+        await (delete(reactions)..where((tbl) => tbl.messageID.isIn(batch)))
+            .go();
+        await (delete(pinnedMessages)
+              ..where((tbl) => tbl.messageStanzaId.isIn(batch)))
+            .go();
+        await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(batch))).go();
+      }
+      if (messageIds.isNotEmpty) {
+        for (final batch in _chunked(messageIds, batchSize: 900)) {
+          await messageAttachmentsAccessor.deleteForMessages(batch);
+        }
+      }
+      for (final entry in unreadDecrements.entries) {
+        final chat = await getChat(entry.key);
+        if (chat == null) continue;
+        final nextUnread = chat.unreadCount - entry.value;
+        await chatsAccessor.updateOne(
+          chat.copyWith(unreadCount: nextUnread < 0 ? 0 : nextUnread),
+        );
+      }
+    });
+    for (final metadataId in metadataIds) {
+      await _deleteFileMetadataIfOrphaned(metadataId);
+    }
+    final affectedChats =
+        messagesToDelete.map((message) => message.chatJid).toSet();
+    for (final chatJid in affectedChats) {
+      await _refreshChatSummaryAfterTrim(jid: chatJid);
     }
   }
 
@@ -2933,9 +3053,8 @@ WHERE email_from_address IN ($placeholderClause)
       ),
     ])
       ..where(messageCopies.shareId.equals(shareId));
-    return query.get().then(
-          (rows) => rows.map((row) => row.readTable(messages)).toList(),
-        );
+    final rows = await query.get();
+    return rows.map((row) => row.readTable(messages)).toList();
   }
 
   @override
@@ -3348,11 +3467,11 @@ WHERE email_from_address IN ($placeholderClause)
         .get();
     if (messageAttachmentRefs.isNotEmpty) return true;
 
-    final draftAttachmentRefs = await (selectOnly(draftAttachmentRefs)
+    final draftAttachmentRows = await (selectOnly(draftAttachmentRefs)
           ..addColumns([draftAttachmentRefs.fileMetadataId])
           ..where(draftAttachmentRefs.fileMetadataId.equals(id)))
         .get();
-    if (draftAttachmentRefs.isNotEmpty) return true;
+    if (draftAttachmentRows.isNotEmpty) return true;
 
     final messageRefs = await (selectOnly(messages)
           ..addColumns([messages.fileMetadataID])
@@ -3437,6 +3556,13 @@ WHERE email_from_address IN ($placeholderClause)
   ) async {
     for (final metadata in metadataItems) {
       await _deleteManagedAttachmentFile(metadata);
+    }
+  }
+
+  Iterable<List<T>> _chunked<T>(List<T> items, {required int batchSize}) sync* {
+    for (var index = 0; index < items.length; index += batchSize) {
+      final end = index + batchSize;
+      yield items.sublist(index, end > items.length ? items.length : end);
     }
   }
 
@@ -4180,7 +4306,9 @@ WHERE email_from_address IN ($placeholderClause)
         );
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
-      await (delete(invites)..where((tbl) => tbl.jid.isIn(jids))).go();
+      for (final batch in _chunked(jids, batchSize: 900)) {
+        await (delete(invites)..where((tbl) => tbl.jid.isIn(batch))).go();
+      }
     });
   }
 
@@ -4205,7 +4333,9 @@ WHERE email_from_address IN ($placeholderClause)
         );
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
-      await (delete(invites)..where((tbl) => tbl.jid.isIn(jids))).go();
+      for (final batch in _chunked(jids, batchSize: 900)) {
+        await (delete(invites)..where((tbl) => tbl.jid.isIn(batch))).go();
+      }
     });
   }
 
@@ -4434,10 +4564,12 @@ WHERE email_from_address IN ($placeholderClause)
       final existingKeys = blockedAtByJid.keys.toSet();
       final toDelete = existingKeys.difference(normalizedBlocks).toList();
       if (toDelete.isNotEmpty) {
-        await (delete(
-          blocklist,
-        )..where((tbl) => tbl.jid.isIn(toDelete)))
-            .go();
+        for (final batch in _chunked(toDelete, batchSize: 900)) {
+          await (delete(
+            blocklist,
+          )..where((tbl) => tbl.jid.isIn(batch)))
+              .go();
+        }
       }
       final toInsert = normalizedBlocks.difference(existingKeys);
       for (final blocked in toInsert) {
@@ -4467,10 +4599,12 @@ WHERE email_from_address IN ($placeholderClause)
           .where((id) => !contactsByNativeId.containsKey(id))
           .toList();
       if (toDelete.isNotEmpty) {
-        await (delete(
-          contacts,
-        )..where((tbl) => tbl.nativeID.isIn(toDelete)))
-            .go();
+        for (final batch in _chunked(toDelete, batchSize: 900)) {
+          await (delete(
+            contacts,
+          )..where((tbl) => tbl.nativeID.isIn(batch)))
+              .go();
+        }
       }
       final upserts = <ContactsCompanion>[];
       for (final entry in contactsByNativeId.entries) {
@@ -4806,8 +4940,7 @@ END
   }
 
   Future<void> _createRecipientAddressTriggers() async {
-    const upsertClause =
-        'ON CONFLICT(address) DO UPDATE SET last_seen = '
+    const upsertClause = 'ON CONFLICT(address) DO UPDATE SET last_seen = '
         'CASE WHEN excluded.last_seen > recipient_addresses.last_seen '
         'THEN excluded.last_seen ELSE recipient_addresses.last_seen END';
     await customStatement('''
@@ -4913,7 +5046,7 @@ ON CONFLICT(address) DO UPDATE SET last_seen =
   Future<void> _backfillDraftAttachmentRefs() async {
     await customStatement('''
 INSERT INTO draft_attachment_refs(draft_id, file_metadata_id)
-SELECT d.id, value
+SELECT DISTINCT d.id, value
 FROM drafts d, json_each(d.attachment_metadata_ids)
 WHERE value IS NOT NULL AND trim(value) != ''
 ''');
@@ -5134,6 +5267,19 @@ String _escapeLikePattern(String input) {
       .replaceAll(r'\', r'\\')
       .replaceAll('%', r'\%')
       .replaceAll('_', r'\_');
+}
+
+String _escapeFtsQuery(String input) {
+  final tokens = input.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+  if (tokens.isEmpty) return '';
+  return tokens.map(_escapeFtsToken).join(' ');
+}
+
+String _escapeFtsToken(String token) {
+  final escaped = token.replaceAll('"', '""');
+  final requiresQuotes = RegExp(r'[^\w]').hasMatch(token);
+  final base = requiresQuotes ? '"$escaped"' : escaped;
+  return '$base*';
 }
 
 typedef HashFunction = mox.HashFunction;

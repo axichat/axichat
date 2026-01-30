@@ -99,10 +99,21 @@ class CalendarAvailabilityShareCoordinator {
     required CalendarAvailabilityShareSource source,
     required CalendarModel model,
   }) {
-    _pendingUpdate = _pendingUpdate.then(
-      (_) => _handleModelChanged(source: source, model: model),
+    _pendingUpdate = _runPendingUpdate(
+      previous: _pendingUpdate,
+      source: source,
+      model: model,
     );
     return _pendingUpdate;
+  }
+
+  Future<void> _runPendingUpdate({
+    required Future<void> previous,
+    required CalendarAvailabilityShareSource source,
+    required CalendarModel model,
+  }) async {
+    await previous;
+    await _handleModelChanged(source: source, model: model);
   }
 
   CalendarAvailabilityShareRecord? recordFor(String shareId) {

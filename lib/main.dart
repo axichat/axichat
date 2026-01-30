@@ -61,21 +61,18 @@ Future<void> main() async {
       getApplicationDocumentsDirectory();
   const bool isWeb = kIsWeb;
 
-  final Future<HydratedStorage> baseStorageFuture = storageDirectoryFuture.then(
-    (Directory storageDirectory) =>
-        HydratedStorage.build(storageDirectory: storageDirectory),
+  final Directory storageDirectory = await storageDirectoryFuture;
+  final HydratedStorage baseStorage = await HydratedStorage.build(
+    storageDirectory: storageDirectory,
   );
-  final Future<void> hiveInitFuture = storageDirectoryFuture.then((
-    Directory storageDirectory,
-  ) async {
+  final Future<void> hiveInitFuture = () async {
     final String storagePath = storageDirectory.path;
     if (isWeb) {
       await Hive.initFlutter();
       return;
     }
     Hive.init(storagePath);
-  });
-  final HydratedStorage baseStorage = await baseStorageFuture;
+  }();
   final CalendarStorageRegistry storageRegistry = CalendarStorageRegistry(
     fallback: baseStorage,
   );

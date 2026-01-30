@@ -493,8 +493,10 @@ class XmppService extends XmppBase
   @override
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
   var _hasInitializedDatabases = false;
-  final _databaseReloadController = StreamController<void>.broadcast();
-  final _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
+  StreamController<void> _databaseReloadController =
+      StreamController<void>.broadcast();
+  StreamController<StoredAvatar?> _selfAvatarController =
+      StreamController<StoredAvatar?>.broadcast();
   StoredAvatar? _cachedSelfAvatar;
   @override
   String? _databasePrefix;
@@ -519,17 +521,19 @@ class XmppService extends XmppBase
   Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
       _emailBlocklistSyncCallback;
 
-  final _httpUploadSupportController =
+  StreamController<HttpUploadSupport> _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
-  final _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
+  StreamController<PubSubSupport> _pubSubSupportController =
+      StreamController<PubSubSupport>.broadcast();
   var _pubSubSupport = const PubSubSupport(
     pubSubSupported: false,
     pepSupported: false,
     bookmarks2Supported: false,
   );
   var _pubSubSupportResolved = false;
-  final _streamReadyController = StreamController<XmppStreamReady>.broadcast();
+  StreamController<XmppStreamReady> _streamReadyController =
+      StreamController<XmppStreamReady>.broadcast();
   XmppStreamReady? _lastStreamReady;
 
   bool get mamSupported => _mamSupported;
@@ -644,9 +648,9 @@ class XmppService extends XmppBase
     'avatar_encryption_salt',
   );
 
-  final StreamController<XmppOperationEvent> _xmppOperationController =
+  StreamController<XmppOperationEvent> _xmppOperationController =
       StreamController<XmppOperationEvent>.broadcast();
-  final StreamController<mox.OmemoActivityEvent> _omemoActivityController =
+  StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
   StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
   StreamSubscription<NetworkAvailability>? _networkAvailabilitySubscription;
@@ -1010,7 +1014,8 @@ class XmppService extends XmppBase
 
   @override
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
-  final _connectivityStream = StreamController<ConnectionState>.broadcast();
+  StreamController<ConnectionState> _connectivityStream =
+      StreamController<ConnectionState>.broadcast();
 
   static const _connectivityRepairReasonStanzaAcked = 'stanza acked';
   static const _connectivityRepairReasonStreamNegotiationsDone =
@@ -2494,6 +2499,8 @@ class XmppService extends XmppBase
     await _omemoActivitySubscription?.cancel();
     _omemoActivitySubscription = null;
 
+    await _closeManagerStreams();
+
     if (connected) {
       try {
         await _connection.setShouldReconnect(false);
@@ -2510,6 +2517,7 @@ class XmppService extends XmppBase
     if (withForeground) {
       await _connection.reset();
     }
+    await _connection.socketWrapper.closeStreams();
     _connection = await _connectionFactory();
     _configureSocketCallbacks();
 
@@ -2542,6 +2550,7 @@ class XmppService extends XmppBase
     _cachedChatList = null;
 
     await super._reset();
+    await _resetStreamControllers();
 
     final residuals = <String>[];
     if (_messageStream.hasListener) residuals.add('messageStream');
@@ -2565,16 +2574,33 @@ class XmppService extends XmppBase
     assert(residuals.isEmpty);
   }
 
-  Future<void> close() async {
-    await _reset();
+  Future<void> _closeManagerStreams() async {
+    await bookmarksManager?.close();
+    await conversationIndexManager?.close();
+    await _connection.getManager<DraftsPubSubManager>()?.close();
+    await _connection.getManager<SpamPubSubManager>()?.close();
+    await _connection.getManager<EmailBlocklistPubSubManager>()?.close();
+  }
+
+  Future<void> _resetStreamControllers() async {
+    await _closeStreamControllers();
+    _httpUploadSupportController = StreamController<HttpUploadSupport>.broadcast();
+    _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
+    _streamReadyController = StreamController<XmppStreamReady>.broadcast();
+    _databaseReloadController = StreamController<void>.broadcast();
+    _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
+    _xmppOperationController = StreamController<XmppOperationEvent>.broadcast();
+    _omemoActivityController =
+        StreamController<mox.OmemoActivityEvent>.broadcast();
+    _connectivityStream = StreamController<ConnectionState>.broadcast();
+  }
+
+  Future<void> _closeStreamControllers() async {
     if (!_httpUploadSupportController.isClosed) {
       await _httpUploadSupportController.close();
     }
     if (!_pubSubSupportController.isClosed) {
       await _pubSubSupportController.close();
-    }
-    if (!_mamSupportController.isClosed) {
-      await _mamSupportController.close();
     }
     if (!_streamReadyController.isClosed) {
       await _streamReadyController.close();
@@ -2584,6 +2610,26 @@ class XmppService extends XmppBase
     }
     if (!_selfAvatarController.isClosed) {
       await _selfAvatarController.close();
+    }
+    if (!_xmppOperationController.isClosed) {
+      await _xmppOperationController.close();
+    }
+    if (!_omemoActivityController.isClosed) {
+      await _omemoActivityController.close();
+    }
+    if (!_connectivityStream.isClosed) {
+      await _connectivityStream.close();
+    }
+  }
+
+  Future<void> close() async {
+    await _reset();
+    await _closeStreamControllers();
+    if (!_mamSupportController.isClosed) {
+      await _mamSupportController.close();
+    }
+    if (!_messageStream.isClosed) {
+      await _messageStream.close();
     }
     await _closeDemoScript();
     _instance = null;
@@ -3324,19 +3370,24 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       },
     );
 
-    socket.done.then((_) {
+    _trackSocketDone(socket);
+  }
+
+  Future<void> _trackSocketDone(Socket socket) async {
+    try {
+      await socket.done;
       _markSocketClosed(socket);
       _eventStream.add(
         mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
       );
-    }).catchError((Object error, StackTrace stackTrace) {
+    } on Exception catch (error, stackTrace) {
       _log.fine(_socketClosedWithErrorLog, error, stackTrace);
       _eventStream.add(mox.XmppSocketErrorEvent(error));
       _markSocketClosed(socket);
       _eventStream.add(
         mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
       );
-    });
+    }
   }
 
   bool _containsForbiddenXml(String data) {
@@ -3406,6 +3457,15 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       _log.warning('Closing socket threw exception: $error');
     }
     _markSocketClosed(socket);
+  }
+
+  Future<void> closeStreams() async {
+    if (!_dataStream.isClosed) {
+      await _dataStream.close();
+    }
+    if (!_eventStream.isClosed) {
+      await _eventStream.close();
+    }
   }
 
   @override

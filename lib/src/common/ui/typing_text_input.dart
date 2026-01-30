@@ -567,7 +567,25 @@ class TypingCaretPainter extends RenderEditablePainter {
     final Canvas canvas = Canvas(recorder);
     canvas.scale(pixelRatio, pixelRatio);
     painter.paint(canvas, Offset.zero);
-    recorder.endRecording().toImage(width, height).then((ui.Image image) {
+    _finalizeGlyphRaster(
+      recorder: recorder,
+      width: width,
+      height: height,
+      glyphAnimation: glyphAnimation,
+      raster: raster,
+    );
+  }
+
+  Future<void> _finalizeGlyphRaster({
+    required ui.PictureRecorder recorder,
+    required int width,
+    required int height,
+    required TypingGlyphAnimation glyphAnimation,
+    required _TypingGlyphRaster raster,
+  }) async {
+    try {
+      final ui.Image image =
+          await recorder.endRecording().toImage(width, height);
       if (_disposed) {
         image.dispose();
         return;
@@ -581,9 +599,9 @@ class TypingCaretPainter extends RenderEditablePainter {
         ..image = image
         ..isGenerating = false;
       notifyListeners();
-    }).catchError((Object _) {
+    } on Exception {
       raster.isGenerating = false;
-    });
+    }
   }
 
   void _pruneGlyphRasters(List<TypingGlyphFrame> frames) {

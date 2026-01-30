@@ -416,13 +416,23 @@ mixin AvatarService on XmppBase, MucService {
     Iterable<String> jids, {
     bool force = false,
   }) async {
-    final refreshes = <Future<void>>[];
+    final refreshes = <String>[];
     for (final jid in jids) {
       if (_isMucAvatarJid(jid)) continue;
-      refreshes.add(_refreshAvatarForJid(jid, force: force));
+      refreshes.add(jid);
     }
     if (refreshes.isEmpty) return;
-    await Future.wait(refreshes);
+    const maxConcurrent = 6;
+    for (var index = 0; index < refreshes.length; index += maxConcurrent) {
+      final end = index + maxConcurrent;
+      final batch = refreshes.sublist(
+        index,
+        end > refreshes.length ? refreshes.length : end,
+      );
+      await Future.wait(
+        batch.map((jid) => _refreshAvatarForJid(jid, force: force)),
+      );
+    }
   }
 
   Future<void> _refreshConversationAvatars(Iterable<String> jids) async {
@@ -1012,18 +1022,21 @@ mixin AvatarService on XmppBase, MucService {
     List<mox.UserAvatarMetadata> metadata,
   ) {
     if (metadata.isEmpty) return null;
-    final filtered = metadata.where(
-      (item) => item.length > 0 && item.length <= _maxAvatarBytes,
-    );
-    if (filtered.isEmpty) return null;
-    final sorted = [...filtered]..sort((a, b) {
-        final sizeA = (a.width ?? 0) * (a.height ?? 0);
-        final sizeB = (b.width ?? 0) * (b.height ?? 0);
-        final dimensionCompare = sizeB.compareTo(sizeA);
-        if (dimensionCompare != 0) return dimensionCompare;
-        return b.length.compareTo(a.length);
-      });
-    return sorted.first;
+    mox.UserAvatarMetadata? selected;
+    var selectedArea = 0;
+    var selectedLength = 0;
+    for (final item in metadata) {
+      if (item.length <= 0 || item.length > _maxAvatarBytes) continue;
+      final area = (item.width ?? 0) * (item.height ?? 0);
+      if (selected == null ||
+          area > selectedArea ||
+          (area == selectedArea && item.length > selectedLength)) {
+        selected = item;
+        selectedArea = area;
+        selectedLength = item.length;
+      }
+    }
+    return selected;
   }
 
   Future<String?> _storedAvatarHash(String jid) async {

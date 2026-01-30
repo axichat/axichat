@@ -2013,7 +2013,7 @@ class _ChatState extends State<Chat> {
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: spacing.m),
+            padding: EdgeInsetsDirectional.only(start: spacing.m),
             child: Align(
               alignment: Alignment.centerRight,
               child: LayoutBuilder(

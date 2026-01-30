@@ -225,6 +225,19 @@ mixin MucService on XmppBase, BaseStreamService {
   String? _mucServiceHost;
   bool _mucBookmarksSyncInFlight = false;
 
+  @override
+  Future<void> _reset() async {
+    for (final controller in _roomStreams.values) {
+      await controller.close();
+    }
+    _roomStreams.clear();
+    for (final controller in _roomSubjectStreams.values) {
+      await controller.close();
+    }
+    _roomSubjectStreams.clear();
+    await super._reset();
+  }
+
   String get mucServiceHost =>
       _mucServiceHost ?? 'conference.${_myJid?.domain ?? 'example.com'}';
 

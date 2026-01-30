@@ -5,8 +5,10 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:flutter/material.dart';
@@ -53,6 +55,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     };
     var shouldRebuild = false;
     final List<String> removalQueue = <String>[];
+    final animationDuration = _resolveAnimationDuration();
+    final exitDelay = _resolveExitDelay(animationDuration);
 
     for (final entry in _entries) {
       final XmppOperation? updated = incoming.remove(entry.operation.id);
@@ -63,24 +67,31 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         }
         continue;
       }
-      if (updated.status != entry.operation.status ||
-          updated.startedAt != entry.operation.startedAt) {
+      final statusChanged = updated.status != entry.operation.status ||
+          updated.startedAt != entry.operation.startedAt;
+      if (statusChanged) {
         entry.operation = updated;
         shouldRebuild = true;
-        if (updated.status == XmppOperationStatus.inProgress) {
-          _cancelExitTimer(updated.id);
-          _cancelRemovalTimer(updated.id);
-          if (!entry.isVisible) {
-            entry.isVisible = true;
-          }
-        } else {
-          _ensureExitScheduled(updated.id);
-        }
+      }
+      var visibilityRestored = false;
+      if (!entry.isVisible) {
+        entry.isVisible = true;
+        _cancelRemovalTimer(updated.id);
+        visibilityRestored = true;
+        shouldRebuild = true;
+      }
+      if (updated.status == XmppOperationStatus.inProgress) {
+        _cancelExitTimer(updated.id);
+        _cancelRemovalTimer(updated.id);
+      } else if (statusChanged || visibilityRestored) {
+        _scheduleExit(updated.id, exitDelay, animationDuration);
+      } else {
+        _ensureExitScheduled(updated.id, exitDelay, animationDuration);
       }
     }
 
     for (final id in removalQueue) {
-      if (_startExitNow(id)) {
+      if (_startExitNow(id, animationDuration)) {
         shouldRebuild = true;
       }
     }
@@ -107,7 +118,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     _entries.insert(0, _ToastEntry(operation: operation));
   }
 
-  void _scheduleExit(String id, Duration delay) {
+  void _scheduleExit(String id, Duration delay, Duration animationDuration) {
     _cancelExitTimer(id);
     _exitTimers[id] = Timer(delay, () {
       if (!mounted) {
@@ -117,15 +128,19 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       if (changed) {
         setState(() {});
       }
-      _scheduleRemoval(id);
+      _scheduleRemoval(id, animationDuration);
     });
   }
 
-  void _ensureExitScheduled(String id) {
+  void _ensureExitScheduled(
+    String id,
+    Duration delay,
+    Duration animationDuration,
+  ) {
     if (_exitTimers.containsKey(id)) {
       return;
     }
-    _scheduleExit(id, context.motion.statusBannerSuccessDuration);
+    _scheduleExit(id, delay, animationDuration);
   }
 
   void _cancelExitTimer(String id) {
@@ -138,17 +153,19 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     timer?.cancel();
   }
 
-  bool _startExitNow(String id) {
+  bool _startExitNow(String id, Duration animationDuration) {
     _cancelExitTimer(id);
     _cancelRemovalTimer(id);
+    if (!_hasEntry(id)) {
+      return false;
+    }
     final changed = _setEntryVisibility(id, false);
-    _scheduleRemoval(id);
+    _scheduleRemoval(id, animationDuration);
     return changed;
   }
 
-  void _scheduleRemoval(String id) {
+  void _scheduleRemoval(String id, Duration animationDuration) {
     _cancelRemovalTimer(id);
-    final animationDuration = context.motion.statusBannerSuccessDuration;
     _removalTimers[id] = Timer(animationDuration, () {
       if (!mounted) {
         return;
@@ -156,6 +173,10 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       _removeEntry(id);
       setState(() {});
     });
+  }
+
+  bool _hasEntry(String id) {
+    return _entries.any((entry) => entry.operation.id == id);
   }
 
   bool _setEntryVisibility(String id, bool isVisible) {
@@ -177,8 +198,24 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     _entries.removeWhere((entry) => entry.operation.id == id);
   }
 
+  Duration _resolveAnimationDuration() {
+    return maybeSettingsCubit(context)?.animationDuration ??
+        context.motion.statusBannerSuccessDuration;
+  }
+
+  Duration _resolveExitDelay(Duration animationDuration) {
+    final totalDuration = context.motion.statusBannerSuccessDuration;
+    final delay = totalDuration - animationDuration;
+    return delay.isNegative ? Duration.zero : delay;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final animationDuration = maybeSettingsCubit(context) == null
+        ? context.motion.statusBannerSuccessDuration
+        : context.select<SettingsCubit, Duration>(
+            (cubit) => cubit.animationDuration,
+          );
     return BlocListener<XmppActivityCubit, XmppActivityState>(
       listener: (context, state) => _syncOperations(state.operations),
       child: IgnorePointer(
@@ -206,8 +243,6 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
                 itemCount: _entries.length,
                 itemBuilder: (context, index) {
                   final _ToastEntry entry = _entries[index];
-                  final animationDuration =
-                      context.motion.statusBannerSuccessDuration;
                   return Padding(
                     padding: EdgeInsets.only(bottom: context.spacing.s),
                     child: Align(

@@ -197,6 +197,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       StreamController<ConvItemUpdate>.broadcast();
   Stream<ConvItemUpdate> get updates => _updatesController.stream;
 
+  Future<void> close() async {
+    if (_updatesController.isClosed) return;
+    await _updatesController.close();
+  }
+
   final Map<String, ConvItem> _cache = {};
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(
     conversationIndexSyncRateLimit,

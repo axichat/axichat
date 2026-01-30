@@ -561,10 +561,10 @@ class NotificationService {
     return (hash & 0x7fffffff) + 1;
   }
 
-  Future<PackageInfo> _resolvePackageInfo() {
+  Future<PackageInfo> _resolvePackageInfo() async {
     final cached = _packageInfo;
     if (cached != null) {
-      return Future.value(cached);
+      return cached;
     }
     final inflight = _packageInfoFuture;
     if (inflight != null) {
@@ -572,17 +572,15 @@ class NotificationService {
     }
     final future = PackageInfo.fromPlatform();
     _packageInfoFuture = future;
-    return future.then((resolved) {
+    try {
+      final resolved = await future;
       _packageInfo = resolved;
       _packageInfoFuture = null;
       return resolved;
-    }).catchError(
-      (Object error, StackTrace stackTrace) {
-        _packageInfoFuture = null;
-        _log.warning('Failed to resolve package info.', error, stackTrace);
-        throw error;
-      },
-      test: (Object error) => error is Exception,
-    );
+    } on Exception catch (error, stackTrace) {
+      _packageInfoFuture = null;
+      _log.warning('Failed to resolve package info.', error, stackTrace);
+      rethrow;
+    }
   }
 }

@@ -336,6 +336,22 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     return controller.stream;
   }
 
+  @override
+  Future<void> _reset() async {
+    for (final controller in _typingParticipantStreams.values) {
+      await controller.close();
+    }
+    _typingParticipantStreams.clear();
+    _typingParticipants.clear();
+    for (final timers in _typingParticipantExpiry.values) {
+      for (final timer in timers.values) {
+        timer.cancel();
+      }
+    }
+    _typingParticipantExpiry.clear();
+    await super._reset();
+  }
+
   void clearTypingParticipants(String jid) {
     final participants = _typingParticipants[jid];
     if (participants != null) {

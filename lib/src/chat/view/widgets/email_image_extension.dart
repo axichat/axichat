@@ -21,8 +21,6 @@ const int _emailImageMaxPixels = 16 * 1024 * 1024;
 const int _emailImageMaxFrames = 60;
 const int _emailImageMinDimension = 1;
 const int _emailImageMaxRedirects = 3;
-const double _emailImageLoadingSize = 24.0;
-const double _emailImageLoadingStroke = 2.0;
 const String _emailImageMimePrefix = 'image/';
 const String _emailImageMimeDetectPlaceholder = 'email-image';
 const String _emailImageHttpsScheme = 'https';
@@ -88,13 +86,7 @@ class _EmailImageLoaderState extends State<EmailImageLoader> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox(
-            width: _emailImageLoadingSize,
-            height: _emailImageLoadingSize,
-            child: CircularProgressIndicator(
-              strokeWidth: _emailImageLoadingStroke,
-            ),
-          );
+          return const AxiProgressIndicator();
         }
         final bytes = snapshot.data;
         if (bytes == null || bytes.isEmpty) {

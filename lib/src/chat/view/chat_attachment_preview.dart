@@ -1237,7 +1237,8 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     }
     final controller = VideoPlayerController.file(file);
     _controller = controller;
-    controller.initialize().timeout(_attachmentVideoInitTimeout).then((_) {
+    try {
+      await controller.initialize().timeout(_attachmentVideoInitTimeout);
       if (!mounted) return;
       final size = controller.value.size;
       if (!_isVideoFrameAllowed(size)) {
@@ -1248,12 +1249,12 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       }
       MediaDecodeGuard.instance.registerSuccess(guardKey);
       setState(() {});
-    }).catchError((_) {
+    } on Exception {
       if (!mounted) return;
       _disposeVideoController(controller);
       MediaDecodeGuard.instance.registerFailure(guardKey);
       _markVideoInitFailed();
-    });
+    }
   }
 
   Future<int?> _safeFileLength(File file) async {

@@ -1718,19 +1718,34 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     _originIdHydrationPending.add(key);
-    _originIdHydrationQueue = _originIdHydrationQueue.then((_) async {
-      try {
-        await _hydrateOriginId(
-          context: context,
-          msgId: msgId,
-          accountId: accountId,
-        );
-      } on Exception catch (error, stackTrace) {
-        _log.fine(_originIdHydrationFailedLog, error, stackTrace);
-      } finally {
-        _originIdHydrationPending.remove(key);
-      }
-    });
+    _originIdHydrationQueue = _runOriginIdHydration(
+      previous: _originIdHydrationQueue,
+      context: context,
+      msgId: msgId,
+      accountId: accountId,
+      key: key,
+    );
+  }
+
+  Future<void> _runOriginIdHydration({
+    required Future<void> previous,
+    required DeltaContextHandle context,
+    required int msgId,
+    required int accountId,
+    required String key,
+  }) async {
+    await previous;
+    try {
+      await _hydrateOriginId(
+        context: context,
+        msgId: msgId,
+        accountId: accountId,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(_originIdHydrationFailedLog, error, stackTrace);
+    } finally {
+      _originIdHydrationPending.remove(key);
+    }
   }
 
   Future<void> _scheduleAttachmentMetadataHydration({

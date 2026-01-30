@@ -286,18 +286,21 @@ class _LoginScreenState extends State<LoginScreen>
   void _startAuthTimeout(_AuthFlow flow) {
     _authTimeoutGeneration++;
     final generation = _authTimeoutGeneration;
-    Future<void>.delayed(_authOperationTimeout).then((_) async {
-      if (!mounted ||
-          _activeFlow != flow ||
-          generation != _authTimeoutGeneration) {
-        return;
-      }
-      await _failOperation();
-    });
+    _runAuthTimeout(flow, generation);
   }
 
   void _clearAuthTimeout() {
     _authTimeoutGeneration++;
+  }
+
+  Future<void> _runAuthTimeout(_AuthFlow flow, int generation) async {
+    await Future<void>.delayed(_authOperationTimeout);
+    if (!mounted ||
+        _activeFlow != flow ||
+        generation != _authTimeoutGeneration) {
+      return;
+    }
+    await _failOperation();
   }
 
   Future<void> _preloadSelfAvatarCache() async {

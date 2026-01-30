@@ -13,11 +13,16 @@ class VerificationCubit extends Cubit<VerificationState> {
   VerificationCubit({required this.jid, required OmemoService omemoService})
       : _omemoService = omemoService,
         super(const VerificationState(loading: true)) {
-    _omemoService.populateTrustCache(jid: jid).then((_) => loadFingerprints());
+    _initialize();
   }
 
   final String jid;
   final OmemoService _omemoService;
+
+  Future<void> _initialize() async {
+    await _omemoService.populateTrustCache(jid: jid);
+    await loadFingerprints();
+  }
 
   Future<void> loadFingerprints() async {
     emit(state.copyWith(loading: true));

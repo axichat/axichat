@@ -2,8 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -144,6 +144,8 @@ class FeedbackSystem {
 
   static void _showSnackBar(BuildContext context, FeedbackMessage feedback) {
     final colorsForTone = _getColorsForTone(context, feedback.tone);
+    final sizing = context.sizing;
+    final textTheme = context.textTheme;
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) {
@@ -159,13 +161,14 @@ class FeedbackSystem {
               Icon(
                 _getIconForTone(feedback.tone),
                 color: colorsForTone.foreground,
-                size: 18,
+                size: sizing.iconButtonIconSize,
               ),
               const SizedBox(width: calendarGutterSm),
               Expanded(
                 child: Text(
                   feedback.message,
-                  style: TextStyle(color: colorsForTone.foreground),
+                  style: textTheme.bodyMedium
+                      .copyWith(color: colorsForTone.foreground),
                 ),
               ),
             ],
@@ -174,7 +177,9 @@ class FeedbackSystem {
         backgroundColor: colorsForTone.background,
         duration: feedback.duration ?? const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(sizing.containerRadius),
+        ),
         action: feedback.actionLabel != null && feedback.onAction != null
             ? SnackBarAction(
                 label: feedback.actionLabel!,
@@ -191,17 +196,20 @@ class FeedbackSystem {
     BuildContext context,
     FeedbackTone tone,
   ) {
-    final scheme = ShadTheme.of(context).colorScheme;
+    final scheme = context.colorScheme;
     switch (tone) {
       case FeedbackTone.success:
-        return (background: const Color(0xFF22C55E), foreground: Colors.white);
+        return (background: scheme.green, foreground: scheme.primaryForeground);
       case FeedbackTone.info:
         return (
           background: calendarPrimaryColor,
           foreground: scheme.primaryForeground,
         );
       case FeedbackTone.warning:
-        return (background: const Color(0xFFF97316), foreground: Colors.white);
+        return (
+          background: scheme.warning,
+          foreground: scheme.primaryForeground,
+        );
       case FeedbackTone.error:
         return (
           background: scheme.destructive,
@@ -238,6 +246,8 @@ class InlineFeedback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final textTheme = context.textTheme;
     final colors = FeedbackSystem._getColorsForTone(context, tone);
 
     return Container(
@@ -247,29 +257,33 @@ class InlineFeedback extends StatelessWidget {
         color: colors.background.withValues(alpha: 0.1),
         border: Border.all(
           color: colors.background.withValues(alpha: 0.3),
-          width: 1,
+          width: context.borderSide.width,
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(sizing.containerRadius),
       ),
       child: Row(
         children: [
           Icon(
             FeedbackSystem._getIconForTone(tone),
             color: colors.background,
-            size: 18,
+            size: sizing.iconButtonIconSize,
           ),
           const SizedBox(width: calendarGutterSm),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(color: colors.background, fontSize: 14),
+              style: textTheme.bodySmall.copyWith(color: colors.background),
             ),
           ),
           if (onDismiss != null) ...[
             const SizedBox(width: calendarGutterSm),
             GestureDetector(
               onTap: onDismiss,
-              child: Icon(Icons.close, color: colors.background, size: 16),
+              child: Icon(
+                Icons.close,
+                color: colors.background,
+                size: sizing.menuItemIconSize,
+              ),
             ),
           ],
         ],
@@ -292,6 +306,8 @@ class ProgressIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -299,24 +315,22 @@ class ProgressIndicator extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text(label, style: textTheme.bodySmall),
             if (showPercentage && progress != null)
               Text(
                 context.l10n.commonPercentLabel(
                   (progress! * 100).toInt(),
                 ),
-                style: Theme.of(context).textTheme.bodySmall,
+                style: textTheme.bodySmall,
               ),
           ],
         ),
         const SizedBox(height: calendarGutterSm),
         LinearProgressIndicator(
           value: progress,
-          backgroundColor: Theme.of(
-            context,
-          ).colorScheme.surfaceContainerHighest,
+          backgroundColor: colors.border.withValues(alpha: 0.6),
           valueColor: AlwaysStoppedAnimation<Color>(
-            Theme.of(context).colorScheme.primary,
+            colors.primary,
           ),
           borderRadius: BorderRadius.circular(_feedbackProgressCornerRadius),
         ),
@@ -372,11 +386,17 @@ class _ActionFeedbackState extends State<ActionFeedback>
       // HapticFeedback.lightImpact();
     }
 
-    _animationController.forward().then((_) {
-      _animationController.reverse();
-    });
+    _runTapAnimation();
 
     widget.onTap?.call();
+  }
+
+  Future<void> _runTapAnimation() async {
+    await _animationController.forward();
+    if (!mounted) {
+      return;
+    }
+    await _animationController.reverse();
   }
 
   @override

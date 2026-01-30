@@ -15,30 +15,36 @@ class LoadingIndicator extends StatelessWidget {
   const LoadingIndicator({
     super.key,
     this.message,
-    this.size = 24.0,
+    this.size,
     this.showMessage = true,
   });
 
   final String? message;
-  final double size;
+  final double? size;
   final bool showMessage;
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final textTheme = context.textTheme;
+    final double resolvedSize = size ?? sizing.progressIndicatorSize;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: size,
-            height: size,
-            child: _CalendarSpinner(size: size, semanticsLabel: message),
+            width: resolvedSize,
+            height: resolvedSize,
+            child:
+                _CalendarSpinner(size: resolvedSize, semanticsLabel: message),
           ),
           if (showMessage && message != null) ...[
-            const SizedBox(height: calendarGutterLg),
+            SizedBox(height: spacing.l),
             Text(
               message!,
-              style: calendarSubtitleTextStyle,
+              style: textTheme.bodySmall.copyWith(color: colors.foreground),
               textAlign: TextAlign.center,
             ),
           ],
@@ -56,40 +62,36 @@ class CalendarLoadingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final textTheme = context.textTheme;
     final String resolvedMessage =
         message ?? context.l10n.calendarLoadingMessage;
-    return Container(
-      padding: calendarPaddingXl,
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: colors.border.withValues(alpha: 0.9)),
-        boxShadow: calendarMediumShadow,
-      ),
+    final double indicatorSize = sizing.buttonHeightRegular;
+    return AxiModalSurface(
+      padding: EdgeInsets.all(spacing.m),
+      backgroundColor: colors.card,
+      borderColor: colors.border.withValues(alpha: 0.9),
+      shadows: calendarMediumShadow,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 42,
-            height: 42,
+            width: indicatorSize,
+            height: indicatorSize,
             child: _CalendarSpinner(
-              size: 42,
-              strokeWidth: 4,
+              size: indicatorSize,
+              strokeWidth: sizing.progressIndicatorStrokeWidth,
               semanticsLabel: resolvedMessage,
             ),
           ),
-          const SizedBox(height: calendarGutterLg),
+          SizedBox(height: spacing.l),
           Text(
             resolvedMessage,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: colors.foreground,
-                      fontWeight: FontWeight.w600,
-                    ) ??
-                TextStyle(
-                  fontSize: 16,
-                  color: calendarTitleColor,
-                  fontWeight: FontWeight.w600,
-                ),
+            style: textTheme.bodyLarge.copyWith(
+              color: colors.foreground,
+              fontWeight: FontWeight.w600,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
