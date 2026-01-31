@@ -397,6 +397,7 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get chatComposerSendFailed =>
       'Impossible d\'envoyer le message. Veuillez réessayer.';
+
   @override
   String get chatComposerAttachmentBundleFailed =>
       'Impossible de regrouper les pièces jointes. Veuillez réessayer.';

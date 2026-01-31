@@ -20,12 +20,16 @@ class HomeRefreshSyncService {
   final XmppService _xmppService;
   final EmailService? _emailService;
   final Logger _log = Logger('HomeRefreshSyncService');
+  final StreamController<HomeRefreshSyncUpdate> _syncUpdates =
+      StreamController<HomeRefreshSyncUpdate>.broadcast();
   Future<DateTime>? _syncTask;
   DateTime? _lastSyncAt;
   StreamSubscription<ConnectionState>? _xmppConnectivitySubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   ConnectionState? _lastXmppState;
   EmailSyncStatus? _lastEmailStatus;
+
+  Stream<HomeRefreshSyncUpdate> get syncUpdates => _syncUpdates.stream;
 
   void start() {
     if (_xmppConnectivitySubscription != null) return;
@@ -52,11 +56,7 @@ class HomeRefreshSyncService {
   }
 
   Future<void> syncOnLogin() async {
-    try {
-      await refreshUnreadOnly();
-    } on Exception {
-      _log.fine('Post-login sync failed.');
-    }
+    unawaited(refreshUnreadOnly());
   }
 
   Future<DateTime> refreshUnreadOnly() async {
@@ -91,7 +91,27 @@ class HomeRefreshSyncService {
     if (pending != null) {
       return pending;
     }
-    final task = action();
+    _syncUpdates.add(const HomeRefreshSyncUpdate(
+      phase: HomeRefreshSyncPhase.running,
+    ));
+    final task = () async {
+      try {
+        final syncedAt = await action();
+        _syncUpdates.add(
+          HomeRefreshSyncUpdate(
+            phase: HomeRefreshSyncPhase.success,
+            syncedAt: syncedAt,
+          ),
+        );
+        return syncedAt;
+      } on Exception catch (error, stackTrace) {
+        _log.fine('Home refresh failed.', error, stackTrace);
+        _syncUpdates.add(const HomeRefreshSyncUpdate(
+          phase: HomeRefreshSyncPhase.failure,
+        ));
+        return _lastSyncAt ?? DateTime.timestamp();
+      }
+    }();
     _syncTask = task;
     return task.whenComplete(() {
       if (_syncTask == task) {
@@ -104,7 +124,7 @@ class HomeRefreshSyncService {
     final wasConnected = _lastXmppState == ConnectionState.connected;
     _lastXmppState = state;
     if (!wasConnected && state == ConnectionState.connected) {
-      await _runReconnectSync();
+      _runReconnectSync();
       return;
     }
   }
@@ -113,19 +133,15 @@ class HomeRefreshSyncService {
     final wasReady = _lastEmailStatus == EmailSyncStatus.ready;
     _lastEmailStatus = state.status;
     if (!wasReady && state.status == EmailSyncStatus.ready) {
-      await _runReconnectSync();
+      _runReconnectSync();
     }
   }
 
-  Future<void> _runReconnectSync() async {
+  void _runReconnectSync() {
     if (_syncTask != null) {
       return;
     }
-    try {
-      await refreshUnreadOnly();
-    } on Exception {
-      _log.fine('Reconnect sync failed.');
-    }
+    unawaited(refreshUnreadOnly());
   }
 
   Future<void> _rehydrateCalendar() async {
@@ -262,4 +278,13 @@ class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.syncDraftsSnapshot();
   }
+}
+
+enum HomeRefreshSyncPhase { idle, running, success, failure }
+
+class HomeRefreshSyncUpdate {
+  const HomeRefreshSyncUpdate({required this.phase, this.syncedAt});
+
+  final HomeRefreshSyncPhase phase;
+  final DateTime? syncedAt;
 }

@@ -28,11 +28,6 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   bool get canForegroundService => _capability?.canForegroundService ?? false;
 
-  Stream<bool> get mamSupportStream =>
-      _xmppService?.mamSupportStream ?? const Stream<bool>.empty();
-
-  bool get mamSupported => _xmppService?.mamSupported ?? false;
-
   Duration get animationDuration =>
       state.lowMotion ? Duration.zero : baseAnimationDuration;
 

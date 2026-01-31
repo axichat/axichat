@@ -14,8 +14,6 @@ import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 
-const int _emptyCount = 0;
-
 enum ProfileExportKind {
   xmppMessages,
   xmppContacts,
@@ -38,7 +36,7 @@ class ProfileExportResult {
     required this.kind,
     required this.outcome,
     this.file,
-    this.itemCount = _emptyCount,
+    this.itemCount = 0,
   });
 
   const ProfileExportResult.success({
@@ -56,14 +54,14 @@ class ProfileExportResult {
       : this._(
           kind: kind,
           outcome: ProfileExportOutcome.empty,
-          itemCount: _emptyCount,
+          itemCount: 0,
         );
 
   const ProfileExportResult.failure({required ProfileExportKind kind})
       : this._(
           kind: kind,
           outcome: ProfileExportOutcome.failure,
-          itemCount: _emptyCount,
+          itemCount: 0,
         );
 
   final ProfileExportKind kind;

@@ -83,10 +83,8 @@ class SettingsControls extends StatelessWidget {
         final exportBusy = context.select<ProfileExportCubit, bool>(
           (cubit) => cubit.state.isBusy,
         );
-        final selectTextStyle = context.textTheme.small;
-        final double dividerIndent = fullWidthDividers
-            ? sectionHeaderPadding.horizontal - sectionHeaderPadding.horizontal
-            : sectionHeaderPadding.horizontal;
+        final double dividerIndent =
+            fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
@@ -253,7 +251,7 @@ class SettingsControls extends StatelessWidget {
                               value: themeMode,
                               child: Text(
                                 themeMode.label(context.l10n),
-                                style: selectTextStyle,
+                                style: context.textTheme.small,
                               ),
                             ),
                           )
@@ -261,7 +259,7 @@ class SettingsControls extends StatelessWidget {
                       selectedOptionBuilder: (BuildContext context, mode) =>
                           Text(
                         mode.label(context.l10n),
-                        style: selectTextStyle,
+                        style: context.textTheme.small,
                       ),
                     ),
                   ),
@@ -289,14 +287,14 @@ class SettingsControls extends StatelessWidget {
                               value: colorScheme,
                               child: Text(
                                 colorScheme.name,
-                                style: selectTextStyle,
+                                style: context.textTheme.small,
                               ),
                             ),
                           )
                           .toList(),
                       selectedOptionBuilder:
                           (BuildContext context, ShadColor value) =>
-                              Text(value.name, style: selectTextStyle),
+                              Text(value.name, style: context.textTheme.small),
                     ),
                   ),
                 ],

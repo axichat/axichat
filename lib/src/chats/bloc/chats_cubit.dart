@@ -70,6 +70,8 @@ class ChatsCubit extends Cubit<ChatsState> {
     _chatsSubscription = _chatsService.chatsStream().listen(
           (items) => _updateChats(items),
         );
+    _homeRefreshSyncSubscription =
+        _homeRefreshSyncService.syncUpdates.listen(_handleHomeRefreshUpdate);
   }
 
   static ChatsState _seedInitialState(List<Chat>? cached) {
@@ -121,6 +123,8 @@ class ChatsCubit extends Cubit<ChatsState> {
   final EmailService? _emailService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
+  late final StreamSubscription<HomeRefreshSyncUpdate>
+      _homeRefreshSyncSubscription;
   final List<Timer> _exportCleanupTimers = [];
 
   @override
@@ -129,6 +133,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       timer.cancel();
     }
     _exportCleanupTimers.clear();
+    await _homeRefreshSyncSubscription.cancel();
     await _chatsSubscription.cancel();
     return super.close();
   }
@@ -137,6 +142,25 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   void startDemoInteractivePhase() {
     _xmppService.startDemoInteractivePhase();
+  }
+
+  void _handleHomeRefreshUpdate(HomeRefreshSyncUpdate update) {
+    final nextStatus = switch (update.phase) {
+      HomeRefreshSyncPhase.running => RequestStatus.loading,
+      HomeRefreshSyncPhase.success => RequestStatus.success,
+      HomeRefreshSyncPhase.failure => RequestStatus.failure,
+      HomeRefreshSyncPhase.idle => RequestStatus.none,
+    };
+    if (state.refreshStatus == nextStatus &&
+        (update.syncedAt == null || state.lastSyncedAt == update.syncedAt)) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        refreshStatus: nextStatus,
+        lastSyncedAt: update.syncedAt ?? state.lastSyncedAt,
+      ),
+    );
   }
 
   void scheduleExportCleanup(File file) {

@@ -19,10 +19,15 @@ class ProfileFingerprint extends StatefulWidget {
 
 class _ProfileFingerprintState extends State<ProfileFingerprint> {
   var _showFingerprint = false;
+  var _didLoadFingerprints = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoadFingerprints) {
+      return;
+    }
+    _didLoadFingerprints = true;
     context.read<ProfileCubit>().loadFingerprints();
   }
 
@@ -32,50 +37,56 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         if (state.fingerprint == null) return const SizedBox.shrink();
-        return ShadCard(
-          rowCrossAxisAlignment: CrossAxisAlignment.center,
-          columnCrossAxisAlignment: CrossAxisAlignment.center,
-          rowMainAxisAlignment: MainAxisAlignment.center,
-          columnMainAxisAlignment: MainAxisAlignment.center,
-          padding: EdgeInsets.symmetric(horizontal: spacing.m),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        return AxiModalSurface(
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.m,
+            vertical: spacing.s,
+          ),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                context.l10n.profileDeviceFingerprint,
-                style: context.textTheme.small,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.l10n.profileDeviceFingerprint,
+                    style: context.textTheme.small,
+                  ),
+                  AxiIconButton.ghost(
+                    iconData: _showFingerprint
+                        ? LucideIcons.chevronUp
+                        : LucideIcons.chevronDown,
+                    onPressed: () => setState(() {
+                      _showFingerprint = !_showFingerprint;
+                    }),
+                  ),
+                ],
               ),
-              ExpandIcon(
-                isExpanded: _showFingerprint,
-                onPressed: (_) => setState(() {
-                  _showFingerprint = !_showFingerprint;
-                }),
+              AxiAnimatedSize(
+                duration: context.watch<SettingsCubit>().animationDuration,
+                child: _showFingerprint
+                    ? Padding(
+                        padding: EdgeInsets.only(bottom: spacing.s),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: spacing.m,
+                          children: [
+                            Text(
+                              context.l10n.verificationDeviceIdLabel(
+                                state.fingerprint!.deviceID,
+                              ),
+                              style: context.textTheme.small,
+                            ),
+                            DisplayFingerprint(
+                              fingerprint: state.fingerprint!.fingerprint,
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ],
-          ),
-          child: AxiAnimatedSize(
-            duration: context.watch<SettingsCubit>().animationDuration,
-            child: _showFingerprint
-                ? Padding(
-                    padding: EdgeInsets.only(bottom: spacing.s),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: spacing.m,
-                      children: [
-                        Text(
-                          context.l10n.verificationDeviceIdLabel(
-                            state.fingerprint!.deviceID,
-                          ),
-                          style: context.textTheme.small,
-                        ),
-                        DisplayFingerprint(
-                          fingerprint: state.fingerprint!.fingerprint,
-                        ),
-                      ],
-                    ),
-                  )
-                : const SizedBox.shrink(),
           ),
         );
       },

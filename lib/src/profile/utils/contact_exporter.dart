@@ -63,7 +63,7 @@ class ContactExporter {
 String _buildCsv(
     List<ContactExportEntry> contacts, ContactExportLabels labels) {
   final String csvHeaderLine =
-      '${labels.csvHeaderName},${labels.csvHeaderAddress}';
+      '${_escapeCsvField(labels.csvHeaderName)},${_escapeCsvField(labels.csvHeaderAddress)}';
   final StringBuffer buffer = StringBuffer()..writeln(csvHeaderLine);
   for (final contact in contacts) {
     final String name = contact.displayName?.trim() ?? '';

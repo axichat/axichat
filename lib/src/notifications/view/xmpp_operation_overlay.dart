@@ -29,6 +29,11 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _syncOperations(context.read<XmppActivityCubit>().state.operations);
   }
 
