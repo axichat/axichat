@@ -551,7 +551,7 @@ extension ChatThreadExtension on Chat {
 }
 
 extension ChatTransportExtension on Chat {
-  bool get supportsEmail => isEmailOnlyContact;
+  bool get supportsEmail => isEmailBacked;
 
   bool get isAxiContact {
     return remoteJid.isAxiJid;
@@ -561,7 +561,7 @@ extension ChatTransportExtension on Chat {
     if (type != ChatType.chat) {
       return false;
     }
-    return remoteJid.isEmailJid;
+    return isEmailBacked;
   }
 
   bool get isEmailBacked {
@@ -572,14 +572,14 @@ extension ChatTransportExtension on Chat {
     if (address != null && address.isNotEmpty) {
       return true;
     }
-    return defaultTransport.isEmail;
+    return false;
   }
 
   MessageTransport get defaultTransport {
     if (type != ChatType.chat) {
       return MessageTransport.xmpp;
     }
-    return remoteJid.inferredTransport;
+    return isEmailBacked ? MessageTransport.email : MessageTransport.xmpp;
   }
 
   MessageTransport get transport => defaultTransport;

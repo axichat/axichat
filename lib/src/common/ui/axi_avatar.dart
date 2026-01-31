@@ -357,14 +357,13 @@ class _AxiAvatarState extends State<AxiAvatar> {
   }
 
   String _presenceLabel(BuildContext context, Presence presence) {
-    final l10n = context.l10n;
     return switch (presence) {
-      Presence.unavailable => l10n.sessionCapabilityStatusOffline,
-      Presence.xa => l10n.emailDemoStatusIdle,
-      Presence.away => l10n.emailDemoStatusIdle,
-      Presence.dnd => l10n.calendarFreeBusyBusy,
-      Presence.chat => l10n.calendarFreeBusyFree,
-      Presence.unknown => l10n.commonUnknownLabel,
+      Presence.unavailable => context.l10n.sessionCapabilityStatusOffline,
+      Presence.xa => context.l10n.emailDemoStatusIdle,
+      Presence.away => context.l10n.emailDemoStatusIdle,
+      Presence.dnd => context.l10n.calendarFreeBusyBusy,
+      Presence.chat => context.l10n.calendarFreeBusyFree,
+      Presence.unknown => context.l10n.commonUnknownLabel,
     };
   }
 }

@@ -390,15 +390,12 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
   Widget build(BuildContext context) {
     final chatCoordinator = _chatCalendarCoordinator;
     final availabilityCoordinator = _availabilityCoordinator;
-    if (chatCoordinator == null || availabilityCoordinator == null) {
-      return widget.child;
-    }
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+        RepositoryProvider<ChatCalendarSyncCoordinator?>.value(
           value: chatCoordinator,
         ),
-        RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
+        RepositoryProvider<CalendarAvailabilityShareCoordinator?>.value(
           value: availabilityCoordinator,
         ),
       ],

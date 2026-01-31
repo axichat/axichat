@@ -18,6 +18,7 @@ import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -189,6 +190,8 @@ class _DraftFormState extends State<DraftForm> {
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final rosterItems =
+        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.s + spacing.xs;
     final smallGap = spacing.xs + spacing.xxs;
@@ -308,6 +311,7 @@ class _DraftFormState extends State<DraftForm> {
                               RecipientChipsBar(
                                 recipients: _recipients,
                                 availableChats: chats,
+                                rosterItems: rosterItems,
                                 onRecipientAdded: (target) {
                                   _handleRecipientAdded(target);
                                   field.didChange(null);

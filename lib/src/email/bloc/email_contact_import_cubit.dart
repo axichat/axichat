@@ -29,12 +29,6 @@ class EmailContactImportCubit extends Cubit<EmailContactImportState> {
       emit(EmailContactImportSuccess(summary));
     } on EmailContactImportException catch (error) {
       emit(EmailContactImportFailure(error.reason));
-    } catch (_) {
-      emit(
-        const EmailContactImportFailure(
-          EmailContactImportFailureReason.importFailed,
-        ),
-      );
     }
   }
 

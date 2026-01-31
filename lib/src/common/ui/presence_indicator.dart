@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/common/ui/status_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -62,10 +63,10 @@ class PresenceCircle extends StatelessWidget {
 
   Color _presenceColor(ShadColorScheme colors) => switch (presence) {
         Presence.unavailable => colors.muted,
-        Presence.xa => colors.secondary,
-        Presence.away => colors.secondary,
+        Presence.xa => colors.warning,
+        Presence.away => colors.warning,
         Presence.dnd => colors.destructive,
-        Presence.chat => colors.primary,
+        Presence.chat => colors.green,
         Presence.unknown => colors.muted,
       };
 }

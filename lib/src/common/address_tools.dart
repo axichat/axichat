@@ -2,8 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/message_content_limits.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -146,30 +144,12 @@ bool isAxiJid(String? raw, {String? axiDomain}) {
   return _isAxiJidInternal(raw, axiDomain: axiDomain);
 }
 
-bool isEmailJid(String? raw, {String? axiDomain}) {
-  return _isEmailJidInternal(raw, axiDomain: axiDomain);
-}
-
 bool _isAxiJidInternal(String? raw, {String? axiDomain}) {
   final targetDomain = _normalizeDomain(axiDomain);
   if (targetDomain == null) return false;
   final domain = _domainFromBare(raw);
   if (domain == null) return false;
   return domain == targetDomain;
-}
-
-bool _isEmailJidInternal(String? raw, {String? axiDomain}) {
-  final targetDomain = _normalizeDomain(axiDomain);
-  final domain = _domainFromBare(raw);
-  if (domain == null) return false;
-  if (targetDomain == null) return true;
-  return domain != targetDomain;
-}
-
-MessageTransport inferTransport(String? raw, {String? axiDomain}) {
-  return isAxiJid(raw, axiDomain: axiDomain)
-      ? MessageTransport.xmpp
-      : MessageTransport.email;
 }
 
 String? _normalizeDomain(String? domain) {
@@ -212,11 +192,7 @@ extension AddressStringExtensions on String {
 
   bool get isAxiJid => _isAxiJidInternal(this);
 
-  bool get isEmailJid => _isEmailJidInternal(this);
-
   String? get displaySafeJid => displaySafeAddress(this);
-
-  MessageTransport get inferredTransport => inferTransport(this);
 
   mox.JID toJid() => parseJidOrThrow(this);
 

@@ -882,31 +882,15 @@ bool _chatMessagesShouldChain(ChatMessage current, ChatMessage? neighbor) {
   return neighborDate == currentDate;
 }
 
-ChatCalendarSyncCoordinator? _maybeReadChatCalendarCoordinator(
+ChatCalendarSyncCoordinator? _readChatCalendarCoordinator(
   BuildContext context,
-) {
-  try {
-    return RepositoryProvider.of<ChatCalendarSyncCoordinator>(
-      context,
-      listen: false,
-    );
-  } on FlutterError {
-    return null;
-  }
-}
+) =>
+    context.read<ChatCalendarSyncCoordinator?>();
 
-CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
+CalendarAvailabilityShareCoordinator? _readAvailabilityShareCoordinator(
   BuildContext context,
-) {
-  try {
-    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
-      context,
-      listen: false,
-    );
-  } on FlutterError {
-    return null;
-  }
-}
+) =>
+    context.read<CalendarAvailabilityShareCoordinator?>();
 
 class Chat extends StatefulWidget {
   const Chat({super.key, this.readOnly = false});
@@ -1254,7 +1238,7 @@ class _ChatState extends State<Chat> {
     required CalendarStorageManager storageManager,
     required XmppService xmppService,
   }) {
-    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    final coordinator = _readChatCalendarCoordinator(context);
     if (coordinator != null) {
       return coordinator;
     }
@@ -1306,7 +1290,7 @@ class _ChatState extends State<Chat> {
     final reminderController = context.read<CalendarReminderController>();
     final xmppService = context.read<XmppService>();
     final emailService = context.read<EmailService?>();
-    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
+    final availabilityCoordinator = _readAvailabilityShareCoordinator(
       context,
     );
     final bloc = ChatCalendarBloc(
@@ -1586,7 +1570,7 @@ class _ChatState extends State<Chat> {
       );
       return;
     }
-    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    final coordinator = _readChatCalendarCoordinator(context);
     if (coordinator == null) {
       _showSnackbar(
         l10n.chatAvailabilityRequestChatCalendarUnavailableMessage,
@@ -4294,7 +4278,7 @@ class _ChatState extends State<Chat> {
                                           attachments.isNotEmpty;
                                     }).toList();
                                     final availabilityCoordinator =
-                                        _maybeReadAvailabilityShareCoordinator(
+                                        _readAvailabilityShareCoordinator(
                                       context,
                                     );
                                     final availabilityShareOwnersById =
@@ -11075,6 +11059,8 @@ class _ChatComposerSection extends StatelessWidget {
       RecipientChipsBar(
         recipients: recipients,
         availableChats: availableChats,
+        rosterItems:
+            context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
         latestStatuses: latestStatuses,
         collapsedByDefault: true,
         suggestionAddresses: suggestionAddresses,
@@ -13119,7 +13105,7 @@ class _GuestChatState extends State<GuestChat> {
     final l10n = context.l10n;
     _selfUser = ChatUser(id: 'me', firstName: l10n.chatSenderYou);
     _axiUser = ChatUser(id: 'axichat', firstName: appDisplayName);
-    _messages = _buildScriptMessages(l10n);
+    _messages = _scriptMessagesForLocale(l10n);
   }
 
   List<_GuestScriptEntry> _previewScript(AppLocalizations l10n) => [
@@ -13167,7 +13153,7 @@ class _GuestChatState extends State<GuestChat> {
         ),
       ];
 
-  List<ChatMessage> _buildScriptMessages(AppLocalizations l10n) {
+  List<ChatMessage> _scriptMessagesForLocale(AppLocalizations l10n) {
     final now = DateTime.now();
     return _previewScript(l10n)
         .map(
@@ -13987,6 +13973,8 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
         RecipientChipsBar(
           recipients: _recipients,
           availableChats: widget.availableChats,
+          rosterItems:
+              context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
           latestStatuses: const {},
           collapsedByDefault: false,
           allowAddressTargets: false,

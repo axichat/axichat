@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -227,6 +228,7 @@ class EmailService {
   static const int _emailLocalPartMinLength = 1;
   static const String _unknownEmailPassword = '';
   static const String _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
+  static const String _emailStockPurgeKeyPrefix = 'email_stock_purge_v1';
   static const String _connectionOverrideKeyPrefix =
       'email_connection_overrides_v1';
   static const String _credentialTrueValue = 'true';
@@ -381,6 +383,8 @@ class EmailService {
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
   final Set<String> _ephemeralConnectionOverrideScopes = {};
+  final Map<String, RegisteredCredentialKey> _stockPurgeKeys = {};
+  final Set<String> _ephemeralStockPurgeScopes = {};
   final _authFailureController = StreamController<DeltaChatException>.broadcast(
     sync: true,
   );
@@ -1900,7 +1904,7 @@ class EmailService {
 
   Future<void> applySpamSyncUpdate(SpamSyncUpdate update) async {
     final normalized = normalizeEmailAddress(update.address);
-    if (normalized.isEmpty || !normalized.isEmailJid) {
+    if (normalized.isEmpty || !normalized.isValidEmailAddress) {
       return;
     }
     try {
@@ -1923,7 +1927,7 @@ class EmailService {
     EmailBlocklistSyncUpdate update,
   ) async {
     final normalized = normalizeEmailAddress(update.address);
-    if (normalized.isEmpty || !normalized.isEmailJid) {
+    if (normalized.isEmpty || !normalized.isValidEmailAddress) {
       return;
     }
     try {
@@ -3617,6 +3621,17 @@ class EmailService {
   }) {
     final identifier = '${_emailBootstrapKeyPrefix}_${databasePrefix}_$scope';
     return _bootstrapKeys.putIfAbsent(
+      identifier,
+      () => CredentialStore.registerKey(identifier),
+    );
+  }
+
+  RegisteredCredentialKey _stockPurgeKeyFor({
+    required String scope,
+    required String databasePrefix,
+  }) {
+    final identifier = '${_emailStockPurgeKeyPrefix}_${databasePrefix}_$scope';
+    return _stockPurgeKeys.putIfAbsent(
       identifier,
       () => CredentialStore.registerKey(identifier),
     );

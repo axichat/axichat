@@ -60,7 +60,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
 
   Future<void> block({
     required String address,
-    MessageTransport? transport,
+    required MessageTransport transport,
     SpamReportReason? reportReason,
   }) async {
     final normalized = address.trim();
@@ -68,9 +68,8 @@ class BlocklistCubit extends Cubit<BlocklistState>
       _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
       return;
     }
-    final resolvedTransport = transport ?? normalized.inferredTransport;
     _emitLoading(jid: normalized);
-    if (resolvedTransport.isEmail) {
+    if (transport.isEmail) {
       if (!normalized.isValidEmailAddress) {
         _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
         return;

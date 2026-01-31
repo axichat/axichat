@@ -11,7 +11,6 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/foundation.dart';
@@ -25,6 +24,7 @@ class RecipientChipsBar extends StatefulWidget {
     super.key,
     required this.recipients,
     required this.availableChats,
+    this.rosterItems = const <RosterItem>[],
     required this.onRecipientAdded,
     required this.onRecipientToggled,
     required this.onRecipientRemoved,
@@ -41,6 +41,7 @@ class RecipientChipsBar extends StatefulWidget {
 
   final List<ComposerRecipient> recipients;
   final List<Chat> availableChats;
+  final List<RosterItem> rosterItems;
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientToggled;
   final ValueChanged<String> onRecipientRemoved;
@@ -81,6 +82,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
   String? _ownNormalizedJid;
+  List<RosterItem> _lastRosterItems = const <RosterItem>[];
+  Map<String, String> _avatarPathsByJid = const <String, String>{};
+  List<Chat> _availableAutocompleteChats = const <Chat>[];
+  Set<String> _knownDomains = const <String>{};
+  Set<String> _knownAddresses = const <String>{};
+  Set<String> _knownAddressesLower = const <String>{};
 
   @override
   void initState() {
@@ -101,6 +108,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       curve: Curves.easeInOutCubic,
     );
     _controller.addListener(_handleTextChanged);
+    _lastRosterItems = List<RosterItem>.from(widget.rosterItems);
+    _avatarPathsByJid = _computeAvatarPaths(widget.rosterItems);
+    final pools = _computeSuggestionPools();
+    _availableAutocompleteChats = pools.availableChats;
+    _knownDomains = pools.domains;
+    _knownAddresses = pools.addresses;
+    _knownAddressesLower = pools.addressesLower;
   }
 
   @override
@@ -113,7 +127,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         .listen((addresses) {
       if (!mounted) return;
       if (listEquals(addresses, _databaseSuggestionAddresses)) return;
-      setState(() => _databaseSuggestionAddresses = addresses);
+      setState(() {
+        _databaseSuggestionAddresses = addresses;
+      });
+      _refreshSuggestionPools();
     });
     _updateOwnJid(context.read<ChatBloc>().selfJid);
   }
@@ -124,6 +141,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     setState(() {
       _ownNormalizedJid = normalized;
     });
+    _refreshSuggestionPools();
   }
 
   @override
@@ -138,6 +156,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
     _syncRenderedRecipients();
     _prunePendingRemoval();
+    _refreshAvatarPaths();
+    _refreshSuggestionPools();
   }
 
   @override
@@ -156,15 +176,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final recipients = widget.recipients;
-    final rosterItems =
-        (context.watch<RosterCubit?>()?.cache['items'] as List<RosterItem>?) ??
-            const <RosterItem>[];
-    final avatarPathsByJid = <String, String>{};
-    for (final item in rosterItems) {
-      final path = item.avatarPath?.trim();
-      if (path == null || path.isEmpty) continue;
-      avatarPathsByJid[item.jid.toLowerCase()] = path;
-    }
+    final avatarPathsByJid = _avatarPathsByJid;
     final visibleRecipients = _visibleRecipientsForState();
     final overflow = recipients.length - visibleRecipients.length;
     final chips = <Widget>[
@@ -204,17 +216,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     ];
 
     final barBackground = colors.card;
-    final availableAutocompleteChats = widget.availableChats
-        .where(
-          (chat) => !widget.recipients.any(
-            (recipient) => recipient.target.chat?.jid == chat.jid,
-          ),
-        )
-        .toList();
-    final Set<String> knownDomains =
-        widget.allowAddressTargets ? _knownDomains() : const <String>{};
-    final Set<String> knownAddresses =
-        widget.allowAddressTargets ? _knownAddresses() : const <String>{};
+    final availableAutocompleteChats = _availableAutocompleteChats;
+    final knownDomains = _knownDomains;
+    final knownAddresses = _knownAddresses;
     final headerPadding = EdgeInsets.symmetric(
       horizontal: context.spacing.m,
       vertical: context.spacing.xs,
@@ -402,6 +406,134 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ],
       ),
     );
+  }
+
+  Map<String, String> _computeAvatarPaths(List<RosterItem> rosterItems) {
+    final next = <String, String>{};
+    for (final item in rosterItems) {
+      final path = item.avatarPath?.trim();
+      if (path == null || path.isEmpty) continue;
+      next[item.jid.toLowerCase()] = path;
+    }
+    return next;
+  }
+
+  void _refreshAvatarPaths() {
+    final rosterItems = widget.rosterItems;
+    if (listEquals(rosterItems, _lastRosterItems)) {
+      return;
+    }
+    _lastRosterItems = List<RosterItem>.from(rosterItems);
+    final next = _computeAvatarPaths(rosterItems);
+    if (mapEquals(next, _avatarPathsByJid)) {
+      return;
+    }
+    setState(() {
+      _avatarPathsByJid = next;
+    });
+  }
+
+  ({
+    List<Chat> availableChats,
+    Set<String> domains,
+    Set<String> addresses,
+    Set<String> addressesLower,
+  }) _computeSuggestionPools() {
+    final allowAddressTargets = widget.allowAddressTargets;
+    final availableChats = widget.availableChats;
+    final recipients = widget.recipients;
+    final nextAvailable = availableChats
+        .where(
+          (chat) => !recipients.any(
+            (recipient) => recipient.target.chat?.jid == chat.jid,
+          ),
+        )
+        .toList(growable: false);
+    final Set<String> nextDomains;
+    final Set<String> nextAddresses;
+    if (!allowAddressTargets) {
+      nextDomains = const <String>{};
+      nextAddresses = const <String>{};
+    } else {
+      final domains = <String>{EndpointConfig.defaultDomain}
+        ..addAll(widget.suggestionDomains);
+      void addDomainFrom(String? address) {
+        if (_isRoomNick(address)) return;
+        if (_isOwnAddress(address)) return;
+        final domain = _extractDomain(address);
+        if (domain != null) {
+          domains.add(domain);
+        }
+      }
+
+      for (final suggestion in widget.suggestionAddresses) {
+        addDomainFrom(suggestion);
+      }
+      for (final suggestion in _databaseSuggestionAddresses) {
+        addDomainFrom(suggestion);
+      }
+      for (final chat in availableChats) {
+        addDomainFrom(chat.emailAddress);
+        addDomainFrom(chat.jid);
+        addDomainFrom(chat.remoteJid);
+      }
+      for (final recipient in recipients) {
+        final target = recipient.target;
+        addDomainFrom(target.chat?.emailAddress ?? target.address);
+        addDomainFrom(target.chat?.jid);
+        addDomainFrom(target.chat?.remoteJid);
+      }
+
+      final addresses = <String>{}
+        ..addAll(widget.suggestionAddresses)
+        ..addAll(_databaseSuggestionAddresses);
+      void addAddress(String? raw) {
+        final value = raw?.trim();
+        if (value == null || value.isEmpty) return;
+        if (_isRoomNick(value)) return;
+        if (_isOwnAddress(value)) return;
+        addresses.add(value);
+      }
+
+      for (final chat in availableChats) {
+        addAddress(chat.emailAddress);
+        addAddress(chat.jid);
+        addAddress(chat.remoteJid);
+      }
+      for (final recipient in recipients) {
+        final target = recipient.target;
+        addAddress(target.address);
+        addAddress(target.chat?.jid);
+        addAddress(target.chat?.emailAddress);
+        addAddress(target.chat?.remoteJid);
+      }
+      nextDomains = domains;
+      nextAddresses = addresses;
+    }
+    final lowerAddresses =
+        nextAddresses.map((address) => address.toLowerCase()).toSet();
+    return (
+      availableChats: nextAvailable,
+      domains: nextDomains,
+      addresses: nextAddresses,
+      addressesLower: lowerAddresses,
+    );
+  }
+
+  void _refreshSuggestionPools() {
+    final pools = _computeSuggestionPools();
+    if (listEquals(pools.availableChats, _availableAutocompleteChats) &&
+        setEquals(pools.domains, _knownDomains) &&
+        setEquals(pools.addresses, _knownAddresses) &&
+        setEquals(pools.addressesLower, _knownAddressesLower)) {
+      return;
+    }
+    setState(() {
+      _availableAutocompleteChats = pools.availableChats;
+      _knownDomains = pools.domains;
+      _knownAddresses = pools.addresses;
+      _knownAddressesLower = pools.addressesLower;
+    });
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -652,67 +784,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     });
   }
 
-  Set<String> _knownDomains() {
-    final domains = <String>{EndpointConfig.defaultDomain}
-      ..addAll(widget.suggestionDomains);
-    void addFrom(String? address) {
-      if (_isRoomNick(address)) return;
-      if (_isOwnAddress(address)) return;
-      final domain = _extractDomain(address);
-      if (domain != null) {
-        domains.add(domain);
-      }
-    }
-
-    for (final suggestion in widget.suggestionAddresses) {
-      addFrom(suggestion);
-    }
-
-    for (final suggestion in _databaseSuggestionAddresses) {
-      addFrom(suggestion);
-    }
-
-    for (final chat in widget.availableChats) {
-      addFrom(chat.emailAddress);
-      addFrom(chat.jid);
-      addFrom(chat.remoteJid);
-    }
-    for (final recipient in widget.recipients) {
-      final target = recipient.target;
-      addFrom(target.chat?.emailAddress ?? target.address);
-      addFrom(target.chat?.jid);
-      addFrom(target.chat?.remoteJid);
-    }
-    return domains;
-  }
-
-  Set<String> _knownAddresses() {
-    final addresses = <String>{}
-      ..addAll(widget.suggestionAddresses)
-      ..addAll(_databaseSuggestionAddresses);
-    void add(String? raw) {
-      final value = raw?.trim();
-      if (value == null || value.isEmpty) return;
-      if (_isRoomNick(value)) return;
-      if (_isOwnAddress(value)) return;
-      addresses.add(value);
-    }
-
-    for (final chat in widget.availableChats) {
-      add(chat.emailAddress);
-      add(chat.jid);
-      add(chat.remoteJid);
-    }
-    for (final recipient in widget.recipients) {
-      final target = recipient.target;
-      add(target.address);
-      add(target.chat?.jid);
-      add(target.chat?.emailAddress);
-      add(target.chat?.remoteJid);
-    }
-    return addresses;
-  }
-
   bool _isRoomNick(String? raw) {
     final value = raw?.trim();
     if (value == null || value.isEmpty) return false;
@@ -764,6 +835,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     required bool shareTokenSignatureEnabled,
   }) {
     const maxSuggestions = 8;
+    final knownAddressesLower = _knownAddressesLower;
     FanOutTarget chatTarget(Chat chat) => FanOutTarget.chat(
           chat: chat,
           shareSignatureEnabled:
@@ -829,10 +901,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
             .map(
               (domain) => _DomainCompletion(
                 domain: domain,
-                hasExactAddress: knownAddresses.any(
-                  (address) =>
-                      address.toLowerCase() == '$normalizedLocal@$domain',
-                ),
+                hasExactAddress:
+                    knownAddressesLower.contains('$normalizedLocal@$domain'),
               ),
             )
             .where(

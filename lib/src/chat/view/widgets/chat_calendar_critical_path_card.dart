@@ -44,9 +44,11 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   Future<void> _handleCopy(BuildContext context) async {
     final CalendarStorageManager storageManager =
         context.read<CalendarStorageManager>();
-    final bool canAddToPersonal = storageManager.isAuthStorageReady &&
-        _maybeReadPersonalCalendarBloc(context) != null;
-    final bool canAddToChat = _maybeReadChatCalendarBloc(context) != null;
+    final CalendarBloc? personalBloc = context.read<CalendarBloc?>();
+    final ChatCalendarBloc? chatBloc = context.read<ChatCalendarBloc?>();
+    final bool canAddToPersonal =
+        storageManager.isAuthStorageReady && personalBloc != null;
+    final bool canAddToChat = chatBloc != null;
 
     if (!canAddToPersonal && !canAddToChat) {
       FeedbackSystem.showInfo(
@@ -71,12 +73,10 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
       return;
     }
 
-    final CalendarModel importModel = _buildImportModel();
+    final CalendarModel importModel = _importModel();
     final CalendarCriticalPath? importPath = importModel.criticalPaths[path.id];
     final Set<String> taskIds = <String>{}
       ..addAll(importPath?.taskIds ?? const <String>[]);
-    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc(context);
-    final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc(context);
     bool didCopy = false;
     if (decision.addToPersonal && personalBloc != null) {
       final bool copied = await _copyCriticalPathToCalendar(
@@ -108,7 +108,7 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     }
   }
 
-  CalendarModel _buildImportModel() {
+  CalendarModel _importModel() {
     final Set<String> availableIds = tasks.map((task) => task.id).toSet();
     final List<String> orderedIds =
         path.taskIds.where(availableIds.contains).toList(growable: false);
@@ -136,21 +136,5 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
       pathId: pathId,
       taskIds: taskIds,
     );
-  }
-
-  CalendarBloc? _maybeReadPersonalCalendarBloc(BuildContext context) {
-    try {
-      return context.read<CalendarBloc>();
-    } on FlutterError {
-      return null;
-    }
-  }
-
-  ChatCalendarBloc? _maybeReadChatCalendarBloc(BuildContext context) {
-    try {
-      return context.read<ChatCalendarBloc>();
-    } on FlutterError {
-      return null;
-    }
   }
 }

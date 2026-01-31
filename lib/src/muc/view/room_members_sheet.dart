@@ -13,7 +13,9 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -802,6 +804,8 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final rosterItems =
+        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
     final contentPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,
@@ -851,6 +855,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
             RecipientChipsBar(
               recipients: _recipients,
               availableChats: const <chat_models.Chat>[],
+              rosterItems: rosterItems,
               latestStatuses: const {},
               onRecipientAdded: _addRecipient,
               onRecipientRemoved: _removeRecipient,

@@ -6,6 +6,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -117,6 +118,7 @@ class _SpamListBody extends StatelessWidget {
     }
 
     return AxiNowTicker(
+      now: kEnableDemoChats ? demoNow : DateTime.now,
       builder: (context, nowListenable) => ValueListenableBuilder<DateTime>(
         valueListenable: nowListenable,
         builder: (context, timestampNow, _) {

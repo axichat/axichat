@@ -279,7 +279,8 @@ class EndpointResolver {
       );
     }
     try {
-      final addresses = await lookup(config.domain);
+      final lookupHost = preferred ?? config.domain;
+      final addresses = await lookup(lookupHost);
       final host = addresses.isNotEmpty
           ? addresses.first.address
           : _chooseHost(preferredHost, fallbackHost, config.domain);

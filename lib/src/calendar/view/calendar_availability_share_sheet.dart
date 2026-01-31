@@ -26,7 +26,9 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -970,6 +972,8 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rosterItems =
+        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -994,6 +998,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
         RecipientChipsBar(
           recipients: recipients,
           availableChats: availableChats,
+          rosterItems: rosterItems,
           latestStatuses: const {},
           collapsedByDefault: false,
           allowAddressTargets: false,

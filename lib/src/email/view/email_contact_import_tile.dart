@@ -197,9 +197,7 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
         final TextStyle fileStyle = _selectedFileName == null
             ? context.textTheme.muted
             : context.textTheme.small;
-        final TextStyle selectTextStyle = context.textTheme.small.copyWith(
-          color: context.colorScheme.foreground,
-        );
+        final TextStyle selectTextStyle = context.textTheme.small;
         final EmailContactImportFailureReason? failureReason =
             state is EmailContactImportFailure ? state.reason : null;
         return AxiInputDialog(
@@ -274,9 +272,7 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                 SizedBox(height: spacing.m),
                 Text(
                   _failureMessage(l10n, failureReason),
-                  style: context.textTheme.small.copyWith(
-                    color: context.colorScheme.destructive,
-                  ),
+                  style: context.textTheme.small,
                 ),
               ],
             ],

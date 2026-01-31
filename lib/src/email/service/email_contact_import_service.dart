@@ -178,7 +178,11 @@ class EmailContactImportService {
       return _stripBom(content);
     } on EmailContactImportException {
       rethrow;
-    } catch (_) {
+    } on FileSystemException {
+      throw const EmailContactImportException(
+        EmailContactImportFailureReason.readFailure,
+      );
+    } on FormatException {
       throw const EmailContactImportException(
         EmailContactImportFailureReason.readFailure,
       );

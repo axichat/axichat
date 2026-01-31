@@ -18,7 +18,9 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -110,6 +112,8 @@ class _CalendarCriticalPathShareSheetState
 
   @override
   Widget build(BuildContext context) {
+    final rosterItems =
+        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
     final header = AxiSheetHeader(
       title: Text(context.l10n.calendarCriticalPathShareTitle),
       subtitle: Text(context.l10n.calendarCriticalPathShareSubtitle),
@@ -136,6 +140,7 @@ class _CalendarCriticalPathShareSheetState
           RecipientChipsBar(
             recipients: _recipients,
             availableChats: widget.availableChats,
+            rosterItems: rosterItems,
             latestStatuses: const {},
             collapsedByDefault: false,
             allowAddressTargets: false,

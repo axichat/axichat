@@ -5,6 +5,7 @@ import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 
@@ -120,14 +121,14 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
           detail: null,
         ),
       );
-    } catch (error, stackTrace) {
+    } on EmailProvisioningException catch (error, stackTrace) {
       const String logMessage = 'Provisioning failed';
       _log.warning(logMessage, error, stackTrace);
       emit(
         state.copyWith(
           status: EmailDemoStatus.provisionFailed,
           failure: EmailDemoFailure.unexpected,
-          detail: '$error',
+          detail: null,
         ),
       );
     }
@@ -168,14 +169,24 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
           failure: null,
         ),
       );
-    } catch (error, stackTrace) {
+    } on FanOutValidationException catch (error, stackTrace) {
       const String logMessage = 'Failed to send demo message';
       _log.warning(logMessage, error, stackTrace);
       emit(
         state.copyWith(
           status: EmailDemoStatus.sendFailed,
           failure: EmailDemoFailure.unexpected,
-          detail: '$error',
+          detail: null,
+        ),
+      );
+    } on DeltaChatException catch (error, stackTrace) {
+      const String logMessage = 'Failed to send demo message';
+      _log.warning(logMessage, error, stackTrace);
+      emit(
+        state.copyWith(
+          status: EmailDemoStatus.sendFailed,
+          failure: EmailDemoFailure.unexpected,
+          detail: null,
         ),
       );
     }

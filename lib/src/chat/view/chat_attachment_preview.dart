@@ -2865,7 +2865,7 @@ Future<void> _applyDownloadProtections(File destination) async {
 
 Future<void> _applyMacOsQuarantine(File destination) async {
   try {
-    final value = _buildMacOsQuarantineValue();
+    final value = _macOsQuarantineValue();
     await Process.run(_attachmentMacOsQuarantineCommand, [
       _attachmentMacOsQuarantineWriteArg,
       _attachmentMacOsQuarantineAttribute,
@@ -2888,7 +2888,7 @@ Future<void> _applyWindowsZoneIdentifier(File destination) async {
   }
 }
 
-String _buildMacOsQuarantineValue() {
+String _macOsQuarantineValue() {
   final timestampSeconds =
       DateTime.now().millisecondsSinceEpoch ~/ _attachmentMillisecondsPerSecond;
   final timestampHex = timestampSeconds.toRadixString(

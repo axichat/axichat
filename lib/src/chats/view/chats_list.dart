@@ -234,7 +234,7 @@ class _ChatsListBody extends StatelessWidget {
               body = ColoredBox(
                 color: context.colorScheme.background,
                 child: AxiNowTicker(
-                  now: () => kEnableDemoChats ? demoNow() : DateTime.now(),
+                  now: kEnableDemoChats ? demoNow : DateTime.now,
                   builder: (context, nowListenable) => AnimatedChatsListView(
                     items: visibleItems,
                     includeCalendarShortcut: includeCalendarShortcut,

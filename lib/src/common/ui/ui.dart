@@ -48,6 +48,7 @@ export 'axi_version.dart';
 export 'axi_motion.dart';
 export 'axi_spacing.dart';
 export 'axi_sizing.dart';
+export 'status_colors.dart';
 export 'buttons/axi_button.dart';
 export 'buttons/axi_icon_button.dart';
 export 'buttons/axi_list_button.dart';
@@ -130,15 +131,6 @@ const calendarTaskSplitPreviewAnimationDuration = Duration(milliseconds: 120);
 const calendarScrollAnimationDuration = Duration(milliseconds: 250);
 const calendarSlotHoverAnimationDuration = Duration(milliseconds: 200);
 const basePageItemLimit = 15;
-
-const axiGreen = Color(0xff00ff55);
-const axiWarning = Color(0xFFFD7E14);
-
-extension AxiStatusColors on ShadColorScheme {
-  Color get green => axiGreen;
-
-  Color get warning => axiWarning;
-}
 
 class CalendarPalette {
   CalendarPalette._();

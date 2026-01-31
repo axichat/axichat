@@ -16,6 +16,8 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -86,6 +88,8 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final rosterItems =
+        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
     final bool isReadOnly = _isReadOnly;
     final String readOnlyHint = isReadOnly
         ? l10n.calendarTaskShareReadOnlyHint
@@ -118,6 +122,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           RecipientChipsBar(
             recipients: _recipients,
             availableChats: widget.availableChats,
+            rosterItems: rosterItems,
             latestStatuses: const {},
             collapsedByDefault: false,
             allowAddressTargets: true,

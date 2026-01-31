@@ -3,16 +3,21 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlockMenuItem extends StatelessWidget {
-  const BlockMenuItem({super.key, required this.jid});
+  const BlockMenuItem({
+    super.key,
+    required this.jid,
+    required this.transport,
+  });
 
   final String jid;
+  final MessageTransport transport;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +28,9 @@ class BlockMenuItem extends StatelessWidget {
         return ShadContextMenuItem(
           onPressed: disabled
               ? null
-              : () => context.read<BlocklistCubit?>()?.block(address: jid),
+              : () => context
+                  .read<BlocklistCubit>()
+                  .block(address: jid, transport: transport),
           leading: Icon(
             LucideIcons.userX,
             color: context.colorScheme.destructive,
@@ -36,9 +43,14 @@ class BlockMenuItem extends StatelessWidget {
 }
 
 class ReportSpamMenuItem extends StatelessWidget {
-  const ReportSpamMenuItem({super.key, required this.jid});
+  const ReportSpamMenuItem({
+    super.key,
+    required this.jid,
+    required this.transport,
+  });
 
   final String jid;
+  final MessageTransport transport;
 
   @override
   Widget build(BuildContext context) {
@@ -49,8 +61,9 @@ class ReportSpamMenuItem extends StatelessWidget {
         return ShadContextMenuItem(
           onPressed: disabled
               ? null
-              : () => context.read<BlocklistCubit?>()?.block(
+              : () => context.read<BlocklistCubit>().block(
                     address: jid,
+                    transport: transport,
                     reportReason: SpamReportReason.spam,
                   ),
           leading: Icon(
