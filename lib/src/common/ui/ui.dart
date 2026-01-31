@@ -31,6 +31,7 @@ export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';
 export 'axi_menu.dart';
 export 'axi_more.dart';
+export 'axi_now_ticker.dart';
 export 'axi_navigation_rail.dart';
 export 'axi_popover.dart';
 export 'axi_progress_indicator.dart';

@@ -5,7 +5,6 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -452,47 +451,6 @@ main() {
         expect(stored, isNull);
 
         await controller.close();
-      },
-    );
-  });
-
-  group('server-only storage', () {
-    test(
-      'Uses an in-memory database and trims chat history to the cap',
-      () async {
-        xmppService.setMamSupportOverride(true);
-        xmppService.updateMessageStorageMode(MessageStorageMode.serverOnly);
-
-        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-        when(
-          () => mockConnection.sendMessage(any()),
-        ).thenAnswer((_) async => true);
-
-        await connectSuccessfully(xmppService);
-
-        final memoryDb = await xmppService.database;
-        expect(memoryDb, isA<XmppDrift>());
-        expect((memoryDb as XmppDrift).isInMemory, isTrue);
-
-        const targetJid = 'contact@axi.im';
-        const targetCount = serverOnlyChatMessageCap + 10;
-        try {
-          for (var i = 0; i < targetCount; i++) {
-            await xmppService.sendMessage(jid: targetJid, text: 'message $i');
-          }
-        } on XmppUnknownException catch (error, stackTrace) {
-          fail(
-            'Unexpected XmppUnknownException: ${error.wrapped ?? error}\n'
-            'wrappedType=${error.wrapped?.runtimeType ?? 'unknown'}\n'
-            '$stackTrace',
-          );
-        }
-
-        final storedCount = await memoryDb.countChatMessages(
-          targetJid,
-          includePseudoMessages: true,
-        );
-        expect(storedCount, serverOnlyChatMessageCap);
       },
     );
   });

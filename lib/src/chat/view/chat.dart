@@ -63,6 +63,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_error_l10n.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -923,7 +924,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
     required this.onChangeNickname,
     required this.onLeaveRoom,
     required this.onClose,
-    required this.rootContext,
   });
 
   final ValueChanged<String> onInvite;
@@ -931,7 +931,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   final ValueChanged<String> onChangeNickname;
   final VoidCallback onLeaveRoom;
   final VoidCallback onClose;
-  final BuildContext rootContext;
 
   @override
   Widget build(BuildContext context) {
@@ -972,7 +971,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
               roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
-          rootContext: rootContext,
           roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
@@ -2001,16 +1999,15 @@ class _ChatState extends State<Chat> {
   }
 
   void _showMembers({bool refreshMembership = true}) {
+    final locate = context.read;
     if (refreshMembership) {
-      context.read<ChatBloc>().add(const ChatRoomMembersOpened());
+      locate<ChatBloc>().add(const ChatRoomMembersOpened());
     }
     final navigator = Navigator.of(context);
-    final rootContext = context;
-    final locate = context.read;
     final sizing = context.sizing;
     final spacing = context.spacing;
     final Duration animationDuration =
-        context.read<SettingsCubit>().animationDuration;
+        locate<SettingsCubit>().animationDuration;
     final colors = context.colorScheme;
     showGeneralDialog(
       context: context,
@@ -2053,7 +2050,6 @@ class _ChatState extends State<Chat> {
                             const ChatLeaveRoomRequested(),
                           ),
                           onClose: navigator.pop,
-                          rootContext: rootContext,
                         ),
                       ),
                     ),
@@ -3030,22 +3026,6 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  void _pruneMessageSelection(Set<String> availableIds) {
-    if (!_multiSelectActive) return;
-    final missing = _multiSelectedMessageIds
-        .where(
-          (id) =>
-              !availableIds.contains(id) &&
-              !_selectedMessageSnapshots.containsKey(id),
-        )
-        .toList();
-    if (missing.isEmpty) return;
-    final missingSet = missing.toSet();
-    setState(() {
-      _multiSelectedMessageIds.removeWhere(missingSet.contains);
-    });
-  }
-
   List<Message> _collectSelectedMessages(List<Message> orderedMessages) {
     if (_multiSelectedMessageIds.isEmpty) return const [];
     final selected = <Message>[];
@@ -3208,30 +3188,6 @@ class _ChatState extends State<Chat> {
       return 0;
     }
     return gapDelta;
-  }
-
-  double _scrollShortfallForGap(double gapDelta) {
-    final position = _scrollController.position;
-    final directionSign = _axisDirectionSign(position.axisDirection);
-    final scrollDelta = gapDelta * directionSign;
-    final rawTarget = position.pixels + scrollDelta;
-    if (rawTarget > position.maxScrollExtent + _selectionHeadroomTolerance) {
-      return rawTarget - position.maxScrollExtent;
-    }
-    if (rawTarget < position.minScrollExtent - _selectionHeadroomTolerance) {
-      return position.minScrollExtent - rawTarget;
-    }
-    return 0;
-  }
-
-  void _extendSpacerBy(double amount) {
-    final additional = math.max(amount, 0.0);
-    if (additional <= _selectionHeadroomTolerance) return;
-    setState(() {
-      _selectionSpacerHeight =
-          math.max(_selectionSpacerHeight, _selectionSpacerBaseHeight) +
-              additional;
-    });
   }
 
   Future<void> _reboundSelectionScroll(double accumulated) async {

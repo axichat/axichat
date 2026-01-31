@@ -23,6 +23,7 @@ class VerificationSelector extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
+        final colors = context.colorScheme;
         final self = state.fingerprint?.deviceID == fingerprint.deviceID &&
             state.fingerprint?.jid == fingerprint.jid;
         return ShadCard(
@@ -31,7 +32,9 @@ class VerificationSelector extends StatelessWidget {
           border: self
               ? null
               : Border.fromBorderSide(
-                  BorderSide(color: fingerprint.trust.toColor),
+                  context.borderSide.copyWith(
+                    color: fingerprint.trust.color(colors),
+                  ),
                 ),
           child: Column(
             spacing: 8.0,
@@ -87,8 +90,8 @@ class VerificationSelector extends StatelessWidget {
                   spacing: 8.0,
                   children: [
                     Icon(
-                      fingerprint.trust.toIcon,
-                      color: fingerprint.trust.toColor,
+                      fingerprint.trust.iconData(),
+                      color: fingerprint.trust.color(colors),
                     ),
                     AxiSelect<BTBVTrustState>(
                       initialValue: fingerprint.trust,
@@ -121,8 +124,8 @@ class VerificationSelector extends StatelessWidget {
                     Icon(
                       fingerprint.trusted.toShieldIcon,
                       color: fingerprint.trusted
-                          ? axiGreen
-                          : context.colorScheme.destructive,
+                          ? colors.green
+                          : colors.destructive,
                     ),
                     Text(
                       fingerprint.trusted
@@ -145,5 +148,17 @@ extension _TrustStateLocalization on BTBVTrustState {
         BTBVTrustState.notTrusted => l10n.verificationTrustNone,
         BTBVTrustState.blindTrust => l10n.verificationTrustBlind,
         BTBVTrustState.verified => l10n.verificationTrustVerified,
+      };
+
+  IconData iconData() => switch (this) {
+        BTBVTrustState.notTrusted => LucideIcons.shieldX,
+        BTBVTrustState.blindTrust => LucideIcons.shieldQuestionMark,
+        BTBVTrustState.verified => LucideIcons.shieldCheck,
+      };
+
+  Color color(ShadColorScheme colors) => switch (this) {
+        BTBVTrustState.notTrusted => colors.destructive,
+        BTBVTrustState.blindTrust => colors.warning,
+        BTBVTrustState.verified => colors.green,
       };
 }

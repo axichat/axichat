@@ -42,7 +42,6 @@ class _ArchivesView extends StatelessWidget {
         final selectedChats = chatsState.selectedChats;
         final selectionActive = selectedChats.isNotEmpty;
         final archivedItems = chatsState.archivedItems;
-        final timestampNow = DateTime.now();
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.chatsArchiveTitle),
@@ -83,23 +82,32 @@ class _ArchivesView extends StatelessWidget {
                         style: context.textTheme.muted,
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: archivedItems.length,
-                      itemBuilder: (context, index) => ListItemPadding(
-                        child: ChatListTile(
-                          item: archivedItems[index],
-                          selectionActive: selectionActive,
-                          isSelected: chatsState.selectedJids
-                              .contains(archivedItems[index].jid),
-                          isOpen:
-                              chatsState.openJid == archivedItems[index].jid,
-                          timestampNow: timestampNow,
-                          archivedContext: true,
-                          onArchivedTap: (chat) => GoRouter.of(context).push(
-                            ArchivedChatRoute(jid: chat.jid).location,
-                            extra: locate,
-                          ),
-                        ),
+                  : AxiNowTicker(
+                      builder: (context, nowListenable) =>
+                          ValueListenableBuilder<DateTime>(
+                        valueListenable: nowListenable,
+                        builder: (context, timestampNow, _) {
+                          return ListView.builder(
+                            itemCount: archivedItems.length,
+                            itemBuilder: (context, index) => ListItemPadding(
+                              child: ChatListTile(
+                                item: archivedItems[index],
+                                selectionActive: selectionActive,
+                                isSelected: chatsState.selectedJids
+                                    .contains(archivedItems[index].jid),
+                                isOpen: chatsState.openJid ==
+                                    archivedItems[index].jid,
+                                timestampNow: timestampNow,
+                                archivedContext: true,
+                                onArchivedTap: (chat) =>
+                                    GoRouter.of(context).push(
+                                  ArchivedChatRoute(jid: chat.jid).location,
+                                  extra: locate,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
           bottomNavigationBar: selectionActive

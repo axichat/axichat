@@ -325,7 +325,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return BlocConsumer<SettingsCubit, SettingsState>(
       listener: (context, state) async {
         final notificationService = context.read<NotificationService>();
-        final xmppService = context.read<XmppService>();
         final emailService = context.read<EmailService>();
         notificationService
           ..mute = state.mute

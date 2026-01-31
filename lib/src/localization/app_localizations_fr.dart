@@ -1945,19 +1945,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
-  String get settingsMessageStorageTitle => 'Stockage des messages';
-
-  @override
-  String get settingsMessageStorageSubtitle =>
-      'Local conserve des copies sur l’appareil ; Serveur uniquement interroge l’archive.';
-
-  @override
-  String get settingsMessageStorageLocal => 'Local';
-
-  @override
-  String get settingsMessageStorageServerOnly => 'Serveur uniquement';
-
-  @override
   String get settingsMuteNotifications => 'Couper les notifications';
 
   @override

@@ -1848,18 +1848,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
-  String get settingsMessageStorageTitle => '消息存储';
-
-  @override
-  String get settingsMessageStorageSubtitle => '本地保留设备副本；仅服务器模式从存档查询。';
-
-  @override
-  String get settingsMessageStorageLocal => '本地';
-
-  @override
-  String get settingsMessageStorageServerOnly => '仅服务器';
-
-  @override
   String get settingsMuteNotifications => '静音通知';
 
   @override
@@ -7516,18 +7504,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
-
-  @override
-  String get settingsMessageStorageTitle => '訊息儲存';
-
-  @override
-  String get settingsMessageStorageSubtitle => '本地會保留裝置副本；僅伺服器模式會查詢封存。';
-
-  @override
-  String get settingsMessageStorageLocal => '本地';
-
-  @override
-  String get settingsMessageStorageServerOnly => '僅伺服器';
 
   @override
   String get settingsMuteNotifications => '靜音通知';

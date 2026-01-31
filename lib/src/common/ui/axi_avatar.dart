@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_decode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -310,7 +311,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
                     for (final value
                         in Presence.values.toList()..remove(Presence.unknown))
                       ListTile(
-                        title: Text(value.tooltip),
+                        title: Text(_presenceLabel(context, value)),
                         leading: PresenceCircle(presence: value),
                         selected: widget.presence?.name == value.name,
                         shape: RoundedRectangleBorder(
@@ -340,7 +341,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
     }
     final sizedChild = SizedBox.square(dimension: widget.size, child: child);
     final statusText = widget.status?.trim();
-    final presenceLabel = widget.presence?.tooltip;
+    final presenceLabel = widget.presence == null
+        ? null
+        : _presenceLabel(context, widget.presence!);
     final tooltipText = () {
       if (statusText != null && statusText.isNotEmpty) {
         return presenceLabel == null
@@ -351,5 +354,17 @@ class _AxiAvatarState extends State<AxiAvatar> {
     }();
     if (tooltipText == null) return sizedChild;
     return AxiTooltip(builder: (_) => Text(tooltipText), child: sizedChild);
+  }
+
+  String _presenceLabel(BuildContext context, Presence presence) {
+    final l10n = context.l10n;
+    return switch (presence) {
+      Presence.unavailable => l10n.sessionCapabilityStatusOffline,
+      Presence.xa => l10n.emailDemoStatusIdle,
+      Presence.away => l10n.emailDemoStatusIdle,
+      Presence.dnd => l10n.calendarFreeBusyBusy,
+      Presence.chat => l10n.calendarFreeBusyFree,
+      Presence.unknown => l10n.commonUnknownLabel,
+    };
   }
 }

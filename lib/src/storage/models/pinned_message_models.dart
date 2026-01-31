@@ -3,11 +3,6 @@
 
 import 'package:drift/drift.dart';
 
-const String _pinnedMessagesChatIndexName = 'idx_pinned_messages_chat';
-const String _pinnedMessagesChatIndexColumns = 'chat_jid, pinned_at';
-const String _pinnedMessagesMessageIndexName = 'idx_pinned_messages_message';
-const String _pinnedMessagesMessageIndexColumns = 'message_stanza_id';
-
 @DataClassName('PinnedMessageEntry')
 class PinnedMessages extends Table {
   TextColumn get messageStanzaId => text()();
@@ -20,8 +15,7 @@ class PinnedMessages extends Table {
   Set<Column<Object>>? get primaryKey => {messageStanzaId, chatJid};
 
   List<Index> get indexes => [
-        Index(_pinnedMessagesChatIndexName, _pinnedMessagesChatIndexColumns),
-        Index(_pinnedMessagesMessageIndexName,
-            _pinnedMessagesMessageIndexColumns),
+        Index('idx_pinned_messages_chat', 'chat_jid, pinned_at'),
+        Index('idx_pinned_messages_message', 'message_stanza_id'),
       ];
 }

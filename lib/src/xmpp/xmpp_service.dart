@@ -49,7 +49,6 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart' hide DraftAttachmentRef;
 import 'package:axichat/src/storage/impatient_completer.dart';
@@ -489,7 +488,6 @@ class XmppService extends XmppBase
 
   final Logger _xmppLogger = Logger('XmppService');
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
-  @override
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
   var _hasInitializedDatabases = false;
   StreamController<void> _databaseReloadController =
@@ -499,8 +497,6 @@ class XmppService extends XmppBase
   StoredAvatar? _cachedSelfAvatar;
   @override
   String? _databasePrefix;
-  @override
-  String? _databasePassphrase;
 
   final FutureOr<XmppConnection> Function() _connectionFactory;
   final FutureOr<XmppStateStore> Function(String, String) _stateStoreFactory;
@@ -620,7 +616,6 @@ class XmppService extends XmppBase
   Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
       get emailBlocklistSyncCallback => _emailBlocklistSyncCallback;
 
-  @override
   void _notifyDatabaseReloaded() {
     if (_databaseReloadController.isClosed) return;
     _databaseReloadController.add(null);
@@ -1145,7 +1140,6 @@ class XmppService extends XmppBase
     EndpointOverride? endpoint,
   }) async {
     _databasePrefix = databasePrefix;
-    _databasePassphrase = databasePassphrase;
     _reconnectBlocked = false;
     _ensureNetworkAvailabilityListener();
     if (_synchronousConnection.isCompleted && connected) {
@@ -1254,7 +1248,6 @@ class XmppService extends XmppBase
   }) async {
     final shouldNotify = _hasInitializedDatabases;
     _databasePrefix = databasePrefix;
-    _databasePassphrase = databasePassphrase;
     _reconnectBlocked = false;
     _ensureNetworkAvailabilityListener();
     final targetJid = mox.JID.fromString(jid);
@@ -1287,9 +1280,6 @@ class XmppService extends XmppBase
     }
     await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
-    if (_demoOfflineMode) {
-      await updateMessageStorageMode(MessageStorageMode.local);
-    }
     _setConnectionState(ConnectionState.notConnected);
     await _seedDemoChatsIfNeeded();
   }
@@ -1405,9 +1395,6 @@ class XmppService extends XmppBase
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
     await refreshSelfAvatarIfNeeded();
-    if (messageStorageMode.isServerOnly) {
-      await purgeMessageHistory();
-    }
     fireAndForget(
       _verifyMamSupportOnLogin,
       operationName: 'XmppService.verifyMamSupportOnLogin',
@@ -1487,7 +1474,6 @@ class XmppService extends XmppBase
     });
   }
 
-  @override
   Future<XmppDatabase> _buildDatabase(String prefix, String passphrase) async {
     if (kEnableDemoChats) {
       final useSqlCipher = Platform.isAndroid;
@@ -1495,15 +1481,6 @@ class XmppService extends XmppBase
         return XmppDrift.inMemory();
       }
       return _databaseFactory(prefix, passphrase);
-    }
-    final effectiveMode = messageStorageMode;
-    if (effectiveMode.isServerOnly) {
-      return XmppDrift.inMemory();
-    }
-    if (_messageStorageMode.isServerOnly && !_mamSupported) {
-      _xmppLogger.warning(
-        'Server-only storage requested without MAM support; falling back to local storage.',
-      );
     }
     return _databaseFactory(prefix, passphrase);
   }
@@ -2073,9 +2050,6 @@ class XmppService extends XmppBase
   @override
   Future<void> disconnect() async {
     _xmppLogger.info('Logging out...');
-    if (messageStorageMode.isServerOnly) {
-      await purgeMessageHistory(awaitDatabase: false);
-    }
     await _reset();
     _xmppLogger.info('Logged out.');
   }
@@ -2544,7 +2518,6 @@ class XmppService extends XmppBase
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
     _databasePrefix = null;
-    _databasePassphrase = null;
     _cachedSelfAvatar = null;
     _cachedChatList = null;
 

@@ -13,64 +13,89 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class SpamList extends StatefulWidget {
+typedef _SpamSearchInputs = ({bool active, TabSearchState tabState});
+
+class SpamList extends StatelessWidget {
   const SpamList({super.key});
 
   @override
-  State<SpamList> createState() => _SpamListState();
+  Widget build(BuildContext context) {
+    return BlocSelector<HomeSearchCubit, HomeSearchState, _SpamSearchInputs>(
+      selector: (state) => (
+        active: state.active,
+        tabState: state.stateFor(HomeTab.spam),
+      ),
+      builder: (context, searchInputs) => _SpamSearchSync(
+        searchInputs: searchInputs,
+        child: BlocBuilder<ChatsCubit, ChatsState>(
+          buildWhen: (previous, current) =>
+              previous.items != current.items ||
+              previous.spamVisibleItems != current.spamVisibleItems ||
+              previous.spamUpdatingJids != current.spamUpdatingJids,
+          builder: (context, state) {
+            if (state.items == null) {
+              return Center(
+                child: AxiProgressIndicator(
+                  color: context.colorScheme.foreground,
+                ),
+              );
+            }
+            return _SpamListBody(
+              items: state.spamVisibleItems,
+              updatingJids: state.spamUpdatingJids,
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
 
-class _SpamListState extends State<SpamList> {
+class _SpamSearchSync extends StatefulWidget {
+  const _SpamSearchSync({
+    required this.searchInputs,
+    required this.child,
+  });
+
+  final _SpamSearchInputs searchInputs;
+  final Widget child;
+
+  @override
+  State<_SpamSearchSync> createState() => _SpamSearchSyncState();
+}
+
+class _SpamSearchSyncState extends State<_SpamSearchSync> {
+  _SpamSearchInputs? _lastInputs;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final searchState = context.read<HomeSearchCubit>().state;
-    final tabState = searchState.stateFor(HomeTab.spam);
+    _syncIfNeeded(widget.searchInputs);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SpamSearchSync oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchInputs != widget.searchInputs) {
+      _syncIfNeeded(widget.searchInputs);
+    }
+  }
+
+  void _syncIfNeeded(_SpamSearchInputs inputs) {
+    if (_lastInputs == inputs) {
+      return;
+    }
+    _lastInputs = inputs;
     context.read<ChatsCubit>().updateSpamSearchSnapshot(
-          active: searchState.active,
-          query: tabState.query,
-          filterId: tabState.filterId,
-          sortOrder: tabState.sort,
+          active: inputs.active,
+          query: inputs.tabState.query,
+          filterId: inputs.tabState.filterId,
+          sortOrder: inputs.tabState.sort,
         );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return BlocListener<HomeSearchCubit, HomeSearchState>(
-      listenWhen: (previous, current) {
-        final previousTab = previous.stateFor(HomeTab.spam);
-        final currentTab = current.stateFor(HomeTab.spam);
-        return previous.active != current.active ||
-            previousTab.query != currentTab.query ||
-            previousTab.filterId != currentTab.filterId ||
-            previousTab.sort != currentTab.sort;
-      },
-      listener: (context, searchState) {
-        final tabState = searchState.stateFor(HomeTab.spam);
-        context.read<ChatsCubit>().updateSpamSearchSnapshot(
-              active: searchState.active,
-              query: tabState.query,
-              filterId: tabState.filterId,
-              sortOrder: tabState.sort,
-            );
-      },
-      child: BlocBuilder<ChatsCubit, ChatsState>(
-        builder: (context, state) {
-          if (state.items == null) {
-            return Center(
-              child: AxiProgressIndicator(
-                color: context.colorScheme.foreground,
-              ),
-            );
-          }
-          return _SpamListBody(
-            items: state.spamVisibleItems,
-            updatingJids: state.spamUpdatingJids,
-          );
-        },
-      ),
-    );
-  }
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _SpamListBody extends StatelessWidget {
@@ -91,35 +116,43 @@ class _SpamListBody extends StatelessWidget {
       );
     }
 
-    return ColoredBox(
-      color: context.colorScheme.background,
-      child: ListView.builder(
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final chat = items[index];
-          final isUpdating = updatingJids.contains(chat.jid);
-          return ListItemPadding(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ChatListTile(
-                  item: chat,
-                  selectionActive: false,
-                  isSelected: false,
-                  isOpen: false,
-                  timestampNow: DateTime.now(),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: AxiButton.secondary(
-                    size: AxiButtonSize.sm,
-                    loading: isUpdating,
-                    onPressed:
-                        isUpdating ? null : () => _moveToInbox(context, chat),
-                    child: Text(l10n.spamMoveToInbox),
+    return AxiNowTicker(
+      builder: (context, nowListenable) => ValueListenableBuilder<DateTime>(
+        valueListenable: nowListenable,
+        builder: (context, timestampNow, _) {
+          return ColoredBox(
+            color: context.colorScheme.background,
+            child: ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final chat = items[index];
+                final isUpdating = updatingJids.contains(chat.jid);
+                return ListItemPadding(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ChatListTile(
+                        item: chat,
+                        selectionActive: false,
+                        isSelected: false,
+                        isOpen: false,
+                        timestampNow: timestampNow,
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AxiButton.secondary(
+                          size: AxiButtonSize.sm,
+                          loading: isUpdating,
+                          onPressed: isUpdating
+                              ? null
+                              : () => _moveToInbox(context, chat),
+                          child: Text(l10n.spamMoveToInbox),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
           );
         },

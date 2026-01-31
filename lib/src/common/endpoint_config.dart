@@ -259,6 +259,16 @@ class EndpointResolver {
     final fallbackHost = fallback?.host;
     final fallbackPort = fallback?.port ?? defaultPort;
     final selectedPort = defaultPort > 0 ? defaultPort : fallbackPort;
+    final preferred = preferredHost?.trim();
+    final preferredIp = preferred == null || preferred.isEmpty
+        ? null
+        : InternetAddress.tryParse(preferred);
+    if (preferredIp != null) {
+      return EndpointOverride(
+        host: preferredIp.address,
+        port: selectedPort,
+      );
+    }
     if (!config.useDns) {
       final host = _chooseHost(preferredHost, fallbackHost, config.domain);
       return EndpointOverride(host: host, port: selectedPort);

@@ -905,7 +905,7 @@ class EmailService {
       return deltaAccountId;
     }
 
-    const deltaAccountId = deltaAccountIdLegacy;
+    const deltaAccountId = DeltaAccountDefaults.legacyId;
     await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
     return deltaAccountId;
@@ -2211,7 +2211,7 @@ class EmailService {
           _queueNotification(
             chatId: event.data1,
             msgId: event.data2,
-            accountId: event.accountId ?? deltaAccountIdLegacy,
+            accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
           );
         }
         break;
@@ -2222,7 +2222,7 @@ class EmailService {
         await _handleIncomingReaction(
           chatId: event.data1,
           msgId: event.data2,
-          accountId: event.accountId ?? deltaAccountIdLegacy,
+          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
           reaction: event.data2Text,
         );
         break;
@@ -2230,14 +2230,14 @@ class EmailService {
         await _handleIncomingWebxdcNotify(
           chatId: event.data1,
           msgId: event.data2,
-          accountId: event.accountId ?? deltaAccountIdLegacy,
+          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
           text: event.data2Text,
         );
         break;
       case DeltaEventType.msgsNoticed:
         await _handleMessagesNoticed(
           event.data1,
-          accountId: event.accountId ?? deltaAccountIdLegacy,
+          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
         );
         break;
       case DeltaEventType.chatModified:
@@ -2245,7 +2245,7 @@ class EmailService {
       case DeltaEventType.chatDeleted:
         await _handleChatDeleted(
           event.data1,
-          accountId: event.accountId ?? deltaAccountIdLegacy,
+          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
         );
         break;
       case DeltaEventType.contactsChanged:

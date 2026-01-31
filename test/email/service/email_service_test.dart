@@ -111,10 +111,11 @@ void main() {
     when(() => transport.selfJid).thenReturn('dc-self@user.delta.chat');
     when(() => transport.accountsSupported).thenReturn(true);
     when(() => transport.accountsActive).thenReturn(false);
-    when(() => transport.activeAccountId).thenReturn(deltaAccountIdLegacy);
+    when(() => transport.activeAccountId)
+        .thenReturn(DeltaAccountDefaults.legacyId);
     when(
       () => transport.createAccount(),
-    ).thenAnswer((_) async => deltaAccountIdLegacy);
+    ).thenAnswer((_) async => DeltaAccountDefaults.legacyId);
     when(() => transport.ensureAccountSession(any())).thenAnswer((_) async {});
     when(
       () => transport.isConfigured(accountId: any(named: 'accountId')),

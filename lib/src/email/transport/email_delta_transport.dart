@@ -8,7 +8,6 @@ import 'dart:ui';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
-import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -16,11 +15,8 @@ import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart'
-    show serverOnlyChatMessageCap;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -166,14 +162,11 @@ class EmailDeltaTransport implements ChatTransport {
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
   Future<void> _originIdHydrationQueue = Future<void>.value();
   final Set<String> _originIdHydrationPending = <String>{};
-  final Map<String, Timer> _serverOnlyTrimTimers = {};
-  final Map<String, EmailAsyncQueue> _serverOnlyTrimQueues = {};
 
   String? _databasePrefix;
   String? _databasePassphrase;
   final Map<int, String> _accountAddresses = {};
   int? _primaryAccountId;
-  MessageStorageMode _messageStorageMode = MessageStorageMode.local;
 
   @override
   Stream<DeltaCoreEvent> get events =>
@@ -225,16 +218,6 @@ class EmailDeltaTransport implements ChatTransport {
       deltaAccountId: accountId,
       placeholderJids: deltaPlaceholderJids,
     );
-  }
-
-  void updateMessageStorageMode(MessageStorageMode mode) {
-    _messageStorageMode = mode;
-    final consumers = <DeltaEventConsumer>{
-      for (final session in _accountSessions.values) session.consumer,
-    };
-    for (final consumer in consumers) {
-      consumer.updateMessageStorageMode(mode);
-    }
   }
 
   @override
@@ -647,7 +630,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   bool get accountsActive => _accounts != null;
 
-  int get activeAccountId => _defaultAccountId ?? deltaAccountIdLegacy;
+  int get activeAccountId => _defaultAccountId ?? DeltaAccountDefaults.legacyId;
 
   bool get isIoRunning => _ioRunning;
 
@@ -668,7 +651,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       return const <int>[];
     }
-    return const <int>[deltaAccountIdLegacy];
+    return const <int>[DeltaAccountDefaults.legacyId];
   }
 
   Future<int> createAccount({bool closed = false}) async {
@@ -767,7 +750,8 @@ class EmailDeltaTransport implements ChatTransport {
   int? _resolveAccountId(int? accountId) {
     final requestedAccountId = accountId;
     if (requestedAccountId != null) {
-      if (requestedAccountId == deltaAccountIdLegacy && _accounts != null) {
+      if (requestedAccountId == DeltaAccountDefaults.legacyId &&
+          _accounts != null) {
         final primary = _primaryAccountId;
         if (primary != null) {
           return primary;
@@ -781,11 +765,11 @@ class EmailDeltaTransport implements ChatTransport {
     final context = _context;
     if (context == null) {
       if (_accountSessions.isEmpty) {
-        return deltaAccountIdLegacy;
+        return DeltaAccountDefaults.legacyId;
       }
       return _accountSessions.keys.first;
     }
-    return context.accountId ?? deltaAccountIdLegacy;
+    return context.accountId ?? DeltaAccountDefaults.legacyId;
   }
 
   String _selfJidForAddress(String? address) {
@@ -817,7 +801,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (existing != null) {
       return existing;
     }
-    if (_accounts == null || resolvedId == deltaAccountIdLegacy) {
+    if (_accounts == null || resolvedId == DeltaAccountDefaults.legacyId) {
       final context = _context;
       if (context == null) {
         return null;
@@ -843,7 +827,6 @@ class EmailDeltaTransport implements ChatTransport {
     final consumer = DeltaEventConsumer(
       databaseBuilder: _databaseBuilder,
       context: context,
-      messageStorageMode: _messageStorageMode,
       defaultChatAttachmentAutoDownload: _defaultChatAttachmentAutoDownload,
       localizationsProvider: _localizationsProvider,
       selfJidProvider: () => _selfJidForAccount(accountId),
@@ -948,7 +931,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   int? _eventAccountId(DeltaCoreEvent event) {
     final accountId = event.accountId;
-    if (accountId != null && accountId != deltaAccountIdLegacy) {
+    if (accountId != null && accountId != DeltaAccountDefaults.legacyId) {
       return accountId;
     }
     final primary = _primaryAccountId;
@@ -1171,9 +1154,9 @@ class EmailDeltaTransport implements ChatTransport {
           osName: 'dart',
         );
         _contextOpened = false;
-        _primaryAccountId ??= deltaAccountIdLegacy;
+        _primaryAccountId ??= DeltaAccountDefaults.legacyId;
         await _registerSession(
-          accountId: deltaAccountIdLegacy,
+          accountId: DeltaAccountDefaults.legacyId,
           context: _context!,
           scheduleHydration: _contextOpened,
         );
@@ -1186,7 +1169,7 @@ class EmailDeltaTransport implements ChatTransport {
         _contextOpened = true;
         await _scheduleAccountAddressHydration(
           context: _context!,
-          accountId: deltaAccountIdLegacy,
+          accountId: DeltaAccountDefaults.legacyId,
         );
       } on DeltaSafeException catch (error, stackTrace) {
         _log.warning(
@@ -1484,12 +1467,6 @@ class EmailDeltaTransport implements ChatTransport {
       fileMetadataID: metadata?.id,
     );
     await db.saveMessage(message);
-    if (_messageStorageMode.isServerOnly) {
-      _scheduleServerOnlyTrim(
-        chatJid: resolvedChat.jid,
-        deltaAccountId: deltaAccountId,
-      );
-    }
     await db.updateChat(
       resolvedChat.copyWith(lastChangeTimestamp: resolvedTimestamp),
     );
@@ -1577,32 +1554,6 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
-  void _scheduleServerOnlyTrim({
-    required String chatJid,
-    required int deltaAccountId,
-  }) {
-    const debounce = Duration(seconds: 2);
-    final key = '$deltaAccountId::$chatJid';
-    _serverOnlyTrimTimers[key]?.cancel();
-    _serverOnlyTrimTimers[key] = Timer(debounce, () {
-      _serverOnlyTrimTimers.remove(key);
-      final queue =
-          _serverOnlyTrimQueues.putIfAbsent(key, () => EmailAsyncQueue());
-      queue.run(() async {
-        try {
-          final db = await _databaseBuilder();
-          await db.trimChatMessages(
-            jid: chatJid,
-            maxMessages: serverOnlyChatMessageCap,
-            deltaAccountId: deltaAccountId,
-          );
-        } on Exception {
-          // Ignore trim failures; next queued trim will retry.
-        }
-      });
-    });
-  }
-
   Future<void> _markOutgoingMessageFailed({required String stanzaId}) async {
     final XmppDatabase db = await _databaseBuilder();
     await db.saveMessageError(
@@ -1677,7 +1628,7 @@ class EmailDeltaTransport implements ChatTransport {
   }) async {
     final db = await _databaseBuilder();
     final resolvedAccountId =
-        _resolveAccountId(accountId) ?? deltaAccountIdLegacy;
+        _resolveAccountId(accountId) ?? DeltaAccountDefaults.legacyId;
     final existing = await db.getChatByDeltaChatId(
       chatId,
       accountId: resolvedAccountId,

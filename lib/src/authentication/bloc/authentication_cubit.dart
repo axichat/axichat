@@ -347,10 +347,25 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {
-    _rebuildEmailProvisioningClient(config);
-    _emailService?.updateEndpointConfig(config);
-    emit(state.copyWithConfig(config));
+    final normalized = _normalizeEndpointConfig(config);
+    _rebuildEmailProvisioningClient(normalized);
+    _emailService?.updateEndpointConfig(normalized);
+    emit(state.copyWithConfig(normalized));
     _updateEmailForegroundKeepalive();
+  }
+
+  EndpointConfig _normalizeEndpointConfig(EndpointConfig config) {
+    final host = config.xmppHost?.trim();
+    final parsed =
+        host == null || host.isEmpty ? null : InternetAddress.tryParse(host);
+    if (parsed != null && config.useDns) {
+      return config.copyWith(
+        useDns: false,
+        useSrv: false,
+        requireDnssec: false,
+      );
+    }
+    return config;
   }
 
   Uri? _tryParseEmailProvisioningBaseUrl(String? value) {

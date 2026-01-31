@@ -10,7 +10,6 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
-import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
@@ -23,7 +22,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
 import 'package:sqlite3/open.dart';
 
-import 'models.dart';
+import 'package:axichat/src/storage/models.dart';
 
 part 'database.g.dart';
 
@@ -32,42 +31,10 @@ abstract interface class Database {
   Future<void> close();
 }
 
-const String _draftSyncIdSql = "lower(hex(randomblob(16)))";
-const String _draftSyncIdUpdateSql = '''
-UPDATE drafts
-SET draft_sync_id = $_draftSyncIdSql
-WHERE draft_sync_id IS NULL OR trim(draft_sync_id) = ''
-''';
-const String _draftUpdatedAtUpdateSql = '''
-UPDATE drafts
-SET draft_updated_at = CURRENT_TIMESTAMP
-WHERE draft_updated_at IS NULL
-''';
-const String _draftSourceIdUpdateSql = '''
-UPDATE drafts
-SET draft_source_id = ?
-WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
-''';
-const String _attachmentRootDirectoryName = 'attachments';
 const String _databaseFileSuffix = '.axichat.drift';
-const String _attachmentPrefixFallback = 'shared';
-const String _attachmentPrefixReplacement = '_';
-const String _databaseWalSuffix = '-wal';
-const String _databaseShmSuffix = '-shm';
-const String _databaseJournalSuffix = '-journal';
 const int _messageAttachmentMaxCount = 50;
-const int _messageAttachmentSortOrderStart = 0;
-const int _messageAttachmentSortOrderStep = 1;
-const int _lastMessagePageSize = 25;
 const int _emptyTimestampMillis = 0;
-const int _emptyMessageLength = 0;
 const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
-const int _messageStatusSyncEnvelopeVersion = 1;
-const String _messageStatusSyncEnvelopeVersionKey = 'v';
-const String _messageStatusSyncEnvelopeIdKey = 'id';
-const int _pinnedMessagesSchemaVersion = 29;
-const int _schemaVersion = _pinnedMessagesSchemaVersion;
-final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
 class MessageDeltaSnapshot {
   const MessageDeltaSnapshot({
@@ -265,7 +232,7 @@ abstract interface class XmppDatabase implements Database {
     required String shareId,
     required int dcMsgId,
     required int dcChatId,
-    int dcAccountId = deltaAccountIdLegacy,
+    int dcAccountId = DeltaAccountDefaults.legacyId,
   });
 
   Future<void> assignShareOriginator({
@@ -290,7 +257,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<String?> getShareIdForDeltaMessage(
     int deltaMsgId, {
-    int deltaAccountId = deltaAccountIdLegacy,
+    int deltaAccountId = DeltaAccountDefaults.legacyId,
   });
 
   Future<void> removeChatMessages(String jid);
@@ -861,7 +828,7 @@ class MessageCopiesAccessor
 
   Future<MessageCopyData?> selectByDeltaMsgId(
     int deltaMsgId, {
-    int deltaAccountId = deltaAccountIdLegacy,
+    int deltaAccountId = DeltaAccountDefaults.legacyId,
   }) =>
       (select(table)
             ..where(
@@ -873,7 +840,7 @@ class MessageCopiesAccessor
 
   Future<String?> selectShareIdForDeltaMsg(
     int deltaMsgId, {
-    int deltaAccountId = deltaAccountIdLegacy,
+    int deltaAccountId = DeltaAccountDefaults.legacyId,
   }) async =>
       (await selectByDeltaMsgId(
         deltaMsgId,
@@ -1395,7 +1362,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => _schemaVersion;
+  int get schemaVersion => 29;
 
   @override
   MigrationStrategy get migration {
@@ -1506,12 +1473,31 @@ WHERE file_metadata_i_d IS NOT NULL
 ''');
         }
         if (from < 19) {
+          const draftSyncIdSql = "lower(hex(randomblob(16)))";
+          const draftSyncIdUpdateSql = '''
+UPDATE drafts
+SET draft_sync_id = $draftSyncIdSql
+WHERE draft_sync_id IS NULL OR trim(draft_sync_id) = ''
+''';
+          const draftUpdatedAtUpdateSql = '''
+UPDATE drafts
+SET draft_updated_at = CURRENT_TIMESTAMP
+WHERE draft_updated_at IS NULL
+''';
+          const draftSourceIdUpdateSql = '''
+UPDATE drafts
+SET draft_source_id = ?
+WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
+''';
           await m.addColumn(drafts, drafts.draftSyncId);
           await m.addColumn(drafts, drafts.draftUpdatedAt);
           await m.addColumn(drafts, drafts.draftSourceId);
-          await customStatement(_draftSyncIdUpdateSql);
-          await customStatement(_draftUpdatedAtUpdateSql);
-          await customStatement(_draftSourceIdUpdateSql, [draftSourceLegacyId]);
+          await customStatement(draftSyncIdUpdateSql);
+          await customStatement(draftUpdatedAtUpdateSql);
+          await customStatement(
+            draftSourceIdUpdateSql,
+            [DraftDefaults.sourceLegacyId],
+          );
         }
         if (from < 20) {
           await m.addColumn(drafts, drafts.draftRecipients);
@@ -1573,7 +1559,7 @@ SELECT jid, ?, delta_chat_id
 FROM chats
 WHERE delta_chat_id IS NOT NULL
 ''',
-            [deltaAccountIdLegacy],
+            [DeltaAccountDefaults.legacyId],
           );
         }
         if (from < 27) {
@@ -1873,7 +1859,7 @@ WHERE delta_chat_id IS NOT NULL
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
     const int startOffset = 0;
-    const int pageSize = _lastMessagePageSize;
+    const int pageSize = 25;
     int offset = startOffset;
     while (true) {
       final messages = await getChatMessages(
@@ -2072,6 +2058,9 @@ WHERE delta_chat_id IS NOT NULL
     if (!raw.contains(_messageStatusSyncEnvelopeKey)) {
       return false;
     }
+    const versionKey = 'v';
+    const idKey = 'id';
+    const messageStatusSyncEnvelopeVersion = 1;
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) {
@@ -2081,11 +2070,11 @@ WHERE delta_chat_id IS NOT NULL
       if (payload is! Map<String, dynamic>) {
         return false;
       }
-      final version = payload[_messageStatusSyncEnvelopeVersionKey] as int?;
-      if (version != _messageStatusSyncEnvelopeVersion) {
+      final version = payload[versionKey] as int?;
+      if (version != messageStatusSyncEnvelopeVersion) {
         return false;
       }
-      final id = payload[_messageStatusSyncEnvelopeIdKey] as String?;
+      final id = payload[idKey] as String?;
       return id != null && id.trim().isNotEmpty;
     } catch (_) {
       return false;
@@ -2112,7 +2101,7 @@ WHERE delta_chat_id IS NOT NULL
     final bool shouldIncrementUnread = shouldUpdateChatSummary &&
         (hasBody || hasAttachment) &&
         message.pseudoMessageType == null;
-    final int unreadIncrement = shouldIncrementUnread.toBinary;
+    final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
     final DateTime? existingLastChangeTimestamp = shouldUpdateChatSummary
         ? null
         : (await getChat(message.chatJid))?.lastChangeTimestamp;
@@ -2316,6 +2305,7 @@ WHERE delta_chat_id IS NOT NULL
     final resolvedLastMessage = lastMessage ?? '';
     final hasLastMessage = resolvedLastMessage.trim().isNotEmpty;
     final int serializedTimestamp = timestamp.millisecondsSinceEpoch;
+    const int emptyMessageLength = 0;
     await customStatement(
       '''
 UPDATE chats
@@ -2334,8 +2324,8 @@ WHERE jid = ?
       [
         serializedTimestamp,
         serializedTimestamp,
-        hasLastMessage.toBinary,
-        _emptyMessageLength,
+        hasLastMessage ? 1 : 0,
+        emptyMessageLength,
         resolvedLastMessage,
         serializedTimestamp,
         resolvedLastMessage,
@@ -3028,7 +3018,7 @@ WHERE email_from_address IN ($placeholderClause)
     required String shareId,
     required int dcMsgId,
     required int dcChatId,
-    int dcAccountId = deltaAccountIdLegacy,
+    int dcAccountId = DeltaAccountDefaults.legacyId,
   }) async {
     await messageCopiesAccessor.insertOrUpdateOne(
       MessageCopiesCompanion.insert(
@@ -3089,7 +3079,7 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<String?> getShareIdForDeltaMessage(
     int deltaMsgId, {
-    int deltaAccountId = deltaAccountIdLegacy,
+    int deltaAccountId = DeltaAccountDefaults.legacyId,
   }) =>
       messageCopiesAccessor.selectShareIdForDeltaMsg(
         deltaMsgId,
@@ -3518,8 +3508,9 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   Future<Directory> _attachmentRootDirectory() async {
+    const attachmentRootDirectoryName = 'attachments';
     final supportDir = await getApplicationSupportDirectory();
-    return Directory(p.join(supportDir.path, _attachmentRootDirectoryName));
+    return Directory(p.join(supportDir.path, attachmentRootDirectoryName));
   }
 
   String? _databasePrefixFromFilePath() {
@@ -3541,13 +3532,16 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   String _normalizeAttachmentPrefix(String prefix) {
+    const attachmentPrefixFallback = 'shared';
+    const attachmentPrefixReplacement = '_';
+    final attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
     final trimmed = prefix.trim();
     if (trimmed.isEmpty) {
-      return _attachmentPrefixFallback;
+      return attachmentPrefixFallback;
     }
     return trimmed.replaceAll(
-      _attachmentPrefixSanitizer,
-      _attachmentPrefixReplacement,
+      attachmentPrefixSanitizer,
+      attachmentPrefixReplacement,
     );
   }
 
@@ -3664,7 +3658,9 @@ WHERE email_from_address IN ($placeholderClause)
     await transaction(() async {
       await messageAttachmentsAccessor.deleteForMessage(messageId);
       if (trimmedIds.isEmpty) return;
-      var order = _messageAttachmentSortOrderStart;
+      const attachmentSortOrderStart = 0;
+      const attachmentSortOrderStep = 1;
+      var order = attachmentSortOrderStart;
       for (final metadataId in trimmedIds) {
         await into(messageAttachments).insert(
           MessageAttachmentsCompanion.insert(
@@ -3675,7 +3671,7 @@ WHERE email_from_address IN ($placeholderClause)
           ),
           mode: InsertMode.insertOrIgnore,
         );
-        order += _messageAttachmentSortOrderStep;
+        order += attachmentSortOrderStep;
       }
     });
   }
@@ -3806,7 +3802,7 @@ WHERE email_from_address IN ($placeholderClause)
 
   Future<List<Chat>> _mergeDeltaChatsForAccount(int accountId) async {
     final Map<String, Chat> resolved = <String, Chat>{};
-    if (accountId == deltaAccountIdLegacy) {
+    if (accountId == DeltaAccountDefaults.legacyId) {
       final legacy = await (select(
         chats,
       )..where((tbl) => tbl.deltaChatId.isNotNull()))
@@ -3858,7 +3854,7 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<Chat?> getChatByDeltaChatId(int deltaChatId, {int? accountId}) async {
-    final resolvedAccountId = accountId ?? deltaAccountIdLegacy;
+    final resolvedAccountId = accountId ?? DeltaAccountDefaults.legacyId;
     final query = select(chats).join([
       innerJoin(
         emailChatAccounts,
@@ -3884,7 +3880,7 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Stream<Chat?> watchChatByDeltaChatId(int deltaChatId, {int? accountId}) {
-    final resolvedAccountId = accountId ?? deltaAccountIdLegacy;
+    final resolvedAccountId = accountId ?? DeltaAccountDefaults.legacyId;
     final query = select(chats).join([
       innerJoin(
         emailChatAccounts,
@@ -5104,7 +5100,7 @@ WHERE value IS NOT NULL AND trim(value) != ''
       await customStatement(
         'INSERT INTO "$tableName" ($columnList, "dc_account_id") '
         'SELECT $columnList, ? FROM "$tempTableName"',
-        [deltaAccountIdLegacy],
+        [DeltaAccountDefaults.legacyId],
       );
       await customStatement('DROP TABLE "$tempTableName"');
     } finally {
@@ -5211,12 +5207,15 @@ WHERE value IS NOT NULL AND trim(value) != ''
     if (_inMemory || _file.path.isEmpty) {
       return;
     }
+    const databaseWalSuffix = '-wal';
+    const databaseShmSuffix = '-shm';
+    const databaseJournalSuffix = '-journal';
     final basePath = _file.path;
     final candidates = <File>[
       File(basePath),
-      File('$basePath$_databaseWalSuffix'),
-      File('$basePath$_databaseShmSuffix'),
-      File('$basePath$_databaseJournalSuffix'),
+      File('$basePath$databaseWalSuffix'),
+      File('$basePath$databaseShmSuffix'),
+      File('$basePath$databaseJournalSuffix'),
     ];
     for (final candidate in candidates) {
       if (!await candidate.exists()) {

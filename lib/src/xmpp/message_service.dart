@@ -729,9 +729,7 @@ const WindowRateLimit _inboundAttachmentAutoDownloadGlobalRateLimit =
   maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
   window: _inboundAttachmentAutoDownloadRateLimitWindow,
 );
-const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
-const int _emptyMessageCount = 0;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
 const int _calendarSnapshotDownloadMaxBytes =
@@ -834,17 +832,7 @@ mixin MessageService
         ChatsService,
         DraftSyncService,
         BlockingService {
-  ImpatientCompleter<XmppDatabase> get _database;
-
-  set _database(ImpatientCompleter<XmppDatabase> value);
-
   String? get _databasePrefix;
-
-  String? get _databasePassphrase;
-
-  Future<XmppDatabase> _buildDatabase(String prefix, String passphrase);
-
-  void _notifyDatabaseReloaded();
 
   Stream<List<Message>> messageStreamForChat(
     String jid, {
@@ -963,41 +951,7 @@ mixin MessageService
     }
     await _dbOp<XmppDatabase>((db) async {
       await db.saveMessage(message, chatType: chatType);
-      if (messageStorageMode.isServerOnly) {
-        await _queueServerTrim(db: db, jid: message.chatJid);
-      }
     });
-  }
-
-  Future<void> _queueServerTrim({
-    required XmppDatabase db,
-    required String jid,
-  }) {
-    _pendingServerTrimJids.add(jid);
-    final pending = _pendingServerTrimTask;
-    if (pending != null) {
-      return pending;
-    }
-    final task = _drainServerTrimQueue(db);
-    _pendingServerTrimTask = task;
-    return task;
-  }
-
-  Future<void> _drainServerTrimQueue(XmppDatabase db) async {
-    try {
-      while (_pendingServerTrimJids.isNotEmpty) {
-        final batch = _pendingServerTrimJids.toList(growable: false);
-        _pendingServerTrimJids.clear();
-        for (final jid in batch) {
-          await db.trimChatMessages(
-            jid: jid,
-            maxMessages: serverOnlyChatMessageCap,
-          );
-        }
-      }
-    } finally {
-      _pendingServerTrimTask = null;
-    }
   }
 
   Future<DateTime> _resolveDemoTimestampForChat(
@@ -1041,84 +995,11 @@ mixin MessageService
     );
   }
 
-  MessageStorageMode get messageStorageMode =>
-      _messageStorageMode.isServerOnly && !_mamSupported
-          ? MessageStorageMode.local
-          : _messageStorageMode;
-
-  Future<void> updateMessageStorageMode(MessageStorageMode mode) async {
-    final previous = messageStorageMode;
-    _messageStorageMode = mode;
-    final next = messageStorageMode;
-    if (mode.isServerOnly && !_mamSupported) {
-      _log.warning(
-        'Server-only storage requires MAM; using local persistence instead.',
-      );
-    }
-    if (previous == next) return;
-    await _applyMessageStorageModeChange(previous: previous, next: next);
-  }
-
-  Future<void> _applyMessageStorageModeChange({
-    required MessageStorageMode previous,
-    required MessageStorageMode next,
-  }) async {
-    _log.info('Message storage mode change: $previous -> $next');
-    if (next.isServerOnly) {
-      await purgeMessageHistory();
-    }
-    await _reopenDatabaseForStorageMode(previous: previous, next: next);
-  }
-
-  Future<void> _reopenDatabaseForStorageMode({
-    required MessageStorageMode previous,
-    required MessageStorageMode next,
-  }) async {
-    if (!_database.isCompleted) return;
-    final currentDb = _database.value;
-    final wantsInMemory = next.isServerOnly && _mamSupported;
-    final isCurrentInMemory =
-        currentDb is XmppDrift ? currentDb.isInMemory : false;
-    if (wantsInMemory == isCurrentInMemory) return;
-    _log.info(
-      'Reopening database for storage mode change '
-      '($previous -> $next); inMemoryTarget=$wantsInMemory',
-    );
-    final prefix = _databasePrefix;
-    final passphrase = _databasePassphrase;
-    if (prefix == null || passphrase == null) {
-      _log.warning(
-        'Unable to reopen database for storage mode change; missing prefix or passphrase.',
-      );
-      return;
-    }
-    try {
-      await currentDb?.close();
-    } catch (error, stackTrace) {
-      _log.warning(
-        'Failed to close existing database during storage mode change.',
-        error,
-        stackTrace,
-      );
-    }
-    _database = ImpatientCompleter(Completer<XmppDatabase>());
-    _database.complete(await _buildDatabase(prefix, passphrase));
-    _notifyDatabaseReloaded();
-  }
-
   Future<void> _updateMamSupport(bool supported) async {
     if (_mamSupported == supported) return;
-    final previousEffective = messageStorageMode;
     _mamSupported = supported;
     if (!_mamSupportController.isClosed) {
       _mamSupportController.add(supported);
-    }
-    final nextEffective = messageStorageMode;
-    if (previousEffective != nextEffective) {
-      await _applyMessageStorageModeChange(
-        previous: previousEffective,
-        next: nextEffective,
-      );
     }
   }
 
@@ -1815,9 +1696,6 @@ mixin MessageService
   }
 
   final _log = Logger('MessageService');
-  final Set<String> _pendingServerTrimJids = <String>{};
-  Future<void>? _pendingServerTrimTask;
-
   StreamController<Message> _messageStream =
       StreamController<Message>.broadcast();
 
@@ -1848,7 +1726,6 @@ mixin MessageService
   final Map<String, Set<String>> _seenStableKeys = {};
   final Map<String, Queue<String>> _stableKeyOrder = {};
   final Map<String, RegisteredStateKey> _lastSeenKeys = {};
-  MessageStorageMode _messageStorageMode = MessageStorageMode.local;
   bool _mamSupported = false;
   bool? _mamSupportOverride;
   StreamController<bool> _mamSupportController =
@@ -2206,9 +2083,7 @@ mixin MessageService
             includePseudoMessages: false,
           );
           final lastSeen = await loadLastSeenTimestamp(chatJid);
-          final shouldBackfillLatest = messageStorageMode.isServerOnly ||
-              localCount == 0 ||
-              lastSeen == null;
+          final shouldBackfillLatest = localCount == 0 || lastSeen == null;
 
           if (shouldBackfillLatest) {
             await fetchLatestFromArchive(
@@ -2274,9 +2149,7 @@ mixin MessageService
         includePseudoMessages: false,
       );
       final lastSeen = await loadLastSeenTimestamp(normalizedRoom);
-      final shouldBackfillLatest = messageStorageMode.isServerOnly ||
-          localCount == _emptyMessageCount ||
-          lastSeen == null;
+      final shouldBackfillLatest = localCount == 0 || lastSeen == null;
 
       if (shouldBackfillLatest) {
         await fetchLatestFromArchive(

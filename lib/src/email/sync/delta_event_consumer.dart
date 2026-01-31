@@ -13,7 +13,6 @@ import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
-import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
@@ -22,11 +21,8 @@ import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart'
-    show serverOnlyChatMessageCap;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 
@@ -288,7 +284,6 @@ class DeltaEventConsumer {
   DeltaEventConsumer({
     required Future<XmppDatabase> Function() databaseBuilder,
     required DeltaContextHandle context,
-    MessageStorageMode messageStorageMode = MessageStorageMode.local,
     AttachmentAutoDownload defaultChatAttachmentAutoDownload =
         AttachmentAutoDownload.blocked,
     AppLocalizations Function()? localizationsProvider,
@@ -296,7 +291,6 @@ class DeltaEventConsumer {
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
-        _messageStorageMode = messageStorageMode,
         _defaultChatAttachmentAutoDownload = defaultChatAttachmentAutoDownload,
         _localizationsProvider = localizationsProvider,
         _selfJidProvider = selfJidProvider,
@@ -304,7 +298,6 @@ class DeltaEventConsumer {
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
-  MessageStorageMode _messageStorageMode;
   AttachmentAutoDownload _defaultChatAttachmentAutoDownload;
   final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _selfJidProvider;
@@ -313,16 +306,10 @@ class DeltaEventConsumer {
   Future<Set<int>>? _archivedChatlistInFlight;
   DateTime? _archivedChatlistFetchedAt;
   final Set<int> _archivedChatIds = <int>{};
-  final Map<String, Timer> _serverOnlyTrimTimers = {};
-  final Map<String, EmailAsyncQueue> _serverOnlyTrimQueues = {};
 
   AppLocalizations get _l10n =>
       _localizationsProvider?.call() ??
       lookupAppLocalizations(const Locale('en'));
-
-  void updateMessageStorageMode(MessageStorageMode mode) {
-    _messageStorageMode = mode;
-  }
 
   void updateDefaultChatAttachmentAutoDownload(
     AttachmentAutoDownload value,
@@ -333,7 +320,8 @@ class DeltaEventConsumer {
   String get _selfJid =>
       _selfJidProvider?.call().resolveDeltaPlaceholderJid() ?? _emptyJid;
 
-  int get _deltaAccountId => _context.accountId ?? deltaAccountIdLegacy;
+  int get _deltaAccountId =>
+      _context.accountId ?? DeltaAccountDefaults.legacyId;
 
   Future<bool> bootstrapFromCore() async {
     final int deltaAccountId = _deltaAccountId;
@@ -414,10 +402,7 @@ class DeltaEventConsumer {
       if (filteredMsgIds.isEmpty) {
         continue;
       }
-      final int startIndex = _messageStorageMode.isServerOnly &&
-              filteredMsgIds.length > serverOnlyChatMessageCap
-          ? filteredMsgIds.length - serverOnlyChatMessageCap
-          : 0;
+      const int startIndex = 0;
       var imported = 0;
       for (var index = startIndex; index < filteredMsgIds.length; index++) {
         final msg = await _context.getMessage(filteredMsgIds[index]);
@@ -885,10 +870,7 @@ class DeltaEventConsumer {
       );
       return;
     }
-    final startIndex = _messageStorageMode.isServerOnly &&
-            filteredIds.length > serverOnlyChatMessageCap
-        ? filteredIds.length - serverOnlyChatMessageCap
-        : _deltaMessageIdUnset;
+    const int startIndex = 0;
     final visibleIds = filteredIds
         .skip(startIndex)
         .where((id) => id > _deltaMessageIdUnset)
@@ -1684,38 +1666,6 @@ class DeltaEventConsumer {
     required String chatJid,
   }) async {
     await db.saveMessage(message);
-    if (_messageStorageMode.isServerOnly) {
-      _scheduleServerOnlyTrim(
-        chatJid: chatJid,
-        deltaAccountId: message.deltaAccountId,
-      );
-    }
-  }
-
-  void _scheduleServerOnlyTrim({
-    required String chatJid,
-    required int deltaAccountId,
-  }) {
-    const debounce = Duration(seconds: 2);
-    final key = '$deltaAccountId::$chatJid';
-    _serverOnlyTrimTimers[key]?.cancel();
-    _serverOnlyTrimTimers[key] = Timer(debounce, () {
-      _serverOnlyTrimTimers.remove(key);
-      final queue =
-          _serverOnlyTrimQueues.putIfAbsent(key, () => EmailAsyncQueue());
-      queue.run(() async {
-        try {
-          final db = await _db();
-          await db.trimChatMessages(
-            jid: chatJid,
-            maxMessages: serverOnlyChatMessageCap,
-            deltaAccountId: deltaAccountId,
-          );
-        } on Exception {
-          // Ignore trim failures; next queued trim will retry.
-        }
-      });
-    });
   }
 
   Future<Message> _attachFileMetadata({

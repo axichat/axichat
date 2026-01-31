@@ -11,15 +11,16 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'file_models.freezed.dart';
 
-const String draftSyncIdFallback = '';
-const String draftSourceLegacyId = 'legacy';
-const String draftRecipientsFallbackJson = '[]';
-const String _draftRecipientJidKey = 'jid';
-const String _draftRecipientRoleKey = 'role';
-const String _draftRecipientRoleFallback = 'to';
+final class DraftDefaults {
+  static const String sourceLegacyId = 'legacy';
+}
 
 final class DraftRecipientData {
   const DraftRecipientData({required this.jid, required this.role});
+
+  static const String _jidKey = 'jid';
+  static const String _roleKey = 'role';
+  static const String _roleFallback = 'to';
 
   final String jid;
   final String role;
@@ -29,20 +30,20 @@ final class DraftRecipientData {
   }
 
   Map<String, dynamic> toJson() => {
-        _draftRecipientJidKey: jid,
-        _draftRecipientRoleKey: role,
+        _jidKey: jid,
+        _roleKey: role,
       };
 
   static DraftRecipientData? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
-    final rawJid = json[_draftRecipientJidKey];
+    final rawJid = json[_jidKey];
     if (rawJid is! String) return null;
     final trimmedJid = rawJid.trim();
     if (trimmedJid.isEmpty) return null;
-    final rawRole = json[_draftRecipientRoleKey];
+    final rawRole = json[_roleKey];
     final role = rawRole is String && rawRole.trim().isNotEmpty
         ? rawRole.trim()
-        : _draftRecipientRoleFallback;
+        : _roleFallback;
     return DraftRecipientData(jid: trimmedJid, role: role);
   }
 }
@@ -270,18 +271,17 @@ class Drafts extends Table {
 
   TextColumn get jids => text().map(ListConverter<String>())();
 
-  TextColumn get draftSyncId =>
-      text().withDefault(const Constant(draftSyncIdFallback))();
+  TextColumn get draftSyncId => text().withDefault(const Constant(''))();
 
   DateTimeColumn get draftUpdatedAt =>
       dateTime().withDefault(currentDateAndTime)();
 
   TextColumn get draftSourceId =>
-      text().withDefault(const Constant(draftSourceLegacyId))();
+      text().withDefault(const Constant(DraftDefaults.sourceLegacyId))();
 
   TextColumn get draftRecipients => text()
       .map(const DraftRecipientListConverter())
-      .withDefault(const Constant(draftRecipientsFallbackJson))();
+      .withDefault(const Constant('[]'))();
 
   TextColumn get body => text().nullable()();
 

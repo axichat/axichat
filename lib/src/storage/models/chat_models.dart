@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart' hide JsonKey;
-import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -84,24 +83,6 @@ enum Presence {
         'dnd' => dnd,
         'chat' => chat,
         _ => unknown,
-      };
-
-  Color get toColor => switch (this) {
-        unavailable => Colors.grey,
-        xa => Colors.red,
-        away => Colors.orange,
-        dnd => Colors.red,
-        chat => axiGreen,
-        unknown => Colors.grey,
-      };
-
-  String get tooltip => switch (this) {
-        unavailable => 'Offline',
-        xa => 'Away',
-        away => 'Idle',
-        dnd => 'Busy',
-        chat => 'Online',
-        unknown => 'Unknown',
       };
 }
 
@@ -541,7 +522,7 @@ class EmailChatAccounts extends Table {
   TextColumn get chatJid => text().references(Chats, #jid)();
 
   IntColumn get deltaAccountId =>
-      integer().withDefault(const Constant(deltaAccountIdLegacy))();
+      integer().withDefault(const Constant(DeltaAccountDefaults.legacyId))();
 
   IntColumn get deltaChatId => integer()();
 

@@ -4,22 +4,17 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart' hide JsonKey;
-import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';
 // ignore: depend_on_referenced_packages
 import 'package:cryptography/cryptography.dart';
 import 'package:logging/logging.dart';
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'omemo_models.freezed.dart';
-
-final _ratchetLogger = Logger('OmemoRatchet');
 
 final keyPairTypes = <String, KeyPairType>{
   KeyPairType.ed25519.name: KeyPairType.ed25519,
@@ -166,32 +161,6 @@ class SignedPreKey extends omemo.OmemoKeyPair implements AsyncJsonSerializable {
 
 // RatchetMapKey and OmemoDataPackage are exported from omemo_dart
 // We use the types directly from the package instead of defining our own
-
-extension TrustDisplay on BTBVTrustState {
-  bool get isNone => this == BTBVTrustState.notTrusted;
-
-  bool get isBlind => this == BTBVTrustState.blindTrust;
-
-  bool get isVerified => this == BTBVTrustState.verified;
-
-  String get asString => switch (this) {
-        omemo.BTBVTrustState.notTrusted => 'No trust',
-        omemo.BTBVTrustState.blindTrust => 'Blind trust',
-        omemo.BTBVTrustState.verified => 'Verified',
-      };
-
-  IconData get toIcon => switch (this) {
-        omemo.BTBVTrustState.notTrusted => LucideIcons.shieldX,
-        omemo.BTBVTrustState.blindTrust => LucideIcons.shieldQuestionMark,
-        omemo.BTBVTrustState.verified => LucideIcons.shieldCheck,
-      };
-
-  Color get toColor => switch (this) {
-        omemo.BTBVTrustState.notTrusted => Colors.red,
-        omemo.BTBVTrustState.blindTrust => Colors.orange,
-        omemo.BTBVTrustState.verified => axiGreen,
-      };
-}
 
 class OmemoDevice extends omemo.OmemoDevice {
   OmemoDevice({
@@ -551,6 +520,8 @@ class OmemoRatchet {
     required this.device,
     required this.serialized,
   });
+
+  static final Logger _ratchetLogger = Logger('OmemoRatchet');
 
   final String jid;
   final int device;

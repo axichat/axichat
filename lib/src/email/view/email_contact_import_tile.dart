@@ -23,7 +23,7 @@ class EmailContactImportTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final rootContext = context;
+    final locate = context.read;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
@@ -35,10 +35,11 @@ class EmailContactImportTile extends StatelessWidget {
             onTap: loading
                 ? null
                 : () {
+                    final cubit = locate<EmailContactImportCubit>()..reset();
                     showFadeScaleDialog(
-                      context: rootContext,
+                      context: context,
                       builder: (dialogContext) => EmailContactImportDialog(
-                        cubit: context.read<EmailContactImportCubit>()..reset(),
+                        cubit: cubit,
                       ),
                     );
                   },
@@ -60,7 +61,7 @@ class EmailContactImportActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final rootContext = context;
+    final locate = context.read;
     return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
@@ -75,10 +76,11 @@ class EmailContactImportActionButton extends StatelessWidget {
             onPressed: loading
                 ? null
                 : () {
+                    final cubit = locate<EmailContactImportCubit>()..reset();
                     showFadeScaleDialog(
-                      context: rootContext,
+                      context: context,
                       builder: (dialogContext) => EmailContactImportDialog(
-                        cubit: context.read<EmailContactImportCubit>()..reset(),
+                        cubit: cubit,
                       ),
                     );
                   },

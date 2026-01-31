@@ -27,7 +27,6 @@ class RoomMembersSheet extends StatelessWidget {
     required this.canInvite,
     required this.onInvite,
     required this.onAction,
-    required this.rootContext,
     this.roomAvatarPath,
     this.onChangeNickname,
     this.onLeaveRoom,
@@ -42,7 +41,6 @@ class RoomMembersSheet extends StatelessWidget {
   final bool canInvite;
   final ValueChanged<String> onInvite;
   final void Function(String occupantId, MucModerationAction action) onAction;
-  final BuildContext rootContext;
   final String? roomAvatarPath;
   final ValueChanged<String>? onChangeNickname;
   final VoidCallback? onLeaveRoom;
@@ -115,7 +113,7 @@ class RoomMembersSheet extends StatelessWidget {
                   AxiButton.outline(
                     size: AxiButtonSize.sm,
                     onPressed: () async {
-                      final next = await _promptNickname();
+                      final next = await _promptNickname(context);
                       if (next?.isNotEmpty == true) {
                         onChangeNickname!(next!);
                       }
@@ -186,10 +184,10 @@ class RoomMembersSheet extends StatelessWidget {
     return wrappedContent;
   }
 
-  Future<List<String>?> _promptInvite() async {
-    final dialogMaxWidth = rootContext.sizing.dialogMaxWidth;
+  Future<List<String>?> _promptInvite(BuildContext context) async {
+    final dialogMaxWidth = context.sizing.dialogMaxWidth;
     return showAdaptiveBottomSheet<List<String>>(
-      context: rootContext,
+      context: context,
       isScrollControlled: true,
       useRootNavigator: false,
       surfacePadding: EdgeInsets.zero,
@@ -203,7 +201,7 @@ class RoomMembersSheet extends StatelessWidget {
   }
 
   Future<void> _handleInvite(BuildContext context) async {
-    final jids = await _promptInvite();
+    final jids = await _promptInvite(context);
     if (jids != null && jids.isNotEmpty) {
       for (final jid in jids) {
         onInvite(jid.trim());
@@ -211,11 +209,11 @@ class RoomMembersSheet extends StatelessWidget {
     }
   }
 
-  Future<String?> _promptNickname() async {
+  Future<String?> _promptNickname(BuildContext context) async {
     final controller = TextEditingController(text: currentNickname ?? '');
-    final dialogMaxWidth = rootContext.sizing.dialogMaxWidth;
+    final dialogMaxWidth = context.sizing.dialogMaxWidth;
     final result = await showAdaptiveBottomSheet<String>(
-      context: rootContext,
+      context: context,
       isScrollControlled: true,
       useRootNavigator: false,
       showCloseButton: false,
@@ -238,11 +236,12 @@ class RoomMembersSheet extends StatelessWidget {
     String? avatarPath,
   ) async {
     final avatar = await RoomAvatarEditorSheet.show(
-      rootContext,
+      context,
       avatarPath: avatarPath,
     );
     if (!context.mounted || avatar == null) return;
-    context.read<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
+    final locate = context.read;
+    locate<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
   }
 }
 

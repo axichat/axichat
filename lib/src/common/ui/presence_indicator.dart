@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -24,23 +25,47 @@ class PresenceCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    final indicatorSize = sizing.progressIndicatorSize;
+    final double iconSize =
+        (indicatorSize - spacing.xs).clamp(0.0, indicatorSize).toDouble();
+    final presenceColor = _presenceColor(colors);
     return Container(
-      height: 14.0,
-      width: 14.0,
+      height: indicatorSize,
+      width: indicatorSize,
       decoration: ShapeDecoration(
         shape: CircleBorder(
           side: BorderSide(
-            color: Color.lerp(presence.toColor, Colors.white, 0.6)!,
-            width: 1.0,
+            color: context.borderSide.color,
+            width: context.borderSide.width,
           ),
         ),
-        color: presence.toColor,
+        color: presenceColor,
       ),
       child: presence.isDnd
-          ? const Icon(LucideIcons.minus, color: Colors.white, size: 10.0)
+          ? Icon(
+              LucideIcons.minus,
+              color: colors.background,
+              size: iconSize,
+            )
           : presence.isUnknown
-              ? const Icon(Icons.question_mark, color: Colors.black, size: 10.0)
+              ? Icon(
+                  Icons.question_mark,
+                  color: colors.mutedForeground,
+                  size: iconSize,
+                )
               : null,
     );
   }
+
+  Color _presenceColor(ShadColorScheme colors) => switch (presence) {
+        Presence.unavailable => colors.muted,
+        Presence.xa => colors.secondary,
+        Presence.away => colors.secondary,
+        Presence.dnd => colors.destructive,
+        Presence.chat => colors.primary,
+        Presence.unknown => colors.muted,
+      };
 }

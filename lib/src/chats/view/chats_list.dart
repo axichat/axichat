@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -234,33 +233,38 @@ class _ChatsListBody extends StatelessWidget {
               );
               body = ColoredBox(
                 color: context.colorScheme.background,
-                child: AnimatedChatsListView(
-                  items: visibleItems,
-                  includeCalendarShortcut: includeCalendarShortcut,
-                  animationDuration:
-                      context.watch<SettingsCubit>().animationDuration,
-                  scrollPhysics: scrollPhysics,
-                  selectedJids: state.selectedJids,
-                  openJid: state.openJid,
-                  calendarShortcut: includeCalendarShortcut
-                      ? ListItemPadding(
-                          child: BlocBuilder<CalendarBloc, CalendarState>(
-                            builder: (context, state) {
-                              final currentTask = state.currentTaskAt(
-                                DateTime.now(),
-                              );
-                              return CalendarTile(
-                                onTap: () =>
-                                    context.read<ChatsCubit>().toggleCalendar(),
-                                currentTask: currentTask,
-                                nextTask: state.nextTask,
-                                dueReminderCount:
-                                    state.dueReminders?.length ?? 0,
-                              );
-                            },
-                          ),
-                        )
-                      : null,
+                child: AxiNowTicker(
+                  now: () => kEnableDemoChats ? demoNow() : DateTime.now(),
+                  builder: (context, nowListenable) => AnimatedChatsListView(
+                    items: visibleItems,
+                    includeCalendarShortcut: includeCalendarShortcut,
+                    animationDuration:
+                        context.watch<SettingsCubit>().animationDuration,
+                    scrollPhysics: scrollPhysics,
+                    selectedJids: state.selectedJids,
+                    openJid: state.openJid,
+                    timestampNowListenable: nowListenable,
+                    calendarShortcut: includeCalendarShortcut
+                        ? ListItemPadding(
+                            child: BlocBuilder<CalendarBloc, CalendarState>(
+                              builder: (context, state) {
+                                final currentTask = state.currentTaskAt(
+                                  DateTime.now(),
+                                );
+                                return CalendarTile(
+                                  onTap: () => context
+                                      .read<ChatsCubit>()
+                                      .toggleCalendar(),
+                                  currentTask: currentTask,
+                                  nextTask: state.nextTask,
+                                  dueReminderCount:
+                                      state.dueReminders?.length ?? 0,
+                                );
+                              },
+                            ),
+                          )
+                        : null,
+                  ),
                 ),
               );
             }
@@ -511,6 +515,7 @@ class AnimatedChatsListView extends StatefulWidget {
     required this.scrollPhysics,
     required this.selectedJids,
     required this.openJid,
+    required this.timestampNowListenable,
     this.includeCalendarShortcut = false,
     this.calendarShortcut,
   });
@@ -520,6 +525,7 @@ class AnimatedChatsListView extends StatefulWidget {
   final ScrollPhysics scrollPhysics;
   final Set<String> selectedJids;
   final String? openJid;
+  final ValueListenable<DateTime> timestampNowListenable;
   final bool includeCalendarShortcut;
   final Widget? calendarShortcut;
 
@@ -531,25 +537,16 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   final GlobalKey<SliverAnimatedListState> _listKey =
       GlobalKey<SliverAnimatedListState>();
   final ScrollController _scrollController = ScrollController();
-  late final ValueNotifier<DateTime> _timestampNow;
-  Timer? _timestampTicker;
   late List<Chat> _displayedItems;
 
   @override
   void initState() {
     super.initState();
     _displayedItems = List<Chat>.from(widget.items);
-    _timestampNow = ValueNotifier<DateTime>(_resolveNow());
-    _timestampTicker = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _timestampNow.value = _resolveNow(),
-    );
   }
 
   @override
   void dispose() {
-    _timestampTicker?.cancel();
-    _timestampNow.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -559,8 +556,6 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
     super.didUpdateWidget(oldWidget);
     _updateDisplayedItems(widget.items);
   }
-
-  DateTime _resolveNow() => kEnableDemoChats ? demoNow() : DateTime.now();
 
   void _updateDisplayedItems(List<Chat> newItems) {
     final listState = _listKey.currentState;
@@ -588,7 +583,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
             selectionActive: widget.selectedJids.isNotEmpty,
             isSelected: widget.selectedJids.contains(removedChat.jid),
             isOpen: widget.openJid == removedChat.jid,
-            timestampNowListenable: _timestampNow,
+            timestampNowListenable: widget.timestampNowListenable,
           ),
           duration: widget.animationDuration,
         );
@@ -658,7 +653,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
             selectionActive: widget.selectedJids.isNotEmpty,
             isSelected: widget.selectedJids.contains(chat.jid),
             isOpen: widget.openJid == chat.jid,
-            timestampNowListenable: _timestampNow,
+            timestampNowListenable: widget.timestampNowListenable,
           );
         },
       ),

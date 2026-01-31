@@ -21,6 +21,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_error_l10n.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';

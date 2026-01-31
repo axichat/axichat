@@ -7,15 +7,11 @@ import 'dart:io';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 
-const int _lockUnavailableErrorCode = 11;
-const int _defaultLockRetryAttempts = 10;
-const Duration _defaultLockRetryDelay = Duration(milliseconds: 200);
-const String _lockRetryFailureMessage = 'Hive lock retry attempts exhausted.';
-
 bool isHiveLockUnavailable(Object error) {
   if (error is FileSystemException) {
+    const lockUnavailableErrorCode = 11;
     final OSError? osError = error.osError;
-    return osError != null && osError.errorCode == _lockUnavailableErrorCode;
+    return osError != null && osError.errorCode == lockUnavailableErrorCode;
   }
   return false;
 }
@@ -25,8 +21,8 @@ extension HiveInterfaceOpenBoxRetry on HiveInterface {
     String name, {
     HiveCipher? encryptionCipher,
     Logger? logger,
-    int lockRetryAttempts = _defaultLockRetryAttempts,
-    Duration lockRetryDelay = _defaultLockRetryDelay,
+    int lockRetryAttempts = 10,
+    Duration lockRetryDelay = const Duration(milliseconds: 200),
   }) async {
     for (var attempt = 0; attempt < lockRetryAttempts; attempt++) {
       try {
@@ -45,6 +41,7 @@ extension HiveInterfaceOpenBoxRetry on HiveInterface {
         await Future<void>.delayed(lockRetryDelay);
       }
     }
-    throw StateError(_lockRetryFailureMessage);
+    const lockRetryFailureMessage = 'Hive lock retry attempts exhausted.';
+    throw StateError(lockRetryFailureMessage);
   }
 }

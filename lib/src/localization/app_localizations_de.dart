@@ -1944,19 +1944,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsLicenseAgpl => 'AGPLv3';
 
   @override
-  String get settingsMessageStorageTitle => 'Nachrichtenspeicherung';
-
-  @override
-  String get settingsMessageStorageSubtitle =>
-      'Lokal behält Gerätekopien; Nur Server fragt das Archiv ab.';
-
-  @override
-  String get settingsMessageStorageLocal => 'Lokal';
-
-  @override
-  String get settingsMessageStorageServerOnly => 'Nur Server';
-
-  @override
   String get settingsMuteNotifications => 'Benachrichtigungen stummschalten';
 
   @override

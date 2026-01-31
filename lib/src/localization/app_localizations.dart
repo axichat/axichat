@@ -3476,30 +3476,6 @@ abstract class AppLocalizations {
   /// **'AGPLv3'**
   String get settingsLicenseAgpl;
 
-  /// No description provided for @settingsMessageStorageTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Message storage'**
-  String get settingsMessageStorageTitle;
-
-  /// No description provided for @settingsMessageStorageSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Local keeps device copies; Server-only queries the archive.'**
-  String get settingsMessageStorageSubtitle;
-
-  /// No description provided for @settingsMessageStorageLocal.
-  ///
-  /// In en, this message translates to:
-  /// **'Local'**
-  String get settingsMessageStorageLocal;
-
-  /// No description provided for @settingsMessageStorageServerOnly.
-  ///
-  /// In en, this message translates to:
-  /// **'Server-only'**
-  String get settingsMessageStorageServerOnly;
-
   /// No description provided for @settingsMuteNotifications.
   ///
   /// In en, this message translates to:

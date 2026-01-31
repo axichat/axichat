@@ -182,7 +182,6 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'indicateTyping': 'indicate_typing',
         'lowMotion': 'low_motion',
         'colorfulAvatars': 'colorful_avatars',
-        'messageStorageMode': 'message_storage_mode',
         'shareTokenSignatureEnabled': 'share_token_signature_enabled',
         'hideCompletedScheduled': 'hide_completed_scheduled',
         'hideCompletedUnscheduled': 'hide_completed_unscheduled',

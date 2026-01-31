@@ -10,7 +10,6 @@ import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/drift.dart' hide JsonKey;
@@ -22,9 +21,10 @@ import 'package:uuid/uuid.dart';
 part 'message_models.freezed.dart';
 
 const uuid = Uuid();
-const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
-const int _maxCalendarTaskIcsBytes = maxMessageHtmlBytes;
-const int deltaAccountIdLegacy = 0;
+
+final class DeltaAccountDefaults {
+  static const int legacyId = 0;
+}
 
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
@@ -68,48 +68,6 @@ enum MessageError {
   bool get isNone => this == none;
 
   bool get isNotNone => this != none;
-
-  String? tooltip(AppLocalizations l10n) {
-    if (this == serviceUnavailable) {
-      return l10n.messageErrorServiceUnavailableTooltip;
-    }
-    return null;
-  }
-
-  String label(AppLocalizations l10n) => switch (this) {
-        serviceUnavailable => l10n.messageErrorServiceUnavailable,
-        serverNotFound => l10n.messageErrorServerNotFound,
-        serverTimeout => l10n.messageErrorServerTimeout,
-        unknown => l10n.messageErrorUnknown,
-        notEncryptedForDevice => l10n.messageErrorNotEncryptedForDevice,
-        malformedKey => l10n.messageErrorMalformedKey,
-        unknownSPK => l10n.messageErrorUnknownSignedPrekey,
-        noDeviceSession => l10n.messageErrorNoDeviceSession,
-        skippingTooManyKeys => l10n.messageErrorSkippingTooManyKeys,
-        invalidHMAC => l10n.messageErrorInvalidHmac,
-        malformedCiphertext => l10n.messageErrorMalformedCiphertext,
-        noKeyMaterial => l10n.messageErrorNoKeyMaterial,
-        noDecryptionKey => l10n.messageErrorNoDecryptionKey,
-        invalidKEX => l10n.messageErrorInvalidKex,
-        unknownOmemoError => l10n.messageErrorUnknownOmemo,
-        invalidAffixElements => l10n.messageErrorInvalidAffixElements,
-        emptyDeviceList => l10n.messageErrorEmptyDeviceList,
-        omemoUnsupported => l10n.messageErrorOmemoUnsupported,
-        encryptionFailure => l10n.messageErrorEncryptionFailure,
-        invalidEnvelope => l10n.messageErrorInvalidEnvelope,
-        fileDownloadFailure => l10n.messageErrorFileDownloadFailure,
-        fileUploadFailure => l10n.messageErrorFileUploadFailure,
-        fileDecryptionFailure => l10n.messageErrorFileDecryptionFailure,
-        fileEncryptionFailure => l10n.messageErrorFileEncryptionFailure,
-        plaintextFileInOmemo => l10n.messageErrorPlaintextFileInOmemo,
-        emailSendFailure => l10n.messageErrorEmailSendFailure,
-        emailAttachmentTooLarge => l10n.messageErrorEmailAttachmentTooLarge,
-        emailRecipientRejected => l10n.messageErrorEmailRecipientRejected,
-        emailAuthenticationFailed => l10n.messageErrorEmailAuthenticationFailed,
-        emailBounced => l10n.messageErrorEmailBounced,
-        emailThrottled => l10n.messageErrorEmailThrottled,
-        _ => l10n.messageErrorUnknown,
-      };
 
   static MessageError fromOmemo(Object? error) => switch (error) {
         omemo.NotEncryptedForDeviceError _ => notEncryptedForDevice,
@@ -276,7 +234,7 @@ class Message with _$Message implements Insertable<Message> {
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
-    @Default(deltaAccountIdLegacy) int deltaAccountId,
+    @Default(DeltaAccountDefaults.legacyId) int deltaAccountId,
     int? deltaChatId,
     int? deltaMsgId,
   }) = _Message;
@@ -656,11 +614,13 @@ extension MessageCalendarAvailabilityX on Message {
 CalendarTask? _decodeCalendarTaskIcsPayload(CalendarTaskIcsPayload payload) {
   final raw = payload.ics.trim();
   if (raw.isEmpty) return null;
-  if (!isWithinUtf8ByteLimit(raw, maxBytes: _maxCalendarTaskIcsBytes)) {
+  const maxBytes = maxMessageHtmlBytes;
+  if (!isWithinUtf8ByteLimit(raw, maxBytes: maxBytes)) {
     return null;
   }
   try {
-    return _calendarTaskIcsCodec.decode(raw);
+    const calendarTaskIcsCodec = CalendarTaskIcsCodec();
+    return calendarTaskIcsCodec.decode(raw);
   } on Exception {
     return null;
   }
@@ -912,7 +872,7 @@ class Messages extends Table {
   IntColumn get deltaMsgId => integer().nullable()();
 
   IntColumn get deltaAccountId =>
-      integer().withDefault(const Constant(deltaAccountIdLegacy))();
+      integer().withDefault(const Constant(DeltaAccountDefaults.legacyId))();
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
@@ -994,7 +954,7 @@ class MessageCopies extends Table {
   IntColumn get dcChatId => integer()();
 
   IntColumn get dcAccountId =>
-      integer().withDefault(const Constant(deltaAccountIdLegacy))();
+      integer().withDefault(const Constant(DeltaAccountDefaults.legacyId))();
 
   @override
   List<String> get customConstraints => const [
