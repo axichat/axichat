@@ -5,6 +5,7 @@ import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -108,7 +109,7 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
         return;
       }
       final account = await _emailService.ensureProvisioned(
-        displayName: jid.split('@').first,
+        displayName: addressLocalPart(jid) ?? jid,
         databasePrefix: databasePrefix,
         databasePassphrase: passphrase,
         jid: jid,

@@ -3501,11 +3501,12 @@ class EmailService {
     if (normalized == null) {
       return null;
     }
-    final parts = normalized.split('@');
-    if (parts.length != 2) {
+    final local = addressLocalPart(normalized);
+    final domain = addressDomainPart(normalized);
+    if (local == null || domain == null) {
       return null;
     }
-    if (parts.first.isEmpty || parts.last.isEmpty) {
+    if (local.isEmpty || domain.isEmpty) {
       return null;
     }
     return normalized;

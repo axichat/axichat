@@ -866,7 +866,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final resolvedPassword =
         storedPassword ?? sessionPassword ?? activePassword;
     final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
-    final displayName = jid.split('@').first;
+    final displayName = addressLocalPart(jid) ?? jid;
     final rememberMe = await loadRememberMeChoice();
     await _ensureEmailProvisioned(
       displayName: displayName,
@@ -1268,7 +1268,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final String? fallbackEmailPassword =
         passwordPreHashed ? null : resolvedPassword;
     String? emailPassword = emailCredentials?.password ?? fallbackEmailPassword;
-    final String displayName = resolvedJid.split('@').first;
+    final String displayName = addressLocalPart(resolvedJid) ?? resolvedJid;
 
     final bool canPreserveSession = wasAuthenticated && usingStoredCredentials;
 
@@ -1591,7 +1591,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _emit(AuthenticationLogInInProgress(config: endpointConfig));
       }
       await _recoverAuthTransaction();
-      final demoDomain = kDemoSelfJid.split('@').last;
+      final demoDomain =
+          addressDomainPart(kDemoSelfJid) ?? EndpointConfig.defaultDomain;
       final demoConfig = EndpointConfig(
         domain: demoDomain,
         enableXmpp: false,
@@ -2812,7 +2813,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     try {
-      final displayName = jid.split('@').first;
+      final displayName = addressLocalPart(jid) ?? jid;
       await emailService.updatePassword(
         jid: jid,
         displayName: displayName,
@@ -3198,9 +3199,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   String _normalizeJid(String jid) {
-    final parts = jid.split('@');
-    if (parts.length == 2) {
-      return _normalizeSignupKey(parts.first, parts.last);
+    final local = addressLocalPart(jid);
+    final domain = addressDomainPart(jid);
+    if (local != null && domain != null) {
+      return _normalizeSignupKey(local, domain);
     }
     return jid.trim().toLowerCase();
   }

@@ -156,9 +156,14 @@ String? normalizedOccupantId(String? raw) {
 
 String? addressLocalPart(String? raw) {
   final parsed = parseJid(raw);
-  if (parsed == null) return null;
-  final local = parsed.local.trim();
-  return local.isEmpty ? null : local;
+  if (parsed != null) {
+    return parsed.local.trim();
+  }
+  final normalized = normalizeAddress(raw);
+  if (normalized == null) return null;
+  final atIndex = normalized.indexOf('@');
+  if (atIndex == -1) return null;
+  return normalized.substring(0, atIndex).trim();
 }
 
 String? addressDomainPart(String? raw) {

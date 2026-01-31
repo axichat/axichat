@@ -682,7 +682,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                 ),
       );
     }
-    final previewFile = localFile;
+    final previewFile = localFile!;
     final previewAllowedFuture = _resolvePreviewAllowed(
       previewFile,
       metadataId: metadata.id,

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
@@ -55,12 +56,9 @@ class ComposeDraftContent extends StatelessWidget {
 }
 
 String? _domainFromAddress(String? value) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty || !trimmed.contains('@')) {
+  final domain = addressDomainPart(value)?.toLowerCase();
+  if (domain == null || domain.isEmpty) {
     return null;
   }
-  final parts = trimmed.split('@');
-  if (parts.length != 2) return null;
-  final domain = parts.last.trim().toLowerCase();
-  return domain.isEmpty ? null : domain;
+  return domain;
 }

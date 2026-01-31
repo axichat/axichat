@@ -64,7 +64,9 @@ class RosterAddButton extends StatelessWidget {
                             return JidInput(
                               enabled: !isLoading,
                               error: errorMessage,
-                              jidOptions: ['${jid.split('@').first}@$server'],
+                              jidOptions: [
+                                '${addressLocalPart(jid) ?? jid}@$server',
+                              ],
                               onChanged: (value) {
                                 setState(() => jid = value);
                               },

@@ -1314,8 +1314,8 @@ class XmppService extends XmppBase
     }
 
     _myJid = mox.JID.fromString(jid);
-    final bareDomain = _myJid?.toBare().toString().split('@').last;
-    if (bareDomain != null && endpoint != null) {
+    final bareDomain = _myJid?.domain.trim();
+    if (bareDomain != null && bareDomain.isNotEmpty && endpoint != null) {
       serverLookup[bareDomain] = IOEndpoint(endpoint.host, endpoint.port);
     }
 
