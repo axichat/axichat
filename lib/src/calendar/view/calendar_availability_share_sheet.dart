@@ -41,7 +41,6 @@ const double _availabilitySheetSectionSpacing = 16.0;
 const double _availabilitySheetSectionGap = 8.0;
 const double _availabilitySheetHeaderIconSize = 18.0;
 const double _availabilitySheetProgressStrokeWidth = 2.0;
-const double _availabilitySheetLabelLetterSpacing = 0.4;
 const EdgeInsets _availabilityRecipientsContentPadding =
     EdgeInsets.symmetric(horizontal: 16);
 const double _availabilityEditorPanelGap = 16.0;
@@ -65,7 +64,7 @@ Future<void> showCalendarAvailabilityShareSheet({
 }) async {
   final l10n = context.l10n;
   final List<Chat> chats =
-      context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
+      context.read<ChatsCubit>().state.items ?? const <Chat>[];
   final Chat? lockedChat = lockToChat ? initialChat : null;
   final bool canLockToChat =
       lockedChat != null && lockedChat.supportsChatCalendar;
@@ -973,7 +972,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rosterItems =
-        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
+        context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1033,11 +1032,7 @@ class _AvailabilitySheetSectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: _availabilitySheetSectionGap),
       child: Text(
         text,
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-          color: context.colorScheme.mutedForeground,
-          letterSpacing: _availabilitySheetLabelLetterSpacing,
-        ),
+        style: context.textTheme.sectionLabelM,
       ),
     );
   }

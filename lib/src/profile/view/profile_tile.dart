@@ -22,8 +22,7 @@ class ProfileTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
-        final demoOffline =
-            context.watch<XmppService?>()?.demoOfflineMode ?? false;
+        final demoOffline = context.watch<XmppService>().demoOfflineMode;
         final connectionState = _xmppStateFor(
           connectivityState,
           demoOffline: demoOffline,

@@ -63,12 +63,8 @@ const ValueKey<String> _calendarSurfacePageKey = ValueKey<String>(
 const bool _calendarSurfacePopEnabledDefault = true;
 
 bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
-  try {
-    return context.watch<ChatsCubit?>()?.state.openCalendar ??
-        _calendarSurfacePopEnabledDefault;
-  } on FlutterError {
-    return _calendarSurfacePopEnabledDefault;
-  }
+  return context.watch<ChatsCubit>().state.openCalendar ||
+      _calendarSurfacePopEnabledDefault;
 }
 
 class _CalendarWidgetState
@@ -309,8 +305,8 @@ class _CalendarWidgetState
       calendarNavigator.pop();
       return;
     }
-    if (context.read<ChatsCubit?>()?.state.openCalendar == true) {
-      context.read<ChatsCubit?>()?.toggleCalendar();
+    if (context.read<ChatsCubit>().state.openCalendar) {
+      context.read<ChatsCubit>().toggleCalendar();
       return;
     }
 

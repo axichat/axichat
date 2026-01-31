@@ -28,8 +28,6 @@ const String _attendeeDefaultLabel = 'Default';
 const String _attendeeActionAcceptLabel = 'Accept';
 const String _attendeeActionDeclineLabel = 'Decline';
 const String _attendeeActionTentativeLabel = 'Tentative';
-const double _participantLabelLetterSpacing = 0.2;
-const double _participantLabelFontSize = 12;
 const double _participantSelectIconSize = 16;
 const int _participantTextSelectionOffset = 0;
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
@@ -188,11 +186,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
-      letterSpacing: _participantLabelLetterSpacing,
-    );
+    final TextStyle labelStyle = context.textTheme.sectionLabelM;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,11 +319,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
-      letterSpacing: _participantLabelLetterSpacing,
-    );
+    final TextStyle labelStyle = context.textTheme.sectionLabelM;
     final List<CalendarAttendee> attendees =
         widget.attendees.isEmpty ? _emptyAttendees : widget.attendees;
     final List<ShadOption<CalendarParticipantRole?>> roleOptions = [
@@ -554,12 +544,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = TextStyle(
-      fontSize: _participantLabelFontSize,
-      fontWeight: FontWeight.w600,
-      color: calendarSubtitleColor,
-      letterSpacing: _participantLabelLetterSpacing,
-    );
+    final TextStyle labelStyle = context.textTheme.sectionLabelM;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

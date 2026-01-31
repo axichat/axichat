@@ -28,7 +28,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _criticalPathShareHeaderIconSize = 18.0;
 const double _criticalPathShareProgressStrokeWidth = 2.0;
-const double _criticalPathShareLabelLetterSpacing = 0.4;
 
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
@@ -37,7 +36,7 @@ Future<void> showCalendarCriticalPathShareSheet({
   Chat? initialChat,
 }) async {
   final List<Chat> chats =
-      context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
+      context.read<ChatsCubit>().state.items ?? const <Chat>[];
   final List<Chat> available =
       chats.where((chat) => chat.supportsChatCalendar).toList(growable: false);
   if (available.isEmpty) {
@@ -113,7 +112,7 @@ class _CalendarCriticalPathShareSheetState
   @override
   Widget build(BuildContext context) {
     final rosterItems =
-        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
+        context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final header = AxiSheetHeader(
       title: Text(context.l10n.calendarCriticalPathShareTitle),
       subtitle: Text(context.l10n.calendarCriticalPathShareSubtitle),
@@ -296,9 +295,7 @@ class _CriticalPathShareSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: context.textTheme.muted.copyWith(
-        letterSpacing: _criticalPathShareLabelLetterSpacing,
-      ),
+      style: context.textTheme.sectionLabelM,
     );
   }
 }

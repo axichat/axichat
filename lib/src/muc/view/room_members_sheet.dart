@@ -308,7 +308,7 @@ class _MemberSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.textTheme;
+    final textTheme = context.textTheme;
     final spacing = context.spacing;
     final title = _titleForKind(kind);
     return Column(
@@ -316,7 +316,7 @@ class _MemberSection extends StatelessWidget {
       children: [
         Padding(
           padding: EdgeInsets.symmetric(vertical: spacing.xs),
-          child: Text(title, style: theme.muted),
+          child: Text(title, style: textTheme.sectionLabelM),
         ),
         ...members.map((member) {
           final occupant = member.occupant;
@@ -805,7 +805,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final rosterItems =
-        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
+        context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final contentPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,

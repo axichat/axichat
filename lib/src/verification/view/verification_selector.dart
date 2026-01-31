@@ -53,7 +53,7 @@ class VerificationSelector extends StatelessWidget {
                     initialValue: fingerprint.label,
                     placeholder: Text(l10n.verificationAddLabelPlaceholder),
                     onSubmitted: (value) =>
-                        context.read<VerificationCubit?>()?.labelFingerprint(
+                        context.read<VerificationCubit>().labelFingerprint(
                               jid: fingerprint.jid,
                               device: fingerprint.deviceID,
                               label: value,
@@ -96,7 +96,7 @@ class VerificationSelector extends StatelessWidget {
                     AxiSelect<BTBVTrustState>(
                       initialValue: fingerprint.trust,
                       onChanged: (trust) =>
-                          context.read<VerificationCubit?>()?.setDeviceTrust(
+                          context.read<VerificationCubit>().setDeviceTrust(
                                 jid: fingerprint.jid,
                                 device: fingerprint.deviceID,
                                 trust: trust!,

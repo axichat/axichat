@@ -13,6 +13,7 @@ import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
+import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
@@ -27,7 +28,6 @@ import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 
 const int _deltaChatLastSpecialId = DeltaChatId.lastSpecial;
-const _bootstrapYieldEveryMessages = 40;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
 const int _emptyUnreadCount = 0;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
@@ -306,6 +306,9 @@ class DeltaEventConsumer {
   Future<Set<int>>? _archivedChatlistInFlight;
   DateTime? _archivedChatlistFetchedAt;
   final Set<int> _archivedChatIds = <int>{};
+  final EmailAsyncQueue _autoDownloadQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _originIdHydrationQueue = EmailAsyncQueue();
+  final Set<int> _originIdHydrationPending = <int>{};
 
   AppLocalizations get _l10n =>
       _localizationsProvider?.call() ??
@@ -388,7 +391,6 @@ class DeltaEventConsumer {
       if (updated != chat) {
         await db.updateChat(updated);
       }
-      await Future<void>.delayed(Duration.zero);
     }
 
     for (final chatId in entriesByChatId.keys) {
@@ -403,7 +405,6 @@ class DeltaEventConsumer {
         continue;
       }
       const int startIndex = 0;
-      var imported = 0;
       for (var index = startIndex; index < filteredMsgIds.length; index++) {
         final msg = await _context.getMessage(filteredMsgIds[index]);
         if (msg == null) continue;
@@ -413,10 +414,6 @@ class DeltaEventConsumer {
           chat: chat,
           skipSystemChatCheck: true,
         );
-        imported += 1;
-        if (imported % _bootstrapYieldEveryMessages == 0) {
-          await Future<void>.delayed(Duration.zero);
-        }
       }
 
       final last = await _context.getMessage(filteredMsgIds.last);
@@ -512,7 +509,6 @@ class DeltaEventConsumer {
         }
       }
     }
-    var processed = 0;
     for (final entry in entriesByChatId.values) {
       final chatId = entry.chatId;
       if (await _isDeltaSystemChat(chatId)) {
@@ -595,10 +591,6 @@ class DeltaEventConsumer {
       } else if (updated != chat) {
         await db.updateChat(updated);
       }
-      processed += 1;
-      if (processed % _bootstrapYieldEveryMessages == 0) {
-        await Future<void>.delayed(Duration.zero);
-      }
     }
   }
 
@@ -659,10 +651,6 @@ class DeltaEventConsumer {
         if (imported >= needed) {
           break;
         }
-        if (imported > _deltaMessageIdUnset &&
-            imported % _bootstrapYieldEveryMessages == _deltaMessageIdUnset) {
-          await Future<void>.delayed(Duration.zero);
-        }
       }
       return imported;
     }
@@ -685,10 +673,6 @@ class DeltaEventConsumer {
       imported += 1;
       if (imported >= needed) {
         break;
-      }
-      if (imported > _deltaMessageIdUnset &&
-          imported % _bootstrapYieldEveryMessages == _deltaMessageIdUnset) {
-        await Future<void>.delayed(Duration.zero);
       }
     }
     return imported;
@@ -901,24 +885,28 @@ class DeltaEventConsumer {
     if (staleStanzaIds.isNotEmpty) {
       await db.deleteMessagesByStanzaIds(staleStanzaIds);
     }
-    var processed = 0;
+    final missingIds = <int>[];
     for (final deltaId in visibleIds) {
-      if (localDeltaIds.contains(deltaId)) {
-        continue;
+      if (!localDeltaIds.contains(deltaId)) {
+        missingIds.add(deltaId);
       }
-      final msg = await _context.getMessage(deltaId);
-      if (msg == null) {
-        continue;
-      }
-      await _ingestDeltaMessage(
-        chatId: chatId,
-        msg: msg,
-        chat: chat,
-        skipSystemChatCheck: true,
+    }
+    const int batchSize = 8;
+    for (var index = 0; index < missingIds.length; index += batchSize) {
+      final chunk = missingIds.skip(index).take(batchSize).toList();
+      final messages = await Future.wait(
+        chunk.map(_context.getMessage),
       );
-      processed += 1;
-      if (processed % _bootstrapYieldEveryMessages == 0) {
-        await Future<void>.delayed(Duration.zero);
+      for (final msg in messages) {
+        if (msg == null) {
+          continue;
+        }
+        await _ingestDeltaMessage(
+          chatId: chatId,
+          msg: msg,
+          chat: chat,
+          skipSystemChatCheck: true,
+        );
       }
     }
   }
@@ -1070,7 +1058,9 @@ class DeltaEventConsumer {
             .isAllowed &&
         !isSpamQuarantined) {
       fireAndForget(
-        () => _context.downloadFullMessage(msg.id),
+        () => _autoDownloadQueue.run(
+          () async => _context.downloadFullMessage(msg.id),
+        ),
         operationName: 'DeltaEventConsumer.downloadFullMessage',
       );
     }
@@ -1155,14 +1145,14 @@ class DeltaEventConsumer {
 
   bool _isSelfPendingSender(Message message) {
     final String normalizedSender =
-        normalizedAddressValue(message.senderJid) ?? '';
+        normalizedAddressValueOrEmpty(message.senderJid);
     if (normalizedSender.isEmpty) {
       return false;
     }
     if (normalizedSender.isDeltaPlaceholderJid) {
       return true;
     }
-    final String normalizedSelf = normalizedAddressValue(_selfJid) ?? '';
+    final String normalizedSelf = normalizedAddressValueOrEmpty(_selfJid);
     if (normalizedSelf.isEmpty) {
       return false;
     }
@@ -1270,11 +1260,19 @@ class DeltaEventConsumer {
     required int msgId,
     required int accountId,
   }) async {
-    try {
-      await _hydrateOriginId(msgId: msgId, accountId: accountId);
-    } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to hydrate Delta origin ID.', error, stackTrace);
+    if (_originIdHydrationPending.contains(msgId)) {
+      return;
     }
+    _originIdHydrationPending.add(msgId);
+    await _originIdHydrationQueue.run(() async {
+      try {
+        await _hydrateOriginId(msgId: msgId, accountId: accountId);
+      } on Exception catch (error, stackTrace) {
+        _log.fine('Failed to hydrate Delta origin ID.', error, stackTrace);
+      } finally {
+        _originIdHydrationPending.remove(msgId);
+      }
+    });
   }
 
   Future<void> _scheduleOriginIdHydrationIfNeeded({

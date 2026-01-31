@@ -37,7 +37,6 @@ const double _freeBusyResizeHandleExtent = 8.0;
 const double _freeBusySheetSpacing = 16.0;
 const double _freeBusySheetGap = 8.0;
 const double _freeBusySheetActionSpacing = 8.0;
-const double _freeBusySheetLabelLetterSpacing = 0.4;
 const double _freeBusySheetActionPaddingHorizontal = 12.0;
 const double _freeBusySheetActionPaddingVertical = 10.0;
 const double _freeBusySheetActionCornerRadius = 12.0;
@@ -1797,11 +1796,7 @@ class _FreeBusySheetSectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: _freeBusySheetGap),
       child: Text(
         text,
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-          color: context.colorScheme.mutedForeground,
-          letterSpacing: _freeBusySheetLabelLetterSpacing,
-        ),
+        style: context.textTheme.sectionLabelM,
       ),
     );
   }

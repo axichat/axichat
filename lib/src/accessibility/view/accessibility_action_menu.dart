@@ -5,6 +5,7 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
@@ -665,7 +666,7 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
     final localeName = context.l10n.localeName;
     if (_localeName != localeName) {
       _localeName = localeName;
-      context.read<AccessibilityActionBloc?>()?.add(
+      context.read<AccessibilityActionBloc>().add(
             AccessibilityLocaleUpdated(context.l10n),
           );
     }
@@ -699,9 +700,9 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
         pressed.contains(LogicalKeyboardKey.control);
     if (!hasMeta && !hasControl) return false;
     final locate = context.read;
-    final blocClosed = locate<AccessibilityActionBloc?>()?.isClosed ?? true;
+    final blocClosed = locate<AccessibilityActionBloc>().isClosed;
     if (blocClosed) return false;
-    locate<AccessibilityActionBloc?>()!.add(const AccessibilityMenuOpened());
+    locate<AccessibilityActionBloc>().add(const AccessibilityMenuOpened());
     return true;
   }
 
@@ -1411,16 +1412,22 @@ class _AccessibilityChatScope extends StatelessWidget {
     final unreadCount = _unreadCountFor(state.contacts, chatJid);
     return BlocProvider(
       key: ValueKey(chatJid),
-      create: (context) => AccessibilityChatBloc(
-        jid: chatJid,
-        messageService: context.read<XmppService>(),
-        emailService: context.read<EmailService?>(),
-        initialLocalization: context.l10n,
-        contacts: state.contacts,
-        myJid: state.myJid,
-        initialUnreadCount: unreadCount,
-        draftId: entry.draftId,
-      ),
+      create: (context) {
+        final endpointConfig =
+            context.read<AuthenticationCubit>().endpointConfig;
+        final emailService =
+            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+        return AccessibilityChatBloc(
+          jid: chatJid,
+          messageService: context.read<XmppService>(),
+          emailService: emailService,
+          initialLocalization: context.l10n,
+          contacts: state.contacts,
+          myJid: state.myJid,
+          initialUnreadCount: unreadCount,
+          draftId: entry.draftId,
+        );
+      },
       child: _AccessibilityChatSync(
         state: state,
         unreadCount: unreadCount,
@@ -3101,7 +3108,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
                     header: true,
                     child: Text(
                       section.title!,
-                      style: context.textTheme.muted,
+                      style: context.textTheme.sectionLabelM,
                     ),
                   ),
                 )

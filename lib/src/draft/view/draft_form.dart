@@ -191,7 +191,7 @@ class _DraftFormState extends State<DraftForm> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final rosterItems =
-        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
+        context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.s + spacing.xs;
     final smallGap = spacing.xs + spacing.xxs;

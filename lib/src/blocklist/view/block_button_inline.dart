@@ -45,7 +45,10 @@ class BlockButtonInline extends StatelessWidget {
         final onPressed = disabled
             ? null
             : () {
-                context.read<BlocklistCubit?>()?.block(address: jid);
+                context.read<BlocklistCubit>().block(
+                      address: jid,
+                      transport: MessageTransport.xmpp,
+                    );
                 if (callback != null) {
                   callback!();
                 }

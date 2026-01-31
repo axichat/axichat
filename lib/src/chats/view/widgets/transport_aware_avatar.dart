@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -35,7 +36,7 @@ class TransportAwareAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<ProfileCubit>().state;
-    final emailService = context.watch<EmailService>();
+    final endpointConfig = context.watch<AuthenticationCubit>().endpointConfig;
     final xmppService = context.watch<XmppService>();
     final sizing = context.sizing;
     final spacing = context.spacing;
@@ -44,7 +45,9 @@ class TransportAwareAvatar extends StatelessWidget {
     final resolvedProfileJid = profile.jid.trim();
     final String? selfXmppJid =
         resolvedProfileJid.isNotEmpty ? resolvedProfileJid : xmppService.myJid;
-    final String? selfEmailJid = emailService.selfSenderJid;
+    final String? selfEmailJid = endpointConfig.enableSmtp
+        ? context.watch<EmailService>().selfSenderJid
+        : null;
     final bool isSelfChat = chat.remoteJid.sameBare(selfXmppJid) ||
         chat.remoteJid.sameBare(selfEmailJid);
     final String? selfAvatarPath = profile.avatarPath?.trim();

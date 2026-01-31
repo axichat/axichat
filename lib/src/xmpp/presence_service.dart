@@ -86,11 +86,11 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Future<bool> _isBlockedPresenceSender(mox.JID from) async {
-    final fromBare = _normalizeBareJidValue(from.toBare().toString());
+    final fromBare = normalizedBareAddressValue(from.toBare().toString());
     if (fromBare == null) {
       return false;
     }
-    final accountBare = _normalizeBareJidValue(myJid?.toString());
+    final accountBare = normalizedBareAddressValue(myJid?.toString());
     if (accountBare != null && fromBare == accountBare) {
       return false;
     }

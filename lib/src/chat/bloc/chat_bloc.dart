@@ -404,7 +404,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final String? _chatLookupJid = jid == null
       ? null
       : _isEmailOnlyAddress(jid)
-          ? normalizedAddressValue(jid) ?? jid!.trim().toLowerCase()
+          ? normalizedAddressValueOrEmpty(jid)
           : jid;
   final MessageService _messageService;
   XmppService? _xmppService;

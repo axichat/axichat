@@ -572,6 +572,10 @@ extension ChatTransportExtension on Chat {
     if (address != null && address.isNotEmpty) {
       return true;
     }
+    final fromAddress = emailFromAddress?.trim();
+    if (fromAddress != null && fromAddress.isNotEmpty) {
+      return true;
+    }
     return false;
   }
 

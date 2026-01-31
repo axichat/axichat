@@ -4,6 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -92,7 +93,7 @@ class _RosterListBody extends StatelessWidget {
                 child: AxiListTile(
                   key: Key(item.jid),
                   onTap: () =>
-                      context.read<ChatsCubit?>()?.openChat(jid: item.jid),
+                      context.read<ChatsCubit>().openChat(jid: item.jid),
                   menuItems: [
                     ShadContextMenuItem(
                       leading: const Icon(LucideIcons.pencilLine),
@@ -103,8 +104,14 @@ class _RosterListBody extends StatelessWidget {
                         attachmentMetadataIds: const <String>[],
                       ),
                     ),
-                    BlockMenuItem(jid: item.jid),
-                    ReportSpamMenuItem(jid: item.jid),
+                    BlockMenuItem(
+                      jid: item.jid,
+                      transport: MessageTransport.xmpp,
+                    ),
+                    ReportSpamMenuItem(
+                      jid: item.jid,
+                      transport: MessageTransport.xmpp,
+                    ),
                     AxiDeleteMenuItem(
                       onPressed: () async {
                         if (!isLoading &&
@@ -114,7 +121,7 @@ class _RosterListBody extends StatelessWidget {
                                 ) ==
                                 true &&
                             context.mounted) {
-                          context.read<RosterCubit?>()?.removeContact(
+                          context.read<RosterCubit>().removeContact(
                                 jid: item.jid,
                               );
                         }

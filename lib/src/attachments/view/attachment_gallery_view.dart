@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
@@ -91,13 +92,19 @@ class AttachmentGalleryPanel extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return BlocProvider(
-      create: (context) => AttachmentGalleryBloc(
-        xmppService: context.read<XmppService>(),
-        emailService: context.read<EmailService>(),
-        chatJid: chat!.jid,
-        chatOverride: chat!,
-        showChatLabel: false,
-      ),
+      create: (context) {
+        final endpointConfig =
+            context.read<AuthenticationCubit>().endpointConfig;
+        final emailService =
+            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+        return AttachmentGalleryBloc(
+          xmppService: context.read<XmppService>(),
+          emailService: emailService,
+          chatJid: chat!.jid,
+          chatOverride: chat!,
+          showChatLabel: false,
+        );
+      },
       child: AxiSheetScaffold(
         header: AxiSheetHeader(
           title: Text(title),

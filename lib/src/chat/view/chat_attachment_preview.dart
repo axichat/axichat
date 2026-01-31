@@ -615,17 +615,9 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
   var _autoDownloadRequested = false;
   Future<bool>? _previewAllowed;
   String? _previewPath;
-  File? _localFile;
-  bool _hasLocalFile = false;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshLocalFile();
-  }
 
   @override
   void didUpdateWidget(covariant _ImageAttachment oldWidget) {
@@ -635,40 +627,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     if (oldPath != nextPath) {
       _previewAllowed = null;
       _previewPath = null;
-      _refreshLocalFile();
     }
-  }
-
-  Future<void> _refreshLocalFile() async {
-    final path = widget.metadata.path?.trim();
-    final file = path == null || path.isEmpty ? null : File(path);
-    final exists = await file?.exists() ?? false;
-    if (!mounted) return;
-    setState(() {
-      _localFile = file;
-      _hasLocalFile = exists;
-    });
-    await _maybeAutoDownload();
-  }
-
-  Future<void> _maybeAutoDownload() async {
-    if (!widget.autoDownload ||
-        _autoDownloadRequested ||
-        _downloading ||
-        _hasLocalFile) {
-      return;
-    }
-    final metadata = widget.metadata;
-    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
-        ? null
-        : metadata.sourceUrls!.first;
-    final canDownload = url != null || widget.downloadDelegate != null;
-    if (!canDownload) return;
-    _autoDownloadRequested = true;
-    await _downloadAttachment(
-      showFeedback: widget.autoDownloadUserInitiated,
-      requireConfirmation: widget.autoDownloadUserInitiated,
-    );
   }
 
   @override
@@ -678,13 +637,28 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final localFile = _localFile;
-    final hasLocalFile = _hasLocalFile;
+    final path = metadata.path?.trim();
+    final localFile = path == null || path.isEmpty ? null : File(path);
+    final hasLocalFile = localFile?.existsSync() ?? false;
     final canDownload = url != null || widget.downloadDelegate != null;
-    if ((!hasLocalFile || localFile == null) && !canDownload) {
+    if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
-    if (!hasLocalFile || localFile == null) {
+    if (widget.autoDownload &&
+        !_autoDownloadRequested &&
+        !_downloading &&
+        !hasLocalFile &&
+        canDownload) {
+      _autoDownloadRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _downloadAttachment(
+          showFeedback: widget.autoDownloadUserInitiated,
+          requireConfirmation: widget.autoDownloadUserInitiated,
+        );
+      });
+    }
+    if (!hasLocalFile) {
       if (_encrypted) {
         return _EncryptedAttachment(
           filename: metadata.filename,
@@ -892,8 +866,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   var _autoDownloadRequested = false;
   var _initFailed = false;
   VideoPlayerController? _controller;
-  File? _localFile;
-  bool _hasLocalFile = false;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
@@ -901,8 +873,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   @override
   void initState() {
     super.initState();
-    _refreshLocalFile();
-    unawaited(_initializeVideoIfAvailable());
+    _initializeVideoIfAvailable();
   }
 
   @override
@@ -912,8 +883,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final nextPath = widget.metadata.path?.trim();
     if (oldPath != nextPath) {
       _resetController();
-      _refreshLocalFile();
-      unawaited(_initializeVideoIfAvailable());
+      _initializeVideoIfAvailable();
     }
   }
 
@@ -921,38 +891,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   void dispose() {
     _resetController();
     super.dispose();
-  }
-
-  Future<void> _refreshLocalFile() async {
-    final path = widget.metadata.path?.trim();
-    final file = path == null || path.isEmpty ? null : File(path);
-    final exists = await file?.exists() ?? false;
-    if (!mounted) return;
-    setState(() {
-      _localFile = file;
-      _hasLocalFile = exists;
-    });
-    await _maybeAutoDownload();
-  }
-
-  Future<void> _maybeAutoDownload() async {
-    if (!widget.autoDownload ||
-        _autoDownloadRequested ||
-        _downloading ||
-        _hasLocalFile) {
-      return;
-    }
-    final metadata = widget.metadata;
-    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
-        ? null
-        : metadata.sourceUrls!.first;
-    final canDownload = url != null || widget.downloadDelegate != null;
-    if (!canDownload) return;
-    _autoDownloadRequested = true;
-    await _downloadAttachment(
-      showFeedback: widget.autoDownloadUserInitiated,
-      requireConfirmation: widget.autoDownloadUserInitiated,
-    );
   }
 
   @override
@@ -963,11 +901,26 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final localFile = _localFile;
-    final hasLocalFile = _hasLocalFile;
+    final path = metadata.path?.trim();
+    final localFile = path == null || path.isEmpty ? null : File(path);
+    final hasLocalFile = localFile?.existsSync() ?? false;
     final canDownload = url != null || widget.downloadDelegate != null;
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
+    }
+    if (widget.autoDownload &&
+        !_autoDownloadRequested &&
+        !_downloading &&
+        !hasLocalFile &&
+        canDownload) {
+      _autoDownloadRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _downloadAttachment(
+          showFeedback: widget.autoDownloadUserInitiated,
+          requireConfirmation: widget.autoDownloadUserInitiated,
+        );
+      });
     }
     if (!hasLocalFile) {
       if (_encrypted) {
@@ -1559,60 +1512,17 @@ class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
   late final ShadPopoverController _actionsController;
-  bool _hasLocalFile = false;
 
   @override
   void initState() {
     super.initState();
     _actionsController = ShadPopoverController();
-    _refreshLocalFile();
-  }
-
-  @override
-  void didUpdateWidget(covariant _FileAttachment oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final oldPath = oldWidget.metadata.path?.trim();
-    final nextPath = widget.metadata.path?.trim();
-    if (oldPath != nextPath) {
-      _refreshLocalFile();
-    }
   }
 
   @override
   void dispose() {
     _actionsController.dispose();
     super.dispose();
-  }
-
-  Future<void> _refreshLocalFile() async {
-    final path = widget.metadata.path?.trim();
-    final file = path == null || path.isEmpty ? null : File(path);
-    final exists = await file?.exists() ?? false;
-    if (!mounted) return;
-    setState(() {
-      _hasLocalFile = exists;
-    });
-    await _maybeAutoDownload();
-  }
-
-  Future<void> _maybeAutoDownload() async {
-    if (!widget.autoDownload ||
-        _autoDownloadRequested ||
-        _downloading ||
-        _hasLocalFile) {
-      return;
-    }
-    final metadata = widget.metadata;
-    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
-        ? null
-        : metadata.sourceUrls!.first;
-    final canDownload = url != null || widget.downloadDelegate != null;
-    if (!canDownload) return;
-    _autoDownloadRequested = true;
-    await _downloadOnly(
-      showFeedback: widget.autoDownloadUserInitiated,
-      requireConfirmation: widget.autoDownloadUserInitiated,
-    );
   }
 
   @override
@@ -1627,7 +1537,9 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final hasLocalFile = _hasLocalFile;
+    final path = metadata.path?.trim();
+    final localFile = path == null || path.isEmpty ? null : File(path);
+    final hasLocalFile = localFile?.existsSync() ?? false;
     final canDownload = url != null || widget.downloadDelegate != null;
     final bool shareEnabled = hasLocalFile || canDownload;
     final FileOpenRisk risk = assessFileOpenRisk(
@@ -1659,6 +1571,20 @@ class _FileAttachmentState extends State<_FileAttachment> {
         : canDownload
             ? () => _downloadOnly(showFeedback: true, requireConfirmation: true)
             : null;
+    if (widget.autoDownload &&
+        !_autoDownloadRequested &&
+        !_downloading &&
+        !hasLocalFile &&
+        canDownload) {
+      _autoDownloadRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _downloadOnly(
+          showFeedback: widget.autoDownloadUserInitiated,
+          requireConfirmation: widget.autoDownloadUserInitiated,
+        );
+      });
+    }
     final border = context.borderSide;
     final Widget attachmentIcon = DecoratedBox(
       decoration: ShapeDecoration(

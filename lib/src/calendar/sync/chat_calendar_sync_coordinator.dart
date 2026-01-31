@@ -13,6 +13,7 @@ import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_state_store.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 
 typedef ChatCalendarSendMessage = Future<void> Function({
@@ -138,7 +139,7 @@ class ChatCalendarSyncCoordinator {
 }
 
 String _normalizeChatJid(String chatJid) {
-  return chatJid.trim();
+  return normalizeAddress(chatJid) ?? '';
 }
 
 String _chatKey(String chatJid) => chatCalendarStorageId(chatJid);

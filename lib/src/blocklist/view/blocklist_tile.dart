@@ -41,8 +41,7 @@ class BlocklistTile extends StatelessWidget {
             ShadButton.ghost(
               onPressed: disabled
                   ? null
-                  : () =>
-                      context.read<BlocklistCubit?>()?.unblock(entry: entry),
+                  : () => context.read<BlocklistCubit>().unblock(entry: entry),
               foregroundColor: context.colorScheme.destructive,
               child: Text(context.l10n.blocklistUnblock),
             ).withTapBounce(enabled: !disabled),

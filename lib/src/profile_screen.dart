@@ -170,8 +170,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
       builder: (context, state) {
         final l10n = context.l10n;
         final colors = context.colorScheme;
-        final demoOffline =
-            context.read<XmppService?>()?.demoOfflineMode ?? false;
+        final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
         final ConnectionState connectionState = _xmppStateFor(
           state,

@@ -31,7 +31,7 @@ Future<void> showCalendarTaskShareSheet({
 }) async {
   final l10n = context.l10n;
   final List<Chat> chats =
-      context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
+      context.read<ChatsCubit>().state.items ?? const <Chat>[];
   final List<Chat> available =
       chats.where((chat) => chat.type != ChatType.note).toList(growable: false);
   if (available.isEmpty) {
@@ -89,7 +89,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final rosterItems =
-        context.watch<RosterCubit?>()?.state.items ?? const <RosterItem>[];
+        context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final bool isReadOnly = _isReadOnly;
     final String readOnlyHint = isReadOnly
         ? l10n.calendarTaskShareReadOnlyHint

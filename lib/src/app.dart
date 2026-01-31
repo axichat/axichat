@@ -165,96 +165,110 @@ class _AxichatState extends State<Axichat> {
             policy: context.read<Policy>(),
           ),
         ),
-        RepositoryProvider<EmailService>(
-          create: (context) => EmailService(
-            credentialStore: context.read<CredentialStore>(),
-            databaseBuilder: () => context.read<XmppService>().database,
-            notificationService: context.read<NotificationService>(),
-            messageService: context.read<MessageService>(),
-          ),
-        ),
-        RepositoryProvider<HomeRefreshSyncService>(
-          create: (context) => HomeRefreshSyncService(
-            xmppService: context.read<XmppService>(),
-            emailService: context.read<EmailService>(),
-          )..start(),
-        ),
       ],
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider(
-            create: (context) => SettingsCubit(
-              xmppService: context.read<XmppService>(),
-              capability: context.read<Capability>(),
-            ),
-          ),
-          BlocProvider(
-            create: (context) => AuthenticationCubit(
-              credentialStore: context.read<CredentialStore>(),
-              xmppService: context.read<XmppService>(),
-              emailService: context.read<EmailService>(),
-              homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
-              notificationService: context.read<NotificationService>(),
-              initialEndpointConfig:
-                  context.read<SettingsCubit>().state.endpointConfig,
-            ),
-          ),
-          BlocProvider(
-            create: (context) =>
-                OmemoActivityCubit(xmppBase: context.read<XmppService>()),
-          ),
-          BlocProvider.value(value: _xmppActivityCubit),
-          BlocProvider(create: (context) => ShareIntentCubit()..initialize()),
-          BlocProvider(
-            create: (context) => ChatsCubit(
-              xmppService: context.read<XmppService>(),
-              homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
-              emailService: context.read<EmailService>(),
-            ),
-          ),
-          BlocProvider(
-            create: (context) => DraftCubit(
-              messageService: context.read<MessageService>(),
-              emailService: context.read<EmailService>(),
-              shareTokenSignatureEnabled: context
-                  .read<SettingsCubit>()
-                  .state
-                  .shareTokenSignatureEnabled,
-            ),
-          ),
-          BlocProvider(create: (context) => ComposeWindowCubit()),
-          if (widget._storageManager.guestStorage != null)
-            BlocProvider(
-              create: (context) => GuestCalendarBloc(
-                storage: widget._storageManager.guestStorage!,
-                reminderController: _reminderController,
-              )..add(const CalendarStarted()),
-              key: const Key('guest_calendar_bloc'),
-            ),
-        ],
-        child: MultiBlocListener(
-          listeners: [
-            BlocListener<SettingsCubit, SettingsState>(
-              listenWhen: (previous, current) =>
-                  previous.endpointConfig != current.endpointConfig,
-              listener: (context, settings) {
-                context
-                    .read<AuthenticationCubit>()
-                    .updateEndpointConfig(settings.endpointConfig);
-              },
-            ),
-            BlocListener<SettingsCubit, SettingsState>(
-              listenWhen: (previous, current) =>
-                  previous.shareTokenSignatureEnabled !=
-                  current.shareTokenSignatureEnabled,
-              listener: (context, settings) {
-                context.read<DraftCubit>().updateShareTokenSignatureEnabled(
-                      settings.shareTokenSignatureEnabled,
-                    );
-              },
-            ),
-          ],
-          child: const MaterialAxichat(),
+      child: BlocProvider(
+        create: (context) => SettingsCubit(
+          xmppService: context.read<XmppService>(),
+          capability: context.read<Capability>(),
+        ),
+        child: BlocBuilder<SettingsCubit, SettingsState>(
+          buildWhen: (previous, current) =>
+              previous.endpointConfig != current.endpointConfig,
+          builder: (context, settings) {
+            final endpointConfig = settings.endpointConfig;
+            final bool emailEnabled = endpointConfig.enableSmtp;
+            return MultiRepositoryProvider(
+              providers: [
+                if (emailEnabled)
+                  RepositoryProvider<EmailService>(
+                    create: (context) => EmailService(
+                      credentialStore: context.read<CredentialStore>(),
+                      databaseBuilder: () =>
+                          context.read<XmppService>().database,
+                      notificationService: context.read<NotificationService>(),
+                      messageService: context.read<MessageService>(),
+                    ),
+                  ),
+                RepositoryProvider<HomeRefreshSyncService>(
+                  create: (context) => HomeRefreshSyncService(
+                    xmppService: context.read<XmppService>(),
+                    emailService:
+                        emailEnabled ? context.read<EmailService>() : null,
+                  )..start(),
+                ),
+              ],
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider(
+                    create: (context) => AuthenticationCubit(
+                      credentialStore: context.read<CredentialStore>(),
+                      xmppService: context.read<XmppService>(),
+                      emailService:
+                          emailEnabled ? context.read<EmailService>() : null,
+                      homeRefreshSyncService:
+                          context.read<HomeRefreshSyncService>(),
+                      notificationService: context.read<NotificationService>(),
+                      initialEndpointConfig: endpointConfig,
+                    ),
+                  ),
+                  BlocProvider(
+                    create: (context) => OmemoActivityCubit(
+                        xmppBase: context.read<XmppService>()),
+                  ),
+                  BlocProvider.value(value: _xmppActivityCubit),
+                  BlocProvider(
+                    create: (context) => ShareIntentCubit()..initialize(),
+                  ),
+                  BlocProvider(
+                    create: (context) => ChatsCubit(
+                      xmppService: context.read<XmppService>(),
+                      homeRefreshSyncService:
+                          context.read<HomeRefreshSyncService>(),
+                      emailService:
+                          emailEnabled ? context.read<EmailService>() : null,
+                    ),
+                  ),
+                  BlocProvider(
+                    create: (context) => DraftCubit(
+                      messageService: context.read<MessageService>(),
+                      emailService:
+                          emailEnabled ? context.read<EmailService>() : null,
+                      shareTokenSignatureEnabled: context
+                          .read<SettingsCubit>()
+                          .state
+                          .shareTokenSignatureEnabled,
+                    ),
+                  ),
+                  BlocProvider(create: (context) => ComposeWindowCubit()),
+                  if (widget._storageManager.guestStorage != null)
+                    BlocProvider(
+                      create: (context) => GuestCalendarBloc(
+                        storage: widget._storageManager.guestStorage!,
+                        reminderController: _reminderController,
+                      )..add(const CalendarStarted()),
+                      key: const Key('guest_calendar_bloc'),
+                    ),
+                ],
+                child: MultiBlocListener(
+                  listeners: [
+                    BlocListener<SettingsCubit, SettingsState>(
+                      listenWhen: (previous, current) =>
+                          previous.shareTokenSignatureEnabled !=
+                          current.shareTokenSignatureEnabled,
+                      listener: (context, settings) {
+                        context
+                            .read<DraftCubit>()
+                            .updateShareTokenSignatureEnabled(
+                              settings.shareTokenSignatureEnabled,
+                            );
+                      },
+                    ),
+                  ],
+                  child: const MaterialAxichat(),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -270,7 +284,7 @@ class MaterialAxichat extends StatefulWidget {
 
 class _MaterialAxichatState extends State<MaterialAxichat> {
   late final XmppService _xmppService;
-  late final EmailService _emailService;
+  EmailService? _emailService;
   bool _shareIntentHandling = false;
 
   late final GoRouter _router = GoRouter(
@@ -303,21 +317,34 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   void initState() {
     super.initState();
     _xmppService = context.read<XmppService>();
-    _emailService = context.read<EmailService>();
-    _xmppService
-      ..setEmailSpamSyncCallback(_emailService.applySpamSyncUpdate)
-      ..setEmailBlocklistSyncCallback(
-        _emailService.applyEmailBlocklistSyncUpdate,
-      );
+    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final EmailService? emailService =
+        endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+    _emailService = emailService;
+    if (emailService != null) {
+      _attachEmailCallbacks(emailService);
+    }
   }
 
   @override
   void dispose() {
+    _detachEmailCallbacks();
+    _router.dispose();
+    super.dispose();
+  }
+
+  void _attachEmailCallbacks(EmailService emailService) {
+    _xmppService
+      ..setEmailSpamSyncCallback(emailService.applySpamSyncUpdate)
+      ..setEmailBlocklistSyncCallback(
+        emailService.applyEmailBlocklistSyncUpdate,
+      );
+  }
+
+  void _detachEmailCallbacks() {
     _xmppService
       ..clearEmailSpamSyncCallback()
       ..clearEmailBlocklistSyncCallback();
-    _router.dispose();
-    super.dispose();
   }
 
   @override
@@ -325,11 +352,21 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return BlocConsumer<SettingsCubit, SettingsState>(
       listener: (context, state) async {
         final notificationService = context.read<NotificationService>();
-        final emailService = context.read<EmailService>();
+        final endpointConfig =
+            context.read<AuthenticationCubit>().endpointConfig;
+        final EmailService? emailService =
+            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+        if (_emailService != emailService) {
+          _detachEmailCallbacks();
+          if (emailService != null) {
+            _attachEmailCallbacks(emailService);
+          }
+          _emailService = emailService;
+        }
         notificationService
           ..mute = state.mute
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
-        emailService.updateDefaultChatAttachmentAutoDownload(
+        emailService?.updateDefaultChatAttachmentAutoDownload(
           state.defaultChatAttachmentAutoDownload,
         );
       },

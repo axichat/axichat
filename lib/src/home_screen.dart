@@ -8,6 +8,7 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
@@ -121,7 +122,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void deactivate() {
-    context.read<CalendarBloc?>()?.clearChatCalendarSyncHandler();
+    final storageManager = context.read<CalendarStorageManager>();
+    if (!storageManager.isAuthStorageReady) {
+      super.deactivate();
+      return;
+    }
+    context.read<CalendarBloc>().clearChatCalendarSyncHandler();
     super.deactivate();
   }
 
@@ -133,11 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    final chatsCubit = context.read<ChatsCubit?>();
-    final chatsState = chatsCubit?.state;
-    if (chatsCubit == null || chatsState == null) {
-      return;
-    }
+    final chatsCubit = context.read<ChatsCubit>();
+    final chatsState = chatsCubit.state;
     if (chatsState.openStack.skip(1).isNotEmpty) {
       chatsCubit.popChat();
       return;
@@ -173,11 +176,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    final chatsCubit = context.read<ChatsCubit?>();
-    final chatsState = chatsCubit?.state;
-    if (chatsCubit == null || chatsState == null) {
-      return;
-    }
+    final chatsCubit = context.read<ChatsCubit>();
+    final chatsState = chatsCubit.state;
     if (!chatsState.openCalendar) {
       return;
     }
@@ -213,18 +213,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final chatsState = context.read<ChatsCubit?>()?.state;
-    if (chatsState == null) {
-      _clearOpenChatHistoryEntry();
-      _clearOpenCalendarHistoryEntry();
-      return;
-    }
+    final chatsState = context.read<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
     if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
-    context.read<AccessibilityActionBloc?>()?.add(
+    context.read<AccessibilityActionBloc>().add(
           const AccessibilityMenuOpened(),
         );
     return KeyEventResult.handled;
@@ -242,12 +237,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final shouldOpen =
         event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
     final locate = context.read;
-    return shouldOpen && locate<AccessibilityActionBloc?>()?.isClosed == false;
+    return shouldOpen && !locate<AccessibilityActionBloc>().isClosed;
   }
 
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!mounted || !_isFindActionEvent(event)) return false;
-    context.read<AccessibilityActionBloc?>()?.add(
+    context.read<AccessibilityActionBloc>().add(
           const AccessibilityMenuOpened(),
         );
     return true;
@@ -314,7 +309,10 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
   void _ensureCoordinators() {
     final storage = widget.storage;
     if (storage == null) {
-      context.read<CalendarBloc?>()?.clearChatCalendarSyncHandler();
+      final storageManager = context.read<CalendarStorageManager>();
+      if (storageManager.isAuthStorageReady) {
+        context.read<CalendarBloc>().clearChatCalendarSyncHandler();
+      }
       _chatCalendarCoordinator = null;
       _availabilityCoordinator = null;
       return;
@@ -322,19 +320,14 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     if (_storage == storage &&
         _chatCalendarCoordinator != null &&
         _availabilityCoordinator != null) {
-      final calendarBloc = context.read<CalendarBloc?>();
-      if (calendarBloc != null) {
-        calendarBloc
-          ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
-          ..attachAvailabilityCoordinator(_availabilityCoordinator!);
-      }
+      final calendarBloc = context.read<CalendarBloc>();
+      calendarBloc
+        ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
+        ..attachAvailabilityCoordinator(_availabilityCoordinator!);
       return;
     }
     _storage = storage;
-    final calendarBloc = context.read<CalendarBloc?>();
-    if (calendarBloc == null) {
-      return;
-    }
+    final calendarBloc = context.read<CalendarBloc>();
     final chatStorage = ChatCalendarStorage(storage: storage);
     _chatCalendarCoordinator = ChatCalendarSyncCoordinator(
       storage: chatStorage,
@@ -382,7 +375,10 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
 
   @override
   void dispose() {
-    context.read<CalendarBloc?>()?.clearChatCalendarSyncHandler();
+    final storageManager = context.read<CalendarStorageManager>();
+    if (storageManager.isAuthStorageReady) {
+      context.read<CalendarBloc>().clearChatCalendarSyncHandler();
+    }
     super.dispose();
   }
 
@@ -392,12 +388,14 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     final availabilityCoordinator = _availabilityCoordinator;
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<ChatCalendarSyncCoordinator?>.value(
-          value: chatCoordinator,
-        ),
-        RepositoryProvider<CalendarAvailabilityShareCoordinator?>.value(
-          value: availabilityCoordinator,
-        ),
+        if (chatCoordinator != null)
+          RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+            value: chatCoordinator,
+          ),
+        if (availabilityCoordinator != null)
+          RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
+            value: availabilityCoordinator,
+          ),
       ],
       child: widget.child,
     );
@@ -428,12 +426,6 @@ class _HomeContent extends StatelessWidget {
     final l10n = context.l10n;
 
     final xmppService = context.watch<XmppService>();
-    // ignore: unnecessary_type_check
-    final isRoster = xmppService is RosterService;
-    // ignore: unnecessary_type_check
-    final isPresence = xmppService is PresenceService;
-    // ignore: unnecessary_type_check
-    final isBlocking = xmppService is BlockingService;
     final isOmemo = xmppService is OmemoService;
     final env = EnvScope.of(context);
     final navPlacement = env.navPlacement;
@@ -506,13 +498,11 @@ class _HomeContent extends StatelessWidget {
                 Expanded(
                   child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                     builder: (context, state) {
-                      final String? openJid =
-                          context.watch<ChatsCubit?>()?.state.openJid;
-                      final bool openCalendar = hasCalendarBloc &&
-                          (context.watch<ChatsCubit?>()?.state.openCalendar ??
-                              false);
-                      final chatRoute =
-                          context.watch<ChatsCubit?>()?.state.openChatRoute;
+                      final chatsState = context.watch<ChatsCubit>().state;
+                      final String? openJid = chatsState.openJid;
+                      final bool openCalendar =
+                          hasCalendarBloc && chatsState.openCalendar;
+                      final chatRoute = chatsState.openChatRoute;
                       final navRail = navPlacement == NavPlacement.rail
                           ? _HomeNavigationRail(
                               tabs: tabs,
@@ -530,7 +520,7 @@ class _HomeContent extends StatelessWidget {
                               calendarAvailable: hasCalendarBloc,
                               calendarActive: openCalendar,
                               onCalendarSelected: () {
-                                context.read<ChatsCubit?>()?.toggleCalendar();
+                                context.read<ChatsCubit>().toggleCalendar();
                               },
                               onCollapsedChanged: onRailCollapsedChanged,
                             )
@@ -545,6 +535,13 @@ class _HomeContent extends StatelessWidget {
                                   create: (context) {
                                     final settings =
                                         context.read<SettingsCubit>().state;
+                                    final endpointConfig = context
+                                        .read<AuthenticationCubit>()
+                                        .endpointConfig;
+                                    final emailService =
+                                        endpointConfig.enableSmtp
+                                            ? context.read<EmailService>()
+                                            : null;
                                     return ChatBloc(
                                       jid: openJid,
                                       messageService:
@@ -553,8 +550,7 @@ class _HomeContent extends StatelessWidget {
                                       mucService: context.read<XmppService>(),
                                       notificationService:
                                           context.read<NotificationService>(),
-                                      emailService:
-                                          context.read<EmailService>(),
+                                      emailService: emailService,
                                       omemoService: isOmemo
                                           ? context.read<XmppService>()
                                               as OmemoService
@@ -575,7 +571,12 @@ class _HomeContent extends StatelessWidget {
                                   create: (context) => ChatSearchCubit(
                                     jid: openJid,
                                     messageService: context.read<XmppService>(),
-                                    emailService: context.read<EmailService>(),
+                                    emailService: context
+                                            .read<AuthenticationCubit>()
+                                            .endpointConfig
+                                            .enableSmtp
+                                        ? context.read<EmailService>()
+                                        : null,
                                   ),
                                 ),
                                 /* Verification flow temporarily disabled
@@ -638,11 +639,10 @@ class _HomeContent extends StatelessWidget {
                       }
 
                       final bool demoOffline =
-                          context.watch<XmppService?>()?.demoOfflineMode ??
-                              false;
+                          context.watch<XmppService>().demoOfflineMode;
 
                       final bool showChatCalendar =
-                          openJid != null && (chatRoute?.isCalendar ?? false);
+                          openJid != null && chatRoute.isCalendar;
                       return SafeArea(
                         top: state is ConnectivityConnected || demoOffline,
                         child: openCalendar
@@ -679,27 +679,24 @@ class _HomeContent extends StatelessWidget {
                 initialFilters: initialTabFilters,
               ),
             ),
-            if (isRoster)
-              BlocProvider(
-                create: (context) =>
-                    RosterCubit(rosterService: context.read<XmppService>()),
+            BlocProvider(
+              create: (context) => RosterCubit(
+                rosterService: context.read<XmppService>() as RosterService,
               ),
+            ),
             BlocProvider(
               create: (context) => ProfileCubit(
                 xmppService: context.read<XmppService>(),
-                presenceService: isPresence
-                    ? context.read<XmppService>() as PresenceService
-                    : null,
+                presenceService: context.read<XmppService>() as PresenceService,
                 omemoService: isOmemo
                     ? context.read<XmppService>() as OmemoService
                     : null,
               ),
             ),
-            if (isBlocking)
-              BlocProvider(
-                create: (context) =>
-                    BlocklistCubit(xmppService: context.read<XmppService>()),
-              ),
+            BlocProvider(
+              create: (context) =>
+                  BlocklistCubit(xmppService: context.read<XmppService>()),
+            ),
             // Always provide CalendarBloc for logged-in users
             if (calendarStorage != null)
               BlocProvider<CalendarBloc>(
@@ -707,7 +704,11 @@ class _HomeContent extends StatelessWidget {
                   final reminderController =
                       context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
-                  final emailService = context.read<EmailService?>();
+                  final endpointConfig =
+                      context.read<AuthenticationCubit>().endpointConfig;
+                  final emailService = endpointConfig.enableSmtp
+                      ? context.read<EmailService>()
+                      : null;
                   const bool seedDemoCalendar = kEnableDemoChats;
                   final storage = calendarStorage;
 
@@ -773,10 +774,11 @@ class _HomeContent extends StatelessWidget {
               create: (context) =>
                   ConnectivityCubit(xmppBase: context.read<XmppService>()),
             ),
-            BlocProvider(
-              create: (context) =>
-                  EmailSyncCubit(emailService: context.read<EmailService>()),
-            ),
+            if (context.read<AuthenticationCubit>().endpointConfig.enableSmtp)
+              BlocProvider(
+                create: (context) =>
+                    EmailSyncCubit(emailService: context.read<EmailService>()),
+              ),
           ],
           child: _HomeCoordinatorBridge(
             storage: calendarStorage,
@@ -790,8 +792,7 @@ class _HomeContent extends StatelessWidget {
         final bloc = AccessibilityActionBloc(
           chatsService: context.read<XmppService>(),
           messageService: context.read<XmppService>(),
-          rosterService:
-              isRoster ? context.read<XmppService>() as RosterService : null,
+          rosterService: context.read<XmppService>() as RosterService,
           initialLocalization: l10n,
         );
         return bloc;
@@ -844,20 +845,20 @@ class _HomeContent extends StatelessWidget {
                   ),
                   ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
                     onInvoke: (_) {
-                      context.read<HomeSearchCubit?>()?.toggleSearch();
+                      context.read<HomeSearchCubit>().toggleSearch();
                       return null;
                     },
                   ),
                   ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
                     onInvoke: (_) {
                       if (!hasCalendarBloc) return null;
-                      context.read<ChatsCubit?>()?.toggleCalendar();
+                      context.read<ChatsCubit>().toggleCalendar();
                       return null;
                     },
                   ),
                   OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
                     onInvoke: (_) {
-                      context.read<AccessibilityActionBloc?>()?.add(
+                      context.read<AccessibilityActionBloc>().add(
                             const AccessibilityMenuOpened(),
                           );
                       return null;

@@ -1366,7 +1366,7 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
             children: [
               Text(
                 'Task actions',
-                style: context.textTheme.small,
+                style: context.textTheme.sectionLabelM,
               ),
               const SizedBox(height: calendarInsetSm),
               LayoutBuilder(

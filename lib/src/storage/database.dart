@@ -1336,7 +1336,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) =>
-      normalizedAddressValue(address) ?? address.trim().toLowerCase();
+      normalizedAddressValueOrEmpty(address);
   String? _normalizeBlocklistJid(String jid) {
     final normalized = normalizedAddressKey(jid);
     if (normalized != null && normalized.isNotEmpty) {
@@ -2639,7 +2639,7 @@ WHERE email_from_address IN ($placeholderClause)
       final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
       final candidates = messagesByKey[key] ?? const <Message>[];
       final hasNonPlaceholder = candidates.any((candidate) {
-        final sender = normalizedAddressValue(candidate.senderJid) ?? '';
+        final sender = normalizedAddressValueOrEmpty(candidate.senderJid);
         return !normalizedPlaceholders.contains(sender);
       });
       if (hasNonPlaceholder) {

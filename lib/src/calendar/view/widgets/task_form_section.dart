@@ -15,6 +15,8 @@ import 'task_text_field.dart';
 
 const double _taskFormActionIconSize = 16.0;
 
+enum TaskSectionLabelSize { medium, large }
+
 /// Standard section title used across the calendar task forms. Keeps typography
 /// and spacing consistent while allowing trailing actions or custom padding.
 class TaskSectionHeader extends StatelessWidget {
@@ -22,20 +24,23 @@ class TaskSectionHeader extends StatelessWidget {
     super.key,
     required this.title,
     this.padding = EdgeInsets.zero,
-    this.textStyle,
+    this.size = TaskSectionLabelSize.medium,
     this.trailing,
     this.uppercase = true,
   });
 
   final String title;
   final EdgeInsetsGeometry padding;
-  final TextStyle? textStyle;
+  final TaskSectionLabelSize size;
   final Widget? trailing;
   final bool uppercase;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle style = textStyle ?? context.textTheme.sectionLabel;
+    final TextStyle style = switch (size) {
+      TaskSectionLabelSize.large => context.textTheme.sectionLabelLg,
+      TaskSectionLabelSize.medium => context.textTheme.sectionLabelM,
+    };
     final String displayTitle = uppercase ? title.toUpperCase() : title;
 
     return Padding(
@@ -537,7 +542,7 @@ class TaskScheduleSection extends StatelessWidget {
     this.title = 'Schedule',
     this.spacing = calendarGutterSm,
     this.padding = EdgeInsets.zero,
-    this.headerStyle,
+    this.headerSize = TaskSectionLabelSize.medium,
     this.headerTrailing,
     this.startLabel,
     this.endLabel,
@@ -557,7 +562,7 @@ class TaskScheduleSection extends StatelessWidget {
   final String title;
   final double spacing;
   final EdgeInsetsGeometry padding;
-  final TextStyle? headerStyle;
+  final TaskSectionLabelSize headerSize;
   final Widget? headerTrailing;
   final String? startLabel;
   final String? endLabel;
@@ -607,7 +612,7 @@ class TaskScheduleSection extends StatelessWidget {
         children: [
           TaskSectionHeader(
             title: title,
-            textStyle: headerStyle,
+            size: headerSize,
             trailing: effectiveTrailing,
           ),
           SizedBox(height: spacing),
@@ -640,7 +645,7 @@ class TaskRecurrenceSection extends StatelessWidget {
     this.title = 'Repeat',
     this.spacing = calendarGutterSm,
     this.padding = EdgeInsets.zero,
-    this.headerStyle,
+    this.headerSize = TaskSectionLabelSize.medium,
     this.headerTrailing,
     this.enabled = true,
     this.fallbackWeekday,
@@ -665,7 +670,7 @@ class TaskRecurrenceSection extends StatelessWidget {
   final String title;
   final double spacing;
   final EdgeInsetsGeometry padding;
-  final TextStyle? headerStyle;
+  final TaskSectionLabelSize headerSize;
   final Widget? headerTrailing;
   final bool enabled;
   final int? fallbackWeekday;
@@ -686,7 +691,7 @@ class TaskRecurrenceSection extends StatelessWidget {
         children: [
           TaskSectionHeader(
             title: title,
-            textStyle: headerStyle,
+            size: headerSize,
             trailing: headerTrailing,
           ),
           SizedBox(height: spacing),

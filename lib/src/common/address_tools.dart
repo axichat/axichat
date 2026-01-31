@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -14,6 +15,10 @@ String? normalizeAddress(String? raw) {
 String? normalizedAddressValue(String? raw) {
   final normalized = normalizeAddress(raw);
   return normalized?.toLowerCase();
+}
+
+String normalizedAddressValueOrEmpty(String? raw) {
+  return normalizedAddressValue(raw) ?? '';
 }
 
 mox.JID? parseJid(String? raw) {
@@ -51,6 +56,16 @@ String? bareAddressValue(String? raw) {
   return raw.substring(0, index);
 }
 
+String? normalizedBareAddressValue(String? raw) {
+  final normalized = normalizeAddress(raw);
+  if (normalized == null) return null;
+  final parsed = parseJid(normalized);
+  if (parsed == null) {
+    return normalized.toLowerCase();
+  }
+  return parsed.toBare().toString().toLowerCase();
+}
+
 String? bareAddressOrNull(String? raw, {int? maxBytes}) {
   final normalized = normalizeAddress(raw);
   if (normalized == null) return null;
@@ -84,6 +99,10 @@ String? normalizedAddressKey(String? raw) {
   }
   final bare = bareAddressValue(normalized) ?? normalized;
   return bare.toLowerCase();
+}
+
+String normalizedAddressKeyOrEmpty(String? raw) {
+  return normalizedAddressKey(raw) ?? '';
 }
 
 bool sameNormalizedAddressValue(String? a, String? b) {
@@ -120,6 +139,21 @@ String? displaySafeAddress(String? raw, {bool includeResource = false}) {
   return sanitizeUnicodeControls(fallback).value;
 }
 
+String? normalizedOccupantId(String? raw) {
+  final normalized = normalizeAddress(raw);
+  if (normalized == null) return null;
+  final parsed = parseJid(normalized);
+  if (parsed == null) {
+    return normalized.toLowerCase();
+  }
+  final bare = parsed.toBare().toString().toLowerCase();
+  final resource = parsed.resource.trim();
+  if (resource.isEmpty) {
+    return bare;
+  }
+  return '$bare/${resource.toLowerCase()}';
+}
+
 String? addressLocalPart(String? raw) {
   final parsed = parseJid(raw);
   if (parsed == null) return null;
@@ -138,6 +172,13 @@ String? addressDomainPart(String? raw) {
   }
   final domain = parts.last.trim();
   return domain.isEmpty ? null : domain;
+}
+
+String? addressResourcePart(String? raw) {
+  final parsed = parseJid(raw);
+  if (parsed == null) return null;
+  final resource = parsed.resource.trim();
+  return resource.isEmpty ? null : resource;
 }
 
 bool isAxiJid(String? raw, {String? axiDomain}) {

@@ -2153,8 +2153,10 @@ class EmailDeltaTransport implements ChatTransport {
     if (consumer == null) {
       return;
     }
-    for (final messageId in messageIds) {
-      await consumer.hydrateMessage(messageId);
+    const int batchSize = 8;
+    for (var index = 0; index < messageIds.length; index += batchSize) {
+      final chunk = messageIds.skip(index).take(batchSize).toList();
+      await Future.wait(chunk.map(consumer.hydrateMessage));
     }
   }
 

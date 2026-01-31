@@ -73,7 +73,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     final previous = Set<String>.from(_blockedJids);
     final next = <String>{
       for (final entry in items)
-        if (_normalizeBareJidValue(entry.jid) case final jid?) jid,
+        if (normalizedBareAddressValue(entry.jid) case final jid?) jid,
     };
     _blockedJids
       ..clear()
@@ -103,7 +103,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
   }
 
   Future<bool> isJidBlocked(String jid) async {
-    final normalized = _normalizeBareJidValue(jid);
+    final normalized = normalizedBareAddressValue(jid);
     if (normalized == null) {
       return false;
     }

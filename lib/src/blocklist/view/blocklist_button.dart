@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ class BlocklistAddButton extends StatelessWidget {
       label: context.l10n.blocklistBlock,
       dialogBuilder: (context) {
         String jid = '';
+        MessageTransport transport = MessageTransport.xmpp;
         return MultiBlocProvider(
           providers: [
             BlocProvider.value(value: locate<BlocklistCubit>()),
@@ -36,8 +38,10 @@ class BlocklistAddButton extends StatelessWidget {
           ],
           child: StatefulBuilder(
             builder: (context, setState) {
+              final l10n = context.l10n;
+              final spacing = context.spacing;
               return AxiInputDialog(
-                title: Text(context.l10n.blocklistBlockUser),
+                title: Text(l10n.blocklistBlockUser),
                 content: BlocConsumer<BlocklistCubit, BlocklistState>(
                   listener: (context, state) {
                     if (state is BlocklistSuccess) {
@@ -45,23 +49,54 @@ class BlocklistAddButton extends StatelessWidget {
                     }
                   },
                   builder: (context, state) {
-                    return JidInput(
-                      enabled: state is! BlocklistLoading,
-                      error: state is! BlocklistFailure
-                          ? null
-                          : state.notice.resolve(context.l10n),
-                      jidOptions:
-                          locate<RosterCubit?>()?.contacts.toList() ?? [],
-                      onChanged: (value) {
-                        setState(() => jid = value);
-                      },
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AxiSelect<MessageTransport>(
+                          initialValue: transport,
+                          enabled: state is! BlocklistLoading,
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() => transport = value);
+                          },
+                          options: [
+                            ShadOption(
+                              value: MessageTransport.xmpp,
+                              child: Text(l10n.authEndpointXmppLabel),
+                            ),
+                            ShadOption(
+                              value: MessageTransport.email,
+                              child: Text(l10n.sessionCapabilityEmail),
+                            ),
+                          ],
+                          selectedOptionBuilder: (_, value) => Text(
+                            value == MessageTransport.xmpp
+                                ? l10n.authEndpointXmppLabel
+                                : l10n.sessionCapabilityEmail,
+                          ),
+                        ),
+                        SizedBox(height: spacing.s),
+                        JidInput(
+                          enabled: state is! BlocklistLoading,
+                          error: state is! BlocklistFailure
+                              ? null
+                              : state.notice.resolve(l10n),
+                          jidOptions: locate<RosterCubit>().contacts.toList(),
+                          onChanged: (value) {
+                            setState(() => jid = value);
+                          },
+                        ),
+                      ],
                     );
                   },
                 ),
                 callback: jid.isEmpty
                     ? null
-                    : () =>
-                        context.read<BlocklistCubit?>()?.block(address: jid),
+                    : () => context.read<BlocklistCubit>().block(
+                          address: jid,
+                          transport: transport,
+                        ),
               );
             },
           ),
@@ -95,7 +130,7 @@ class BlocklistUnblockAllButton extends StatelessWidget {
           onPressed: () async {
             if (await confirm(context) != true) return;
             if (context.mounted) {
-              context.read<BlocklistCubit?>()?.unblockAll();
+              context.read<BlocklistCubit>().unblockAll();
             }
           },
           child: Row(

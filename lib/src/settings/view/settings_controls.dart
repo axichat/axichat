@@ -826,7 +826,7 @@ class _SettingsSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final header = Padding(
       padding: padding,
-      child: Text(label, style: context.textTheme.muted),
+      child: Text(label, style: context.textTheme.sectionLabelLg),
     );
     if (!showDivider) {
       return header;

@@ -1400,10 +1400,7 @@ class _QuickAddScheduleSection extends StatelessWidget {
       builder: (context, _) {
         return TaskScheduleSection(
           title: l10n.calendarScheduleLabel,
-          headerStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
+          headerSize: TaskSectionLabelSize.medium,
           spacing: calendarGutterSm,
           start: formController.startTime,
           end: formController.endTime,
@@ -1436,10 +1433,7 @@ class _QuickAddDeadlineSection extends StatelessWidget {
           children: [
             TaskSectionHeader(
               title: l10n.calendarDeadlineLabel,
-              textStyle: calendarSubtitleTextStyle.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+              size: TaskSectionLabelSize.medium,
             ),
             const SizedBox(height: calendarGutterSm),
             DeadlinePickerField(
@@ -1507,10 +1501,7 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
             DateTime.now().weekday;
         return TaskRecurrenceSection(
           title: l10n.calendarRepeatLabel,
-          headerStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
+          headerSize: TaskSectionLabelSize.medium,
           spacing: calendarGutterSm,
           value: formController.recurrence,
           fallbackWeekday: fallbackWeekday,

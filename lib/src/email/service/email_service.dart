@@ -190,6 +190,8 @@ class FanOutValidationException implements Exception {
 class EmailService {
   static const int _defaultPageSize = 50;
   static const int _maxFanOutRecipients = 20;
+  static const int _fanOutConcurrentOps = 4;
+  static const int _contactHydrationConcurrentOps = 6;
   static const int _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
   static const int _deltaMessageIdUnset = DeltaMessageId.none;
   static const int _emptyUnreadCount = 0;
@@ -796,7 +798,18 @@ class EmailService {
           accountId: deltaAccountId,
         );
         _resetImapCapabilities();
-        await _transport.purgeStockMessages(accountId: deltaAccountId);
+        if (await _shouldPurgeStockMessages(
+          scope: scope,
+          databasePrefix: databasePrefix,
+          persistCredentials: shouldPersistCredentials,
+        )) {
+          await _transport.purgeStockMessages(accountId: deltaAccountId);
+          await _markStockPurgeCompleted(
+            scope: scope,
+            databasePrefix: databasePrefix,
+            persistCredentials: shouldPersistCredentials,
+          );
+        }
         await _markConnectionOverridesApplied(
           scope: scope,
           persistCredentials: shouldPersistCredentials,
@@ -1036,6 +1049,12 @@ class EmailService {
     _resetDeltaOperationQueue();
     await _transport.dispose();
     await _transport.deleteStorageArtifacts();
+    if (scope != null && _databasePrefix != null) {
+      await _clearStockPurgeKey(
+        scope: scope,
+        databasePrefix: _databasePrefix!,
+      );
+    }
     _running = false;
     if (scope != null) {
       await _clearCredentials(scope);
@@ -1446,8 +1465,13 @@ class EmailService {
     }
 
     final results = <(FanOutRecipientStatus, int?)>[];
-    for (final target in resolvedTargets.values) {
-      results.add(await sendTo(target));
+    final targetsToSend = resolvedTargets.values.toList(growable: false);
+    for (var index = 0;
+        index < targetsToSend.length;
+        index += _fanOutConcurrentOps) {
+      final chunk =
+          targetsToSend.skip(index).take(_fanOutConcurrentOps).toList();
+      results.addAll(await Future.wait(chunk.map(sendTo)));
     }
 
     for (final result in results) {
@@ -3371,24 +3395,42 @@ class EmailService {
     List<FanOutTarget> targets,
   ) async {
     final resolvedByJid = <String, Chat>{};
+    final pending = <String, Future<Chat>>{};
     for (final target in targets) {
-      final Chat chat;
       if (target.chat != null) {
-        chat = await ensureChatForEmailChat(target.chat!);
-      } else {
-        final address = target.address;
-        if (address == null || address.isEmpty) {
-          continue;
-        }
-        chat = await ensureChatForAddress(
-          address: address,
-          displayName: target.displayName ?? address,
+        pending.putIfAbsent(
+          target.key,
+          () => ensureChatForEmailChat(target.chat!),
         );
-      }
-      if (resolvedByJid.containsKey(chat.jid)) {
         continue;
       }
-      resolvedByJid.putIfAbsent(chat.jid, () => chat);
+      final address = target.address;
+      if (address == null || address.isEmpty) {
+        continue;
+      }
+      pending.putIfAbsent(
+        target.key,
+        () => ensureChatForAddress(
+          address: address,
+          displayName: target.displayName ?? address,
+        ),
+      );
+    }
+    final entries = pending.entries.toList(growable: false);
+    for (var index = 0; index < entries.length; index += _fanOutConcurrentOps) {
+      final chunk = entries.skip(index).take(_fanOutConcurrentOps).toList();
+      final results = await Future.wait(
+        chunk.map(
+          (entry) async => MapEntry(entry.key, await entry.value),
+        ),
+      );
+      for (final result in results) {
+        final chat = result.value;
+        if (resolvedByJid.containsKey(chat.jid)) {
+          continue;
+        }
+        resolvedByJid.putIfAbsent(chat.jid, () => chat);
+      }
     }
     return resolvedByJid;
   }
@@ -3637,8 +3679,50 @@ class EmailService {
     );
   }
 
-  String _scopeForJid(String jid) =>
-      normalizedAddressKey(jid) ?? jid.trim().toLowerCase();
+  Future<bool> _shouldPurgeStockMessages({
+    required String scope,
+    required String databasePrefix,
+    required bool persistCredentials,
+  }) async {
+    if (!persistCredentials) {
+      return !_ephemeralStockPurgeScopes.contains(scope);
+    }
+    final key = _stockPurgeKeyFor(
+      scope: scope,
+      databasePrefix: databasePrefix,
+    );
+    return (await _credentialStore.read(key: key)) != _credentialTrueValue;
+  }
+
+  Future<void> _markStockPurgeCompleted({
+    required String scope,
+    required String databasePrefix,
+    required bool persistCredentials,
+  }) async {
+    if (!persistCredentials) {
+      _ephemeralStockPurgeScopes.add(scope);
+      return;
+    }
+    final key = _stockPurgeKeyFor(
+      scope: scope,
+      databasePrefix: databasePrefix,
+    );
+    await _credentialStore.write(key: key, value: _credentialTrueValue);
+  }
+
+  Future<void> _clearStockPurgeKey({
+    required String scope,
+    required String databasePrefix,
+  }) async {
+    final identifier = '${_emailStockPurgeKeyPrefix}_${databasePrefix}_$scope';
+    _stockPurgeKeys.remove(identifier);
+    _ephemeralStockPurgeScopes.remove(scope);
+    await _credentialStore.delete(
+      key: CredentialStore.registerKey(identifier),
+    );
+  }
+
+  String _scopeForJid(String jid) => normalizedAddressKeyOrEmpty(jid);
 
   String? _scopeForOptionalJid(String? jid) =>
       jid == null ? _activeCredentialScope : _scopeForJid(jid);
@@ -3757,7 +3841,22 @@ class EmailService {
         additional: configureOverrides,
         accountId: account.deltaAccountId,
       );
-      await _transport.purgeStockMessages(accountId: account.deltaAccountId);
+      final databasePrefix = _databasePrefix;
+      final shouldPersistCredentials =
+          !_ephemeralProvisionedScopes.contains(scope);
+      if (databasePrefix != null &&
+          await _shouldPurgeStockMessages(
+            scope: scope,
+            databasePrefix: databasePrefix,
+            persistCredentials: shouldPersistCredentials,
+          )) {
+        await _transport.purgeStockMessages(accountId: account.deltaAccountId);
+        await _markStockPurgeCompleted(
+          scope: scope,
+          databasePrefix: databasePrefix,
+          persistCredentials: shouldPersistCredentials,
+        );
+      }
     } on DeltaSafeException catch (error, stackTrace) {
       final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
         error,
@@ -3859,6 +3958,7 @@ class EmailService {
     }
     _ephemeralProvisionedScopes.remove(scope);
     _ephemeralConnectionOverrideScopes.remove(scope);
+    _ephemeralStockPurgeScopes.remove(scope);
   }
 
   Future<T> _guardDeltaOperation<T>({
@@ -4403,34 +4503,44 @@ class EmailService {
     return _transport.getContact(contactId);
   }
 
+  Future<List<DeltaContact>> _hydrateContactsByIds(
+    List<int> ids,
+  ) async {
+    if (ids.isEmpty) {
+      return const <DeltaContact>[];
+    }
+    final contacts = <DeltaContact>[];
+    for (var index = 0;
+        index < ids.length;
+        index += _contactHydrationConcurrentOps) {
+      final chunk =
+          ids.skip(index).take(_contactHydrationConcurrentOps).toList();
+      final resolved = await Future.wait(
+        chunk.map(_transport.getContact),
+      );
+      for (final contact in resolved) {
+        if (contact != null) {
+          contacts.add(contact);
+        }
+      }
+    }
+    return contacts;
+  }
+
   /// Gets all contacts from core as a list.
   ///
   /// Use flags from [DeltaContactListFlags] to filter results.
   Future<List<DeltaContact>> getContacts({int flags = 0, String? query}) async {
     await _ensureReady();
     final ids = await _transport.getContactIds(flags: flags, query: query);
-    final contacts = <DeltaContact>[];
-    for (final id in ids) {
-      final contact = await _transport.getContact(id);
-      if (contact != null) {
-        contacts.add(contact);
-      }
-    }
-    return contacts;
+    return _hydrateContactsByIds(ids);
   }
 
   /// Gets all blocked contacts from core as a list.
   Future<List<DeltaContact>> getBlockedContacts() async {
     await _ensureReady();
     final ids = await _transport.getBlockedContactIds();
-    final contacts = <DeltaContact>[];
-    for (final id in ids) {
-      final contact = await _transport.getContact(id);
-      if (contact != null) {
-        contacts.add(contact);
-      }
-    }
-    return contacts;
+    return _hydrateContactsByIds(ids);
   }
 }
 

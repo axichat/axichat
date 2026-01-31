@@ -321,12 +321,7 @@ class _ReminderSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      fontSize: 10,
-      color: colors.mutedForeground,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.4,
-    );
+    final TextStyle labelStyle = context.textTheme.sectionLabelM;
     final spacing = context.spacing;
 
     return Column(

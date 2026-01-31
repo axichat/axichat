@@ -23,7 +23,7 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
   @override
   void initState() {
     super.initState();
-    context.read<ProfileCubit?>()?.loadFingerprints();
+    context.read<ProfileCubit>().loadFingerprints();
   }
 
   @override

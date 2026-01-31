@@ -104,10 +104,16 @@ extension ModalTypography on BuildContext {
 }
 
 extension AxiTextThemeTokens on ShadTextTheme {
-  TextStyle get sectionLabel => small.copyWith(
-        fontSize: 10,
+  TextStyle get sectionLabelM => muted.copyWith(
+        fontSize: 12,
         fontWeight: FontWeight.w600,
-        letterSpacing: 0.6,
+        letterSpacing: 0.4,
+      );
+
+  TextStyle get sectionLabelLg => muted.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.2,
       );
 }
 

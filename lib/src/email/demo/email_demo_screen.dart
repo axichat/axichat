@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/demo/bloc/email_demo_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -83,6 +84,10 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    if (!endpointConfig.enableSmtp) {
+      return const SizedBox.shrink();
+    }
     final spacing = context.spacing;
     final sizing = context.sizing;
     return BlocProvider(

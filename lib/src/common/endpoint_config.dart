@@ -279,7 +279,8 @@ class EndpointResolver {
       );
     }
     try {
-      final lookupHost = preferred ?? config.domain;
+      final lookupHost =
+          preferred != null && preferred.isNotEmpty ? preferred : config.domain;
       final addresses = await lookup(lookupHost);
       final host = addresses.isNotEmpty
           ? addresses.first.address
@@ -291,6 +292,9 @@ class EndpointResolver {
         usedSrv: false,
       );
     } on SocketException {
+      final host = _chooseHost(preferredHost, fallbackHost, config.domain);
+      return EndpointOverride(host: host, port: selectedPort);
+    } on FormatException {
       final host = _chooseHost(preferredHost, fallbackHost, config.domain);
       return EndpointOverride(host: host, port: selectedPort);
     }

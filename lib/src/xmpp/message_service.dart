@@ -397,18 +397,8 @@ bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
   return false;
 }
 
-String? _normalizeBareJidValue(String? jid) {
-  final trimmed = jid?.trim();
-  if (trimmed == null || trimmed.isEmpty) return null;
-  try {
-    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
-  } on Exception {
-    return trimmed.toLowerCase();
-  }
-}
-
 String? _normalizeMucRoomJidCandidate(String? jid) {
-  final normalized = _normalizeBareJidValue(jid);
+  final normalized = normalizedBareAddressValue(jid);
   if (normalized == null) return null;
   try {
     final parsed = mox.JID.fromString(normalized);
@@ -420,17 +410,17 @@ String? _normalizeMucRoomJidCandidate(String? jid) {
 }
 
 bool _hasInvalidArchiveOrigin(mox.MessageEvent event, String? accountJid) {
-  final normalizedAccount = _normalizeBareJidValue(accountJid);
+  final normalizedAccount = normalizedBareAddressValue(accountJid);
   if (normalizedAccount == null) return false;
   if (event.isCarbon) {
-    final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+    final fromBare = normalizedBareAddressValue(event.from.toBare().toString());
     if (fromBare == null || fromBare != normalizedAccount) {
       return true;
     }
   }
   if (!event.isFromMAM) return false;
-  final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
-  final toBare = _normalizeBareJidValue(event.to.toBare().toString());
+  final fromBare = normalizedBareAddressValue(event.from.toBare().toString());
+  final toBare = normalizedBareAddressValue(event.to.toBare().toString());
   final bool isGroupChat = event.type == _messageTypeGroupchat;
   if (isGroupChat) {
     return toBare == null || toBare != normalizedAccount;
@@ -447,11 +437,11 @@ Future<bool> _isBlockedInboundSender(
   if (event.type == _messageTypeGroupchat) {
     return false;
   }
-  final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+  final fromBare = normalizedBareAddressValue(event.from.toBare().toString());
   if (fromBare == null) {
     return false;
   }
-  final accountBare = _normalizeBareJidValue(accountJid);
+  final accountBare = normalizedBareAddressValue(accountJid);
   if (accountBare != null && fromBare == accountBare) {
     return false;
   }
@@ -2602,7 +2592,7 @@ mixin MessageService
         _OutboundMessageFlag.uploadNotification,
       if (extensions.get<XhtmlImData>() != null) _OutboundMessageFlag.xhtml,
     ];
-    final String? normalizedChatJid = _normalizeBareJidValue(chatJid);
+    final String? normalizedChatJid = normalizedBareAddressValue(chatJid);
     final _OutboundMessageSummary summary = _OutboundMessageSummary(
       kind: kind,
       chatType: chatType,
@@ -4682,7 +4672,8 @@ mixin MessageService
     final String? toBare = _normalizeMucRoomJidCandidate(
       event.to.toBare().toString(),
     );
-    final String? ownBare = _normalizeBareJidValue(_myJid?.toBare().toString());
+    final String? ownBare =
+        normalizedBareAddressValue(_myJid?.toBare().toString());
     if (ownBare == null || ownBare.isEmpty) {
       return fromBare ?? toBare;
     }
@@ -4698,7 +4689,8 @@ mixin MessageService
     final String? toBare = _normalizeMucRoomJidCandidate(
       event.to.toBare().toString(),
     );
-    final String? ownBare = _normalizeBareJidValue(_myJid?.toBare().toString());
+    final String? ownBare =
+        normalizedBareAddressValue(_myJid?.toBare().toString());
     if (ownBare == null || ownBare.isEmpty) {
       return fromBare ?? toBare;
     }
@@ -7326,7 +7318,7 @@ mixin MessageService
   }
 
   bool _allowInboundAttachmentAutoDownload(String chatJid) {
-    final normalized = _normalizeBareJidValue(chatJid);
+    final normalized = normalizedBareAddressValue(chatJid);
     if (normalized == null) {
       return true;
     }

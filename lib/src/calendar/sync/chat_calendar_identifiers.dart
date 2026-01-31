@@ -18,7 +18,7 @@ String chatCalendarSyncStateKey(String chatJid) {
 }
 
 String _hashJid(String jid) {
-  final normalized = normalizedAddressValue(jid) ?? jid.trim().toLowerCase();
+  final normalized = normalizedAddressValueOrEmpty(jid);
   final bytes = utf8.encode(normalized);
   return sha256.convert(bytes).toString();
 }

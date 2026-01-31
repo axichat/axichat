@@ -513,7 +513,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                     variant: AxiButtonVariant.secondary,
                     onPressed: () {
                       Navigator.of(dialogContext).pop();
-                      context.read<ChatsCubit?>()?.openChat(jid: recipient.jid);
+                      context.read<ChatsCubit>().openChat(jid: recipient.jid);
                     },
                     child: Text(context.l10n.chatMessageOpenChat),
                   ),

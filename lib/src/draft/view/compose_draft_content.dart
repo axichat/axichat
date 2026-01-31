@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
@@ -26,7 +27,10 @@ class ComposeDraftContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final myJid = context.watch<XmppService>().myJid;
-    final emailAddress = context.watch<EmailService?>()?.activeAccount?.address;
+    final endpointConfig = context.watch<AuthenticationCubit>().endpointConfig;
+    final emailAddress = endpointConfig.enableSmtp
+        ? context.watch<EmailService>().activeAccount?.address
+        : null;
     final suggestionAddresses = <String>{
       if (myJid?.isNotEmpty == true) myJid!,
       if (emailAddress?.isNotEmpty == true) emailAddress!,

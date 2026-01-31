@@ -3834,12 +3834,6 @@ class _SelectionTaskTile extends StatelessWidget {
   }
 }
 
-final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w700,
-  letterSpacing: 0.6,
-).copyWith(color: calendarSubtitleColor);
-
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
@@ -3942,7 +3936,7 @@ class _AddTaskSection extends StatelessWidget {
           children: [
             TaskSectionHeader(
               title: l10n.calendarAddTaskAction,
-              textStyle: _sidebarSectionHeaderStyle,
+              size: TaskSectionLabelSize.medium,
               trailing: AnimatedBuilder(
                 animation: formActivityListenable,
                 builder: (context, _) {
@@ -4289,7 +4283,7 @@ class _CollapsedAddTaskSection extends StatelessWidget {
             const SizedBox(width: calendarInsetSm),
             Text(
               l10n.calendarAddTaskAction.toUpperCase(),
-              style: _sidebarSectionHeaderStyle,
+              style: context.textTheme.sectionLabelM,
             ),
             const Spacer(),
           ],
@@ -4482,7 +4476,7 @@ class _SidebarAccordionSection extends StatelessWidget {
                         Expanded(
                           child: Text(
                             title.toUpperCase(),
-                            style: _sidebarSectionHeaderStyle,
+                            style: context.textTheme.sectionLabelM,
                           ),
                         ),
                         if (trailing != null) ...[

@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -94,8 +95,14 @@ class _RosterInvitesBody extends StatelessWidget {
                         }
                       },
                     ),
-                    BlockMenuItem(jid: invite.jid),
-                    ReportSpamMenuItem(jid: invite.jid),
+                    BlockMenuItem(
+                      jid: invite.jid,
+                      transport: MessageTransport.xmpp,
+                    ),
+                    ReportSpamMenuItem(
+                      jid: invite.jid,
+                      transport: MessageTransport.xmpp,
+                    ),
                   ],
                   leading: AxiAvatar(jid: invite.jid),
                   title: invite.title,
@@ -108,7 +115,7 @@ class _RosterInvitesBody extends StatelessWidget {
                       onPressed: disabled
                           ? null
                           : () {
-                              context.read<RosterCubit?>()?.addContact(
+                              context.read<RosterCubit>().addContact(
                                     jid: invite.jid,
                                     title: invite.title,
                                   );

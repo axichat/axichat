@@ -34,7 +34,7 @@ class _NexusState extends State<Nexus> {
   void _triggerDemoInteractivePhase() {
     if (_demoPhase != _HomeDemoPhase.idle) return;
     setState(() => _demoPhase = _HomeDemoPhase.triggered);
-    context.read<ChatsCubit?>()?.startDemoInteractivePhase();
+    context.read<ChatsCubit>().startDemoInteractivePhase();
   }
 
   @override
@@ -51,8 +51,8 @@ class _NexusState extends State<Nexus> {
       _teardownDemoResetSubscription();
       return;
     }
-    final demoResetStream = context.read<ChatsCubit?>()?.demoResetStream;
-    if (demoResetStream == null || demoResetStream == _demoResetStream) {
+    final demoResetStream = context.read<ChatsCubit>().demoResetStream;
+    if (demoResetStream == _demoResetStream) {
       return;
     }
     _teardownDemoResetSubscription();
@@ -71,7 +71,7 @@ class _NexusState extends State<Nexus> {
 
   void _notifyTabIndex(int index) {
     if (index < 0 || index >= widget.tabs.length) return;
-    context.read<HomeSearchCubit?>()?.setActiveTab(widget.tabs[index].id);
+    context.read<HomeSearchCubit>().setActiveTab(widget.tabs[index].id);
   }
 
   @override
@@ -158,11 +158,11 @@ class _NexusScaffold extends StatelessWidget {
             .where((chat) => chatsState.selectedJids.contains(chat.jid))
             .toList();
     final badgeCounts = <HomeTab, int>{
-      HomeTab.invites: context.watch<RosterCubit?>()?.inviteCount ?? 0,
+      HomeTab.invites: context.watch<RosterCubit>().inviteCount,
       HomeTab.chats: chatItems
           .where((chat) => !chat.archived && !chat.spam)
           .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
-      HomeTab.drafts: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
+      HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
       HomeTab.spam:
           chatItems.where((chat) => chat.spam && !chat.archived).length,
     };
@@ -173,18 +173,16 @@ class _NexusScaffold extends StatelessWidget {
           iconData: LucideIcons.play,
           onPressed: onTriggerDemoInteractivePhase,
         ),
-      if (navPlacement != NavPlacement.rail &&
-          context.watch<AccessibilityActionBloc?>() != null)
+      if (navPlacement != NavPlacement.rail)
         AppBarActionItem(
           label: l10n.accessibilityActionsLabel,
           iconData: LucideIcons.lifeBuoy,
           inline: const _FindActionIconButton(),
-          onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+          onPressed: () => context.read<AccessibilityActionBloc>().add(
                 const AccessibilityMenuOpened(),
               ),
         ),
-      if (EnvScope.of(context).isDesktopPlatform &&
-          context.watch<ChatsCubit?>() != null)
+      if (EnvScope.of(context).isDesktopPlatform)
         AppBarActionItem(
           label: l10n.homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
@@ -306,28 +304,27 @@ class _NexusTabViews extends StatelessWidget {
     final toast = showToast;
     return MultiBlocListener(
       listeners: [
-        if (context.watch<RosterCubit?>() != null)
-          BlocListener<RosterCubit, RosterState>(
-            listenWhen: (previous, current) =>
-                previous.actionState != current.actionState,
-            listener: (context, state) {
-              if (toast == null) return;
-              final actionState = state.actionState;
-              if (actionState is RosterActionFailure) {
-                toast(
-                  FeedbackToast.error(
-                    message: _rosterFailureToastMessage(context, actionState),
-                  ),
-                );
-              } else if (actionState is RosterActionSuccess) {
-                toast(
-                  FeedbackToast.success(
-                    message: _rosterSuccessToastMessage(context, actionState),
-                  ),
-                );
-              }
-            },
-          ),
+        BlocListener<RosterCubit, RosterState>(
+          listenWhen: (previous, current) =>
+              previous.actionState != current.actionState,
+          listener: (context, state) {
+            if (toast == null) return;
+            final actionState = state.actionState;
+            if (actionState is RosterActionFailure) {
+              toast(
+                FeedbackToast.error(
+                  message: _rosterFailureToastMessage(context, actionState),
+                ),
+              );
+            } else if (actionState is RosterActionSuccess) {
+              toast(
+                FeedbackToast.success(
+                  message: _rosterSuccessToastMessage(context, actionState),
+                ),
+              );
+            }
+          },
+        ),
         BlocListener<BlocklistCubit, BlocklistState>(
           listener: (context, state) {
             if (toast == null) return;
@@ -445,9 +442,6 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.watch<AccessibilityActionBloc?>() == null) {
-      return const SizedBox.shrink();
-    }
     final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
@@ -455,7 +449,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
       return AxiIconButton.ghost(
         iconData: LucideIcons.lifeBuoy,
         tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-        onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+        onPressed: () => context.read<AccessibilityActionBloc>().add(
               const AccessibilityMenuOpened(),
             ),
       );
@@ -468,7 +462,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
       collapsedSemanticLabel: label,
       leading: const Icon(LucideIcons.lifeBuoy),
       child: Text(label, overflow: TextOverflow.ellipsis),
-      onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+      onPressed: () => context.read<AccessibilityActionBloc>().add(
             const AccessibilityMenuOpened(),
           ),
     );
@@ -483,9 +477,7 @@ class _HomeNavigationRailFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[];
-    if (context.watch<AccessibilityActionBloc?>() != null) {
-      items.add(_AccessibilityFindActionRailItem(collapsed: collapsed));
-    }
+    items.add(_AccessibilityFindActionRailItem(collapsed: collapsed));
     if (items.isNotEmpty) {
       items.add(SizedBox(height: context.spacing.m));
     }
@@ -531,16 +523,13 @@ class _FindActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (context.watch<AccessibilityActionBloc?>() == null) {
-      return const SizedBox.shrink();
-    }
     final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     return AxiIconButton.outline(
       iconData: LucideIcons.lifeBuoy,
       tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-      onPressed: () => context.read<AccessibilityActionBloc?>()?.add(
+      onPressed: () => context.read<AccessibilityActionBloc>().add(
             const AccessibilityMenuOpened(),
           ),
     );
@@ -715,8 +704,8 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         }
         final badgeCounts = _computeBadgeCounts(
           chatsState: chatsState,
-          inviteCount: context.watch<RosterCubit?>()?.inviteCount ?? 0,
-          draftCount: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
+          inviteCount: context.watch<RosterCubit>().inviteCount,
+          draftCount: context.watch<DraftCubit>().state.items?.length ?? 0,
         );
         final calendarDestinationIndex = _calendarDestinationIndex();
         final destinations = <AxiRailDestination>[];
@@ -901,7 +890,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
 
   void _handleTextChanged() {
     if (_programmaticChange) return;
-    context.read<HomeSearchCubit?>()?.updateQuery(_controller.text);
+    context.read<HomeSearchCubit>().updateQuery(_controller.text);
     setState(() {});
   }
 
@@ -989,7 +978,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         placeholder: Text(placeholder),
                         clearTooltip: l10n.commonClear,
                         onClear: () =>
-                            context.read<HomeSearchCubit?>()?.clearQuery(
+                            context.read<HomeSearchCubit>().clearQuery(
                                   tab: tab,
                                 ),
                       ),
@@ -1012,7 +1001,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         initialValue: sortValue,
                         onChanged: (value) {
                           if (value == null) return;
-                          context.read<HomeSearchCubit?>()?.updateSort(
+                          context.read<HomeSearchCubit>().updateSort(
                                 value,
                                 tab: tab,
                               );
@@ -1035,7 +1024,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         child: AxiSelect<SearchFilterId>(
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
-                            context.read<HomeSearchCubit?>()?.updateFilter(
+                            context.read<HomeSearchCubit>().updateFilter(
                                   value,
                                   tab: tab,
                                 );

@@ -45,10 +45,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required DateTime initialDate,
     DayEvent? existing,
   }) async {
-    final B? targetBloc = context.read<B?>();
-    if (targetBloc == null) {
-      return;
-    }
+    final B targetBloc = context.read<B>();
     targetBloc.add(CalendarEvent.dateSelected(date: initialDate));
     final DayEventEditorResult? result = await showDayEventEditor(
       context: context,

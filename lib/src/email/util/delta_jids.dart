@@ -21,8 +21,7 @@ const List<String> deltaPlaceholderJids = <String>[
 ];
 
 extension DeltaJidExtensions on String {
-  String get normalizedDeltaJid =>
-      normalizedAddressValue(this) ?? trim().toLowerCase();
+  String get normalizedDeltaJid => normalizedAddressValueOrEmpty(this);
 
   bool get isDeltaPlaceholderJid =>
       deltaPlaceholderJids.contains(normalizedDeltaJid);
