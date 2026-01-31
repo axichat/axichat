@@ -47,32 +47,37 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
   @override
   Widget build(BuildContext context) {
     final pop = Navigator.of(context).pop;
+    final spacing = context.spacing;
     return ShadDialog(
       title: Text(widget.title, style: context.modalHeaderTextStyle),
       actions: [
-        ShadButton.outline(
+        AxiButton(
           onPressed: () => pop(
             const AttachmentApprovalDecision(
               approved: false,
               alwaysAllow: false,
             ),
           ),
+          size: AxiButtonSize.sm,
+          variant: AxiButtonVariant.outline,
           child: Text(widget.cancelLabel),
-        ).withTapBounce(),
-        ShadButton(
+        ),
+        AxiButton(
           onPressed: () => pop(
             AttachmentApprovalDecision(
               approved: true,
               alwaysAllow: _alwaysAllow,
             ),
           ),
+          size: AxiButtonSize.sm,
+          variant: AxiButtonVariant.secondary,
           child: Text(widget.confirmLabel),
-        ).withTapBounce(),
+        ),
       ],
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: _attachmentApprovalSpacing,
+        spacing: spacing.s,
         children: [
           Text(widget.message, style: context.textTheme.muted),
           if (widget.showAutoTrustToggle)
@@ -91,5 +96,3 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
     );
   }
 }
-
-const double _attachmentApprovalSpacing = 12.0;

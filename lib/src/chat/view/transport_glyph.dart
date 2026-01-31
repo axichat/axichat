@@ -14,6 +14,7 @@ class TransportGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final sizing = context.sizing;
     final background = transport.isEmail ? colors.destructive : colors.primary;
     final foreground = transport.isEmail
         ? colors.destructiveForeground
@@ -21,14 +22,17 @@ class TransportGlyph extends StatelessWidget {
     final icon =
         transport.isEmail ? LucideIcons.mail : LucideIcons.messageCircle;
     return Container(
-      width: 18,
-      height: 18,
+      width: sizing.iconButtonIconSize,
+      height: sizing.iconButtonIconSize,
       decoration: BoxDecoration(
         color: background,
         shape: BoxShape.circle,
-        border: Border.all(color: colors.background, width: 2),
+        border: Border.all(
+          color: context.borderSide.color,
+          width: context.borderSide.width,
+        ),
       ),
-      child: Icon(icon, size: 10, color: foreground),
+      child: Icon(icon, size: sizing.menuItemIconSize, color: foreground),
     );
   }
 }

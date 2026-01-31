@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
@@ -39,7 +40,7 @@ class FilterToggle extends StatelessWidget {
         children: [
           Text(
             l10n.chatFilterTitle,
-            style: textTheme.labelMedium.copyWith(
+            style: textTheme.small.copyWith(
               color: colors.mutedForeground,
               fontWeight: FontWeight.w600,
             ),
@@ -51,12 +52,12 @@ class FilterToggle extends StatelessWidget {
             children: [
               for (final entry in labels)
                 AxiButton(
-                  label: Text(entry.$2),
                   size: AxiButtonSize.sm,
                   variant: entry.$1 == selected
                       ? AxiButtonVariant.secondary
                       : AxiButtonVariant.outline,
                   onPressed: () => onChanged(entry.$1),
+                  child: Text(entry.$2),
                 ),
             ],
           ),

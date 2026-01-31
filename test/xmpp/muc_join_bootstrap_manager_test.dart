@@ -192,7 +192,7 @@ void main() {
 
         final mucUser = _createMucUserNode(
           nick: _roomNick,
-          statusCodes: {mucStatusSelfPresence},
+          statusCodes: {MucStatusCode.selfPresence.code},
           reason: _reasonRaw,
         );
         final presence = _createPresence(
@@ -218,7 +218,10 @@ void main() {
         expect(event.nick, equals(_roomNick));
         expect(event.isAvailable, isTrue);
         expect(event.isNickChange, isFalse);
-        expect(event.statusCodes, contains(mucStatusSelfPresence));
+        expect(
+          event.statusCodes,
+          contains(MucStatusCode.selfPresence.code),
+        );
         expect(event.reason, equals(_reasonTrimmed));
         expect(event.newNick, isNull);
       },
@@ -233,7 +236,10 @@ void main() {
 
         final mucUser = _createMucUserNode(
           nick: _roomNick,
-          statusCodes: {mucStatusSelfPresence, mucStatusNickChange},
+          statusCodes: {
+            MucStatusCode.selfPresence.code,
+            MucStatusCode.nickChange.code,
+          },
           newNick: _roomNickUpdated,
         );
         final presence = _createPresence(
@@ -256,7 +262,10 @@ void main() {
         final event = events.single as MucSelfPresenceEvent;
         expect(event.isNickChange, isTrue);
         expect(event.newNick, equals(_roomNickUpdated));
-        expect(event.statusCodes, contains(mucStatusNickChange));
+        expect(
+          event.statusCodes,
+          contains(MucStatusCode.nickChange.code),
+        );
       },
     );
   });

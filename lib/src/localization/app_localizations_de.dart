@@ -2877,6 +2877,14 @@ class AppLocalizationsDe extends AppLocalizations {
       'E-Mail-Synchronisierung wird in Kürze erneut versucht...';
 
   @override
+  String get emailSyncMessageRefreshing =>
+      'E-Mail-Synchronisierung nach einer Unterbrechung wird aktualisiert…';
+
+  @override
+  String get emailSyncMessageRefreshFailed =>
+      'E-Mail-Synchronisierung konnte nicht aktualisiert werden. Bitte die App neu öffnen.';
+
+  @override
   String get authChangePasswordPending => 'Passwort wird aktualisiert...';
 
   @override

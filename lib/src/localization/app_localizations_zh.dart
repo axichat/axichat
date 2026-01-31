@@ -2742,6 +2742,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailSyncMessageRetrying => '邮件同步将很快重试...';
 
   @override
+  String get emailSyncMessageRefreshing => '正在在中断后刷新邮件同步…';
+
+  @override
+  String get emailSyncMessageRefreshFailed => '无法刷新邮件同步。请尝试重新打开应用。';
+
+  @override
   String get authChangePasswordPending => '正在更新密码...';
 
   @override
@@ -8404,6 +8410,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get emailSyncMessageRetrying => '電郵同步將很快重試...';
+
+  @override
+  String get emailSyncMessageRefreshing => '正在於中斷後更新電郵同步…';
+
+  @override
+  String get emailSyncMessageRefreshFailed => '無法更新電郵同步。請嘗試重新開啟應用程式。';
 
   @override
   String get authChangePasswordPending => '正在更新密碼...';

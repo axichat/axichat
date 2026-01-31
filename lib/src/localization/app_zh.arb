@@ -1157,6 +1157,8 @@
   "emailSyncMessageGroupMembershipChanged": "邮件群组成员已更改。请重新打开聊天。",
   "emailSyncMessageHistorySyncing": "正在同步邮件历史...",
   "emailSyncMessageRetrying": "邮件同步将很快重试...",
+  "emailSyncMessageRefreshing": "正在在中断后刷新邮件同步…",
+  "emailSyncMessageRefreshFailed": "无法刷新邮件同步。请尝试重新打开应用。",
   "authChangePasswordPending": "正在更新密码...",
   "authEndpointAdvancedHint": "高级选项",
   "authEndpointApiPortPlaceholder": "API 端口",

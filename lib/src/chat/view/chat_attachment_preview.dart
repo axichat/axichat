@@ -551,7 +551,6 @@ class _BlockedAttachment extends StatelessWidget {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final sizing = context.sizing;
     return _AttachmentSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,10 +577,10 @@ class _BlockedAttachment extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: AxiButton(
-              label: Text(l10n.chatAttachmentLoad),
               size: AxiButtonSize.sm,
               variant: AxiButtonVariant.secondary,
               onPressed: onAllowPressed,
+              child: Text(l10n.chatAttachmentLoad),
             ),
           ),
         ],
@@ -682,10 +681,10 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final localFile = _localFile;
     final hasLocalFile = _hasLocalFile;
     final canDownload = url != null || widget.downloadDelegate != null;
-    if (!hasLocalFile && !canDownload) {
+    if ((!hasLocalFile || localFile == null) && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
-    if (!hasLocalFile) {
+    if (!hasLocalFile || localFile == null) {
       if (_encrypted) {
         return _EncryptedAttachment(
           filename: metadata.filename,
@@ -709,7 +708,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                 ),
       );
     }
-    final previewFile = localFile!;
+    final previewFile = localFile;
     final previewAllowedFuture = _resolvePreviewAllowed(
       previewFile,
       metadataId: metadata.id,
@@ -959,6 +958,8 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   @override
   Widget build(BuildContext context) {
     final metadata = widget.metadata;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
@@ -1392,6 +1393,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
     final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
     final fallbackWidth = math.min(maxWidth, sizing.dialogMaxWidth);
@@ -1557,7 +1559,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
   late final ShadPopoverController _actionsController;
-  File? _localFile;
   bool _hasLocalFile = false;
 
   @override
@@ -1589,7 +1590,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final exists = await file?.exists() ?? false;
     if (!mounted) return;
     setState(() {
-      _localFile = file;
       _hasLocalFile = exists;
     });
     await _maybeAutoDownload();
@@ -1627,7 +1627,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final localFile = _localFile;
     final hasLocalFile = _hasLocalFile;
     final canDownload = url != null || widget.downloadDelegate != null;
     final bool shareEnabled = hasLocalFile || canDownload;
@@ -2030,13 +2029,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
     }
   }
 
-  Future<String?> _downloadViaXmpp() async {
-    final downloaded = await context.read<ChatBloc>().downloadInboundAttachment(
-          metadataId: widget.metadata.id,
-          stanzaId: widget.stanzaId,
-        );
+  Future<String?> _downloadViaXmpp(ChatBloc chatBloc) async {
+    final downloaded = await chatBloc.downloadInboundAttachment(
+      metadataId: widget.metadata.id,
+      stanzaId: widget.stanzaId,
+    );
     if (!downloaded) return null;
-    final refreshed = await _reloadMetadata();
+    final refreshed = await _reloadMetadata(chatBloc);
     final refreshedPath = refreshed?.path?.trim();
     if (refreshedPath == null || refreshedPath.isEmpty) return null;
     final refreshedFile = File(refreshedPath);
@@ -2053,6 +2052,21 @@ class _FileAttachmentState extends State<_FileAttachment> {
         ? null
         : File(resolvedExisting);
     if (await existingFile?.exists() ?? false) return existingFile!.path;
+    return _resolveLocalPathAfterConfirmation(
+      requireConfirmation: requireConfirmation,
+      typeReport: typeReport,
+    );
+  }
+
+  Future<FileMetadataData?> _reloadMetadata(ChatBloc chatBloc) async {
+    return chatBloc.reloadFileMetadata(widget.metadata.id);
+  }
+
+  Future<String?> _resolveLocalPathAfterConfirmation({
+    required bool requireConfirmation,
+    FileTypeReport? typeReport,
+  }) async {
+    final chatBloc = context.read<ChatBloc>();
     final allowed = await _confirmDownloadAllowed(
       context,
       metadata: widget.metadata,
@@ -2066,17 +2080,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
     if (downloadDelegate != null) {
       final downloaded = await downloadDelegate.download();
       if (!downloaded) return null;
-      final refreshed = await _reloadMetadata();
+      final refreshed = await _reloadMetadata(chatBloc);
       final refreshedPath = refreshed?.path?.trim();
       if (refreshedPath == null || refreshedPath.isEmpty) return null;
       final refreshedFile = File(refreshedPath);
       return await refreshedFile.exists() ? refreshedFile.path : null;
     }
-    return _downloadViaXmpp();
-  }
-
-  Future<FileMetadataData?> _reloadMetadata() async {
-    return context.read<ChatBloc>().reloadFileMetadata(widget.metadata.id);
+    return _downloadViaXmpp(chatBloc);
   }
 }
 
@@ -2140,13 +2150,13 @@ class _EncryptedAttachment extends StatelessWidget {
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
                       child: AxiButton(
-                        label: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
-                        ),
                         size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         loading: downloading,
                         onPressed: onPressed,
+                        child: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        ),
                       ),
                     ),
                   ),
@@ -2220,13 +2230,13 @@ class _RemoteImageAttachment extends StatelessWidget {
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
                       child: AxiButton(
-                        label: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
-                        ),
                         size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         loading: downloading,
                         onPressed: onPressed,
+                        child: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        ),
                       ),
                     ),
                   ),
@@ -2300,13 +2310,13 @@ class _RemoteVideoAttachment extends StatelessWidget {
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
                       child: AxiButton(
-                        label: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
-                        ),
                         size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         loading: downloading,
                         onPressed: onPressed,
+                        child: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        ),
                       ),
                     ),
                   ),

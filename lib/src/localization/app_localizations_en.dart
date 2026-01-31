@@ -2827,6 +2827,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emailSyncMessageRetrying => 'Email sync will retry shortly...';
 
   @override
+  String get emailSyncMessageRefreshing =>
+      'Refreshing email sync after interruption…';
+
+  @override
+  String get emailSyncMessageRefreshFailed =>
+      'Email sync could not refresh. Try reopening the app.';
+
+  @override
   String get authChangePasswordPending => 'Updating password...';
 
   @override

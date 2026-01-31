@@ -377,7 +377,7 @@ class _PendingFileAttachment extends StatelessWidget {
                 width: sizing.iconButtonSize,
                 height: sizing.iconButtonSize,
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest,
+                  color: colors.card,
                   borderRadius: BorderRadius.circular(sizing.containerRadius),
                 ),
                 child: Icon(
@@ -583,7 +583,7 @@ class _ShimmerSurface extends StatelessWidget {
       child: SizedBox.expand(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: colors.surfaceContainerHighest,
+            color: colors.card,
           ),
         ),
       ),
@@ -689,14 +689,10 @@ class _PendingAttachmentOverlayAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return AxiIconButton.outline(
+    return AxiIconButton.destructive(
       iconData: icon,
       tooltip: tooltip,
       onPressed: onPressed,
-      color: colors.destructiveForeground,
-      backgroundColor: colors.surfaceContainerHighest,
-      borderColor: colors.destructiveForeground,
     );
   }
 }
@@ -712,7 +708,7 @@ class PendingAttachmentStatusBadge extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final l10n = context.l10n;
-    final background = colors.surfaceContainerHighest;
+    final background = colors.card;
     final extent = sizing.iconButtonIconSize + spacing.xs;
     return AxiTooltip(
       builder: (_) => Text(_statusLabel(status, l10n)),

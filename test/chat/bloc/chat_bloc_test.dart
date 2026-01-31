@@ -9,10 +9,12 @@ import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
+import 'package:flutter/material.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -455,7 +457,12 @@ void main() {
         shareId: any(named: 'shareId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
-    ).thenThrow(const FanOutValidationException('Too many recipients.'));
+    ).thenThrow(
+      const FanOutValidationException(
+        FanOutValidationFailure.tooManyRecipients,
+        maxRecipients: 2,
+      ),
+    );
 
     final bloc = ChatBloc(
       jid: emailChat.jid,
@@ -488,7 +495,13 @@ void main() {
     bloc.add(ChatMessageSent(text: 'Weekly sync', recipients: recipients));
     await _pumpBloc();
 
-    expect(bloc.state.composerError, 'Too many recipients.');
+    expect(
+      bloc.state.composerError,
+      FanOutValidationFailure.tooManyRecipients.message(
+        lookupAppLocalizations(const Locale('en')),
+        maxRecipients: 2,
+      ),
+    );
 
     await bloc.close();
   });

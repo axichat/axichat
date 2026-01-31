@@ -825,7 +825,7 @@ void main() {
       final state = RoomState(
         roomJid: _roomJid,
         occupants: const {},
-        selfPresenceStatusCodes: {mucStatusRoomCreated},
+        selfPresenceStatusCodes: {MucStatusCode.roomCreated.code},
       );
       expect(state.roomCreated, isTrue);
     });
@@ -834,7 +834,7 @@ void main() {
       final state = RoomState(
         roomJid: _roomJid,
         occupants: const {},
-        selfPresenceStatusCodes: {mucStatusNickAssigned},
+        selfPresenceStatusCodes: {MucStatusCode.nickAssigned.code},
       );
       expect(state.nickAssigned, isTrue);
     });
@@ -843,7 +843,7 @@ void main() {
       final state = RoomState(
         roomJid: _roomJid,
         occupants: const {},
-        selfPresenceStatusCodes: {mucStatusBanned},
+        selfPresenceStatusCodes: {MucStatusCode.banned.code},
       );
       expect(state.wasBanned, isTrue);
     });
@@ -852,7 +852,7 @@ void main() {
       final state = RoomState(
         roomJid: _roomJid,
         occupants: const {},
-        selfPresenceStatusCodes: {mucStatusKicked},
+        selfPresenceStatusCodes: {MucStatusCode.kicked.code},
       );
       expect(state.wasKicked, isTrue);
     });
@@ -861,7 +861,7 @@ void main() {
       final state = RoomState(
         roomJid: _roomJid,
         occupants: const {},
-        selfPresenceStatusCodes: {mucStatusRoomShutdown},
+        selfPresenceStatusCodes: {MucStatusCode.roomShutdown.code},
       );
       expect(state.roomShutdown, isTrue);
     });

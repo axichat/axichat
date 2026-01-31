@@ -1157,6 +1157,8 @@
   "emailSyncMessageGroupMembershipChanged": "L'adhésion au groupe e-mail a changé. Rouvrez la discussion.",
   "emailSyncMessageHistorySyncing": "Synchronisation de l'historique des e-mails...",
   "emailSyncMessageRetrying": "La synchronisation des e-mails réessaiera bientôt...",
+  "emailSyncMessageRefreshing": "Actualisation de la synchro e-mail après une interruption…",
+  "emailSyncMessageRefreshFailed": "Impossible d’actualiser la synchro e-mail. Essayez de rouvrir l’app.",
   "authChangePasswordPending": "Mise à jour du mot de passe...",
   "authEndpointAdvancedHint": "Options avancées",
   "authEndpointApiPortPlaceholder": "Port API",

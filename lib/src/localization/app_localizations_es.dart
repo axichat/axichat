@@ -2871,6 +2871,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'La sincronización de correo se reintentará pronto...';
 
   @override
+  String get emailSyncMessageRefreshing =>
+      'Actualizando la sincronización de correo tras una interrupción…';
+
+  @override
+  String get emailSyncMessageRefreshFailed =>
+      'No se pudo actualizar la sincronización del correo. Intenta reabrir la app.';
+
+  @override
   String get authChangePasswordPending => 'Actualizando contraseña...';
 
   @override

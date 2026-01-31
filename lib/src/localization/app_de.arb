@@ -1157,6 +1157,8 @@
   "emailSyncMessageGroupMembershipChanged": "E-Mail-Gruppenmitgliedschaft geändert. Bitte öffne den Chat erneut.",
   "emailSyncMessageHistorySyncing": "E-Mail-Verlauf wird synchronisiert...",
   "emailSyncMessageRetrying": "E-Mail-Synchronisierung wird in Kürze erneut versucht...",
+  "emailSyncMessageRefreshing": "E-Mail-Synchronisierung nach einer Unterbrechung wird aktualisiert…",
+  "emailSyncMessageRefreshFailed": "E-Mail-Synchronisierung konnte nicht aktualisiert werden. Bitte die App neu öffnen.",
   "authChangePasswordPending": "Passwort wird aktualisiert...",
   "authEndpointAdvancedHint": "Erweiterte Optionen",
   "authEndpointApiPortPlaceholder": "API-Port",

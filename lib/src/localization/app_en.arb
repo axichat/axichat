@@ -1234,6 +1234,8 @@
   "emailSyncMessageGroupMembershipChanged": "Email group membership changed. Try reopening the chat.",
   "emailSyncMessageHistorySyncing": "Syncing email history...",
   "emailSyncMessageRetrying": "Email sync will retry shortly...",
+  "emailSyncMessageRefreshing": "Refreshing email sync after interruption…",
+  "emailSyncMessageRefreshFailed": "Email sync could not refresh. Try reopening the app.",
   "authChangePasswordPending": "Updating password...",
   "authEndpointAdvancedHint": "Advanced options",
   "authEndpointApiPortPlaceholder": "API port",

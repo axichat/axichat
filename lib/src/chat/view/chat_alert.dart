@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -40,28 +41,28 @@ class ChatAlert extends StatelessWidget {
                       Expanded(
                         child: Text(
                           state.chat!.alert!,
-                          style: context.textTheme.bodyMedium.copyWith(
+                          style: context.textTheme.p.copyWith(
                             color: colors.foreground,
                           ),
                         ),
                       ),
                       SizedBox.square(dimension: spacing.xs),
                       AxiButton(
-                        label: Text(l10n.chatAlertHide),
                         size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         onPressed: () => context.read<ChatBloc>().add(
                               const ChatAlertHidden(),
                             ),
+                        child: Text(l10n.chatAlertHide),
                       ),
                       SizedBox.square(dimension: spacing.xs),
                       AxiButton(
-                        label: Text(l10n.chatAlertIgnore),
                         size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.ghost,
                         onPressed: () => context.read<ChatBloc>().add(
                               const ChatAlertHidden(forever: true),
                             ),
+                        child: Text(l10n.chatAlertIgnore),
                       ),
                     ],
                   ),

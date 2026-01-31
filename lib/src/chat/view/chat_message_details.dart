@@ -5,9 +5,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -19,6 +21,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_html/flutter_html.dart' as html_widget;
 
 class ChatMessageDetails extends StatefulWidget {
   const ChatMessageDetails({
@@ -221,7 +224,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                           ),
                           Text(
                             shareContext!.subject!,
-                            style: textTheme.bodyLarge.copyWith(
+                            style: textTheme.p.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
                             textAlign: TextAlign.center,
@@ -474,10 +477,10 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
               ),
               actions: [
                 AxiButton(
-                  label: Text(context.l10n.commonClose),
                   size: AxiButtonSize.sm,
                   variant: AxiButtonVariant.outline,
                   onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(context.l10n.commonClose),
                 ),
               ],
               child: Column(
@@ -486,7 +489,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 children: [
                   if (onAddRecipient != null)
                     AxiButton(
-                      label: Text(context.l10n.chatMessageAddRecipients),
                       size: AxiButtonSize.sm,
                       variant: AxiButtonVariant.secondary,
                       onPressed: () {
@@ -503,19 +505,19 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                           ),
                         );
                       },
+                      child: Text(context.l10n.chatMessageAddRecipients),
                     ),
                   AxiButton(
-                    label: Text(context.l10n.chatMessageOpenChat),
                     size: AxiButtonSize.sm,
                     variant: AxiButtonVariant.secondary,
                     onPressed: () {
                       Navigator.of(dialogContext).pop();
                       context.read<ChatsCubit?>()?.openChat(jid: recipient.jid);
                     },
+                    child: Text(context.l10n.chatMessageOpenChat),
                   ),
                   if (canCreateEmailChat)
                     AxiButton(
-                      label: Text(context.l10n.chatMessageCreateChat),
                       size: AxiButtonSize.sm,
                       variant: AxiButtonVariant.secondary,
                       loading: creating,
@@ -539,6 +541,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                     ),
                                   );
                             },
+                      child: Text(context.l10n.chatMessageCreateChat),
                     ),
                 ],
               ),
@@ -638,9 +641,8 @@ class _SanitizedHtmlBodyState extends State<_SanitizedHtmlBody> {
   @override
   Widget build(BuildContext context) {
     final fallbackFontSize = widget.textStyle.fontSize ??
-        context.textTheme.bodyMedium.fontSize ??
-        context.textTheme.bodyLarge.fontSize ??
-        context.textTheme.bodySmall.fontSize ??
+        context.textTheme.p.fontSize ??
+        context.textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
     return html_widget.Html(
       data: _cachedHtml ?? _lastRaw ?? '',
@@ -704,10 +706,10 @@ class _MessageHeadersSection extends StatelessWidget {
       children: [
         Text(title, style: context.textTheme.muted),
         AxiButton(
-          label: Text(buttonLabel),
           size: AxiButtonSize.sm,
           variant: AxiButtonVariant.secondary,
           onPressed: _canOpen ? () => _showHeadersDialog(context) : null,
+          child: Text(buttonLabel),
         ),
         if (statusLabel != null)
           Text(statusLabel, style: context.textTheme.muted),
@@ -760,18 +762,18 @@ class _RawHeadersDialog extends StatelessWidget {
       title: Text(title, style: context.modalHeaderTextStyle),
       actions: [
         AxiButton(
-          label: Text(copyLabel),
           size: AxiButtonSize.sm,
           variant: AxiButtonVariant.secondary,
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: headers));
           },
+          child: Text(copyLabel),
         ),
         AxiButton(
-          label: Text(closeLabel),
           size: AxiButtonSize.sm,
           variant: AxiButtonVariant.outline,
           onPressed: () => Navigator.of(context).pop(),
+          child: Text(closeLabel),
         ),
       ],
       child: ConstrainedBox(
@@ -872,7 +874,7 @@ class _RecipientChip extends StatelessWidget {
       size: AxiButtonSize.sm,
       variant: AxiButtonVariant.secondary,
       onPressed: onPressed,
-      label: Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(LucideIcons.mail, size: sizing.menuItemIconSize),
@@ -913,7 +915,7 @@ class _ReactionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(reaction.emoji, style: context.textTheme.bodyMedium),
+            Text(reaction.emoji, style: context.textTheme.p),
             SizedBox(width: spacing.xs),
             Text('${reaction.count}', style: context.textTheme.small),
           ],

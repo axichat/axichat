@@ -404,7 +404,7 @@ class EmailService {
   int? _lastConnectivityValue;
   int? _lastLoggedConnectivityValue;
   DateTime? _lastConnectivityLoggedAt;
-  bool _channelOverflowRecoveryInProgress = false;
+  final EmailAsyncQueue _channelOverflowRecoveryQueue = EmailAsyncQueue();
   final Map<String, RegisteredCredentialKey> _bootstrapKeys = {};
   Future<void>? _bootstrapFuture;
   int _bootstrapOperationId = 0;
@@ -2778,42 +2778,35 @@ class EmailService {
   }
 
   Future<void> _handleChannelOverflow() async {
-    if (_channelOverflowRecoveryInProgress) {
-      return;
-    }
-    _channelOverflowRecoveryInProgress = true;
-    _updateSyncState(
-      const EmailSyncState.recovering(
-        'Refreshing email sync after interruption…',
-      ),
-      source: _EmailSyncSource.channelOverflow,
-    );
-    try {
-      final success = await _transport.performBackgroundFetch(
-        _foregroundFetchTimeout,
-      );
-      if (!success) {
-        await _transport.notifyNetworkAvailable();
-      }
-      await refreshChatlistFromCore();
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to recover from Delta channel overflow',
-        error,
-        stackTrace,
-      );
+    await _channelOverflowRecoveryQueue.run(() async {
       _updateSyncState(
-        const EmailSyncState.error(
-          'Email sync could not refresh. Try reopening the app.',
-        ),
-        source: _EmailSyncSource.channelOverflowFailure,
+        EmailSyncState.recovering(_l10n.emailSyncMessageRefreshing),
+        source: _EmailSyncSource.channelOverflow,
       );
-    } finally {
-      _channelOverflowRecoveryInProgress = false;
-    }
-    await _refreshConnectivityState(
-      source: _EmailSyncSource.channelOverflowComplete,
-    );
+      try {
+        final success = await _transport.performBackgroundFetch(
+          _foregroundFetchTimeout,
+        );
+        if (!success) {
+          await _transport.notifyNetworkAvailable();
+        }
+        await refreshChatlistFromCore();
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+          'Failed to recover from Delta channel overflow',
+          error,
+          stackTrace,
+        );
+        _updateSyncState(
+          EmailSyncState.error(_l10n.emailSyncMessageRefreshFailed),
+          source: _EmailSyncSource.channelOverflowFailure,
+        );
+      } finally {
+        await _refreshConnectivityState(
+          source: _EmailSyncSource.channelOverflowComplete,
+        );
+      }
+    });
   }
 
   void _updateSyncState(

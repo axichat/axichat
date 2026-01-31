@@ -5120,6 +5120,18 @@ abstract class AppLocalizations {
   /// **'Email sync will retry shortly...'**
   String get emailSyncMessageRetrying;
 
+  /// No description provided for @emailSyncMessageRefreshing.
+  ///
+  /// In en, this message translates to:
+  /// **'Refreshing email sync after interruption…'**
+  String get emailSyncMessageRefreshing;
+
+  /// No description provided for @emailSyncMessageRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sync could not refresh. Try reopening the app.'**
+  String get emailSyncMessageRefreshFailed;
+
   /// No description provided for @authChangePasswordPending.
   ///
   /// In en, this message translates to:

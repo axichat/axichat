@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -153,8 +154,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
     final l10n = context.l10n;
     final recipients = widget.recipients;
     final rosterItems =
@@ -204,7 +203,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ),
     ];
 
-    final barBackground = colors.surfaceContainerHigh;
+    final barBackground = colors.card;
     final availableAutocompleteChats = widget.availableChats
         .where(
           (chat) => !widget.recipients.any(
@@ -220,15 +219,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       horizontal: context.spacing.m,
       vertical: context.spacing.xs,
     );
-    final double autocompleteFieldOuterPadding = context.spacing.s;
-    final double autocompleteFieldInnerPadding = context.spacing.m;
     final bodyPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
       vertical: context.spacing.s,
     );
     final headerStyle = context.textTheme.small.copyWith(
       fontWeight: FontWeight.w600,
-      color: colors.onSurfaceVariant,
+      color: colors.mutedForeground,
     );
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
@@ -286,7 +283,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                       curve: Curves.easeInOutCubic,
                       padding: headerPadding,
                       decoration: ShapeDecoration(
-                        color: context.colorScheme.surfaceContainerHighest,
+                        color: context.colorScheme.card,
                         shape: RoundedSuperellipseBorder(
                           borderRadius: context.radius,
                           side: _headerFocused
@@ -333,7 +330,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                               arrowIcon,
                               key: ValueKey<bool>(_barCollapsed),
                               size: context.sizing.menuItemIconSize,
-                              color: context.colorScheme.onSurfaceVariant,
+                              color: context.colorScheme.mutedForeground,
                             ),
                           ),
                         ],
@@ -372,8 +369,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                               controller: _controller,
                               focusNode: _focusNode,
                               tapRegionGroup: _tapRegionGroup,
-                              fieldOuterPadding: autocompleteFieldOuterPadding,
-                              fieldInnerPadding: autocompleteFieldInnerPadding,
+                              fieldOuterPadding: context.spacing.s,
+                              fieldInnerPadding: context.spacing.m,
                               backgroundColor: barBackground,
                               avatarPathsByJid: avatarPathsByJid,
                               showSuggestionsWhenEmpty:
@@ -915,10 +912,10 @@ class _RecipientChip extends StatelessWidget {
     final baseForeground = _chipForegroundColor(colors, colorfulAvatars);
     final background = pendingRemoval
         ? colors.destructive
-        : (included ? colors.primaryContainer : baseBackground);
+        : (included ? colors.primary : baseBackground);
     final foreground = pendingRemoval
         ? colors.destructiveForeground
-        : (included ? colors.onPrimaryContainer : baseForeground);
+        : (included ? colors.primaryForeground : baseForeground);
     final borderColor =
         pendingRemoval ? colors.destructive : context.borderSide.color;
     final borderSide = context.borderSide.copyWith(color: borderColor);
@@ -990,16 +987,14 @@ class _RecipientChip extends StatelessWidget {
         context.l10n.recipientsFallbackLabel;
   }
 
-  Color _chipBackgroundColor(ColorScheme colors, bool colorfulAvatars) {
-    return colorfulAvatars
-        ? colors.secondaryContainer
-        : colors.surfaceContainerHighest;
+  Color _chipBackgroundColor(ShadColorScheme colors, bool colorfulAvatars) {
+    return colorfulAvatars ? colors.secondary : colors.card;
   }
 
-  Color _chipForegroundColor(ColorScheme colors, bool colorfulAvatars) {
+  Color _chipForegroundColor(ShadColorScheme colors, bool colorfulAvatars) {
     return colorfulAvatars
-        ? colors.onSecondaryContainer
-        : colors.onSurfaceVariant;
+        ? colors.secondaryForeground
+        : colors.mutedForeground;
   }
 }
 
@@ -1037,7 +1032,7 @@ class _RecipientChipAvatar extends StatelessWidget {
     if (badgeIcon == null) {
       return SizedBox.square(dimension: avatarSize, child: avatar);
     }
-    final badgeBackground = colors.surface;
+    final badgeBackground = colors.background;
     final badgeBorder = context.borderSide;
     final badgeSize = sizing.progressIndicatorSize;
     return SizedBox.square(
@@ -1071,7 +1066,7 @@ class _RecipientChipAvatar extends StatelessWidget {
   Widget? _statusIcon(
     BuildContext context,
     FanOutRecipientState? state,
-    ColorScheme colors,
+    ShadColorScheme colors,
   ) =>
       switch (state) {
         FanOutRecipientState.failed => Icon(
@@ -1087,7 +1082,7 @@ class _RecipientChipAvatar extends StatelessWidget {
         FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
             width: context.sizing.progressIndicatorSize,
             height: context.sizing.progressIndicatorSize,
-            child: AxiProgressIndicator(color: colors.onSurfaceVariant),
+            child: AxiProgressIndicator(color: colors.mutedForeground),
           ),
         null => null,
       };
@@ -1574,9 +1569,7 @@ final class _RecipientAutocompleteOverlayState
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final sizing = context.sizing;
-    final hintColor = colors.mutedForeground;
     final textStyle = context.textTheme.p;
-    final double fieldVerticalPadding = context.spacing.xs;
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -1691,7 +1684,7 @@ final class _RecipientAutocompleteOverlayState
                     child: Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: widget.fieldInnerPadding,
-                        vertical: fieldVerticalPadding,
+                        vertical: context.spacing.xs,
                       ),
                       child: AxiTextField(
                         controller: widget.controller,
@@ -1709,7 +1702,9 @@ final class _RecipientAutocompleteOverlayState
                         ],
                         decoration: InputDecoration(
                           hintText: context.l10n.recipientsAddHint,
-                          hintStyle: textStyle.copyWith(color: hintColor),
+                          hintStyle: textStyle.copyWith(
+                            color: colors.mutedForeground,
+                          ),
                           isDense: true,
                           filled: false,
                           border: InputBorder.none,
@@ -1833,7 +1828,6 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
   @override
   Widget build(BuildContext context) {
     final sizing = context.sizing;
-    final spacing = context.spacing;
     final options = widget.options;
     if (options.isEmpty) {
       return const SizedBox.shrink();
@@ -1908,7 +1902,7 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
                   size: sizing.menuItemIconSize,
                 ),
                 child: Padding(
-                  padding: EdgeInsets.only(right: spacing.xs),
+                  padding: EdgeInsets.only(right: context.spacing.xs),
                   child: optionContent,
                 ),
               ),

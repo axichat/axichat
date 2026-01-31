@@ -6,9 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-const double _kHorizontalInset = 34;
-const double _kVerticalInset = 20;
-
 class ChatComposerAccessory {
   const ChatComposerAccessory({
     required this.child,
@@ -35,7 +32,7 @@ class ChatComposerAccessory {
     return ChatComposerAccessory(
       child: child,
       edge: CutoutEdge.left,
-      alignment: const Alignment(-1.04, 0),
+      alignment: Alignment.centerLeft,
       depth: depth,
       thickness: thickness,
       cornerRadius: cornerRadius,
@@ -51,7 +48,7 @@ class ChatComposerAccessory {
     return ChatComposerAccessory(
       child: child,
       edge: CutoutEdge.right,
-      alignment: const Alignment(1.02, 0),
+      alignment: Alignment.centerRight,
       depth: depth,
       thickness: thickness,
       cornerRadius: cornerRadius,
@@ -88,11 +85,14 @@ class ChatCutoutComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final textScaler = MediaQuery.of(context).textScaler;
     double scaled(double value) => textScaler.scale(value);
-    final horizontalInset = scaled(_kHorizontalInset);
-    final verticalInset = scaled(_kVerticalInset);
-    final headerAwareTopInset = header == null ? verticalInset : scaled(8);
+    final horizontalInset = scaled(spacing.l);
+    final verticalInset = scaled(spacing.m);
+    final headerAwareTopInset =
+        header == null ? verticalInset : scaled(spacing.s);
     final padding = EdgeInsetsDirectional.fromSTEB(
       horizontalInset,
       headerAwareTopInset,
@@ -113,23 +113,24 @@ class ChatCutoutComposer extends StatelessWidget {
       ),
     };
 
-    final textStyle = context.textTheme.p.copyWith(height: 1.35);
+    final textStyle = context.textTheme.p;
     final cursorHeight = textStyle.fontSize == null
         ? null
         : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
-    final cutoutGap = context.spacing.xxs;
-    final iconButtonSize = context.sizing.iconButtonSize;
+    final cutoutGap = spacing.xxs;
+    final iconButtonSize = sizing.iconButtonSize;
     final defaultCutoutThickness = iconButtonSize + (cutoutGap * 2);
     final defaultCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final defaultCutoutCornerRadius = context.radii.squircle;
 
     return CutoutSurface(
       backgroundColor: colors.card,
-      borderColor: colors.border,
+      borderColor: context.borderSide.color,
       shape: SquircleBorder(
         cornerRadius: defaultCutoutCornerRadius,
         side: BorderSide(
-          color: colors.border,
+          color: context.borderSide.color,
+          width: context.borderSide.width,
         ),
       ),
       cutouts: actions
@@ -152,15 +153,15 @@ class ChatCutoutComposer extends StatelessWidget {
           children: [
             if (header != null) ...[
               Padding(
-                padding: EdgeInsets.only(bottom: scaled(2)),
+                padding: EdgeInsets.only(bottom: scaled(spacing.xxs)),
                 child: header!,
               ),
               Divider(
-                height: 1,
-                thickness: scaled(1),
-                color: colors.border.withValues(alpha: 0.5),
+                height: context.borderSide.width,
+                thickness: context.borderSide.width,
+                color: context.borderSide.color,
               ),
-              SizedBox(height: scaled(8)),
+              SizedBox(height: scaled(spacing.s)),
             ],
             Shortcuts(
               shortcuts: shortcuts,

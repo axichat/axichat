@@ -242,7 +242,7 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
     );
     final content = DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.surfaceContainerHighest,
+        color: colors.card,
         shape: shape,
       ),
       child: Padding(
@@ -258,13 +258,13 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
                   ? Icons.broken_image_outlined
                   : Icons.image_outlined,
               size: sizing.menuItemIconSize,
-              color: colors.onSurfaceVariant,
+              color: colors.mutedForeground,
             ),
             SizedBox(width: spacing.xs),
             Text(
               label,
               style: context.textTheme.small.copyWith(
-                color: colors.onSurfaceVariant,
+                color: colors.mutedForeground,
               ),
             ),
           ],

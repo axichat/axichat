@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -80,10 +81,11 @@ String? normalizedAddressKey(String? raw) {
   final normalized = normalizeAddress(raw);
   if (normalized == null) return null;
   final parsed = parseJid(normalized);
-  if (parsed == null) {
-    return normalized.toLowerCase();
+  if (parsed != null) {
+    return parsed.toBare().toString().toLowerCase();
   }
-  return parsed.toBare().toString().toLowerCase();
+  final bare = bareAddressValue(normalized) ?? normalized;
+  return bare.toLowerCase();
 }
 
 bool sameNormalizedAddressValue(String? a, String? b) {
@@ -149,19 +151,19 @@ bool isEmailJid(String? raw, {String? axiDomain}) {
 }
 
 bool _isAxiJidInternal(String? raw, {String? axiDomain}) {
-  final parsed = parseJid(raw);
-  if (parsed == null) return false;
   final targetDomain = _normalizeDomain(axiDomain);
   if (targetDomain == null) return false;
-  return parsed.domain.trim().toLowerCase() == targetDomain;
+  final domain = _domainFromBare(raw);
+  if (domain == null) return false;
+  return domain == targetDomain;
 }
 
 bool _isEmailJidInternal(String? raw, {String? axiDomain}) {
-  final parsed = parseJid(raw);
-  if (parsed == null) return false;
   final targetDomain = _normalizeDomain(axiDomain);
+  final domain = _domainFromBare(raw);
+  if (domain == null) return false;
   if (targetDomain == null) return true;
-  return parsed.domain.trim().toLowerCase() != targetDomain;
+  return domain != targetDomain;
 }
 
 MessageTransport inferTransport(String? raw, {String? axiDomain}) {
@@ -174,6 +176,13 @@ String? _normalizeDomain(String? domain) {
   final resolved = domain ?? EndpointConfig.defaultDomain;
   final trimmed = resolved.trim().toLowerCase();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+String? _domainFromBare(String? raw) {
+  final bare = bareAddress(raw);
+  if (bare == null) return null;
+  final domain = addressDomainPart(bare)?.toLowerCase();
+  return domain == null || domain.isEmpty ? null : domain;
 }
 
 String _stripResource(String raw) {

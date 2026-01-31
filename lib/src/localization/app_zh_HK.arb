@@ -1157,6 +1157,8 @@
   "emailSyncMessageGroupMembershipChanged": "電郵群組成員已變更。請重新開啟聊天。",
   "emailSyncMessageHistorySyncing": "正在同步電郵歷史...",
   "emailSyncMessageRetrying": "電郵同步將很快重試...",
+  "emailSyncMessageRefreshing": "正在於中斷後更新電郵同步…",
+  "emailSyncMessageRefreshFailed": "無法更新電郵同步。請嘗試重新開啟應用程式。",
   "authChangePasswordPending": "正在更新密碼...",
   "authEndpointAdvancedHint": "進階選項",
   "authEndpointApiPortPlaceholder": "API 埠",

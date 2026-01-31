@@ -4763,7 +4763,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return true;
     } on FanOutValidationException catch (error) {
-      emit(state.copyWith(composerError: error.message));
+      emit(
+        state.copyWith(
+          composerError: error.reason.message(
+            _l10n,
+            maxRecipients: error.maxRecipients,
+          ),
+        ),
+      );
       return false;
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to send fan-out message', error, stackTrace);

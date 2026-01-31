@@ -2883,6 +2883,14 @@ class AppLocalizationsFr extends AppLocalizations {
       'La synchronisation des e-mails réessaiera bientôt...';
 
   @override
+  String get emailSyncMessageRefreshing =>
+      'Actualisation de la synchro e-mail après une interruption…';
+
+  @override
+  String get emailSyncMessageRefreshFailed =>
+      'Impossible d’actualiser la synchro e-mail. Essayez de rouvrir l’app.';
+
+  @override
   String get authChangePasswordPending => 'Mise à jour du mot de passe...';
 
   @override

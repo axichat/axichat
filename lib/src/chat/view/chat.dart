@@ -53,6 +53,7 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart'
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
+import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
@@ -103,6 +104,7 @@ import 'package:flutter/rendering.dart'
         RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -2008,7 +2010,7 @@ class _ChatState extends State<Chat> {
       useRootNavigator: false,
       barrierDismissible: true,
       barrierLabel: context.l10n.chatRoomMembers,
-      barrierColor: colors.scrim,
+      barrierColor: colors.muted,
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
@@ -3633,6 +3635,7 @@ class _ChatState extends State<Chat> {
               ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
               final readOnly = widget.readOnly;
               final xmppService = context.read<XmppService>();
+              final emailService = context.read<EmailService?>();
               final emailSelfJid = state.emailSelfJid;
               final String? resolvedEmailSelfJid =
                   emailSelfJid.resolveDeltaPlaceholderJid();
@@ -6645,11 +6648,14 @@ class _ChatState extends State<Chat> {
                                                             final emailDownloadDelegate =
                                                                 isEmailChat
                                                                     ? AttachmentDownloadDelegate(
-                                                                        () => context
-                                                                            .read<ChatBloc>()
-                                                                            .downloadFullEmailMessage(
-                                                                              messageModel,
-                                                                            ),
+                                                                        () async {
+                                                                          await context
+                                                                              .read<ChatBloc>()
+                                                                              .downloadFullEmailMessage(
+                                                                                messageModel,
+                                                                              );
+                                                                          return true;
+                                                                        },
                                                                       )
                                                                     : null;
                                                             final autoDownloadUserInitiated =
@@ -9450,7 +9456,12 @@ class _PinnedMessageTile extends StatelessWidget {
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailDownloadDelegate = isEmailBacked
           ? AttachmentDownloadDelegate(
-              () => context.read<ChatBloc>().downloadFullEmailMessage(message),
+              () async {
+                await context
+                    .read<ChatBloc>()
+                    .downloadFullEmailMessage(message);
+                return true;
+              },
             )
           : null;
       final autoDownloadUserInitiated = allowAttachmentOnce;
@@ -10852,64 +10863,69 @@ class _ComposerNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final (Color background, Color foreground, IconData icon) = switch (type) {
       _ComposerNoticeType.error => (
-          colors.errorContainer,
-          colors.onErrorContainer,
+          colors.destructive,
+          colors.destructiveForeground,
           Icons.error_outline,
         ),
       _ComposerNoticeType.warning => (
-          colors.secondaryContainer,
-          colors.onSecondaryContainer,
+          colors.warning,
+          colors.foreground,
           Icons.warning_amber_rounded,
         ),
       _ComposerNoticeType.info => (
-          colors.surfaceContainerHighest,
-          colors.onSurface,
+          colors.card,
+          colors.foreground,
           Icons.refresh,
         ),
     };
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(10),
+    return AxiModalSurface(
+      backgroundColor: background,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: foreground),
-          const SizedBox(width: 8),
+          Icon(
+            icon,
+            size: sizing.menuItemIconSize,
+            color: foreground,
+          ),
+          SizedBox(width: spacing.s),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(color: foreground, fontWeight: FontWeight.w500),
+              style: context.textTheme.small.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (actionLabel != null && onAction != null)
-            TextButton(
+            AxiButton(
+              size: AxiButtonSize.sm,
+              variant: AxiButtonVariant.ghost,
               onPressed: onAction,
-              style: TextButton.styleFrom(foregroundColor: foreground),
-              child: Text(actionLabel!),
+              child: Text(
+                actionLabel!,
+                style: context.textTheme.small.copyWith(color: foreground),
+              ),
             ),
           if (onDismiss != null)
-            Builder(
-              builder: (context) {
-                const double dismissIconSize = 16;
-                const double dismissButtonSize = 28;
-                const double dismissTapTargetSize = 32;
-                return AxiIconButton.ghost(
-                  iconData: LucideIcons.x,
-                  tooltip: context.l10n.commonClose,
-                  onPressed: onDismiss,
-                  color: foreground,
-                  iconSize: dismissIconSize,
-                  buttonSize: dismissButtonSize,
-                  tapTargetSize: dismissTapTargetSize,
-                );
-              },
+            AxiIconButton.ghost(
+              iconData: LucideIcons.x,
+              tooltip: context.l10n.commonClose,
+              onPressed: onDismiss,
+              color: foreground,
+              iconSize: sizing.menuItemIconSize,
+              buttonSize: sizing.menuItemHeight,
+              tapTargetSize: sizing.menuItemHeight,
             ),
         ],
       ),
@@ -13091,10 +13107,10 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
     final fallbackFontSize = widget.textStyle.fontSize ??
-        context.textTheme.bodyMedium.fontSize ??
-        context.textTheme.bodyLarge.fontSize ??
-        context.textTheme.bodySmall.fontSize ??
+        textTheme.p.fontSize ??
+        textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
     return html_widget.Html(
       data: _sanitizedHtml ?? _rawHtml ?? '',
