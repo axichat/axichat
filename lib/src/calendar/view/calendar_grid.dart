@@ -2969,6 +2969,42 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return List.generate(7, (index) => startOfWeek.add(Duration(days: index)));
   }
 
+  DateTime _dayKey(DateTime date) => DateTime(date.year, date.month, date.day);
+
+  Map<DateTime, List<CalendarTask>> _buildWeekTaskMap(
+    List<DateTime> weekDates,
+  ) {
+    if (weekDates.isEmpty) {
+      return const <DateTime, List<CalendarTask>>{};
+    }
+    final DateTime weekStart = _dayKey(weekDates.first);
+    final DateTime weekEnd = _dayKey(weekDates.last).add(
+      const Duration(hours: 23, minutes: 59, seconds: 59, milliseconds: 999),
+    );
+    final Map<DateTime, List<CalendarTask>> bucketed = {
+      for (final date in weekDates) _dayKey(date): <CalendarTask>[],
+    };
+    final List<CalendarTask> tasks =
+        widget.state.tasksInRange(weekStart, weekEnd);
+    for (final CalendarTask task in tasks) {
+      if (!_isTaskVisible(task) || task.scheduledTime == null) {
+        continue;
+      }
+      final CalendarTask preview =
+          _taskInteractionController.resizePreviews[task.id] ?? task;
+      final DateTime? scheduled = preview.scheduledTime;
+      if (scheduled == null) {
+        continue;
+      }
+      final DateTime key = _dayKey(scheduled);
+      final List<CalendarTask>? bucket = bucketed[key];
+      if (bucket != null) {
+        bucket.add(preview);
+      }
+    }
+    return bucketed;
+  }
+
   List<CalendarTask> _getTasksForDay(DateTime date) {
     final tasks = widget.state.tasksForDate(date);
     return tasks
@@ -3573,6 +3609,8 @@ class _CalendarGridContent extends StatelessWidget {
         ? weekDates
         : <DateTime>[gridState.widget.state.selectedDate];
     final bool isDayView = !isWeekView;
+    final Map<DateTime, List<CalendarTask>>? weekTasks =
+        isWeekView ? gridState._buildWeekTaskMap(weekDates) : null;
     final Set<String> visibleTaskIds = <String>{};
     gridState._visibleTasks.clear();
     final CalendarLayoutMetrics? resolvedMetrics =
@@ -3583,7 +3621,9 @@ class _CalendarGridContent extends StatelessWidget {
     final double stepHeight = gridState._effectiveStepHeight(resolvedMetrics);
     final List<Widget> taskEntries = <Widget>[];
     for (final DateTime date in columns) {
-      final List<CalendarTask> tasks = gridState._getTasksForDay(date);
+      final List<CalendarTask> tasks = weekTasks == null
+          ? gridState._getTasksForDay(date)
+          : (weekTasks[gridState._dayKey(date)] ?? const <CalendarTask>[]);
       for (final CalendarTask task in tasks) {
         gridState._visibleTasks[task.id] = task;
         visibleTaskIds.add(task.id);

@@ -21,6 +21,14 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.appBarScrolledUnderElevation,
     required this.dialogMaxWidth,
     required this.dialogMaxHeightFraction,
+    required this.composeWindowWidth,
+    required this.composeWindowExpandedWidth,
+    required this.composeWindowHeight,
+    required this.composeWindowExpandedHeight,
+    required this.composeWindowMinWidth,
+    required this.composeWindowMinHeight,
+    required this.composeWindowPadding,
+    required this.composeWindowStackOffset,
     required this.mediaPreviewMaxScale,
     required this.sheetDragHandleWidth,
     required this.sheetDragHandleHeight,
@@ -48,6 +56,14 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double appBarScrolledUnderElevation;
   final double dialogMaxWidth;
   final double dialogMaxHeightFraction;
+  final double composeWindowWidth;
+  final double composeWindowExpandedWidth;
+  final double composeWindowHeight;
+  final double composeWindowExpandedHeight;
+  final double composeWindowMinWidth;
+  final double composeWindowMinHeight;
+  final double composeWindowPadding;
+  final double composeWindowStackOffset;
   final double mediaPreviewMaxScale;
   final double sheetDragHandleWidth;
   final double sheetDragHandleHeight;
@@ -76,6 +92,14 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? appBarScrolledUnderElevation,
     double? dialogMaxWidth,
     double? dialogMaxHeightFraction,
+    double? composeWindowWidth,
+    double? composeWindowExpandedWidth,
+    double? composeWindowHeight,
+    double? composeWindowExpandedHeight,
+    double? composeWindowMinWidth,
+    double? composeWindowMinHeight,
+    double? composeWindowPadding,
+    double? composeWindowStackOffset,
     double? mediaPreviewMaxScale,
     double? sheetDragHandleWidth,
     double? sheetDragHandleHeight,
@@ -105,6 +129,19 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       dialogMaxWidth: dialogMaxWidth ?? this.dialogMaxWidth,
       dialogMaxHeightFraction:
           dialogMaxHeightFraction ?? this.dialogMaxHeightFraction,
+      composeWindowWidth: composeWindowWidth ?? this.composeWindowWidth,
+      composeWindowExpandedWidth:
+          composeWindowExpandedWidth ?? this.composeWindowExpandedWidth,
+      composeWindowHeight: composeWindowHeight ?? this.composeWindowHeight,
+      composeWindowExpandedHeight:
+          composeWindowExpandedHeight ?? this.composeWindowExpandedHeight,
+      composeWindowMinWidth:
+          composeWindowMinWidth ?? this.composeWindowMinWidth,
+      composeWindowMinHeight:
+          composeWindowMinHeight ?? this.composeWindowMinHeight,
+      composeWindowPadding: composeWindowPadding ?? this.composeWindowPadding,
+      composeWindowStackOffset:
+          composeWindowStackOffset ?? this.composeWindowStackOffset,
       mediaPreviewMaxScale: mediaPreviewMaxScale ?? this.mediaPreviewMaxScale,
       sheetDragHandleWidth: sheetDragHandleWidth ?? this.sheetDragHandleWidth,
       sheetDragHandleHeight:
@@ -145,6 +182,14 @@ const AxiSizing axiSizing = AxiSizing(
   appBarScrolledUnderElevation: 0,
   dialogMaxWidth: 640,
   dialogMaxHeightFraction: 0.9,
+  composeWindowWidth: 520,
+  composeWindowExpandedWidth: 720,
+  composeWindowHeight: 560,
+  composeWindowExpandedHeight: 640,
+  composeWindowMinWidth: 360,
+  composeWindowMinHeight: 260,
+  composeWindowPadding: 12,
+  composeWindowStackOffset: 20,
   mediaPreviewMaxScale: 4,
   sheetDragHandleWidth: 32,
   sheetDragHandleHeight: 4,

@@ -64,7 +64,6 @@ const String _emptyShareBody = '';
 const List<String> _emptyShareJids = [''];
 const int _shareAttachmentUnknownSizeBytes = 0;
 const int _shareAttachmentMinSizeBytes = 1;
-const Duration _shareIntentNavigationDelay = Duration.zero;
 
 class Axichat extends StatefulWidget {
   Axichat({
@@ -286,6 +285,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   late final XmppService _xmppService;
   EmailService? _emailService;
   bool _shareIntentHandling = false;
+  bool _shareIntentAwaitingRoute = false;
 
   late final GoRouter _router = GoRouter(
     restorationScopeId: 'app',
@@ -324,10 +324,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     if (emailService != null) {
       _attachEmailCallbacks(emailService);
     }
+    _router.routerDelegate.addListener(_handleRouteChange);
   }
 
   @override
   void dispose() {
+    _router.routerDelegate.removeListener(_handleRouteChange);
     _detachEmailCallbacks();
     _router.dispose();
     super.dispose();
@@ -619,12 +621,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         );
                       }
                     }
-                    await _handleShareIntent(context);
+                    await _handleShareIntent();
                   },
                 ),
                 BlocListener<ShareIntentCubit, ShareIntentState>(
                   listener: (context, _) async {
-                    await _handleShareIntent(context);
+                    await _handleShareIntent();
                   },
                 ),
               ],
@@ -689,34 +691,40 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     );
   }
 
-  Future<void> _handleShareIntent(BuildContext context) async {
-    if (_shareIntentHandling) return;
-    final ShareIntentCubit shareCubit = context.read<ShareIntentCubit>();
-    final ShareIntentState shareState = shareCubit.state;
-    if (!shareState.hasPayload) return;
+  Future<void> _handleShareIntent() async {
+    if (!mounted || _shareIntentHandling) return;
+    if (context.read<ShareIntentCubit>().state.hasPayload != true) return;
     if (context.read<AuthenticationCubit>().state is! AuthenticationComplete) {
+      return;
+    }
+    if (_shareIntentAwaitingRoute && !_isOnHomeRoute()) {
+      return;
+    }
+    if (_shareIntentAwaitingRoute && _isOnHomeRoute()) {
+      _shareIntentAwaitingRoute = false;
+    }
+    if (_shouldNavigateToHomeForShare()) {
+      _shareIntentAwaitingRoute = true;
+      _router.go(const HomeRoute().location);
       return;
     }
     _shareIntentHandling = true;
     try {
-      final SharePayload payload = shareState.payload!;
-      if (!context.mounted) return;
+      final SharePayload? payload =
+          context.read<ShareIntentCubit>().state.payload;
+      if (payload == null) return;
       final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
       final bool hasBody = resolvedBody.isNotEmpty;
-      if (_shouldNavigateToHomeForShare()) {
-        _router.go(const HomeRoute().location);
-        await Future<void>.delayed(_shareIntentNavigationDelay);
-      }
-      if (!context.mounted) return;
+      if (!mounted) return;
       final MessageService messageService = context.read<MessageService>();
       final List<String> attachmentMetadataIds =
           await _persistSharedAttachments(
         messageService: messageService,
         attachments: payload.attachments,
       );
-      if (!context.mounted) return;
+      if (!mounted) return;
       if (!hasBody && attachmentMetadataIds.isEmpty) {
-        _consumeSharePayload(shareCubit, payload);
+        _consumeSharePayload(payload);
         return;
       }
       openComposeDraft(
@@ -726,17 +734,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         jids: _emptyShareJids,
         attachmentMetadataIds: attachmentMetadataIds,
       );
-      _consumeSharePayload(shareCubit, payload);
+      _consumeSharePayload(payload);
     } finally {
       _shareIntentHandling = false;
-      if (context.mounted && shareCubit.state.hasPayload) {
-        Timer(
-          _shareIntentNavigationDelay,
-          () async {
-            await _handleShareIntent(context);
-          },
-        );
-      }
     }
   }
 
@@ -766,11 +766,20 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return currentRoute.authenticationRequired == false;
   }
 
-  void _consumeSharePayload(ShareIntentCubit shareCubit, SharePayload payload) {
-    if (!identical(shareCubit.state.payload, payload)) {
+  void _consumeSharePayload(SharePayload payload) {
+    if (!identical(context.read<ShareIntentCubit>().state.payload, payload)) {
       return;
     }
-    shareCubit.consume();
+    context.read<ShareIntentCubit>().consume();
+  }
+
+  void _handleRouteChange() {
+    if (!mounted || !_shareIntentAwaitingRoute) return;
+    if (!_isOnHomeRoute()) {
+      return;
+    }
+    _shareIntentAwaitingRoute = false;
+    _handleShareIntent();
   }
 
   Future<List<String>> _persistSharedAttachments({

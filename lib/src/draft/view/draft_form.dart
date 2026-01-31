@@ -1730,24 +1730,28 @@ class _DraftAttachmentsSection extends StatelessWidget {
     final useDesktopMenu = commandSurface == CommandSurface.menu;
 
     List<Widget> menuItems(PendingAttachment pending) {
-      final items = <Widget>[];
+      final actions = <AxiMenuAction>[];
       if (pending.attachment.isImage) {
-        items.add(
-          ShadContextMenuItem(
-            leading: const Icon(LucideIcons.image),
+        actions.add(
+          AxiMenuAction(
+            label: l10n.draftAttachmentPreview,
+            icon: LucideIcons.image,
             onPressed: () => onPreview(pending),
-            child: Text(l10n.draftAttachmentPreview),
           ),
         );
       }
-      items.add(
-        ShadContextMenuItem(
-          leading: const Icon(LucideIcons.trash2),
+      actions.add(
+        AxiMenuAction(
+          label: l10n.draftRemoveAttachment,
+          icon: LucideIcons.trash2,
+          destructive: true,
           onPressed: () => onRemove(pending.id),
-          child: Text(l10n.draftRemoveAttachment),
         ),
       );
-      return items;
+      if (actions.isEmpty) {
+        return const [];
+      }
+      return [AxiMenu(actions: actions)];
     }
 
     Widget body;

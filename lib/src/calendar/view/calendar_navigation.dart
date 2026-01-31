@@ -835,26 +835,25 @@ class _SegmentedToggleItem extends StatelessWidget {
         child: child,
       ),
     );
-    return MouseRegion(
-      cursor: selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
-      child: InkWell(
-        onTap: selected ? null : onSelected,
-        customBorder: ContinuousRectangleBorder(borderRadius: radius),
-        overlayColor: overlay,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
-          padding: padding,
-          constraints: BoxConstraints(minHeight: minHeight),
-          alignment: Alignment.center,
-          decoration: ShapeDecoration(
-            color: selected ? activeBackground : Colors.transparent,
-            shape: ContinuousRectangleBorder(borderRadius: radius),
-          ),
-          child: styledChild,
+    return InkWell(
+      onTap: selected ? null : onSelected,
+      mouseCursor:
+          selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      customBorder: ContinuousRectangleBorder(borderRadius: radius),
+      overlayColor: overlay,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        padding: padding,
+        constraints: BoxConstraints(minHeight: minHeight),
+        alignment: Alignment.center,
+        decoration: ShapeDecoration(
+          color: selected ? activeBackground : Colors.transparent,
+          shape: ContinuousRectangleBorder(borderRadius: radius),
         ),
-      ).withTapBounce(enabled: !selected),
-    );
+        child: styledChild,
+      ),
+    ).withTapBounce(enabled: !selected);
   }
 }
 
@@ -931,6 +930,8 @@ class _DateLabelState extends State<_DateLabel> {
   OverlayEntry? _overlayEntry;
   bool _isBottomSheetOpen = false;
   late DateTime _visibleMonth;
+  late DateFormat _dayFormat;
+  late DateFormat _monthFormat;
   bool get _isPickerOpen => _overlayEntry != null || _isBottomSheetOpen;
 
   @override
@@ -940,6 +941,14 @@ class _DateLabelState extends State<_DateLabel> {
       widget.state.selectedDate.year,
       widget.state.selectedDate.month,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final locale = Localizations.localeOf(context).toString();
+    _dayFormat = DateFormat.yMMMd(locale);
+    _monthFormat = DateFormat.yMMMM(locale);
   }
 
   @override
@@ -971,9 +980,7 @@ class _DateLabelState extends State<_DateLabel> {
           _formatDay(widget.state.weekStart),
           _formatDay(widget.state.weekEnd),
         ),
-      CalendarView.month => DateFormat.yMMMM().format(
-          widget.state.selectedDate,
-        ),
+      CalendarView.month => _monthFormat.format(widget.state.selectedDate),
     };
     final bool hideText =
         widget.collapseText || MediaQuery.of(context).size.width < 420;
@@ -986,44 +993,41 @@ class _DateLabelState extends State<_DateLabel> {
       link: _link,
       child: SizedBox(
         height: 40,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: ShadButton.outline(
-            size: ShadButtonSize.sm,
-            onPressed: _toggleOverlay,
-            foregroundColor: textColor,
-            hoverForegroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.calendar_today_outlined, size: 16, color: iconColor),
-                if (!hideText) ...[
-                  const SizedBox(width: calendarGutterSm),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 260),
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                        letterSpacing: 0.1,
-                      ),
+        child: ShadButton.outline(
+          size: ShadButtonSize.sm,
+          onPressed: _toggleOverlay,
+          foregroundColor: textColor,
+          hoverForegroundColor: calendarPrimaryColor,
+          hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 16, color: iconColor),
+              if (!hideText) ...[
+                const SizedBox(width: calendarGutterSm),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                      letterSpacing: 0.1,
                     ),
                   ),
-                ],
-                const SizedBox(width: calendarInsetLg),
-                Icon(
-                  isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                  size: 18,
-                  color: iconColor,
                 ),
               ],
-            ),
+              const SizedBox(width: calendarInsetLg),
+              Icon(
+                isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                size: 18,
+                color: iconColor,
+              ),
+            ],
           ),
         ).withTapBounce(),
       ),
@@ -1075,6 +1079,7 @@ class _DateLabelState extends State<_DateLabel> {
                     color: Colors.transparent,
                     child: InBoundsFadeScale(
                       child: _CalendarDropdown(
+                        monthFormat: _monthFormat,
                         month: _visibleMonth,
                         selectedWeekStart: widget.state.weekStart,
                         selectedDate: widget.state.selectedDate,
@@ -1120,6 +1125,7 @@ class _DateLabelState extends State<_DateLabel> {
               top: false,
               bottom: false,
               child: _CalendarDropdown(
+                monthFormat: _monthFormat,
                 useSurface: false,
                 margin: EdgeInsets.zero,
                 month: sheetMonth,
@@ -1172,11 +1178,12 @@ class _DateLabelState extends State<_DateLabel> {
     }
   }
 
-  String _formatDay(DateTime date) => DateFormat.yMMMd().format(date);
+  String _formatDay(DateTime date) => _dayFormat.format(date);
 }
 
 class _CalendarDropdown extends StatelessWidget {
   const _CalendarDropdown({
+    required this.monthFormat,
     required this.month,
     required this.selectedWeekStart,
     required this.selectedDate,
@@ -1187,6 +1194,7 @@ class _CalendarDropdown extends StatelessWidget {
     this.useSurface = true,
   });
 
+  final DateFormat monthFormat;
   final DateTime month;
   final DateTime selectedWeekStart;
   final DateTime selectedDate;
@@ -1215,7 +1223,7 @@ class _CalendarDropdown extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  DateFormat.yMMMM().format(month),
+                  monthFormat.format(month),
                   style: calendarTitleTextStyle,
                 ),
               ),
@@ -1277,37 +1285,34 @@ class _CalendarDropdown extends StatelessWidget {
                 border = BorderSide.none;
               }
 
-              return MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(
-                    calendarBorderRadius / 1.5,
+              return InkWell(
+                borderRadius: BorderRadius.circular(
+                  calendarBorderRadius / 1.5,
+                ),
+                mouseCursor: SystemMouseCursors.click,
+                hoverColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                splashColor: Colors.transparent,
+                onTap: () => onDateSelected(date),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: backgroundColor,
+                    borderRadius: BorderRadius.circular(
+                      calendarBorderRadius / 1.5,
+                    ),
+                    border: border == BorderSide.none
+                        ? null
+                        : Border.fromBorderSide(border),
                   ),
-                  mouseCursor: SystemMouseCursors.click,
-                  hoverColor: Colors.transparent,
-                  highlightColor: Colors.transparent,
-                  splashColor: Colors.transparent,
-                  onTap: () => onDateSelected(date),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(
-                        calendarBorderRadius / 1.5,
-                      ),
-                      border: border == BorderSide.none
-                          ? null
-                          : Border.fromBorderSide(border),
-                    ),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: calendarInsetLg,
-                    ),
-                    child: Text(
-                      date.day.toString(),
-                      style: calendarBodyTextStyle.copyWith(
-                        fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
-                        color: textColor,
-                      ),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: calendarInsetLg,
+                  ),
+                  child: Text(
+                    date.day.toString(),
+                    style: calendarBodyTextStyle.copyWith(
+                      fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
+                      color: textColor,
                     ),
                   ),
                 ),

@@ -250,21 +250,19 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final entry = widget.entry;
     final mediaSize = widget.viewportSize;
     final colors = context.colorScheme;
-    final spacing = context.spacing;
     final sizing = context.sizing;
     final isMinimized = entry.isMinimized;
     final isExpanded = entry.isExpanded;
 
-    final windowPadding = spacing.s + spacing.xs;
+    final windowPadding = sizing.composeWindowPadding;
     final headerHeight = sizing.buttonHeightLg;
-    final baseWidth = sizing.dialogMaxWidth - spacing.l;
-    final expandedWidth = sizing.dialogMaxWidth + spacing.xl;
-    final minWidth = sizing.menuMaxWidth + spacing.m;
-    final stackOffset = spacing.m + spacing.xs;
-    final maxHeight = mediaSize.height * sizing.dialogMaxHeightFraction;
-    final baseHeight = sizing.dialogMaxWidth - spacing.l;
-    final expandedHeight = sizing.dialogMaxWidth + spacing.s;
-    final minHeight = sizing.buttonHeightLg * 5;
+    final baseWidth = sizing.composeWindowWidth;
+    final expandedWidth = sizing.composeWindowExpandedWidth;
+    final minWidth = sizing.composeWindowMinWidth;
+    final stackOffset = sizing.composeWindowStackOffset;
+    final baseHeight = sizing.composeWindowHeight;
+    final expandedHeight = sizing.composeWindowExpandedHeight;
+    final minHeight = sizing.composeWindowMinHeight;
 
     final double availableWidth = math.max(
       mediaSize.width - (windowPadding * 2),
@@ -285,7 +283,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final double normalHeight = math.max(
       math.min(
         isExpanded ? expandedHeight : baseHeight,
-        math.min(availableHeight, maxHeight),
+        availableHeight,
       ),
       math.min(availableHeight, minHeight),
     );

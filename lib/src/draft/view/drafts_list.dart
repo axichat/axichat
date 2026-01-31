@@ -22,15 +22,6 @@ class DraftsList extends StatefulWidget {
 }
 
 class _DraftsListState extends State<DraftsList> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _syncSearchSnapshot(context.read<HomeSearchCubit>().state);
-    });
-  }
-
   void _syncSearchSnapshot(HomeSearchState searchState) {
     final tabState = searchState.stateFor(HomeTab.drafts);
     final query = searchState.active ? tabState.query.trim().toLowerCase() : '';

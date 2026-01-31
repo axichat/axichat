@@ -3927,12 +3927,7 @@ class _AddTaskSection extends StatelessWidget {
                   return AnimatedOpacity(
                     duration: baseAnimationDuration,
                     opacity: enabled ? 1 : 0.5,
-                    child: MouseRegion(
-                      cursor: enabled
-                          ? SystemMouseCursors.click
-                          : SystemMouseCursors.basic,
-                      child: decorated,
-                    ),
+                    child: decorated,
                   );
                 },
               ),
@@ -4442,38 +4437,36 @@ class _SidebarAccordionSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: InkWell(
-                  onTap: () => onToggleSection(section),
-                  child: Padding(
-                    padding: calendarFieldPadding,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title.toUpperCase(),
-                            style: context.textTheme.sectionLabelM,
-                          ),
+              InkWell(
+                onTap: () => onToggleSection(section),
+                mouseCursor: SystemMouseCursors.click,
+                child: Padding(
+                  padding: calendarFieldPadding,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title.toUpperCase(),
+                          style: context.textTheme.sectionLabelM,
                         ),
-                        if (trailing != null) ...[
-                          const SizedBox(width: calendarInsetSm),
-                          trailing!,
-                        ],
-                        _SectionCountBadge(
-                          count: itemCount,
-                          isExpanded: isExpanded,
-                        ),
-                        const SizedBox(width: calendarGutterSm),
-                        Icon(
-                          isExpanded
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                          size: 18,
-                          color: calendarSubtitleColor,
-                        ),
+                      ),
+                      if (trailing != null) ...[
+                        const SizedBox(width: calendarInsetSm),
+                        trailing!,
                       ],
-                    ),
+                      _SectionCountBadge(
+                        count: itemCount,
+                        isExpanded: isExpanded,
+                      ),
+                      const SizedBox(width: calendarGutterSm),
+                      Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: 18,
+                        color: calendarSubtitleColor,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -4898,19 +4891,16 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
 
   @override
   Widget build(BuildContext context) {
-    final Widget baseTile = MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: _SidebarTaskTile<B>(
-        host: host,
-        task: task,
-        uiState: uiState,
-        trailing: trailing,
-        enableInteraction: enableInteraction,
-        onTapOverride: onTapOverride,
-        allowContextMenu: allowContextMenu,
-        onToggleCompletion: (completed) =>
-            host._toggleSidebarTaskCompletion(task, completed),
-      ),
+    final Widget baseTile = _SidebarTaskTile<B>(
+      host: host,
+      task: task,
+      uiState: uiState,
+      trailing: trailing,
+      enableInteraction: enableInteraction,
+      onTapOverride: onTapOverride,
+      allowContextMenu: allowContextMenu,
+      onToggleCompletion: (completed) =>
+          host._toggleSidebarTaskCompletion(task, completed),
     );
     final Widget fadedTile = Opacity(
       opacity: 0.3,

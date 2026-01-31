@@ -492,7 +492,7 @@ class _HomeBottomAppBar extends StatelessWidget {
                 child: _BottomNavItem(
                   label: Text(l10n.homeTabChats),
                   icon: Icon(
-                    LucideIcons.home,
+                    LucideIcons.messagesSquare,
                     size: sizing.menuItemIconSize,
                   ),
                   selected: true,
@@ -515,7 +515,7 @@ class _HomeBottomAppBar extends StatelessWidget {
                 child: _BottomNavItem(
                   label: const TasksTabLabel(),
                   icon: Icon(
-                    LucideIcons.checkSquare,
+                    LucideIcons.squareCheck,
                     size: sizing.menuItemIconSize,
                   ),
                   onPressed: calendarAvailable
@@ -588,7 +588,7 @@ class _SettingsBottomNavItem extends StatelessWidget {
           label: Text(label),
           icon: AxiAvatar(
             jid: state.jid,
-            subscription: Subscription.both,
+            subscription: m.Subscription.both,
             avatarPath: state.avatarPath,
             presence: null,
             status: null,
@@ -701,7 +701,7 @@ class _ProfileRailItem extends StatelessWidget {
       builder: (context, state) {
         final avatar = AxiAvatar(
           jid: state.jid,
-          subscription: Subscription.both,
+          subscription: m.Subscription.both,
           avatarPath: state.avatarPath,
           presence: null,
           status: null,

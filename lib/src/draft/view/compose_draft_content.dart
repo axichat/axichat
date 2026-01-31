@@ -29,9 +29,9 @@ class ComposeDraftContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final myJid = context.watch<XmppService>().myJid;
     final endpointConfig = context.watch<AuthenticationCubit>().endpointConfig;
-    final emailAddress = endpointConfig.enableSmtp
-        ? context.watch<EmailService>().activeAccount?.address
-        : null;
+    final emailService =
+        endpointConfig.enableSmtp ? context.watch<EmailService?>() : null;
+    final emailAddress = emailService?.activeAccount?.address;
     final suggestionAddresses = <String>{
       if (myJid?.isNotEmpty == true) myJid!,
       if (emailAddress?.isNotEmpty == true) emailAddress!,

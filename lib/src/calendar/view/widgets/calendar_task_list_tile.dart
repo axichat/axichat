@@ -30,132 +30,129 @@ class CalendarTaskListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = ShadTheme.of(context).colorScheme;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: task.isCompleted
+                            ? calendarPrimaryColor
+                            : calendarTitleColor,
+                        decoration: task.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    if (scheduleLabel != null) ...[
+                      const SizedBox(height: calendarInsetSm),
                       Text(
-                        task.title,
+                        scheduleLabel!,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 11,
                           color: task.isCompleted
                               ? calendarPrimaryColor
-                              : calendarTitleColor,
-                          decoration: task.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
+                              : calendarSubtitleColor,
+                          letterSpacing: 0.1,
                         ),
                       ),
-                      if (scheduleLabel != null) ...[
-                        const SizedBox(height: calendarInsetSm),
-                        Text(
-                          scheduleLabel!,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: task.isCompleted
-                                ? calendarPrimaryColor
-                                : calendarSubtitleColor,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: calendarInsetMd),
+              if (trailing != null) ...[
+                CalendarDragExclude(child: trailing!),
                 const SizedBox(width: calendarInsetMd),
-                if (trailing != null) ...[
-                  CalendarDragExclude(child: trailing!),
+              ],
+              CalendarDragExclude(
+                child: CalendarCompletionCheckbox(
+                  value: task.isCompleted,
+                  onChanged: onToggleCompletion,
+                ),
+              ),
+            ],
+          ),
+          if (task.description?.isNotEmpty == true) ...[
+            const SizedBox(height: calendarInsetMd),
+            Text(
+              task.description!.length > 50
+                  ? '${task.description!.substring(0, 50)}...'
+                  : task.description!,
+              style: const TextStyle(fontSize: 11).copyWith(
+                color: calendarSubtitleColor,
+              ),
+            ),
+          ],
+          if (task.hasChecklist) ...[
+            const SizedBox(height: calendarInsetMd),
+            TaskChecklistProgressBar(
+              progress: task.checklistProgress,
+              activeColor: colors.primary,
+              backgroundColor: colors.muted.withValues(alpha: 0.2),
+            ),
+          ],
+          if (task.deadline != null) ...[
+            const SizedBox(height: calendarGutterLg),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterSm,
+                vertical: calendarInsetMd,
+              ),
+              decoration: BoxDecoration(
+                color: _deadlineBackgroundColor(task.deadline!),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 12,
+                    color: _deadlineColor(task.deadline!),
+                  ),
                   const SizedBox(width: calendarInsetMd),
+                  Text(
+                    _deadlineLabel(context.l10n, task.deadline!),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _deadlineColor(task.deadline!),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
                 ],
-                CalendarDragExclude(
-                  child: CalendarCompletionCheckbox(
-                    value: task.isCompleted,
-                    onChanged: onToggleCompletion,
+              ),
+            ),
+          ],
+          if (task.location?.isNotEmpty == true) ...[
+            const SizedBox(height: calendarInsetMd),
+            Row(
+              children: [
+                const Text('📍', style: TextStyle(fontSize: 12, height: 1)),
+                Expanded(
+                  child: Text(
+                    task.location!,
+                    style: const TextStyle(fontSize: 11).copyWith(
+                      color: calendarSubtitleColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            if (task.description?.isNotEmpty == true) ...[
-              const SizedBox(height: calendarInsetMd),
-              Text(
-                task.description!.length > 50
-                    ? '${task.description!.substring(0, 50)}...'
-                    : task.description!,
-                style: const TextStyle(fontSize: 11).copyWith(
-                  color: calendarSubtitleColor,
-                ),
-              ),
-            ],
-            if (task.hasChecklist) ...[
-              const SizedBox(height: calendarInsetMd),
-              TaskChecklistProgressBar(
-                progress: task.checklistProgress,
-                activeColor: colors.primary,
-                backgroundColor: colors.muted.withValues(alpha: 0.2),
-              ),
-            ],
-            if (task.deadline != null) ...[
-              const SizedBox(height: calendarGutterLg),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterSm,
-                  vertical: calendarInsetMd,
-                ),
-                decoration: BoxDecoration(
-                  color: _deadlineBackgroundColor(task.deadline!),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 12,
-                      color: _deadlineColor(task.deadline!),
-                    ),
-                    const SizedBox(width: calendarInsetMd),
-                    Text(
-                      _deadlineLabel(context.l10n, task.deadline!),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _deadlineColor(task.deadline!),
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (task.location?.isNotEmpty == true) ...[
-              const SizedBox(height: calendarInsetMd),
-              Row(
-                children: [
-                  const Text('📍', style: TextStyle(fontSize: 12, height: 1)),
-                  Expanded(
-                    child: Text(
-                      task.location!,
-                      style: const TextStyle(fontSize: 11).copyWith(
-                        color: calendarSubtitleColor,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }

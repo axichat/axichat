@@ -7,6 +7,7 @@ const int _maxXmppStanzaBytes = 1024 * 1024;
 const int _maxXmppStanzaDepth = 64;
 const int _maxReactionEmojisPerMessage = 32;
 const int _maxReactionEmojiBytes = 32;
+const int _maxAttachmentAutoDownloadBytes = 50 * 1024 * 1024;
 const int _utf8OneByteMax = 0x7f;
 const int _utf8TwoByteMax = 0x7ff;
 const int _utf8ThreeByteMax = 0xffff;
@@ -21,6 +22,7 @@ const int maxXmppStanzaBytes = _maxXmppStanzaBytes;
 const int maxXmppStanzaDepth = _maxXmppStanzaDepth;
 const int maxReactionEmojisPerMessage = _maxReactionEmojisPerMessage;
 const int maxReactionEmojiBytes = _maxReactionEmojiBytes;
+const int maxAttachmentAutoDownloadBytes = _maxAttachmentAutoDownloadBytes;
 
 String? clampMessageText(String? value) =>
     _clampUtf8(value, maxBytes: _maxMessageTextBytes);

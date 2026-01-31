@@ -1051,11 +1051,13 @@ class DeltaEventConsumer {
     );
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
+    final fileSize = msg.fileSize;
     if (!isOutgoing &&
         msg.hasFile &&
         (resolvedChat.attachmentAutoDownload ??
                 _defaultChatAttachmentAutoDownload)
             .isAllowed &&
+        (fileSize == null || fileSize <= maxAttachmentAutoDownloadBytes) &&
         !isSpamQuarantined) {
       fireAndForget(
         () => _autoDownloadQueue.run(

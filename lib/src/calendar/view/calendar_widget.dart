@@ -9,6 +9,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart' as m;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -167,10 +168,17 @@ class _CalendarWidgetState
   ) {
     final env = EnvScope.of(context);
     if (env.navPlacement == NavPlacement.bottom) {
-      return _CalendarMobileBottomBar(
-        tabSwitcher: tabSwitcher,
+      return CalendarMobileTabShell(
+        tabBar: _CalendarMobileNavRow(
+          tabSwitcher: tabSwitcher,
+          onHomePressed: () => context.read<ChatsCubit>().toggleCalendar(),
+        ),
         cancelBucket: cancelBucket,
-        onHomePressed: () => context.read<ChatsCubit>().toggleCalendar(),
+        backgroundColor: context.colorScheme.background,
+        borderColor: context.colorScheme.border,
+        dividerColor: context.colorScheme.border,
+        showTopBorder: true,
+        showDivider: false,
       );
     }
     final colors = context.colorScheme;
@@ -401,54 +409,39 @@ class CalendarSurfaceNavigator extends StatelessWidget {
   }
 }
 
-class _CalendarMobileBottomBar extends StatelessWidget {
-  const _CalendarMobileBottomBar({
+class _CalendarMobileNavRow extends StatelessWidget {
+  const _CalendarMobileNavRow({
     required this.tabSwitcher,
-    required this.cancelBucket,
     required this.onHomePressed,
   });
 
   final Widget tabSwitcher;
-  final Widget cancelBucket;
   final VoidCallback onHomePressed;
 
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final colors = context.colorScheme;
     final l10n = context.l10n;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(top: context.borderSide),
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.xs,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: spacing.s,
-              vertical: spacing.xs,
+          _CalendarBottomNavItem(
+            label: Text(l10n.homeTabChats),
+            icon: Icon(
+              LucideIcons.messagesSquare,
+              size: sizing.menuItemIconSize,
             ),
-            child: Row(
-              children: [
-                _CalendarBottomNavItem(
-                  label: Text(l10n.homeTabChats),
-                  icon: Icon(
-                    LucideIcons.home,
-                    size: sizing.menuItemIconSize,
-                  ),
-                  onPressed: onHomePressed,
-                ),
-                Expanded(child: tabSwitcher),
-                _CalendarSettingsBottomNavItem(
-                  label: l10n.settingsButtonLabel,
-                ),
-              ],
-            ),
+            onPressed: onHomePressed,
           ),
-          cancelBucket,
+          Expanded(child: tabSwitcher),
+          _CalendarSettingsBottomNavItem(
+            label: l10n.settingsButtonLabel,
+          ),
         ],
       ),
     );
@@ -503,7 +496,7 @@ class _CalendarSettingsBottomNavItem extends StatelessWidget {
           label: Text(label),
           icon: AxiAvatar(
             jid: state.jid,
-            subscription: Subscription.both,
+            subscription: m.Subscription.both,
             avatarPath: state.avatarPath,
             presence: null,
             status: null,

@@ -34,74 +34,72 @@ class PriorityCheckboxTile extends StatelessWidget {
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1);
     final bool? checkboxValue = isIndeterminate ? null : value;
 
-    return MouseRegion(
-      cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      child: Semantics(
-        container: true,
-        label: label,
-        checked: checkboxValue ?? false,
-        mixed: isIndeterminate,
-        enabled: isEnabled,
-        onTap: isEnabled ? () => onChanged!(!value) : null,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: isEnabled ? () => onChanged!(!value) : null,
-            borderRadius: BorderRadius.circular(10),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterMd,
-                vertical: 6,
+    return Semantics(
+      container: true,
+      label: label,
+      checked: checkboxValue ?? false,
+      mixed: isIndeterminate,
+      enabled: isEnabled,
+      onTap: isEnabled ? () => onChanged!(!value) : null,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isEnabled ? () => onChanged!(!value) : null,
+          mouseCursor:
+              isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: borderColor,
+                width: borderWidth,
               ),
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: borderColor,
-                  width: borderWidth,
+              boxShadow: showShadow
+                  ? [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.16),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: calendarCheckboxTapTarget,
+                  height: calendarCheckboxTapTarget,
+                  child: Center(
+                    child: CalendarCheckbox(
+                      value: value,
+                      isIndeterminate: isIndeterminate,
+                      onChanged: onChanged,
+                      activeColor: color,
+                      borderColor: borderColor,
+                      visualSize: 18,
+                    ),
+                  ),
                 ),
-                boxShadow: showShadow
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.16),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
-                        ),
-                      ]
-                    : const [],
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: calendarCheckboxTapTarget,
-                    height: calendarCheckboxTapTarget,
-                    child: Center(
-                      child: CalendarCheckbox(
-                        value: value,
-                        isIndeterminate: isIndeterminate,
-                        onChanged: onChanged,
-                        activeColor: color,
-                        borderColor: borderColor,
-                        visualSize: 18,
-                      ),
+                const SizedBox(width: calendarFormGap),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                      color: textColor,
                     ),
                   ),
-                  const SizedBox(width: calendarFormGap),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            isActive ? FontWeight.w600 : FontWeight.w500,
-                        color: textColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

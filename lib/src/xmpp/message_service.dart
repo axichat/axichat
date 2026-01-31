@@ -687,7 +687,6 @@ final Map<String, RegisteredStateKey> _mamGlobalScopedKeyCache = {};
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
-const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
 const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
@@ -6226,7 +6225,7 @@ mixin MessageService
   int _attachmentDownloadLimitBytes(FileMetadataData metadata) {
     final limit = httpUploadSupport.maxFileSizeBytes;
     if (limit != null && limit > 0) return limit;
-    return _xmppAttachmentDownloadLimitFallbackBytes;
+    return maxAttachmentAutoDownloadBytes;
   }
 
   String _resolveAttachmentCachePrefix() {

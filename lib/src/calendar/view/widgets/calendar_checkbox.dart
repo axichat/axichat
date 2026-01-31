@@ -45,32 +45,28 @@ class CalendarCheckbox extends StatelessWidget {
           : Colors.transparent,
     );
 
-    return MouseRegion(
-      cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      child: SizedBox(
-        width: calendarCheckboxTapTarget,
-        height: calendarCheckboxTapTarget,
-        child: Checkbox(
-          value: checkboxValue,
-          tristate: isIndeterminate,
-          onChanged:
-              isEnabled ? (checked) => onChanged!(checked ?? false) : null,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity(
-            horizontal: visualScale,
-            vertical: visualScale,
-          ),
-          activeColor: activeColor,
-          fillColor: fillColor,
-          checkColor: checkColor,
-          mouseCursor:
-              isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-          side: BorderSide(
-            color: borderColor,
-            width: borderWidth,
-          ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    return SizedBox(
+      width: calendarCheckboxTapTarget,
+      height: calendarCheckboxTapTarget,
+      child: Checkbox(
+        value: checkboxValue,
+        tristate: isIndeterminate,
+        onChanged: isEnabled ? (checked) => onChanged!(checked ?? false) : null,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity(
+          horizontal: visualScale,
+          vertical: visualScale,
         ),
+        activeColor: activeColor,
+        fillColor: fillColor,
+        checkColor: checkColor,
+        mouseCursor:
+            isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        side: BorderSide(
+          color: borderColor,
+          width: borderWidth,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
     );
   }
