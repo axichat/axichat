@@ -660,10 +660,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     emit(state.copyWith(creationStatus: RequestStatus.none));
   }
 
-  void refreshHomeSync() {
-    if (state.refreshStatus.isLoading) return;
-    emit(state.copyWith(refreshStatus: RequestStatus.loading));
-    unawaited(_homeRefreshSyncService.refresh());
+  Future<void> refreshHomeSync() {
+    if (!state.refreshStatus.isLoading) {
+      emit(state.copyWith(refreshStatus: RequestStatus.loading));
+    }
+    return _homeRefreshSyncService.refresh().then((_) {});
   }
 
   void clearRefreshStatus() {

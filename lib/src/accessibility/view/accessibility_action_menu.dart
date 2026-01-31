@@ -12,7 +12,6 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -2872,7 +2871,6 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     final timestampLabel = currentItem?.timestampLabel ?? '';
     final attachmentLabel = currentItem?.attachmentLabel;
     final rawBody = (currentMessage?.body ?? '').trim();
-    const autoDownloadAllowed = false;
     final positionLabel = hasItems
         ? context.l10n.accessibilityMessagePosition(
             clampedIndex + 1,
@@ -2969,23 +2967,6 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                           attachment,
                         ),
                         allowed: true,
-                        autoDownloadImages: context
-                            .watch<SettingsCubit>()
-                            .state
-                            .autoDownloadImages,
-                        autoDownloadVideos: context
-                            .watch<SettingsCubit>()
-                            .state
-                            .autoDownloadVideos,
-                        autoDownloadDocuments: context
-                            .watch<SettingsCubit>()
-                            .state
-                            .autoDownloadDocuments,
-                        autoDownloadArchives: context
-                            .watch<SettingsCubit>()
-                            .state
-                            .autoDownloadArchives,
-                        autoDownloadAllowed: autoDownloadAllowed,
                       ),
                     )
                   else if (attachmentLabel != null && rawBody.isEmpty)

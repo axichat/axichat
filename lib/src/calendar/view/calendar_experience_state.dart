@@ -166,14 +166,27 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
                 tabSwitcher,
                 cancelBucket,
               );
-        final Widget layout = _buildLayout(
+        final Widget? desktopTopHeader =
+            buildDesktopTopHeader(navigation, errorBanner);
+        final Widget? desktopBodyHeader =
+            buildDesktopBodyHeader(navigation, errorBanner);
+        final Widget layout = _CalendarExperienceLayout(
           usesDesktopLayout: usesDesktopLayout,
-          navigation: navigation,
-          errorBanner: errorBanner,
+          desktopTopHeader: desktopTopHeader,
+          desktopBodyHeader: desktopBodyHeader,
           sidebar: sidebar,
           calendarGrid: calendarSurface,
           dragOverlay: dragTargets,
           mobileTabShell: mobileTabShell,
+          tabController: _mobileTabController,
+          safeAreaTop: useMobileSafeAreaTop,
+          safeAreaBottom: useMobileSafeAreaBottom,
+          headerBuilder: (context, showingPrimary) => buildMobileHeader(
+            context,
+            showingPrimary,
+            navigation,
+            errorBanner,
+          ),
         );
         _updateTasksTabPulse(highlightTasksTab);
         final Color surfaceColor = resolveSurfaceColor(context);
@@ -219,36 +232,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           ),
         );
       },
-    );
-  }
-
-  Widget _buildLayout({
-    required bool usesDesktopLayout,
-    required Widget navigation,
-    required Widget? errorBanner,
-    required Widget sidebar,
-    required Widget calendarGrid,
-    required Widget dragOverlay,
-    required Widget mobileTabShell,
-  }) {
-    if (usesDesktopLayout) {
-      return CalendarDesktopSplitScaffold(
-        topHeader: buildDesktopTopHeader(navigation, errorBanner),
-        bodyHeader: buildDesktopBodyHeader(navigation, errorBanner),
-        sidebar: sidebar,
-        content: calendarGrid,
-      );
-    }
-    return CalendarMobileSplitScaffold(
-      tabController: _mobileTabController,
-      primaryPane: calendarGrid,
-      secondaryPane: sidebar,
-      dragOverlay: dragOverlay,
-      tabBar: mobileTabShell,
-      safeAreaTop: useMobileSafeAreaTop,
-      safeAreaBottom: useMobileSafeAreaBottom,
-      headerBuilder: (context, showingPrimary) =>
-          buildMobileHeader(context, showingPrimary, navigation, errorBanner),
     );
   }
 
@@ -599,5 +582,56 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         final int clampedDay = base.day.clamp(1, maxDay).toInt();
         return DateTime(targetMonth.year, targetMonth.month, clampedDay);
     }
+  }
+}
+
+class _CalendarExperienceLayout extends StatelessWidget {
+  const _CalendarExperienceLayout({
+    required this.usesDesktopLayout,
+    required this.desktopTopHeader,
+    required this.desktopBodyHeader,
+    required this.sidebar,
+    required this.calendarGrid,
+    required this.dragOverlay,
+    required this.mobileTabShell,
+    required this.tabController,
+    required this.safeAreaTop,
+    required this.safeAreaBottom,
+    required this.headerBuilder,
+  });
+
+  final bool usesDesktopLayout;
+  final Widget? desktopTopHeader;
+  final Widget? desktopBodyHeader;
+  final Widget sidebar;
+  final Widget calendarGrid;
+  final Widget dragOverlay;
+  final Widget mobileTabShell;
+  final TabController tabController;
+  final bool safeAreaTop;
+  final bool safeAreaBottom;
+  final Widget Function(BuildContext context, bool showingPrimary)
+      headerBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (usesDesktopLayout) {
+      return CalendarDesktopSplitScaffold(
+        topHeader: desktopTopHeader,
+        bodyHeader: desktopBodyHeader,
+        sidebar: sidebar,
+        content: calendarGrid,
+      );
+    }
+    return CalendarMobileSplitScaffold(
+      tabController: tabController,
+      primaryPane: calendarGrid,
+      secondaryPane: sidebar,
+      dragOverlay: dragOverlay,
+      tabBar: mobileTabShell,
+      safeAreaTop: safeAreaTop,
+      safeAreaBottom: safeAreaBottom,
+      headerBuilder: headerBuilder,
+    );
   }
 }

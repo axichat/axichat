@@ -171,34 +171,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     );
   }
 
-  Widget _wrapWithContextMenu(Widget child) {
-    final TaskContextMenuBuilder? builder = widget.contextMenuBuilder;
-    final ShadPopoverController? controller = widget.contextMenuController;
-    final ValueKey<String>? groupId = widget.contextMenuGroupId;
-    if (builder == null || controller == null || groupId == null) {
-      return child;
-    }
-
-    final items = builder(
-      context,
-      TaskContextMenuRequest(
-        task: widget.task,
-        localPosition: _contextMenuLocalPosition,
-        normalizedPosition: _contextMenuNormalizedPosition,
-        splitTime: _contextMenuSplitTime,
-        markCloseIntent: _markMenuCloseIntent,
-      ),
-    );
-
-    return AxiContextMenuRegion(
-      controller: controller,
-      groupId: groupId,
-      longPressEnabled: widget.contextMenuLongPressEnabled,
-      items: items,
-      child: child,
-    );
-  }
-
   void _markMenuCloseIntent() {
     widget.contextMenuController?.hide();
   }
@@ -259,7 +231,18 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 child: animatedBody,
               );
 
-              final Widget contextualized = _wrapWithContextMenu(sizedBody);
+              final Widget contextualized = _TaskContextMenuWrapper(
+                task: widget.task,
+                builder: widget.contextMenuBuilder,
+                controller: widget.contextMenuController,
+                groupId: widget.contextMenuGroupId,
+                longPressEnabled: widget.contextMenuLongPressEnabled,
+                localPosition: _contextMenuLocalPosition,
+                normalizedPosition: _contextMenuNormalizedPosition,
+                splitTime: _contextMenuSplitTime,
+                onCloseIntent: _markMenuCloseIntent,
+                child: sizedBody,
+              );
 
               return CalendarTaskTitleHoverReporter(
                 title: task.title,
@@ -320,6 +303,63 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
   Offset get debugContextMenuNormalizedPosition =>
       _contextMenuNormalizedPosition;
+}
+
+class _TaskContextMenuWrapper extends StatelessWidget {
+  const _TaskContextMenuWrapper({
+    required this.child,
+    required this.task,
+    required this.builder,
+    required this.controller,
+    required this.groupId,
+    required this.longPressEnabled,
+    required this.localPosition,
+    required this.normalizedPosition,
+    required this.splitTime,
+    required this.onCloseIntent,
+  });
+
+  final Widget child;
+  final CalendarTask task;
+  final TaskContextMenuBuilder? builder;
+  final ShadPopoverController? controller;
+  final ValueKey<String>? groupId;
+  final bool longPressEnabled;
+  final Offset localPosition;
+  final Offset normalizedPosition;
+  final DateTime? splitTime;
+  final VoidCallback onCloseIntent;
+
+  @override
+  Widget build(BuildContext context) {
+    final TaskContextMenuBuilder? resolvedBuilder = builder;
+    final ShadPopoverController? resolvedController = controller;
+    final ValueKey<String>? resolvedGroupId = groupId;
+    if (resolvedBuilder == null ||
+        resolvedController == null ||
+        resolvedGroupId == null) {
+      return child;
+    }
+
+    final items = resolvedBuilder(
+      context,
+      TaskContextMenuRequest(
+        task: task,
+        localPosition: localPosition,
+        normalizedPosition: normalizedPosition,
+        splitTime: splitTime,
+        markCloseIntent: onCloseIntent,
+      ),
+    );
+
+    return AxiContextMenuRegion(
+      controller: resolvedController,
+      groupId: resolvedGroupId,
+      longPressEnabled: longPressEnabled,
+      items: items,
+      child: child,
+    );
+  }
 }
 
 class _ResizableTaskBody extends StatelessWidget {

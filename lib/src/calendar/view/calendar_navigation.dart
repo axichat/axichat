@@ -105,15 +105,13 @@ class CalendarNavigation extends StatelessWidget {
         spec.sizeClass != CalendarSizeClass.expanded;
     final List<Widget> navButtons = [
       if (!placeChevronsInHeader)
-        _iconNavButton(
-          context: context,
+        _IconNavButton(
           icon: Icons.chevron_left,
           tooltip: l10n.calendarPreviousUnit(unitLabel),
           compact: isCompact,
           onPressed: () => _jumpRelative(-1),
         ),
-      _navButton(
-        context: context,
+      _NavigationButton(
         label: l10n.calendarToday,
         icon: null,
         highlighted: !_isToday(state.selectedDate),
@@ -125,8 +123,7 @@ class CalendarNavigation extends StatelessWidget {
             : () => onDateSelected(DateTime.now()),
       ),
       if (!placeChevronsInHeader)
-        _iconNavButton(
-          context: context,
+        _IconNavButton(
           icon: Icons.chevron_right,
           tooltip: l10n.calendarNextUnit(unitLabel),
           compact: isCompact,
@@ -139,7 +136,6 @@ class CalendarNavigation extends StatelessWidget {
       onRedo: onRedo,
       canUndo: canUndo,
       canRedo: canRedo,
-      iconBuilder: _iconControl,
     );
     final colors = context.colorScheme;
     return LayoutBuilder(
@@ -275,22 +271,33 @@ class CalendarNavigation extends StatelessWidget {
         now.month == date.month &&
         now.day == date.day;
   }
+}
 
-  Widget _navButton({
-    required BuildContext context,
-    required String label,
-    required VoidCallback? onPressed,
-    bool highlighted = false,
-    IconData? icon,
-    bool compact = false,
-    String? tooltip,
-    bool showLabelInCompact = false,
-  }) {
+class _NavigationButton extends StatelessWidget {
+  const _NavigationButton({
+    required this.label,
+    required this.onPressed,
+    this.highlighted = false,
+    this.icon,
+    this.compact = false,
+    this.tooltip,
+    this.showLabelInCompact = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool highlighted;
+  final IconData? icon;
+  final bool compact;
+  final String? tooltip;
+  final bool showLabelInCompact;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final bool useCompactIconOnly = compact && !showLabelInCompact;
     if (useCompactIconOnly) {
-      return _compactNavButton(
-        context: context,
+      return _CompactNavButton(
         icon: icon ?? Icons.help_outline,
         tooltip: tooltip ?? label,
         onPressed: onPressed,
@@ -315,59 +322,84 @@ class CalendarNavigation extends StatelessWidget {
           );
     return button;
   }
+}
 
-  Widget _iconNavButton({
-    required BuildContext context,
-    required IconData icon,
-    required String tooltip,
-    required bool compact,
-    required VoidCallback? onPressed,
-    bool highlighted = false,
-  }) {
-    return _compactNavButton(
-      context: context,
+class _IconNavButton extends StatelessWidget {
+  const _IconNavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.compact,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool compact;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactNavButton(
       icon: icon,
       tooltip: tooltip,
       onPressed: onPressed,
-      highlighted: highlighted,
+      highlighted: false,
       enabled: onPressed != null,
       dense: !compact,
     );
   }
+}
 
-  Widget _iconControl({
-    required BuildContext context,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onPressed,
-    required bool compact,
-  }) {
+class _IconControlButton extends StatelessWidget {
+  const _IconControlButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.compact,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
     final shortcut = icon == Icons.undo_rounded
         ? context.l10n.calendarShortcutUndo
         : context.l10n.calendarShortcutRedo;
     final String message =
         context.l10n.commonShortcutTooltip(tooltip, shortcut);
-    final bool enabled = onPressed != null;
-    return _compactNavButton(
-      context: context,
+    return _CompactNavButton(
       icon: icon,
       tooltip: message,
       onPressed: onPressed,
       highlighted: false,
-      enabled: enabled,
+      enabled: onPressed != null,
       dense: !compact,
     );
   }
+}
 
-  Widget _compactNavButton({
-    required BuildContext context,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onPressed,
-    required bool highlighted,
-    bool enabled = true,
-    bool dense = false,
-  }) {
+class _CompactNavButton extends StatelessWidget {
+  const _CompactNavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.highlighted,
+    this.enabled = true,
+    this.dense = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final bool highlighted;
+  final bool enabled;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final bool active = enabled && onPressed != null;
     final Color foreground = active
@@ -389,6 +421,28 @@ class CalendarNavigation extends StatelessWidget {
       iconSize: 16,
       buttonSize: buttonSize,
       tapTargetSize: tapTarget,
+    );
+  }
+}
+
+class _CalendarDropdownNavButton extends StatelessWidget {
+  const _CalendarDropdownNavButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiIconButton.outline(
+      iconData: icon,
+      onPressed: onPressed,
+      iconSize: context.sizing.iconButtonIconSize,
+      buttonSize: context.sizing.iconButtonSize,
+      tapTargetSize: context.sizing.iconButtonTapTarget,
+      color: calendarSubtitleColor,
     );
   }
 }
@@ -430,28 +484,18 @@ class CalendarNavigationLeadingActions extends StatelessWidget {
   }
 }
 
-typedef _IconControlBuilder = Widget Function({
-  required BuildContext context,
-  required IconData icon,
-  required String tooltip,
-  required VoidCallback? onPressed,
-  required bool compact,
-});
-
 class _UndoRedoGroup extends StatelessWidget {
   const _UndoRedoGroup({
     required this.onUndo,
     required this.onRedo,
     required this.canUndo,
     required this.canRedo,
-    required this.iconBuilder,
   });
 
   final VoidCallback? onUndo;
   final VoidCallback? onRedo;
   final bool canUndo;
   final bool canRedo;
-  final _IconControlBuilder iconBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -459,8 +503,7 @@ class _UndoRedoGroup extends StatelessWidget {
     final controls = <Widget>[];
     if (onUndo != null) {
       controls.add(
-        iconBuilder(
-          context: context,
+        _IconControlButton(
           icon: Icons.undo_rounded,
           tooltip: context.l10n.calendarUndo,
           onPressed: canUndo ? onUndo : null,
@@ -473,8 +516,7 @@ class _UndoRedoGroup extends StatelessWidget {
         controls.add(const SizedBox(width: calendarGutterSm));
       }
       controls.add(
-        iconBuilder(
-          context: context,
+        _IconControlButton(
           icon: Icons.redo_rounded,
           tooltip: context.l10n.calendarRedo,
           onPressed: canRedo ? onRedo : null,
@@ -1177,14 +1219,12 @@ class _CalendarDropdown extends StatelessWidget {
                   style: calendarTitleTextStyle,
                 ),
               ),
-              _navIconButton(
-                context: context,
+              _CalendarDropdownNavButton(
                 icon: Icons.chevron_left,
                 onPressed: () => onMonthChanged(_addMonths(month, -1)),
               ),
               const SizedBox(width: calendarGutterSm),
-              _navIconButton(
-                context: context,
+              _CalendarDropdownNavButton(
                 icon: Icons.chevron_right,
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
@@ -1321,24 +1361,6 @@ class _CalendarDropdown extends StatelessWidget {
     }
 
     return dates;
-  }
-
-  Widget _navIconButton({
-    required BuildContext context,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: AxiIconButton.outline(
-        iconData: icon,
-        onPressed: onPressed,
-        iconSize: context.sizing.iconButtonIconSize,
-        buttonSize: context.sizing.iconButtonSize,
-        tapTargetSize: context.sizing.iconButtonTapTarget,
-        color: calendarSubtitleColor,
-      ),
-    );
   }
 
   bool _isSameDay(DateTime a, DateTime b) {

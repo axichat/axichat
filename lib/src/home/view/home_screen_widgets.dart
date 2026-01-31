@@ -10,6 +10,8 @@ class Nexus extends StatefulWidget {
     super.key,
     required this.tabs,
     required this.navPlacement,
+    required this.calendarAvailable,
+    required this.onCalendarTabRequested,
     this.showNavigationRail = true,
     this.navRailCollapsed = false,
     this.onToggleNavRail,
@@ -17,6 +19,8 @@ class Nexus extends StatefulWidget {
 
   final List<HomeTabEntry> tabs;
   final NavPlacement navPlacement;
+  final bool calendarAvailable;
+  final ValueChanged<int> onCalendarTabRequested;
   final bool showNavigationRail;
   final bool navRailCollapsed;
   final VoidCallback? onToggleNavRail;
@@ -101,6 +105,8 @@ class _NexusState extends State<Nexus> {
               onToggleNavRail: widget.onToggleNavRail,
               selectedIndex: _tabController?.index ?? 0,
               onDestinationSelected: _handleRailSelection,
+              calendarAvailable: widget.calendarAvailable,
+              onCalendarTabRequested: widget.onCalendarTabRequested,
               searchState: searchState,
               chatsState: chatsState,
               demoPhase: _demoPhase,
@@ -129,6 +135,8 @@ class _NexusScaffold extends StatelessWidget {
     required this.onToggleNavRail,
     required this.selectedIndex,
     required this.onDestinationSelected,
+    required this.calendarAvailable,
+    required this.onCalendarTabRequested,
     required this.searchState,
     required this.chatsState,
     required this.demoPhase,
@@ -142,6 +150,8 @@ class _NexusScaffold extends StatelessWidget {
   final VoidCallback? onToggleNavRail;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final bool calendarAvailable;
+  final ValueChanged<int> onCalendarTabRequested;
   final HomeSearchState searchState;
   final ChatsState chatsState;
   final _HomeDemoPhase demoPhase;
@@ -187,10 +197,7 @@ class _NexusScaffold extends StatelessWidget {
           label: l10n.homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
           inline: const _DesktopHomeRefreshButton(),
-          onPressed: () async {
-            final chatsCubit = context.read<ChatsCubit>();
-            await chatsCubit.refreshHomeSync();
-          },
+          onPressed: () => context.read<ChatsCubit>().refreshHomeSync(),
         ),
       AppBarActionItem(
         label: searchState.active ? l10n.chatSearchClose : l10n.commonSearch,
@@ -203,7 +210,6 @@ class _NexusScaffold extends StatelessWidget {
       ),
     ];
     final header = _NexusHeader(
-      navPlacement: navPlacement,
       tabs: tabs,
       headerActions: headerActions,
     );
@@ -222,6 +228,8 @@ class _NexusScaffold extends StatelessWidget {
       tabs: tabs,
       selectedChats: selectedChats,
       badgeCounts: badgeCounts,
+      calendarAvailable: calendarAvailable,
+      onCalendarTabRequested: onCalendarTabRequested,
     );
     final column = Column(
       children: [
@@ -257,12 +265,10 @@ class _NexusScaffold extends StatelessWidget {
 
 class _NexusHeader extends StatelessWidget {
   const _NexusHeader({
-    required this.navPlacement,
     required this.tabs,
     required this.headerActions,
   });
 
-  final NavPlacement navPlacement;
   final List<HomeTabEntry> tabs;
   final List<AppBarActionItem> headerActions;
 
@@ -273,7 +279,8 @@ class _NexusHeader extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiAppBar(
-          showTitle: navPlacement != NavPlacement.rail,
+          showTitle: false,
+          leading: const _TransportStatusChips(),
           trailing: AppBarActions(
             actions: headerActions,
             spacing: spacing.s,
@@ -282,6 +289,41 @@ class _NexusHeader extends StatelessWidget {
         ),
         _HomeSearchPanel(tabs: tabs),
       ],
+    );
+  }
+}
+
+class _TransportStatusChips extends StatelessWidget {
+  const _TransportStatusChips();
+
+  @override
+  Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final demoOffline = context.watch<XmppService>().demoOfflineMode;
+    return BlocBuilder<ConnectivityCubit, ConnectivityState>(
+      builder: (context, connectivityState) {
+        final connectionState = _xmppStateForHome(
+          connectivityState,
+          demoOffline: demoOffline,
+        );
+        final sessionEmailState = demoOffline
+            ? const EmailSyncState.ready()
+            : connectivityState.emailState;
+        final emailEnabled =
+            demoOffline ? true : connectivityState.emailEnabled;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SessionCapabilityIndicators(
+              xmppState: connectionState,
+              emailState: sessionEmailState,
+              emailEnabled: emailEnabled,
+              compact: true,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -371,12 +413,16 @@ class _NexusBottomArea extends StatelessWidget {
     required this.tabs,
     required this.selectedChats,
     required this.badgeCounts,
+    required this.calendarAvailable,
+    required this.onCalendarTabRequested,
   });
 
   final NavPlacement navPlacement;
   final List<HomeTabEntry> tabs;
   final List<m.Chat> selectedChats;
   final Map<HomeTab, int> badgeCounts;
+  final bool calendarAvailable;
+  final ValueChanged<int> onCalendarTabRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -400,10 +446,160 @@ class _NexusBottomArea extends StatelessWidget {
       );
       return Column(
         mainAxisSize: MainAxisSize.min,
-        children: [tabBar, const ProfileTile()],
+        children: [
+          tabBar,
+          _HomeBottomAppBar(
+            calendarAvailable: calendarAvailable,
+            onCalendarTabRequested: onCalendarTabRequested,
+          ),
+        ],
       );
     }
-    return const ProfileTile();
+    return const SizedBox.shrink();
+  }
+}
+
+class _HomeBottomAppBar extends StatelessWidget {
+  const _HomeBottomAppBar({
+    required this.calendarAvailable,
+    required this.onCalendarTabRequested,
+  });
+
+  final bool calendarAvailable;
+  final ValueChanged<int> onCalendarTabRequested;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final colors = context.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(top: context.borderSide),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.s,
+            vertical: spacing.xs,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _BottomNavItem(
+                  label: Text(l10n.homeTabChats),
+                  icon: Icon(
+                    LucideIcons.home,
+                    size: sizing.menuItemIconSize,
+                  ),
+                  selected: true,
+                  onPressed: () => context.read<ChatsCubit>().closeAllChats(),
+                ),
+              ),
+              Expanded(
+                child: _BottomNavItem(
+                  label: Text(l10n.calendarScheduleLabel),
+                  icon: Icon(
+                    LucideIcons.calendarClock,
+                    size: sizing.menuItemIconSize,
+                  ),
+                  onPressed: calendarAvailable
+                      ? () => onCalendarTabRequested(0)
+                      : null,
+                ),
+              ),
+              Expanded(
+                child: _BottomNavItem(
+                  label: const TasksTabLabel(),
+                  icon: Icon(
+                    LucideIcons.checkSquare,
+                    size: sizing.menuItemIconSize,
+                  ),
+                  onPressed: calendarAvailable
+                      ? () => onCalendarTabRequested(1)
+                      : null,
+                ),
+              ),
+              Expanded(
+                child: _SettingsBottomNavItem(
+                  label: l10n.settingsButtonLabel,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomNavItem extends StatelessWidget {
+  const _BottomNavItem({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.selected = false,
+  });
+
+  final Widget label;
+  final Widget icon;
+  final VoidCallback? onPressed;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final textStyle = context.textTheme.small;
+    return AxiButton.ghost(
+      size: AxiButtonSize.sm,
+      widthBehavior: AxiButtonWidth.expand,
+      selected: selected,
+      onPressed: onPressed,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          SizedBox(height: spacing.xxs),
+          DefaultTextStyle.merge(
+            style: textStyle,
+            textAlign: TextAlign.center,
+            child: label,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsBottomNavItem extends StatelessWidget {
+  const _SettingsBottomNavItem({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, state) {
+        final sizing = context.sizing;
+        return _BottomNavItem(
+          label: Text(label),
+          icon: AxiAvatar(
+            jid: state.jid,
+            subscription: Subscription.both,
+            avatarPath: state.avatarPath,
+            presence: null,
+            status: null,
+            active: false,
+            size: sizing.iconButtonIconSize,
+          ),
+          onPressed: () =>
+              context.push(const ProfileRoute().location, extra: context.read),
+        );
+      },
+    );
   }
 }
 
@@ -481,13 +677,13 @@ class _HomeNavigationRailFooter extends StatelessWidget {
     if (items.isNotEmpty) {
       items.add(SizedBox(height: context.spacing.m));
     }
-    items.add(_SettingsRailItem(collapsed: collapsed));
+    items.add(_ProfileRailItem(collapsed: collapsed));
     return Column(mainAxisSize: MainAxisSize.min, children: items);
   }
 }
 
-class _SettingsRailItem extends StatelessWidget {
-  const _SettingsRailItem({required this.collapsed});
+class _ProfileRailItem extends StatelessWidget {
+  const _ProfileRailItem({required this.collapsed});
 
   final bool collapsed;
 
@@ -499,21 +695,56 @@ class _SettingsRailItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final label = l10n.settingsButtonLabel;
-    if (collapsed) {
-      return AxiIconButton.ghost(
-        iconData: LucideIcons.settings,
-        tooltip: label,
-        onPressed: () => _openSettings(context),
-      );
-    }
-    return AxiListButton(
-      collapsed: collapsed,
-      collapsedIconData: LucideIcons.settings,
-      collapsedTooltip: label,
-      collapsedSemanticLabel: label,
-      leading: const Icon(LucideIcons.settings),
-      child: Text(label, overflow: TextOverflow.ellipsis),
-      onPressed: () => _openSettings(context),
+    final sizing = context.sizing;
+    final textTheme = context.textTheme;
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, state) {
+        final avatar = AxiAvatar(
+          jid: state.jid,
+          subscription: Subscription.both,
+          avatarPath: state.avatarPath,
+          presence: null,
+          status: null,
+          active: false,
+          size: sizing.iconButtonSize,
+        );
+        if (collapsed) {
+          return AxiIconButton.ghost(
+            iconData: LucideIcons.user,
+            icon: avatar,
+            tooltip: label,
+            semanticLabel: label,
+            onPressed: () => _openSettings(context),
+          );
+        }
+        return AxiListButton(
+          collapsed: collapsed,
+          collapsedIconData: LucideIcons.user,
+          collapsedTooltip: label,
+          collapsedSemanticLabel: label,
+          semanticLabel: label,
+          leading: avatar,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                state.username,
+                style: textTheme.small.copyWith(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              Text(
+                state.jid,
+                style: textTheme.muted,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+          onPressed: () => _openSettings(context),
+        );
+      },
     );
   }
 }
@@ -569,10 +800,7 @@ class _DesktopHomeRefreshButton extends StatelessWidget {
           loading: isLoading,
           onPressed: isLoading
               ? null
-              : () async {
-                  final chatsCubit = context.read<ChatsCubit>();
-                  await chatsCubit.refreshHomeSync();
-                },
+              : () => context.read<ChatsCubit>().refreshHomeSync(),
         );
       },
     );
@@ -834,6 +1062,19 @@ IconData _tabIcon(HomeTab tab) {
     case HomeTab.drafts:
       return LucideIcons.fileText;
   }
+}
+
+ConnectionState _xmppStateForHome(
+  ConnectivityState state, {
+  required bool demoOffline,
+}) {
+  if (demoOffline) return ConnectionState.connected;
+  return switch (state) {
+    ConnectivityConnected() => ConnectionState.connected,
+    ConnectivityConnecting() => ConnectionState.connecting,
+    ConnectivityError() => ConnectionState.error,
+    ConnectivityNotConnected() => ConnectionState.notConnected,
+  };
 }
 
 String _rosterFailureToastMessage(

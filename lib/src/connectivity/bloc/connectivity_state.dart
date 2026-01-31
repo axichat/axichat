@@ -4,21 +4,39 @@
 part of 'connectivity_cubit.dart';
 
 sealed class ConnectivityState {
-  const ConnectivityState();
+  const ConnectivityState({
+    required this.emailState,
+    required this.emailEnabled,
+  });
+
+  final EmailSyncState emailState;
+  final bool emailEnabled;
 }
 
 final class ConnectivityConnected extends ConnectivityState {
-  const ConnectivityConnected();
+  const ConnectivityConnected({
+    required super.emailState,
+    required super.emailEnabled,
+  });
 }
 
 final class ConnectivityConnecting extends ConnectivityState {
-  const ConnectivityConnecting();
+  const ConnectivityConnecting({
+    required super.emailState,
+    required super.emailEnabled,
+  });
 }
 
 final class ConnectivityNotConnected extends ConnectivityState {
-  const ConnectivityNotConnected();
+  const ConnectivityNotConnected({
+    required super.emailState,
+    required super.emailEnabled,
+  });
 }
 
 final class ConnectivityError extends ConnectivityState {
-  const ConnectivityError();
+  const ConnectivityError({
+    required super.emailState,
+    required super.emailEnabled,
+  });
 }

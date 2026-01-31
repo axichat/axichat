@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -124,7 +125,8 @@ abstract class BaseCalendarBloc
   final NlScheduleParserService _nlParserService;
   Future<void> _pendingReminderSync = Future.value();
   static const int _undoHistoryLimit = 50;
-  final List<_CalendarUndoSnapshot> _undoStack = <_CalendarUndoSnapshot>[];
+  final ListQueue<_CalendarUndoSnapshot> _undoStack =
+      ListQueue<_CalendarUndoSnapshot>();
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
   int _focusSequence = 0;
   static final CalendarLinkedTaskRegistry _linkedTaskRegistry =
@@ -426,7 +428,7 @@ abstract class BaseCalendarBloc
       ),
     );
     if (_undoStack.length > _undoHistoryLimit) {
-      _undoStack.removeAt(0);
+      _undoStack.removeFirst();
     }
     _redoStack.clear();
   }

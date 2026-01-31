@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
-import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
@@ -29,41 +28,41 @@ class ProfileTile extends StatelessWidget {
           connectivityState,
           demoOffline: demoOffline,
         );
-        return BlocBuilder<EmailSyncCubit, EmailSyncState>(
-          builder: (context, emailSyncState) {
-            final sessionEmailState =
-                demoOffline ? const EmailSyncState.ready() : emailSyncState;
-            return BlocBuilder<ProfileCubit, ProfileState>(
-              builder: (context, state) {
-                final sizing = context.sizing;
-                final baseTitleStyle = context.textTheme.h4;
-                final usernameStyle = baseTitleStyle.copyWith(
-                  fontSize: context.textTheme.large.fontSize,
-                );
-                final subtitleStyle = context.textTheme.muted;
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final indicatorMaxWidth =
-                        constraints.maxWidth < sizing.menuMaxWidth
-                            ? constraints.maxWidth
-                            : sizing.menuMaxWidth;
-                    return _ProfileTileSurface(
-                      onTap: () => context.push(
-                        const ProfileRoute().location,
-                        extra: context.read,
-                      ),
-                      child: _ProfileTileLayout(
-                        username: state.username,
-                        jid: state.jid,
-                        avatarPath: state.avatarPath,
-                        usernameStyle: usernameStyle,
-                        subtitleStyle: subtitleStyle,
-                        indicatorMaxWidth: indicatorMaxWidth,
-                        connectionState: connectionState,
-                        sessionEmailState: sessionEmailState,
-                      ),
-                    );
-                  },
+        final sessionEmailState = demoOffline
+            ? const EmailSyncState.ready()
+            : connectivityState.emailState;
+        final emailEnabled =
+            demoOffline ? true : connectivityState.emailEnabled;
+        return BlocBuilder<ProfileCubit, ProfileState>(
+          builder: (context, state) {
+            final sizing = context.sizing;
+            final baseTitleStyle = context.textTheme.h4;
+            final usernameStyle = baseTitleStyle.copyWith(
+              fontSize: context.textTheme.large.fontSize,
+            );
+            final subtitleStyle = context.textTheme.muted;
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final indicatorMaxWidth =
+                    constraints.maxWidth < sizing.menuMaxWidth
+                        ? constraints.maxWidth
+                        : sizing.menuMaxWidth;
+                return _ProfileTileSurface(
+                  onTap: () => context.push(
+                    const ProfileRoute().location,
+                    extra: context.read,
+                  ),
+                  child: _ProfileTileLayout(
+                    username: state.username,
+                    jid: state.jid,
+                    avatarPath: state.avatarPath,
+                    usernameStyle: usernameStyle,
+                    subtitleStyle: subtitleStyle,
+                    indicatorMaxWidth: indicatorMaxWidth,
+                    connectionState: connectionState,
+                    sessionEmailState: sessionEmailState,
+                    emailEnabled: emailEnabled,
+                  ),
                 );
               },
             );
@@ -155,6 +154,7 @@ class _ProfileTileLayout extends StatelessWidget {
     required this.indicatorMaxWidth,
     required this.connectionState,
     required this.sessionEmailState,
+    required this.emailEnabled,
   });
 
   final String username;
@@ -165,6 +165,7 @@ class _ProfileTileLayout extends StatelessWidget {
   final double indicatorMaxWidth;
   final ConnectionState connectionState;
   final EmailSyncState sessionEmailState;
+  final bool emailEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +230,7 @@ class _ProfileTileLayout extends StatelessWidget {
               child: SessionCapabilityIndicators(
                 xmppState: connectionState,
                 emailState: sessionEmailState,
-                emailEnabled: true,
+                emailEnabled: emailEnabled,
                 compact: true,
               ),
             ),

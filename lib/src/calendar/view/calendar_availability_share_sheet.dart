@@ -204,7 +204,15 @@ class _CalendarAvailabilityShareScreenState
             rangeStart: _rangeStart,
             rangeEnd: _rangeEnd,
             presets: _presets,
-            editor: _editorWidget(),
+            editor: _AvailabilityEditorContent(
+              rangeStart: _rangeStart,
+              rangeEnd: _rangeEnd,
+              intervals: _draftIntervals,
+              tzid: _resolveTimeZone(_localModel),
+              invalidMessage:
+                  context.l10n.calendarAvailabilityShareInvalidRange,
+              onIntervalsChanged: _handleDraftIntervalsChanged,
+            ),
             onStartChanged: _handleRangeStartChanged,
             onEndChanged: _handleRangeEndChanged,
             onPresetSelected: _handlePresetSelected,
@@ -293,23 +301,6 @@ class _CalendarAvailabilityShareScreenState
       return startLabel;
     }
     return context.l10n.commonRangeLabel(startLabel, endLabel);
-  }
-
-  Widget _editorWidget() {
-    final DateTime? start = _rangeStart;
-    final DateTime? end = _rangeEnd;
-    if (start == null || end == null || !end.isAfter(start)) {
-      return _AvailabilitySheetEmptyMessage(
-        message: context.l10n.calendarAvailabilityShareInvalidRange,
-      );
-    }
-    return _AvailabilityEditorGrid(
-      rangeStart: start,
-      rangeEnd: end,
-      intervals: _draftIntervals,
-      tzid: _resolveTimeZone(_localModel),
-      onIntervalsChanged: _handleDraftIntervalsChanged,
-    );
   }
 
   void _handleRangeStartChanged(DateTime? value) {
@@ -1015,6 +1006,40 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AvailabilityEditorContent extends StatelessWidget {
+  const _AvailabilityEditorContent({
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.intervals,
+    required this.tzid,
+    required this.invalidMessage,
+    required this.onIntervalsChanged,
+  });
+
+  final DateTime? rangeStart;
+  final DateTime? rangeEnd;
+  final List<CalendarFreeBusyInterval> intervals;
+  final String? tzid;
+  final String invalidMessage;
+  final ValueChanged<List<CalendarFreeBusyInterval>> onIntervalsChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime? start = rangeStart;
+    final DateTime? end = rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return _AvailabilitySheetEmptyMessage(message: invalidMessage);
+    }
+    return _AvailabilityEditorGrid(
+      rangeStart: start,
+      rangeEnd: end,
+      intervals: intervals,
+      tzid: tzid,
+      onIntervalsChanged: onIntervalsChanged,
     );
   }
 }

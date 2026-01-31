@@ -19,6 +19,7 @@ import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/event_transform.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_error_l10n.dart';
@@ -186,18 +187,30 @@ class ChatSettingsSnapshot extends Equatable {
     required this.chatReadReceipts,
     required this.emailReadReceipts,
     required this.shareTokenSignatureEnabled,
+    required this.autoDownloadImages,
+    required this.autoDownloadVideos,
+    required this.autoDownloadDocuments,
+    required this.autoDownloadArchives,
   });
 
   final AppLanguage language;
   final bool chatReadReceipts;
   final bool emailReadReceipts;
   final bool shareTokenSignatureEnabled;
+  final bool autoDownloadImages;
+  final bool autoDownloadVideos;
+  final bool autoDownloadDocuments;
+  final bool autoDownloadArchives;
 
   ChatSettingsSnapshot copyWith({
     AppLanguage? language,
     bool? chatReadReceipts,
     bool? emailReadReceipts,
     bool? shareTokenSignatureEnabled,
+    bool? autoDownloadImages,
+    bool? autoDownloadVideos,
+    bool? autoDownloadDocuments,
+    bool? autoDownloadArchives,
   }) =>
       ChatSettingsSnapshot(
         language: language ?? this.language,
@@ -205,7 +218,20 @@ class ChatSettingsSnapshot extends Equatable {
         emailReadReceipts: emailReadReceipts ?? this.emailReadReceipts,
         shareTokenSignatureEnabled:
             shareTokenSignatureEnabled ?? this.shareTokenSignatureEnabled,
+        autoDownloadImages: autoDownloadImages ?? this.autoDownloadImages,
+        autoDownloadVideos: autoDownloadVideos ?? this.autoDownloadVideos,
+        autoDownloadDocuments:
+            autoDownloadDocuments ?? this.autoDownloadDocuments,
+        autoDownloadArchives: autoDownloadArchives ?? this.autoDownloadArchives,
       );
+
+  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
+      autoDownloadImages ||
+              autoDownloadVideos ||
+              autoDownloadDocuments ||
+              autoDownloadArchives
+          ? AttachmentAutoDownload.allowed
+          : AttachmentAutoDownload.blocked;
 
   @override
   List<Object?> get props => [
@@ -213,6 +239,10 @@ class ChatSettingsSnapshot extends Equatable {
         chatReadReceipts,
         emailReadReceipts,
         shareTokenSignatureEnabled,
+        autoDownloadImages,
+        autoDownloadVideos,
+        autoDownloadDocuments,
+        autoDownloadArchives,
       ];
 }
 
@@ -274,6 +304,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatAttachmentAutoDownloadToggled>(_onChatAttachmentAutoDownloadToggled);
+    on<ChatAttachmentAutoDownloadRequested>(
+      _onChatAttachmentAutoDownloadRequested,
+    );
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
@@ -449,6 +482,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _emailHistoryLoading = false;
   bool _pinHydrationInFlight = false;
   final Set<String> _roomAffiliationRefreshAttempts = <String>{};
+  final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
+  final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
   Completer<void>? _mamLoadingCompleter;
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   List<Chat> _roomChats = const <Chat>[];
@@ -1520,6 +1555,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _hydrateShareReplies(filteredItems, emit);
     }
     _maybeAutofillEmailSubject(filteredItems, emit);
+    await _maybeAutoDownloadAttachments(
+      messages: filteredItems,
+      attachmentsByMessageId: filtered.attachmentsByMessageId,
+    );
 
     final chat = state.chat;
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
@@ -2221,11 +2260,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(supportsHttpFileUpload: event.supported));
   }
 
-  void _onChatSettingsUpdated(
+  Future<void> _onChatSettingsUpdated(
     ChatSettingsUpdated event,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
     _settingsSnapshot = event.settings;
+    await _maybeAutoDownloadAttachments(
+      messages: state.items,
+      attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
+    );
   }
 
   Future<void> _onChatMessageFocused(
@@ -2887,6 +2930,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? AttachmentAutoDownload.allowed
         : AttachmentAutoDownload.blocked;
     emit(state.copyWith(chat: chat.copyWith(attachmentAutoDownload: value)));
+    if (event.enabled) {
+      await _maybeAutoDownloadAttachments(
+        messages: state.items,
+        attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
+      );
+    }
+  }
+
+  Future<void> _onChatAttachmentAutoDownloadRequested(
+    ChatAttachmentAutoDownloadRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final stanzaId = event.stanzaId.trim();
+    if (stanzaId.isEmpty) return;
+    final message =
+        state.items.where((item) => item.stanzaID == stanzaId).firstOrNull;
+    if (message == null) return;
+    final key = _messageKey(message);
+    final attachmentIds = state.attachmentMetadataIdsByMessageId[key];
+    if (attachmentIds == null || attachmentIds.isEmpty) return;
+    await _maybeAutoDownloadAttachments(
+      messages: [message],
+      attachmentsByMessageId: {key: attachmentIds},
+      force: true,
+    );
   }
 
   Future<void> _onChatResponsivityChanged(
@@ -4232,6 +4300,141 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String _messageKey(Message message) => message.id ?? message.stanzaID;
+
+  bool _chatAllowsAutoDownload(Chat chat) {
+    final resolved = chat.attachmentAutoDownload ??
+        _settingsSnapshot.defaultChatAttachmentAutoDownload;
+    return resolved.isAllowed;
+  }
+
+  bool _metadataAllowsAutoDownload(FileMetadataData metadata) {
+    return metadata.downloadCategory.isAutoDownloadAllowed(
+      imagesEnabled: _settingsSnapshot.autoDownloadImages,
+      videosEnabled: _settingsSnapshot.autoDownloadVideos,
+      documentsEnabled: _settingsSnapshot.autoDownloadDocuments,
+      archivesEnabled: _settingsSnapshot.autoDownloadArchives,
+    );
+  }
+
+  Future<bool> _isChatBlockedForAutoDownload(Chat chat) async {
+    if (chat.spam) return true;
+    final xmppService = _xmppService;
+    if (xmppService == null) return false;
+    return xmppService.isJidBlocked(chat.jid);
+  }
+
+  Future<bool> _hasLocalAttachmentFile(FileMetadataData metadata) async {
+    final path = metadata.path?.trim();
+    if (path == null || path.isEmpty) return false;
+    return File(path).exists();
+  }
+
+  Future<bool> _needsAttachmentDownload(
+    FileMetadataData metadata, {
+    required bool isEmailChat,
+  }) async {
+    if (await _hasLocalAttachmentFile(metadata)) {
+      return false;
+    }
+    if (isEmailChat) {
+      return true;
+    }
+    final urls = metadata.sourceUrls;
+    return urls != null && urls.isNotEmpty;
+  }
+
+  Future<void> _maybeAutoDownloadAttachments({
+    required List<Message> messages,
+    required Map<String, List<String>> attachmentsByMessageId,
+    bool force = false,
+  }) async {
+    if (messages.isEmpty || attachmentsByMessageId.isEmpty) return;
+    final chat = state.chat;
+    if (chat == null) return;
+    if (!force && !_chatAllowsAutoDownload(chat)) return;
+    if (!force && await _isChatBlockedForAutoDownload(chat)) return;
+
+    final messageKeys = <String, List<String>>{};
+    final metadataIds = <String>{};
+    for (final message in messages) {
+      final key = _messageKey(message);
+      final ids = attachmentsByMessageId[key];
+      if (ids == null || ids.isEmpty) continue;
+      messageKeys[key] = ids;
+      metadataIds.addAll(ids);
+    }
+    if (metadataIds.isEmpty) return;
+    final db = await _messageService.database;
+    final metadataList = await db.getFileMetadataForIds(metadataIds);
+    final metadataById = <String, FileMetadataData>{
+      for (final metadata in metadataList) metadata.id: metadata,
+    };
+    final isEmailChat = chat.defaultTransport.isEmail;
+    final downloads = <({String metadataId, String stanzaId})>[];
+    final emailMessages = <Message>[];
+
+    for (final message in messages) {
+      final key = _messageKey(message);
+      final ids = messageKeys[key];
+      if (ids == null || ids.isEmpty) continue;
+      var shouldDownloadEmail = false;
+      for (final metadataId in ids) {
+        final metadata = metadataById[metadataId];
+        if (metadata == null) continue;
+        if (!force &&
+            (_autoDownloadAttemptedMetadataIds.contains(metadataId) ||
+                !_metadataAllowsAutoDownload(metadata))) {
+          continue;
+        }
+        final needsDownload = await _needsAttachmentDownload(
+          metadata,
+          isEmailChat: isEmailChat,
+        );
+        if (!needsDownload) continue;
+        if (!force) {
+          _autoDownloadAttemptedMetadataIds.add(metadataId);
+        }
+        if (isEmailChat) {
+          shouldDownloadEmail = true;
+        } else {
+          downloads.add(
+            (metadataId: metadataId, stanzaId: message.stanzaID),
+          );
+        }
+      }
+      if (!shouldDownloadEmail) continue;
+      if (!force &&
+          _autoDownloadAttemptedEmailMessages.contains(message.stanzaID)) {
+        continue;
+      }
+      if (!force) {
+        _autoDownloadAttemptedEmailMessages.add(message.stanzaID);
+      }
+      emailMessages.add(message);
+    }
+
+    if (isEmailChat) {
+      for (final message in emailMessages) {
+        try {
+          await downloadFullEmailMessage(message);
+        } on DeltaChatException catch (error, stackTrace) {
+          _log.warning(
+              'Auto-download email message failed.', error, stackTrace);
+        }
+      }
+      return;
+    }
+    for (final download in downloads) {
+      try {
+        await downloadInboundAttachment(
+          metadataId: download.metadataId,
+          stanzaId: download.stanzaId,
+        );
+      } on XmppException catch (error, stackTrace) {
+        _log.warning('Auto-download attachment failed.', error, stackTrace);
+      }
+    }
+  }
 
   Stream<FileMetadataData?> fileMetadataStreamFor(String id) =>
       _messageService.fileMetadataStream(id);

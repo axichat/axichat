@@ -236,6 +236,15 @@ final class ChatAttachmentAutoDownloadToggled extends ChatEvent {
   List<Object?> get props => [enabled];
 }
 
+final class ChatAttachmentAutoDownloadRequested extends ChatEvent {
+  const ChatAttachmentAutoDownloadRequested(this.stanzaId);
+
+  final String stanzaId;
+
+  @override
+  List<Object?> get props => [stanzaId];
+}
+
 final class ChatResponsivityChanged extends ChatEvent {
   const ChatResponsivityChanged(this.responsive);
 

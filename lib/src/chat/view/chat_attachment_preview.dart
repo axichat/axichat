@@ -239,12 +239,6 @@ class ChatAttachmentPreview extends StatefulWidget {
     required this.metadataStream,
     this.initialMetadata,
     required this.allowed,
-    required this.autoDownloadImages,
-    required this.autoDownloadVideos,
-    required this.autoDownloadDocuments,
-    required this.autoDownloadArchives,
-    required this.autoDownloadAllowed,
-    this.autoDownloadUserInitiated = false,
     this.downloadDelegate,
     this.onAllowPressed,
     this.surfaceShape,
@@ -255,12 +249,6 @@ class ChatAttachmentPreview extends StatefulWidget {
   final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData? initialMetadata;
   final bool allowed;
-  final bool autoDownloadImages;
-  final bool autoDownloadVideos;
-  final bool autoDownloadDocuments;
-  final bool autoDownloadArchives;
-  final bool autoDownloadAllowed;
-  final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
   final OutlinedBorder? surfaceShape;
@@ -275,21 +263,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
   int? _typeReportKey;
   Future<bool>? _fileExistsFuture;
   int? _fileExistsKey;
-
-  bool _shouldAutoDownload(FileMetadataData metadata) {
-    if (widget.autoDownloadUserInitiated) {
-      return true;
-    }
-    if (!widget.autoDownloadAllowed) {
-      return false;
-    }
-    return metadata.downloadCategory.isAutoDownloadAllowed(
-      imagesEnabled: widget.autoDownloadImages,
-      videosEnabled: widget.autoDownloadVideos,
-      documentsEnabled: widget.autoDownloadDocuments,
-      archivesEnabled: widget.autoDownloadArchives,
-    );
-  }
 
   Future<FileTypeReport> _resolveTypeReportFuture({
     required FileMetadataData metadata,
@@ -364,7 +337,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             final stanzaId = widget.stanzaId;
             final onAllowPressed = widget.onAllowPressed;
             final downloadDelegate = widget.downloadDelegate;
-            final autoDownloadUserInitiated = widget.autoDownloadUserInitiated;
             final allowed = widget.allowed;
             final metadata = snapshot.data;
             if (metadata == null) {
@@ -380,7 +352,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             }
             final FileTypeReport declaredReport = metadata.declaredTypeReport;
 
-            final shouldAutoDownload = _shouldAutoDownload(metadata);
             final path = metadata.path?.trim();
             final localFile = path == null || path.isEmpty ? null : File(path);
             if (localFile != null) {
@@ -433,9 +404,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                           return _ImageAttachment(
                             metadata: metadata,
                             stanzaId: stanzaId,
-                            autoDownload: shouldAutoDownload,
-                            autoDownloadUserInitiated:
-                                autoDownloadUserInitiated,
                             downloadDelegate: downloadDelegate,
                             typeReport: resolvedReport,
                           );
@@ -444,9 +412,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                           return _VideoAttachment(
                             metadata: metadata,
                             stanzaId: stanzaId,
-                            autoDownload: shouldAutoDownload,
-                            autoDownloadUserInitiated:
-                                autoDownloadUserInitiated,
                             downloadDelegate: downloadDelegate,
                             typeReport: resolvedReport,
                           );
@@ -454,8 +419,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                         return _FileAttachment(
                           metadata: metadata,
                           stanzaId: stanzaId,
-                          autoDownload: shouldAutoDownload,
-                          autoDownloadUserInitiated: autoDownloadUserInitiated,
                           downloadDelegate: downloadDelegate,
                           typeReport: resolvedReport,
                         );
@@ -472,8 +435,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     return _ImageAttachment(
                       metadata: metadata,
                       stanzaId: stanzaId,
-                      autoDownload: shouldAutoDownload,
-                      autoDownloadUserInitiated: autoDownloadUserInitiated,
                       downloadDelegate: downloadDelegate,
                       typeReport: declaredReport,
                     );
@@ -482,8 +443,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     return _VideoAttachment(
                       metadata: metadata,
                       stanzaId: stanzaId,
-                      autoDownload: shouldAutoDownload,
-                      autoDownloadUserInitiated: autoDownloadUserInitiated,
                       downloadDelegate: downloadDelegate,
                       typeReport: declaredReport,
                     );
@@ -491,8 +450,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                   return _FileAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
-                    autoDownload: shouldAutoDownload,
-                    autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
                     typeReport: declaredReport,
                   );
@@ -509,8 +466,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               return _ImageAttachment(
                 metadata: metadata,
                 stanzaId: stanzaId,
-                autoDownload: shouldAutoDownload,
-                autoDownloadUserInitiated: autoDownloadUserInitiated,
                 downloadDelegate: downloadDelegate,
                 typeReport: declaredReport,
               );
@@ -519,8 +474,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               return _VideoAttachment(
                 metadata: metadata,
                 stanzaId: stanzaId,
-                autoDownload: shouldAutoDownload,
-                autoDownloadUserInitiated: autoDownloadUserInitiated,
                 downloadDelegate: downloadDelegate,
                 typeReport: declaredReport,
               );
@@ -528,8 +481,6 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             return _FileAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
-              autoDownload: shouldAutoDownload,
-              autoDownloadUserInitiated: autoDownloadUserInitiated,
               downloadDelegate: downloadDelegate,
               typeReport: declaredReport,
             );
@@ -593,16 +544,12 @@ class _ImageAttachment extends StatefulWidget {
   const _ImageAttachment({
     required this.metadata,
     required this.stanzaId,
-    required this.autoDownload,
-    required this.autoDownloadUserInitiated,
     this.downloadDelegate,
     this.typeReport,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
-  final bool autoDownload;
-  final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final FileTypeReport? typeReport;
 
@@ -612,7 +559,6 @@ class _ImageAttachment extends StatefulWidget {
 
 class _ImageAttachmentState extends State<_ImageAttachment> {
   var _downloading = false;
-  var _autoDownloadRequested = false;
   Future<bool>? _previewAllowed;
   String? _previewPath;
 
@@ -643,20 +589,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final canDownload = url != null || widget.downloadDelegate != null;
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
-    }
-    if (widget.autoDownload &&
-        !_autoDownloadRequested &&
-        !_downloading &&
-        !hasLocalFile &&
-        canDownload) {
-      _autoDownloadRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _downloadAttachment(
-          showFeedback: widget.autoDownloadUserInitiated,
-          requireConfirmation: widget.autoDownloadUserInitiated,
-        );
-      });
     }
     if (!hasLocalFile) {
       if (_encrypted) {
@@ -702,8 +634,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
           return _FileAttachment(
             metadata: metadata,
             stanzaId: widget.stanzaId,
-            autoDownload: widget.autoDownload,
-            autoDownloadUserInitiated: widget.autoDownloadUserInitiated,
             downloadDelegate: widget.downloadDelegate,
             typeReport: widget.typeReport,
           );
@@ -844,16 +774,12 @@ class _VideoAttachment extends StatefulWidget {
   const _VideoAttachment({
     required this.metadata,
     required this.stanzaId,
-    required this.autoDownload,
-    required this.autoDownloadUserInitiated,
     this.downloadDelegate,
     this.typeReport,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
-  final bool autoDownload;
-  final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final FileTypeReport? typeReport;
 
@@ -863,7 +789,6 @@ class _VideoAttachment extends StatefulWidget {
 
 class _VideoAttachmentState extends State<_VideoAttachment> {
   var _downloading = false;
-  var _autoDownloadRequested = false;
   var _initFailed = false;
   VideoPlayerController? _controller;
 
@@ -908,20 +833,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
-    if (widget.autoDownload &&
-        !_autoDownloadRequested &&
-        !_downloading &&
-        !hasLocalFile &&
-        canDownload) {
-      _autoDownloadRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _downloadAttachment(
-          showFeedback: widget.autoDownloadUserInitiated,
-          requireConfirmation: widget.autoDownloadUserInitiated,
-        );
-      });
-    }
     if (!hasLocalFile) {
       if (_encrypted) {
         return _EncryptedAttachment(
@@ -950,8 +861,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       return _FileAttachment(
         metadata: metadata,
         stanzaId: widget.stanzaId,
-        autoDownload: widget.autoDownload,
-        autoDownloadUserInitiated: widget.autoDownloadUserInitiated,
         downloadDelegate: widget.downloadDelegate,
         typeReport: widget.typeReport,
       );
@@ -1487,16 +1396,12 @@ class _FileAttachment extends StatefulWidget {
   const _FileAttachment({
     required this.metadata,
     required this.stanzaId,
-    required this.autoDownload,
-    required this.autoDownloadUserInitiated,
     this.downloadDelegate,
     this.typeReport,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
-  final bool autoDownload;
-  final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final FileTypeReport? typeReport;
 
@@ -1510,7 +1415,6 @@ class _AttachmentDownloadCancelledException implements Exception {
 
 class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
-  var _autoDownloadRequested = false;
   late final ShadPopoverController _actionsController;
 
   @override
@@ -1571,20 +1475,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
         : canDownload
             ? () => _downloadOnly(showFeedback: true, requireConfirmation: true)
             : null;
-    if (widget.autoDownload &&
-        !_autoDownloadRequested &&
-        !_downloading &&
-        !hasLocalFile &&
-        canDownload) {
-      _autoDownloadRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _downloadOnly(
-          showFeedback: widget.autoDownloadUserInitiated,
-          requireConfirmation: widget.autoDownloadUserInitiated,
-        );
-      });
-    }
     final border = context.borderSide;
     final Widget attachmentIcon = DecoratedBox(
       decoration: ShapeDecoration(

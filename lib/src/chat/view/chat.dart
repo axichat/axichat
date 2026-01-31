@@ -1033,6 +1033,10 @@ class _ChatState extends State<Chat> {
         chatReadReceipts: settings.chatReadReceipts,
         emailReadReceipts: settings.emailReadReceipts,
         shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+        autoDownloadImages: settings.autoDownloadImages,
+        autoDownloadVideos: settings.autoDownloadVideos,
+        autoDownloadDocuments: settings.autoDownloadDocuments,
+        autoDownloadArchives: settings.autoDownloadArchives,
       );
 
   double _outsideTapDragThreshold() =>
@@ -2332,14 +2336,14 @@ class _ChatState extends State<Chat> {
             const ChatAttachmentAutoDownloadToggled(true),
           );
     }
-    if (isEmailChat) {
-      await context.read<ChatBloc>().downloadFullEmailMessage(message);
-    }
 
     if (mounted) {
       setState(() {
         _oneTimeAllowedAttachmentStanzaIds.add(stanzaId.trim());
       });
+      context.read<ChatBloc>().add(
+            ChatAttachmentAutoDownloadRequested(stanzaId.trim()),
+          );
     }
   }
 
@@ -6299,18 +6303,6 @@ class _ChatState extends State<Chat> {
                                                                 !attachmentsBlockedForChat &&
                                                                     (allowAttachmentByTrust ||
                                                                         allowAttachmentOnce);
-                                                            final chatAutoDownloadAllowed = (state
-                                                                        .chat
-                                                                        ?.attachmentAutoDownload ??
-                                                                    context
-                                                                        .watch<
-                                                                            SettingsCubit>()
-                                                                        .state
-                                                                        .defaultChatAttachmentAutoDownload)
-                                                                .isAllowed;
-                                                            final autoDownloadAllowed =
-                                                                allowAttachment &&
-                                                                    chatAutoDownloadAllowed;
                                                             final emailDownloadDelegate =
                                                                 isEmailChat
                                                                     ? AttachmentDownloadDelegate(
@@ -6324,8 +6316,6 @@ class _ChatState extends State<Chat> {
                                                                         },
                                                                       )
                                                                     : null;
-                                                            final autoDownloadUserInitiated =
-                                                                allowAttachmentOnce;
                                                             for (var index = 0;
                                                                 index <
                                                                     attachmentIds
@@ -6368,30 +6358,6 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                   allowed:
                                                                       allowAttachment,
-                                                                  autoDownloadImages: context
-                                                                      .watch<
-                                                                          SettingsCubit>()
-                                                                      .state
-                                                                      .autoDownloadImages,
-                                                                  autoDownloadVideos: context
-                                                                      .watch<
-                                                                          SettingsCubit>()
-                                                                      .state
-                                                                      .autoDownloadVideos,
-                                                                  autoDownloadDocuments: context
-                                                                      .watch<
-                                                                          SettingsCubit>()
-                                                                      .state
-                                                                      .autoDownloadDocuments,
-                                                                  autoDownloadArchives: context
-                                                                      .watch<
-                                                                          SettingsCubit>()
-                                                                      .state
-                                                                      .autoDownloadArchives,
-                                                                  autoDownloadAllowed:
-                                                                      autoDownloadAllowed,
-                                                                  autoDownloadUserInitiated:
-                                                                      autoDownloadUserInitiated,
                                                                   downloadDelegate:
                                                                       emailDownloadDelegate,
                                                                   onAllowPressed: allowAttachment
@@ -9070,13 +9036,6 @@ class _PinnedMessageTile extends StatelessWidget {
           : isOneTimeAttachmentAllowed(message.stanzaID);
       final allowAttachment = !attachmentsBlockedForPin &&
           (allowAttachmentByTrust || allowAttachmentOnce);
-      final chatAutoDownloadAllowed = (chat.attachmentAutoDownload ??
-              context
-                  .watch<SettingsCubit>()
-                  .state
-                  .defaultChatAttachmentAutoDownload)
-          .isAllowed;
-      final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailDownloadDelegate = isEmailBacked
           ? AttachmentDownloadDelegate(
               () async {
@@ -9087,7 +9046,6 @@ class _PinnedMessageTile extends StatelessWidget {
               },
             )
           : null;
-      final autoDownloadUserInitiated = allowAttachmentOnce;
       for (var index = 0; index < attachmentIds.length; index += 1) {
         final attachmentId = attachmentIds[index];
         if (index > 0) {
@@ -9101,16 +9059,6 @@ class _PinnedMessageTile extends StatelessWidget {
             metadataStream: metadataStreamFor(attachmentId),
             initialMetadata: metadataInitialFor(attachmentId),
             allowed: allowAttachment,
-            autoDownloadImages:
-                context.watch<SettingsCubit>().state.autoDownloadImages,
-            autoDownloadVideos:
-                context.watch<SettingsCubit>().state.autoDownloadVideos,
-            autoDownloadDocuments:
-                context.watch<SettingsCubit>().state.autoDownloadDocuments,
-            autoDownloadArchives:
-                context.watch<SettingsCubit>().state.autoDownloadArchives,
-            autoDownloadAllowed: autoDownloadAllowed,
-            autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: emailDownloadDelegate,
             onAllowPressed: allowAttachment
                 ? null

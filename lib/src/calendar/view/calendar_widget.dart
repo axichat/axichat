@@ -3,8 +3,11 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,7 +31,12 @@ import 'widgets/calendar_hover_title_scope.dart';
 import 'widgets/calendar_mobile_tab_shell.dart';
 
 class CalendarWidget extends StatefulWidget {
-  const CalendarWidget({super.key});
+  const CalendarWidget({
+    super.key,
+    this.pendingMobileTabIndex,
+  });
+
+  final ValueNotifier<int?>? pendingMobileTabIndex;
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
@@ -76,9 +84,35 @@ class _CalendarWidgetState
       GlobalKey<NavigatorState>();
 
   @override
+  void initState() {
+    super.initState();
+    _consumePendingMobileTabIndex(animate: false);
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _consumePendingMobileTabIndex(animate: true);
+  }
+
+  @override
   void dispose() {
     _hoverTitleController.dispose();
     super.dispose();
+  }
+
+  void _consumePendingMobileTabIndex({required bool animate}) {
+    final notifier = widget.pendingMobileTabIndex;
+    if (notifier == null) return;
+    final pending = notifier.value;
+    if (pending == null) return;
+    final resolved = pending.clamp(0, mobileTabController.length - 1);
+    if (animate && mobileTabController.index != resolved) {
+      mobileTabController.animateTo(resolved);
+    } else {
+      mobileTabController.index = resolved;
+    }
+    notifier.value = null;
   }
 
   @override
@@ -131,6 +165,14 @@ class _CalendarWidgetState
     Widget tabSwitcher,
     Widget cancelBucket,
   ) {
+    final env = EnvScope.of(context);
+    if (env.navPlacement == NavPlacement.bottom) {
+      return _CalendarMobileBottomBar(
+        tabSwitcher: tabSwitcher,
+        cancelBucket: cancelBucket,
+        onHomePressed: () => context.read<ChatsCubit>().toggleCalendar(),
+      );
+    }
     final colors = context.colorScheme;
     return CalendarMobileTabShell(
       tabBar: tabSwitcher,
@@ -355,6 +397,123 @@ class CalendarSurfaceNavigator extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CalendarMobileBottomBar extends StatelessWidget {
+  const _CalendarMobileBottomBar({
+    required this.tabSwitcher,
+    required this.cancelBucket,
+    required this.onHomePressed,
+  });
+
+  final Widget tabSwitcher;
+  final Widget cancelBucket;
+  final VoidCallback onHomePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(top: context.borderSide),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.s,
+              vertical: spacing.xs,
+            ),
+            child: Row(
+              children: [
+                _CalendarBottomNavItem(
+                  label: Text(l10n.homeTabChats),
+                  icon: Icon(
+                    LucideIcons.home,
+                    size: sizing.menuItemIconSize,
+                  ),
+                  onPressed: onHomePressed,
+                ),
+                Expanded(child: tabSwitcher),
+                _CalendarSettingsBottomNavItem(
+                  label: l10n.settingsButtonLabel,
+                ),
+              ],
+            ),
+          ),
+          cancelBucket,
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarBottomNavItem extends StatelessWidget {
+  const _CalendarBottomNavItem({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final Widget label;
+  final Widget icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final textStyle = context.textTheme.small;
+    return AxiButton.ghost(
+      size: AxiButtonSize.sm,
+      onPressed: onPressed,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          SizedBox(height: spacing.xxs),
+          DefaultTextStyle.merge(
+            style: textStyle,
+            textAlign: TextAlign.center,
+            child: label,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarSettingsBottomNavItem extends StatelessWidget {
+  const _CalendarSettingsBottomNavItem({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, state) {
+        final sizing = context.sizing;
+        return _CalendarBottomNavItem(
+          label: Text(label),
+          icon: AxiAvatar(
+            jid: state.jid,
+            subscription: Subscription.both,
+            avatarPath: state.avatarPath,
+            presence: null,
+            status: null,
+            active: false,
+            size: sizing.iconButtonIconSize,
+          ),
+          onPressed: () =>
+              context.push(const ProfileRoute().location, extra: context.read),
+        );
+      },
     );
   }
 }

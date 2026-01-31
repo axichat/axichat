@@ -243,12 +243,18 @@ class _CalendarAvailabilityEditorSheetState
           ),
         )
         .toList(growable: false);
-    final List<DateTime> starts = drafts.map((draft) => draft.start!).toList();
-    final List<DateTime> ends = drafts.map((draft) => draft.end!).toList();
-    starts.sort();
-    ends.sort();
-    final DateTime rangeStart = starts.first;
-    final DateTime rangeEnd = ends.last;
+    DateTime rangeStart = drafts.first.start!;
+    DateTime rangeEnd = drafts.first.end!;
+    for (final draft in drafts.skip(1)) {
+      final DateTime start = draft.start!;
+      final DateTime end = draft.end!;
+      if (start.isBefore(rangeStart)) {
+        rangeStart = start;
+      }
+      if (end.isAfter(rangeEnd)) {
+        rangeEnd = end;
+      }
+    }
     final CalendarIcsMeta nextMeta = _updatedAvailabilityMeta(
       _baseAvailability?.icsMeta,
     );

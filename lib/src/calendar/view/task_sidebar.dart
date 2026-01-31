@@ -715,11 +715,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                       onReorderPath: _handleCriticalPathReorder,
                       taskTileBuilder: (task, trailing,
                               {bool requiresLongPress = false}) =>
-                          _buildDraggableSidebarTaskTile(
-                        task,
+                          _SidebarDraggableTaskTile<B>(
+                        host: this,
+                        task: task,
+                        uiState: uiState,
                         trailing: trailing,
                         requiresLongPress: requiresLongPress,
-                        uiState: uiState,
                       ),
                       isExpanded: _criticalPathsExpanded,
                       onToggleExpanded: _toggleCriticalPathsExpanded,
@@ -989,8 +990,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           trailing, {
                           bool requiresLongPress = false,
                         }) =>
-                            _buildDraggableSidebarTaskTile(
-                          task,
+                            _SidebarDraggableTaskTile<B>(
+                          host: this,
+                          task: task,
                           uiState: uiState,
                           trailing: trailing,
                           requiresLongPress: requiresLongPress,
@@ -1972,31 +1974,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _sidebarController.endResize();
   }
 
-  Widget _wrapWithSidebarContextMenu({
-    required CalendarTask task,
-    required Widget child,
-  }) {
-    return AxiContextMenuRegion(
-      items: _sidebarContextMenuItems(task),
-      child: child,
-    );
-  }
-
-  Widget _buildDraggableSidebarTaskTile(
-    CalendarTask task, {
-    required CalendarSidebarState uiState,
-    Widget? trailing,
-    bool requiresLongPress = false,
-  }) {
-    return _SidebarDraggableTaskTile<B>(
-      host: this,
-      task: task,
-      uiState: uiState,
-      trailing: trailing,
-      requiresLongPress: requiresLongPress,
-    );
-  }
-
   Widget buildSearchTaskTile(
     CalendarTask task, {
     Widget? trailing,
@@ -2489,13 +2466,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   List<CalendarTask> _sortTasksByDeadline(List<CalendarTask> tasks) {
     final List<CalendarTask> tasksCopy = List.from(tasks);
+    final DateTime now = DateTime.now();
+    final DateTime soonThreshold = now.add(const Duration(hours: 24));
     tasksCopy.sort((a, b) {
-      final now = DateTime.now();
-
       int getDeadlineCategory(DateTime? deadline) {
         if (deadline == null) return 4; // No deadline
         if (deadline.isBefore(now)) return 1; // Overdue
-        if (deadline.isBefore(now.add(const Duration(hours: 24)))) return 2;
+        if (deadline.isBefore(soonThreshold)) return 2;
         return 3; // Future
       }
 
@@ -4984,6 +4961,21 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
   }
 }
 
+class _SidebarContextMenuWrapper extends StatelessWidget {
+  const _SidebarContextMenuWrapper({
+    required this.items,
+    required this.child,
+  });
+
+  final List<Widget> items;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiContextMenuRegion(items: items, child: child);
+  }
+}
+
 class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatefulWidget {
   const _SidebarTaskTile({
     required this.host,
@@ -5350,7 +5342,10 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     }
 
     if (enableInteraction && allowContextMenu && host._hasPrecisePointerInput) {
-      tile = host._wrapWithSidebarContextMenu(task: task, child: tile);
+      tile = _SidebarContextMenuWrapper(
+        items: host._sidebarContextMenuItems(task),
+        child: tile,
+      );
     }
 
     return CalendarTaskTitleHoverReporter(

@@ -2977,15 +2977,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         .map((task) {
       final preview = _taskInteractionController.resizePreviews[task.id];
       return preview ?? task;
-    }).toList()
-      ..sort((a, b) {
-        final DateTime? aTime = a.scheduledTime;
-        final DateTime? bTime = b.scheduledTime;
-        if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        return aTime.compareTo(bTime);
-      });
+    }).toList();
   }
 
   List<CalendarAvailabilityWindow> _resolveAvailabilityWindows() {

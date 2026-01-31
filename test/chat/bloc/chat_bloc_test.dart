@@ -29,6 +29,10 @@ ChatSettingsSnapshot _defaultChatSettings() => const ChatSettingsSnapshot(
       chatReadReceipts: true,
       emailReadReceipts: false,
       shareTokenSignatureEnabled: true,
+      autoDownloadImages: true,
+      autoDownloadVideos: false,
+      autoDownloadDocuments: false,
+      autoDownloadArchives: false,
     );
 
 void _mockEmailSync(MockEmailService service) {

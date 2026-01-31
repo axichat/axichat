@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -67,7 +68,8 @@ class CalendarSyncManager {
       _sendSnapshotFile;
   final CalendarSyncState Function() _readSyncState;
   final Future<void> Function(CalendarSyncState) _writeSyncState;
-  final List<CalendarSyncOutbound> _pendingEnvelopes = <CalendarSyncOutbound>[];
+  final ListQueue<CalendarSyncOutbound> _pendingEnvelopes =
+      ListQueue<CalendarSyncOutbound>();
   Future<void>? _pendingFlush;
   Timer? _batchFlushTimer;
 
@@ -769,7 +771,7 @@ class CalendarSyncManager {
       while (_pendingEnvelopes.isNotEmpty) {
         final envelope = _pendingEnvelopes.first;
         await _sendCalendarMessage(envelope);
-        _pendingEnvelopes.removeAt(0);
+        _pendingEnvelopes.removeFirst();
       }
     } finally {
       _pendingFlush = null;

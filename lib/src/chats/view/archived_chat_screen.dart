@@ -118,6 +118,11 @@ class ArchivedChatScreen extends StatelessWidget {
                 emailReadReceipts: settingsCubit.state.emailReadReceipts,
                 shareTokenSignatureEnabled:
                     settingsCubit.state.shareTokenSignatureEnabled,
+                autoDownloadImages: settingsCubit.state.autoDownloadImages,
+                autoDownloadVideos: settingsCubit.state.autoDownloadVideos,
+                autoDownloadDocuments:
+                    settingsCubit.state.autoDownloadDocuments,
+                autoDownloadArchives: settingsCubit.state.autoDownloadArchives,
               ),
             ),
           ),

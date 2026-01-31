@@ -25,6 +25,7 @@ import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
@@ -49,6 +50,7 @@ import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -58,7 +60,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/profile/view/profile_tile.dart';
+import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -96,6 +98,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
+  final ValueNotifier<int?> _pendingCalendarTabIndex =
+      ValueNotifier<int?>(null);
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
@@ -115,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
       HardwareKeyboard.instance.removeHandler(handler);
     }
     _shortcutFocusNode.dispose();
+    _pendingCalendarTabIndex.dispose();
     _clearOpenChatHistoryEntry();
     _clearOpenCalendarHistoryEntry();
     super.dispose();
@@ -254,6 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return _HomeContent(
       storageManager: storageManager,
       shortcutFocusNode: _shortcutFocusNode,
+      pendingCalendarTabIndex: _pendingCalendarTabIndex,
       railCollapsed: _railCollapsed,
       onToggleNavRail: () {
         setState(() {
@@ -267,7 +273,16 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
       onHomeKeyEvent: _handleHomeKeyEvent,
+      onCalendarTabRequested: _handleCalendarTabRequested,
     );
+  }
+
+  void _handleCalendarTabRequested(int index) {
+    _pendingCalendarTabIndex.value = index;
+    final chatsCubit = context.read<ChatsCubit>();
+    if (!chatsCubit.state.openCalendar) {
+      chatsCubit.toggleCalendar();
+    }
   }
 }
 
@@ -406,20 +421,24 @@ class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.storageManager,
     required this.shortcutFocusNode,
+    required this.pendingCalendarTabIndex,
     required this.railCollapsed,
     required this.onToggleNavRail,
     required this.onRailCollapsedChanged,
     required this.onSyncHomeHistoryEntries,
     required this.onHomeKeyEvent,
+    required this.onCalendarTabRequested,
   });
 
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
+  final ValueNotifier<int?> pendingCalendarTabIndex;
   final bool railCollapsed;
   final VoidCallback onToggleNavRail;
   final ValueChanged<bool> onRailCollapsedChanged;
   final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
   final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
+  final ValueChanged<int> onCalendarTabRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -563,6 +582,14 @@ class _HomeContent extends StatelessWidget {
                                             settings.emailReadReceipts,
                                         shareTokenSignatureEnabled:
                                             settings.shareTokenSignatureEnabled,
+                                        autoDownloadImages:
+                                            settings.autoDownloadImages,
+                                        autoDownloadVideos:
+                                            settings.autoDownloadVideos,
+                                        autoDownloadDocuments:
+                                            settings.autoDownloadDocuments,
+                                        autoDownloadArchives:
+                                            settings.autoDownloadArchives,
                                       ),
                                     );
                                   },
@@ -619,6 +646,9 @@ class _HomeContent extends StatelessWidget {
                                       navPlacement != NavPlacement.rail,
                                   navRailCollapsed: railCollapsed,
                                   onToggleNavRail: onToggleNavRail,
+                                  calendarAvailable: hasCalendarBloc,
+                                  onCalendarTabRequested:
+                                      onCalendarTabRequested,
                                 ),
                                 secondaryChild: chatPane,
                               ),
@@ -633,7 +663,11 @@ class _HomeContent extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (navRail != null) navRail,
-                            const Expanded(child: CalendarWidget()),
+                            Expanded(
+                              child: CalendarWidget(
+                                pendingMobileTabIndex: pendingCalendarTabIndex,
+                              ),
+                            ),
                           ],
                         );
                       }
@@ -771,14 +805,18 @@ class _HomeContent extends StatelessWidget {
                 },
               ),
             BlocProvider(
-              create: (context) =>
-                  ConnectivityCubit(xmppBase: context.read<XmppService>()),
+              create: (context) {
+                final endpointConfig =
+                    context.read<AuthenticationCubit>().endpointConfig;
+                return ConnectivityCubit(
+                  xmppBase: context.read<XmppService>(),
+                  emailEnabled: endpointConfig.enableSmtp,
+                  emailService: endpointConfig.enableSmtp
+                      ? context.read<EmailService>()
+                      : null,
+                );
+              },
             ),
-            if (context.read<AuthenticationCubit>().endpointConfig.enableSmtp)
-              BlocProvider(
-                create: (context) =>
-                    EmailSyncCubit(emailService: context.read<EmailService>()),
-              ),
           ],
           child: _HomeCoordinatorBridge(
             storage: calendarStorage,

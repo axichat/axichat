@@ -4,34 +4,86 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 part 'connectivity_state.dart';
 
 class ConnectivityCubit extends Cubit<ConnectivityState> {
-  ConnectivityCubit({required XmppBase xmppBase})
-      : _xmppBase = xmppBase,
-        super(stateMap(xmppBase.connectionState)) {
+  ConnectivityCubit({
+    required XmppBase xmppBase,
+    required bool emailEnabled,
+    EmailService? emailService,
+  })  : _xmppBase = xmppBase,
+        _emailEnabled = emailEnabled,
+        _emailService = emailService,
+        super(
+          stateMap(
+            xmppBase.connectionState,
+            emailState: emailService?.syncState ?? const EmailSyncState.ready(),
+            emailEnabled: emailEnabled,
+          ),
+        ) {
     _connectivitySubscription = _xmppBase.connectivityStream.listen(
-      (e) => emit(stateMap(e)),
+      (e) => emit(
+        stateMap(
+          e,
+          emailState: state.emailState,
+          emailEnabled: state.emailEnabled,
+        ),
+      ),
+    );
+    _emailSyncSubscription = _emailService?.syncStateStream.listen(
+      _handleEmailSyncState,
     );
   }
 
-  static ConnectivityState stateMap(ConnectionState connectionState) =>
+  static ConnectivityState stateMap(
+    ConnectionState connectionState, {
+    required EmailSyncState emailState,
+    required bool emailEnabled,
+  }) =>
       switch (connectionState) {
-        ConnectionState.connected => const ConnectivityConnected(),
-        ConnectionState.connecting => const ConnectivityConnecting(),
-        ConnectionState.notConnected => const ConnectivityNotConnected(),
-        ConnectionState.error => const ConnectivityError(),
+        ConnectionState.connected => ConnectivityConnected(
+            emailState: emailState,
+            emailEnabled: emailEnabled,
+          ),
+        ConnectionState.connecting => ConnectivityConnecting(
+            emailState: emailState,
+            emailEnabled: emailEnabled,
+          ),
+        ConnectionState.notConnected => ConnectivityNotConnected(
+            emailState: emailState,
+            emailEnabled: emailEnabled,
+          ),
+        ConnectionState.error => ConnectivityError(
+            emailState: emailState,
+            emailEnabled: emailEnabled,
+          ),
       };
 
   final XmppBase _xmppBase;
+  final EmailService? _emailService;
+  final bool _emailEnabled;
 
   late final StreamSubscription<ConnectionState> _connectivitySubscription;
+  StreamSubscription<EmailSyncState>? _emailSyncSubscription;
+
+  void _handleEmailSyncState(EmailSyncState emailState) {
+    emit(
+      stateMap(
+        _xmppBase.connectionState,
+        emailState: emailState,
+        emailEnabled: _emailEnabled,
+      ),
+    );
+  }
 
   @override
   Future<void> close() async {
     await _connectivitySubscription.cancel();
+    await _emailSyncSubscription?.cancel();
     return super.close();
   }
 }

@@ -14,7 +14,6 @@ import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
-import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -70,7 +69,6 @@ class ProfileScreen extends StatelessWidget {
         providers: [
           BlocProvider.value(value: locate<ProfileCubit>()),
           BlocProvider.value(value: locate<ConnectivityCubit>()),
-          BlocProvider.value(value: locate<EmailSyncCubit>()),
           BlocProvider(
             create: (context) =>
                 EmailContactImportCubit(emailService: locate<EmailService>()),
@@ -167,13 +165,13 @@ class _ProfileBodyState extends State<_ProfileBody> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
-      builder: (context, state) {
+      builder: (context, connectivityState) {
         final l10n = context.l10n;
         final colors = context.colorScheme;
         final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
         final ConnectionState connectionState = _xmppStateFor(
-          state,
+          connectivityState,
           demoOffline: demoOffline,
         );
         return Scaffold(
@@ -671,15 +669,16 @@ class _ProfileCardSection extends StatelessWidget {
                 ),
                 Align(
                   alignment: Alignment.center,
-                  child: BlocBuilder<EmailSyncCubit, EmailSyncState>(
-                    builder: (context, emailSyncState) {
-                      final displayedEmailState = demoOffline
-                          ? const EmailSyncState.ready()
-                          : emailSyncState;
+                  child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+                    builder: (context, emailConnectivityState) {
                       return SessionCapabilityIndicators(
                         xmppState: connectionState,
-                        emailState: displayedEmailState,
-                        emailEnabled: true,
+                        emailState: demoOffline
+                            ? const EmailSyncState.ready()
+                            : emailConnectivityState.emailState,
+                        emailEnabled: demoOffline
+                            ? true
+                            : emailConnectivityState.emailEnabled,
                         compact: !wideCard,
                       );
                     },
