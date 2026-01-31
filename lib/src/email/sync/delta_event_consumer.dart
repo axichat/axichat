@@ -1704,12 +1704,16 @@ class DeltaEventConsumer {
       final queue =
           _serverOnlyTrimQueues.putIfAbsent(key, () => EmailAsyncQueue());
       queue.run(() async {
-        final db = await _db();
-        await db.trimChatMessages(
-          jid: chatJid,
-          maxMessages: serverOnlyChatMessageCap,
-          deltaAccountId: deltaAccountId,
-        );
+        try {
+          final db = await _db();
+          await db.trimChatMessages(
+            jid: chatJid,
+            maxMessages: serverOnlyChatMessageCap,
+            deltaAccountId: deltaAccountId,
+          );
+        } on Exception {
+          // Ignore trim failures; next queued trim will retry.
+        }
       });
     });
   }

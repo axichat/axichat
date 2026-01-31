@@ -129,10 +129,16 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     if (widget.selectedChats.isEmpty) return;
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
+    final loadChatHistory = context.read<ChatsCubit>().loadChatHistory;
+    final countChatHistory =
+        context.read<ChatsCubit>().countChatHistoryMessages;
+    final loadChatHistoryPage = context.read<ChatsCubit>().loadChatHistoryPage;
+    final scheduleExportCleanup =
+        context.read<ChatsCubit>().scheduleExportCleanup;
     final String? fileLabel =
         widget.selectedChats.length == 1 ? null : l10n.chatsExportFileLabel;
     final confirmed = await _confirmChatExport();
-    if (!context.mounted || !confirmed) return;
+    if (!mounted || !confirmed) return;
     setState(() {
       _exporting = true;
     });
@@ -140,9 +146,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: widget.selectedChats,
-        loadHistory: context.read<ChatsCubit>().loadChatHistory,
-        countHistory: context.read<ChatsCubit>().countChatHistoryMessages,
-        loadHistoryPage: context.read<ChatsCubit>().loadChatHistoryPage,
+        loadHistory: loadChatHistory,
+        countHistory: countChatHistory,
+        loadHistoryPage: loadChatHistoryPage,
         fileLabel: fileLabel,
       );
       exportFile = result.file;
@@ -177,7 +183,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       );
     } finally {
       if (exportFile != null) {
-        context.read<ChatsCubit>().scheduleExportCleanup(exportFile);
+        scheduleExportCleanup(exportFile);
       }
       if (mounted) {
         setState(() {
@@ -189,6 +195,8 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
 
   Future<void> _confirmDelete() async {
     final l10n = context.l10n;
+    final deleteSelectedChats =
+        context.read<ChatsCubit>().bulkDeleteSelectedChats;
     final confirmed = await confirm(
       context,
       title: l10n.chatSelectionDeleteConfirmTitle,
@@ -199,7 +207,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       barrierDismissible: false,
     );
     if (!mounted || confirmed != true) return;
-    await context.read<ChatsCubit>().bulkDeleteSelectedChats();
+    await deleteSelectedChats();
   }
 
   Future<bool> _confirmChatExport() async {

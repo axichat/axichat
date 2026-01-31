@@ -909,7 +909,7 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
   }
 
   Future<List<Reaction>> _mapReactions(
-    JoinedSelectStatement<$ReactionsTable, Reaction> query,
+    JoinedSelectStatement<HasResultSet, dynamic> query,
   ) async {
     final rows = await query.get();
     return rows.map((row) => row.readTable(reactions)).toList();

@@ -13,6 +13,7 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -65,7 +66,6 @@ class RoomMembersSheet extends StatelessWidget {
     final avatarPath = roomAvatarPath?.trim();
     final canEditAvatar = roomState.canEditAvatar;
     final showAvatarSection = avatarPath?.isNotEmpty == true || canEditAvatar;
-    final sections = memberSections;
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -144,7 +144,7 @@ class RoomMembersSheet extends StatelessWidget {
               spacing.m,
               spacing.m,
             ),
-            child: sections.isEmpty
+            child: memberSections.isEmpty
                 ? Center(
                     child: Text(
                       l10n.mucNoMembers,
@@ -156,7 +156,7 @@ class RoomMembersSheet extends StatelessWidget {
                 : ListView.separated(
                     padding: EdgeInsets.zero,
                     itemBuilder: (context, index) {
-                      final group = sections[index];
+                      final group = memberSections[index];
                       return _MemberSection(
                         kind: group.kind,
                         members: group.members,
@@ -167,7 +167,7 @@ class RoomMembersSheet extends StatelessWidget {
                       );
                     },
                     separatorBuilder: (_, __) => SizedBox(height: spacing.s),
-                    itemCount: sections.length,
+                    itemCount: memberSections.length,
                   ),
           ),
         ),
@@ -553,11 +553,7 @@ String _avatarKey(Occupant occupant) {
   if (realJid == null || realJid.isEmpty) {
     return occupant.nick;
   }
-  final separatorIndex = realJid.indexOf('/');
-  if (separatorIndex <= 0) {
-    return realJid;
-  }
-  return realJid.substring(0, separatorIndex);
+  return bareAddress(realJid) ?? realJid;
 }
 
 class RoomAvatarEditorSheet extends StatefulWidget {

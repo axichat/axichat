@@ -330,8 +330,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         notificationService
           ..mute = state.mute
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
-        await xmppService.updateMessageStorageMode(state.messageStorageMode);
-        emailService.updateMessageStorageMode(xmppService.messageStorageMode);
         emailService.updateDefaultChatAttachmentAutoDownload(
           state.defaultChatAttachmentAutoDownload,
         );

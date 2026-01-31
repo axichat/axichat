@@ -184,7 +184,11 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     required ProfileExportKind kind,
     required MessageTransport transport,
     required String fileLabel,
-    ChatHistoryMessageLineFormatter? lineFormatter,
+    String? Function({
+      required Chat chat,
+      required Message message,
+      required intl.DateFormat format,
+    })? lineFormatter,
   }) async {
     const int chatExportStart = 0;
     const int chatExportEnd = 0;

@@ -5,7 +5,6 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/settings/app_language.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -99,10 +98,6 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void toggleShareTokenSignature(bool enabled) {
     emit(state.copyWith(shareTokenSignatureEnabled: enabled));
-  }
-
-  void updateMessageStorageMode(MessageStorageMode mode) {
-    emit(state.copyWith(messageStorageMode: mode));
   }
 
   void toggleHideCompletedScheduled(bool hide) {

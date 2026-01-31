@@ -117,9 +117,9 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
-      Future<void>(() async {
-        await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
-      });
+      unawaited(
+        _cleanupSeedAttachmentMetadata(context.read<DraftCubit>()),
+      );
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -200,7 +200,7 @@ class _DraftFormState extends State<DraftForm> {
 
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
-        final chats = chatsState.items;
+        final chats = chatsState.items ?? const <Chat>[];
         _scheduleRecipientsInitialization(chats);
         final autovalidateMode = _showValidationMessages
             ? AutovalidateMode.always
@@ -659,6 +659,9 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleAttachmentAdded() async {
     if (_addingAttachment) return;
     setState(() => _addingAttachment = true);
+    final attachmentInaccessibleMessage =
+        context.l10n.draftAttachmentInaccessible;
+    final attachmentFailedMessage = context.l10n.draftAttachmentFailed;
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: false,
@@ -670,7 +673,8 @@ class _DraftFormState extends State<DraftForm> {
       final file = result.files.single;
       final path = file.path;
       if (path == null) {
-        _showToast(context.l10n.draftAttachmentInaccessible);
+        if (!mounted) return;
+        _showToast(attachmentInaccessibleMessage);
         return;
       }
       final pendingId = _nextPendingAttachmentId();
@@ -695,15 +699,18 @@ class _DraftFormState extends State<DraftForm> {
         path: path,
         fileName: fileName,
       );
+      if (!mounted) return;
       attachment = attachment.copyWith(mimeType: resolvedMimeType);
       if (attachment.sizeBytes <= 0) {
         try {
           final resolvedSize = await File(path).length();
+          if (!mounted) return;
           attachment = attachment.copyWith(sizeBytes: resolvedSize);
         } on Exception {
           // Best-effort. Keep placeholder size until optimization completes.
         }
       }
+      if (!mounted) return;
       attachment =
           await context.read<DraftCubit>().optimizeAttachment(attachment);
       if (!mounted) return;
@@ -717,23 +724,21 @@ class _DraftFormState extends State<DraftForm> {
             .toList();
       });
     } on PlatformException catch (error) {
-      if (mounted) {
-        setState(() {
-          _pendingAttachments = _pendingAttachments
-              .where((pending) => !pending.isPreparing)
-              .toList();
-        });
-      }
-      _showToast(error.message ?? context.l10n.draftAttachmentFailed);
+      if (!mounted) return;
+      setState(() {
+        _pendingAttachments = _pendingAttachments
+            .where((pending) => !pending.isPreparing)
+            .toList();
+      });
+      _showToast(error.message ?? attachmentFailedMessage);
     } on Exception {
-      if (mounted) {
-        setState(() {
-          _pendingAttachments = _pendingAttachments
-              .where((pending) => !pending.isPreparing)
-              .toList();
-        });
-      }
-      _showToast(context.l10n.draftAttachmentFailed);
+      if (!mounted) return;
+      setState(() {
+        _pendingAttachments = _pendingAttachments
+            .where((pending) => !pending.isPreparing)
+            .toList();
+      });
+      _showToast(attachmentFailedMessage);
     } finally {
       if (mounted) {
         setState(() => _addingAttachment = false);
@@ -805,6 +810,7 @@ class _DraftFormState extends State<DraftForm> {
       metadataIds: result.attachmentMetadataIds,
       expectedAttachmentIds: attachmentIds,
     );
+    if (!mounted) return;
     if (wasNewDraft && widget.attachmentMetadataIds.isNotEmpty) {
       final Set<String> retainedMetadataIds =
           result.attachmentMetadataIds.toSet();
@@ -961,6 +967,7 @@ class _DraftFormState extends State<DraftForm> {
       if (id != null) {
         await context.read<DraftCubit>().deleteDraft(id: id!);
       }
+      if (!mounted) return;
       if (shouldCleanupSeedAttachments) {
         await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
       }
@@ -1071,7 +1078,7 @@ class _DraftFormState extends State<DraftForm> {
         _sendingDraft = false;
         _sendCompletionHandled = true;
       });
-      _showToast(l10n.draftSendFailed);
+      _showToast(context.l10n.draftSendFailed);
       return;
     }
     if (!mounted || !succeeded) {
@@ -1275,8 +1282,10 @@ class _DraftFormState extends State<DraftForm> {
     if (!mounted) return;
     final attachment = pending.attachment;
     final file = File(attachment.path);
+    final missingMessage = context.l10n.draftFileMissing(attachment.path);
     if (!await file.exists()) {
-      _showToast(context.l10n.draftFileMissing(attachment.path));
+      if (!mounted) return;
+      _showToast(missingMessage);
       return;
     }
     if (!mounted) return;
@@ -1565,7 +1574,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
         ? task.description!.trim()
         : null;
     final borderRadius = context.radius;
-    final shadowColor = colors.shadow.withValues(
+    final shadowColor = colors.foreground.withValues(
       alpha: context.motion.tapSplashAlpha,
     );
     return Material(

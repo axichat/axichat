@@ -174,7 +174,6 @@ const double _chatAppBarTitleMinWidth = 220.0;
 const double _chatAppBarTitleMaxWidth = 420.0;
 const double _chatAppBarTitleWidthScale = 0.45;
 const double _chatAppBarCollapsedLeadingWidth = 0.0;
-const double _chatAppBarRenameIconSize = 16.0;
 const double _unknownSenderCardPadding = 12.0;
 const double _unknownSenderIconSize = 18.0;
 const double _unknownSenderTextSpacing = 8.0;
@@ -288,13 +287,15 @@ const double _inviteAttachmentInlineActionsMinWidth =
         (_inviteAttachmentRowSpacing * 2) +
         _inviteAttachmentActionRowMinWidth;
 const _selectionExtrasViewportGap = 50.0;
-const _reactionManagerRadius = 18.0;
-const _reactionManagerQuickSpacing = 8.0;
-const _reactionManagerPadding = EdgeInsets.symmetric(
-  horizontal: 14,
-  vertical: 12,
-);
-const _reactionManagerShadowGap = 16.0;
+double _reactionManagerQuickSpacing(BuildContext context) => context.spacing.s;
+
+EdgeInsets _reactionManagerPadding(BuildContext context) =>
+    EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
+    );
+
+double _reactionManagerShadowGap(BuildContext context) => context.spacing.m;
 const _selectionHeadroomTolerance = 1.0;
 final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
   0,
@@ -423,25 +424,26 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
       listener: (context, state) {
         _syncController(state.query);
         if (state.active) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || _focusNode.hasFocus) return;
-            _focusNode.requestFocus();
-          });
+          if (_focusNode.hasFocus) return;
+          _focusNode.requestFocus();
         } else if (_focusNode.hasFocus) {
           _focusNode.unfocus();
         }
       },
       builder: (context, state) {
         final l10n = context.l10n;
+        final spacing = context.spacing;
+        final colors = context.colorScheme;
         final messageFilterOptions = _messageFilterOptions(l10n);
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.m,
+            vertical: spacing.s,
+          ),
           decoration: BoxDecoration(
-            color: context.colorScheme.card,
-            border: Border(
-              bottom: BorderSide(color: context.colorScheme.border),
-            ),
+            color: colors.card,
+            border: Border(bottom: context.borderSide),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -457,16 +459,17 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                       onClear: _controller.clear,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ShadButton.ghost(
-                    size: ShadButtonSize.sm,
+                  SizedBox(width: spacing.s),
+                  AxiButton(
+                    size: AxiButtonSize.sm,
+                    variant: AxiButtonVariant.ghost,
                     onPressed: () =>
                         context.read<ChatSearchCubit?>()?.setActive(false),
                     child: Text(l10n.commonCancel),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.s),
               Row(
                 children: [
                   Expanded(
@@ -488,7 +491,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                           Text(_sortLabel(value, l10n)),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: spacing.s),
                   Expanded(
                     child: AxiSelect<MessageTimelineFilter>(
                       initialValue: state.filter,
@@ -513,7 +516,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.s),
               Row(
                 children: [
                   Expanded(
@@ -617,44 +620,41 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
   }
 }
 
-class _SizeReportingWidget extends SingleChildRenderObjectWidget {
+class _SizeReportingWidget extends StatefulWidget {
   const _SizeReportingWidget({
     required this.onSizeChange,
-    required super.child,
+    required this.child,
   });
 
   final ValueChanged<Size> onSizeChange;
+  final Widget child;
 
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _SizeReportingRenderObject(onSizeChange);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant _SizeReportingRenderObject renderObject,
-  ) {
-    renderObject.onSizeChange = onSizeChange;
-  }
+  State<_SizeReportingWidget> createState() => _SizeReportingWidgetState();
 }
 
-class _SizeReportingRenderObject extends RenderProxyBox {
-  _SizeReportingRenderObject(this.onSizeChange);
-
-  ValueChanged<Size> onSizeChange;
-  Size? _lastSize;
+class _SizeReportingWidgetState extends State<_SizeReportingWidget> {
+  final GlobalKey _childKey = GlobalKey();
 
   @override
-  void performLayout() {
-    super.performLayout();
-    final newSize = size;
-    if (_lastSize == newSize) {
-      return;
-    }
-    _lastSize = newSize;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      onSizeChange(newSize);
-    });
+  Widget build(BuildContext context) {
+    return NotificationListener<SizeChangedLayoutNotification>(
+      onNotification: (_) {
+        final renderObject = _childKey.currentContext?.findRenderObject();
+        final renderBox = renderObject is RenderBox ? renderObject : null;
+        if (renderBox == null || !renderBox.hasSize) {
+          return false;
+        }
+        widget.onSizeChange(renderBox.size);
+        return false;
+      },
+      child: SizeChangedLayoutNotifier(
+        child: KeyedSubtree(
+          key: _childKey,
+          child: widget.child,
+        ),
+      ),
+    );
   }
 }
 
@@ -992,7 +992,7 @@ class _ChatState extends State<Chat> {
   late final TextEditingController _subjectController;
   late final FocusNode _subjectFocusNode;
   late final FocusNode _attachmentButtonFocusNode;
-  late final ScrollController _scrollController;
+  late ScrollController _scrollController;
   bool _composerHasText = false;
   bool get _composerHasContent =>
       _composerHasText || _pendingCalendarTaskIcs != null;
@@ -1036,10 +1036,8 @@ class _ChatState extends State<Chat> {
   double _selectionControlsHeight = 0;
   double _bottomSectionHeight = 0.0;
   bool _selectionAutoscrollActive = false;
-  bool _selectionAutoscrollScheduled = false;
   bool _selectionAutoscrollInProgress = false;
   double _selectionAutoscrollAccumulated = 0.0;
-  bool _selectionControlsMeasurementPending = false;
   int? _outsideTapPointer;
   Offset? _outsideTapStart;
   var _sendingAttachment = false;
@@ -1711,12 +1709,18 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  void _replaceScrollController({required double initialOffset}) {
+    _scrollController.removeListener(_handleScrollChanged);
+    _scrollController.dispose();
+    _scrollController = ScrollController(initialScrollOffset: initialOffset);
+    _scrollController.addListener(_handleScrollChanged);
+  }
+
   void _handleScrollChanged() => _persistScrollOffset();
 
   void _restoreScrollOffsetForCurrentChat() {
     final target = _restoreScrollOffset();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+    if (_scrollController.hasClients) {
       final position = _scrollController.position;
       if (!position.hasPixels) return;
       final maxExtent = position.maxScrollExtent;
@@ -1724,15 +1728,18 @@ class _ChatState extends State<Chat> {
       if (position.pixels != clamped) {
         _scrollController.jumpTo(clamped);
       }
-    });
+      return;
+    }
+    if (_scrollController.initialScrollOffset == target) {
+      return;
+    }
+    _replaceScrollController(initialOffset: target);
   }
 
   String? _nickFromSender(String senderJid) {
-    final slashIndex = senderJid.indexOf('/');
-    if (slashIndex == -1 || slashIndex + 1 >= senderJid.length) {
-      return null;
-    }
-    final nick = senderJid.substring(slashIndex + 1).trim();
+    final parsed = parseJid(senderJid);
+    if (parsed == null) return null;
+    final nick = parsed.resource.trim();
     return nick.isEmpty ? null : nick;
   }
 
@@ -2490,20 +2497,22 @@ class _ChatState extends State<Chat> {
     final action = await showAdaptiveBottomSheet<String>(
       context: context,
       showDragHandle: true,
-      dialogMaxWidth: 420,
+      dialogMaxWidth: context.sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
-        final colors = sheetContext.colorScheme;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
             title: Text(sheetContext.l10n.commonActions),
             onClose: () => Navigator.of(sheetContext).maybePop(),
           ),
           children: [
-            ListTile(
-              leading: Icon(LucideIcons.save, color: colors.primary),
-              title: Text(sheetContext.l10n.chatSaveAsDraft),
-              onTap: () => Navigator.of(sheetContext).pop('save'),
+            AxiListButton(
+              leading: Icon(
+                LucideIcons.save,
+                color: sheetContext.colorScheme.primary,
+              ),
+              onPressed: () => Navigator.of(sheetContext).pop('save'),
+              child: Text(sheetContext.l10n.chatSaveAsDraft),
             ),
           ],
         );
@@ -2808,12 +2817,13 @@ class _ChatState extends State<Chat> {
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      dialogMaxWidth: 520,
+      dialogMaxWidth: context.sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes, l10n);
-        final colors = Theme.of(sheetContext).colorScheme;
+        final colors = sheetContext.colorScheme;
+        final spacing = sheetContext.spacing;
         return BlocProvider.value(
           value: locate<ChatBloc>(),
           child: Builder(
@@ -2822,32 +2832,52 @@ class _ChatState extends State<Chat> {
                 header: AxiSheetHeader(
                   title: Text(l10n.chatAttachmentTooltip),
                   onClose: () => Navigator.of(sheetContext).maybePop(),
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  padding: EdgeInsets.fromLTRB(
+                    spacing.m,
+                    spacing.m,
+                    spacing.m,
+                    spacing.s,
+                  ),
                 ),
-                bodyPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                bodyPadding: EdgeInsets.fromLTRB(
+                  spacing.m,
+                  spacing.xs,
+                  spacing.m,
+                  spacing.m,
+                ),
                 children: [
-                  ListTile(
+                  AxiListButton(
                     leading: Icon(
                       attachmentIcon(attachment),
                       color: colors.primary,
                     ),
-                    title: Text(attachment.fileName),
-                    subtitle: Text(sizeLabel),
+                    onPressed: null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(attachment.fileName),
+                        Text(
+                          sizeLabel,
+                          style: context.textTheme.small.copyWith(
+                            color: colors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   if (attachment.isImage)
-                    ListTile(
+                    AxiListButton(
                       leading: const Icon(LucideIcons.eye),
-                      title: Text(l10n.chatAttachmentView),
-                      onTap: () {
+                      onPressed: () {
                         Navigator.of(sheetContext).pop();
                         _showAttachmentPreview(pending);
                       },
+                      child: Text(l10n.chatAttachmentView),
                     ),
                   if (pending.status == PendingAttachmentStatus.failed)
-                    ListTile(
+                    AxiListButton(
                       leading: const Icon(LucideIcons.refreshCw),
-                      title: Text(l10n.chatAttachmentRetry),
-                      onTap: () {
+                      onPressed: () {
                         Navigator.of(sheetContext).pop();
                         context.read<ChatBloc>().add(
                               ChatAttachmentRetryRequested(
@@ -2856,16 +2886,17 @@ class _ChatState extends State<Chat> {
                               ),
                             );
                       },
+                      child: Text(l10n.chatAttachmentRetry),
                     ),
-                  ListTile(
+                  AxiListButton(
                     leading: const Icon(LucideIcons.trash),
-                    title: Text(l10n.chatAttachmentRemove),
-                    onTap: () {
+                    onPressed: () {
                       Navigator.of(sheetContext).pop();
                       context.read<ChatBloc>().add(
                             ChatPendingAttachmentRemoved(pending.id),
                           );
                     },
+                    child: Text(l10n.chatAttachmentRemove),
                   ),
                 ],
               );
@@ -2876,7 +2907,7 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  void _toggleMessageSelection(Message message) {
+  Future<void> _toggleMessageSelection(Message message) async {
     if (widget.readOnly) return;
     final messageId = message.stanzaID;
     if (_multiSelectActive) {
@@ -2884,13 +2915,13 @@ class _ChatState extends State<Chat> {
       return;
     }
     if (_selectedMessageId == messageId) {
-      _clearMessageSelection();
+      await _clearMessageSelection();
     } else {
-      _selectMessage(messageId);
+      await _selectMessage(messageId);
     }
   }
 
-  void _clearMessageSelection() {
+  Future<void> _clearMessageSelection() async {
     if (_selectedMessageId == null) return;
     final accumulated = _selectionAutoscrollAccumulated;
     setState(() {
@@ -2900,20 +2931,16 @@ class _ChatState extends State<Chat> {
       _reactionManagerKey = null;
       _selectionSpacerHeight = 0;
       _selectionControlsHeight = 0;
-      _selectionControlsMeasurementPending = false;
       _selectionAutoscrollActive = false;
-      _selectionAutoscrollScheduled = false;
       _selectionAutoscrollInProgress = false;
       _selectionAutoscrollAccumulated = 0.0;
     });
     if (accumulated.abs() > 0.0) {
-      Future<void>(() async {
-        await _reboundSelectionScroll(accumulated);
-      });
+      await _reboundSelectionScroll(accumulated);
     }
   }
 
-  void _startMultiSelect(Message message) {
+  Future<void> _startMultiSelect(Message message) async {
     final messageId = message.stanzaID;
     if (widget.readOnly) return;
     if (_multiSelectedMessageIds.length == 1 &&
@@ -2921,7 +2948,7 @@ class _ChatState extends State<Chat> {
         _selectedMessageId == null) {
       return;
     }
-    _clearMessageSelection();
+    await _clearMessageSelection();
     setState(() {
       _multiSelectedMessageIds
         ..clear()
@@ -2947,6 +2974,54 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _syncSelectionCaches(ChatState state, {bool notify = true}) {
+    if (!mounted) return;
+    final messageById = <String, Message>{
+      for (final item in state.items) item.stanzaID: item,
+      ...state.quotedMessagesById,
+    };
+    final availableIds = messageById.keys.toSet();
+    final removedKeys = _messageKeys.keys
+        .where((id) => !availableIds.contains(id))
+        .toList(growable: false);
+    final removedSelections = _multiSelectedMessageIds
+        .where((id) => !availableIds.contains(id))
+        .toList(growable: false);
+    var didChange = false;
+    if (removedKeys.isNotEmpty) {
+      for (final id in removedKeys) {
+        _messageKeys.remove(id);
+      }
+      didChange = true;
+    }
+    for (final id in availableIds) {
+      if (_messageKeys.containsKey(id)) continue;
+      _messageKeys[id] = GlobalKey();
+      didChange = true;
+    }
+    if (removedSelections.isNotEmpty) {
+      _multiSelectedMessageIds.removeAll(removedSelections);
+      for (final id in removedSelections) {
+        _selectedMessageSnapshots.remove(id);
+      }
+      didChange = true;
+    }
+    if (_multiSelectedMessageIds.isNotEmpty) {
+      for (final id in _multiSelectedMessageIds) {
+        final message = messageById[id];
+        if (message == null) continue;
+        if (_selectedMessageSnapshots[id] == message) continue;
+        _selectedMessageSnapshots[id] = message;
+        didChange = true;
+      }
+    }
+    if (!didChange) return;
+    if (!notify) {
+      return;
+    }
+    setState(() {});
+  }
+
   void _clearMultiSelection() {
     if (_multiSelectedMessageIds.isEmpty) return;
     setState(() {
@@ -2966,11 +3041,8 @@ class _ChatState extends State<Chat> {
         .toList();
     if (missing.isEmpty) return;
     final missingSet = missing.toSet();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _multiSelectedMessageIds.removeWhere(missingSet.contains);
-      });
+    setState(() {
+      _multiSelectedMessageIds.removeWhere(missingSet.contains);
     });
   }
 
@@ -2999,18 +3071,10 @@ class _ChatState extends State<Chat> {
         missingIds.add(id);
       }
     }
-    if (missingIds.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _multiSelectedMessageIds.removeWhere(missingIds.contains);
-        });
-      });
-    }
     return selected;
   }
 
-  void _selectMessage(String messageId) {
+  Future<void> _selectMessage(String messageId) async {
     if (_selectedMessageId == messageId) return;
     if (_scrollController.hasClients) {
       _updateSelectionSpacerBase(_scrollController.position.viewportDimension);
@@ -3018,9 +3082,9 @@ class _ChatState extends State<Chat> {
     _selectionAutoscrollAccumulated = 0.0;
     setState(() {
       _selectedMessageId = messageId;
-      _activeSelectionExtrasKey = null;
-      _selectionActionBarKey = null;
-      _reactionManagerKey = null;
+      _activeSelectionExtrasKey = GlobalKey();
+      _selectionActionBarKey = GlobalKey();
+      _reactionManagerKey = GlobalKey();
       final baseHeadroom =
           _selectionSpacerBaseHeight > _selectionHeadroomTolerance
               ? _selectionSpacerBaseHeight
@@ -3029,12 +3093,10 @@ class _ChatState extends State<Chat> {
           baseHeadroom > _selectionHeadroomTolerance ? baseHeadroom : 0.0;
       _selectionAutoscrollActive = true;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await _primeSelectionHeadroomIfNeeded();
-      await _scrollSelectedMessageIntoView(messageId);
-      _scheduleSelectionAutoscroll();
-    });
+    if (!mounted) return;
+    _primeSelectionHeadroomIfNeeded();
+    await _scrollSelectedMessageIntoView(messageId);
+    await _scrollSelectionExtrasIntoView();
   }
 
   Future<void> _scrollSelectedMessageIntoView(String messageId) async {
@@ -3054,50 +3116,19 @@ class _ChatState extends State<Chat> {
     if (_selectionAutoscrollInProgress) return;
     _selectionAutoscrollInProgress = true;
     try {
-      if (!_selectionAutoscrollActive || _selectedMessageId == null) return;
-      await _waitForPostFrame();
       if (!_selectionAutoscrollActive ||
           _selectedMessageId == null ||
           !_scrollController.hasClients) {
         return;
       }
-      final initialGapDelta = _selectionGapDelta();
-      if (initialGapDelta == null) return;
-      if (initialGapDelta.abs() <= _selectionHeadroomTolerance) {
+      final gapDelta = _selectionGapDelta();
+      if (gapDelta == null || gapDelta.abs() <= _selectionHeadroomTolerance) {
         _selectionAutoscrollActive = false;
-        return;
-      }
-      var gapDelta = _selectionGapDelta();
-      if (gapDelta == null) return;
-      var shortfall = _scrollShortfallForGap(gapDelta);
-      if (shortfall > _selectionHeadroomTolerance) {
-        _extendSpacerBy(shortfall);
-        await _waitForPostFrame();
-        if (!_selectionAutoscrollActive ||
-            _selectedMessageId == null ||
-            !_scrollController.hasClients) {
-          return;
-        }
-        gapDelta = _selectionGapDelta();
-        if (gapDelta == null) return;
-        shortfall = _scrollShortfallForGap(gapDelta);
-        if (shortfall > _selectionHeadroomTolerance) {
-          _extendSpacerBy(shortfall);
-          await _waitForPostFrame();
-          gapDelta = _selectionGapDelta();
-          if (gapDelta == null) return;
-        }
-      }
-      if (gapDelta.abs() <= _selectionHeadroomTolerance) {
-        _selectionAutoscrollActive = false;
-        _selectionAutoscrollScheduled = false;
-        await _settleResidualSelectionGap();
         return;
       }
       final outcome = await _shiftSelectionBy(gapDelta);
       if (outcome != _SelectionShiftOutcome.awaitingHeadroom) {
         _selectionAutoscrollActive = false;
-        _selectionAutoscrollScheduled = false;
         await _settleResidualSelectionGap();
       }
     } finally {
@@ -3179,33 +3210,6 @@ class _ChatState extends State<Chat> {
     return gapDelta;
   }
 
-  Future<void> _waitForPostFrame() async {
-    if (!mounted) return;
-    final completer = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    });
-    await completer.future;
-  }
-
-  void _scheduleSelectionAutoscroll() {
-    if (!_selectionAutoscrollActive ||
-        !mounted ||
-        _selectionAutoscrollScheduled) {
-      return;
-    }
-    _selectionAutoscrollScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _selectionAutoscrollScheduled = false;
-      if (!mounted || !_selectionAutoscrollActive) {
-        return;
-      }
-      _scrollSelectionExtrasIntoView();
-    });
-  }
-
   double _scrollShortfallForGap(double gapDelta) {
     final position = _scrollController.position;
     final directionSign = _axisDirectionSign(position.axisDirection);
@@ -3251,7 +3255,6 @@ class _ChatState extends State<Chat> {
 
   Future<void> _settleResidualSelectionGap() async {
     if (!_scrollController.hasClients || _selectedMessageId == null) return;
-    await _waitForPostFrame();
     final residual = _selectionGapDelta();
     if (residual == null ||
         residual.abs() <= _selectionAutoscrollSlop ||
@@ -3279,19 +3282,8 @@ class _ChatState extends State<Chat> {
     _selectionAutoscrollAccumulated += (target - start);
   }
 
-  void _requestSelectionControlsMeasurement() {
-    if (_selectionControlsMeasurementPending || !mounted) return;
-    if (_selectedMessageId == null) return;
-    _selectionControlsMeasurementPending = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _selectionControlsMeasurementPending = false;
-      if (!mounted || _selectedMessageId == null) return;
-      _captureSelectionControlsHeight();
-    });
-  }
-
   void _captureSelectionControlsHeight() {
-    final extrasContext = _activeSelectionExtrasKey?.currentContext;
+    final extrasContext = _selectionActionBarKey?.currentContext;
     if (extrasContext == null) return;
     final renderBox = extrasContext.findRenderObject() as RenderBox?;
     if (renderBox == null ||
@@ -3314,13 +3306,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _captureBaseSelectionHeadroom() {
-    if (!mounted) return;
-    if (!_scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _captureBaseSelectionHeadroom();
-      });
-      return;
-    }
+    if (!mounted || !_scrollController.hasClients) return;
     final viewportExtent = _scrollController.position.viewportDimension;
     _updateSelectionSpacerBase(viewportExtent);
   }
@@ -3356,21 +3342,14 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  Future<void> _primeSelectionHeadroomIfNeeded() async {
-    if (!_scrollController.hasClients) {
-      await _waitForPostFrame();
-      if (!mounted || _selectedMessageId == null) return;
-      return _primeSelectionHeadroomIfNeeded();
-    }
+  void _primeSelectionHeadroomIfNeeded() {
+    if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final viewportExtent = position.viewportDimension;
     if (viewportExtent <= _selectionHeadroomTolerance) {
-      await _waitForPostFrame();
-      if (!mounted || _selectedMessageId == null) return;
-      return _primeSelectionHeadroomIfNeeded();
+      return;
     }
     _updateSelectionSpacerBase(viewportExtent);
-    await _waitForPostFrame();
   }
 
   @override
@@ -3382,8 +3361,14 @@ class _ChatState extends State<Chat> {
     _subjectController = TextEditingController();
     _subjectFocusNode = FocusNode();
     _attachmentButtonFocusNode = FocusNode();
-    _scrollController = ScrollController();
+    _scrollController = ScrollController(
+      initialScrollOffset: _restoreScrollOffset(),
+    );
     _scrollController.addListener(_handleScrollChanged);
+    _syncSelectionCaches(
+      context.read<ChatBloc>().state,
+      notify: false,
+    );
     _subjectFocusNode.onKeyEvent = _handleSubjectKeyEvent;
     _focusNode.onKeyEvent = _handleComposerKeyEvent;
     _textController.addListener(_typingListener);
@@ -3407,9 +3392,7 @@ class _ChatState extends State<Chat> {
     context
         .read<ChatBloc>()
         .add(ChatSettingsUpdated(_settingsSnapshotFromState(settings)));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _captureBaseSelectionHeadroom();
-    });
+    _captureBaseSelectionHeadroom();
   }
 
   @override
@@ -3612,6 +3595,12 @@ class _ChatState extends State<Chat> {
                       previous.messagesLoaded != current.messagesLoaded),
               listener: (_, state) => _hydrateAnimatedMessages(state.items),
             ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.items != current.items ||
+                  previous.quotedMessagesById != current.quotedMessagesById,
+              listener: (_, state) => _syncSelectionCaches(state),
+            ),
           ],
           child: BlocConsumer<ChatBloc, ChatState>(
             listenWhen: (previous, current) {
@@ -3634,12 +3623,9 @@ class _ChatState extends State<Chat> {
                   context.watch<ProfileCubit?>()?.state;
               ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
               final readOnly = widget.readOnly;
-              final xmppService = context.read<XmppService>();
-              final emailService = context.read<EmailService?>();
               final emailSelfJid = state.emailSelfJid;
               final String? resolvedEmailSelfJid =
                   emailSelfJid.resolveDeltaPlaceholderJid();
-              final xmppSelfJid = xmppService.myJid;
               final chatEntity = state.chat;
               final List<BlocklistEntry> blocklistEntries =
                   _resolveBlocklistEntries();
@@ -3665,7 +3651,10 @@ class _ChatState extends State<Chat> {
               final String? resolvedProfileJid = profileState()?.jid.trim();
               final String? selfXmppJid = resolvedProfileJid?.isNotEmpty == true
                   ? resolvedProfileJid
-                  : xmppSelfJid;
+                  : null;
+              final String? accountJidForPins = isDefaultEmail
+                  ? (resolvedEmailSelfJid ?? selfXmppJid)
+                  : (selfXmppJid ?? resolvedEmailSelfJid);
               final String? normalizedXmppSelfJid =
                   normalizedAddressKey(selfXmppJid);
               final String? normalizedEmailSelfJid =
@@ -3694,7 +3683,7 @@ class _ChatState extends State<Chat> {
               final shareReplies = state.shareReplies;
               final recipients = _recipients;
               final pendingAttachments = state.pendingAttachments;
-              final canSendEmailAttachments = emailService != null &&
+              final canSendEmailAttachments = state.emailServiceAvailable &&
                   chatEntity != null &&
                   _hasEmailAttachmentTarget(
                     chat: chatEntity,
@@ -3769,23 +3758,21 @@ class _ChatState extends State<Chat> {
               String? avatarPathForTypingParticipant(String participant) {
                 final trimmed = participant.trim();
                 if (trimmed.isEmpty) return null;
-                final slashIndex = trimmed.indexOf('/');
-                if (slashIndex == -1) {
+                final bareParticipant = bareAddress(trimmed);
+                if (bareParticipant == null) return null;
+                if (bareParticipant == trimmed) {
                   return avatarPathForBareJid(trimmed);
                 }
-                final bareParticipant =
-                    normalizedAddressValue(trimmed.substring(0, slashIndex));
                 final roomJid = normalizedAddressValue(chatEntity?.jid);
                 final isRoomParticipant =
-                    bareParticipant != null && bareParticipant == roomJid;
+                    normalizedAddressValue(bareParticipant) == roomJid;
                 if (!isRoomParticipant) {
-                  return avatarPathForBareJid(
-                    trimmed.substring(0, slashIndex),
-                  );
+                  return avatarPathForBareJid(bareParticipant);
                 }
                 final roomState = state.roomState;
                 if (roomState == null) return null;
-                final nick = trimmed.substring(slashIndex + 1).trim();
+                final parsed = parseJid(trimmed);
+                final nick = parsed?.resource.trim() ?? '';
                 if (nick.isEmpty) return null;
 
                 Occupant? occupant = roomState.occupants[trimmed];
@@ -3800,13 +3787,11 @@ class _ChatState extends State<Chat> {
 
                 final realJid = occupant?.realJid?.trim();
                 if (realJid == null || realJid.isEmpty) return null;
-                final realSlashIndex = realJid.indexOf('/');
-                final bareRealJid = realSlashIndex == -1
-                    ? realJid
-                    : realJid.substring(0, realSlashIndex);
+                final bareRealJid = bareAddress(realJid) ?? realJid;
                 return avatarPathForBareJid(bareRealJid);
               }
 
+              final xmppService = context.read<XmppService>();
               final storageManager = context.watch<CalendarStorageManager>();
               final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
                 storageManager: storageManager,
@@ -4036,10 +4021,11 @@ class _ChatState extends State<Chat> {
                                 final avatarTooltip = isGroupChat
                                     ? context.l10n.chatRoomMembers
                                     : null;
+                                final spacing = context.spacing;
                                 Widget avatar = TransportAwareAvatar(
                                   chat: chatEntity!,
                                   size: _chatAppBarAvatarSize,
-                                  badgeOffset: const Offset(-6, -4),
+                                  badgeOffset: Offset(-spacing.xs, -spacing.xs),
                                   presence: presence,
                                   status: statusLabel,
                                   subscription: subscription,
@@ -4066,22 +4052,17 @@ class _ChatState extends State<Chat> {
                                   _chatAppBarTitleMinWidth,
                                   _chatAppBarTitleMaxWidth,
                                 );
-                                final baseTitleStyle = Theme.of(
-                                      context,
-                                    ).appBarTheme.titleTextStyle ??
-                                    context.textTheme.h4;
+                                final baseTitleStyle = context.textTheme.h4;
                                 final titleStyle = baseTitleStyle.copyWith(
                                   fontSize: context.textTheme.large.fontSize,
                                 );
-                                const double subtitleLineHeight = 1.05;
-                                final TextStyle subtitleStyle = context
-                                    .textTheme.muted
-                                    .copyWith(height: subtitleLineHeight);
+                                final TextStyle subtitleStyle =
+                                    context.textTheme.muted;
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     avatar,
-                                    const SizedBox(width: avatarTitleSpacing),
+                                    SizedBox(width: spacing.s),
                                     Flexible(
                                       fit: FlexFit.loose,
                                       child: ConstrainedBox(
@@ -4140,26 +4121,14 @@ class _ChatState extends State<Chat> {
                                                             .chatContactRenameTooltip,
                                                       ),
                                                       child:
-                                                          ShadIconButton.ghost(
+                                                          AxiIconButton.ghost(
                                                         onPressed:
                                                             _promptContactRename,
-                                                        icon: Icon(
-                                                          LucideIcons
-                                                              .pencilLine,
-                                                          size:
-                                                              _chatAppBarRenameIconSize,
-                                                          color: context
-                                                              .colorScheme
-                                                              .mutedForeground,
-                                                        ),
-                                                        decoration:
-                                                            const ShadDecoration(
-                                                          secondaryBorder:
-                                                              ShadBorder.none,
-                                                          secondaryFocusedBorder:
-                                                              ShadBorder.none,
-                                                        ),
-                                                      ).withTapBounce(),
+                                                        iconData: LucideIcons
+                                                            .pencilLine,
+                                                        iconSize: context.sizing
+                                                            .menuItemIconSize,
+                                                      ),
                                                     ),
                                                   ),
                                               ],
@@ -4319,9 +4288,6 @@ class _ChatState extends State<Chat> {
                                         messageById[item.stanzaID] = item;
                                       }
                                     }
-                                    _pruneMessageSelection(
-                                      messageById.keys.toSet(),
-                                    );
                                     final activeItems = searchFiltering
                                         ? searchResults
                                         : state.items;
@@ -4411,14 +4377,6 @@ class _ChatState extends State<Chat> {
                                         _collectSelectedMessages(
                                       filteredItems,
                                     );
-                                    if (_multiSelectActive &&
-                                        selectedMessages.isEmpty) {
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                        if (!mounted) return;
-                                        _clearMultiSelection();
-                                      });
-                                    }
                                     final selectionActive =
                                         _selectedMessageId != null;
                                     final selectionSpacerVisibleHeight =
@@ -4973,6 +4931,7 @@ class _ChatState extends State<Chat> {
                                                     pendingAttachments,
                                                 composerHasText:
                                                     _composerHasContent,
+                                                selfJid: selfXmppJid,
                                                 composerError:
                                                     state.composerError,
                                                 onComposerErrorCleared: () =>
@@ -5049,6 +5008,7 @@ class _ChatState extends State<Chat> {
                                           chat: chatEntity,
                                           visible: _pinnedPanelVisible,
                                           maxHeight: pinnedPanelMaxHeight,
+                                          accountJid: accountJidForPins,
                                           pinnedMessages: state.pinnedMessages,
                                           pinnedMessagesLoaded:
                                               state.pinnedMessagesLoaded,
@@ -5705,20 +5665,20 @@ class _ChatState extends State<Chat> {
                                                                           .readOnly ||
                                                                       isDesktopPlatform
                                                                   ? null
-                                                                  : () =>
+                                                                  : () {
                                                                       _toggleMessageSelection(
                                                                         messageModel,
-                                                                      ),
+                                                                      );
+                                                                    },
                                                               onSecondaryTapUp:
                                                                   isDesktopPlatform &&
                                                                           !widget
                                                                               .readOnly
-                                                                      ? (
-                                                                          _,
-                                                                        ) =>
+                                                                      ? (_) {
                                                                           _toggleMessageSelection(
                                                                             messageModel,
-                                                                          )
+                                                                          );
+                                                                        }
                                                                       : null,
                                                               child: child,
                                                             );
@@ -5866,6 +5826,10 @@ class _ChatState extends State<Chat> {
                                                                 onPressed: () =>
                                                                     _handleInviteTap(
                                                                   messageModel,
+                                                                  roomState: state
+                                                                      .roomState,
+                                                                  selfJid:
+                                                                      selfXmppJid,
                                                                 ),
                                                               ),
                                                               shape:
@@ -5889,17 +5853,10 @@ class _ChatState extends State<Chat> {
                                                                   subjectText =
                                                                   subjectLabel;
                                                               final textTheme =
-                                                                  Theme.of(
-                                                                context,
-                                                              ).textTheme;
-                                                              final baseSubjectStyle = textTheme
-                                                                      .titleSmall ??
-                                                                  textTheme
-                                                                      .bodyMedium ??
-                                                                  textTheme
-                                                                      .bodyLarge ??
                                                                   context
-                                                                      .textTheme
+                                                                      .textTheme;
+                                                              final baseSubjectStyle =
+                                                                  textTheme
                                                                       .lead;
                                                               final subjectStyle =
                                                                   baseSubjectStyle
@@ -7287,10 +7244,11 @@ class _ChatState extends State<Chat> {
                                                           VoidCallback?
                                                               onSelect;
                                                           if (includeSelectAction) {
-                                                            onSelect = () =>
-                                                                _startMultiSelect(
-                                                                  messageModel,
-                                                                );
+                                                            onSelect = () {
+                                                              _startMultiSelect(
+                                                                messageModel,
+                                                              );
+                                                            };
                                                           }
                                                           VoidCallback?
                                                               onResend;
@@ -7346,49 +7304,52 @@ class _ChatState extends State<Chat> {
 
                                                           final Widget
                                                               actionBar =
-                                                              KeyedSubtree(
-                                                            key:
-                                                                _selectionActionBarKey ??=
-                                                                    GlobalKey(),
+                                                              NotificationListener<
+                                                                  SizeChangedLayoutNotification>(
+                                                            onNotification: (
+                                                              _,
+                                                            ) {
+                                                              _captureSelectionControlsHeight();
+                                                              return false;
+                                                            },
                                                             child:
-                                                                _MessageActionBar(
-                                                              onReply: onReply,
-                                                              onForward:
-                                                                  onForward,
-                                                              onCopy: onCopy,
-                                                              onShare: onShare,
-                                                              shareStatus:
-                                                                  _shareRequestStatus,
-                                                              onAddToCalendar:
-                                                                  onAddToCalendar,
-                                                              onDetails:
-                                                                  onDetails,
-                                                              onSelect:
-                                                                  onSelect,
-                                                              onResend:
-                                                                  onResend,
-                                                              onEdit: onEdit,
-                                                              onPinToggle:
-                                                                  onPinToggle,
-                                                              isPinned:
-                                                                  isPinned,
-                                                              onRevokeInvite:
-                                                                  onRevokeInvite,
+                                                                SizeChangedLayoutNotifier(
+                                                              child:
+                                                                  KeyedSubtree(
+                                                                key:
+                                                                    _selectionActionBarKey,
+                                                                child:
+                                                                    _MessageActionBar(
+                                                                  onReply:
+                                                                      onReply,
+                                                                  onForward:
+                                                                      onForward,
+                                                                  onCopy:
+                                                                      onCopy,
+                                                                  onShare:
+                                                                      onShare,
+                                                                  shareStatus:
+                                                                      _shareRequestStatus,
+                                                                  onAddToCalendar:
+                                                                      onAddToCalendar,
+                                                                  onDetails:
+                                                                      onDetails,
+                                                                  onSelect:
+                                                                      onSelect,
+                                                                  onResend:
+                                                                      onResend,
+                                                                  onEdit:
+                                                                      onEdit,
+                                                                  onPinToggle:
+                                                                      onPinToggle,
+                                                                  isPinned:
+                                                                      isPinned,
+                                                                  onRevokeInvite:
+                                                                      onRevokeInvite,
+                                                                ),
+                                                              ),
                                                             ),
                                                           );
-                                                          if (isSingleSelection) {
-                                                            _activeSelectionExtrasKey ??=
-                                                                GlobalKey();
-                                                            _scheduleSelectionAutoscroll();
-                                                            _requestSelectionControlsMeasurement();
-                                                          } else if (_activeSelectionExtrasKey !=
-                                                                  null &&
-                                                              _selectedMessageId ==
-                                                                  messageModel
-                                                                      .stanzaID) {
-                                                            _activeSelectionExtrasKey =
-                                                                null;
-                                                          }
                                                           final attachmentsKey =
                                                               isSingleSelection
                                                                   ? _activeSelectionExtrasKey
@@ -7405,7 +7366,9 @@ class _ChatState extends State<Chat> {
                                                           final attachmentBottomPadding =
                                                               _selectionExtrasViewportGap +
                                                                   (showReactionManager
-                                                                      ? _reactionManagerShadowGap
+                                                                      ? _reactionManagerShadowGap(
+                                                                          context,
+                                                                        )
                                                                       : 0);
                                                           final attachmentPadding =
                                                               EdgeInsets.only(
@@ -7421,8 +7384,8 @@ class _ChatState extends State<Chat> {
                                                           final reactionManager =
                                                               showReactionManager
                                                                   ? KeyedSubtree(
-                                                                      key: _reactionManagerKey ??=
-                                                                          GlobalKey(),
+                                                                      key:
+                                                                          _reactionManagerKey,
                                                                       child:
                                                                           _ReactionManager(
                                                                         reactions:
@@ -7669,12 +7632,9 @@ class _ChatState extends State<Chat> {
                                                                       },
                                                                     );
                                                           final messageKey =
-                                                              _messageKeys
-                                                                  .putIfAbsent(
-                                                            messageModel
-                                                                .stanzaID,
-                                                            () => GlobalKey(),
-                                                          );
+                                                              _messageKeys[
+                                                                  messageModel
+                                                                      .stanzaID];
                                                           final bubbleDisplay =
                                                               shadowedBubble;
                                                           final selectableBubble =
@@ -7694,20 +7654,20 @@ class _ChatState extends State<Chat> {
                                                                         .readOnly ||
                                                                     isDesktopPlatform
                                                                 ? null
-                                                                : () =>
+                                                                : () {
                                                                     _toggleMessageSelection(
                                                                       messageModel,
-                                                                    ),
+                                                                    );
+                                                                  },
                                                             onSecondaryTapUp:
                                                                 isDesktopPlatform &&
                                                                         !widget
                                                                             .readOnly
-                                                                    ? (
-                                                                        _,
-                                                                      ) =>
+                                                                    ? (_) {
                                                                         _toggleMessageSelection(
                                                                           messageModel,
-                                                                        )
+                                                                        );
+                                                                      }
                                                                     : null,
                                                             child:
                                                                 bubbleDisplay,
@@ -8126,7 +8086,7 @@ class _ChatState extends State<Chat> {
                 decoration: BoxDecoration(
                   color: colors.background,
                   border: Border(
-                    left: BorderSide(color: colors.border),
+                    left: context.borderSide,
                   ),
                 ),
                 child: content,
@@ -8142,11 +8102,11 @@ class _ChatState extends State<Chat> {
     if (!mounted) return null;
     return showAdaptiveBottomSheet<String>(
       context: context,
-      dialogMaxWidth: 420,
+      dialogMaxWidth: context.sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final picker = SizedBox(
-          height: 320,
+          height: sheetContext.sizing.menuMaxHeight,
           child: EmojiPicker(
             config: Config(
               emojiViewConfig: EmojiViewConfig(
@@ -8221,20 +8181,22 @@ class _ChatState extends State<Chat> {
           style: dialogContext.modalHeaderTextStyle,
         ),
         actions: [
-          ShadButton.ghost(
+          AxiButton(
+            variant: AxiButtonVariant.ghost,
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(l10n.commonCancel),
-          ).withTapBounce(),
-          ShadButton(
+          ),
+          AxiButton.primary(
             onPressed: () =>
                 Navigator.of(dialogContext).pop(EmailForwardingMode.safe),
             child: Text(l10n.chatForwardEmailOptionSafe),
-          ).withTapBounce(),
-          ShadButton.destructive(
+          ),
+          AxiButton(
+            variant: AxiButtonVariant.destructive,
             onPressed: () =>
                 Navigator.of(dialogContext).pop(EmailForwardingMode.original),
             child: Text(l10n.chatForwardEmailOptionOriginal),
-          ).withTapBounce(),
+          ),
         ],
         child: Text(l10n.chatForwardEmailWarningMessage),
       ),
@@ -8258,23 +8220,25 @@ class _ChatState extends State<Chat> {
         );
   }
 
-  Future<void> _handleInviteTap(Message message) async {
+  Future<void> _handleInviteTap(
+    Message message, {
+    required RoomState? roomState,
+    required String? selfJid,
+  }) async {
     final l10n = context.l10n;
     final data = message.pseudoMessageData ?? const {};
     final roomJid = data['roomJid'] as String?;
     final roomName = (data['roomName'] as String?)?.trim();
     final invitee = data['invitee'] as String?;
     if (roomJid == null) return;
-    final myJid = context.read<XmppService>().myJid;
-    final roomState = context.read<XmppService>().roomStateFor(roomJid);
     if (roomState?.myOccupantId != null) {
       _showSnackbar(l10n.chatInviteAlreadyInRoom);
       return;
     }
     if (invitee != null &&
-        myJid != null &&
+        selfJid != null &&
         mox.JID.fromString(invitee).toBare().toString() !=
-            mox.JID.fromString(myJid).toBare().toString()) {
+            mox.JID.fromString(selfJid).toBare().toString()) {
       _showSnackbar(l10n.chatInviteWrongAccount);
       return;
     }
@@ -8913,6 +8877,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.chat,
     required this.visible,
     required this.maxHeight,
+    required this.accountJid,
     required this.pinnedMessages,
     required this.pinnedMessagesLoaded,
     required this.pinnedMessagesHydrating,
@@ -8931,6 +8896,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final chat_models.Chat? chat;
   final bool visible;
   final double maxHeight;
+  final String? accountJid;
   final List<PinnedMessageItem> pinnedMessages;
   final bool pinnedMessagesLoaded;
   final bool pinnedMessagesHydrating;
@@ -9050,6 +9016,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                     canTogglePins: widget.canTogglePins,
                     canShowCalendarTasks: widget.canShowCalendarTasks,
                     isHydrating: widget.pinnedMessagesHydrating,
+                    accountJid: widget.accountJid,
                     metadataStreamFor: widget.metadataStreamFor,
                     metadataInitialFor: widget.metadataInitialFor,
                     attachmentsBlocked: widget.attachmentsBlocked,
@@ -9116,6 +9083,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.canTogglePins,
     required this.canShowCalendarTasks,
     required this.isHydrating,
+    required this.accountJid,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
     required this.attachmentsBlocked,
@@ -9130,6 +9098,7 @@ class _PinnedMessageTile extends StatelessWidget {
   final bool canTogglePins;
   final bool canShowCalendarTasks;
   final bool isHydrating;
+  final String? accountJid;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
   final bool attachmentsBlocked;
@@ -9329,9 +9298,7 @@ class _PinnedMessageTile extends StatelessWidget {
         !hasAttachments &&
         !hasCalendarTask &&
         !hasCriticalPath;
-    final messageStyle = Theme.of(
-      context,
-    ).textTheme.bodyMedium?.copyWith(color: colors.foreground);
+    final messageStyle = context.textTheme.p.copyWith(color: colors.foreground);
     final messageWidget = showLoading
         ? Align(
             alignment: Alignment.centerLeft,
@@ -9353,23 +9320,15 @@ class _PinnedMessageTile extends StatelessWidget {
     final unpinButton = canTogglePins && messageForPin != null
         ? AxiTooltip(
             builder: (context) => Text(l10n.chatUnpinMessage),
-            child: ShadIconButton.ghost(
+            child: AxiIconButton.ghost(
               onPressed: () => context.read<ChatBloc>().add(
                     ChatMessagePinRequested(message: messageForPin, pin: false),
                   ),
-              icon: Icon(
-                LucideIcons.pinOff,
-                size: _messageActionIconSize,
-                color: colors.mutedForeground,
-              ),
-              decoration: const ShadDecoration(
-                secondaryBorder: ShadBorder.none,
-                secondaryFocusedBorder: ShadBorder.none,
-              ),
-            ).withTapBounce(),
+              iconData: LucideIcons.pinOff,
+              iconSize: context.sizing.menuItemIconSize,
+            ),
           )
         : null;
-    final accountJid = context.read<XmppService>().myJid?.toString();
     final isSelf = message == null
         ? false
         : _isSelfMessage(message: message, accountJid: accountJid);
@@ -10942,6 +10901,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.visibilityLabel,
     required this.pendingAttachments,
     required this.composerHasText,
+    required this.selfJid,
     required this.subjectController,
     required this.subjectFocusNode,
     required this.textController,
@@ -10973,6 +10933,7 @@ class _ChatComposerSection extends StatelessWidget {
   final String? visibilityLabel;
   final List<PendingAttachment> pendingAttachments;
   final bool composerHasText;
+  final String? selfJid;
   final TextEditingController subjectController;
   final FocusNode subjectFocusNode;
   final TextEditingController textController;
@@ -11002,8 +10963,7 @@ class _ChatComposerSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
-    final xmppService = context.read<XmppService>();
-    final myJid = xmppService.myJid;
+    final myJid = selfJid;
     final suggestionAddresses = <String>{
       if (myJid != null && myJid.isNotEmpty) myJid,
     };
@@ -11402,24 +11362,32 @@ class _AttachmentPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
-    final maxWidth = (mediaSize.width - 96).clamp(240.0, mediaSize.width);
-    final maxHeight = (mediaSize.height - 160).clamp(240.0, mediaSize.height);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final widthInset = spacing.xl + spacing.l;
+    final heightInset = spacing.xxl + spacing.l;
+    final minPreviewExtent = spacing.xxl + spacing.xl + spacing.l;
+    final maxWidth =
+        (mediaSize.width - widthInset).clamp(minPreviewExtent, mediaSize.width);
+    final maxHeight = (mediaSize.height - heightInset)
+        .clamp(minPreviewExtent, mediaSize.height);
     final targetSize = _fitWithinBounds(
       intrinsicSize: intrinsicSize,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
     );
     final colors = context.colorScheme;
-    final radius = BorderRadius.circular(18);
-    final borderSide = BorderSide(color: colors.border);
+    final radius = context.radius;
+    final borderSide = context.borderSide;
+    final chromeInset = spacing.m + spacing.s;
 
     return ShadDialog(
-      padding: const EdgeInsets.all(12),
-      gap: 12,
+      padding: EdgeInsets.all(spacing.s),
+      gap: spacing.s,
       closeIcon: const SizedBox.shrink(),
       constraints: BoxConstraints(
-        maxWidth: targetSize.width + 24,
-        maxHeight: targetSize.height + 24,
+        maxWidth: targetSize.width + chromeInset,
+        maxHeight: targetSize.height + chromeInset,
       ),
       child: Stack(
         children: [
@@ -11438,7 +11406,7 @@ class _AttachmentPreviewDialog extends StatelessWidget {
                   width: targetSize.width,
                   height: targetSize.height,
                   child: InteractiveViewer(
-                    maxScale: 4,
+                    maxScale: sizing.mediaPreviewMaxScale,
                     child: Image.file(
                       File(attachment.path),
                       fit: BoxFit.contain,
@@ -11449,12 +11417,12 @@ class _AttachmentPreviewDialog extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 4,
-            right: 4,
-            child: ShadButton.ghost(
-              size: ShadButtonSize.sm,
+            top: spacing.xs,
+            right: spacing.xs,
+            child: AxiIconButton.ghost(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Icon(LucideIcons.x, size: 16),
+              iconData: LucideIcons.x,
+              iconSize: sizing.iconButtonIconSize,
             ),
           ),
         ],
@@ -11594,10 +11562,7 @@ TextStyle _reactionEmojiTextStyle(
   BuildContext context, {
   required bool highlighted,
 }) {
-  final base = Theme.of(context).textTheme.bodyMedium ??
-      const TextStyle(fontSize: 16, fontWeight: FontWeight.w500);
-  return base.copyWith(
-    fontSize: 16,
+  return context.textTheme.large.copyWith(
     fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
   );
 }
@@ -11952,16 +11917,17 @@ class _MultiSelectReactionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.m),
         Text(context.l10n.chatActionReact, style: context.textTheme.muted),
-        const SizedBox(height: 8),
+        SizedBox(height: spacing.s),
         Wrap(
-          spacing: _reactionManagerQuickSpacing,
-          runSpacing: _reactionManagerQuickSpacing,
+          spacing: _reactionManagerQuickSpacing(context),
+          runSpacing: _reactionManagerQuickSpacing(context),
           alignment: WrapAlignment.start,
           children: [
             for (final emoji in _reactionQuickChoices)
@@ -11993,6 +11959,7 @@ class _CalendarTextSelectionDialogState
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   String _selection = '';
+  var _requestedFocus = false;
 
   @override
   void initState() {
@@ -12006,11 +11973,15 @@ class _CalendarTextSelectionDialogState
       baseOffset: 0,
       extentOffset: seeded.length,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _focusNode.requestFocus();
-      _handleControllerChanged();
-    });
+    _handleControllerChanged();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_requestedFocus) return;
+    _requestedFocus = true;
+    _focusNode.requestFocus();
   }
 
   @override
@@ -12058,19 +12029,24 @@ class _CalendarTextSelectionDialogState
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final spacing = context.spacing;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: spacing.l,
+        vertical: spacing.m,
+      ),
       child: LayoutBuilder(
         builder: (_, constraints) {
-          final maxWidth = math.min(constraints.maxWidth, 720.0);
+          final maxWidth =
+              math.min(constraints.maxWidth, context.sizing.dialogMaxWidth);
           return Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
               child: AxiModalSurface(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(spacing.m),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -12091,14 +12067,14 @@ class _CalendarTextSelectionDialogState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: spacing.s),
                       Text(
                         l10n.chatChooseTextToAddHint,
                         style: textTheme.muted.copyWith(
                           color: colors.mutedForeground,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: spacing.s),
                       AxiTextInput(
                         controller: _controller,
                         focusNode: _focusNode,
@@ -12107,16 +12083,17 @@ class _CalendarTextSelectionDialogState
                         keyboardType: TextInputType.multiline,
                         autofocus: true,
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: spacing.m),
                       Row(
                         children: [
-                          ShadButton.ghost(
+                          AxiButton(
+                            variant: AxiButtonVariant.ghost,
                             onPressed: () => Navigator.of(context).maybePop(),
                             child: Text(l10n.commonCancel),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: spacing.s),
                           Expanded(
-                            child: ShadButton(
+                            child: AxiButton.primary(
                               onPressed: _canSubmit ? _submit : null,
                               child: Text(l10n.chatActionAddToCalendar),
                             ),
@@ -12491,67 +12468,54 @@ class _ReactionManager extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final textTheme = context.textTheme;
     final sorted = reactions.toList()
       ..sort((a, b) => b.count.compareTo(a.count));
     final hasReactions = sorted.isNotEmpty;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(_reactionManagerRadius),
-        border: Border.all(color: colors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    return AxiModalSurface(
+      padding: _reactionManagerPadding(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: spacing.s,
+        children: [
+          if (hasReactions)
+            Wrap(
+              spacing: _reactionManagerQuickSpacing(context),
+              runSpacing: _reactionManagerQuickSpacing(context),
+              children: [
+                for (final reaction in sorted)
+                  _ReactionManagerChip(
+                    key: ValueKey(reaction.emoji),
+                    data: reaction,
+                    onToggle: () => onToggle(reaction.emoji),
+                  ),
+              ],
+            )
+          else
+            Text(
+              context.l10n.chatReactionsNone,
+              style: textTheme.small.copyWith(color: colors.mutedForeground),
+            ),
+          Text(
+            hasReactions
+                ? context.l10n.chatReactionsPrompt
+                : context.l10n.chatReactionsPick,
+            style: textTheme.muted,
+          ),
+          Wrap(
+            spacing: _reactionManagerQuickSpacing(context),
+            runSpacing: _reactionManagerQuickSpacing(context),
+            children: [
+              for (final emoji in _reactionQuickChoices)
+                _ReactionQuickButton(
+                  emoji: emoji,
+                  onPressed: () => onToggle(emoji),
+                ),
+              _ReactionAddButton(onPressed: onAddCustom),
+            ],
           ),
         ],
-      ),
-      child: Padding(
-        padding: _reactionManagerPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 12,
-          children: [
-            if (hasReactions)
-              Wrap(
-                spacing: _reactionManagerQuickSpacing,
-                runSpacing: _reactionManagerQuickSpacing,
-                children: [
-                  for (final reaction in sorted)
-                    _ReactionManagerChip(
-                      key: ValueKey(reaction.emoji),
-                      data: reaction,
-                      onToggle: () => onToggle(reaction.emoji),
-                    ),
-                ],
-              )
-            else
-              Text(
-                context.l10n.chatReactionsNone,
-                style: textTheme.small.copyWith(color: colors.mutedForeground),
-              ),
-            Text(
-              hasReactions
-                  ? context.l10n.chatReactionsPrompt
-                  : context.l10n.chatReactionsPick,
-              style: textTheme.muted,
-            ),
-            Wrap(
-              spacing: _reactionManagerQuickSpacing,
-              runSpacing: _reactionManagerQuickSpacing,
-              children: [
-                for (final emoji in _reactionQuickChoices)
-                  _ReactionQuickButton(
-                    emoji: emoji,
-                    onPressed: () => onToggle(emoji),
-                  ),
-                _ReactionAddButton(onPressed: onAddCustom),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -12617,22 +12581,11 @@ class _ReactionQuickButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.secondary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border.withValues(alpha: 0.9)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Text(emoji, style: const TextStyle(fontSize: 20)),
-        ),
-      ),
-    ).withTapBounce();
+    return AxiButton.secondary(
+      size: AxiButtonSize.sm,
+      onPressed: onPressed,
+      child: Text(emoji),
+    );
   }
 }
 
@@ -12643,18 +12596,14 @@ class _ReactionAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return ShadButton.outline(
+    return AxiButton.outline(
       onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.plus, size: 16, color: colors.primary),
-          const SizedBox(width: 6),
-          Text(context.l10n.chatReactionMore),
-        ],
+      leading: Icon(
+        LucideIcons.plus,
+        size: context.sizing.menuItemIconSize,
       ),
-    ).withTapBounce();
+      child: Text(context.l10n.chatReactionMore),
+    );
   }
 }
 
@@ -13458,8 +13407,7 @@ class _GuestChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final baseTitleStyle =
-        Theme.of(context).appBarTheme.titleTextStyle ?? context.textTheme.h4;
+    final baseTitleStyle = context.textTheme.h4;
     final titleStyle = baseTitleStyle.copyWith(
       fontSize: context.textTheme.large.fontSize,
     );
@@ -13470,7 +13418,7 @@ class _GuestChatHeader extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.background,
-          border: Border(bottom: BorderSide(color: colors.border)),
+          border: Border(bottom: context.borderSide),
         ),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -13910,8 +13858,8 @@ class _ChatMessageListState extends State<_ChatMessageList> {
               : DefaultScrollToBottom(
                   scrollController: _scrollController,
                   readOnly: widget.readOnly,
-                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                  textColor: Theme.of(context).primaryColor,
+                  backgroundColor: context.colorScheme.background,
+                  textColor: context.colorScheme.primary,
                 ),
       ],
     );
@@ -14061,7 +14009,6 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
 
   Future<void> _handleClose() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    await Future<void>.delayed(Duration.zero);
     if (!mounted) return;
     Navigator.of(context).maybePop();
   }

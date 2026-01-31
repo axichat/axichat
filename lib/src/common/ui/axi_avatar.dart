@@ -54,14 +54,11 @@ class _AxiAvatarState extends State<AxiAvatar> {
 
   String _displayLabelForJid(String jid) {
     if (jid.isEmpty) return '?';
-    final resourceIndex = jid.indexOf('/');
-    if (resourceIndex != -1 && resourceIndex + 1 < jid.length) {
-      final resource = jid.substring(resourceIndex + 1).trim();
+    final parsed = parseJid(jid);
+    if (parsed != null) {
+      final resource = parsed.resource.trim();
       if (resource.isNotEmpty) return resource;
-    }
-    final localPartIndex = jid.indexOf('@');
-    if (localPartIndex > 0) {
-      final localPart = jid.substring(0, localPartIndex).trim();
+      final localPart = parsed.local.trim();
       if (localPart.isNotEmpty) return localPart;
     }
     return jid;

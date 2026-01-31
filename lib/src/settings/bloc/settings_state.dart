@@ -33,7 +33,6 @@ class SettingsState with _$SettingsState {
     @Default(false) bool lowMotion,
     @Default(true) bool colorfulAvatars,
     @Default(false) bool emailForwardingGuideSeen,
-    @Default(MessageStorageMode.local) MessageStorageMode messageStorageMode,
     @Default(true) bool shareTokenSignatureEnabled,
     @Default(false) bool hideCompletedScheduled,
     @Default(false) bool hideCompletedUnscheduled,

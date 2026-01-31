@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -409,13 +410,13 @@ class AccessibilityChatBloc
   }
 
   String _senderLabelFor(Message message) {
-    final senderBare = message.senderJid.split('/').first;
+    final senderBare = bareAddress(message.senderJid) ?? message.senderJid;
     final myJid = _myJid;
-    if (myJid != null && senderBare == myJid) {
+    if (myJid != null && sameBareAddress(senderBare, myJid)) {
       return _l10n.chatSenderYou;
     }
     final matching = _contacts.firstWhere(
-      (contact) => contact.jid == senderBare,
+      (contact) => sameBareAddress(contact.jid, senderBare),
       orElse: () => AccessibilityContact(
         jid: senderBare,
         displayName: senderBare,

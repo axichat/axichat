@@ -19,7 +19,6 @@ import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:axichat/src/profile/view/contact_export_sheet.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -340,10 +339,6 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
-            Padding(
-              padding: EdgeInsets.all(spacing.m),
-              child: MessageStorageTile(state: state),
-            ),
             Padding(
               padding: EdgeInsets.all(spacing.m),
               child: ShadSwitch(
@@ -848,88 +843,6 @@ class _SettingsSectionHeader extends StatelessWidget {
         ),
         header,
       ],
-    );
-  }
-}
-
-class MessageStorageTile extends StatelessWidget {
-  const MessageStorageTile({super.key, required this.state});
-
-  final SettingsState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final l10n = context.l10n;
-    final selectTextStyle = context.textTheme.small;
-    return AxiModalSurface(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
-        vertical: spacing.s,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.settingsMessageStorageTitle,
-                  style: context.textTheme.small,
-                ),
-              ),
-              StreamBuilder<bool>(
-                stream: context.watch<SettingsCubit>().mamSupportStream,
-                initialData: context.watch<SettingsCubit>().mamSupported,
-                builder: (context, snapshot) {
-                  final mamSupported = snapshot.data ?? false;
-                  final options = mamSupported
-                      ? MessageStorageMode.values
-                      : const [MessageStorageMode.local];
-                  final effectiveMode = mamSupported
-                      ? state.messageStorageMode
-                      : MessageStorageMode.local;
-                  return AxiSelect<MessageStorageMode>(
-                    initialValue: effectiveMode,
-                    onChanged: (mode) {
-                      if (mode == null) return;
-                      if (mode.isServerOnly && !mamSupported) return;
-                      context.read<SettingsCubit>().updateMessageStorageMode(
-                            mode,
-                          );
-                    },
-                    options: options
-                        .map(
-                          (mode) => ShadOption<MessageStorageMode>(
-                            value: mode,
-                            child: Text(
-                              mode.isLocal
-                                  ? l10n.settingsMessageStorageLocal
-                                  : l10n.settingsMessageStorageServerOnly,
-                              style: selectTextStyle,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    selectedOptionBuilder: (context, mode) => Text(
-                      mode.isLocal
-                          ? l10n.settingsMessageStorageLocal
-                          : l10n.settingsMessageStorageServerOnly,
-                      style: selectTextStyle,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.s),
-          Text(
-            l10n.settingsMessageStorageSubtitle,
-            style: context.textTheme.muted,
-          ),
-        ],
-      ),
     );
   }
 }

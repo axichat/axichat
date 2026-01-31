@@ -795,7 +795,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final isSelected = widget.isSelected;
     final isOpen = widget.isOpen;
 
-    final brightness = colors.brightness;
+    final brightness = context.brightness;
     final overlayAlpha = brightness == Brightness.dark
         ? motion.tapHoverAlpha
         : motion.tapSplashAlpha;

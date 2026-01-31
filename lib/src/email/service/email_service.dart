@@ -14,7 +14,6 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:uuid/uuid.dart';
@@ -424,10 +423,6 @@ class EmailService {
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
-  }
-
-  void updateMessageStorageMode(MessageStorageMode mode) {
-    _transport.updateMessageStorageMode(mode);
   }
 
   void updateDefaultChatAttachmentAutoDownload(

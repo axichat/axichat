@@ -595,13 +595,13 @@ String _senderLabelFor(
   Message message,
 ) {
   final l10n = context.l10n;
-  final senderBare = message.senderJid.split('/').first;
+  final senderBare = bareAddress(message.senderJid) ?? message.senderJid;
   final myJid = state.myJid;
-  if (myJid != null && senderBare == myJid) {
+  if (myJid != null && sameBareAddress(senderBare, myJid)) {
     return l10n.chatSenderYou;
   }
   final matching = state.contacts.firstWhere(
-    (contact) => contact.jid == senderBare,
+    (contact) => sameBareAddress(contact.jid, senderBare),
     orElse: () => AccessibilityContact(
       jid: senderBare,
       displayName: senderBare,

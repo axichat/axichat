@@ -556,12 +556,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<int> _archivedMessageCount(Chat chat) {
-    if (_messageService.messageStorageMode.isServerOnly) {
-      final visibleMessages = state.items.where(
-        (message) => message.pseudoMessageType == null,
-      );
-      return Future<int>.value(visibleMessages.length);
-    }
     return _messageService.countLocalMessages(
       jid: chat.remoteJid,
       filter: state.viewFilter,

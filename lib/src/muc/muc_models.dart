@@ -132,9 +132,11 @@ class RoomState {
     this.myOccupantId,
     Set<String>? selfPresenceStatusCodes,
     this.selfPresenceReason,
-  })  : occupants = Map.unmodifiable(occupants ?? <String, Occupant>{}),
+  })  : occupants = Map.unmodifiable(
+          Map<String, Occupant>.of(occupants ?? <String, Occupant>{}),
+        ),
         selfPresenceStatusCodes = Set.unmodifiable(
-          selfPresenceStatusCodes ?? const <String>{},
+          Set<String>.of(selfPresenceStatusCodes ?? const <String>{}),
         );
 
   final String roomJid;
@@ -183,10 +185,9 @@ class RoomState {
     final moderators = <Occupant>[];
     final members = <Occupant>[];
     final visitors = <Occupant>[];
-    final seen = <String>{};
 
     for (final occupant in occupants.values) {
-      if (!seen.add(occupant.occupantId)) continue;
+      if (occupant.affiliation.isOutcast) continue;
       if (occupant.affiliation.isOwner) {
         owners.add(occupant);
       } else if (occupant.affiliation.isAdmin) {
@@ -195,7 +196,7 @@ class RoomState {
         moderators.add(occupant);
       } else if (occupant.affiliation.isMember) {
         members.add(occupant);
-      } else {
+      } else if (occupant.affiliation.isNone) {
         visitors.add(occupant);
       }
     }
