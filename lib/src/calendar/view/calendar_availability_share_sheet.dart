@@ -39,8 +39,6 @@ const int _availabilityDefaultRangeDays = 7;
 const int _availabilityPresetMaxCount = 5;
 const double _availabilitySheetSectionSpacing = 16.0;
 const double _availabilitySheetSectionGap = 8.0;
-const double _availabilitySheetHeaderIconSize = 18.0;
-const double _availabilitySheetProgressStrokeWidth = 2.0;
 const EdgeInsets _availabilityRecipientsContentPadding =
     EdgeInsets.symmetric(horizontal: 16);
 const double _availabilityEditorPanelGap = 16.0;
@@ -1116,8 +1114,8 @@ class _AvailabilityPresetChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final String label =
         preset.name?.trim() ?? _presetRangeLabel(context, preset);
-    return ShadButton.ghost(
-      size: ShadButtonSize.sm,
+    return AxiButton.ghost(
+      size: AxiButtonSize.sm,
       onPressed: onPressed,
       child: Text(label),
     );
@@ -1154,14 +1152,14 @@ class _AvailabilityDualActionRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        ShadButton.ghost(
-          size: ShadButtonSize.sm,
+        AxiButton.ghost(
+          size: AxiButtonSize.sm,
           onPressed: onPrimaryPressed,
           child: Text(primaryLabel),
         ),
         const SizedBox(width: _availabilityRecipientChipSpacing),
-        ShadButton(
-          size: ShadButtonSize.sm,
+        AxiButton.primary(
+          size: AxiButtonSize.sm,
           onPressed: onSecondaryPressed,
           child: Text(secondaryLabel),
         ),
@@ -1185,52 +1183,25 @@ class _AvailabilityActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spinnerColor = context.colorScheme.primaryForeground;
-    final spinner = SizedBox(
-      width: _availabilitySheetHeaderIconSize,
-      height: _availabilitySheetHeaderIconSize,
-      child: CircularProgressIndicator(
-        strokeWidth: _availabilitySheetProgressStrokeWidth,
-        valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
-      ),
-    );
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        ShadButton.ghost(
-          size: ShadButtonSize.sm,
+        AxiButton.ghost(
+          size: AxiButtonSize.sm,
           onPressed: onBack,
           child: Text(context.l10n.commonBack),
         ),
         const SizedBox(width: _availabilityRecipientChipSpacing),
-        ShadButton(
-          size: ShadButtonSize.sm,
-          onPressed: () {
-            if (isBusy) {
-              return;
-            }
-            onPressed();
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ButtonSpinnerSlot(
-                isVisible: isBusy,
-                spinner: spinner,
-                slotSize: _availabilitySheetHeaderIconSize,
-                gap: _availabilitySheetSectionGap,
-                duration: baseAnimationDuration,
-              ),
-              if (!isBusy) ...[
-                const Icon(
-                  LucideIcons.send,
-                  size: _availabilitySheetHeaderIconSize,
-                ),
-                const SizedBox(width: _availabilitySheetSectionGap),
-              ],
-              Text(label),
-            ],
+        AxiButton.primary(
+          size: AxiButtonSize.sm,
+          onPressed: isBusy ? null : onPressed,
+          loading: isBusy,
+          widthBehavior: AxiButtonWidth.fit,
+          leading: Icon(
+            LucideIcons.send,
+            size: context.sizing.iconButtonIconSize,
           ),
+          child: Text(label),
         ),
       ],
     );

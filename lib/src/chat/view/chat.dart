@@ -1008,8 +1008,6 @@ class _ChatState extends State<Chat> {
   LocalHistoryEntry? _chatRouteHistoryEntry;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
-  GlobalKey? _selectionExtrasGlobalKey;
-  Size? _selectionExtrasSize;
   final _multiSelectedMessageIds = <String>{};
   final _selectedMessageSnapshots = <String, Message>{};
   final _messageKeys = <String, GlobalKey>{};
@@ -2191,11 +2189,9 @@ class _ChatState extends State<Chat> {
       return true;
     }
     for (final recipient in recipients) {
-      final targetChat = recipient.target.chat;
-      if (targetChat != null && targetChat.defaultTransport.isEmail) {
-        return true;
-      }
-      if (_isEmailOnlyAddress(recipient.target.address)) {
+      final transport =
+          recipient.target.chat?.defaultTransport ?? recipient.target.transport;
+      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
         return true;
       }
     }
@@ -2883,8 +2879,6 @@ class _ChatState extends State<Chat> {
     if (_selectedMessageId == null) return;
     setState(() {
       _selectedMessageId = null;
-      _selectionExtrasGlobalKey = null;
-      _selectionExtrasSize = null;
     });
   }
 
@@ -3037,8 +3031,6 @@ class _ChatState extends State<Chat> {
     if (_selectedMessageId == messageId) return;
     setState(() {
       _selectedMessageId = messageId;
-      _selectionExtrasGlobalKey = GlobalKey();
-      _selectionExtrasSize = null;
     });
     if (!mounted) return;
     await _scrollSelectedMessageIntoView(messageId);
@@ -3055,30 +3047,6 @@ class _ChatState extends State<Chat> {
       duration: _bubbleFocusDuration,
       curve: _bubbleFocusCurve,
     );
-  }
-
-  Future<void> _scrollSelectionExtrasIntoView({
-    Duration duration = Duration.zero,
-  }) async {
-    final context = _selectionExtrasGlobalKey?.currentContext;
-    if (context == null) return;
-    await Scrollable.ensureVisible(
-      context,
-      alignment: 0.5,
-      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-      duration: duration,
-      curve: _bubbleFocusCurve,
-    );
-  }
-
-  void _handleSelectionExtrasSizeChange(Size size) {
-    if (_selectedMessageId == null) return;
-    if (_selectionExtrasSize == size) return;
-    _selectionExtrasSize = size;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectedMessageId == null) return;
-      _scrollSelectionExtrasIntoView();
-    });
   }
 
   @override
@@ -7113,56 +7081,39 @@ class _ChatState extends State<Chat> {
                                                               ValueKey(
                                                             'selection-extras-${messageModel.stanzaID}-${isSingleSelection ? 'open' : 'closed'}',
                                                           );
-                                                          final selectionExtrasTarget =
-                                                              Align(
-                                                            key: isSingleSelection
-                                                                ? _selectionExtrasGlobalKey
-                                                                : null,
-                                                            alignment: self
-                                                                ? Alignment
-                                                                    .centerRight
-                                                                : Alignment
-                                                                    .centerLeft,
-                                                            child: SizedBox(
-                                                              width:
-                                                                  selectionExtrasMaxWidth,
-                                                              child: Padding(
-                                                                padding:
-                                                                    attachmentPadding,
-                                                                child: Column(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .center,
-                                                                  children: [
-                                                                    actionBar,
-                                                                    if (reactionManager !=
-                                                                        null)
-                                                                      const SizedBox(
-                                                                        height:
-                                                                            20,
-                                                                      ),
-                                                                    if (reactionManager !=
-                                                                        null)
-                                                                      reactionManager,
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          );
                                                           final selectionExtras =
                                                               isSingleSelection
                                                                   ? KeyedSubtree(
                                                                       key:
                                                                           selectionExtrasKey,
                                                                       child:
-                                                                          _SizeReportingWidget(
-                                                                        onSizeChange:
-                                                                            _handleSelectionExtrasSizeChange,
+                                                                          Align(
+                                                                        alignment: self
+                                                                            ? Alignment.centerRight
+                                                                            : Alignment.centerLeft,
                                                                         child:
-                                                                            selectionExtrasTarget,
+                                                                            SizedBox(
+                                                                          width:
+                                                                              selectionExtrasMaxWidth,
+                                                                          child:
+                                                                              Padding(
+                                                                            padding:
+                                                                                attachmentPadding,
+                                                                            child:
+                                                                                Column(
+                                                                              mainAxisSize: MainAxisSize.min,
+                                                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                                                              children: [
+                                                                                actionBar,
+                                                                                if (reactionManager != null)
+                                                                                  const SizedBox(
+                                                                                    height: 20,
+                                                                                  ),
+                                                                                if (reactionManager != null) reactionManager,
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                        ),
                                                                       ),
                                                                     )
                                                                   : KeyedSubtree(

@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chats_cubit.freezed.dart';
+
 part 'chats_state.dart';
 
 enum ChatRouteIndex {
@@ -659,20 +660,10 @@ class ChatsCubit extends Cubit<ChatsState> {
     emit(state.copyWith(creationStatus: RequestStatus.none));
   }
 
-  Future<void> refreshHomeSync() async {
+  void refreshHomeSync() {
     if (state.refreshStatus.isLoading) return;
     emit(state.copyWith(refreshStatus: RequestStatus.loading));
-    try {
-      final syncedAt = await _homeRefreshSyncService.refresh();
-      emit(
-        state.copyWith(
-          refreshStatus: RequestStatus.success,
-          lastSyncedAt: syncedAt,
-        ),
-      );
-    } on Exception {
-      emit(state.copyWith(refreshStatus: RequestStatus.failure));
-    }
+    unawaited(_homeRefreshSyncService.refresh());
   }
 
   void clearRefreshStatus() {

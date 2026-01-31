@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:equatable/equatable.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 enum CalendarSidebarSection { unscheduled, reminders }
@@ -27,8 +26,6 @@ class CalendarSidebarController extends ChangeNotifier {
         );
 
   CalendarSidebarState _state;
-  bool _notifyPending = false;
-
   CalendarSidebarState get state => _state;
 
   void syncBounds({
@@ -137,21 +134,7 @@ class CalendarSidebarController extends ChangeNotifier {
       return;
     }
     _state = next;
-    final SchedulerPhase phase = SchedulerBinding.instance.schedulerPhase;
-    final bool shouldDefer = phase == SchedulerPhase.persistentCallbacks ||
-        phase == SchedulerPhase.postFrameCallbacks;
-    if (!shouldDefer) {
-      notifyListeners();
-      return;
-    }
-    if (_notifyPending) {
-      return;
-    }
-    _notifyPending = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _notifyPending = false;
-      notifyListeners();
-    });
+    notifyListeners();
   }
 }
 

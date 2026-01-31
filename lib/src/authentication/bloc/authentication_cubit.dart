@@ -12,10 +12,10 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -235,7 +235,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _triggerEmailReconnect();
         await _flushPendingAccountDeletions();
         if (_authenticatedJid != null) {
-          await _homeRefreshSyncService.syncOnLogin();
+          unawaited(_homeRefreshSyncService.syncOnLogin());
         }
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
@@ -324,6 +324,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _activeSignupCredentialKey;
   AvatarUploadPayload? _signupAvatarDraft;
   _AuthTransaction? _authTransaction;
+
   bool get _stickyAuthActive => state is AuthenticationComplete;
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
@@ -1981,7 +1982,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _updateEmailForegroundKeepalive();
     await _triggerEmailReconnect();
     if (_xmppService.connectionState == ConnectionState.connected) {
-      await _homeRefreshSyncService.syncOnLogin();
+      unawaited(_homeRefreshSyncService.syncOnLogin());
     }
   }
 

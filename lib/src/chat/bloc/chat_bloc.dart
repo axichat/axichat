@@ -462,6 +462,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return bareAddress(jid);
   }
 
+  MessageTransport? _transportForRecipient(ComposerRecipient recipient) {
+    final chat = recipient.target.chat;
+    if (chat != null) {
+      return chat.defaultTransport;
+    }
+    return recipient.target.transport;
+  }
+
   Future<void> _markEmailMessagesDisplayedLocally(
     List<Message> messages,
   ) async {
@@ -4574,20 +4582,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailRecipients = <ComposerRecipient>[];
     final xmppRecipients = <ComposerRecipient>[];
     for (final recipient in recipients) {
-      final targetChat = recipient.target.chat;
       if (forceEmail) {
         emailRecipients.add(recipient);
         continue;
       }
-      if (targetChat == null) {
-        if (_isEmailOnlyAddress(recipient.target.address)) {
-          emailRecipients.add(recipient);
-        } else {
-          xmppRecipients.add(recipient);
-        }
-        continue;
-      }
-      if (targetChat.defaultTransport.isEmail) {
+      final transport = _transportForRecipient(recipient);
+      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
         emailRecipients.add(recipient);
       } else {
         xmppRecipients.add(recipient);
@@ -4604,11 +4604,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return true;
     }
     for (final recipient in recipients) {
-      final targetChat = recipient.target.chat;
-      if (targetChat != null && _isEmailCapableChat(targetChat)) {
-        return true;
-      }
-      if (_isEmailOnlyAddress(recipient.target.address)) {
+      final transport = _transportForRecipient(recipient);
+      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
         return true;
       }
     }
@@ -4623,11 +4620,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return true;
     }
     for (final recipient in recipients) {
-      final targetChat = recipient.target.chat;
-      if (targetChat != null && targetChat.defaultTransport.isEmail) {
-        return true;
-      }
-      if (_isEmailOnlyAddress(recipient.target.address)) {
+      final transport = _transportForRecipient(recipient);
+      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
         return true;
       }
     }

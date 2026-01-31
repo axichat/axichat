@@ -26,9 +26,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _criticalPathShareHeaderIconSize = 18.0;
-const double _criticalPathShareProgressStrokeWidth = 2.0;
-
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
   required CalendarCriticalPath path,
@@ -313,45 +310,18 @@ class _CriticalPathShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spinnerColor = context.colorScheme.primaryForeground;
-    final spinner = SizedBox(
-      width: _criticalPathShareHeaderIconSize,
-      height: _criticalPathShareHeaderIconSize,
-      child: CircularProgressIndicator(
-        strokeWidth: _criticalPathShareProgressStrokeWidth,
-        valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
-      ),
-    );
     return Align(
       alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
-        onPressed: () {
-          if (isBusy) {
-            return;
-          }
-          onPressed();
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ButtonSpinnerSlot(
-              isVisible: isBusy,
-              spinner: spinner,
-              slotSize: _criticalPathShareHeaderIconSize,
-              gap: context.spacing.m,
-              duration: baseAnimationDuration,
-            ),
-            if (!isBusy) ...[
-              const Icon(
-                LucideIcons.share2,
-                size: _criticalPathShareHeaderIconSize,
-              ),
-              SizedBox(width: context.spacing.m),
-            ],
-            Text(label),
-          ],
+      child: AxiButton.primary(
+        size: AxiButtonSize.sm,
+        onPressed: isBusy ? null : onPressed,
+        loading: isBusy,
+        widthBehavior: AxiButtonWidth.fit,
+        leading: Icon(
+          LucideIcons.share2,
+          size: context.sizing.iconButtonIconSize,
         ),
+        child: Text(label),
       ),
     );
   }

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:flutter/material.dart';
 
-class TaskTileSurface extends StatelessWidget {
+class TaskTileSurface extends StatefulWidget {
   const TaskTileSurface({
     super.key,
     required this.margin,
@@ -34,13 +36,62 @@ class TaskTileSurface extends StatelessWidget {
   final double? leadingStripeWidth;
 
   @override
+  State<TaskTileSurface> createState() => _TaskTileSurfaceState();
+}
+
+class _TaskTileSurfaceState extends State<TaskTileSurface> {
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
+  bool _hovered = false;
+  bool _pressed = false;
+
+  void _setHovered(bool value) {
+    if (_hovered == value) return;
+    if (!mounted) return;
+    setState(() {
+      _hovered = value;
+    });
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    if (!mounted) return;
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  Color? _resolveOverlayColor({required bool focused}) {
+    if (_pressed) {
+      return widget.highlightColor ?? widget.splashColor;
+    }
+    if (_hovered) {
+      return widget.hoverColor;
+    }
+    if (focused) {
+      return widget.focusColor;
+    }
+    return null;
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskTileSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.onTap == null && (_hovered || _pressed)) {
+      _hovered = false;
+      _pressed = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final RoundedSuperellipseBorder shape =
         RoundedSuperellipseBorder(borderRadius: context.radius);
-    final MouseCursor effectiveCursor = mouseCursor ??
-        (onTap != null ? SystemMouseCursors.click : MouseCursor.defer);
-    final Border? border =
-        decoration.border is Border ? decoration.border as Border : null;
+    final bool enabled = widget.onTap != null;
+    final MouseCursor effectiveCursor = widget.mouseCursor ??
+        (enabled ? SystemMouseCursors.click : MouseCursor.defer);
+    final Border? border = widget.decoration.border is Border
+        ? widget.decoration.border as Border
+        : null;
     final BorderSide? uniformSide =
         border == null || !border.isUniform ? null : border.top;
     final RoundedSuperellipseBorder decoratedShape = uniformSide == null
@@ -50,12 +101,12 @@ class TaskTileSurface extends StatelessWidget {
             side: uniformSide,
           );
     final ShapeDecoration shapedDecoration = ShapeDecoration(
-      color: decoration.color,
+      color: widget.decoration.color,
       shape: decoratedShape,
-      shadows: decoration.boxShadow,
+      shadows: widget.decoration.boxShadow,
     );
-    final double? stripeWidth = leadingStripeWidth;
-    final Color? stripeColor = leadingStripeColor;
+    final double? stripeWidth = widget.leadingStripeWidth;
+    final Color? stripeColor = widget.leadingStripeColor;
     final Widget content =
         stripeColor != null && stripeWidth != null && stripeWidth > 0
             ? CustomPaint(
@@ -64,30 +115,66 @@ class TaskTileSurface extends StatelessWidget {
                   color: stripeColor,
                   width: stripeWidth,
                 ),
-                child: child,
+                child: widget.child,
               )
-            : child;
+            : widget.child;
 
     return Container(
-      margin: margin,
+      margin: widget.margin,
       child: AxiTapBounce(
-        enabled: onTap != null,
-        child: DecoratedBox(
-          decoration: shapedDecoration,
-          child: Material(
-            type: MaterialType.transparency,
-            shape: decoratedShape,
-            child: InkWell(
-              onTap: onTap,
-              customBorder: decoratedShape,
-              mouseCursor: effectiveCursor,
-              hoverColor: hoverColor ?? Colors.transparent,
-              splashColor: splashColor ?? Colors.transparent,
-              highlightColor: highlightColor ?? Colors.transparent,
-              focusColor: focusColor ?? Colors.transparent,
-              child: content,
-            ),
-          ),
+        enabled: enabled,
+        controller: _bounceController,
+        child: ShadFocusable(
+          canRequestFocus: enabled,
+          builder: (context, focused, _) {
+            final Color? overlayColor = _resolveOverlayColor(focused: focused);
+            final Widget overlay = overlayColor == null
+                ? const SizedBox.shrink()
+                : DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: overlayColor,
+                      shape: decoratedShape,
+                    ),
+                  );
+            final Widget decoratedContent = Stack(
+              fit: StackFit.passthrough,
+              children: [
+                DecoratedBox(decoration: shapedDecoration, child: content),
+                if (overlayColor != null)
+                  Positioned.fill(child: IgnorePointer(child: overlay)),
+              ],
+            );
+
+            return Material(
+              type: MaterialType.transparency,
+              shape: decoratedShape,
+              clipBehavior: Clip.antiAlias,
+              child: ShadGestureDetector(
+                cursor: effectiveCursor,
+                onHoverChange: enabled ? _setHovered : null,
+                onTap: enabled ? widget.onTap : null,
+                onTapDown: enabled
+                    ? (details) {
+                        _setPressed(true);
+                        _bounceController.handleTapDown(details);
+                      }
+                    : null,
+                onTapUp: enabled
+                    ? (details) {
+                        _setPressed(false);
+                        _bounceController.handleTapUp(details);
+                      }
+                    : null,
+                onTapCancel: enabled
+                    ? () {
+                        _setPressed(false);
+                        _bounceController.handleTapCancel();
+                      }
+                    : null,
+                child: decoratedContent,
+              ),
+            );
+          },
         ),
       ),
     );

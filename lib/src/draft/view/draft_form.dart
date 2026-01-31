@@ -17,6 +17,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -1180,6 +1181,10 @@ class _DraftFormState extends State<DraftForm> {
 
   String? _resolveXmppJid(ComposerRecipient recipient) {
     final chat = recipient.target.chat;
+    final transport = recipient.target.transport ?? chat?.defaultTransport;
+    if (transport?.isEmail ?? false) {
+      return null;
+    }
     if (chat != null) {
       return _isAxiDestination(chat.jid) ? chat.jid : null;
     }
@@ -1194,6 +1199,10 @@ class _DraftFormState extends State<DraftForm> {
 
   bool _isEmailRecipient(ComposerRecipient recipient) {
     final chat = recipient.target.chat;
+    final transport = recipient.target.transport ?? chat?.defaultTransport;
+    if (transport?.isEmail ?? false) {
+      return true;
+    }
     if (chat != null) {
       final address = _recipientAddress(chat);
       return address != null && !_isAxiDestination(address);

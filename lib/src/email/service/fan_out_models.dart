@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 
@@ -58,6 +59,7 @@ class FanOutTarget extends Equatable {
     required this.address,
     required this.displayName,
     required this.shareSignatureEnabled,
+    required this.transport,
   });
 
   factory FanOutTarget.chat({
@@ -69,12 +71,14 @@ class FanOutTarget extends Equatable {
         address: chat.emailAddress,
         displayName: chat.contactDisplayName,
         shareSignatureEnabled: shareSignatureEnabled,
+        transport: chat.defaultTransport,
       );
 
   factory FanOutTarget.address({
     required String address,
     String? displayName,
     required bool shareSignatureEnabled,
+    MessageTransport? transport,
   }) {
     final trimmed = address.trim();
     final resolvedDisplayName = displayName?.trim();
@@ -85,6 +89,7 @@ class FanOutTarget extends Equatable {
           ? resolvedDisplayName
           : trimmed,
       shareSignatureEnabled: shareSignatureEnabled,
+      transport: transport,
     );
   }
 
@@ -92,6 +97,7 @@ class FanOutTarget extends Equatable {
   final String? address;
   final String? displayName;
   final bool shareSignatureEnabled;
+  final MessageTransport? transport;
 
   String get key => chat?.jid ?? normalizedAddress ?? address!;
 
@@ -109,6 +115,7 @@ class FanOutTarget extends Equatable {
         address,
         displayName,
         shareSignatureEnabled,
+        transport,
       ];
 }
 
