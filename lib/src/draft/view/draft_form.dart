@@ -205,6 +205,7 @@ class _DraftFormState extends State<DraftForm> {
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
         final chats = chatsState.items ?? const <Chat>[];
+        final locate = context.read;
         _scheduleRecipientsInitialization(chats);
         final autovalidateMode = _showValidationMessages
             ? AutovalidateMode.always
@@ -313,6 +314,9 @@ class _DraftFormState extends State<DraftForm> {
                                 recipients: _recipients,
                                 availableChats: chats,
                                 rosterItems: rosterItems,
+                                recipientSuggestionsStream: locate<ChatsCubit>()
+                                    .recipientAddressSuggestionsStream(),
+                                selfJid: locate<ChatsCubit>().selfJid,
                                 onRecipientAdded: (target) {
                                   _handleRecipientAdded(target);
                                   field.didChange(null);

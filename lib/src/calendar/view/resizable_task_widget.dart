@@ -560,8 +560,7 @@ class _ResizableTaskBody extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style:
-                    context.textTheme.label.copyWith(color: secondaryColor),
+                style: context.textTheme.label.copyWith(color: secondaryColor),
               ),
             ),
           ],

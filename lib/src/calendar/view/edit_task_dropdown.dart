@@ -1416,7 +1416,6 @@ class _EditTaskInlineActionChip extends StatelessWidget {
         borderRadius: context.radius,
       ),
       child: AxiButton.ghost(
-        size: AxiButtonSize.sm,
         widthBehavior: AxiButtonWidth.fit,
         onPressed: action.onSelected,
         leading: Icon(

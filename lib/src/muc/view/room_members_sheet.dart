@@ -8,6 +8,7 @@ import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';

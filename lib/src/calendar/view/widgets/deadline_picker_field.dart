@@ -1061,11 +1061,7 @@ class _DeadlineFieldContent extends StatelessWidget {
       if (!showStatusLabel) {
         return Text(
           value,
-          style: TextStyle(
-            fontSize: 14,
-            color: calendarTitleColor,
-            fontWeight: FontWeight.w500,
-          ),
+          style: context.textTheme.small.copyWith(color: calendarTitleColor),
         );
       }
 
@@ -1075,21 +1071,15 @@ class _DeadlineFieldContent extends StatelessWidget {
         children: [
           Text(
             statusLabel ?? value,
-            style: TextStyle(
-              fontSize: 12,
+            style: context.textTheme.label.strong.copyWith(
               color: iconColor,
-              fontWeight: FontWeight.w600,
               letterSpacing: 0.2,
             ),
           ),
           const SizedBox(height: calendarInsetSm),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 14,
-              color: calendarTitleColor,
-              fontWeight: FontWeight.w500,
-            ),
+            style: context.textTheme.small.copyWith(color: calendarTitleColor),
           ),
         ],
       );
@@ -1097,11 +1087,7 @@ class _DeadlineFieldContent extends StatelessWidget {
 
     return Text(
       placeholder,
-      style: TextStyle(
-        fontSize: 14,
-        color: calendarTimeLabelColor,
-        fontWeight: FontWeight.w400,
-      ),
+      style: context.textTheme.small.copyWith(color: calendarTimeLabelColor),
     );
   }
 }
@@ -1139,11 +1125,8 @@ class _DeadlineMonthHeader extends StatelessWidget {
             child: Center(
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: calendarTitleColor,
-                ),
+                style: context.textTheme.small.strong
+                    .copyWith(color: calendarTitleColor),
               ),
             ),
           ),
@@ -1172,17 +1155,29 @@ class _DeadlineNavigationButton extends StatelessWidget {
     final iconColor = enabled
         ? calendarTitleColor
         : calendarSubtitleColor.withValues(alpha: 0.4);
+    const desiredPadding = EdgeInsets.symmetric(
+      horizontal: calendarGutterSm,
+      vertical: calendarInsetLg,
+    );
+    final basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final extraPadding = EdgeInsets.only(
+      left: math.max(0, desiredPadding.left - basePadding.left),
+      right: math.max(0, desiredPadding.right - basePadding.right),
+      top: math.max(0, desiredPadding.top - basePadding.top),
+      bottom: math.max(0, desiredPadding.bottom - basePadding.bottom),
+    );
 
-    return ShadButton.outline(
-      size: ShadButtonSize.sm,
-      foregroundColor: iconColor,
-      hoverForegroundColor: enabled ? calendarPrimaryColor : iconColor,
+    return AxiButton.outline(
+      size: AxiButtonSize.sm,
       onPressed: onPressed,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetLg,
+      child: Padding(
+        padding: extraPadding,
+        child: Icon(
+          icon,
+          size: context.sizing.menuItemIconSize,
+          color: iconColor,
+        ),
       ),
-      child: Icon(icon, size: 16, color: iconColor),
     );
   }
 }
@@ -1230,9 +1225,7 @@ class _DeadlineCalendarGrid extends StatelessWidget {
                     child: Center(
                       child: Text(
                         label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                        style: context.textTheme.labelSm.strong.copyWith(
                           color: calendarTimeLabelColor,
                         ),
                       ),
@@ -1258,50 +1251,28 @@ class _DeadlineCalendarGrid extends StatelessWidget {
               return SizedBox(
                 width: 36,
                 height: 36,
-                child: ShadButton.raw(
+                child: AxiButton(
                   variant: isSelected
-                      ? ShadButtonVariant.primary
-                      : ShadButtonVariant.outline,
-                  size: ShadButtonSize.sm,
+                      ? AxiButtonVariant.primary
+                      : AxiButtonVariant.outline,
+                  size: AxiButtonSize.sm,
+                  widthBehavior: AxiButtonWidth.expand,
+                  selected: isSelected,
                   onPressed: isDisabled ? null : () => onDaySelected(date),
-                  backgroundColor: isSelected
-                      ? calendarPrimaryColor
-                      : isDisabled
-                          ? calendarBorderColor.withValues(alpha: 0.2)
-                          : calendarContainerColor,
-                  hoverBackgroundColor: isSelected
-                      ? calendarPrimaryHoverColor
-                      : isDisabled
-                          ? calendarBorderColor.withValues(alpha: 0.2)
-                          : calendarPrimaryColor.withValues(alpha: 0.12),
-                  foregroundColor: isSelected
-                      ? context.colorScheme.primaryForeground
-                      : isDisabled
-                          ? calendarSubtitleColor.withValues(alpha: 0.6)
-                          : calendarTitleColor,
-                  hoverForegroundColor: isSelected
-                      ? context.colorScheme.primaryForeground
-                      : isDisabled
-                          ? calendarSubtitleColor.withValues(alpha: 0.6)
-                          : calendarPrimaryColor,
-                  padding: EdgeInsets.zero,
                   child: Text(
                     '${date.day}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : isDisabled
-                              ? FontWeight.w400
-                              : FontWeight.w500,
-                      color: isSelected
-                          ? context.colorScheme.primaryForeground
-                          : isToday
-                              ? calendarPrimaryColor
-                              : isDisabled
-                                  ? calendarSubtitleColor.withValues(alpha: 0.6)
-                                  : calendarTitleColor,
-                    ),
+                    style:
+                        context.textTheme.label.strongIf(isSelected).copyWith(
+                              color: isSelected
+                                  ? context.colorScheme.primaryForeground
+                                  : isToday
+                                      ? calendarPrimaryColor
+                                      : isDisabled
+                                          ? calendarSubtitleColor.withValues(
+                                              alpha: 0.6,
+                                            )
+                                          : calendarTitleColor,
+                            ),
                   ),
                 ),
               );
@@ -1355,9 +1326,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
         children: [
           Text(
             context.l10n.commonTimeLabel,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+            style: context.textTheme.labelSm.strong.copyWith(
               color: calendarSubtitleColor,
               letterSpacing: 0.3,
             ),
@@ -1409,9 +1378,7 @@ class _DeadlineTimeDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w600,
+    final TextStyle labelStyle = context.textTheme.labelSm.strong.copyWith(
       color: calendarSubtitleColor,
       letterSpacing: 0.3,
     );
@@ -1483,9 +1450,10 @@ class _DeadlinePickerActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final verticalPadding = showTimeSelectors ? 10.0 : 8.0;
-    final horizontalPadding = showTimeSelectors ? 12.0 : 16.0;
+    final verticalPadding =
+        showTimeSelectors ? calendarGutterMd : calendarGutterSm;
+    final horizontalPadding =
+        showTimeSelectors ? calendarGutterMd : calendarGutterLg;
     final Widget content = Container(
       padding: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
@@ -1496,26 +1464,22 @@ class _DeadlinePickerActions extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ShadButton.outline(
-            size: ShadButtonSize.sm,
+          AxiButton.outline(
+            size: AxiButtonSize.sm,
             onPressed: onCancel,
             child: Text(context.l10n.commonCancel),
           ),
           if (hasValue && onClear != null) ...[
             const SizedBox(width: calendarGutterSm),
-            ShadButton.outline(
-              size: ShadButtonSize.sm,
+            AxiButton.outline(
+              size: AxiButtonSize.sm,
               onPressed: onClear,
               child: Text(context.l10n.commonClear),
             ),
           ],
           const Spacer(),
-          ShadButton(
-            size: ShadButtonSize.sm,
-            backgroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryHoverColor,
-            foregroundColor: colors.primaryForeground,
-            hoverForegroundColor: colors.primaryForeground,
+          AxiButton.primary(
+            size: AxiButtonSize.sm,
             onPressed: onDone,
             child: Text(context.l10n.commonDone),
           ),

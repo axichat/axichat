@@ -825,4 +825,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     final db = await _loadDatabase();
     return db.getChatMessages(jid, start: offset, end: limit);
   }
+
+  Stream<List<String>> recipientAddressSuggestionsStream() =>
+      _chatsService.recipientAddressSuggestionsStream();
+
+  String? get selfJid => _xmppService.myJid;
 }

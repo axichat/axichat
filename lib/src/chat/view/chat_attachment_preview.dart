@@ -24,7 +24,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -415,6 +414,8 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                             stanzaId: stanzaId,
                             hasLocalFile: true,
                             downloadDelegate: downloadDelegate,
+                            metadataReloadDelegate:
+                                widget.metadataReloadDelegate,
                             typeReport: resolvedReport,
                           );
                         }
@@ -424,6 +425,8 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                             stanzaId: stanzaId,
                             hasLocalFile: true,
                             downloadDelegate: downloadDelegate,
+                            metadataReloadDelegate:
+                                widget.metadataReloadDelegate,
                             typeReport: resolvedReport,
                           );
                         }
@@ -450,6 +453,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                       stanzaId: stanzaId,
                       hasLocalFile: false,
                       downloadDelegate: downloadDelegate,
+                      metadataReloadDelegate: widget.metadataReloadDelegate,
                       typeReport: declaredReport,
                     );
                   }
@@ -459,6 +463,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                       stanzaId: stanzaId,
                       hasLocalFile: false,
                       downloadDelegate: downloadDelegate,
+                      metadataReloadDelegate: widget.metadataReloadDelegate,
                       typeReport: declaredReport,
                     );
                   }
@@ -485,6 +490,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                 stanzaId: stanzaId,
                 hasLocalFile: false,
                 downloadDelegate: downloadDelegate,
+                metadataReloadDelegate: widget.metadataReloadDelegate,
                 typeReport: declaredReport,
               );
             }
@@ -494,6 +500,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                 stanzaId: stanzaId,
                 hasLocalFile: false,
                 downloadDelegate: downloadDelegate,
+                metadataReloadDelegate: widget.metadataReloadDelegate,
                 typeReport: declaredReport,
               );
             }
@@ -567,6 +574,7 @@ class _ImageAttachment extends StatefulWidget {
     required this.stanzaId,
     required this.hasLocalFile,
     this.downloadDelegate,
+    this.metadataReloadDelegate,
     this.typeReport,
   });
 
@@ -574,6 +582,7 @@ class _ImageAttachment extends StatefulWidget {
   final String stanzaId;
   final bool hasLocalFile;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final FileTypeReport? typeReport;
 
   @override
@@ -804,6 +813,7 @@ class _VideoAttachment extends StatefulWidget {
     required this.stanzaId,
     required this.hasLocalFile,
     this.downloadDelegate,
+    this.metadataReloadDelegate,
     this.typeReport,
   });
 
@@ -811,6 +821,7 @@ class _VideoAttachment extends StatefulWidget {
   final String stanzaId;
   final bool hasLocalFile;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final FileTypeReport? typeReport;
 
   @override

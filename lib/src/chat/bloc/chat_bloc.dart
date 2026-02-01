@@ -41,9 +41,11 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/app_language.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
+import 'package:drift/drift.dart' hide JsonKey;
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
@@ -487,6 +489,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   Completer<void>? _mamLoadingCompleter;
+  int? _attachmentMapsSignature;
+  Map<String, List<String>> _cachedAttachmentIdsByMessageId =
+      const <String, List<String>>{};
+  Map<String, String> _cachedAttachmentGroupLeaderByMessageId =
+      const <String, String>{};
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   List<Chat> _roomChats = const <Chat>[];
   String? _roomSelfAvatarPath;
@@ -517,8 +524,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (messages.isEmpty) return;
     if (_messageService case final XmppBase xmppBase) {
       final db = await xmppBase.database;
-      for (final message in messages) {
-        await db.markMessageDisplayed(message.stanzaID);
+      final stanzaIds = messages
+          .map((message) => message.stanzaID)
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+      if (stanzaIds.isEmpty) return;
+      if (db is XmppDrift) {
+        await db.batch((batch) {
+          batch.update(
+            db.messages,
+            const MessagesCompanion(displayed: Value(true)),
+            where: (tbl) =>
+                tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds),
+          );
+        });
+        return;
+      }
+      for (final id in stanzaIds) {
+        await db.markMessageDisplayed(id);
       }
     }
   }
@@ -1108,6 +1132,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _httpUploadSupportSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
+    _autoDownloadAttemptedMetadataIds.clear();
+    _autoDownloadAttemptedEmailMessages.clear();
     _lifecycleListener?.dispose();
     _lifecycleListener = null;
     return super.close();
@@ -1178,7 +1204,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _lastNoticedEmailMessageId = null;
       _lastNoticedEmailUnreadCount = null;
       _lastOccupantTrackedStanzaId = null;
+      _attachmentMapsSignature = null;
+      _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
+      _cachedAttachmentGroupLeaderByMessageId = const <String, String>{};
       _shareContextAttemptedStanzaIds.clear();
+      _autoDownloadAttemptedMetadataIds.clear();
+      _autoDownloadAttemptedEmailMessages.clear();
       await _subscribeToMessages(
         limit: desiredLimit,
         filter: nextViewFilter,
@@ -4625,6 +4656,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         Map<String, String> groupLeaderByMessageId,
       })> _loadAttachmentMaps(List<Message> messages) async {
     if (messages.isEmpty) {
+      _attachmentMapsSignature = null;
+      _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
+      _cachedAttachmentGroupLeaderByMessageId = const <String, String>{};
       return (
         attachmentsByMessageId: const <String, List<String>>{},
         groupLeaderByMessageId: const <String, String>{},
@@ -4634,13 +4668,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final messageIds = <String>[];
     final messageById = <String, Message>{};
     final messageIndex = <String, int>{};
+    var signature = messages.length;
     for (var index = 0; index < messages.length; index += 1) {
       final message = messages[index];
       final id = message.id;
+      final signatureKey = id ?? message.stanzaID;
+      signature = Object.hash(signature, signatureKey, message.fileMetadataID);
       if (id == null || id.isEmpty) continue;
       messageIds.add(id);
       messageById[id] = message;
       messageIndex[id] = index;
+    }
+    if (signature == _attachmentMapsSignature) {
+      return (
+        attachmentsByMessageId: _cachedAttachmentIdsByMessageId,
+        groupLeaderByMessageId: _cachedAttachmentGroupLeaderByMessageId,
+      );
     }
     final attachmentByMessageId = <String, List<String>>{};
     final groupLeaderByMessageId = <String, String>{};
@@ -4697,6 +4740,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
+    _attachmentMapsSignature = signature;
+    _cachedAttachmentIdsByMessageId = attachmentByMessageId;
+    _cachedAttachmentGroupLeaderByMessageId = groupLeaderByMessageId;
     return (
       attachmentsByMessageId: attachmentByMessageId,
       groupLeaderByMessageId: groupLeaderByMessageId,

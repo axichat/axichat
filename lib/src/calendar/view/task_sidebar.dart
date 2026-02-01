@@ -31,7 +31,6 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
@@ -2289,15 +2288,15 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  ShadButton.ghost(
+                  AxiButton.ghost(
                     onPressed: () => Navigator.of(sheetContext).maybePop(false),
                     child: Text(context.l10n.commonCancel),
-                  ).withTapBounce(),
+                  ),
                   const SizedBox(width: calendarInsetSm),
-                  ShadButton.destructive(
+                  AxiButton.destructive(
                     onPressed: () => Navigator.of(sheetContext).pop(true),
                     child: Text(sheetContext.l10n.commonDelete),
-                  ).withTapBounce(),
+                  ),
                 ],
               ),
             ],
@@ -3119,8 +3118,8 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
               TaskSectionHeader(
                 title: l10n.calendarSelectionMode,
                 padding: const EdgeInsets.only(bottom: calendarGutterSm),
-                trailing: ShadButton.outline(
-                  size: ShadButtonSize.sm,
+                trailing: AxiButton.outline(
+                  size: AxiButtonSize.sm,
                   onPressed: onExitSelection,
                   child: Text(l10n.calendarExit),
                 ),
@@ -3330,7 +3329,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: TaskPrimaryButton(
             label: l10n.calendarApplyChanges,
-            size: ShadButtonSize.sm,
+            size: AxiButtonSize.sm,
             onPressed:
                 hasTasks && hasPendingSelectionEdits ? onApplyChanges : null,
           ),
@@ -3915,16 +3914,15 @@ class _AddTaskSection extends StatelessWidget {
                 animation: formActivityListenable,
                 builder: (context, _) {
                   final bool enabled = hasSidebarFormValues();
-                  final button = ShadButton.outline(
-                    size: ShadButtonSize.sm,
+                  final button = AxiButton.outline(
+                    size: AxiButtonSize.sm,
                     onPressed: enabled ? onClearFieldsPressed : null,
                     child: Text(l10n.commonClear),
                   );
-                  final decorated = button.withTapBounce(enabled: enabled);
                   return AnimatedOpacity(
                     duration: baseAnimationDuration,
                     opacity: enabled ? 1 : 0.5,
-                    child: decorated,
+                    child: button,
                   );
                 },
               ),
@@ -4572,28 +4570,19 @@ class _HideCompletedToggle extends StatelessWidget {
     final Color foreground = hiding ? colors.primary : colors.mutedForeground;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
+      child: AxiButton.ghost(
+        size: AxiButtonSize.sm,
         onPressed: () => onChanged(!value),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              hiding ? Icons.visibility_off : Icons.visibility,
-              size: 16,
-              color: foreground,
-            ),
-            const SizedBox(width: calendarInsetMd),
-            Text(
-              context.l10n.calendarCompletedLabel,
-              style: context.textTheme.small.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        leading: Icon(
+          hiding ? Icons.visibility_off : Icons.visibility,
+          size: context.sizing.menuItemIconSize,
+          color: foreground,
         ),
-      ).withTapBounce(),
+        child: Text(
+          context.l10n.calendarCompletedLabel,
+          style: context.textTheme.label.strong.copyWith(color: foreground),
+        ),
+      ),
     );
   }
 }

@@ -983,33 +983,23 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return ShadButton.raw(
-      variant:
-          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
-      size: ShadButtonSize.sm,
-      padding: padding,
-      backgroundColor:
-          isSelected ? calendarPrimaryColor : calendarContainerColor,
-      hoverBackgroundColor: isSelected
-          ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
-      foregroundColor: isSelected
-          ? colors.primaryForeground
-          : enabled
-              ? calendarPrimaryColor
-              : calendarSubtitleColor,
-      hoverForegroundColor:
-          isSelected ? colors.primaryForeground : calendarPrimaryHoverColor,
+    final EdgeInsets basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final EdgeInsets extraPadding = EdgeInsets.only(
+      left: math.max(0, padding.left - basePadding.left),
+      right: math.max(0, padding.right - basePadding.right),
+      top: math.max(0, padding.top - basePadding.top),
+      bottom: math.max(0, padding.bottom - basePadding.bottom),
+    );
+    return AxiButton(
+      variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
+      size: AxiButtonSize.sm,
+      selected: isSelected,
       onPressed: enabled ? onPressed : null,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: _recurrenceBodyFontSize,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-        ),
+      child: Padding(
+        padding: extraPadding,
+        child: Text(label, style: context.textTheme.label.strongIf(isSelected)),
       ),
-    ).withTapBounce();
+    );
   }
 }
 
@@ -1039,43 +1029,33 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ShadColorScheme colors = context.colorScheme;
-    final Color unselectedBackground = colors.muted.withValues(
-      alpha: enabled ? 0.12 : 0.08,
+    final EdgeInsets basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final EdgeInsets extraPadding = EdgeInsets.only(
+      left: math.max(0, padding.left - basePadding.left),
+      right: math.max(0, padding.right - basePadding.right),
+      top: math.max(0, padding.top - basePadding.top),
+      bottom: math.max(0, padding.bottom - basePadding.bottom),
     );
-    final Color unselectedHover = colors.muted.withValues(
-      alpha: enabled ? 0.18 : 0.1,
-    );
-    final Color selectedForeground = colors.primaryForeground;
     return Wrap(
       spacing: 6,
       runSpacing: 6,
       children: List.generate(_values.length, (index) {
         final weekday = _values[index];
         final isSelected = selectedWeekdays.contains(weekday);
-        return ShadButton.raw(
-          variant: isSelected
-              ? ShadButtonVariant.primary
-              : ShadButtonVariant.outline,
-          size: ShadButtonSize.sm,
-          padding: padding,
-          backgroundColor:
-              isSelected ? calendarPrimaryColor : unselectedBackground,
-          hoverBackgroundColor:
-              isSelected ? calendarPrimaryHoverColor : unselectedHover,
-          foregroundColor:
-              isSelected ? selectedForeground : calendarPrimaryColor,
-          hoverForegroundColor:
-              isSelected ? selectedForeground : calendarPrimaryHoverColor,
+        return AxiButton(
+          variant:
+              isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
+          size: AxiButtonSize.sm,
+          selected: isSelected,
           onPressed: enabled ? () => onWeekdayToggled(weekday) : null,
-          child: Text(
-            _labels[index],
-            style: TextStyle(
-              fontSize: _recurrenceBodyFontSize,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          child: Padding(
+            padding: extraPadding,
+            child: Text(
+              _labels[index],
+              style: context.textTheme.label.strongIf(isSelected),
             ),
           ),
-        ).withTapBounce();
+        );
       }),
     );
   }
@@ -1108,10 +1088,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
       children: [
         Text(
           _recurrenceRepeatEveryLabel,
-          style: TextStyle(
-            fontSize: _recurrenceBodyFontSize,
-            color: calendarSubtitleColor,
-          ),
+          style: context.textTheme.label.copyWith(color: calendarSubtitleColor),
         ),
         SizedBox(width: fieldGap),
         SizedBox(
@@ -1147,10 +1124,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
         SizedBox(width: fieldGap),
         Text(
           unitLabel,
-          style: TextStyle(
-            fontSize: _recurrenceBodyFontSize,
-            color: calendarSubtitleColor,
-          ),
+          style: context.textTheme.label.copyWith(color: calendarSubtitleColor),
         ),
       ],
     );
@@ -1194,15 +1168,11 @@ class _RecurrenceEndControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final _RecurrenceEndMode mode = _endModeForValue(value);
     final l10n = context.l10n;
-    final TextStyle labelStyle = TextStyle(
-      fontSize: _recurrenceSmallFontSize,
-      fontWeight: FontWeight.w600,
+    final TextStyle labelStyle = context.textTheme.labelSm.strong.copyWith(
       color: calendarSubtitleColor,
       letterSpacing: _recurrenceLabelLetterSpacing,
     );
-    final TextStyle helperStyle = TextStyle(
-      fontSize: _recurrenceHelperFontSize,
-      fontWeight: FontWeight.w600,
+    final TextStyle helperStyle = context.textTheme.labelSm.strong.copyWith(
       color: calendarSubtitleColor,
     );
     final DateTime? derivedUntil = _deriveUntilForCount(
@@ -1263,10 +1233,8 @@ class _RecurrenceEndControls extends StatelessWidget {
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               hintText: l10n.calendarRepeatTimes,
-              hintStyle: TextStyle(
+              hintStyle: context.textTheme.label.copyWith(
                 color: calendarSubtitleColor.withValues(alpha: 0.55),
-                fontSize: _recurrenceInputHintFontSize,
-                fontWeight: FontWeight.w400,
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: calendarGutterMd,
@@ -1320,36 +1288,27 @@ class _RecurrenceEndModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton.raw(
-      variant:
-          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
-      size: ShadButtonSize.sm,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd,
-        vertical: calendarGutterSm,
-      ),
-      backgroundColor:
-          isSelected ? calendarPrimaryColor : calendarContainerColor,
-      hoverBackgroundColor: isSelected
-          ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
-      foregroundColor: isSelected
-          ? context.colorScheme.primaryForeground
-          : enabled
-              ? calendarPrimaryColor
-              : calendarSubtitleColor,
-      hoverForegroundColor: isSelected
-          ? context.colorScheme.primaryForeground
-          : calendarPrimaryHoverColor,
+    const padding = EdgeInsets.symmetric(
+      horizontal: calendarGutterMd,
+      vertical: calendarGutterSm,
+    );
+    final EdgeInsets basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final EdgeInsets extraPadding = EdgeInsets.only(
+      left: math.max(0, padding.left - basePadding.left),
+      right: math.max(0, padding.right - basePadding.right),
+      top: math.max(0, padding.top - basePadding.top),
+      bottom: math.max(0, padding.bottom - basePadding.bottom),
+    );
+    return AxiButton(
+      variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
+      size: AxiButtonSize.sm,
+      selected: isSelected,
       onPressed: enabled ? onPressed : null,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: _recurrenceBodyFontSize,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-        ),
+      child: Padding(
+        padding: extraPadding,
+        child: Text(label, style: context.textTheme.label.strongIf(isSelected)),
       ),
-    ).withTapBounce();
+    );
   }
 }
 
@@ -1567,10 +1526,8 @@ class _RecurrenceAdvancedActiveBadge extends StatelessWidget {
       ),
       child: Text(
         _recurrenceAdvancedActiveLabel,
-        style: TextStyle(
+        style: context.textTheme.labelSm.strong.copyWith(
           color: colors.mutedForeground,
-          fontSize: _recurrenceSmallFontSize,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1584,9 +1541,8 @@ class _RecurrenceAdvancedSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       _recurrenceAdvancedSummary,
-      style: context.textTheme.muted.copyWith(
-        fontSize: _recurrenceBodyFontSize,
-        fontWeight: FontWeight.w500,
+      style: context.textTheme.label.copyWith(
+        color: context.colorScheme.mutedForeground,
       ),
     );
   }
@@ -1605,9 +1561,7 @@ class _RecurrenceAdvancedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      fontSize: _recurrenceSmallFontSize,
-      fontWeight: FontWeight.w700,
+    final TextStyle labelStyle = context.textTheme.labelSm.strong.copyWith(
       color: context.colorScheme.mutedForeground,
       letterSpacing: _recurrenceLabelLetterSpacing,
     );
@@ -1619,9 +1573,8 @@ class _RecurrenceAdvancedSection extends StatelessWidget {
           const SizedBox(height: calendarInsetSm),
           Text(
             helper!,
-            style: context.textTheme.muted.copyWith(
-              fontSize: _recurrenceHelperFontSize,
-              fontWeight: FontWeight.w500,
+            style: context.textTheme.labelSm.copyWith(
+              color: context.colorScheme.mutedForeground,
             ),
           ),
         ],

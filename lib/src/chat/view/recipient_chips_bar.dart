@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -25,6 +25,8 @@ class RecipientChipsBar extends StatefulWidget {
     required this.recipients,
     required this.availableChats,
     this.rosterItems = const <RosterItem>[],
+    this.recipientSuggestionsStream,
+    this.selfJid,
     required this.onRecipientAdded,
     required this.onRecipientToggled,
     required this.onRecipientRemoved,
@@ -42,6 +44,8 @@ class RecipientChipsBar extends StatefulWidget {
   final List<ComposerRecipient> recipients;
   final List<Chat> availableChats;
   final List<RosterItem> rosterItems;
+  final Stream<List<String>>? recipientSuggestionsStream;
+  final String? selfJid;
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientToggled;
   final ValueChanged<String> onRecipientRemoved;
@@ -67,6 +71,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   StreamSubscription<List<String>>? _recipientSuggestionSubscription;
+  Stream<List<String>>? _recipientSuggestionsStream;
   List<String> _databaseSuggestionAddresses = const [];
   bool _expanded = false;
   late bool _barCollapsed;
@@ -115,16 +120,35 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _knownDomains = pools.domains;
     _knownAddresses = pools.addresses;
     _knownAddressesLower = pools.addressesLower;
+    _updateSuggestionStream(widget.recipientSuggestionsStream);
+    _updateOwnJid(widget.selfJid);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _updateSuggestionStream(widget.recipientSuggestionsStream);
+    _updateOwnJid(widget.selfJid);
+  }
+
+  void _updateSuggestionStream(Stream<List<String>>? stream) {
+    if (identical(stream, _recipientSuggestionsStream)) return;
+    _recipientSuggestionsStream = stream;
     _recipientSuggestionSubscription?.cancel();
-    _recipientSuggestionSubscription = context
-        .read<ChatBloc>()
-        .recipientAddressSuggestionsStream()
-        .listen((addresses) {
+    if (stream == null) {
+      if (_databaseSuggestionAddresses.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _databaseSuggestionAddresses = const [];
+          });
+        } else {
+          _databaseSuggestionAddresses = const [];
+        }
+        _refreshSuggestionPools();
+      }
+      return;
+    }
+    _recipientSuggestionSubscription = stream.listen((addresses) {
       if (!mounted) return;
       if (listEquals(addresses, _databaseSuggestionAddresses)) return;
       setState(() {
@@ -132,7 +156,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       });
       _refreshSuggestionPools();
     });
-    _updateOwnJid(context.read<ChatBloc>().selfJid);
   }
 
   void _updateOwnJid(String? jid) {
@@ -153,6 +176,15 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
       _animateCollapse(_barCollapsed);
+    }
+    if (!identical(
+      oldWidget.recipientSuggestionsStream,
+      widget.recipientSuggestionsStream,
+    )) {
+      _updateSuggestionStream(widget.recipientSuggestionsStream);
+    }
+    if (oldWidget.selfJid != widget.selfJid) {
+      _updateOwnJid(widget.selfJid);
     }
     _syncRenderedRecipients();
     _prunePendingRemoval();

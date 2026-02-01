@@ -2785,10 +2785,18 @@ class _ChatState extends State<Chat> {
     if (width != null && height != null && width > 0 && height > 0) {
       return Size(width.toDouble(), height.toDouble());
     }
+    const maxDecodeBytes = 16 * 1024 * 1024;
+    final sizeBytes = attachment.sizeBytes;
+    if (sizeBytes > maxDecodeBytes) {
+      return null;
+    }
     final file = File(attachment.path);
     if (!await file.exists()) return null;
     try {
       final bytes = await file.readAsBytes();
+      if (bytes.length > maxDecodeBytes) {
+        return null;
+      }
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       final image = frame.image;
@@ -10869,6 +10877,9 @@ class _ChatComposerSection extends StatelessWidget {
         availableChats: availableChats,
         rosterItems:
             context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
+        recipientSuggestionsStream:
+            locate<ChatsCubit>().recipientAddressSuggestionsStream(),
+        selfJid: locate<ChatsCubit>().selfJid,
         latestStatuses: latestStatuses,
         collapsedByDefault: true,
         suggestionAddresses: suggestionAddresses,
@@ -13983,6 +13994,9 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
           availableChats: widget.availableChats,
           rosterItems:
               context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
+          recipientSuggestionsStream:
+              locate<ChatsCubit>().recipientAddressSuggestionsStream(),
+          selfJid: locate<ChatsCubit>().selfJid,
           latestStatuses: const {},
           collapsedByDefault: false,
           allowAddressTargets: false,

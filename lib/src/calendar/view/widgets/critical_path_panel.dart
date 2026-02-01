@@ -111,7 +111,6 @@ class CriticalPathPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: AxiButton.ghost(
-                  size: AxiButtonSize.sm,
                   widthBehavior: AxiButtonWidth.expand,
                   onPressed: _handleToggleExpanded,
                   child: Row(
@@ -1119,7 +1118,6 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                 ValueListenableBuilder<bool>(
                   valueListenable: busyNotifier,
                   builder: (context, isBusy, _) => AxiButton.ghost(
-                    size: AxiButtonSize.sm,
                     loading: isBusy,
                     onPressed: isBusy
                         ? null
@@ -1234,13 +1232,11 @@ Future<String?> promptCriticalPathName({
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       AxiButton.outline(
-                        size: AxiButtonSize.sm,
                         onPressed: () => Navigator.of(dialogContext).maybePop(),
                         child: Text(context.l10n.commonCancel),
                       ),
                       const SizedBox(width: calendarInsetSm),
                       AxiButton.primary(
-                        size: AxiButtonSize.sm,
                         onPressed: () {
                           if (!(formKey.currentState?.validate() ?? false)) {
                             focusNode.requestFocus();

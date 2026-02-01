@@ -558,12 +558,3 @@ final class ChatContactRenameRequested extends ChatEvent {
   @override
   List<Object?> get props => [displayName, successMessage, failureMessage];
 }
-
-final class ChatOpenChatRequested extends ChatEvent {
-  const ChatOpenChatRequested({required this.jid});
-
-  final String jid;
-
-  @override
-  List<Object?> get props => [jid];
-}

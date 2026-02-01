@@ -284,6 +284,8 @@ class _PendingImageAttachment extends StatelessWidget {
     final sizing = context.sizing;
     final borderRadius = BorderRadius.circular(sizing.containerRadius);
     final previewExtent = sizing.listButtonHeight + spacing.m + spacing.s;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheExtent = (previewExtent * pixelRatio).round();
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     return SizedBox(
       width: previewExtent,
@@ -296,6 +298,8 @@ class _PendingImageAttachment extends StatelessWidget {
               child: Image.file(
                 File(pending.attachment.path),
                 fit: BoxFit.cover,
+                cacheWidth: cacheExtent,
+                cacheHeight: cacheExtent,
                 frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                   if (wasSynchronouslyLoaded || frame != null) {
                     return child;

@@ -354,6 +354,57 @@ class RenderChatBubbleSurface extends RenderBox
   Rect? _recipientCutoutRect;
   Rect? _avatarCutoutRect;
   Rect? _selectionCutoutRect;
+  Path? _cachedBubblePath;
+  int? _cachedBubbleSignature;
+
+  Path _resolveBubblePath() {
+    final reactionRect = _reactionCutoutRect;
+    final recipientRect = _recipientCutoutRect;
+    final avatarRect = _avatarCutoutRect;
+    final selectionRect = _selectionCutoutRect;
+    final signature = Object.hash(
+      size,
+      borderRadius,
+      reactionRect,
+      recipientRect,
+      avatarRect,
+      selectionRect,
+      reactionStyle?.cornerRadius ?? 16,
+      recipientStyle?.cornerRadius ?? 16,
+      avatarStyle?.cornerRadius ?? 16,
+      selectionStyle?.cornerRadius ?? 16,
+    );
+    final cached = _cachedBubblePath;
+    if (cached != null && _cachedBubbleSignature == signature) {
+      return cached;
+    }
+    final nextPath = _bubblePath(size, borderRadius, [
+      if (reactionRect != null)
+        _CutoutDescriptor(
+          rect: reactionRect,
+          cornerRadius: reactionStyle?.cornerRadius ?? 16,
+        ),
+      if (recipientRect != null)
+        _CutoutDescriptor(
+          rect: recipientRect,
+          cornerRadius: recipientStyle?.cornerRadius ?? 16,
+        ),
+      if (avatarRect != null)
+        _CutoutDescriptor(
+          rect: avatarRect,
+          cornerRadius: avatarStyle?.cornerRadius ?? 16,
+          shape: _CutoutShape.oval,
+        ),
+      if (selectionRect != null)
+        _CutoutDescriptor(
+          rect: selectionRect,
+          cornerRadius: selectionStyle?.cornerRadius ?? 16,
+        ),
+    ]);
+    _cachedBubbleSignature = signature;
+    _cachedBubblePath = nextPath;
+    return nextPath;
+  }
 
   @override
   void setupParentData(RenderObject child) {
@@ -554,34 +605,12 @@ class RenderChatBubbleSurface extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    final localPath = _bubblePath(size, borderRadius, [
-      if (_reactionCutoutRect != null)
-        _CutoutDescriptor(
-          rect: _reactionCutoutRect!,
-          cornerRadius: reactionStyle?.cornerRadius ?? 16,
-        ),
-      if (_recipientCutoutRect != null)
-        _CutoutDescriptor(
-          rect: _recipientCutoutRect!,
-          cornerRadius: recipientStyle?.cornerRadius ?? 16,
-        ),
-      if (_avatarCutoutRect != null)
-        _CutoutDescriptor(
-          rect: _avatarCutoutRect!,
-          cornerRadius: avatarStyle?.cornerRadius ?? 16,
-          shape: _CutoutShape.oval,
-        ),
-      if (_selectionCutoutRect != null)
-        _CutoutDescriptor(
-          rect: _selectionCutoutRect!,
-          cornerRadius: selectionStyle?.cornerRadius ?? 16,
-        ),
-    ]);
-    final path = localPath.shift(offset);
-
+    final localPath = _resolveBubblePath();
     final canvas = context.canvas;
 
-    _paintShadows(canvas, path);
+    canvas.save();
+    canvas.translate(offset.dx, offset.dy);
+    _paintShadows(canvas, localPath);
 
     final fillPaint = Paint()
       ..color = backgroundColor
@@ -592,10 +621,11 @@ class RenderChatBubbleSurface extends RenderBox
       ..strokeWidth = 1
       ..strokeJoin = StrokeJoin.round;
 
-    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(localPath, fillPaint);
     if (borderColor.a > 0) {
-      canvas.drawPath(path, strokePaint);
+      canvas.drawPath(localPath, strokePaint);
     }
+    canvas.restore();
 
     final body = _bodyChild;
     if (body != null) {

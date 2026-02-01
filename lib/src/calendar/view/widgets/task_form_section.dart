@@ -92,7 +92,6 @@ class TaskSectionExpander extends StatelessWidget {
       ],
     );
     final Widget header = AxiButton.ghost(
-      size: AxiButtonSize.sm,
       widthBehavior: AxiButtonWidth.expand,
       onPressed: enabled ? onToggle : null,
       child: TaskSectionHeader(

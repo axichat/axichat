@@ -74,7 +74,6 @@ class ErrorDisplay extends StatelessWidget {
           if (onRetry != null) ...[
             const SizedBox(height: calendarGutterMd),
             AxiButton.outline(
-              size: AxiButtonSize.sm,
               onPressed: onRetry,
               child: Text(l10n.commonRetry),
             ),

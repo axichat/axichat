@@ -7,6 +7,7 @@ import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -2857,6 +2858,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
   Widget build(BuildContext context) {
     final items = _items;
     final spacing = context.spacing;
+    final locate = context.read;
     final hasFocus = widget.focusNode.hasFocus;
     final hasItems = items.isNotEmpty;
     final clampedIndex = _currentIndex.clamp(
@@ -2967,6 +2969,18 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                           attachment,
                         ),
                         allowed: true,
+                        downloadDelegate: AttachmentDownloadDelegate(
+                          () => locate<ChatBloc>().downloadInboundAttachment(
+                            metadataId: attachment.id,
+                            stanzaId: currentMessage?.stanzaID ?? '',
+                          ),
+                        ),
+                        metadataReloadDelegate:
+                            AttachmentMetadataReloadDelegate(
+                          () => locate<ChatBloc>().reloadFileMetadata(
+                            attachment.id,
+                          ),
+                        ),
                       ),
                     )
                   else if (attachmentLabel != null && rawBody.isEmpty)
