@@ -4638,12 +4638,13 @@ class _ChatState extends State<Chat> {
                                           ? null
                                           : () async => context
                                               .read<ChatBloc>()
-                                              .add(const ChatLoadEarlier()),
-                                      loadEarlierBuilder: Container(
-                                        padding: const EdgeInsets.all(12.0),
-                                        alignment: Alignment.center,
-                                        child: CircularProgressIndicator(
-                                          color: context.colorScheme.primary,
+                                              .loadEarlier(),
+                                      loadEarlierBuilder: Padding(
+                                        padding: EdgeInsets.all(
+                                          context.spacing.m,
+                                        ),
+                                        child: const Center(
+                                          child: AxiProgressIndicator(),
                                         ),
                                       ),
                                     );

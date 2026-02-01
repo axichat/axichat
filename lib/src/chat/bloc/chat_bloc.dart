@@ -312,7 +312,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
-    on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatCapabilitiesRequested>(_onChatCapabilitiesRequested);
     on<ChatAlertHidden>(_onChatAlertHidden);
     on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
@@ -486,6 +485,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   int? _emailUnreadBoundaryUnreadCount;
   String? _lastOccupantTrackedStanzaId;
   bool _needsUnreadBootstrap = false;
+  bool _loadEarlierInFlight = false;
 
   RestartableTimer? _typingTimer;
 
@@ -1239,6 +1239,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _lastNoticedEmailUnreadCount = null;
       _emailUnreadBoundaryDeltaId = null;
       _emailUnreadBoundaryUnreadCount = null;
+      _loadEarlierInFlight = false;
       _lastOccupantTrackedStanzaId = null;
       _attachmentMapsSignature = null;
       _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
@@ -3283,18 +3284,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _omemoService?.recreateSessions(jid: jid!);
   }
 
-  Future<void> _onChatLoadEarlier(
-    ChatLoadEarlier event,
-    Emitter<ChatState> emit,
-  ) async {
-    final nextLimit = state.items.length + messageBatchSize;
-    if (_isEmailChat) {
-      await _loadEarlierFromEmail(desiredWindow: nextLimit);
-      await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
+  Future<void> loadEarlier() async {
+    if (_loadEarlierInFlight) {
       return;
     }
-    await _loadEarlierFromMam(desiredWindow: nextLimit);
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    final nextLimit = state.items.length + messageBatchSize;
     await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
+    final canPageNetwork = _isEmailChat
+        ? _canPageEmailHistory(chat)
+        : await _canPageMam(chat) && !_mamComplete;
+    if (!canPageNetwork) {
+      return;
+    }
+    _loadEarlierInFlight = true;
+    try {
+      if (_isEmailChat) {
+        if (_canPageEmailHistory(chat)) {
+          await _loadEarlierFromEmail(desiredWindow: nextLimit);
+        }
+        return;
+      }
+      if (await _canPageMam(chat)) {
+        await _loadEarlierFromMam(desiredWindow: nextLimit);
+      }
+    } finally {
+      _loadEarlierInFlight = false;
+    }
   }
 
   Future<void> _onChatAlertHidden(

@@ -270,13 +270,6 @@ final class ChatEncryptionRepaired extends ChatEvent {
   List<Object?> get props => [];
 }
 
-final class ChatLoadEarlier extends ChatEvent {
-  const ChatLoadEarlier();
-
-  @override
-  List<Object?> get props => [];
-}
-
 final class ChatCapabilitiesRequested extends ChatEvent {
   const ChatCapabilitiesRequested({this.forceRefresh = false});
 
