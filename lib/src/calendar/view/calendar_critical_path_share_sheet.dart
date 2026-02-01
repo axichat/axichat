@@ -110,6 +110,7 @@ class _CalendarCriticalPathShareSheetState
   Widget build(BuildContext context) {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
+    final locate = context.read;
     final header = AxiSheetHeader(
       title: Text(context.l10n.calendarCriticalPathShareTitle),
       subtitle: Text(context.l10n.calendarCriticalPathShareSubtitle),
@@ -137,6 +138,9 @@ class _CalendarCriticalPathShareSheetState
             recipients: _recipients,
             availableChats: widget.availableChats,
             rosterItems: rosterItems,
+            recipientSuggestionsStream:
+                locate<ChatsCubit>().recipientAddressSuggestionsStream(),
+            selfJid: locate<ChatsCubit>().selfJid,
             latestStatuses: const {},
             collapsedByDefault: false,
             allowAddressTargets: false,

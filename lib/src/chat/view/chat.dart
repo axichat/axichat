@@ -1251,7 +1251,7 @@ class _ChatState extends State<Chat> {
 
   ChatCalendarSyncCoordinator? _resolveChatCalendarCoordinator({
     required CalendarStorageManager storageManager,
-    required XmppService xmppService,
+    required ChatBloc chatBloc,
   }) {
     final storage = storageManager.authStorage;
     if (storage == null) {
@@ -1275,13 +1275,13 @@ class _ChatState extends State<Chat> {
         required CalendarSyncOutbound outbound,
         required ChatType chatType,
       }) async {
-        await xmppService.sendCalendarSyncMessage(
+        await chatBloc.sendCalendarSyncMessage(
           jid: jid,
           outbound: outbound,
           chatType: chatType,
         );
       },
-      sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+      sendSnapshotFile: chatBloc.uploadCalendarSnapshot,
     );
   }
 
@@ -1985,8 +1985,8 @@ class _ChatState extends State<Chat> {
       locate<ChatBloc>().add(const ChatRoomMembersOpened());
     }
     final navigator = Navigator.of(context);
-    final sizing = context.sizing;
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final Duration animationDuration =
         locate<SettingsCubit>().animationDuration;
     final colors = context.colorScheme;
@@ -3619,11 +3619,10 @@ class _ChatState extends State<Chat> {
                 return avatarPathForBareJid(bareRealJid);
               }
 
-              final xmppService = context.read<XmppService>();
               final storageManager = context.watch<CalendarStorageManager>();
               final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
                 storageManager: storageManager,
-                xmppService: xmppService,
+                chatBloc: context.read<ChatBloc>(),
               );
               final bool demoEmailCalendarEnabled = kEnableDemoChats &&
                   (chatEntity?.defaultTransport.isEmail ?? false);
@@ -10770,6 +10769,7 @@ class _ChatComposerSection extends StatelessWidget {
         ),
       ),
     );
+    final locate = context.read;
     final notices = <Widget>[];
     if (composerError != null && composerError.isNotEmpty) {
       notices.add(
@@ -11106,7 +11106,6 @@ class _HtmlPreviewDialogState extends State<_HtmlPreviewDialog> {
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
-    final sizing = context.sizing;
     final widthInset = spacing.xl + spacing.l;
     final heightInset = spacing.xxl + spacing.l;
     final maxWidth = math.max(0.0, mediaSize.width - widthInset);
@@ -12619,6 +12618,8 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
 
   @override
   List<Widget> get children => <Widget>[
+        if (senderLabel != null) senderLabel!,
+        if (preview != null) preview!,
         bubble,
       ];
 }
@@ -13931,6 +13932,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final locate = context.read;
     final iconSize = context.sizing.iconButtonIconSize;
     final sectionSpacing = spacing.m;
     final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);

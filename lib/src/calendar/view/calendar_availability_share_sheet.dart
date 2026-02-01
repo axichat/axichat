@@ -962,6 +962,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
+    final locate = context.read;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -987,6 +988,9 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
           recipients: recipients,
           availableChats: availableChats,
           rosterItems: rosterItems,
+          recipientSuggestionsStream:
+              locate<ChatsCubit>().recipientAddressSuggestionsStream(),
+          selfJid: locate<ChatsCubit>().selfJid,
           latestStatuses: const {},
           collapsedByDefault: false,
           allowAddressTargets: false,

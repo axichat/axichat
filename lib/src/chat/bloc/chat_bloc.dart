@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
@@ -483,11 +484,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Set<String> _roomAffiliationRefreshAttempts = <String>{};
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
   final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
+  final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   Completer<void>? _mamLoadingCompleter;
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   List<Chat> _roomChats = const <Chat>[];
   String? _roomSelfAvatarPath;
+  String? _lastReadMarkerStanzaId;
+  String? _lastNoticedEmailMessageId;
+  int? _lastNoticedEmailUnreadCount;
+  String? _lastOccupantTrackedStanzaId;
 
   RestartableTimer? _typingTimer;
 
@@ -544,12 +550,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (shouldSendChatReadReceipts &&
         _xmppAllowedForChat(chat) &&
         chat.type != ChatType.groupChat) {
-      for (final item in scopedItems) {
-        if (!item.displayed &&
-            _bareJid(item.senderJid) != selfBare &&
-            item.body?.isNotEmpty == true) {
-          _messageService.sendReadMarker(chat.jid, item.stanzaID);
-        }
+      Message? latestUnread;
+      for (var i = scopedItems.length - 1; i >= 0; i--) {
+        final item = scopedItems[i];
+        if (item.displayed) continue;
+        if (_bareJid(item.senderJid) == selfBare) continue;
+        if (item.body?.isNotEmpty != true) continue;
+        latestUnread = item;
+        break;
+      }
+      final latestId = latestUnread?.stanzaID;
+      if (latestId != null && latestId != _lastReadMarkerStanzaId) {
+        await _messageService.sendReadMarker(chat.jid, latestId);
+        _lastReadMarkerStanzaId = latestId;
       }
     }
     final emailService = _emailService;
@@ -562,8 +575,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((message) => _bareJid(message.senderJid) != selfBare)
         .toList(growable: false);
     final hasUnread = chat.unreadCount > 0;
-    if (hasUnread || seenCandidates.isNotEmpty) {
-      await emailService.markNoticedChat(chat);
+    final latestSeenCandidateId =
+        seenCandidates.isNotEmpty ? seenCandidates.last.stanzaID : null;
+    if (hasUnread || latestSeenCandidateId != null) {
+      final shouldNotify = _lastNoticedEmailUnreadCount != chat.unreadCount ||
+          _lastNoticedEmailMessageId != latestSeenCandidateId;
+      if (shouldNotify) {
+        await emailService.markNoticedChat(chat);
+        _lastNoticedEmailUnreadCount = chat.unreadCount;
+        _lastNoticedEmailMessageId = latestSeenCandidateId;
+      }
     }
     if (seenCandidates.isEmpty) {
       return;
@@ -580,6 +601,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.isEmailBacked) return false;
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return candidate.trim().isNotEmpty;
+  }
+
+  Future<void> sendCalendarSyncMessage({
+    required String jid,
+    required CalendarSyncOutbound outbound,
+    required ChatType chatType,
+  }) async {
+    final xmppService = _xmppService;
+    if (xmppService == null) return;
+    await xmppService.sendCalendarSyncMessage(
+      jid: jid,
+      outbound: outbound,
+      chatType: chatType,
+    );
+  }
+
+  Future<CalendarSnapshotUploadResult> uploadCalendarSnapshot(
+    File file,
+  ) async {
+    final xmppService = _xmppService;
+    if (xmppService == null) {
+      throw XmppMessageException();
+    }
+    return xmppService.uploadCalendarSnapshot(file);
   }
 
   bool _shouldSkipInitialMamSync(Chat chat) {
@@ -1129,6 +1174,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     _resetMamCursors(resetContext);
     if (resetContext) {
+      _lastReadMarkerStanzaId = null;
+      _lastNoticedEmailMessageId = null;
+      _lastNoticedEmailUnreadCount = null;
+      _lastOccupantTrackedStanzaId = null;
+      _shareContextAttemptedStanzaIds.clear();
       await _subscribeToMessages(
         limit: desiredLimit,
         filter: nextViewFilter,
@@ -1548,7 +1598,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
     );
     if (state.chat?.type == ChatType.groupChat) {
-      _mucService.trackOccupantsFromMessages(state.chat!.jid, filteredItems);
+      final chatJid = state.chat!.jid;
+      final lastTracked = _lastOccupantTrackedStanzaId;
+      var startIndex = -1;
+      if (lastTracked != null) {
+        for (var i = filteredItems.length - 1; i >= 0; i--) {
+          if (filteredItems[i].stanzaID == lastTracked) {
+            startIndex = i;
+            break;
+          }
+        }
+      }
+      final newItems = startIndex == -1
+          ? filteredItems
+          : filteredItems.sublist(startIndex + 1);
+      if (newItems.isNotEmpty) {
+        _mucService.trackOccupantsFromMessages(chatJid, newItems);
+      }
+      if (filteredItems.isNotEmpty) {
+        _lastOccupantTrackedStanzaId = filteredItems.last.stanzaID;
+      }
     }
     if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(filteredItems, emit);
@@ -5398,6 +5467,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (state.shareContexts.containsKey(message.stanzaID)) {
         continue;
       }
+      if (_shareContextAttemptedStanzaIds.contains(message.stanzaID)) {
+        continue;
+      }
+      _shareContextAttemptedStanzaIds.add(message.stanzaID);
       final context = await emailService.shareContextForMessage(message);
       if (context != null) {
         pending[message.stanzaID] = context;

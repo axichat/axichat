@@ -806,6 +806,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final spacing = context.spacing;
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
+    final locate = context.read;
     final contentPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,
@@ -856,6 +857,9 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               recipients: _recipients,
               availableChats: const <chat_models.Chat>[],
               rosterItems: rosterItems,
+              recipientSuggestionsStream:
+                  locate<ChatsCubit>().recipientAddressSuggestionsStream(),
+              selfJid: locate<ChatsCubit>().selfJid,
               latestStatuses: const {},
               onRecipientAdded: _addRecipient,
               onRecipientRemoved: _removeRecipient,

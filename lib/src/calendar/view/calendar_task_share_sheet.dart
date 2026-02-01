@@ -90,6 +90,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final l10n = context.l10n;
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
+    final locate = context.read;
     final bool isReadOnly = _isReadOnly;
     final String readOnlyHint = isReadOnly
         ? l10n.calendarTaskShareReadOnlyHint
@@ -123,6 +124,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             recipients: _recipients,
             availableChats: widget.availableChats,
             rosterItems: rosterItems,
+            recipientSuggestionsStream:
+                locate<ChatsCubit>().recipientAddressSuggestionsStream(),
+            selfJid: locate<ChatsCubit>().selfJid,
             latestStatuses: const {},
             collapsedByDefault: false,
             allowAddressTargets: true,

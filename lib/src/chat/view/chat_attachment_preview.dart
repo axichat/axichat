@@ -7,7 +7,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
@@ -232,6 +231,14 @@ class AttachmentDownloadDelegate {
   Future<bool> download() => _download();
 }
 
+class AttachmentMetadataReloadDelegate {
+  const AttachmentMetadataReloadDelegate(this._reload);
+
+  final Future<FileMetadataData?> Function() _reload;
+
+  Future<FileMetadataData?> reload() => _reload();
+}
+
 class ChatAttachmentPreview extends StatefulWidget {
   const ChatAttachmentPreview({
     super.key,
@@ -240,6 +247,7 @@ class ChatAttachmentPreview extends StatefulWidget {
     this.initialMetadata,
     required this.allowed,
     this.downloadDelegate,
+    this.metadataReloadDelegate,
     this.onAllowPressed,
     this.surfaceShape,
     this.maxWidthFraction,
@@ -250,6 +258,7 @@ class ChatAttachmentPreview extends StatefulWidget {
   final FileMetadataData? initialMetadata;
   final bool allowed;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final VoidCallback? onAllowPressed;
   final OutlinedBorder? surfaceShape;
   final double? maxWidthFraction;
@@ -423,6 +432,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                           stanzaId: stanzaId,
                           hasLocalFile: true,
                           downloadDelegate: downloadDelegate,
+                          metadataReloadDelegate: widget.metadataReloadDelegate,
                           typeReport: resolvedReport,
                         );
                       },
@@ -457,6 +467,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     stanzaId: stanzaId,
                     hasLocalFile: false,
                     downloadDelegate: downloadDelegate,
+                    metadataReloadDelegate: widget.metadataReloadDelegate,
                     typeReport: declaredReport,
                   );
                 },
@@ -491,6 +502,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               stanzaId: stanzaId,
               hasLocalFile: false,
               downloadDelegate: downloadDelegate,
+              metadataReloadDelegate: widget.metadataReloadDelegate,
               typeReport: declaredReport,
             );
           },
@@ -648,6 +660,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
             stanzaId: widget.stanzaId,
             hasLocalFile: hasLocalFile,
             downloadDelegate: widget.downloadDelegate,
+            metadataReloadDelegate: widget.metadataReloadDelegate,
             typeReport: widget.typeReport,
           );
         }
@@ -837,7 +850,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   Widget build(BuildContext context) {
     final metadata = widget.metadata;
     final spacing = context.spacing;
-    final sizing = context.sizing;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
@@ -879,6 +891,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         stanzaId: widget.stanzaId,
         hasLocalFile: hasLocalFile,
         downloadDelegate: widget.downloadDelegate,
+        metadataReloadDelegate: widget.metadataReloadDelegate,
         typeReport: widget.typeReport,
       );
     }
@@ -1411,6 +1424,7 @@ class _FileAttachment extends StatefulWidget {
     required this.stanzaId,
     required this.hasLocalFile,
     this.downloadDelegate,
+    this.metadataReloadDelegate,
     this.typeReport,
   });
 
@@ -1418,6 +1432,7 @@ class _FileAttachment extends StatefulWidget {
   final String stanzaId;
   final bool hasLocalFile;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final FileTypeReport? typeReport;
 
   @override
