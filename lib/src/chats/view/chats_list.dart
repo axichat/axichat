@@ -955,7 +955,11 @@ class _ChatListTileState extends State<ChatListTile> {
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
-        items: _chatContextMenuItems(item),
+        items: [
+          AxiMenu(
+            actions: _chatContextMenuActions(item),
+          ),
+        ],
         child: tileContent,
       );
     }
@@ -1190,6 +1194,8 @@ class _ChatListTileState extends State<ChatListTile> {
 
   Future<void> _exportChatFromContextMenu(Chat chat) async {
     final l10n = context.l10n;
+    final scheduleExportCleanup =
+        context.read<ChatsCubit>().scheduleExportCleanup;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     File? exportFile;
@@ -1218,71 +1224,70 @@ class _ChatListTileState extends State<ChatListTile> {
       _showMessage(l10n.chatsExportFailure);
     } finally {
       if (exportFile != null) {
-        context.read<ChatsCubit>().scheduleExportCleanup(exportFile);
+        scheduleExportCleanup(exportFile);
       }
     }
   }
 
-  List<Widget> _chatContextMenuItems(Chat chat) {
+  List<AxiMenuAction> _chatContextMenuActions(Chat chat) {
     final l10n = context.l10n;
     return [
-      ShadContextMenuItem(
-        leading: const Icon(LucideIcons.messagesSquare),
+      AxiMenuAction(
+        icon: LucideIcons.messagesSquare,
+        label: l10n.commonOpen,
         onPressed: () async {
           await _handleTap(chat);
         },
-        child: Text(l10n.commonOpen),
       ),
-      ShadContextMenuItem(
-        leading: const Icon(LucideIcons.squareCheck),
+      AxiMenuAction(
+        icon: LucideIcons.squareCheck,
+        label: l10n.commonSelect,
         onPressed: () =>
             context.read<ChatsCubit>().ensureChatSelected(chat.jid),
-        child: Text(l10n.commonSelect),
       ),
-      ShadContextMenuItem(
-        leading: const Icon(LucideIcons.share2),
+      AxiMenuAction(
+        icon: LucideIcons.share2,
+        label: l10n.commonExport,
         onPressed: () async {
           await _exportChatFromContextMenu(chat);
         },
-        child: Text(l10n.commonExport),
       ),
-      ShadContextMenuItem(
-        leading: Icon(chat.favorited ? LucideIcons.starOff : LucideIcons.star),
+      AxiMenuAction(
+        icon: chat.favorited ? LucideIcons.starOff : LucideIcons.star,
+        label: chat.favorited ? l10n.commonUnfavorite : l10n.commonFavorite,
         onPressed: () async {
           await context.read<ChatsCubit>().toggleFavorited(
                 jid: chat.jid,
                 favorited: !chat.favorited,
               );
         },
-        child: Text(
-          chat.favorited ? l10n.commonUnfavorite : l10n.commonFavorite,
-        ),
       ),
-      ShadContextMenuItem(
-        leading: Icon(chat.archived ? LucideIcons.undo2 : LucideIcons.archive),
+      AxiMenuAction(
+        icon: chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
+        label: chat.archived ? l10n.commonUnarchive : l10n.commonArchive,
         onPressed: () async {
           await context.read<ChatsCubit>().toggleArchived(
                 jid: chat.jid,
                 archived: !chat.archived,
               );
         },
-        child: Text(chat.archived ? l10n.commonUnarchive : l10n.commonArchive),
       ),
       if (!widget.archivedContext)
-        ShadContextMenuItem(
-          leading: Icon(chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff),
+        AxiMenuAction(
+          icon: chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
+          label: chat.hidden ? l10n.commonShow : l10n.commonHide,
           onPressed: () async {
             await context.read<ChatsCubit>().toggleHidden(
                   jid: chat.jid,
                   hidden: !chat.hidden,
                 );
           },
-          child: Text(chat.hidden ? l10n.commonShow : l10n.commonHide),
         ),
-      ShadContextMenuItem(
-        leading: const Icon(LucideIcons.trash2),
+      AxiMenuAction(
+        icon: LucideIcons.trash2,
+        label: l10n.commonDelete,
+        destructive: true,
         onPressed: () => _confirmDelete(chat),
-        child: Text(l10n.commonDelete),
       ),
     ];
   }

@@ -32,6 +32,7 @@ class _CalendarTileState extends State<CalendarTile> {
   double _cachedBadgeWidth = 0;
   int? _cachedBadgeCount;
   double _textScaleFactor = 1;
+  int _badgeStyleHash = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -101,18 +102,29 @@ class _CalendarTileState extends State<CalendarTile> {
   double _resolveBadgeWidth(BuildContext context, int count) {
     final textScaler = MediaQuery.of(context).textScaler;
     final scaleFactor = textScaler.scale(1);
+    final spacing = context.spacing;
+    final badgeStyle = context.textTheme.small.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    final nextStyleHash = Object.hash(
+      badgeStyle.fontSize,
+      badgeStyle.fontFamily,
+      badgeStyle.fontWeight,
+      badgeStyle.letterSpacing,
+      spacing.s,
+      spacing.xs,
+      spacing.l,
+    );
     if (_cachedBadgeCount == count &&
         _cachedBadgeWidth > 0 &&
-        _textScaleFactor == scaleFactor) {
+        _textScaleFactor == scaleFactor &&
+        _badgeStyleHash == nextStyleHash) {
       return _cachedBadgeWidth;
     }
-    final spacing = context.spacing;
     final textPainter = TextPainter(
       text: TextSpan(
         text: '$count',
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+        style: badgeStyle,
       ),
       textDirection: Directionality.of(context),
       textScaler: textScaler,
@@ -121,6 +133,7 @@ class _CalendarTileState extends State<CalendarTile> {
     final minWidth = spacing.l + spacing.s;
     _cachedBadgeCount = count;
     _textScaleFactor = scaleFactor;
+    _badgeStyleHash = nextStyleHash;
     _cachedBadgeWidth =
         math.max(minWidth, textPainter.width + (horizontalPadding * 2));
     return _cachedBadgeWidth;

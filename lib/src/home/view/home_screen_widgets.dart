@@ -920,7 +920,7 @@ class _ProfileRailItem extends StatelessWidget {
             children: [
               Text(
                 state.username,
-                style: textTheme.small.copyWith(fontWeight: FontWeight.w600),
+                style: textTheme.small.strong,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
