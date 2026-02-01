@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
@@ -824,7 +825,20 @@ class _HomeContent extends StatelessWidget {
     );
 
     final Widget calendarAwareContent = hasCalendarBloc
-        ? CalendarTaskFeedbackObserver<CalendarBloc>(child: mainContent)
+        ? Builder(
+            builder: (context) {
+              final locate = context.read;
+              final initialTasks =
+                  context.select<CalendarBloc, Map<String, CalendarTask>>(
+                (bloc) => bloc.state.model.tasks,
+              );
+              return CalendarTaskFeedbackObserver<CalendarBloc>(
+                initialTasks: initialTasks,
+                onEvent: (event) => locate<CalendarBloc>().add(event),
+                child: mainContent,
+              );
+            },
+          )
         : mainContent;
     final shouldResizeForKeyboard = navPlacement != NavPlacement.bottom;
 

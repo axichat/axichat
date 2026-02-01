@@ -165,7 +165,20 @@ class _GuestCalendarWidgetState
 
   @override
   Widget wrapWithTaskFeedback(BuildContext context, Widget child) {
-    return CalendarTaskFeedbackObserver<GuestCalendarBloc>(child: child);
+    return Builder(
+      builder: (context) {
+        final locate = context.read;
+        final initialTasks =
+            context.select<GuestCalendarBloc, Map<String, CalendarTask>>(
+          (bloc) => bloc.state.model.tasks,
+        );
+        return CalendarTaskFeedbackObserver<GuestCalendarBloc>(
+          initialTasks: initialTasks,
+          onEvent: (event) => locate<GuestCalendarBloc>().add(event),
+          child: child,
+        );
+      },
+    );
   }
 
   @override

@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -16,6 +15,7 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
   const CalendarGridHost({
     super.key,
     required this.state,
+    required this.onEvent,
     required this.onEmptySlotTapped,
     required this.onTaskDragEnd,
     required this.onDragSessionStarted,
@@ -25,6 +25,7 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
   });
 
   final CalendarState state;
+  final ValueChanged<CalendarEvent> onEvent;
   final void Function(DateTime date, Offset position) onEmptySlotTapped;
   final void Function(CalendarTask task, DateTime date) onTaskDragEnd;
   final VoidCallback onDragSessionStarted;
@@ -38,10 +39,8 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
       state: state,
       onEmptySlotTapped: onEmptySlotTapped,
       onTaskDragEnd: onTaskDragEnd,
-      onDateSelected: (date) =>
-          context.read<B>().add(CalendarEvent.dateSelected(date: date)),
-      onViewChanged: (view) =>
-          context.read<B>().add(CalendarEvent.viewChanged(view: view)),
+      onDateSelected: (date) => onEvent(CalendarEvent.dateSelected(date: date)),
+      onViewChanged: (view) => onEvent(CalendarEvent.viewChanged(view: view)),
       focusRequest: state.pendingFocus,
       onDragSessionStarted: onDragSessionStarted,
       onDragGlobalPositionChanged: onDragGlobalPositionChanged,

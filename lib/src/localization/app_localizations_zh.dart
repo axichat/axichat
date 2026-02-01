@@ -11043,6 +11043,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
+  String get chatUnreadDividerLabel => '未讀';
+
+  @override
   String get messageErrorServiceUnavailableTooltip => '服務出現暫時性問題。';
 
   @override

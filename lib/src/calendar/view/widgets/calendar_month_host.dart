@@ -2,19 +2,22 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/view/calendar_month_view.dart';
 import 'package:axichat/src/calendar/view/widgets/day_event_editor.dart';
 
-class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
-  const CalendarMonthHost({super.key, required this.state});
+class CalendarMonthHost extends StatelessWidget {
+  const CalendarMonthHost({
+    super.key,
+    required this.state,
+    required this.onEvent,
+  });
 
   final CalendarState state;
+  final ValueChanged<CalendarEvent> onEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +32,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
       state: state,
       visibleEvents: visibleEvents,
       onDateSelected: (DateTime date) =>
-          context.read<B>().add(CalendarEvent.dateSelected(date: date)),
+          onEvent(CalendarEvent.dateSelected(date: date)),
       onCreateEvent: (DateTime date) =>
           _openComposer(context, initialDate: date),
       onEditEvent: (DayEvent event) => _openComposer(
@@ -45,8 +48,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required DateTime initialDate,
     DayEvent? existing,
   }) async {
-    final B targetBloc = context.read<B>();
-    targetBloc.add(CalendarEvent.dateSelected(date: initialDate));
+    onEvent(CalendarEvent.dateSelected(date: initialDate));
     final DayEventEditorResult? result = await showDayEventEditor(
       context: context,
       initialDate: initialDate,
@@ -56,7 +58,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
       return;
     }
     if (result.deleted && existing != null) {
-      targetBloc.add(CalendarEvent.dayEventDeleted(eventId: existing.id));
+      onEvent(CalendarEvent.dayEventDeleted(eventId: existing.id));
       return;
     }
     final DayEventDraft? draft = result.draft;
@@ -65,7 +67,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
     }
 
     if (existing == null) {
-      targetBloc.add(
+      onEvent(
         CalendarEvent.dayEventAdded(
           title: draft.title,
           startDate: draft.startDate,
@@ -87,7 +89,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
       icsMeta: draft.icsMeta,
       modifiedAt: DateTime.now(),
     );
-    targetBloc.add(CalendarEvent.dayEventUpdated(event: updated));
+    onEvent(CalendarEvent.dayEventUpdated(event: updated));
   }
 }
 

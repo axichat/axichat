@@ -4983,15 +4983,9 @@ class _ChatState extends State<Chat> {
                                                                       'unreadDivider'] ==
                                                                   true;
                                                           if (isUnreadDivider) {
-                                                            final unreadCount =
-                                                                chatEntity
-                                                                        ?.unreadCount ??
-                                                                    0;
                                                             return _UnreadDivider(
                                                               label: l10n
-                                                                  .chatsUnreadLabel(
-                                                                unreadCount,
-                                                              ),
+                                                                  .chatUnreadDividerLabel,
                                                             );
                                                           }
                                                           final bannerParticipants = (message
@@ -6165,6 +6159,12 @@ class _ChatState extends State<Chat> {
                                                                         readOnly:
                                                                             (calendarTaskIcsReadOnly && !self) ||
                                                                                 demoEmailCalendarEnabled,
+                                                                        storageManager:
+                                                                            storageManager,
+                                                                        personalCalendarBloc:
+                                                                            personalCalendarBloc,
+                                                                        chatCalendarBloc:
+                                                                            chatCalendarBloc,
                                                                         requireImportConfirmation:
                                                                             !self,
                                                                         allowChatCopy:

@@ -14,9 +14,16 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 
 class CalendarTaskFeedbackObserver<B extends BaseCalendarBloc>
     extends StatefulWidget {
-  const CalendarTaskFeedbackObserver({super.key, required this.child});
+  const CalendarTaskFeedbackObserver({
+    super.key,
+    required this.child,
+    required this.initialTasks,
+    required this.onEvent,
+  });
 
   final Widget child;
+  final Map<String, CalendarTask> initialTasks;
+  final ValueChanged<CalendarEvent> onEvent;
 
   @override
   State<CalendarTaskFeedbackObserver<B>> createState() =>
@@ -26,17 +33,23 @@ class CalendarTaskFeedbackObserver<B extends BaseCalendarBloc>
 class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     extends State<CalendarTaskFeedbackObserver<B>> {
   Map<String, CalendarTask> _lastTasks = const <String, CalendarTask>{};
-  bool _initialized = false;
   bool _awaitingUndoRemoval = false;
   Set<String> _expectedRemovalIds = const <String>{};
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _lastTasks = Map<String, CalendarTask>.from(
-      context.read<B>().state.model.tasks,
-    );
-    _initialized = true;
+  void initState() {
+    super.initState();
+    _lastTasks = Map<String, CalendarTask>.from(widget.initialTasks);
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarTaskFeedbackObserver<B> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onEvent != widget.onEvent) {
+      _lastTasks = Map<String, CalendarTask>.from(widget.initialTasks);
+      _awaitingUndoRemoval = false;
+      _expectedRemovalIds = const <String>{};
+    }
   }
 
   @override
@@ -45,11 +58,6 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
       listenWhen: (previous, current) =>
           !mapEquals(previous.model.tasks, current.model.tasks),
       listener: (context, state) {
-        if (!_initialized) {
-          _lastTasks = Map<String, CalendarTask>.from(state.model.tasks);
-          _initialized = true;
-          return;
-        }
         _handleModelChanges(context, state);
       },
       child: widget.child,
@@ -95,7 +103,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
       onAction: () {
         _awaitingUndoRemoval = true;
         _expectedRemovalIds = tasks.map((task) => task.id).toSet();
-        context.read<B>().add(const CalendarEvent.undoRequested());
+        widget.onEvent(const CalendarEvent.undoRequested());
       },
     );
   }
@@ -121,9 +129,9 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
       actionLabel: l10n.calendarUndo,
       onAction: () {
         if (removalMatchesUndo) {
-          context.read<B>().add(const CalendarEvent.redoRequested());
+          widget.onEvent(const CalendarEvent.redoRequested());
         } else {
-          context.read<B>().add(const CalendarEvent.undoRequested());
+          widget.onEvent(const CalendarEvent.undoRequested());
         }
       },
     );

@@ -89,30 +89,46 @@ class _CalendarCriticalPathShareSheetState
     extends State<CalendarCriticalPathShareSheet> {
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
+  Chat? _initialChat;
+  bool _didInitRecipients = false;
 
   @override
   void initState() {
     super.initState();
-    final Chat? initialChat = widget.initialChat ??
+    _initialChat = widget.initialChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
-    if (initialChat != null) {
-      _recipients = <ComposerRecipient>[
-        ComposerRecipient(
-          target: FanOutTarget.chat(
-            chat: initialChat,
-            shareSignatureEnabled: initialChat.shareSignatureEnabled ??
-                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
-          ),
-        ),
-      ];
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitRecipients) {
+      return;
     }
+    _didInitRecipients = true;
+    final Chat? initialChat = _initialChat;
+    if (initialChat == null) {
+      return;
+    }
+    final bool shareSignatureEnabled = initialChat.shareSignatureEnabled ??
+        context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
+    _recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: initialChat,
+          shareSignatureEnabled: shareSignatureEnabled,
+        ),
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
-    final locate = context.read;
+    final recipientSuggestionsStream =
+        context.watch<ChatsCubit>().recipientAddressSuggestionsStream();
+    final chatsSelfJid = context.watch<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid =
@@ -148,9 +164,8 @@ class _CalendarCriticalPathShareSheetState
             recipients: _recipients,
             availableChats: widget.availableChats,
             rosterItems: rosterItems,
-            recipientSuggestionsStream:
-                locate<ChatsCubit>().recipientAddressSuggestionsStream(),
-            selfJid: locate<ChatsCubit>().selfJid,
+            recipientSuggestionsStream: recipientSuggestionsStream,
+            selfJid: chatsSelfJid,
             selfIdentity: selfIdentity,
             latestStatuses: const {},
             collapsedByDefault: false,
@@ -260,11 +275,13 @@ class _CalendarCriticalPathShareSheetState
             context,
             context.l10n.calendarCriticalPathShareMissingService,
           );
+          break;
         case CalendarShareFailure.permissionDenied:
           FeedbackSystem.showInfo(
             context,
             context.l10n.calendarCriticalPathShareDenied,
           );
+          break;
         case CalendarShareFailure.attachmentFailed:
         case CalendarShareFailure.sendFailed:
         case null:
@@ -272,6 +289,7 @@ class _CalendarCriticalPathShareSheetState
             context,
             context.l10n.calendarCriticalPathShareFailed,
           );
+          break;
       }
     } catch (_) {
       if (mounted) {

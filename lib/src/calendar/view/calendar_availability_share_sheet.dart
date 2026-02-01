@@ -147,11 +147,13 @@ class _CalendarAvailabilityShareScreenState
       const <CalendarFreeBusyInterval>[];
   List<CalendarAvailabilityPreset> _presets = <CalendarAvailabilityPreset>[];
   Chat? _selectedChat;
+  Chat? _lockedChat;
   bool _isSending = false;
   bool _hasCustomDraft = false;
   _AvailabilityShareStep _step = _AvailabilityShareStep.editor;
   bool _stepReversing = false;
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
+  bool _didInitRecipients = false;
 
   @override
   void initState() {
@@ -163,22 +165,34 @@ class _CalendarAvailabilityShareScreenState
     _localModel = widget.model;
     _presetStore = CalendarAvailabilityPresetStore();
     _presets = _loadPresets();
-    final Chat? lockedChat = widget.lockToChat ? widget.initialChat : null;
-    _selectedChat = lockedChat ??
+    _lockedChat = widget.lockToChat ? widget.initialChat : null;
+    _selectedChat = _lockedChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
-    if (lockedChat != null) {
-      _recipients = <ComposerRecipient>[
-        ComposerRecipient(
-          target: FanOutTarget.chat(
-            chat: lockedChat,
-            shareSignatureEnabled: lockedChat.shareSignatureEnabled ??
-                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
-          ),
-          pinned: true,
-        ),
-      ];
-    }
     _resetDraftIntervals();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitRecipients) {
+      return;
+    }
+    _didInitRecipients = true;
+    final Chat? lockedChat = _lockedChat;
+    if (lockedChat == null) {
+      return;
+    }
+    final bool shareSignatureEnabled = lockedChat.shareSignatureEnabled ??
+        context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
+    _recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: lockedChat,
+          shareSignatureEnabled: shareSignatureEnabled,
+        ),
+        pinned: true,
+      ),
+    ];
   }
 
   @override
@@ -962,7 +976,9 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
-    final locate = context.read;
+    final recipientSuggestionsStream =
+        context.watch<ChatsCubit>().recipientAddressSuggestionsStream();
+    final chatsSelfJid = context.watch<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid =
@@ -996,9 +1012,8 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
           recipients: recipients,
           availableChats: availableChats,
           rosterItems: rosterItems,
-          recipientSuggestionsStream:
-              locate<ChatsCubit>().recipientAddressSuggestionsStream(),
-          selfJid: locate<ChatsCubit>().selfJid,
+          recipientSuggestionsStream: recipientSuggestionsStream,
+          selfJid: chatsSelfJid,
           selfIdentity: selfIdentity,
           latestStatuses: const {},
           collapsedByDefault: false,

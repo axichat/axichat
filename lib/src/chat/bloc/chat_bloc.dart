@@ -482,6 +482,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _lastReadMarkerStanzaId;
   String? _lastNoticedEmailMessageId;
   int? _lastNoticedEmailUnreadCount;
+  int? _emailUnreadBoundaryDeltaId;
+  int? _emailUnreadBoundaryUnreadCount;
   String? _lastOccupantTrackedStanzaId;
 
   RestartableTimer? _typingTimer;
@@ -749,22 +751,41 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _ensureUnreadWindowLoaded({
     required Chat chat,
     required int desiredWindow,
+    int? emailBoundaryDeltaId,
   }) async {
     if (chat.unreadCount <= _emptyMessageCount) {
       return;
     }
     var localCount = await _archivedMessageCount(chat);
     if (chat.defaultTransport.isEmail) {
+      Message? boundaryMessage;
+      if (emailBoundaryDeltaId != null) {
+        boundaryMessage = await _loadEmailMessageByDeltaId(
+          chat: chat,
+          deltaMessageId: emailBoundaryDeltaId,
+        );
+      }
       if (!_canPageEmailHistory(chat)) {
         return;
       }
       var shouldAttemptNetwork = true;
-      while (localCount < desiredWindow || shouldAttemptNetwork) {
+      while (localCount < desiredWindow ||
+          shouldAttemptNetwork ||
+          (emailBoundaryDeltaId != null && boundaryMessage == null)) {
         shouldAttemptNetwork = false;
         await _loadEarlierFromEmail(desiredWindow: desiredWindow);
         final refreshed = await _archivedMessageCount(chat);
+        if (emailBoundaryDeltaId != null) {
+          boundaryMessage = await _loadEmailMessageByDeltaId(
+            chat: chat,
+            deltaMessageId: emailBoundaryDeltaId,
+          );
+        }
         if (refreshed <= localCount) {
-          break;
+          if (emailBoundaryDeltaId == null || boundaryMessage == null) {
+            break;
+          }
+          continue;
         }
         localCount = refreshed;
       }
@@ -1196,6 +1217,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pinnedMessagesLoaded: resetContext ? false : state.pinnedMessagesLoaded,
         pinnedMessagesHydrating:
             resetContext ? false : state.pinnedMessagesHydrating,
+        unreadBoundaryStanzaId:
+            resetContext ? null : state.unreadBoundaryStanzaId,
         xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
             ? null
             : state.xmppCapabilities,
@@ -1210,6 +1233,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _lastReadMarkerStanzaId = null;
       _lastNoticedEmailMessageId = null;
       _lastNoticedEmailUnreadCount = null;
+      _emailUnreadBoundaryDeltaId = null;
+      _emailUnreadBoundaryUnreadCount = null;
       _lastOccupantTrackedStanzaId = null;
       _attachmentMapsSignature = null;
       _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
@@ -1766,7 +1791,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       remaining -= 1;
       if (remaining <= 0) {
-        return message.stanzaID;
+        final stanzaId = message.stanzaID.trim();
+        return stanzaId.isEmpty ? null : stanzaId;
       }
     }
     return null;
@@ -1778,15 +1804,57 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return (hasBody || hasAttachment) && message.pseudoMessageType == null;
   }
 
+  Future<int?> _resolveEmailUnreadBoundaryDeltaId(Chat? chat) async {
+    if (chat == null || !chat.defaultTransport.isEmail) {
+      return null;
+    }
+    if (chat.unreadCount <= _emptyMessageCount) {
+      _emailUnreadBoundaryDeltaId = null;
+      _emailUnreadBoundaryUnreadCount = null;
+      return null;
+    }
+    if (_emailUnreadBoundaryUnreadCount == chat.unreadCount &&
+        _emailUnreadBoundaryDeltaId != null) {
+      return _emailUnreadBoundaryDeltaId;
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
+      return null;
+    }
+    final oldestDeltaId = await emailService.getOldestFreshMessageId(chat);
+    _emailUnreadBoundaryDeltaId = oldestDeltaId;
+    _emailUnreadBoundaryUnreadCount = chat.unreadCount;
+    return oldestDeltaId;
+  }
+
+  Message? _findMessageByDeltaId(List<Message> messages, int deltaMessageId) {
+    for (final message in messages) {
+      if (message.deltaMsgId == deltaMessageId) {
+        return message;
+      }
+    }
+    return null;
+  }
+
+  Future<Message?> _loadEmailMessageByDeltaId({
+    required Chat chat,
+    required int deltaMessageId,
+  }) async {
+    final db = await _messageService.database;
+    return db.getMessageByDeltaId(deltaMessageId, chatJid: chat.jid);
+  }
+
   Future<void> _syncUnreadBoundaryIfNeeded({
     required Chat chat,
     required List<Message> messages,
     required int filteredOutCount,
     required int pseudoCount,
+    int? emailBoundaryDeltaId,
   }) async {
     var boundary = _resolveUnreadBoundaryStanzaId(
       chat: chat,
       messages: messages,
+      emailBoundaryDeltaId: emailBoundaryDeltaId,
     );
     if (boundary != null) {
       return;
@@ -1805,7 +1873,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (beforeCount <= _currentMessageLimit && !canPageNetwork) {
       return;
     }
-    await _ensureUnreadWindowLoaded(chat: chat, desiredWindow: nextLimit);
+    await _ensureUnreadWindowLoaded(
+      chat: chat,
+      desiredWindow: nextLimit,
+      emailBoundaryDeltaId: emailBoundaryDeltaId,
+    );
     final afterCount = await _archivedMessageCount(chat);
     if (afterCount <= beforeCount && beforeCount <= _currentMessageLimit) {
       return;

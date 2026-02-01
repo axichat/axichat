@@ -127,9 +127,13 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         );
         final bool isMonthView = state.viewMode == CalendarView.month;
         final Widget calendarSurface = isMonthView
-            ? CalendarMonthHost<B>(state: state)
+            ? CalendarMonthHost(
+                state: state,
+                onEvent: (event) => context.read<B>().add(event),
+              )
             : CalendarGridHost<B>(
                 state: state,
+                onEvent: (event) => context.read<B>().add(event),
                 onEmptySlotTapped: _onEmptySlotTapped,
                 onTaskDragEnd: _onTaskDragEnd,
                 onDragSessionStarted: _handleCalendarGridDragSessionStarted,

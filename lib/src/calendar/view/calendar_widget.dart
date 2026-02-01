@@ -98,7 +98,9 @@ class _CalendarWidgetState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _mobileTabHostController = CalendarMobileTabHostScope.maybeOf(context);
+    _mobileTabHostController = CalendarMobileTabHostScope.maybeController(
+      context,
+    );
   }
 
   @override

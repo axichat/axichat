@@ -62,6 +62,7 @@ class CalendarBloc extends BaseCalendarBloc {
   final CalendarSyncManager Function(CalendarBloc bloc) _syncManagerBuilder;
   late final CalendarSyncManager _syncManager;
   CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
+  Future<void> _pendingAvailabilitySync = Future.value();
   final XmppService _xmppService;
   final EmailService? _emailService;
   final VoidCallback? _onDispose;
@@ -76,12 +77,7 @@ class CalendarBloc extends BaseCalendarBloc {
     if (_availabilityCoordinator == coordinator) return;
     _availabilityCoordinator = coordinator;
     final model = state.model;
-    Future<void>(() async {
-      await coordinator.handleModelChanged(
-        source: availabilityShareSource,
-        model: model,
-      );
-    });
+    _queueAvailabilitySync(coordinator, model);
   }
 
   Future<void> sendCalendarSyncMessage({
@@ -148,11 +144,25 @@ class CalendarBloc extends BaseCalendarBloc {
     if (!modelChanged || coordinator == null) {
       return;
     }
-    Future<void>(() async {
-      await coordinator.handleModelChanged(
-        source: availabilityShareSource,
-        model: model,
-      );
+    _queueAvailabilitySync(coordinator, model);
+  }
+
+  void _queueAvailabilitySync(
+    CalendarAvailabilityShareCoordinator coordinator,
+    CalendarModel model,
+  ) {
+    _pendingAvailabilitySync = _pendingAvailabilitySync.then((_) async {
+      try {
+        await coordinator.handleModelChanged(
+          source: availabilityShareSource,
+          model: model,
+        );
+      } catch (error) {
+        SafeLogging.debugLog(
+          'Failed to sync availability share: $error',
+          name: 'CalendarBloc',
+        );
+      }
     });
   }
 

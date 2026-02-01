@@ -92,7 +92,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final l10n = context.l10n;
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
-    final locate = context.read;
+    final recipientSuggestionsStream =
+        context.watch<ChatsCubit>().recipientAddressSuggestionsStream();
+    final chatsSelfJid = context.watch<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid =
@@ -134,9 +136,8 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             recipients: _recipients,
             availableChats: widget.availableChats,
             rosterItems: rosterItems,
-            recipientSuggestionsStream:
-                locate<ChatsCubit>().recipientAddressSuggestionsStream(),
-            selfJid: locate<ChatsCubit>().selfJid,
+            recipientSuggestionsStream: recipientSuggestionsStream,
+            selfJid: chatsSelfJid,
             selfIdentity: selfIdentity,
             latestStatuses: const {},
             collapsedByDefault: false,
@@ -267,11 +268,13 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             context,
             context.l10n.calendarTaskShareServiceUnavailable,
           );
+          break;
         case CalendarShareFailure.permissionDenied:
           FeedbackSystem.showInfo(
             context,
             context.l10n.calendarTaskShareDenied,
           );
+          break;
         case CalendarShareFailure.attachmentFailed:
         case CalendarShareFailure.sendFailed:
         case null:
@@ -279,6 +282,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             context,
             context.l10n.calendarTaskShareSendFailed,
           );
+          break;
       }
     } catch (_) {
       if (mounted) {
