@@ -37,9 +37,6 @@ class ChatCalendarTaskCard extends StatefulWidget {
     super.key,
     required this.task,
     required this.readOnly,
-    required this.storageManager,
-    required this.personalCalendarBloc,
-    required this.chatCalendarBloc,
     this.requireImportConfirmation = false,
     this.allowChatCopy = true,
     this.demoQuickAdd = false,
@@ -49,9 +46,6 @@ class ChatCalendarTaskCard extends StatefulWidget {
 
   final CalendarTask task;
   final bool readOnly;
-  final CalendarStorageManager storageManager;
-  final CalendarBloc? personalCalendarBloc;
-  final ChatCalendarBloc? chatCalendarBloc;
   final bool requireImportConfirmation;
   final bool allowChatCopy;
   final bool demoQuickAdd;
@@ -65,77 +59,43 @@ class ChatCalendarTaskCard extends StatefulWidget {
 class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
   @override
   Widget build(BuildContext context) {
-    final chatBloc = widget.chatCalendarBloc;
-    if (chatBloc == null) {
-      return _buildTaskCard(
-        context,
-        resolvedTask: widget.task,
-        taskInCalendar: false,
-        editMode: TaskEditMode.readOnly,
-        allowEdit: false,
-      );
-    }
     return BlocBuilder<ChatCalendarBloc, CalendarState>(
-      bloc: chatBloc,
       builder: (context, state) {
         final CalendarTask resolvedTask =
             state.model.tasks[widget.task.id] ?? widget.task;
         final bool taskInCalendar = state.model.tasks.containsKey(
           widget.task.id,
         );
-        final bool allowEdit = !widget.readOnly;
+        final bool tileReadOnly = widget.readOnly || !taskInCalendar;
         final TaskEditMode editMode =
             widget.readOnly ? TaskEditMode.readOnly : TaskEditMode.full;
-        return _buildTaskCard(
-          context,
-          resolvedTask: resolvedTask,
-          taskInCalendar: taskInCalendar,
-          editMode: editMode,
-          allowEdit: allowEdit,
+        final VoidCallback tapAction = widget.readOnly
+            ? () =>
+                _showTaskEditSheet(context, resolvedTask, editMode: editMode)
+            : () => _handleEditableTap(
+                  resolvedTask,
+                  taskInCalendar: taskInCalendar,
+                  editMode: editMode,
+                );
+        final bool shareFragment = widget.isShareFragment;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ChatCalendarTaskTile(
+              task: resolvedTask,
+              readOnly: tileReadOnly,
+              onTap: tapAction,
+              marginOverride: shareFragment ? _shareMargin() : null,
+              hideActionMenu: shareFragment,
+            ),
+            if (widget.footerDetails.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: _taskFooterPaddingTop),
+                child: ChatInlineDetails(details: widget.footerDetails),
+              ),
+          ],
         );
       },
-    );
-  }
-
-  Widget _buildTaskCard(
-    BuildContext context, {
-    required CalendarTask resolvedTask,
-    required bool taskInCalendar,
-    required TaskEditMode editMode,
-    required bool allowEdit,
-  }) {
-    final bool tileReadOnly =
-        widget.readOnly || !taskInCalendar || widget.chatCalendarBloc == null;
-    final VoidCallback? tapAction = allowEdit && widget.chatCalendarBloc != null
-        ? () => _handleEditableTap(
-              resolvedTask,
-              taskInCalendar: taskInCalendar,
-              editMode: editMode,
-            )
-        : widget.readOnly && widget.chatCalendarBloc != null
-            ? () => _showTaskEditSheet(
-                  context,
-                  resolvedTask,
-                  editMode: editMode,
-                )
-            : null;
-    final bool shareFragment = widget.isShareFragment;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ChatCalendarTaskTile(
-          task: resolvedTask,
-          readOnly: tileReadOnly,
-          onTap: tapAction,
-          marginOverride: shareFragment ? _shareMargin() : null,
-          hideActionMenu: shareFragment,
-        ),
-        if (widget.footerDetails.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: _taskFooterPaddingTop),
-            child: ChatInlineDetails(details: widget.footerDetails),
-          ),
-      ],
     );
   }
 
@@ -144,16 +104,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     CalendarTask task, {
     required TaskEditMode editMode,
   }) async {
-    final chatBloc = widget.chatCalendarBloc;
-    if (chatBloc == null) {
-      return;
-    }
     final bool shouldTrackSession = editMode.allowsAnyEdits;
     if (shouldTrackSession &&
         !TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
-    CalendarState calendarState() => chatBloc.state;
+    CalendarState calendarState() => context.read<ChatCalendarBloc>().state;
     final String baseId = baseTaskIdFrom(task.id);
     final CalendarTask latestTask = calendarState().model.tasks[baseId] ?? task;
     final CalendarTask? storedTask = calendarState().model.tasks[task.id];
@@ -190,7 +146,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
           final double maxHeight =
               mediaQuery.size.height - mediaQuery.viewPadding.vertical;
           return BlocProvider.value(
-            value: chatBloc,
+            value: locate<ChatCalendarBloc>(),
             child: Builder(
               builder: (context) => EditTaskDropdown<ChatCalendarBloc>(
                 task: displayTask,
@@ -206,13 +162,17 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                   if (!editMode.allowsAnyEdits) {
                     return;
                   }
-                  chatBloc.add(CalendarEvent.taskUpdated(task: updatedTask));
+                  locate<ChatCalendarBloc>().add(
+                    CalendarEvent.taskUpdated(task: updatedTask),
+                  );
                 },
                 onTaskDeleted: (taskId) {
                   if (!editMode.allowsFullEdits) {
                     return;
                   }
-                  chatBloc.add(CalendarEvent.taskDeleted(taskId: taskId));
+                  locate<ChatCalendarBloc>().add(
+                    CalendarEvent.taskDeleted(taskId: taskId),
+                  );
                   Navigator.of(sheetContext).maybePop();
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
@@ -232,7 +192,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                         if (!canUpdateSchedule && !canUpdateChecklist) {
                           return;
                         }
-                        chatBloc.add(
+                        locate<ChatCalendarBloc>().add(
                           CalendarEvent.taskOccurrenceUpdated(
                             taskId: baseId,
                             occurrenceId: task.id,
@@ -346,11 +306,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     required CalendarTaskCopyStyle style,
   }) async {
     final l10n = context.l10n;
-    final CalendarStorageManager storageManager = widget.storageManager;
+    final CalendarStorageManager storageManager =
+        context.read<CalendarStorageManager>();
     final bool canAddToPersonal = storageManager.isAuthStorageReady &&
-        widget.personalCalendarBloc != null;
+        _maybeReadPersonalCalendarBloc() != null;
     final bool canAddToChat =
-        widget.allowChatCopy && widget.chatCalendarBloc != null;
+        widget.allowChatCopy && _maybeReadChatCalendarBloc() != null;
 
     if (!canAddToPersonal && !canAddToChat) {
       FeedbackSystem.showInfo(
@@ -373,8 +334,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
 
-    final CalendarBloc? personalBloc = widget.personalCalendarBloc;
-    final ChatCalendarBloc? chatBloc = widget.chatCalendarBloc;
+    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc();
+    final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc();
     bool didCopy = false;
     if (decision.addToPersonal && personalBloc != null) {
       final CalendarTask personalTask = task.copyForCalendar(style);
@@ -443,22 +404,30 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
   }
 
   CalendarBloc? _maybeReadPersonalCalendarBloc() {
-    return widget.personalCalendarBloc;
+    try {
+      return context.read<CalendarBloc>();
+    } on FlutterError {
+      return null;
+    }
   }
 
   ChatCalendarBloc? _maybeReadChatCalendarBloc() {
-    return widget.chatCalendarBloc;
+    try {
+      return context.read<ChatCalendarBloc>();
+    } on FlutterError {
+      return null;
+    }
   }
 
   void _ensureTaskImported(CalendarTask task) {
-    final chatBloc = widget.chatCalendarBloc;
-    if (chatBloc == null) {
+    if (context.read<ChatCalendarBloc>().state.model.tasks.containsKey(
+          task.id,
+        )) {
       return;
     }
-    if (chatBloc.state.model.tasks.containsKey(task.id)) {
-      return;
-    }
-    chatBloc.add(CalendarEvent.tasksImported(tasks: <CalendarTask>[task]));
+    context.read<ChatCalendarBloc>().add(
+          CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
+        );
   }
 
   EdgeInsets _shareMargin() {

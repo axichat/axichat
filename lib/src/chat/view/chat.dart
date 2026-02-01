@@ -6159,12 +6159,6 @@ class _ChatState extends State<Chat> {
                                                                         readOnly:
                                                                             (calendarTaskIcsReadOnly && !self) ||
                                                                                 demoEmailCalendarEnabled,
-                                                                        storageManager:
-                                                                            storageManager,
-                                                                        personalCalendarBloc:
-                                                                            personalCalendarBloc,
-                                                                        chatCalendarBloc:
-                                                                            chatCalendarBloc,
                                                                         requireImportConfirmation:
                                                                             !self,
                                                                         allowChatCopy:

@@ -485,6 +485,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
   String? _lastOccupantTrackedStanzaId;
+  bool _needsUnreadBootstrap = false;
 
   RestartableTimer? _typingTimer;
 
@@ -1188,8 +1189,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? forcedViewFilter
         : state.viewFilter;
     final unreadCount = event.chat.unreadCount;
-    final desiredLimit =
-        unreadCount > messageBatchSize ? unreadCount : messageBatchSize;
     emit(
       state.copyWith(
         chat: event.chat,
@@ -1230,6 +1229,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     _resetMamCursors(resetContext);
     if (resetContext) {
+      _needsUnreadBootstrap = unreadCount > _emptyMessageCount;
+    } else if (unreadCount <= _emptyMessageCount) {
+      _needsUnreadBootstrap = false;
+    }
+    if (resetContext) {
       _lastReadMarkerStanzaId = null;
       _lastNoticedEmailMessageId = null;
       _lastNoticedEmailUnreadCount = null;
@@ -1248,10 +1252,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       await _prefetchPeerAvatar(event.chat);
     }
-    await _ensureUnreadWindowLoaded(
-      chat: event.chat,
-      desiredWindow: desiredLimit,
-    );
+    if (event.chat.defaultTransport.isEmail && !resetContext) {
+      if (_emailUnreadBoundaryUnreadCount != unreadCount) {
+        _emailUnreadBoundaryDeltaId = null;
+        _emailUnreadBoundaryUnreadCount = unreadCount;
+      }
+    }
+    if (resetContext && unreadCount > _emptyMessageCount) {
+      await _resolveEmailUnreadBoundaryDeltaId(event.chat);
+    }
+    if (!resetContext && state.items.isNotEmpty) {
+      final boundary = _resolveUnreadBoundaryStanzaId(
+        chat: event.chat,
+        messages: state.items,
+        emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
+      );
+      if (boundary != state.unreadBoundaryStanzaId) {
+        emit(state.copyWith(unreadBoundaryStanzaId: boundary));
+      }
+    }
     if (typingContextChanged) {
       await _subscribeToTypingParticipants(event.chat);
     }
@@ -1693,9 +1712,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ...referencedQuotes,
       for (final message in loadedQuotes) message.stanzaID: message,
     };
+    final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
     final unreadBoundary = _resolveUnreadBoundaryStanzaId(
       chat: state.chat,
       messages: filteredItems,
+      emailBoundaryDeltaId: emailBoundaryDeltaId,
     );
     emit(
       state.copyWith(
@@ -1748,36 +1769,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         allowSend: lifecycleState == AppLifecycleState.resumed,
       );
     }
-    final updatedChat = state.chat;
-    if (updatedChat != null) {
-      final unreadCount = updatedChat.unreadCount;
-      if (unreadCount > _emptyMessageCount) {
-        final filteredOutCount = event.items.length - filteredItems.length;
-        final pseudoCount = filteredItems
-            .where((message) => message.pseudoMessageType != null)
-            .length;
-        final desiredWindow = unreadCount + filteredOutCount + pseudoCount;
-        final desiredLimit =
-            desiredWindow > messageBatchSize ? desiredWindow : messageBatchSize;
-        await _ensureUnreadWindowLoaded(
-          chat: updatedChat,
-          desiredWindow: desiredLimit,
-        );
-        await _syncUnreadBoundaryIfNeeded(
-          chat: updatedChat,
-          messages: filteredItems,
-          filteredOutCount: filteredOutCount,
-          pseudoCount: pseudoCount,
-        );
-      }
-    }
+    await _maybeBootstrapUnreadWindow(
+      chat: state.chat,
+      filteredOutCount: event.items.length - filteredItems.length,
+      pseudoCount: filteredItems
+          .where((message) => message.pseudoMessageType != null)
+          .length,
+    );
   }
 
   String? _resolveUnreadBoundaryStanzaId({
     required Chat? chat,
     required List<Message> messages,
+    int? emailBoundaryDeltaId,
   }) {
     if (chat == null) {
+      return null;
+    }
+    if (chat.defaultTransport.isEmail && emailBoundaryDeltaId != null) {
+      final boundaryMessage =
+          _findMessageByDeltaId(messages, emailBoundaryDeltaId);
+      if (boundaryMessage != null && _countsTowardUnread(boundaryMessage)) {
+        final stanzaId = boundaryMessage.stanzaID.trim();
+        return stanzaId.isEmpty ? null : stanzaId;
+      }
       return null;
     }
     final unreadCount = chat.unreadCount;
@@ -1813,8 +1828,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _emailUnreadBoundaryUnreadCount = null;
       return null;
     }
-    if (_emailUnreadBoundaryUnreadCount == chat.unreadCount &&
-        _emailUnreadBoundaryDeltaId != null) {
+    if (_emailUnreadBoundaryUnreadCount == chat.unreadCount) {
       return _emailUnreadBoundaryDeltaId;
     }
     final emailService = _emailService;
@@ -1844,45 +1858,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return db.getMessageByDeltaId(deltaMessageId, chatJid: chat.jid);
   }
 
-  Future<void> _syncUnreadBoundaryIfNeeded({
-    required Chat chat,
-    required List<Message> messages,
+  Future<void> _maybeBootstrapUnreadWindow({
+    required Chat? chat,
     required int filteredOutCount,
     required int pseudoCount,
-    int? emailBoundaryDeltaId,
   }) async {
-    var boundary = _resolveUnreadBoundaryStanzaId(
-      chat: chat,
-      messages: messages,
-      emailBoundaryDeltaId: emailBoundaryDeltaId,
-    );
-    if (boundary != null) {
+    if (!_needsUnreadBootstrap) {
       return;
     }
-    final desiredWindow = chat.unreadCount + filteredOutCount + pseudoCount;
-    var nextLimit = _currentMessageLimit;
-    if (nextLimit < desiredWindow) {
-      nextLimit = desiredWindow;
-    } else {
-      nextLimit = _currentMessageLimit + messageBatchSize;
+    if (chat == null) {
+      _needsUnreadBootstrap = false;
+      return;
     }
-    final beforeCount = await _archivedMessageCount(chat);
+    if (chat.unreadCount <= _emptyMessageCount) {
+      _needsUnreadBootstrap = false;
+      return;
+    }
+    _needsUnreadBootstrap = false;
+    final desiredWindow = chat.unreadCount + filteredOutCount + pseudoCount;
+    final desiredLimit =
+        desiredWindow > messageBatchSize ? desiredWindow : messageBatchSize;
     final canPageNetwork = chat.defaultTransport.isEmail
         ? _canPageEmailHistory(chat)
-        : await _canPageMam(chat) && !_mamComplete;
-    if (beforeCount <= _currentMessageLimit && !canPageNetwork) {
-      return;
+        : await _canPageMam(chat);
+    if (canPageNetwork) {
+      await _ensureUnreadWindowLoaded(
+        chat: chat,
+        desiredWindow: desiredLimit,
+        emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
+      );
     }
-    await _ensureUnreadWindowLoaded(
-      chat: chat,
-      desiredWindow: nextLimit,
-      emailBoundaryDeltaId: emailBoundaryDeltaId,
-    );
-    final afterCount = await _archivedMessageCount(chat);
-    if (afterCount <= beforeCount && beforeCount <= _currentMessageLimit) {
-      return;
+    if (desiredLimit != _currentMessageLimit) {
+      await _subscribeToMessages(limit: desiredLimit, filter: state.viewFilter);
     }
-    await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
   }
 
   Future<void> _onPinnedMessagesUpdated(
@@ -3280,12 +3288,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final nextLimit = state.items.length + messageBatchSize;
-    _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
     if (_isEmailChat) {
       await _loadEarlierFromEmail(desiredWindow: nextLimit);
+      await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
       return;
     }
     await _loadEarlierFromMam(desiredWindow: nextLimit);
+    await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
   }
 
   Future<void> _onChatAlertHidden(

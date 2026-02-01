@@ -4123,6 +4123,58 @@ class EmailService {
     );
   }
 
+  /// Returns the oldest fresh (unread) message ID for a chat.
+  ///
+  /// This consults core fresh IDs so the boundary comes from server state.
+  Future<int?> getOldestFreshMessageId(Chat chat) async {
+    await _ensureReady();
+    final account = await _resolveAccountForChat(chat);
+    final chatId = await _deltaChatIdForAccount(
+      chat: chat,
+      deltaAccountId: account.deltaAccountId,
+    );
+    if (chatId == null) {
+      return null;
+    }
+    final freshIds = await _transport.getFreshMessageIds(
+      accountId: account.deltaAccountId,
+    );
+    if (freshIds.isEmpty) {
+      return null;
+    }
+    DeltaMessage? oldest;
+    for (final freshId in freshIds) {
+      if (freshId <= _deltaMessageIdUnset) {
+        continue;
+      }
+      final message = await _transport.getMessage(
+        freshId,
+        accountId: account.deltaAccountId,
+      );
+      if (message == null || message.chatId != chatId) {
+        continue;
+      }
+      if (oldest == null) {
+        oldest = message;
+        continue;
+      }
+      final messageTimestamp = message.timestamp;
+      final oldestTimestamp = oldest.timestamp;
+      if (oldestTimestamp == null && messageTimestamp == null) {
+        if (message.id < oldest.id) {
+          oldest = message;
+        }
+        continue;
+      }
+      if (oldestTimestamp == null ||
+          (messageTimestamp != null &&
+              messageTimestamp.isBefore(oldestTimestamp))) {
+        oldest = message;
+      }
+    }
+    return oldest?.id;
+  }
+
   /// Deletes messages from core and server.
   Future<bool> deleteMessages(List<Message> messages) async {
     final deltaMessages = messages
