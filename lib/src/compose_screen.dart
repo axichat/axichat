@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
@@ -17,8 +18,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _composeScreenMaxWidth = 720;
-
 class ComposeScreen extends StatelessWidget {
   const ComposeScreen({super.key, required this.seed, required this.locate});
 
@@ -27,9 +26,11 @@ class ComposeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = ShadTheme.of(context).colorScheme;
+    final colors = context.colorScheme;
     final l10n = context.l10n;
-    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final emailEnabled = endpointConfig.enableSmtp;
     return MultiRepositoryProvider(
       providers: [
@@ -58,16 +59,16 @@ class ComposeScreen extends StatelessWidget {
             elevation: 0,
             scrolledUnderElevation: 0,
             forceMaterialTransparency: true,
-            shape: Border(bottom: BorderSide(color: colors.border)),
-            leadingWidth: AxiIconButton.kDefaultSize + 24,
+            shape: Border(bottom: context.borderSide),
+            leadingWidth: sizing.iconButtonTapTarget + spacing.m,
             leading: Navigator.canPop(context)
                 ? Padding(
-                    padding: const EdgeInsets.only(left: 12),
+                    padding: EdgeInsets.only(left: spacing.m),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: SizedBox(
-                        width: AxiIconButton.kDefaultSize,
-                        height: AxiIconButton.kDefaultSize,
+                        width: sizing.iconButtonSize,
+                        height: sizing.iconButtonSize,
                         child: AxiIconButton.ghost(
                           iconData: LucideIcons.arrowLeft,
                           tooltip: l10n.commonBack,
@@ -82,20 +83,12 @@ class ComposeScreen extends StatelessWidget {
           body: Align(
             alignment: Alignment.topCenter,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(spacing.m),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: _composeScreenMaxWidth,
+                constraints: BoxConstraints(
+                  maxWidth: sizing.composeWindowExpandedWidth,
                 ),
-                child: DecoratedBox(
-                  decoration: ShapeDecoration(
-                    color: colors.card,
-                    shadows: calendarMediumShadow,
-                    shape: ContinuousRectangleBorder(
-                      borderRadius: ShadTheme.of(context).radius,
-                      side: BorderSide(color: colors.border),
-                    ),
-                  ),
+                child: AxiModalSurface(
                   child: ComposeDraftContent(
                     seed: seed,
                     onClosed: () => Navigator.maybePop(context),

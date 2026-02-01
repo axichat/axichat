@@ -49,7 +49,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   void updateEndpointConfig(EndpointConfig config) {
-    emit(state.copyWith(endpointConfig: config));
+    final normalized = normalizeEndpointConfig(config);
+    emit(state.copyWith(endpointConfig: normalized));
   }
 
   void resetEndpointConfig() {
@@ -222,7 +223,12 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
           migrated['chat_read_receipts'] = migrated['readReceipts'];
         }
       }
-      return SettingsState.fromJson(migrated);
+      final state = SettingsState.fromJson(migrated);
+      final normalizedConfig = normalizeEndpointConfig(state.endpointConfig);
+      if (normalizedConfig == state.endpointConfig) {
+        return state;
+      }
+      return state.copyWith(endpointConfig: normalizedConfig);
     } catch (_) {
       return const SettingsState(shadColor: ShadColor.blue);
     }

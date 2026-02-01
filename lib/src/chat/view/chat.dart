@@ -3815,9 +3815,10 @@ class _ChatState extends State<Chat> {
                       : (AxiIconButton.kTapTargetSize * chatActionCount) +
                           (_chatHeaderActionSpacing *
                               math.max(0, chatActionCount - 1));
-                  const double titleReserveWidth = _chatAppBarAvatarSize +
-                      avatarTitleSpacing +
-                      _chatAppBarTitleMinWidth;
+                  final double titleReserveWidth =
+                      context.sizing.iconButtonSize +
+                          avatarTitleSpacing +
+                          _chatAppBarTitleMinWidth;
                   const double actionsPaddingWidth =
                       _chatAppBarActionsPadding * 2;
                   final bool collapseAppBarActions = leadingActionCount > 0 &&
@@ -3900,7 +3901,7 @@ class _ChatState extends State<Chat> {
                                 Widget avatar = TransportAwareAvatar(
                                   chat: chatEntity!,
                                   selfIdentity: selfIdentity,
-                                  size: _chatAppBarAvatarSize,
+                                  size: context.sizing.iconButtonSize,
                                   badgeOffset: Offset(-spacing.xs, -spacing.xs),
                                   presence: presence,
                                   status: statusLabel,
@@ -6640,8 +6641,8 @@ class _ChatState extends State<Chat> {
                                                           EdgeInsetsGeometry
                                                               bubblePadding =
                                                               _bubblePadding(
-                                                                context,
-                                                              );
+                                                            context,
+                                                          );
                                                           if (bubbleBottomInset >
                                                               0) {
                                                             bubblePadding =
@@ -7565,8 +7566,7 @@ class _ChatState extends State<Chat> {
                                                                     ? _messageAvatarContentInset +
                                                                         _bubblePadding(
                                                                           context,
-                                                                        )
-                                                                            .left
+                                                                        ).left
                                                                     : _senderLabelNoInset;
                                                             senderLabel =
                                                                 _MessageSenderLabel(
@@ -12116,6 +12116,7 @@ class _ChatSettingsButtons extends StatelessWidget {
         resolvedBlockAddress != null && resolvedBlockAddress.isNotEmpty;
     final bool hasBlockEntry = blocklistEntry != null;
     final bool showXmppCapabilities = chat.defaultTransport.isXmpp;
+    final itemPadding = EdgeInsets.all(context.spacing.m);
     final bool blockActionInFlight = switch (blocklistState) {
       BlocklistLoading state => state.jid == null ||
           state.jid == resolvedBlockAddress ||
@@ -12127,25 +12128,25 @@ class _ChatSettingsButtons extends StatelessWidget {
     final List<Widget> tiles = [
       if (showXmppCapabilities)
         Padding(
-          padding: _chatSettingsItemPadding,
+          padding: itemPadding,
           child: _ChatCapabilitiesSection(
             capabilities: state.xmppCapabilities,
           ),
         ),
       if (showAttachmentToggle)
         Padding(
-          padding: _chatSettingsItemPadding,
+          padding: itemPadding,
           child: _ChatAttachmentTrustToggle(chat: chat),
         ),
       Padding(
-        padding: _chatSettingsItemPadding,
+        padding: itemPadding,
         child: _ChatViewFilterControl(
           filter: state.viewFilter,
           onChanged: onViewFilterChanged,
         ),
       ),
       Padding(
-        padding: _chatSettingsItemPadding,
+        padding: itemPadding,
         child: _ChatSettingsSwitchRow(
           title: l10n.chatMuteNotifications,
           value: notificationsMuted,
@@ -12153,7 +12154,7 @@ class _ChatSettingsButtons extends StatelessWidget {
         ),
       ),
       Padding(
-        padding: _chatSettingsItemPadding,
+        padding: itemPadding,
         child: _ChatNotificationPreviewControl(
           setting: chat.notificationPreviewSetting,
           onChanged: (setting) => context.read<ChatBloc>().add(
@@ -12163,7 +12164,7 @@ class _ChatSettingsButtons extends StatelessWidget {
       ),
       if (chat.supportsEmail)
         Padding(
-          padding: _chatSettingsItemPadding,
+          padding: itemPadding,
           child: _ChatSettingsSwitchRow(
             title: l10n.chatSignatureToggleLabel,
             subtitle: '$signatureHint $signatureWarning',
@@ -12176,7 +12177,7 @@ class _ChatSettingsButtons extends StatelessWidget {
           ),
         ),
       Padding(
-        padding: _chatSettingsItemPadding,
+        padding: itemPadding,
         child: _ChatSettingsSwitchRow(
           title: spamLabel,
           titleColor: destructiveColor,
@@ -12186,7 +12187,7 @@ class _ChatSettingsButtons extends StatelessWidget {
         ),
       ),
       Padding(
-        padding: _chatSettingsItemPadding,
+        padding: itemPadding,
         child: _ChatSettingsSwitchRow(
           title: l10n.blocklistBlock,
           titleColor: destructiveColor,
@@ -13575,7 +13576,9 @@ class _GuestChatHeader extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Row(
             children: [
-              const _GuestChatAppIconAvatar(size: _chatAppBarAvatarSize),
+              _GuestChatAppIconAvatar(
+                size: context.sizing.iconButtonSize,
+              ),
               SizedBox(width: spacing),
               Expanded(
                 child: Column(

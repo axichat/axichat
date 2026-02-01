@@ -329,6 +329,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
   final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
+  final _CoalescingAsyncQueue _emailProvisioningRecoveryQueue =
+      _CoalescingAsyncQueue();
+  DateTime? _lastEmailProvisioningRecoveryAt;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -348,25 +351,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {
-    final normalized = _normalizeEndpointConfig(config);
+    final normalized = normalizeEndpointConfig(config);
     _rebuildEmailProvisioningClient(normalized);
     _emailService?.updateEndpointConfig(normalized);
     emit(state.copyWithConfig(normalized));
     _updateEmailForegroundKeepalive();
-  }
-
-  EndpointConfig _normalizeEndpointConfig(EndpointConfig config) {
-    final host = config.xmppHost?.trim();
-    final parsed =
-        host == null || host.isEmpty ? null : InternetAddress.tryParse(host);
-    if (parsed != null && config.useDns) {
-      return config.copyWith(
-        useDns: false,
-        useSrv: false,
-        requireDnssec: false,
-      );
-    }
-    return config;
   }
 
   Uri? _tryParseEmailProvisioningBaseUrl(String? value) {
@@ -557,16 +546,24 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return Duration(seconds: clampedSeconds);
   }
 
-  Future<void> _awaitLoginBackoff() async {
+  Future<bool> _awaitLoginBackoff() async {
     final until = _loginBackoffUntil;
     if (until == null) {
-      return;
+      return false;
     }
     final remaining = until.difference(DateTime.now());
-    if (!remaining.isNegative) {
-      await Future.delayed(remaining);
+    if (remaining.isNegative) {
+      _loginBackoffUntil = null;
+      return false;
     }
-    _loginBackoffUntil = null;
+    final seconds = remaining.inSeconds < 1 ? 1 : remaining.inSeconds;
+    emit(
+      AuthenticationFailure(
+        AuthBackoffMessage(seconds),
+        config: endpointConfig,
+      ),
+    );
+    return true;
   }
 
   Future<void> _recoverAuthTransaction() async {
@@ -816,6 +813,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _attemptEmailProvisioningRecovery() async {
+    await _emailProvisioningRecoveryQueue.enqueue(() async {
+      const cooldown = Duration(seconds: 30);
+      final now = DateTime.timestamp();
+      final lastAttempt = _lastEmailProvisioningRecoveryAt;
+      if (lastAttempt != null && now.difference(lastAttempt) < cooldown) {
+        return;
+      }
+      _lastEmailProvisioningRecoveryAt = now;
+      await _attemptEmailProvisioningRecoveryInternal();
+    });
+  }
+
+  Future<void> _attemptEmailProvisioningRecoveryInternal() async {
     if (!endpointConfig.enableSmtp) {
       return;
     }
@@ -1133,6 +1143,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _ownedHttpClient?.close();
     _pendingDeletionQueue.dispose();
+    _emailProvisioningRecoveryQueue.dispose();
     return super.close();
   }
 
@@ -1184,7 +1195,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         previousState is! AuthenticationLogInInProgress) {
       _emit(loginState);
     }
-    await _awaitLoginBackoff();
+    final blocked = await _awaitLoginBackoff();
+    if (blocked) {
+      return;
+    }
     await _recoverAuthTransaction();
     final EndpointConfig config = endpointConfig;
     final bool shouldSkipLogin = previousState is AuthenticationComplete &&

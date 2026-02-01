@@ -64,8 +64,8 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
       };
 
   final XmppBase _xmppBase;
-  final EmailService? _emailService;
-  final bool _emailEnabled;
+  EmailService? _emailService;
+  bool _emailEnabled;
 
   late final StreamSubscription<ConnectionState> _connectivitySubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
@@ -75,6 +75,32 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
       stateMap(
         _xmppBase.connectionState,
         emailState: emailState,
+        emailEnabled: _emailEnabled,
+      ),
+    );
+  }
+
+  Future<void> updateEmailContext({
+    required bool emailEnabled,
+    EmailService? emailService,
+  }) async {
+    if (_emailEnabled == emailEnabled && identical(_emailService, emailService)) {
+      return;
+    }
+    _emailEnabled = emailEnabled;
+    final emailSub = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await emailSub?.cancel();
+    _emailService = emailService;
+    if (emailService != null) {
+      _emailSyncSubscription = emailService.syncStateStream.listen(
+        _handleEmailSyncState,
+      );
+    }
+    emit(
+      stateMap(
+        _xmppBase.connectionState,
+        emailState: emailService?.syncState ?? const EmailSyncState.ready(),
         emailEnabled: _emailEnabled,
       ),
     );

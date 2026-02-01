@@ -18,7 +18,7 @@ class HomeRefreshSyncService {
         _emailService = emailService;
 
   final XmppService _xmppService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final Logger _log = Logger('HomeRefreshSyncService');
   final StreamController<HomeRefreshSyncUpdate> _syncUpdates =
       StreamController<HomeRefreshSyncUpdate>.broadcast();
@@ -43,6 +43,24 @@ class HomeRefreshSyncService {
       _emailSyncSubscription = emailService.syncStateStream.listen(
         _handleEmailSyncState,
       );
+    }
+  }
+
+  Future<void> updateEmailService(EmailService? emailService) async {
+    if (identical(emailService, _emailService)) {
+      return;
+    }
+    final emailSub = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await emailSub?.cancel();
+    _emailService = emailService;
+    if (emailService != null) {
+      _lastEmailStatus = emailService.syncState.status;
+      _emailSyncSubscription = emailService.syncStateStream.listen(
+        _handleEmailSyncState,
+      );
+    } else {
+      _lastEmailStatus = null;
     }
   }
 

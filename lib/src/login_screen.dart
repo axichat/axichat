@@ -30,7 +30,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:logging/logging.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -528,23 +527,20 @@ class _LoginScreenState extends State<LoginScreen>
                                         duration: context
                                             .watch<SettingsCubit>()
                                             .animationDuration,
-                                        crossFadeState: (_activeFlow !=
-                                                    _AuthFlow.signup &&
-                                                _selectedFlow ==
-                                                    _AuthFlow.login)
-                                            ? CrossFadeState.showFirst
-                                            : CrossFadeState.showSecond,
+                                        crossFadeState:
+                                            (_activeFlow != _AuthFlow.signup &&
+                                                    _selectedFlow ==
+                                                        _AuthFlow.login)
+                                                ? CrossFadeState.showFirst
+                                                : CrossFadeState.showSecond,
                                         firstChild: IgnorePointer(
-                                          ignoring:
-                                              _activeFlow == _AuthFlow.signup ||
-                                                  _selectedFlow !=
-                                                      _AuthFlow.login,
+                                          ignoring: _activeFlow ==
+                                                  _AuthFlow.signup ||
+                                              _selectedFlow != _AuthFlow.login,
                                           child: Padding(
-                                            padding:
-                                                EdgeInsets.all(spacing.m),
+                                            padding: EdgeInsets.all(spacing.m),
                                             child: LoginForm(
-                                              key:
-                                                  const ValueKey('login-form'),
+                                              key: const ValueKey('login-form'),
                                               onSubmitStart: () =>
                                                   _handleSubmissionRequested(
                                                 _AuthFlow.login,
@@ -554,13 +550,11 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ),
                                         secondChild: IgnorePointer(
-                                          ignoring:
-                                              _activeFlow == _AuthFlow.login ||
-                                                  _selectedFlow !=
-                                                      _AuthFlow.signup,
+                                          ignoring: _activeFlow ==
+                                                  _AuthFlow.login ||
+                                              _selectedFlow != _AuthFlow.signup,
                                           child: Padding(
-                                            padding:
-                                                EdgeInsets.all(spacing.m),
+                                            padding: EdgeInsets.all(spacing.m),
                                             child: BlocProvider(
                                               create: (_) =>
                                                   SignupAvatarCubit(),
@@ -575,8 +569,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                 onSubmitStart: () =>
                                                     _handleSubmissionRequested(
                                                   _AuthFlow.signup,
-                                                  label: l10n
-                                                      .authCreatingAccount,
+                                                  label:
+                                                      l10n.authCreatingAccount,
                                                 ),
                                                 onLoadingChanged:
                                                     _handleSignupLoadingChanged,

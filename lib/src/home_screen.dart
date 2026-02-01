@@ -8,7 +8,6 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
@@ -785,9 +784,21 @@ class _HomeContent extends StatelessWidget {
                 ),
               ),
             ],
-            child: _HomeCoordinatorBridge(
-              storage: calendarStorage,
-              child: EmailForwardingWelcomeGate(child: calendarAwareContent),
+            child: BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.endpointConfig != current.endpointConfig,
+              listener: (context, settings) {
+                final config = settings.endpointConfig;
+                context.read<ConnectivityCubit>().updateEmailContext(
+                      emailEnabled: config.enableSmtp,
+                      emailService:
+                          config.enableSmtp ? context.read<EmailService>() : null,
+                    );
+              },
+              child: _HomeCoordinatorBridge(
+                storage: calendarStorage,
+                child: EmailForwardingWelcomeGate(child: calendarAwareContent),
+              ),
             ),
           ),
         ),
@@ -999,9 +1010,10 @@ class _HomeGlobalShortcutHandlerState
 
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!_isFindActionEvent(event)) return false;
-    final bloc = context.read<AccessibilityActionBloc>();
-    if (bloc.isClosed) return false;
-    bloc.add(const AccessibilityMenuOpened());
+    if (context.read<AccessibilityActionBloc>().isClosed) return false;
+    context
+        .read<AccessibilityActionBloc>()
+        .add(const AccessibilityMenuOpened());
     return true;
   }
 

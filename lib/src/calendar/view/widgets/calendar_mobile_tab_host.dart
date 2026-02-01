@@ -52,7 +52,7 @@ class _CalendarMobileTabHostPublisherState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final controller = CalendarMobileTabHostScope.maybeController(context);
+    final controller = CalendarMobileTabHostScope.maybeOf(context);
     if (controller != _controller) {
       _controller?.clear();
       _controller = controller;

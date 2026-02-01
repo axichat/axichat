@@ -173,6 +173,20 @@ class EndpointConfig extends Equatable {
       ];
 }
 
+EndpointConfig normalizeEndpointConfig(EndpointConfig config) {
+  final host = config.xmppHost?.trim();
+  final parsed =
+      host == null || host.isEmpty ? null : InternetAddress.tryParse(host);
+  if (parsed != null && config.useDns) {
+    return config.copyWith(
+      useDns: false,
+      useSrv: false,
+      requireDnssec: false,
+    );
+  }
+  return config;
+}
+
 class EndpointOverride extends Equatable {
   const EndpointOverride({
     required this.host,

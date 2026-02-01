@@ -169,17 +169,17 @@ class _CalendarWidgetState
         tabSwitcher: tabSwitcher,
         cancelBucket: cancelBucket,
       );
-      return CalendarMobileTabHostPublisher(
-        data: data,
-        child: CalendarMobileTabShell(
-          tabBar: const SizedBox.shrink(),
-          cancelBucket: const SizedBox.shrink(),
-          backgroundColor: context.colorScheme.background,
-          borderColor: context.colorScheme.border,
-          dividerColor: context.colorScheme.border,
-          showTopBorder: false,
-          showDivider: false,
+      return CalendarMobileTabShell(
+        tabBar: CalendarMobileTabHostPublisher(
+          data: data,
+          child: const SizedBox.shrink(),
         ),
+        cancelBucket: const SizedBox.shrink(),
+        backgroundColor: context.colorScheme.background,
+        borderColor: context.colorScheme.border,
+        dividerColor: context.colorScheme.border,
+        showTopBorder: false,
+        showDivider: false,
       );
     }
     final colors = context.colorScheme;
