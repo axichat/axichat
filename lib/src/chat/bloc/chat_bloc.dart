@@ -313,6 +313,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
+    on<ChatCapabilitiesRequested>(_onChatCapabilitiesRequested);
     on<ChatAlertHidden>(_onChatAlertHidden);
     on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
     on<ChatContactAddRequested>(_onChatContactAddRequested);
@@ -1360,6 +1361,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         previousChat?.defaultTransport != event.chat.defaultTransport;
     final pinnedContextChanged = resetContext ||
         previousChat?.defaultTransport != event.chat.defaultTransport;
+    final capabilitiesShouldReset = resetContext ||
+        previousChat?.defaultTransport != event.chat.defaultTransport;
+    final showXmppCapabilities = event.chat.defaultTransport.isXmpp;
     final typingShouldClear =
         typingContextChanged || event.chat.defaultTransport.isEmail;
     const forcedViewFilter = MessageTimelineFilter.allWithContact;
@@ -1396,6 +1400,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pinnedMessagesLoaded: resetContext ? false : state.pinnedMessagesLoaded,
         pinnedMessagesHydrating:
             resetContext ? false : state.pinnedMessagesHydrating,
+        xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
+            ? null
+            : state.xmppCapabilities,
         typingParticipants:
             typingShouldClear ? const [] : state.typingParticipants,
         typing: event.chat.defaultTransport.isEmail ? false : state.typing,
@@ -1434,6 +1441,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         !_shouldSkipInitialMamSync(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
     }
+    if (showXmppCapabilities) {
+      final capabilities = await _resolvePeerCapabilities(event.chat);
+      if (capabilities != null) {
+        emit(state.copyWith(xmppCapabilities: capabilities));
+      }
+    }
     await _roomSubscription?.cancel();
     _roomSubscription = null;
     await _roomRosterSubscription?.cancel();
@@ -1462,6 +1475,47 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(roomState: null, roomMemberSections: const []));
     }
     await _primeDemoPendingAttachment(event.chat, emit);
+  }
+
+  Future<void> _onChatCapabilitiesRequested(
+    ChatCapabilitiesRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || !chat.defaultTransport.isXmpp) {
+      emit(state.copyWith(xmppCapabilities: null));
+      return;
+    }
+    final capabilities = await _resolvePeerCapabilities(
+      chat,
+      forceRefresh: event.forceRefresh,
+    );
+    if (capabilities == null) {
+      return;
+    }
+    emit(state.copyWith(xmppCapabilities: capabilities));
+  }
+
+  Future<XmppPeerCapabilities?> _resolvePeerCapabilities(
+    Chat chat, {
+    bool forceRefresh = false,
+  }) async {
+    if (!_xmppAllowedForChat(chat)) {
+      return null;
+    }
+    final peerJid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
+    if (peerJid.trim().isEmpty) {
+      return null;
+    }
+    try {
+      return await _messageService.resolvePeerCapabilities(
+        jid: peerJid,
+        forceRefresh: forceRefresh,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine('Failed to resolve peer capabilities', error, stackTrace);
+      return null;
+    }
   }
 
   Future<void> _onRoomStateUpdated(

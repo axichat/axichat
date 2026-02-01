@@ -548,7 +548,7 @@ class NotificationService {
   String _sanitizeMessageNotificationTitle(String title) {
     final normalized = title.trim();
     if (normalized.isEmpty) return _genericMessageNotificationTitle;
-    if (normalized.contains('@')) return _genericMessageNotificationTitle;
+    if (normalized.isValidJid) return _genericMessageNotificationTitle;
     return normalized;
   }
 

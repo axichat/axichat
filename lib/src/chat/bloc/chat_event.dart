@@ -277,6 +277,15 @@ final class ChatLoadEarlier extends ChatEvent {
   List<Object?> get props => [];
 }
 
+final class ChatCapabilitiesRequested extends ChatEvent {
+  const ChatCapabilitiesRequested({this.forceRefresh = false});
+
+  final bool forceRefresh;
+
+  @override
+  List<Object?> get props => [forceRefresh];
+}
+
 final class ChatAlertHidden extends ChatEvent {
   const ChatAlertHidden({this.forever = false});
 

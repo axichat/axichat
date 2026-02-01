@@ -23,6 +23,7 @@ import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -149,6 +150,14 @@ class _ChatsListBody extends StatelessWidget {
     final showToast = ShadToaster.maybeOf(context)?.show;
     final spacing = context.spacing;
     final sizing = context.sizing;
+    final profileJid = context.watch<ProfileCubit>().state.jid;
+    final resolvedProfileJid = profileJid.trim();
+    final String? selfJid =
+        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final selfIdentity = SelfIdentitySnapshot(
+      selfJid: selfJid,
+      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+    );
     final refreshSpinnerExtent = sizing.buttonHeightLg + spacing.s;
     final refreshSpinnerDimension = sizing.progressIndicatorSize + spacing.xs;
     final refreshOffsetToArmed = spacing.xl + spacing.l;
@@ -244,6 +253,7 @@ class _ChatsListBody extends StatelessWidget {
                     selectedJids: state.selectedJids,
                     openJid: state.openJid,
                     timestampNowListenable: nowListenable,
+                    selfIdentity: selfIdentity,
                     calendarShortcut: includeCalendarShortcut
                         ? ListItemPadding(
                             child: BlocBuilder<CalendarBloc, CalendarState>(
@@ -401,6 +411,7 @@ class _AnimatedChatTile extends StatelessWidget {
     required this.isSelected,
     required this.isOpen,
     required this.timestampNowListenable,
+    required this.selfIdentity,
   });
 
   final Chat chat;
@@ -413,6 +424,7 @@ class _AnimatedChatTile extends StatelessWidget {
   final bool isSelected;
   final bool isOpen;
   final ValueListenable<DateTime> timestampNowListenable;
+  final SelfIdentitySnapshot selfIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +449,7 @@ class _AnimatedChatTile extends StatelessWidget {
           isSelected: isSelected,
           isOpen: isOpen,
           timestampNowListenable: timestampNowListenable,
+          selfIdentity: selfIdentity,
         ),
       ),
     );
@@ -452,6 +465,7 @@ class _ChatTileSlot extends StatelessWidget {
     required this.isSelected,
     required this.isOpen,
     required this.timestampNowListenable,
+    required this.selfIdentity,
   });
 
   final Chat chat;
@@ -461,6 +475,7 @@ class _ChatTileSlot extends StatelessWidget {
   final bool isSelected;
   final bool isOpen;
   final ValueListenable<DateTime> timestampNowListenable;
+  final SelfIdentitySnapshot selfIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +491,7 @@ class _ChatTileSlot extends StatelessWidget {
             isSelected: isSelected,
             isOpen: isOpen,
             timestampNow: timestampNow,
+            selfIdentity: selfIdentity,
           ),
         );
       },
@@ -491,6 +507,7 @@ class ChatListTile extends StatefulWidget {
     required this.isSelected,
     required this.isOpen,
     required this.timestampNow,
+    required this.selfIdentity,
     this.archivedContext = false,
     this.onArchivedTap,
   });
@@ -500,6 +517,7 @@ class ChatListTile extends StatefulWidget {
   final bool isSelected;
   final bool isOpen;
   final DateTime timestampNow;
+  final SelfIdentitySnapshot selfIdentity;
   final bool archivedContext;
   final Future<void> Function(Chat chat)? onArchivedTap;
 
@@ -516,6 +534,7 @@ class AnimatedChatsListView extends StatefulWidget {
     required this.selectedJids,
     required this.openJid,
     required this.timestampNowListenable,
+    required this.selfIdentity,
     this.includeCalendarShortcut = false,
     this.calendarShortcut,
   });
@@ -526,6 +545,7 @@ class AnimatedChatsListView extends StatefulWidget {
   final Set<String> selectedJids;
   final String? openJid;
   final ValueListenable<DateTime> timestampNowListenable;
+  final SelfIdentitySnapshot selfIdentity;
   final bool includeCalendarShortcut;
   final Widget? calendarShortcut;
 
@@ -584,6 +604,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
             isSelected: widget.selectedJids.contains(removedChat.jid),
             isOpen: widget.openJid == removedChat.jid,
             timestampNowListenable: widget.timestampNowListenable,
+            selfIdentity: widget.selfIdentity,
           ),
           duration: widget.animationDuration,
         );
@@ -654,6 +675,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
             isSelected: widget.selectedJids.contains(chat.jid),
             isOpen: widget.openJid == chat.jid,
             timestampNowListenable: widget.timestampNowListenable,
+            selfIdentity: widget.selfIdentity,
           );
         },
       ),
@@ -835,7 +857,10 @@ class _ChatListTileState extends State<ChatListTile> {
       paintSurface: false,
       contentPadding: tilePadding,
       tapBounce: false,
-      leading: TransportAwareAvatar(chat: item),
+      leading: TransportAwareAvatar(
+        chat: item,
+        selfIdentity: widget.selfIdentity,
+      ),
       title: displayName,
       subtitle: subtitleText,
       subtitlePlaceholder: l10n.chatEmptyMessages,

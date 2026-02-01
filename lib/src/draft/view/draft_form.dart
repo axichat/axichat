@@ -29,7 +29,9 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -202,6 +204,14 @@ class _DraftFormState extends State<DraftForm> {
       vertical: spacing.xs,
     );
     final subjectHeight = sizing.buttonHeightRegular;
+    final profileJid = context.watch<ProfileCubit>().state.jid;
+    final resolvedProfileJid = profileJid.trim();
+    final String? selfJid =
+        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final selfIdentity = SelfIdentitySnapshot(
+      selfJid: selfJid,
+      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+    );
 
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
@@ -318,6 +328,7 @@ class _DraftFormState extends State<DraftForm> {
                                 recipientSuggestionsStream: locate<ChatsCubit>()
                                     .recipientAddressSuggestionsStream(),
                                 selfJid: locate<ChatsCubit>().selfJid,
+                                selfIdentity: selfIdentity,
                                 onRecipientAdded: (target) {
                                   _handleRecipientAdded(target).then(
                                     (added) {

@@ -3340,21 +3340,13 @@ class _ChatState extends State<Chat> {
         final searchFiltering =
             searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
         final searchResults = searchState.results;
-        final profile = context.watch<ProfileCubit>().state;
-        final endpointConfig =
-            context.watch<AuthenticationCubit>().endpointConfig;
-        final xmppService = context.watch<XmppService>();
-        final resolvedProfileJid = profile.jid.trim();
-        final String? selfXmppJid = resolvedProfileJid.isNotEmpty
-            ? resolvedProfileJid
-            : xmppService.myJid;
-        final String? selfEmailJid = endpointConfig.enableSmtp
-            ? context.watch<EmailService>().selfSenderJid
-            : null;
+        final profileJid = context.watch<ProfileCubit>().state.jid;
+        final resolvedProfileJid = profileJid.trim();
+        final String? selfJid =
+            resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
         final selfIdentity = SelfIdentitySnapshot(
-          xmppJid: selfXmppJid,
-          emailJid: selfEmailJid,
-          avatarPath: profile.avatarPath,
+          selfJid: selfJid,
+          avatarPath: context.watch<ProfileCubit>().state.avatarPath,
         );
         final showToast = ShadToaster.maybeOf(context)?.show;
         return MultiBlocListener(
@@ -4791,6 +4783,7 @@ class _ChatState extends State<Chat> {
                                                 composerHasText:
                                                     _composerHasContent,
                                                 selfJid: selfXmppJid,
+                                                selfIdentity: selfIdentity,
                                                 composerError:
                                                     state.composerError,
                                                 onComposerErrorCleared: () =>
@@ -10721,6 +10714,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.pendingAttachments,
     required this.composerHasText,
     required this.selfJid,
+    required this.selfIdentity,
     required this.subjectController,
     required this.subjectFocusNode,
     required this.textController,
@@ -10753,6 +10747,7 @@ class _ChatComposerSection extends StatelessWidget {
   final List<PendingAttachment> pendingAttachments;
   final bool composerHasText;
   final String? selfJid;
+  final SelfIdentitySnapshot selfIdentity;
   final TextEditingController subjectController;
   final FocusNode subjectFocusNode;
   final TextEditingController textController;
@@ -10945,6 +10940,7 @@ class _ChatComposerSection extends StatelessWidget {
         recipientSuggestionsStream:
             locate<ChatsCubit>().recipientAddressSuggestionsStream(),
         selfJid: locate<ChatsCubit>().selfJid,
+        selfIdentity: selfIdentity,
         latestStatuses: latestStatuses,
         collapsedByDefault: true,
         suggestionAddresses: suggestionAddresses,
@@ -14101,6 +14097,14 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     final iconSize = context.sizing.iconButtonIconSize;
     final sectionSpacing = spacing.m;
     final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);
+    final profileJid = context.watch<ProfileCubit>().state.jid;
+    final resolvedProfileJid = profileJid.trim();
+    final String? selfJid =
+        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final selfIdentity = SelfIdentitySnapshot(
+      selfJid: selfJid,
+      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+    );
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),
       onClose: _handleClose,
@@ -14117,6 +14121,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
           recipientSuggestionsStream:
               locate<ChatsCubit>().recipientAddressSuggestionsStream(),
           selfJid: locate<ChatsCubit>().selfJid,
+          selfIdentity: selfIdentity,
           latestStatuses: const {},
           collapsedByDefault: false,
           allowAddressTargets: false,

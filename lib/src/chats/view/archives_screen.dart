@@ -5,8 +5,10 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,6 +41,14 @@ class _ArchivesView extends StatelessWidget {
         final l10n = context.l10n;
         final spacing = context.spacing;
         final sizing = context.sizing;
+        final profileJid = context.watch<ProfileCubit>().state.jid;
+        final resolvedProfileJid = profileJid.trim();
+        final String? selfJid =
+            resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+        final selfIdentity = SelfIdentitySnapshot(
+          selfJid: selfJid,
+          avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+        );
         final selectedChats = chatsState.selectedChats;
         final selectionActive = selectedChats.isNotEmpty;
         final archivedItems = chatsState.archivedItems;
@@ -98,6 +108,7 @@ class _ArchivesView extends StatelessWidget {
                                 isOpen: chatsState.openJid ==
                                     archivedItems[index].jid,
                                 timestampNow: timestampNow,
+                                selfIdentity: selfIdentity,
                                 archivedContext: true,
                                 onArchivedTap: (chat) =>
                                     GoRouter.of(context).push(

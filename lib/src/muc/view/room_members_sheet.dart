@@ -9,11 +9,13 @@ import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart'
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -808,6 +810,14 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final locate = context.read;
+    final profileJid = context.watch<ProfileCubit>().state.jid;
+    final resolvedProfileJid = profileJid.trim();
+    final String? selfJid =
+        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final selfIdentity = SelfIdentitySnapshot(
+      selfJid: selfJid,
+      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+    );
     final contentPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,
@@ -861,6 +871,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               recipientSuggestionsStream:
                   locate<ChatsCubit>().recipientAddressSuggestionsStream(),
               selfJid: locate<ChatsCubit>().selfJid,
+              selfIdentity: selfIdentity,
               latestStatuses: const {},
               onRecipientAdded: _addRecipient,
               onRecipientRemoved: _removeRecipient,

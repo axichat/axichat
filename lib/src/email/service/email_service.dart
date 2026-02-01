@@ -3760,7 +3760,7 @@ class EmailService {
     if (localPart != null) {
       return localPart;
     }
-    if (normalized.contains('@')) {
+    if (addressDomainPart(normalized) != null) {
       return null;
     }
     return normalized;

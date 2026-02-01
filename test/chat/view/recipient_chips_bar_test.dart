@@ -1,5 +1,6 @@
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -19,6 +20,8 @@ void main() {
           recipients: const [],
           availableChats: const [],
           latestStatuses: const {},
+          selfIdentity:
+              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
           onRecipientAdded: (target) => added = target,
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -48,6 +51,8 @@ void main() {
           recipients: [recipient],
           availableChats: const [],
           latestStatuses: const {},
+          selfIdentity:
+              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (key) => toggledKey = key,
@@ -93,6 +98,8 @@ void main() {
           recipients: recipients,
           availableChats: const [],
           latestStatuses: const {},
+          selfIdentity:
+              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (key) => removedKey = key,
           onRecipientToggled: (_) {},
@@ -122,6 +129,8 @@ void main() {
           latestStatuses: const {
             'casesensitive@example.com': FanOutRecipientState.failed,
           },
+          selfIdentity:
+              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -154,6 +163,8 @@ void main() {
             ),
           ],
           latestStatuses: const {},
+          selfIdentity:
+              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -184,6 +195,8 @@ void main() {
             ),
           ],
           latestStatuses: const {},
+          selfIdentity:
+              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},

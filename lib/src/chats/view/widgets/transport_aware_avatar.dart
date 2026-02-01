@@ -10,13 +10,11 @@ import 'package:flutter/material.dart';
 
 class SelfIdentitySnapshot {
   const SelfIdentitySnapshot({
-    required this.xmppJid,
-    required this.emailJid,
+    required this.selfJid,
     required this.avatarPath,
   });
 
-  final String? xmppJid;
-  final String? emailJid;
+  final String? selfJid;
   final String? avatarPath;
 }
 
@@ -48,10 +46,8 @@ class TransportAwareAvatar extends StatelessWidget {
     final spacing = context.spacing;
     final resolvedSize = size ?? sizing.iconButtonTapTarget;
     final resolvedBadgeOffset = badgeOffset ?? Offset(-spacing.s, -spacing.xs);
-    final String? selfXmppJid = selfIdentity.xmppJid?.trim();
-    final String? selfEmailJid = selfIdentity.emailJid?.trim();
-    final bool isSelfChat = chat.remoteJid.sameBare(selfXmppJid) ||
-        chat.remoteJid.sameBare(selfEmailJid);
+    final String? selfJid = selfIdentity.selfJid?.trim();
+    final bool isSelfChat = chat.remoteJid.sameBare(selfJid);
     final String? selfAvatarPath = selfIdentity.avatarPath?.trim();
     final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
     final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true

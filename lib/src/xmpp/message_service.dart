@@ -2339,7 +2339,7 @@ mixin MessageService
 
         final chatJid = chat.remoteJid;
         if (chatJid.isEmpty) continue;
-        if (!chatJid.contains('@')) continue;
+        if (!chatJid.isValidJid) continue;
         try {
           final localCount = await countLocalMessages(
             jid: chatJid,

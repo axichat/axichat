@@ -222,6 +222,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           child: _RecipientChip(
             recipient: recipient,
             avatarPathsByJid: avatarPathsByJid,
+            selfIdentity: widget.selfIdentity,
             status: _statusFor(recipient),
             pendingRemoval: _pendingRemovalKey == recipient.key,
             onToggle: () => widget.onRecipientToggled(recipient.key),
@@ -411,6 +412,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                               fieldInnerPadding: context.spacing.m,
                               backgroundColor: barBackground,
                               avatarPathsByJid: avatarPathsByJid,
+                              selfIdentity: widget.selfIdentity,
                               showSuggestionsWhenEmpty:
                                   widget.showSuggestionsWhenEmpty,
                               optionsBuilder: (raw) => _autocompleteOptions(
@@ -988,6 +990,7 @@ class _RecipientChip extends StatelessWidget {
   const _RecipientChip({
     required this.recipient,
     required this.avatarPathsByJid,
+    required this.selfIdentity,
     required this.onToggle,
     required this.onRemove,
     this.pendingRemoval = false,
@@ -996,6 +999,7 @@ class _RecipientChip extends StatelessWidget {
 
   final ComposerRecipient recipient;
   final Map<String, String> avatarPathsByJid;
+  final SelfIdentitySnapshot selfIdentity;
   final VoidCallback onToggle;
   final VoidCallback? onRemove;
   final bool pendingRemoval;
@@ -1051,7 +1055,7 @@ class _RecipientChip extends StatelessWidget {
             _RecipientChipAvatar(
               target: recipient.target,
               avatarPathsByJid: avatarPathsByJid,
-              selfIdentity: widget.selfIdentity,
+              selfIdentity: selfIdentity,
               status: status,
             ),
             SizedBox(width: spacing.xs),
@@ -1269,6 +1273,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
     required this.fieldInnerPadding,
     required this.backgroundColor,
     required this.avatarPathsByJid,
+    required this.selfIdentity,
     required this.showSuggestionsWhenEmpty,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
@@ -1285,6 +1290,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final double fieldInnerPadding;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
+  final SelfIdentitySnapshot selfIdentity;
   final bool showSuggestionsWhenEmpty;
   final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
@@ -1313,6 +1319,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
           fieldInnerPadding: fieldInnerPadding,
           backgroundColor: backgroundColor,
           avatarPathsByJid: avatarPathsByJid,
+          selfIdentity: selfIdentity,
           showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
           optionsBuilder: optionsBuilder,
           highlightedIndexListenable: highlightedIndexListenable,
@@ -1381,6 +1388,7 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
     required this.fieldInnerPadding,
     required this.backgroundColor,
     required this.avatarPathsByJid,
+    required this.selfIdentity,
     required this.showSuggestionsWhenEmpty,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
@@ -1397,6 +1405,7 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
   final double fieldInnerPadding;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
+  final SelfIdentitySnapshot selfIdentity;
   final bool showSuggestionsWhenEmpty;
   final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
@@ -1740,6 +1749,7 @@ final class _RecipientAutocompleteOverlayState
                                   return _AutocompleteOptionsList(
                                     options: _options,
                                     avatarPathsByJid: widget.avatarPathsByJid,
+                                    selfIdentity: widget.selfIdentity,
                                     onSelected: (option) {
                                       widget.onRecipientAdded(option);
                                       widget.controller.clear();
@@ -1900,6 +1910,7 @@ class _AutocompleteOptionsList extends StatefulWidget {
   const _AutocompleteOptionsList({
     required this.options,
     required this.avatarPathsByJid,
+    required this.selfIdentity,
     required this.onSelected,
     required this.titleStyle,
     required this.subtitleStyle,
@@ -1910,6 +1921,7 @@ class _AutocompleteOptionsList extends StatefulWidget {
 
   final List<FanOutTarget> options;
   final Map<String, String> avatarPathsByJid;
+  final SelfIdentitySnapshot selfIdentity;
   final ValueChanged<FanOutTarget> onSelected;
   final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
