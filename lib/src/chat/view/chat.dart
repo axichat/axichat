@@ -3340,6 +3340,22 @@ class _ChatState extends State<Chat> {
         final searchFiltering =
             searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
         final searchResults = searchState.results;
+        final profile = context.watch<ProfileCubit>().state;
+        final endpointConfig =
+            context.watch<AuthenticationCubit>().endpointConfig;
+        final xmppService = context.watch<XmppService>();
+        final resolvedProfileJid = profile.jid.trim();
+        final String? selfXmppJid = resolvedProfileJid.isNotEmpty
+            ? resolvedProfileJid
+            : xmppService.myJid;
+        final String? selfEmailJid = endpointConfig.enableSmtp
+            ? context.watch<EmailService>().selfSenderJid
+            : null;
+        final selfIdentity = SelfIdentitySnapshot(
+          xmppJid: selfXmppJid,
+          emailJid: selfEmailJid,
+          avatarPath: profile.avatarPath,
+        );
         final showToast = ShadToaster.maybeOf(context)?.show;
         return MultiBlocListener(
           listeners: [
@@ -3897,6 +3913,7 @@ class _ChatState extends State<Chat> {
                                 final spacing = context.spacing;
                                 Widget avatar = TransportAwareAvatar(
                                   chat: chatEntity!,
+                                  selfIdentity: selfIdentity,
                                   size: _chatAppBarAvatarSize,
                                   badgeOffset: Offset(-spacing.xs, -spacing.xs),
                                   presence: presence,
@@ -8470,9 +8487,7 @@ class _ChatState extends State<Chat> {
         _focusNode.unfocus();
       }
     });
-    if (!wasSettings && nextRoute.isSettings) {
-      context.read<ChatBloc>().add(const ChatCapabilitiesRequested());
-    }
+    if (!wasSettings && nextRoute.isSettings) {}
     if (leavingCalendar) {
       FocusScope.of(context).unfocus();
     }

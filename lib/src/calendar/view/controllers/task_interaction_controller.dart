@@ -87,10 +87,10 @@ class TaskInteractionController extends ChangeNotifier {
             ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
         feedbackHint = ValueNotifier<DragFeedbackHint>(
           const DragFeedbackHint(
-            width: 0,
-            pointerOffset: 0,
-            anchorDx: 0,
-            anchorDy: 0,
+            width: calendarTaskColumnGap,
+            pointerOffset: calendarTaskColumnGap,
+            anchorDx: calendarTaskColumnGap,
+            anchorDy: calendarTaskColumnGap,
           ),
         ),
         hoveredTaskId = ValueNotifier<String?>(null),
@@ -561,10 +561,10 @@ class TaskInteractionController extends ChangeNotifier {
 
   void resetFeedbackHint() {
     feedbackHint.value = const DragFeedbackHint(
-      width: 0,
-      pointerOffset: 0,
-      anchorDx: 0,
-      anchorDy: 0,
+      width: calendarTaskColumnGap,
+      pointerOffset: calendarTaskColumnGap,
+      anchorDx: calendarTaskColumnGap,
+      anchorDy: calendarTaskColumnGap,
     );
   }
 

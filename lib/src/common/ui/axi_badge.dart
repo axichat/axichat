@@ -22,7 +22,6 @@ class AxiBadge extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final radii = context.radii;
-    final borders = context.borders;
     final text = count > 99 ? '99+' : '$count';
     final resolvedOffset = offset ??
         Offset(
@@ -35,7 +34,7 @@ class AxiBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(radii.pill),
         border: Border.all(
           color: colors.background,
-          width: borders.widthStrong,
+          width: context.borderSide.width,
         ),
       ),
       child: Padding(

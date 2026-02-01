@@ -4172,13 +4172,17 @@ class _CalendarZoomControls extends StatelessWidget {
       return AxiTooltip(builder: (_) => Text(tooltip), child: button);
     }
 
-    return AxiModalSurface(
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      shadows: calendarMediumShadow,
+    return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarZoomControlsPaddingHorizontal,
         vertical: calendarZoomControlsPaddingVertical,
+      ),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border:
+            Border.all(color: colors.border, width: context.borderSide.width),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        boxShadow: calendarMediumShadow,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

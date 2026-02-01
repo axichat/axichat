@@ -875,13 +875,13 @@ mixin MessageService
     });
   }
 
-  Stream<List<Message>> messageStreamForChatStanzaIds(
+  Stream<List<Message>> messageStreamForChatMessageIds(
     String jid, {
-    required List<String> stanzaIds,
+    required List<String> messageIds,
   }) {
-    return _localMessageStreamForChatByStanzaIds(
+    return _localMessageStreamForChatByMessageIds(
       jid: jid,
-      stanzaIds: stanzaIds,
+      messageIds: messageIds,
     ).map((messages) {
       if (messages.isEmpty || !_internalEnvelopeChats.contains(jid)) {
         return messages;
@@ -1009,25 +1009,25 @@ mixin MessageService
     );
   }
 
-  Stream<List<Message>> _localMessageStreamForChatByStanzaIds({
+  Stream<List<Message>> _localMessageStreamForChatByMessageIds({
     required String jid,
-    required List<String> stanzaIds,
+    required List<String> messageIds,
   }) {
     return createSingleItemStream<List<Message>, XmppDatabase>(
       watchFunction: (db) async {
-        final normalized = _normalizeStanzaIds(stanzaIds);
+        final normalized = _normalizeMessageIds(messageIds);
         if (normalized.isEmpty) {
           return Stream.value(const <Message>[]);
         }
-        final messagesStream = _watchChatMessagesByStanzaIds(
+        final messagesStream = _watchChatMessagesByMessageIds(
           db: db,
           jid: jid,
-          stanzaIds: normalized,
+          messageIds: normalized,
         );
-        final initialMessages = await _loadChatMessagesByStanzaIds(
+        final initialMessages = await _loadChatMessagesByMessageIds(
           db: db,
           jid: jid,
-          stanzaIds: normalized,
+          messageIds: normalized,
         );
         if (!_internalEnvelopeChats.contains(jid) &&
             initialMessages.any(
@@ -1052,44 +1052,54 @@ mixin MessageService
     );
   }
 
-  List<String> _normalizeStanzaIds(Iterable<String> ids) {
-    return ids
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+  List<String> _normalizeMessageIds(Iterable<String> ids) {
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final id in ids) {
+      final trimmed = id.trim();
+      if (trimmed.isEmpty) continue;
+      if (seen.add(trimmed)) {
+        normalized.add(trimmed);
+      }
+    }
+    return normalized;
   }
 
-  Future<List<Message>> _loadChatMessagesByStanzaIds({
+  Future<List<Message>> _loadChatMessagesByMessageIds({
     required XmppDatabase db,
     required String jid,
-    required List<String> stanzaIds,
+    required List<String> messageIds,
   }) async {
-    if (stanzaIds.isEmpty) {
+    if (messageIds.isEmpty) {
       return const <Message>[];
     }
-    final orderedIds = List<String>.from(stanzaIds);
-    final messages = await db.getChatMessagesByStanzaIds(jid, stanzaIds);
-    return _orderMessagesByStanzaIds(
+    final orderedIds = List<String>.from(messageIds);
+    final messages = <Message>[];
+    final chunks = _chunkStanzaIds(orderedIds);
+    for (final chunk in chunks) {
+      final batch = await db.getChatMessagesByIds(jid, chunk);
+      messages.addAll(batch);
+    }
+    return _orderMessagesByIds(
       orderedIds: orderedIds,
       messages: messages,
     );
   }
 
-  Stream<List<Message>> _watchChatMessagesByStanzaIds({
+  Stream<List<Message>> _watchChatMessagesByMessageIds({
     required XmppDatabase db,
     required String jid,
-    required List<String> stanzaIds,
+    required List<String> messageIds,
   }) {
-    if (stanzaIds.isEmpty) {
+    if (messageIds.isEmpty) {
       return Stream.value(const <Message>[]);
     }
-    final orderedIds = List<String>.from(stanzaIds);
+    final orderedIds = List<String>.from(messageIds);
     final chunks = _chunkStanzaIds(orderedIds);
     if (chunks.length == 1) {
       return db
-          .watchChatMessagesByStanzaIds(jid, chunks.first)
-          .map((messages) => _orderMessagesByStanzaIds(
+          .watchChatMessagesByIds(jid, chunks.first)
+          .map((messages) => _orderMessagesByIds(
                 orderedIds: orderedIds,
                 messages: messages,
               ));
@@ -1103,7 +1113,7 @@ mixin MessageService
     void emit() {
       if (!controller.hasListener) return;
       controller.add(
-        _orderMessagesByStanzaIds(
+        _orderMessagesByIds(
           orderedIds: orderedIds,
           messages: current.values.toList(growable: false),
         ),
@@ -1114,13 +1124,15 @@ mixin MessageService
       for (final chunk in chunks) {
         final chunkIds = chunk.toSet();
         final subscription =
-            db.watchChatMessagesByStanzaIds(jid, chunk).listen((messages) {
+            db.watchChatMessagesByIds(jid, chunk).listen((messages) {
           if (closed) return;
           for (final id in chunkIds) {
             current.remove(id);
           }
           for (final message in messages) {
-            current[message.stanzaID] = message;
+            final id = message.id?.trim();
+            if (id == null || id.isEmpty) continue;
+            current[id] = message;
           }
           emit();
         });
@@ -1169,16 +1181,19 @@ mixin MessageService
     return chunks;
   }
 
-  List<Message> _orderMessagesByStanzaIds({
+  List<Message> _orderMessagesByIds({
     required List<String> orderedIds,
     required List<Message> messages,
   }) {
     if (messages.isEmpty) {
       return const <Message>[];
     }
-    final byId = <String, Message>{
-      for (final message in messages) message.stanzaID: message,
-    };
+    final byId = <String, Message>{};
+    for (final message in messages) {
+      final id = message.id?.trim();
+      if (id == null || id.isEmpty) continue;
+      byId[id] = message;
+    }
     final ordered = <Message>[];
     for (final id in orderedIds) {
       final message = byId[id];

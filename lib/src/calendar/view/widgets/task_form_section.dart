@@ -1225,11 +1225,10 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     ),
                   );
                 },
-                separatorBuilder: (_, __) =>
-                    Divider(
-                      height: context.borderSide.width,
-                      color: calendarBorderColor,
-                    ),
+                separatorBuilder: (_, __) => Divider(
+                  height: context.borderSide.width,
+                  color: calendarBorderColor,
+                ),
                 itemCount: list.length,
               ),
             ),
@@ -1325,7 +1324,10 @@ class TaskFormActionsRow extends StatelessWidget {
         ? BoxDecoration(
             color: backgroundColor,
             border: Border(
-              top: BorderSide(color: resolvedBorderColor, width: 1),
+              top: BorderSide(
+                color: resolvedBorderColor,
+                width: context.borderSide.width,
+              ),
             ),
           )
         : BoxDecoration(color: backgroundColor);

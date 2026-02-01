@@ -43,7 +43,6 @@ class AxiTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     assert(tabs.isNotEmpty, 'Tabs cannot be empty');
     final scheme = context.colorScheme;
-    final borders = context.borders;
     final radii = context.radii;
     final WidgetStateProperty<Color?> overlayColor =
         WidgetStateColor.resolveWith((states) {
@@ -90,7 +89,7 @@ class AxiTabBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(radii.pill),
                       border: Border.all(
                         color: backgroundColor ?? scheme.background,
-                        width: borders.widthStrong,
+                        width: context.borderSide.width,
                       ),
                     ),
                     child: Padding(

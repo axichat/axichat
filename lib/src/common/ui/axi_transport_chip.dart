@@ -22,7 +22,6 @@ class AxiTransportChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final borders = context.borders;
     final radii = context.radii;
     final isEmail = transport.isEmail;
     final background = isEmail ? colors.destructive : colors.primary;
@@ -40,7 +39,7 @@ class AxiTransportChip extends StatelessWidget {
             vertical: spacing.xs,
           );
     final borderRadius = compact ? radii.squircleSm : radii.squircle;
-    final borderWidth = compact ? borders.width : borders.widthStrong;
+    final borderWidth = context.borderSide.width;
 
     return Container(
       padding: padding,
@@ -74,12 +73,11 @@ class AxiCompatibilityBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final sizing = context.sizing;
-    final borders = context.borders;
     final size =
         compact ? sizing.iconButtonIconSize : sizing.iconButtonIconSize + 4;
     final iconSize =
         compact ? sizing.menuItemIconSize : sizing.menuItemIconSize + 4;
-    final borderWidth = compact ? borders.widthStrong : borders.widthStrong;
+    final borderWidth = context.borderSide.width;
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,

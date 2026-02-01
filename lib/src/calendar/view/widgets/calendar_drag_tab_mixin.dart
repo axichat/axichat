@@ -18,8 +18,7 @@ enum _CalendarDragSwitchSource { edge, tabBar }
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
-  static const double _leftEdgeHotZoneWidth =
-      calendarWeekHeaderHeight +
+  static const double _leftEdgeHotZoneWidth = calendarWeekHeaderHeight +
       calendarGutterLg +
       calendarGutterSm +
       calendarInsetSm;

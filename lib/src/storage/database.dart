@@ -54,9 +54,9 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
-  Stream<List<Message>> watchChatMessagesByStanzaIds(
+  Stream<List<Message>> watchChatMessagesByIds(
     String jid,
-    Iterable<String> stanzaIds,
+    Iterable<String> messageIds,
   );
 
   Future<List<Message>> getChatMessages(
@@ -66,9 +66,9 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
-  Future<List<Message>> getChatMessagesByStanzaIds(
+  Future<List<Message>> getChatMessagesByIds(
     String jid,
-    Iterable<String> stanzaIds,
+    Iterable<String> messageIds,
   );
 
   Future<List<Message>> getChatMessagesBefore(
@@ -1627,11 +1627,11 @@ WHERE delta_chat_id IS NOT NULL
   }
 
   @override
-  Stream<List<Message>> watchChatMessagesByStanzaIds(
+  Stream<List<Message>> watchChatMessagesByIds(
     String jid,
-    Iterable<String> stanzaIds,
+    Iterable<String> messageIds,
   ) {
-    final ids = stanzaIds
+    final ids = messageIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
         .toSet()
@@ -1641,7 +1641,7 @@ WHERE delta_chat_id IS NOT NULL
     }
     final query = select(messages)
       ..where(
-        (tbl) => tbl.chatJid.equals(jid) & tbl.stanzaID.isIn(ids),
+        (tbl) => tbl.chatJid.equals(jid) & tbl.id.isIn(ids),
       )
       ..orderBy([
         (tbl) => OrderingTerm(
@@ -1676,11 +1676,11 @@ WHERE delta_chat_id IS NOT NULL
   }
 
   @override
-  Future<List<Message>> getChatMessagesByStanzaIds(
+  Future<List<Message>> getChatMessagesByIds(
     String jid,
-    Iterable<String> stanzaIds,
+    Iterable<String> messageIds,
   ) async {
-    final ids = stanzaIds
+    final ids = messageIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
         .toSet()
@@ -1690,7 +1690,7 @@ WHERE delta_chat_id IS NOT NULL
     }
     final query = select(messages)
       ..where(
-        (tbl) => tbl.chatJid.equals(jid) & tbl.stanzaID.isIn(ids),
+        (tbl) => tbl.chatJid.equals(jid) & tbl.id.isIn(ids),
       )
       ..orderBy([
         (tbl) => OrderingTerm(

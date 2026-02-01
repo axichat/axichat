@@ -31,6 +31,7 @@ class RecipientChipsBar extends StatefulWidget {
     required this.onRecipientToggled,
     required this.onRecipientRemoved,
     required this.latestStatuses,
+    required this.selfIdentity,
     this.collapsedByDefault = false,
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
@@ -50,6 +51,7 @@ class RecipientChipsBar extends StatefulWidget {
   final ValueChanged<String> onRecipientToggled;
   final ValueChanged<String> onRecipientRemoved;
   final Map<String, FanOutRecipientState> latestStatuses;
+  final SelfIdentitySnapshot selfIdentity;
   final bool collapsedByDefault;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
@@ -1049,6 +1051,7 @@ class _RecipientChip extends StatelessWidget {
             _RecipientChipAvatar(
               target: recipient.target,
               avatarPathsByJid: avatarPathsByJid,
+              selfIdentity: widget.selfIdentity,
               status: status,
             ),
             SizedBox(width: spacing.xs),
@@ -1102,11 +1105,13 @@ class _RecipientChipAvatar extends StatelessWidget {
   const _RecipientChipAvatar({
     required this.target,
     required this.avatarPathsByJid,
+    required this.selfIdentity,
     this.status,
   });
 
   final FanOutTarget target;
   final Map<String, String> avatarPathsByJid;
+  final SelfIdentitySnapshot selfIdentity;
   final FanOutRecipientState? status;
 
   @override
@@ -1119,6 +1124,7 @@ class _RecipientChipAvatar extends StatelessWidget {
     final avatar = chat != null
         ? TransportAwareAvatar(
             chat: chat,
+            selfIdentity: selfIdentity,
             size: avatarSize,
             showBadge: false,
           )
@@ -1996,6 +2002,7 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
                 leading: _SuggestionAvatar(
                   option: option,
                   avatarPathsByJid: widget.avatarPathsByJid,
+                  selfIdentity: widget.selfIdentity,
                 ),
                 trailing: Icon(
                   Icons.north_east,
@@ -2018,10 +2025,12 @@ class _SuggestionAvatar extends StatelessWidget {
   const _SuggestionAvatar({
     required this.option,
     required this.avatarPathsByJid,
+    required this.selfIdentity,
   });
 
   final FanOutTarget option;
   final Map<String, String> avatarPathsByJid;
+  final SelfIdentitySnapshot selfIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -2029,6 +2038,7 @@ class _SuggestionAvatar extends StatelessWidget {
     if (option.chat != null) {
       return TransportAwareAvatar(
         chat: option.chat!,
+        selfIdentity: selfIdentity,
         size: sizing.iconButtonSize,
         showBadge: false,
       );

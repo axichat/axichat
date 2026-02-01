@@ -66,7 +66,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     _mobileTabController = TabController(length: 2, vsync: this);
     _tasksTabPulseController = AnimationController(
       vsync: this,
-      duration: authCompletionAnimationDuration + calendarViewTransitionDuration,
+      duration:
+          authCompletionAnimationDuration + calendarViewTransitionDuration,
     );
     _tasksTabPulse = CurvedAnimation(
       parent: _tasksTabPulseController,

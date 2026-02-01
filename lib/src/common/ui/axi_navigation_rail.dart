@@ -32,7 +32,6 @@ class _RailBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final borders = context.borders;
     final radii = context.radii;
     final text = count > 99 ? '99+' : '$count';
     return DecoratedBox(
@@ -41,7 +40,7 @@ class _RailBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(radii.pill),
         border: Border.all(
           color: colors.background,
-          width: borders.widthStrong,
+          width: context.borderSide.width,
         ),
       ),
       child: Padding(

@@ -328,7 +328,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
     on<ChatComposerErrorCleared>(_onChatComposerErrorCleared);
     on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
-    on<ChatCapabilitiesRequested>(_onChatCapabilitiesRequested);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
     on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
@@ -790,7 +789,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailService = _emailService;
     final useEmailService =
         chat.defaultTransport.isEmail && emailService != null;
-    var oldestMessage = state.items.last;
+    final anchor = _oldestLoadedMessage(state.items);
+    if (anchor == null) {
+      return;
+    }
+    var oldestMessage = anchor;
     var remaining = desiredWindow - loadedCount;
     var added = false;
     while (remaining > 0) {
@@ -822,8 +825,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         break;
       }
       for (final message in messages) {
-        final id = message.stanzaID.trim();
-        if (id.isEmpty) continue;
+        final id = message.id?.trim();
+        if (id == null || id.isEmpty) continue;
         if (_loadedMessageIds.add(id)) {
           _loadedMessageOrder.add(id);
           added = true;
@@ -1181,12 +1184,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _loadedMessageIds.clear();
     _loadedMessageOrder.clear();
     for (final message in messages) {
-      final id = message.stanzaID.trim();
-      if (id.isEmpty) continue;
+      final id = message.id?.trim();
+      if (id == null || id.isEmpty) continue;
       if (_loadedMessageIds.add(id)) {
         _loadedMessageOrder.add(id);
       }
     }
+  }
+
+  Map<String, Message> _messagesByLocalId(List<Message> messages) {
+    final map = <String, Message>{};
+    for (final message in messages) {
+      final id = message.id?.trim();
+      if (id == null || id.isEmpty) continue;
+      map[id] = message;
+    }
+    return map;
+  }
+
+  Message? _oldestLoadedMessage(List<Message> messages) {
+    if (_loadedMessageOrder.isEmpty) {
+      return null;
+    }
+    final byId = _messagesByLocalId(messages);
+    for (var i = _loadedMessageOrder.length - 1; i >= 0; i--) {
+      final message = byId[_loadedMessageOrder[i]];
+      if (message != null) {
+        return message;
+      }
+    }
+    return null;
   }
 
   Future<void> _resubscribeLoadedMessages({
@@ -1204,12 +1231,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailService = _emailService;
     if (useEmailService && emailService != null) {
       _messageSubscription = emailService
-          .messageStreamForChatStanzaIds(jid, stanzaIds: orderedIds)
+          .messageStreamForChatMessageIds(jid, messageIds: orderedIds)
           .listen((items) => _addIfOpen(_ChatMessagesUpdated(items)));
       return;
     }
     _messageSubscription = _messageService
-        .messageStreamForChatStanzaIds(jid, stanzaIds: orderedIds)
+        .messageStreamForChatMessageIds(jid, messageIds: orderedIds)
         .listen((items) => _addIfOpen(_ChatMessagesUpdated(items)));
   }
 
@@ -1220,8 +1247,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     var changed = false;
     for (final message in messages.reversed) {
-      final id = message.stanzaID.trim();
-      if (id.isEmpty) continue;
+      final id = message.id?.trim();
+      if (id == null || id.isEmpty) continue;
       if (_loadedMessageIds.add(id)) {
         _loadedMessageOrder.insert(0, id);
         changed = true;
@@ -1336,7 +1363,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final typingShouldClear =
         typingContextChanged || event.chat.defaultTransport.isEmail;
     const forcedViewFilter = MessageTimelineFilter.allWithContact;
-    final bool isXmppChat = event.chat.defaultTransport.isXmpp;
     final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
         ? forcedViewFilter
         : state.viewFilter;
@@ -1374,18 +1400,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             typingShouldClear ? const [] : state.typingParticipants,
         typing: event.chat.defaultTransport.isEmail ? false : state.typing,
         viewFilter: nextViewFilter,
-        xmppCapabilities: resetContext
-            ? null
-            : isXmppChat
-                ? state.xmppCapabilities
-                : null,
       ),
     );
-    if (isXmppChat &&
-        _xmppService != null &&
-        (resetContext || state.xmppCapabilities == null)) {
-      add(const ChatCapabilitiesRequested());
-    }
     _resetMamCursors(resetContext);
     if (resetContext) {
       _lastReadMarkerStanzaId = null;
@@ -2539,21 +2555,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     if (state.supportsHttpFileUpload == event.supported) return;
     emit(state.copyWith(supportsHttpFileUpload: event.supported));
-  }
-
-  Future<void> _onChatCapabilitiesRequested(
-    ChatCapabilitiesRequested event,
-    Emitter<ChatState> emit,
-  ) async {
-    final chat = state.chat;
-    if (chat == null || !chat.defaultTransport.isXmpp) return;
-    final xmppService = _xmppService;
-    if (xmppService == null) return;
-    final capabilities = await xmppService.resolvePeerCapabilities(
-      jid: chat.jid,
-      forceRefresh: event.forceRefresh,
-    );
-    emit(state.copyWith(xmppCapabilities: capabilities));
   }
 
   Future<void> _onChatSettingsUpdated(

@@ -2,21 +2,29 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+
+class SelfIdentitySnapshot {
+  const SelfIdentitySnapshot({
+    required this.xmppJid,
+    required this.emailJid,
+    required this.avatarPath,
+  });
+
+  final String? xmppJid;
+  final String? emailJid;
+  final String? avatarPath;
+}
 
 class TransportAwareAvatar extends StatelessWidget {
   const TransportAwareAvatar({
     super.key,
     required this.chat,
+    required this.selfIdentity,
     this.size,
     this.badgeOffset,
     this.showBadge = true,
@@ -26,6 +34,7 @@ class TransportAwareAvatar extends StatelessWidget {
   });
 
   final Chat chat;
+  final SelfIdentitySnapshot selfIdentity;
   final double? size;
   final Offset? badgeOffset;
   final bool showBadge;
@@ -35,22 +44,15 @@ class TransportAwareAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = context.watch<ProfileCubit>().state;
-    final endpointConfig = context.watch<AuthenticationCubit>().endpointConfig;
-    final xmppService = context.watch<XmppService>();
     final sizing = context.sizing;
     final spacing = context.spacing;
     final resolvedSize = size ?? sizing.iconButtonTapTarget;
     final resolvedBadgeOffset = badgeOffset ?? Offset(-spacing.s, -spacing.xs);
-    final resolvedProfileJid = profile.jid.trim();
-    final String? selfXmppJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : xmppService.myJid;
-    final String? selfEmailJid = endpointConfig.enableSmtp
-        ? context.watch<EmailService>().selfSenderJid
-        : null;
+    final String? selfXmppJid = selfIdentity.xmppJid?.trim();
+    final String? selfEmailJid = selfIdentity.emailJid?.trim();
     final bool isSelfChat = chat.remoteJid.sameBare(selfXmppJid) ||
         chat.remoteJid.sameBare(selfEmailJid);
-    final String? selfAvatarPath = profile.avatarPath?.trim();
+    final String? selfAvatarPath = selfIdentity.avatarPath?.trim();
     final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
     final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()

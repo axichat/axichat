@@ -48,7 +48,6 @@ class ChatState with _$ChatState {
     @Default(mox.XmppConnectionState.notConnected)
     mox.XmppConnectionState xmppConnectionState,
     @Default(false) bool supportsHttpFileUpload,
-    XmppPeerCapabilities? xmppCapabilities,
     @Default(false) bool emailServiceAvailable,
     String? emailSelfJid,
     String? openChatJid,

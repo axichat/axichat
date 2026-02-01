@@ -315,9 +315,10 @@ class _QuickAddModalState extends State<QuickAddModal>
       return;
     }
     _parserDebounce = Timer(
-      calendarScrollAnimationDuration + calendarTaskSplitPreviewAnimationDuration,
+      calendarScrollAnimationDuration +
+          calendarTaskSplitPreviewAnimationDuration,
       () {
-      _runParser(trimmed);
+        _runParser(trimmed);
       },
     );
   }

@@ -40,7 +40,7 @@ const int _availabilityPresetMaxCount = 5;
 const double _availabilitySheetSectionSpacing = 16.0;
 const double _availabilitySheetSectionGap = 8.0;
 const EdgeInsets _availabilityRecipientsContentPadding =
-    EdgeInsets.symmetric(horizontal: 16);
+    EdgeInsets.symmetric(horizontal: calendarGutterLg);
 const double _availabilityEditorPanelGap = 16.0;
 const double _availabilityEditorPanelMaxWidth = 420.0;
 const bool _calendarUseRootNavigator = false;

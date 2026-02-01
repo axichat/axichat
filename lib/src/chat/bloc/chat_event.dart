@@ -119,15 +119,6 @@ final class _HttpUploadSupportUpdated extends ChatEvent {
   List<Object?> get props => [supported];
 }
 
-final class ChatCapabilitiesRequested extends ChatEvent {
-  const ChatCapabilitiesRequested({this.forceRefresh = false});
-
-  final bool forceRefresh;
-
-  @override
-  List<Object?> get props => [forceRefresh];
-}
-
 final class ChatSettingsUpdated extends ChatEvent {
   const ChatSettingsUpdated(this.settings);
 

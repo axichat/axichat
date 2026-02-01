@@ -122,8 +122,8 @@ class _CalendarSpinnerState extends State<_CalendarSpinner>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration:
-          authCompletionAnimationDuration + calendarTaskSplitPreviewAnimationDuration,
+      duration: authCompletionAnimationDuration +
+          calendarTaskSplitPreviewAnimationDuration,
       vsync: this,
     )..repeat();
   }
@@ -313,9 +313,11 @@ class TaskSkeletonTile extends StatelessWidget {
                       height: labelHeight,
                     ),
                     const SizedBox(height: calendarGutterSm),
-                    SkeletonLoader(width: primaryLineWidth, height: labelSmHeight),
+                    SkeletonLoader(
+                        width: primaryLineWidth, height: labelSmHeight),
                     const SizedBox(height: calendarInsetMd),
-                    SkeletonLoader(width: secondaryLineWidth, height: labelSmHeight),
+                    SkeletonLoader(
+                        width: secondaryLineWidth, height: labelSmHeight),
                   ],
                 ),
               ),

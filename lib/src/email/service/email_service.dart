@@ -2143,28 +2143,33 @@ class EmailService {
     yield* db.watchChatMessages(jid, start: start, end: end, filter: filter);
   }
 
-  Stream<List<Message>> messageStreamForChatStanzaIds(
+  Stream<List<Message>> messageStreamForChatMessageIds(
     String jid, {
-    required List<String> stanzaIds,
+    required List<String> messageIds,
   }) async* {
     await _ensureReady();
-    final normalized = _normalizeStanzaIds(stanzaIds);
+    final normalized = _normalizeMessageIds(messageIds);
     if (normalized.isEmpty) {
       yield const <Message>[];
       return;
     }
     final db = await _databaseBuilder();
-    final initial = await db.getChatMessagesByStanzaIds(jid, normalized);
-    yield _orderMessagesByStanzaIds(
+    final initial = <Message>[];
+    final chunks = _chunkStanzaIds(normalized);
+    for (final chunk in chunks) {
+      final batch = await db.getChatMessagesByIds(jid, chunk);
+      initial.addAll(batch);
+    }
+    yield _orderMessagesByIds(
       orderedIds: normalized,
       messages: initial,
     );
-    yield* _watchChatMessagesByStanzaIds(
+    yield* _watchChatMessagesByMessageIds(
       db: db,
       jid: jid,
-      stanzaIds: normalized,
+      messageIds: normalized,
     ).map(
-      (messages) => _orderMessagesByStanzaIds(
+      (messages) => _orderMessagesByIds(
         orderedIds: normalized,
         messages: messages,
       ),
@@ -2198,25 +2203,30 @@ class EmailService {
     yield* db.watchPinnedMessages(jid);
   }
 
-  List<String> _normalizeStanzaIds(Iterable<String> ids) {
-    return ids
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+  List<String> _normalizeMessageIds(Iterable<String> ids) {
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final id in ids) {
+      final trimmed = id.trim();
+      if (trimmed.isEmpty) continue;
+      if (seen.add(trimmed)) {
+        normalized.add(trimmed);
+      }
+    }
+    return normalized;
   }
 
-  Stream<List<Message>> _watchChatMessagesByStanzaIds({
+  Stream<List<Message>> _watchChatMessagesByMessageIds({
     required XmppDatabase db,
     required String jid,
-    required List<String> stanzaIds,
+    required List<String> messageIds,
   }) {
-    if (stanzaIds.isEmpty) {
+    if (messageIds.isEmpty) {
       return Stream.value(const <Message>[]);
     }
-    final chunks = _chunkStanzaIds(stanzaIds);
+    final chunks = _chunkStanzaIds(messageIds);
     if (chunks.length == 1) {
-      return db.watchChatMessagesByStanzaIds(jid, chunks.first);
+      return db.watchChatMessagesByIds(jid, chunks.first);
     }
     final controller = StreamController<List<Message>>.broadcast();
     final current = <String, Message>{};
@@ -2233,13 +2243,15 @@ class EmailService {
       for (final chunk in chunks) {
         final chunkIds = chunk.toSet();
         final subscription =
-            db.watchChatMessagesByStanzaIds(jid, chunk).listen((messages) {
+            db.watchChatMessagesByIds(jid, chunk).listen((messages) {
           if (closed) return;
           for (final id in chunkIds) {
             current.remove(id);
           }
           for (final message in messages) {
-            current[message.stanzaID] = message;
+            final id = message.id?.trim();
+            if (id == null || id.isEmpty) continue;
+            current[id] = message;
           }
           emit();
         });
@@ -2288,16 +2300,19 @@ class EmailService {
     return chunks;
   }
 
-  List<Message> _orderMessagesByStanzaIds({
+  List<Message> _orderMessagesByIds({
     required List<String> orderedIds,
     required List<Message> messages,
   }) {
     if (messages.isEmpty) {
       return const <Message>[];
     }
-    final byId = <String, Message>{
-      for (final message in messages) message.stanzaID: message,
-    };
+    final byId = <String, Message>{};
+    for (final message in messages) {
+      final id = message.id?.trim();
+      if (id == null || id.isEmpty) continue;
+      byId[id] = message;
+    }
     final ordered = <Message>[];
     for (final id in orderedIds) {
       final message = byId[id];

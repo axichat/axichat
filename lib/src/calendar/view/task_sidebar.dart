@@ -311,7 +311,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return;
     }
     _parserDebounce = Timer(
-      calendarScrollAnimationDuration + calendarTaskSplitPreviewAnimationDuration,
+      calendarScrollAnimationDuration +
+          calendarTaskSplitPreviewAnimationDuration,
       () {
         _runParser(trimmed);
       },
@@ -4487,7 +4488,8 @@ class _SidebarAccordionSection extends StatelessWidget {
                               onTap: () => onToggleSection(section),
                               child: AnimatedContainer(
                                 key: ValueKey('${section.name}-collapsed'),
-                                duration: calendarTaskSplitPreviewAnimationDuration,
+                                duration:
+                                    calendarTaskSplitPreviewAnimationDuration,
                                 padding: const EdgeInsets.fromLTRB(
                                   calendarRecurrenceEndGap,
                                   calendarInsetLg,

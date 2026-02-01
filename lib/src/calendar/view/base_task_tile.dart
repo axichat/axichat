@@ -71,7 +71,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
       },
       child: AnimatedOpacity(
         opacity: _isUpdating ? 0.6 : 1.0,
-        duration: const Duration(milliseconds: 200),
+        duration: calendarSlotHoverAnimationDuration,
         child: Builder(
           builder: (context) {
             final CalendarResponsiveSpec spec = widget.compact
@@ -306,7 +306,10 @@ class _CompactTaskTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: calendarContainerColor,
         boxShadow: calendarLightShadow,
-        border: Border.all(color: calendarBorderColor, width: 1),
+        border: Border.all(
+          color: calendarBorderColor,
+          width: context.borderSide.width,
+        ),
       ),
       leadingStripeColor: indicatorColor,
       leadingStripeWidth: stripWidth,
@@ -522,7 +525,10 @@ class _FullTaskTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: calendarContainerColor,
         boxShadow: calendarLightShadow,
-        border: Border.all(color: calendarBorderColor, width: 1),
+        border: Border.all(
+          color: calendarBorderColor,
+          width: context.borderSide.width,
+        ),
       ),
       leadingStripeColor: indicatorColor,
       leadingStripeWidth: stripWidth,
@@ -569,7 +575,7 @@ class _FullTaskTile extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.access_time,
-                          size: 16,
+                          size: context.sizing.menuItemIconSize,
                           color: calendarTimeLabelColor,
                         ),
                         const SizedBox(width: calendarInsetLg),
@@ -582,7 +588,7 @@ class _FullTaskTile extends StatelessWidget {
                           const SizedBox(width: calendarGutterLg),
                           Icon(
                             Icons.timer,
-                            size: 16,
+                            size: context.sizing.menuItemIconSize,
                             color: calendarTimeLabelColor,
                           ),
                           const SizedBox(width: calendarInsetLg),
@@ -655,9 +661,11 @@ class _TaskCompletionToggle extends StatelessWidget {
       onTap: isUpdating || !isEnabled ? null : () => onToggle!(!isCompleted),
       child: isUpdating
           ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              width: axiSizing.progressIndicatorSize,
+              height: axiSizing.progressIndicatorSize,
+              child: CircularProgressIndicator(
+                strokeWidth: axiSizing.progressIndicatorStrokeWidth,
+              ),
             )
           : CalendarCompletionCheckbox(
               value: isCompleted,
