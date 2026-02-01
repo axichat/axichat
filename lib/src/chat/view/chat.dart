@@ -1011,6 +1011,21 @@ class _ChatState extends State<Chat> {
   final _multiSelectedMessageIds = <String>{};
   final _selectedMessageSnapshots = <String, Message>{};
   final _messageKeys = <String, GlobalKey>{};
+  List<RosterItem>? _cachedRosterItems;
+  List<chat_models.Chat>? _cachedChatItems;
+  String? _cachedSelfAvatarPath;
+  String? _cachedNormalizedXmppSelfJid;
+  String? _cachedNormalizedEmailSelfJid;
+  Map<String, String> _cachedRosterAvatarPathsByJid = const {};
+  Map<String, String> _cachedChatAvatarPathsByJid = const {};
+  List<Message>? _cachedItems;
+  Map<String, Message>? _cachedQuotedMessagesById;
+  List<Message>? _cachedSearchResults;
+  bool _cachedSearchFiltering = false;
+  Map<String, List<String>>? _cachedAttachmentsByMessageId;
+  Map<String, String>? _cachedGroupLeaderByMessageId;
+  Map<String, Message> _cachedMessageById = const {};
+  List<Message> _cachedFilteredItems = const [];
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
   final Object _composerTapRegionGroup = Object();
@@ -2744,6 +2759,26 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  Future<void> _showHtmlPreview({
+    required String html,
+    required bool shouldLoadImages,
+    required VoidCallback? onLoadRequested,
+  }) async {
+    if (!mounted) return;
+    await showFadeScaleDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return _HtmlPreviewDialog(
+          html: html,
+          shouldLoadImages: shouldLoadImages,
+          onLoadRequested: onLoadRequested,
+          onLinkTap: _handleLinkTap,
+        );
+      },
+    );
+  }
+
   Future<Size?> _resolveAttachmentSize(EmailAttachment attachment) async {
     final width = attachment.width;
     final height = attachment.height;
@@ -2920,12 +2955,19 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  void _syncSelectionCaches(ChatState state, {bool notify = true}) {
+  void _syncSelectionCaches(
+    ChatState state, {
+    Iterable<Message> extraMessages = const [],
+    bool notify = true,
+  }) {
     if (!mounted) return;
     final messageById = <String, Message>{
       for (final item in state.items) item.stanzaID: item,
       ...state.quotedMessagesById,
     };
+    for (final message in extraMessages) {
+      messageById[message.stanzaID] = message;
+    }
     final availableIds = messageById.keys.toSet();
     final removedKeys = _messageKeys.keys
         .where((id) => !availableIds.contains(id))
@@ -2968,30 +3010,153 @@ class _ChatState extends State<Chat> {
     setState(() {});
   }
 
+  void _ensureAvatarPathCaches({
+    required List<RosterItem> rosterItems,
+    required List<chat_models.Chat> chatItems,
+    required String? selfAvatarPath,
+    required String? normalizedXmppSelfJid,
+    required String? normalizedEmailSelfJid,
+  }) {
+    final sameRoster = identical(rosterItems, _cachedRosterItems);
+    final sameChats = identical(chatItems, _cachedChatItems);
+    final sameSelfAvatar = selfAvatarPath == _cachedSelfAvatarPath;
+    final sameXmppSelf = normalizedXmppSelfJid == _cachedNormalizedXmppSelfJid;
+    final sameEmailSelf =
+        normalizedEmailSelfJid == _cachedNormalizedEmailSelfJid;
+    if (sameRoster &&
+        sameChats &&
+        sameSelfAvatar &&
+        sameXmppSelf &&
+        sameEmailSelf) {
+      return;
+    }
+    final rosterAvatarPathsByJid = <String, String>{};
+    for (final item in rosterItems) {
+      final path = item.avatarPath?.trim();
+      if (path == null || path.isEmpty) continue;
+      final normalizedJid = normalizedAddressValue(item.jid);
+      if (normalizedJid == null) continue;
+      rosterAvatarPathsByJid[normalizedJid] = path;
+    }
+    final chatAvatarPathsByJid = <String, String>{};
+    for (final chat in chatItems) {
+      final path = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
+      if (path == null || path.isEmpty) continue;
+      final normalizedJid = normalizedAddressValue(chat.jid);
+      if (normalizedJid != null && normalizedJid.isNotEmpty) {
+        chatAvatarPathsByJid[normalizedJid] = path;
+      }
+      final normalizedRemoteJid = normalizedAddressValue(chat.remoteJid);
+      if (normalizedRemoteJid != null && normalizedRemoteJid.isNotEmpty) {
+        chatAvatarPathsByJid[normalizedRemoteJid] = path;
+      }
+    }
+    final normalizedSelfJids = <String>{};
+    if (normalizedXmppSelfJid != null) {
+      normalizedSelfJids.add(normalizedXmppSelfJid);
+    }
+    if (normalizedEmailSelfJid != null) {
+      normalizedSelfJids.add(normalizedEmailSelfJid);
+    }
+    if (normalizedSelfJids.isNotEmpty && selfAvatarPath?.isNotEmpty == true) {
+      final resolvedSelfAvatarPath = selfAvatarPath!;
+      for (final selfJid in normalizedSelfJids) {
+        rosterAvatarPathsByJid.putIfAbsent(
+          selfJid,
+          () => resolvedSelfAvatarPath,
+        );
+        chatAvatarPathsByJid.putIfAbsent(
+          selfJid,
+          () => resolvedSelfAvatarPath,
+        );
+      }
+    }
+    _cachedRosterItems = rosterItems;
+    _cachedChatItems = chatItems;
+    _cachedSelfAvatarPath = selfAvatarPath;
+    _cachedNormalizedXmppSelfJid = normalizedXmppSelfJid;
+    _cachedNormalizedEmailSelfJid = normalizedEmailSelfJid;
+    _cachedRosterAvatarPathsByJid = rosterAvatarPathsByJid;
+    _cachedChatAvatarPathsByJid = chatAvatarPathsByJid;
+  }
+
+  void _ensureMessageCaches({
+    required List<Message> items,
+    required Map<String, Message> quotedMessagesById,
+    required List<Message> searchResults,
+    required bool searchFiltering,
+    required Map<String, List<String>> attachmentsByMessageId,
+    required Map<String, String> groupLeaderByMessageId,
+  }) {
+    final sameItems = identical(items, _cachedItems);
+    final sameQuoted = identical(quotedMessagesById, _cachedQuotedMessagesById);
+    final sameSearch = identical(searchResults, _cachedSearchResults);
+    final sameSearchFiltering = searchFiltering == _cachedSearchFiltering;
+    final sameAttachments =
+        identical(attachmentsByMessageId, _cachedAttachmentsByMessageId);
+    final sameGroupLeaders =
+        identical(groupLeaderByMessageId, _cachedGroupLeaderByMessageId);
+    if (sameItems &&
+        sameQuoted &&
+        sameSearch &&
+        sameSearchFiltering &&
+        sameAttachments &&
+        sameGroupLeaders) {
+      return;
+    }
+    final messageById = <String, Message>{
+      for (final item in items) item.stanzaID: item,
+    };
+    for (final entry in quotedMessagesById.entries) {
+      messageById.putIfAbsent(entry.key, () => entry.value);
+    }
+    if (searchFiltering) {
+      for (final item in searchResults) {
+        messageById[item.stanzaID] = item;
+      }
+    }
+    final activeItems = searchFiltering ? searchResults : items;
+    bool isGroupedNonLeader(Message message) {
+      final messageId = message.id;
+      if (messageId == null || messageId.isEmpty) {
+        return false;
+      }
+      final leaderId = groupLeaderByMessageId[messageId];
+      return leaderId != null && leaderId != messageId;
+    }
+
+    final displayItems = activeItems
+        .where((message) => !isGroupedNonLeader(message))
+        .toList(growable: false);
+    const emptyAttachments = <String>[];
+    String messageKey(Message message) => message.id ?? message.stanzaID;
+    List<String> attachmentsForMessage(Message message) {
+      return attachmentsByMessageId[messageKey(message)] ?? emptyAttachments;
+    }
+
+    final filteredItems = displayItems.where((message) {
+      final hasHtml = message.normalizedHtmlBody?.isNotEmpty == true;
+      final attachments = attachmentsForMessage(message);
+      return message.body != null ||
+          hasHtml ||
+          message.error.isNotNone ||
+          attachments.isNotEmpty;
+    }).toList(growable: false);
+    _cachedItems = items;
+    _cachedQuotedMessagesById = quotedMessagesById;
+    _cachedSearchResults = searchResults;
+    _cachedSearchFiltering = searchFiltering;
+    _cachedAttachmentsByMessageId = attachmentsByMessageId;
+    _cachedGroupLeaderByMessageId = groupLeaderByMessageId;
+    _cachedMessageById = messageById;
+    _cachedFilteredItems = filteredItems;
+  }
+
   void _clearMultiSelection() {
     if (_multiSelectedMessageIds.isEmpty) return;
     setState(() {
       _multiSelectedMessageIds.clear();
       _selectedMessageSnapshots.clear();
-    });
-  }
-
-  void _pruneMessageSelection(Set<String> availableIds) {
-    if (!_multiSelectActive) return;
-    final missing = _multiSelectedMessageIds
-        .where(
-          (id) =>
-              !availableIds.contains(id) &&
-              !_selectedMessageSnapshots.containsKey(id),
-        )
-        .toList();
-    if (missing.isEmpty) return;
-    final missingSet = missing.toSet();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _multiSelectedMessageIds.removeWhere(missingSet.contains);
-      });
     });
   }
 
@@ -3004,29 +3169,17 @@ class _ChatState extends State<Chat> {
       if (_multiSelectedMessageIds.contains(id)) {
         selected.add(message);
         resolvedIds.add(id);
-        _selectedMessageSnapshots[id] = message;
       }
     }
     if (selected.length == _multiSelectedMessageIds.length) {
       return selected;
     }
-    final missingIds = <String>[];
     for (final id in _multiSelectedMessageIds) {
       if (resolvedIds.contains(id)) continue;
       final snapshot = _selectedMessageSnapshots[id];
       if (snapshot != null) {
         selected.add(snapshot);
-      } else {
-        missingIds.add(id);
       }
-    }
-    if (missingIds.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _multiSelectedMessageIds.removeWhere(missingIds.contains);
-        });
-      });
     }
     return selected;
   }
@@ -3165,9 +3318,15 @@ class _ChatState extends State<Chat> {
             ),
             BlocListener<ChatSearchCubit, ChatSearchState>(
               listenWhen: (previous, current) =>
-                  previous.active != current.active,
-              listener: (_, searchState) {
+                  previous.active != current.active ||
+                  !identical(previous.results, current.results),
+              listener: (context, searchState) {
                 if (!mounted) return;
+                _syncSelectionCaches(
+                  context.read<ChatBloc>().state,
+                  extraMessages:
+                      searchState.active ? searchState.results : const [],
+                );
                 if (searchState.active) {
                   _openChatSearch();
                   return;
@@ -3299,7 +3458,14 @@ class _ChatState extends State<Chat> {
               listenWhen: (previous, current) =>
                   previous.items != current.items ||
                   previous.quotedMessagesById != current.quotedMessagesById,
-              listener: (_, state) => _syncSelectionCaches(state),
+              listener: (context, state) {
+                final searchState = context.read<ChatSearchCubit>().state;
+                _syncSelectionCaches(
+                  state,
+                  extraMessages:
+                      searchState.active ? searchState.results : const [],
+                );
+              },
             ),
           ],
           child: BlocConsumer<ChatBloc, ChatState>(
@@ -3367,7 +3533,6 @@ class _ChatState extends State<Chat> {
                       (normalizedEmailSelfJid != null &&
                           normalizedChatJid == normalizedEmailSelfJid));
               final String? selfAvatarPath = profileState()?.avatarPath?.trim();
-              final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
               final myOccupantId = state.roomState?.myOccupantId;
               final myOccupant = myOccupantId == null
                   ? null
@@ -3400,54 +3565,17 @@ class _ChatState extends State<Chat> {
                   warningEntry?.value.attachmentWarning ?? false;
               final rosterItems = context.watch<RosterCubit>().state.items ??
                   const <RosterItem>[];
-              final rosterAvatarPathsByJid = <String, String>{};
-              for (final item in rosterItems) {
-                final path = item.avatarPath?.trim();
-                if (path == null || path.isEmpty) continue;
-                final normalizedJid = normalizedAddressValue(item.jid);
-                if (normalizedJid == null) continue;
-                rosterAvatarPathsByJid[normalizedJid] = path;
-              }
-              final chatAvatarPathsByJid = <String, String>{};
-              for (final chat
-                  in chatsState()?.items ?? const <chat_models.Chat>[]) {
-                final path =
-                    (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
-                if (path == null || path.isEmpty) continue;
-                final normalizedJid = normalizedAddressValue(chat.jid);
-                if (normalizedJid != null && normalizedJid.isNotEmpty) {
-                  chatAvatarPathsByJid[normalizedJid] = path;
-                }
-                final normalizedRemoteJid =
-                    normalizedAddressValue(chat.remoteJid);
-                if (normalizedRemoteJid != null &&
-                    normalizedRemoteJid.isNotEmpty) {
-                  chatAvatarPathsByJid[normalizedRemoteJid] = path;
-                }
-              }
-              final normalizedSelfJids = <String>{};
-              if (normalizedXmppSelfJid != null) {
-                normalizedSelfJids.add(normalizedXmppSelfJid);
-              }
-              if (normalizedEmailSelfJid != null) {
-                normalizedSelfJids.add(normalizedEmailSelfJid);
-              }
-              if (normalizedSelfJids.isNotEmpty && hasSelfAvatarPath) {
-                final resolvedSelfAvatarPath = selfAvatarPath;
-                if (resolvedSelfAvatarPath != null &&
-                    resolvedSelfAvatarPath.isNotEmpty) {
-                  for (final selfJid in normalizedSelfJids) {
-                    rosterAvatarPathsByJid.putIfAbsent(
-                      selfJid,
-                      () => resolvedSelfAvatarPath,
-                    );
-                    chatAvatarPathsByJid.putIfAbsent(
-                      selfJid,
-                      () => resolvedSelfAvatarPath,
-                    );
-                  }
-                }
-              }
+              final chatItems =
+                  chatsState()?.items ?? const <chat_models.Chat>[];
+              _ensureAvatarPathCaches(
+                rosterItems: rosterItems,
+                chatItems: chatItems,
+                selfAvatarPath: selfAvatarPath,
+                normalizedXmppSelfJid: normalizedXmppSelfJid,
+                normalizedEmailSelfJid: normalizedEmailSelfJid,
+              );
+              final rosterAvatarPathsByJid = _cachedRosterAvatarPathsByJid;
+              final chatAvatarPathsByJid = _cachedChatAvatarPathsByJid;
               String? avatarPathForBareJid(String jid) {
                 final normalized = normalizedAddressValue(jid);
                 if (normalized == null || normalized.isEmpty) return null;
@@ -3973,49 +4101,28 @@ class _ChatState extends State<Chat> {
                                       constraints.maxHeight -
                                           _bottomSectionHeight,
                                     );
-                                    final messageById = {
-                                      for (final item in state.items)
-                                        item.stanzaID: item,
-                                    };
-                                    for (final entry
-                                        in state.quotedMessagesById.entries) {
-                                      messageById.putIfAbsent(
-                                        entry.key,
-                                        () => entry.value,
-                                      );
-                                    }
                                     final pinnedStanzaIds = state.pinnedMessages
                                         .map((item) => item.messageStanzaId)
                                         .toSet();
-                                    if (searchFiltering) {
-                                      for (final item in searchResults) {
-                                        messageById[item.stanzaID] = item;
-                                      }
-                                    }
-                                    _pruneMessageSelection(
-                                      messageById.keys.toSet(),
-                                    );
-                                    final activeItems = searchFiltering
-                                        ? searchResults
-                                        : state.items;
                                     final attachmentsByMessageId =
                                         state.attachmentMetadataIdsByMessageId;
                                     final groupLeaderByMessageId =
                                         state.attachmentGroupLeaderByMessageId;
+                                    _ensureMessageCaches(
+                                      items: state.items,
+                                      quotedMessagesById:
+                                          state.quotedMessagesById,
+                                      searchResults: searchResults,
+                                      searchFiltering: searchFiltering,
+                                      attachmentsByMessageId:
+                                          attachmentsByMessageId,
+                                      groupLeaderByMessageId:
+                                          groupLeaderByMessageId,
+                                    );
+                                    final messageById = _cachedMessageById;
                                     const emptyAttachments = <String>[];
                                     String messageKey(Message message) =>
                                         message.id ?? message.stanzaID;
-                                    bool isGroupedNonLeader(Message message) {
-                                      final messageId = message.id;
-                                      if (messageId == null ||
-                                          messageId.isEmpty) {
-                                        return false;
-                                      }
-                                      final leaderId =
-                                          groupLeaderByMessageId[messageId];
-                                      return leaderId != null &&
-                                          leaderId != messageId;
-                                    }
 
                                     List<String> attachmentsForMessage(
                                       Message message,
@@ -4025,25 +4132,7 @@ class _ChatState extends State<Chat> {
                                           emptyAttachments;
                                     }
 
-                                    final displayItems = activeItems
-                                        .where(
-                                          (message) =>
-                                              !isGroupedNonLeader(message),
-                                        )
-                                        .toList();
-                                    final filteredItems = displayItems.where((
-                                      message,
-                                    ) {
-                                      final hasHtml = message
-                                              .normalizedHtmlBody?.isNotEmpty ==
-                                          true;
-                                      final attachments =
-                                          attachmentsForMessage(message);
-                                      return message.body != null ||
-                                          hasHtml ||
-                                          message.error.isNotNone ||
-                                          attachments.isNotEmpty;
-                                    }).toList();
+                                    final filteredItems = _cachedFilteredItems;
                                     final availabilityCoordinator =
                                         _readAvailabilityShareCoordinator(
                                       context,
@@ -4933,17 +5022,11 @@ class _ChatState extends State<Chat> {
                                                             fontWeight:
                                                                 FontWeight.w600,
                                                           );
-                                                          final parsedText =
-                                                              parseMessageText(
-                                                            text: (message.customProperties?[
-                                                                        'renderedText']
-                                                                    as String?) ??
-                                                                message.text,
-                                                            baseStyle:
-                                                                baseTextStyle,
-                                                            linkStyle:
-                                                                linkStyle,
-                                                          );
+                                                          final messageText =
+                                                              (message.customProperties?[
+                                                                          'renderedText']
+                                                                      as String?) ??
+                                                                  message.text;
                                                           final timeColor =
                                                               detailColor;
                                                           final detailStyle =
@@ -5359,6 +5442,8 @@ class _ChatState extends State<Chat> {
                                                               <Widget>[];
                                                           final bubbleExtraChildren =
                                                               <Widget>[];
+                                                          bool hasHtmlBubble =
+                                                              false;
                                                           void addExtra(
                                                             Widget child, {
                                                             required ShapeBorder
@@ -5438,16 +5523,18 @@ class _ChatState extends State<Chat> {
                                                                           .w600,
                                                                 ),
                                                               ),
-                                                              DynamicInlineText(
-                                                                key: ValueKey(
-                                                                  bubbleContentKey,
-                                                                ),
-                                                                text: parsedText
-                                                                    .body,
-                                                                details: [time],
-                                                                links:
-                                                                    parsedText
-                                                                        .links,
+                                                              _ParsedMessageBody(
+                                                                contentKey:
+                                                                    bubbleContentKey,
+                                                                text:
+                                                                    messageText,
+                                                                baseStyle:
+                                                                    baseTextStyle,
+                                                                linkStyle:
+                                                                    linkStyle,
+                                                                details: [
+                                                                  time,
+                                                                ],
                                                                 onLinkTap:
                                                                     _handleLinkTap,
                                                                 onLinkLongPress:
@@ -6132,6 +6219,8 @@ class _ChatState extends State<Chat> {
                                                                 shouldRenderTextContent &&
                                                                 !shouldPreferPlainTextHtml) {
                                                               // Render HTML email content
+                                                              hasHtmlBubble =
+                                                                  true;
                                                               final shouldLoadImages = context
                                                                       .watch<
                                                                           SettingsCubit>()
@@ -6174,6 +6263,20 @@ class _ChatState extends State<Chat> {
                                                                               ),
                                                                   onLinkTap:
                                                                       _handleLinkTap,
+                                                                  onTap: () =>
+                                                                      _showHtmlPreview(
+                                                                    html:
+                                                                        normalizedHtmlBody,
+                                                                    shouldLoadImages:
+                                                                        shouldLoadImages,
+                                                                    onLoadRequested: messageModel.id ==
+                                                                            null
+                                                                        ? null
+                                                                        : () =>
+                                                                            _handleEmailImagesApproved(
+                                                                              messageModel.id!,
+                                                                            ),
+                                                                  ),
                                                                 ),
                                                               );
                                                               // Add details row below HTML content
@@ -6222,13 +6325,15 @@ class _ChatState extends State<Chat> {
                                                             } else if (shouldRenderTextContent) {
                                                               bubbleTextChildren
                                                                   .add(
-                                                                DynamicInlineText(
-                                                                  key: ValueKey(
-                                                                    bubbleContentKey,
-                                                                  ),
+                                                                _ParsedMessageBody(
+                                                                  contentKey:
+                                                                      bubbleContentKey,
                                                                   text:
-                                                                      parsedText
-                                                                          .body,
+                                                                      messageText,
+                                                                  baseStyle:
+                                                                      baseTextStyle,
+                                                                  linkStyle:
+                                                                      linkStyle,
                                                                   details: [
                                                                     time,
                                                                     transportDetail,
@@ -6240,9 +6345,6 @@ class _ChatState extends State<Chat> {
                                                                         null)
                                                                       verification,
                                                                   ],
-                                                                  links:
-                                                                      parsedText
-                                                                          .links,
                                                                   onLinkTap:
                                                                       _handleLinkTap,
                                                                   onLinkLongPress:
@@ -6520,15 +6622,19 @@ class _ChatState extends State<Chat> {
                                                                           ? _recipientCutoutDepth
                                                                           : 0.0,
                                                                     );
+                                                          final bool
+                                                              showBubbleSurface =
+                                                              hasBubbleText &&
+                                                                  !hasHtmlBubble;
                                                           final Color
                                                               bubbleSurfaceColor =
-                                                              hasBubbleText
+                                                              showBubbleSurface
                                                                   ? bubbleColor
                                                                   : Colors
                                                                       .transparent;
                                                           final Color
                                                               bubbleSurfaceBorder =
-                                                              hasBubbleText
+                                                              showBubbleSurface
                                                                   ? borderColor
                                                                   : Colors
                                                                       .transparent;
@@ -6751,7 +6857,7 @@ class _ChatState extends State<Chat> {
                                                                 borderRadius:
                                                                     bubbleBorderRadius,
                                                                 shadowOpacity:
-                                                                    hasBubbleText
+                                                                    showBubbleSurface
                                                                         ? shadowValue
                                                                         : 0.0,
                                                                 shadows:
@@ -10959,6 +11065,113 @@ class _AttachmentAccessoryButton extends StatelessWidget {
   }
 }
 
+class _HtmlPreviewDialog extends StatefulWidget {
+  const _HtmlPreviewDialog({
+    required this.html,
+    required this.shouldLoadImages,
+    required this.onLoadRequested,
+    required this.onLinkTap,
+  });
+
+  final String html;
+  final bool shouldLoadImages;
+  final VoidCallback? onLoadRequested;
+  final ValueChanged<String> onLinkTap;
+
+  @override
+  State<_HtmlPreviewDialog> createState() => _HtmlPreviewDialogState();
+}
+
+class _HtmlPreviewDialogState extends State<_HtmlPreviewDialog> {
+  late bool _shouldLoadImages = widget.shouldLoadImages;
+
+  @override
+  void didUpdateWidget(covariant _HtmlPreviewDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shouldLoadImages != widget.shouldLoadImages) {
+      _shouldLoadImages = widget.shouldLoadImages;
+    }
+  }
+
+  void _handleLoadRequested() {
+    if (!_shouldLoadImages) {
+      setState(() {
+        _shouldLoadImages = true;
+      });
+    }
+    widget.onLoadRequested?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final widthInset = spacing.xl + spacing.l;
+    final heightInset = spacing.xxl + spacing.l;
+    final maxWidth = math.max(0.0, mediaSize.width - widthInset);
+    final maxHeight = math.max(0.0, mediaSize.height - heightInset);
+    final colors = context.colorScheme;
+    final radius = context.radius;
+    final borderSide = context.borderSide;
+    final textStyle = context.textTheme.p.copyWith(color: colors.foreground);
+    return ShadDialog(
+      padding: EdgeInsets.all(spacing.s),
+      gap: spacing.s,
+      closeIcon: const SizedBox.shrink(),
+      constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
+      child: Stack(
+        children: [
+          Center(
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.card,
+                shape: ContinuousRectangleBorder(
+                  borderRadius: radius,
+                  side: borderSide,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: radius,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: maxWidth,
+                    maxHeight: maxHeight,
+                  ),
+                  child: Scrollbar(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.all(spacing.m),
+                      child: _MessageHtmlBody(
+                        html: widget.html,
+                        textStyle: textStyle,
+                        textColor: colors.foreground,
+                        linkColor: colors.primary,
+                        shouldLoadImages: _shouldLoadImages,
+                        onLoadRequested: widget.onLoadRequested == null
+                            ? null
+                            : _handleLoadRequested,
+                        onLinkTap: widget.onLinkTap,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: spacing.xs,
+            right: spacing.xs,
+            child: AxiIconButton.ghost(
+              onPressed: () => Navigator.of(context).pop(),
+              iconData: LucideIcons.x,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AttachmentPreviewDialog extends StatelessWidget {
   const _AttachmentPreviewDialog({
     required this.attachment,
@@ -11033,7 +11246,6 @@ class _AttachmentPreviewDialog extends StatelessWidget {
             child: AxiIconButton.ghost(
               onPressed: () => Navigator.of(context).pop(),
               iconData: LucideIcons.x,
-              iconSize: sizing.iconButtonIconSize,
             ),
           ),
         ],
@@ -12013,7 +12225,7 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
   }
 }
 
-class _ReactionManager extends StatelessWidget {
+class _ReactionManager extends StatefulWidget {
   const _ReactionManager({
     required this.reactions,
     required this.onToggle,
@@ -12025,12 +12237,54 @@ class _ReactionManager extends StatelessWidget {
   final VoidCallback onAddCustom;
 
   @override
+  State<_ReactionManager> createState() => _ReactionManagerState();
+}
+
+class _ReactionManagerState extends State<_ReactionManager> {
+  late List<ReactionPreview> _sorted;
+  int _signature = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSorted();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReactionManager oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextSignature = _reactionsSignature(widget.reactions);
+    if (_signature != nextSignature) {
+      _refreshSorted(signature: nextSignature);
+    }
+  }
+
+  void _refreshSorted({int? signature}) {
+    final resolved = signature ?? _reactionsSignature(widget.reactions);
+    _signature = resolved;
+    _sorted = widget.reactions.toList()
+      ..sort((a, b) => b.count.compareTo(a.count));
+  }
+
+  int _reactionsSignature(List<ReactionPreview> reactions) {
+    var hash = reactions.length;
+    for (final reaction in reactions) {
+      hash = Object.hash(
+        hash,
+        reaction.emoji,
+        reaction.count,
+        reaction.reactedBySelf,
+      );
+    }
+    return hash;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final textTheme = context.textTheme;
-    final sorted = reactions.toList()
-      ..sort((a, b) => b.count.compareTo(a.count));
+    final sorted = _sorted;
     final hasReactions = sorted.isNotEmpty;
     return AxiModalSurface(
       padding: _reactionManagerPadding(context),
@@ -12047,7 +12301,7 @@ class _ReactionManager extends StatelessWidget {
                   _ReactionManagerChip(
                     key: ValueKey(reaction.emoji),
                     data: reaction,
-                    onToggle: () => onToggle(reaction.emoji),
+                    onToggle: () => widget.onToggle(reaction.emoji),
                   ),
               ],
             )
@@ -12069,9 +12323,9 @@ class _ReactionManager extends StatelessWidget {
               for (final emoji in _reactionQuickChoices)
                 _ReactionQuickButton(
                   emoji: emoji,
-                  onPressed: () => onToggle(emoji),
+                  onPressed: () => widget.onToggle(emoji),
                 ),
-              _ReactionAddButton(onPressed: onAddCustom),
+              _ReactionAddButton(onPressed: widget.onAddCustom),
             ],
           ),
         ],
@@ -12564,6 +12818,78 @@ class _QuoteBanner extends StatelessWidget {
   }
 }
 
+class _ParsedMessageBody extends StatefulWidget {
+  const _ParsedMessageBody({
+    required this.text,
+    required this.baseStyle,
+    required this.linkStyle,
+    required this.details,
+    required this.onLinkTap,
+    this.onLinkLongPress,
+    this.contentKey,
+  });
+
+  final String text;
+  final TextStyle baseStyle;
+  final TextStyle linkStyle;
+  final List<InlineSpan> details;
+  final ValueChanged<String> onLinkTap;
+  final ValueChanged<String>? onLinkLongPress;
+  final Object? contentKey;
+
+  @override
+  State<_ParsedMessageBody> createState() => _ParsedMessageBodyState();
+}
+
+class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
+  late ParsedMessageText _parsed;
+  String? _text;
+  TextStyle? _baseStyle;
+  TextStyle? _linkStyle;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshParsedText();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ParsedMessageBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_text != widget.text ||
+        _baseStyle != widget.baseStyle ||
+        _linkStyle != widget.linkStyle) {
+      _refreshParsedText();
+    }
+  }
+
+  void _refreshParsedText() {
+    _text = widget.text;
+    _baseStyle = widget.baseStyle;
+    _linkStyle = widget.linkStyle;
+    _parsed = parseMessageText(
+      text: widget.text,
+      baseStyle: widget.baseStyle,
+      linkStyle: widget.linkStyle,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final linkLongPress = widget.onLinkLongPress ?? widget.onLinkTap;
+    final textKey =
+        widget.contentKey == null ? null : ValueKey(widget.contentKey);
+    return DynamicInlineText(
+      key: textKey,
+      text: _parsed.body,
+      details: widget.details,
+      links: _parsed.links,
+      onLinkTap: widget.onLinkTap,
+      onLinkLongPress: linkLongPress,
+    );
+  }
+}
+
 class _MessageHtmlBody extends StatefulWidget {
   const _MessageHtmlBody({
     super.key,
@@ -12574,6 +12900,7 @@ class _MessageHtmlBody extends StatefulWidget {
     required this.shouldLoadImages,
     required this.onLinkTap,
     this.onLoadRequested,
+    this.onTap,
   });
 
   final String html;
@@ -12583,6 +12910,7 @@ class _MessageHtmlBody extends StatefulWidget {
   final bool shouldLoadImages;
   final ValueChanged<String> onLinkTap;
   final VoidCallback? onLoadRequested;
+  final VoidCallback? onTap;
 
   @override
   State<_MessageHtmlBody> createState() => _MessageHtmlBodyState();
@@ -12618,7 +12946,7 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         textTheme.p.fontSize ??
         textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
-    return html_widget.Html(
+    final htmlBody = html_widget.Html(
       data: _sanitizedHtml ?? _rawHtml ?? '',
       extensions: [
         createEmailImageExtension(
@@ -12642,6 +12970,30 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         if (url == null) return;
         widget.onLinkTap(url);
       },
+    );
+    final onTap = widget.onTap;
+    if (onTap == null) {
+      return htmlBody;
+    }
+    final shape = RoundedSuperellipseBorder(borderRadius: context.radius);
+    return ShadFocusable(
+      canRequestFocus: true,
+      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+      child: ShadGestureDetector(
+        cursor: SystemMouseCursors.click,
+        hoverStrategies: mobileHoverStrategies,
+        onTap: onTap,
+        child: AxiTapBounce(
+          enabled: true,
+          child: DecoratedBox(
+            decoration: ShapeDecoration(
+              color: Colors.transparent,
+              shape: shape,
+            ),
+            child: htmlBody,
+          ),
+        ),
+      ),
     );
   }
 }

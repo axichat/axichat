@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -20,8 +21,8 @@ class SearchInputField extends StatelessWidget {
     this.autofocus = false,
     this.onClear,
     this.clearTooltip,
-    this.clearButtonSize = 28.0,
-    this.clearIconSize = 14.0,
+    this.clearButtonSize,
+    this.clearIconSize,
   });
 
   final TextEditingController controller;
@@ -34,14 +35,17 @@ class SearchInputField extends StatelessWidget {
   final bool autofocus;
   final VoidCallback? onClear;
   final String? clearTooltip;
-  final double clearButtonSize;
-  final double clearIconSize;
+  final double? clearButtonSize;
+  final double? clearIconSize;
 
   @override
   Widget build(BuildContext context) {
     final trimmedQuery = controller.text.trim();
     final VoidCallback? clearAction =
         trimmedQuery.isEmpty ? null : (onClear ?? controller.clear);
+    final sizing = context.sizing;
+    final resolvedButtonSize = clearButtonSize ?? sizing.inputSuffixButtonSize;
+    final resolvedIconSize = clearIconSize ?? sizing.inputSuffixIconSize;
     return AxiInput(
       controller: controller,
       focusNode: focusNode,
@@ -56,9 +60,9 @@ class SearchInputField extends StatelessWidget {
           : AxiIconButton.ghost(
               iconData: LucideIcons.x,
               tooltip: clearTooltip,
-              buttonSize: clearButtonSize,
-              tapTargetSize: clearButtonSize,
-              iconSize: clearIconSize,
+              buttonSize: resolvedButtonSize,
+              tapTargetSize: resolvedButtonSize,
+              iconSize: resolvedIconSize,
               onPressed: clearAction,
             ),
     );

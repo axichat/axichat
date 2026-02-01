@@ -486,6 +486,8 @@ class TaskToolbarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool allowPress = enabled && onPressed != null;
+    final sizing = context.sizing;
+    final textTheme = context.textTheme;
     final button = ShadButton.outline(
       size: ShadButtonSize.sm,
       onPressed: allowPress ? onPressed : null,
@@ -493,10 +495,10 @@ class TaskToolbarButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 16),
+            Icon(icon, size: sizing.menuItemIconSize),
             const SizedBox(width: calendarInsetMd),
           ],
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(label, style: textTheme.small),
         ],
       ),
     ).withTapBounce(enabled: allowPress);

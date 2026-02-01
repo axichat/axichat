@@ -219,8 +219,6 @@ class _AlarmAddButton extends StatelessWidget {
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
       iconSize: calendarGutterLg,
-      buttonSize: AxiIconButton.kDefaultSize,
-      tapTargetSize: AxiIconButton.kTapTargetSize,
     );
   }
 }
@@ -1144,8 +1142,6 @@ class _AlarmRecipientsFieldState extends State<_AlarmRecipientsField> {
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
       iconSize: calendarGutterLg,
-      buttonSize: AxiIconButton.kDefaultSize,
-      tapTargetSize: AxiIconButton.kTapTargetSize,
     );
     final Widget inputRow = widget.isCompact
         ? Column(

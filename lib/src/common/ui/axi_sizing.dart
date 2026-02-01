@@ -30,6 +30,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.composeWindowPadding,
     required this.composeWindowStackOffset,
     required this.mediaPreviewMaxScale,
+    required this.inputSuffixButtonSize,
+    required this.inputSuffixIconSize,
     required this.sheetDragHandleWidth,
     required this.sheetDragHandleHeight,
     required this.modalShadowBlur,
@@ -65,6 +67,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double composeWindowPadding;
   final double composeWindowStackOffset;
   final double mediaPreviewMaxScale;
+  final double inputSuffixButtonSize;
+  final double inputSuffixIconSize;
   final double sheetDragHandleWidth;
   final double sheetDragHandleHeight;
   final double modalShadowBlur;
@@ -101,6 +105,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? composeWindowPadding,
     double? composeWindowStackOffset,
     double? mediaPreviewMaxScale,
+    double? inputSuffixButtonSize,
+    double? inputSuffixIconSize,
     double? sheetDragHandleWidth,
     double? sheetDragHandleHeight,
     double? modalShadowBlur,
@@ -143,6 +149,9 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       composeWindowStackOffset:
           composeWindowStackOffset ?? this.composeWindowStackOffset,
       mediaPreviewMaxScale: mediaPreviewMaxScale ?? this.mediaPreviewMaxScale,
+      inputSuffixButtonSize:
+          inputSuffixButtonSize ?? this.inputSuffixButtonSize,
+      inputSuffixIconSize: inputSuffixIconSize ?? this.inputSuffixIconSize,
       sheetDragHandleWidth: sheetDragHandleWidth ?? this.sheetDragHandleWidth,
       sheetDragHandleHeight:
           sheetDragHandleHeight ?? this.sheetDragHandleHeight,
@@ -191,6 +200,8 @@ const AxiSizing axiSizing = AxiSizing(
   composeWindowPadding: 12,
   composeWindowStackOffset: 20,
   mediaPreviewMaxScale: 4,
+  inputSuffixButtonSize: 24,
+  inputSuffixIconSize: 16,
   sheetDragHandleWidth: 32,
   sheetDragHandleHeight: 4,
   modalShadowBlur: 32,

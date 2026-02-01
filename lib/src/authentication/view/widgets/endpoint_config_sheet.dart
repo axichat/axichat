@@ -416,8 +416,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             iconData: _emailProvisioningTokenObscure
                 ? LucideIcons.eyeOff
                 : LucideIcons.eye,
-            iconSize: sizing.iconButtonIconSize,
-            buttonSize: sizing.iconButtonSize,
+            iconSize: sizing.inputSuffixIconSize,
+            buttonSize: sizing.inputSuffixButtonSize,
+            tapTargetSize: sizing.inputSuffixButtonSize,
             color: colors.mutedForeground,
             backgroundColor: colors.muted,
             onPressed: () => setState(() {

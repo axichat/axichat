@@ -404,6 +404,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                           return _ImageAttachment(
                             metadata: metadata,
                             stanzaId: stanzaId,
+                            hasLocalFile: true,
                             downloadDelegate: downloadDelegate,
                             typeReport: resolvedReport,
                           );
@@ -412,6 +413,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                           return _VideoAttachment(
                             metadata: metadata,
                             stanzaId: stanzaId,
+                            hasLocalFile: true,
                             downloadDelegate: downloadDelegate,
                             typeReport: resolvedReport,
                           );
@@ -419,6 +421,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                         return _FileAttachment(
                           metadata: metadata,
                           stanzaId: stanzaId,
+                          hasLocalFile: true,
                           downloadDelegate: downloadDelegate,
                           typeReport: resolvedReport,
                         );
@@ -435,6 +438,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     return _ImageAttachment(
                       metadata: metadata,
                       stanzaId: stanzaId,
+                      hasLocalFile: false,
                       downloadDelegate: downloadDelegate,
                       typeReport: declaredReport,
                     );
@@ -443,6 +447,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     return _VideoAttachment(
                       metadata: metadata,
                       stanzaId: stanzaId,
+                      hasLocalFile: false,
                       downloadDelegate: downloadDelegate,
                       typeReport: declaredReport,
                     );
@@ -450,6 +455,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                   return _FileAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
+                    hasLocalFile: false,
                     downloadDelegate: downloadDelegate,
                     typeReport: declaredReport,
                   );
@@ -466,6 +472,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               return _ImageAttachment(
                 metadata: metadata,
                 stanzaId: stanzaId,
+                hasLocalFile: false,
                 downloadDelegate: downloadDelegate,
                 typeReport: declaredReport,
               );
@@ -474,6 +481,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               return _VideoAttachment(
                 metadata: metadata,
                 stanzaId: stanzaId,
+                hasLocalFile: false,
                 downloadDelegate: downloadDelegate,
                 typeReport: declaredReport,
               );
@@ -481,6 +489,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             return _FileAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
+              hasLocalFile: false,
               downloadDelegate: downloadDelegate,
               typeReport: declaredReport,
             );
@@ -544,12 +553,14 @@ class _ImageAttachment extends StatefulWidget {
   const _ImageAttachment({
     required this.metadata,
     required this.stanzaId,
+    required this.hasLocalFile,
     this.downloadDelegate,
     this.typeReport,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
+  final bool hasLocalFile;
   final AttachmentDownloadDelegate? downloadDelegate;
   final FileTypeReport? typeReport;
 
@@ -584,8 +595,9 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         ? null
         : metadata.sourceUrls!.first;
     final path = metadata.path?.trim();
-    final localFile = path == null || path.isEmpty ? null : File(path);
-    final hasLocalFile = localFile?.existsSync() ?? false;
+    final localFile =
+        widget.hasLocalFile && path?.isNotEmpty == true ? File(path!) : null;
+    final hasLocalFile = localFile != null;
     final canDownload = url != null || widget.downloadDelegate != null;
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
@@ -614,7 +626,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                 ),
       );
     }
-    final previewFile = localFile!;
+    final previewFile = localFile;
     final previewAllowedFuture = _resolvePreviewAllowed(
       previewFile,
       metadataId: metadata.id,
@@ -634,6 +646,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
           return _FileAttachment(
             metadata: metadata,
             stanzaId: widget.stanzaId,
+            hasLocalFile: hasLocalFile,
             downloadDelegate: widget.downloadDelegate,
             typeReport: widget.typeReport,
           );
@@ -774,12 +787,14 @@ class _VideoAttachment extends StatefulWidget {
   const _VideoAttachment({
     required this.metadata,
     required this.stanzaId,
+    required this.hasLocalFile,
     this.downloadDelegate,
     this.typeReport,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
+  final bool hasLocalFile;
   final AttachmentDownloadDelegate? downloadDelegate;
   final FileTypeReport? typeReport;
 
@@ -827,8 +842,9 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         ? null
         : metadata.sourceUrls!.first;
     final path = metadata.path?.trim();
-    final localFile = path == null || path.isEmpty ? null : File(path);
-    final hasLocalFile = localFile?.existsSync() ?? false;
+    final localFile =
+        widget.hasLocalFile && path?.isNotEmpty == true ? File(path!) : null;
+    final hasLocalFile = localFile != null;
     final canDownload = url != null || widget.downloadDelegate != null;
     if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
@@ -861,11 +877,13 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       return _FileAttachment(
         metadata: metadata,
         stanzaId: widget.stanzaId,
+        hasLocalFile: hasLocalFile,
         downloadDelegate: widget.downloadDelegate,
         typeReport: widget.typeReport,
       );
     }
 
+    final resolvedLocalFile = localFile;
     final colors = context.colorScheme;
     final controller = _controller;
     final initialized = controller?.value.isInitialized == true;
@@ -882,23 +900,19 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         children: [
           AxiIconButton.ghost(
             iconData: LucideIcons.save,
-            iconSize: sizing.iconButtonIconSize,
             onPressed: _downloading
                 ? null
                 : () async {
-                    if (localFile == null) return;
-                    await _handleSaveAttachment(localFile);
+                    await _handleSaveAttachment(resolvedLocalFile);
                   },
           ),
           SizedBox(width: spacing.s),
           AxiIconButton.ghost(
             iconData: LucideIcons.share2,
-            iconSize: sizing.iconButtonIconSize,
             onPressed: _downloading
                 ? null
                 : () async {
-                    if (localFile == null) return;
-                    await _handleShareAttachment(localFile);
+                    await _handleShareAttachment(resolvedLocalFile);
                   },
           ),
         ],
@@ -944,7 +958,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                         child: AxiIconButton.ghost(
                           iconData:
                               playing ? LucideIcons.pause : LucideIcons.play,
-                          iconSize: sizing.iconButtonIconSize,
                           onPressed: _togglePlayback,
                         ),
                       ),
@@ -1396,12 +1409,14 @@ class _FileAttachment extends StatefulWidget {
   const _FileAttachment({
     required this.metadata,
     required this.stanzaId,
+    required this.hasLocalFile,
     this.downloadDelegate,
     this.typeReport,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
+  final bool hasLocalFile;
   final AttachmentDownloadDelegate? downloadDelegate;
   final FileTypeReport? typeReport;
 
@@ -1442,8 +1457,9 @@ class _FileAttachmentState extends State<_FileAttachment> {
         ? null
         : metadata.sourceUrls!.first;
     final path = metadata.path?.trim();
-    final localFile = path == null || path.isEmpty ? null : File(path);
-    final hasLocalFile = localFile?.existsSync() ?? false;
+    final localFile =
+        widget.hasLocalFile && path?.isNotEmpty == true ? File(path!) : null;
+    final hasLocalFile = localFile != null;
     final canDownload = url != null || widget.downloadDelegate != null;
     final bool shareEnabled = hasLocalFile || canDownload;
     final FileOpenRisk risk = assessFileOpenRisk(

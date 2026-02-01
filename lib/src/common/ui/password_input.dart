@@ -38,6 +38,7 @@ class _PasswordInputState extends State<PasswordInput> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final sizing = context.sizing;
     final defaultLabel = widget.confirmValidator != null
         ? l10n.authPasswordConfirm
         : l10n.authPassword;
@@ -55,9 +56,9 @@ class _PasswordInputState extends State<PasswordInput> {
           color: context.colorScheme.mutedForeground,
           borderColor: Colors.transparent,
           iconData: obscure ? LucideIcons.eyeOff : LucideIcons.eye,
-          iconSize: 16,
-          buttonSize: 24,
-          tapTargetSize: 24,
+          iconSize: sizing.inputSuffixIconSize,
+          buttonSize: sizing.inputSuffixButtonSize,
+          tapTargetSize: sizing.inputSuffixButtonSize,
           onPressed: () {
             setState(() => obscure = !obscure);
           },

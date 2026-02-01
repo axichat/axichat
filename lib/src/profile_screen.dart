@@ -38,6 +38,19 @@ import 'authentication/view/logout_button.dart';
 
 enum _ProfileRoute { main, changePassword, delete }
 
+ConnectionState _xmppStateFor(
+  ConnectivityState state, {
+  required bool demoOffline,
+}) {
+  if (demoOffline) return ConnectionState.connected;
+  return switch (state) {
+    ConnectivityConnected() => ConnectionState.connected,
+    ConnectivityConnecting() => ConnectionState.connecting,
+    ConnectivityError() => ConnectionState.error,
+    ConnectivityNotConnected() => ConnectionState.notConnected,
+  };
+}
+
 const double _profileHeaderSpacing = 12.0;
 const double _profileHeaderTextSpacing = 4.0;
 const double _profileHeaderWrapSpacing = 2.0;
@@ -128,19 +141,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
     });
   }
 
-  ConnectionState _xmppStateFor(
-    ConnectivityState state, {
-    required bool demoOffline,
-  }) {
-    if (demoOffline) return ConnectionState.connected;
-    return switch (state) {
-      ConnectivityConnected() => ConnectionState.connected,
-      ConnectivityConnecting() => ConnectionState.connecting,
-      ConnectivityError() => ConnectionState.error,
-      ConnectivityNotConnected() => ConnectionState.notConnected,
-    };
-  }
-
   void _setRoute(_ProfileRoute route) {
     setState(() {
       _profileRoute = route;
@@ -170,10 +170,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final colors = context.colorScheme;
         final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
-        final ConnectionState connectionState = _xmppStateFor(
-          connectivityState,
-          demoOffline: demoOffline,
-        );
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
@@ -235,7 +231,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   children: [
                     _ProfileMainView(
                       isWideLayout: isWideLayout,
-                      connectionState: connectionState,
+                      connectivityState: connectivityState,
                       demoOffline: demoOffline,
                       applicationVersion: _applicationVersion,
                       sidebarColor: profileSidebarColor,
@@ -265,7 +261,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
 class _ProfileMainView extends StatelessWidget {
   const _ProfileMainView({
     required this.isWideLayout,
-    required this.connectionState,
+    required this.connectivityState,
     required this.demoOffline,
     required this.applicationVersion,
     required this.sidebarColor,
@@ -281,7 +277,7 @@ class _ProfileMainView extends StatelessWidget {
   });
 
   final bool isWideLayout;
-  final ConnectionState connectionState;
+  final ConnectivityState connectivityState;
   final bool demoOffline;
   final String? applicationVersion;
   final Color sidebarColor;
@@ -298,7 +294,7 @@ class _ProfileMainView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = _ProfileCardSection(
-      connectionState: connectionState,
+      connectivityState: connectivityState,
       demoOffline: demoOffline,
       isWideLayout: isWideLayout,
       locate: locate,
@@ -516,14 +512,14 @@ class _ProfileMainView extends StatelessWidget {
 
 class _ProfileCardSection extends StatelessWidget {
   const _ProfileCardSection({
-    required this.connectionState,
+    required this.connectivityState,
     required this.demoOffline,
     required this.isWideLayout,
     required this.locate,
     required this.onNavigate,
   });
 
-  final ConnectionState connectionState;
+  final ConnectivityState connectivityState;
   final bool demoOffline;
   final bool isWideLayout;
   final T Function<T>() locate;
@@ -534,6 +530,10 @@ class _ProfileCardSection extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, profileState) {
+        final ConnectionState connectionState = _xmppStateFor(
+          connectivityState,
+          demoOffline: demoOffline,
+        );
         final usernameStyle = context.textTheme.large.copyWith(
           fontWeight: FontWeight.w700,
           color: context.colorScheme.foreground,
@@ -669,19 +669,14 @@ class _ProfileCardSection extends StatelessWidget {
                 ),
                 Align(
                   alignment: Alignment.center,
-                  child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
-                    builder: (context, emailConnectivityState) {
-                      return SessionCapabilityIndicators(
-                        xmppState: connectionState,
-                        emailState: demoOffline
-                            ? const EmailSyncState.ready()
-                            : emailConnectivityState.emailState,
-                        emailEnabled: demoOffline
-                            ? true
-                            : emailConnectivityState.emailEnabled,
-                        compact: !wideCard,
-                      );
-                    },
+                  child: SessionCapabilityIndicators(
+                    xmppState: connectionState,
+                    emailState: demoOffline
+                        ? const EmailSyncState.ready()
+                        : connectivityState.emailState,
+                    emailEnabled:
+                        demoOffline ? true : connectivityState.emailEnabled,
+                    compact: !wideCard,
                   ),
                 ),
               ],

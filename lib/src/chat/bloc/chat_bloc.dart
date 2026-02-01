@@ -484,6 +484,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Set<String> _roomAffiliationRefreshAttempts = <String>{};
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
   final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
+  Future<void> _autoDownloadQueue = Future<void>.value();
   Completer<void>? _mamLoadingCompleter;
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   List<Chat> _roomChats = const <Chat>[];
@@ -1555,7 +1556,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _hydrateShareReplies(filteredItems, emit);
     }
     _maybeAutofillEmailSubject(filteredItems, emit);
-    await _maybeAutoDownloadAttachments(
+    _queueAutoDownloadAttachments(
       messages: filteredItems,
       attachmentsByMessageId: filtered.attachmentsByMessageId,
     );
@@ -2265,7 +2266,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     _settingsSnapshot = event.settings;
-    await _maybeAutoDownloadAttachments(
+    _queueAutoDownloadAttachments(
       messages: state.items,
       attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
     );
@@ -2931,7 +2932,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         : AttachmentAutoDownload.blocked;
     emit(state.copyWith(chat: chat.copyWith(attachmentAutoDownload: value)));
     if (event.enabled) {
-      await _maybeAutoDownloadAttachments(
+      _queueAutoDownloadAttachments(
         messages: state.items,
         attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
       );
@@ -2950,7 +2951,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final key = _messageKey(message);
     final attachmentIds = state.attachmentMetadataIdsByMessageId[key];
     if (attachmentIds == null || attachmentIds.isEmpty) return;
-    await _maybeAutoDownloadAttachments(
+    _queueAutoDownloadAttachments(
       messages: [message],
       attachmentsByMessageId: {key: attachmentIds},
       force: true,
@@ -4307,6 +4308,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return resolved.isAllowed;
   }
 
+  bool _metadataIsHighRisk(FileMetadataData metadata) {
+    final report = buildDeclaredFileTypeReport(
+      declaredMimeType: metadata.mimeType,
+      fileName: metadata.filename,
+      path: metadata.path,
+    );
+    final risk = assessFileOpenRisk(
+      report: report,
+      fileName: metadata.filename,
+    );
+    return risk.isWarning;
+  }
+
   bool _metadataAllowsAutoDownload(FileMetadataData metadata) {
     return metadata.downloadCategory.isAutoDownloadAllowed(
       imagesEnabled: _settingsSnapshot.autoDownloadImages,
@@ -4318,6 +4332,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<bool> _isChatBlockedForAutoDownload(Chat chat) async {
     if (chat.spam) return true;
+    if (chat.defaultTransport.isEmail) {
+      final emailService = _emailService;
+      if (emailService != null) {
+        final address =
+            normalizedAddressValue(chat.emailAddress ?? chat.jid) ?? '';
+        if (address.isNotEmpty &&
+            await emailService.blocking.isBlocked(address)) {
+          return true;
+        }
+      }
+    }
     final xmppService = _xmppService;
     if (xmppService == null) return false;
     return xmppService.isJidBlocked(chat.jid);
@@ -4341,6 +4366,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final urls = metadata.sourceUrls;
     return urls != null && urls.isNotEmpty;
+  }
+
+  void _queueAutoDownloadAttachments({
+    required List<Message> messages,
+    required Map<String, List<String>> attachmentsByMessageId,
+    bool force = false,
+  }) {
+    _autoDownloadQueue = _autoDownloadQueue.then(
+      (_) => _maybeAutoDownloadAttachments(
+        messages: messages,
+        attachmentsByMessageId: attachmentsByMessageId,
+        force: force,
+      ),
+    );
   }
 
   Future<void> _maybeAutoDownloadAttachments({
@@ -4377,10 +4416,53 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final key = _messageKey(message);
       final ids = messageKeys[key];
       if (ids == null || ids.isEmpty) continue;
-      var shouldDownloadEmail = false;
+
+      if (isEmailChat) {
+        final metadataList = <FileMetadataData>[];
+        for (final metadataId in ids) {
+          final metadata = metadataById[metadataId];
+          if (metadata == null) continue;
+          metadataList.add(metadata);
+        }
+        if (metadataList.any(_metadataIsHighRisk)) {
+          continue;
+        }
+
+        var shouldDownloadEmail = false;
+        for (final metadata in metadataList) {
+          if (!force &&
+              (_autoDownloadAttemptedMetadataIds.contains(metadata.id) ||
+                  !_metadataAllowsAutoDownload(metadata))) {
+            continue;
+          }
+          final needsDownload = await _needsAttachmentDownload(
+            metadata,
+            isEmailChat: true,
+          );
+          if (!needsDownload) continue;
+          if (!force) {
+            _autoDownloadAttemptedMetadataIds.add(metadata.id);
+          }
+          shouldDownloadEmail = true;
+        }
+        if (!shouldDownloadEmail) continue;
+        if (!force &&
+            _autoDownloadAttemptedEmailMessages.contains(message.stanzaID)) {
+          continue;
+        }
+        if (!force) {
+          _autoDownloadAttemptedEmailMessages.add(message.stanzaID);
+        }
+        emailMessages.add(message);
+        continue;
+      }
+
       for (final metadataId in ids) {
         final metadata = metadataById[metadataId];
         if (metadata == null) continue;
+        if (_metadataIsHighRisk(metadata)) {
+          continue;
+        }
         if (!force &&
             (_autoDownloadAttemptedMetadataIds.contains(metadataId) ||
                 !_metadataAllowsAutoDownload(metadata))) {
@@ -4388,29 +4470,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         final needsDownload = await _needsAttachmentDownload(
           metadata,
-          isEmailChat: isEmailChat,
+          isEmailChat: false,
         );
         if (!needsDownload) continue;
         if (!force) {
           _autoDownloadAttemptedMetadataIds.add(metadataId);
         }
-        if (isEmailChat) {
-          shouldDownloadEmail = true;
-        } else {
-          downloads.add(
-            (metadataId: metadataId, stanzaId: message.stanzaID),
-          );
-        }
+        downloads.add(
+          (metadataId: metadataId, stanzaId: message.stanzaID),
+        );
       }
-      if (!shouldDownloadEmail) continue;
-      if (!force &&
-          _autoDownloadAttemptedEmailMessages.contains(message.stanzaID)) {
-        continue;
-      }
-      if (!force) {
-        _autoDownloadAttemptedEmailMessages.add(message.stanzaID);
-      }
-      emailMessages.add(message);
     }
 
     if (isEmailChat) {

@@ -384,8 +384,6 @@ class _AttendeesFieldState extends State<_AttendeesField> {
               backgroundColor: calendarContainerColor,
               borderColor: calendarBorderColor,
               iconSize: calendarGutterLg,
-              buttonSize: AxiIconButton.kDefaultSize,
-              tapTargetSize: AxiIconButton.kTapTargetSize,
             ),
           ],
         ),
@@ -643,8 +641,6 @@ class _AttendeeRemoveButton extends StatelessWidget {
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
       iconSize: calendarGutterMd,
-      buttonSize: AxiIconButton.kDefaultSize,
-      tapTargetSize: AxiIconButton.kTapTargetSize,
     );
   }
 }

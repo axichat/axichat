@@ -3799,9 +3799,6 @@ class _SelectionTaskTile extends StatelessWidget {
             child: AxiIconButton.ghost(
               iconData: Icons.close,
               onPressed: () => onRemoveTask(task),
-              iconSize: context.sizing.iconButtonIconSize,
-              buttonSize: context.sizing.iconButtonTapTarget,
-              tapTargetSize: context.sizing.iconButtonTapTarget,
               color: calendarSubtitleColor,
             ),
           ),

@@ -439,9 +439,6 @@ class _CalendarDropdownNavButton extends StatelessWidget {
     return AxiIconButton.outline(
       iconData: icon,
       onPressed: onPressed,
-      iconSize: context.sizing.iconButtonIconSize,
-      buttonSize: context.sizing.iconButtonSize,
-      tapTargetSize: context.sizing.iconButtonTapTarget,
       color: calendarSubtitleColor,
     );
   }
