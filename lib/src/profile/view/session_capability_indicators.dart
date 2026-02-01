@@ -152,12 +152,12 @@ class _CapabilityChip extends StatelessWidget {
     final radii = context.radii;
     final chipPadding = compact
         ? EdgeInsets.symmetric(
-            horizontal: spacing.s,
-            vertical: spacing.xxs,
-          )
-        : EdgeInsets.symmetric(
             horizontal: spacing.m,
             vertical: spacing.xs,
+          )
+        : EdgeInsets.symmetric(
+            horizontal: spacing.l,
+            vertical: spacing.s,
           );
     final labelStyle = context.textTheme.small.copyWith(
       color: colors.foreground,

@@ -6,9 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _calendarSheetHeaderTitleFontSize = 16;
-const FontWeight _calendarSheetHeaderTitleFontWeight = FontWeight.w700;
-
 class CalendarSheetCloseButton extends StatelessWidget {
   const CalendarSheetCloseButton({
     super.key,
@@ -65,11 +62,7 @@ class CalendarSheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadTextTheme textTheme = context.textTheme;
-    final TextStyle resolvedTitleStyle = titleStyle ??
-        textTheme.h3.copyWith(
-          fontSize: _calendarSheetHeaderTitleFontSize,
-          fontWeight: _calendarSheetHeaderTitleFontWeight,
-        );
+    final TextStyle resolvedTitleStyle = titleStyle ?? textTheme.h4.strong;
     final TextStyle resolvedSubtitleStyle = subtitleStyle ?? textTheme.muted;
 
     return Padding(

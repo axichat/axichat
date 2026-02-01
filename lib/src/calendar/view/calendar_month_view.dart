@@ -186,10 +186,7 @@ class _WeekdayHeaderRow extends StatelessWidget {
           MaterialLocalizations.of(context).narrowWeekdays;
       return localized[weekday % localized.length];
     }).toList(growable: false);
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.4,
+    final TextStyle labelStyle = context.textTheme.sectionLabelM.copyWith(
       color: colors.mutedForeground,
     );
     final Color divider = colors.border.withValues(alpha: 0.35);
@@ -318,70 +315,85 @@ class _MonthDayTile extends StatelessWidget {
     final List<DayEvent> visible = events.take(_maxVisibleEvents).toList();
     final int overflow = events.length - visible.length;
 
-    return InkWell(
-      onTap: () {
-        onSelected(date);
-        onCreateEvent(date);
-      },
-      onLongPress: () => onSelected(date),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 120),
-        decoration: BoxDecoration(
-          color: background,
-          border: Border(
-            right: BorderSide(color: gridColor),
-            bottom: BorderSide(color: gridColor),
-          ),
-        ),
-        padding: const EdgeInsets.all(10),
-        child: Opacity(
-          opacity: contentOpacity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: dayPadding,
-                    decoration: BoxDecoration(
-                      color: badgeBackground,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      date.day.toString(),
-                      style: textTheme.small.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: dayColor,
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
+    return AxiTapBounce(
+      child: ShadFocusable(
+        canRequestFocus: true,
+        builder: (context, _, __) {
+          return Material(
+            type: MaterialType.transparency,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor: SystemMouseCursors.click,
+              onTap: () {
+                onSelected(date);
+                onCreateEvent(date);
+              },
+              onLongPress: () => onSelected(date),
+              child: Container(
+                constraints:
+                    const BoxConstraints(minHeight: calendarMonthCellMinHeight),
+                decoration: BoxDecoration(
+                  color: background,
+                  border: Border(
+                    right: BorderSide(color: gridColor),
+                    bottom: BorderSide(color: gridColor),
+                  ),
+                ),
+                padding: calendarPaddingMd,
+                child: Opacity(
+                  opacity: contentOpacity,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: dayPadding,
+                            decoration: BoxDecoration(
+                              color: badgeBackground,
+                              borderRadius: BorderRadius.circular(
+                                context.sizing.containerRadius,
+                              ),
+                            ),
+                            child: Text(
+                              date.day.toString(),
+                              style: textTheme.small.strong.copyWith(
+                                color: dayColor,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: spacing.xs),
-              ...visible.map(
-                (DayEvent event) => _DayEventBullet(
-                  event: event,
-                  onTap: () => onEditEvent(event),
-                  dimmed: !inMonth,
-                ),
-              ),
-              if (overflow > 0)
-                Padding(
-                  padding: EdgeInsets.only(top: spacing.xs),
-                  child: Text(
-                    context.l10n.calendarMonthOverflowMore(overflow),
-                    style: textTheme.small.copyWith(
-                      color: colors.primary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
+                      SizedBox(height: spacing.xs),
+                      ...visible.map(
+                        (DayEvent event) => _DayEventBullet(
+                          event: event,
+                          onTap: () => onEditEvent(event),
+                          dimmed: !inMonth,
+                        ),
+                      ),
+                      if (overflow > 0)
+                        Padding(
+                          padding: EdgeInsets.only(top: spacing.xs),
+                          child: Text(
+                            context.l10n.calendarMonthOverflowMore(overflow),
+                            style: textTheme.labelSm.strong.copyWith(
+                              color: colors.primary,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-        ),
+              ),
+            ),
+          );
+        },
       ),
-    ).withTapBounce();
+    );
   }
 }
 
@@ -401,44 +413,56 @@ class _DayEventBullet extends StatelessWidget {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
     final double opacity = dimmed ? 0.6 : 1;
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
 
     return Opacity(
       opacity: opacity,
       child: Padding(
         padding: const EdgeInsets.only(bottom: calendarInsetSm),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(calendarBorderRadius),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: colors.primary,
-                    shape: BoxShape.circle,
+        child: AxiTapBounce(
+          child: ShadFocusable(
+            canRequestFocus: true,
+            builder: (context, _, __) {
+              return Material(
+                type: MaterialType.transparency,
+                shape: shape,
+                clipBehavior: Clip.antiAlias,
+                child: ShadGestureDetector(
+                  cursor: SystemMouseCursors.click,
+                  onTap: onTap,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: calendarInsetMd),
+                        child: Container(
+                          width: calendarInsetLg,
+                          height: calendarInsetLg,
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: calendarGutterSm),
+                      Expanded(
+                        child: Text(
+                          event.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelSm.strong.copyWith(
+                            color: colors.foreground,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: calendarGutterSm),
-              Expanded(
-                child: Text(
-                  event.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.small.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: colors.foreground,
-                  ),
-                ),
-              ),
-            ],
+              );
+            },
           ),
-        ).withTapBounce(),
+        ),
       ),
     );
   }

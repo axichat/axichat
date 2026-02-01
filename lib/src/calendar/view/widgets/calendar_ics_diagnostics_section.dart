@@ -32,7 +32,6 @@ const String _icsDiagnosticsPropertySingular = 'property';
 const String _icsDiagnosticsPropertyPlural = 'properties';
 const String _icsDiagnosticsChildSingular = 'subcomponent';
 const String _icsDiagnosticsChildPlural = 'subcomponents';
-const double _icsDiagnosticsLabelFontSize = 12;
 const double _icsDiagnosticsLabelLetterSpacing = 0.2;
 
 bool hasIcsDiagnosticsData(CalendarIcsMeta? meta) {
@@ -138,9 +137,7 @@ class _DiagnosticsGroupLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = TextStyle(
-      fontSize: _icsDiagnosticsLabelFontSize,
-      fontWeight: FontWeight.w600,
+    final TextStyle labelStyle = context.textTheme.label.strong.copyWith(
       color: calendarSubtitleColor,
       letterSpacing: _icsDiagnosticsLabelLetterSpacing,
     );
@@ -232,16 +229,12 @@ class _IcsMetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = TextStyle(
-      fontSize: _icsDiagnosticsLabelFontSize,
-      fontWeight: FontWeight.w600,
+    final TextStyle labelStyle = context.textTheme.label.strong.copyWith(
       color: calendarSubtitleColor,
       letterSpacing: _icsDiagnosticsLabelLetterSpacing,
     );
-    final TextStyle valueStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle valueStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,10 +279,8 @@ class _RawPropertyTile extends StatelessWidget {
     final String name = _resolvePropertyName(property.name);
     final String value = _resolvePropertyValue(property.value);
     final List<CalendarPropertyParameter> parameters = property.parameters;
-    final TextStyle titleStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle titleStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final TextStyle valueStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
@@ -352,10 +343,8 @@ class _ParameterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle labelStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarInsetMd,
@@ -363,7 +352,7 @@ class _ParameterChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Text(label, style: labelStyle),
@@ -467,10 +456,8 @@ class _RawComponentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle titleStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final TextStyle subtitleStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );

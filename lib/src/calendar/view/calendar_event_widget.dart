@@ -582,10 +582,11 @@ class _CalendarEventContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double dotSize = context.spacing.xxs + context.borderSide.width;
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: height < 40 ? 6.0 : 8.0,
-        vertical: height < 40 ? 4.0 : 6.0,
+        horizontal: height < 40 ? calendarInsetLg : calendarGutterSm,
+        vertical: height < 40 ? calendarInsetMd : calendarInsetLg,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -595,11 +596,11 @@ class _CalendarEventContent extends StatelessWidget {
             children: [
               if (task.effectivePriority != TaskPriority.none) ...[
                 Container(
-                  width: 3,
-                  height: 3,
+                  width: dotSize,
+                  height: dotSize,
                   decoration: BoxDecoration(
                     color: accentColor,
-                    borderRadius: BorderRadius.circular(1.5),
+                    shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: calendarInsetMd),
@@ -614,7 +615,6 @@ class _CalendarEventContent extends StatelessWidget {
                     color: textColor,
                     decoration:
                         task.isCompleted ? TextDecoration.lineThrough : null,
-                    letterSpacing: -0.1,
                   ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: height < 40 ? 1 : 2,
@@ -700,7 +700,7 @@ class _CalendarEventResizeHandles extends StatelessWidget {
           top: 0,
           left: 0,
           right: 0,
-          height: 8,
+          height: calendarGutterSm,
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeUpDown,
             child: GestureDetector(
@@ -712,11 +712,13 @@ class _CalendarEventResizeHandles extends StatelessWidget {
                 color: Colors.transparent,
                 child: Center(
                   child: Container(
-                    width: 40,
-                    height: 3,
+                    width: context.sizing.iconButtonSize,
+                    height: context.borderSide.width * 3,
                     decoration: BoxDecoration(
                       color: gripColor,
-                      borderRadius: BorderRadius.circular(1.5),
+                      borderRadius: BorderRadius.circular(
+                        context.borderSide.width * 2,
+                      ),
                     ),
                   ),
                 ),
@@ -728,7 +730,7 @@ class _CalendarEventResizeHandles extends StatelessWidget {
           bottom: 0,
           left: 0,
           right: 0,
-          height: 8,
+          height: calendarGutterSm,
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeUpDown,
             child: GestureDetector(
@@ -740,11 +742,13 @@ class _CalendarEventResizeHandles extends StatelessWidget {
                 color: Colors.transparent,
                 child: Center(
                   child: Container(
-                    width: 40,
-                    height: 3,
+                    width: context.sizing.iconButtonSize,
+                    height: context.borderSide.width * 3,
                     decoration: BoxDecoration(
                       color: gripColor,
-                      borderRadius: BorderRadius.circular(1.5),
+                      borderRadius: BorderRadius.circular(
+                        context.borderSide.width * 2,
+                      ),
                     ),
                   ),
                 ),

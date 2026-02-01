@@ -31,7 +31,6 @@ const double _freeBusyTileOverlayPadding = 6.0;
 const double _freeBusyTileOverlayGap = 6.0;
 const double _freeBusyTileControlMinHeight = 40.0;
 const double _freeBusySwitchScale = 0.9;
-const double _freeBusyHeaderFontSize = 12.0;
 const double _freeBusyTapSlop = 4.0;
 const double _freeBusyResizeHandleExtent = 8.0;
 const double _freeBusySheetSpacing = 16.0;
@@ -905,11 +904,7 @@ class _FreeBusyDayHeader extends StatelessWidget {
       child: Center(
         child: Text(
           _dayLabel(context, date),
-          style: context.textTheme.small.copyWith(
-            fontSize: _freeBusyHeaderFontSize,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
+          style: context.textTheme.label.strong.copyWith(color: textColor),
         ),
       ),
     );
@@ -1288,17 +1283,15 @@ class _FreeBusyPopoverContent extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Padding(
         padding: _freeBusyPopoverPadding,
         child: Text(
           label,
-          style: context.textTheme.small.copyWith(
-            color: calendarTitleColor,
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.textTheme.small.strong
+              .copyWith(color: calendarTitleColor),
         ),
       ),
     );
@@ -1337,7 +1330,7 @@ class _FreeBusyTileControls extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: calendarContainerColor.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
           border: Border.all(color: calendarBorderColor),
         ),
         child: Padding(
@@ -1763,10 +1756,8 @@ class _FreeBusySheetActions extends StatelessWidget {
                 children: [
                   Text(
                     context.l10n.calendarFreeBusyToggleLabel,
-                    style: context.textTheme.small.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: context.colorScheme.mutedForeground,
-                    ),
+                    style: context.textTheme.small.strong
+                        .copyWith(color: context.colorScheme.mutedForeground),
                   ),
                   ShadSwitch(value: isFree, onChanged: (_) => onToggle()),
                 ],

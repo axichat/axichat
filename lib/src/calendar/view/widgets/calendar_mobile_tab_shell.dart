@@ -2,9 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 /// Shared container used by both the authenticated and guest calendar mobile
 /// layouts. Handles painting the background/border shell around the draggable
@@ -31,7 +31,7 @@ class CalendarMobileTabShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = ShadTheme.of(context).colorScheme;
+    final colors = context.colorScheme;
     final Color effectiveBackground = backgroundColor ?? colors.background;
     final Color effectiveBorder = borderColor ?? colors.border;
     final Color effectiveDivider = dividerColor ?? effectiveBorder;
@@ -78,8 +78,7 @@ class TasksTabLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final TextStyle resolvedStyle = textStyle ??
-        context.textTheme.small.copyWith(fontWeight: FontWeight.w600);
+    final TextStyle resolvedStyle = textStyle ?? context.textTheme.small.strong;
     if (!highlight || animation == null) {
       return Text(
         text,

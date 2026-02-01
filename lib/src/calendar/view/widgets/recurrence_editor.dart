@@ -106,10 +106,6 @@ const int _recurrenceHourMax = 23;
 const int _recurrenceMinuteMax = 59;
 const int _recurrenceSecondMax = 59;
 const double _recurrenceCompactRadius = 10;
-const double _recurrenceSmallFontSize = 10;
-const double _recurrenceHelperFontSize = 11;
-const double _recurrenceBodyFontSize = 12;
-const double _recurrenceInputHintFontSize = 13;
 const double _recurrenceIconTinySize = 14;
 const double _recurrenceIconSmallSize = 16;
 const double _recurrenceIconMediumSize = 18;
@@ -1466,39 +1462,55 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
+    final TextStyle labelStyle = context.textTheme.sectionLabelM.copyWith(
       color: calendarSubtitleColor,
-      fontWeight: FontWeight.w700,
       letterSpacing: _recurrenceLabelLetterSpacing,
     );
     final Color iconColor = calendarSubtitleColor;
-    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: radius,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterSm,
-            vertical: calendarGutterSm,
-          ),
-          child: Row(
-            children: [
-              Text(_recurrenceAdvancedLabel.toUpperCase(), style: labelStyle),
-              if (hasAdvancedData) ...[
-                const SizedBox(width: calendarInsetSm),
-                _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
-              ],
-              const Spacer(),
-              Icon(
-                isExpanded ? Icons.expand_less : Icons.expand_more,
-                size: _recurrenceIconMediumSize,
-                color: iconColor,
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
+    return AxiTapBounce(
+      enabled: onPressed != null,
+      child: ShadFocusable(
+        canRequestFocus: onPressed != null,
+        builder: (context, _, __) {
+          return Material(
+            type: MaterialType.transparency,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor: onPressed != null
+                  ? SystemMouseCursors.click
+                  : SystemMouseCursors.basic,
+              onTap: onPressed,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: calendarGutterSm,
+                  vertical: calendarGutterSm,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      _recurrenceAdvancedLabel.toUpperCase(),
+                      style: labelStyle,
+                    ),
+                    if (hasAdvancedData) ...[
+                      const SizedBox(width: calendarInsetSm),
+                      _RecurrenceAdvancedActiveBadge(
+                          enabled: onPressed != null),
+                    ],
+                    const Spacer(),
+                    Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: _recurrenceIconMediumSize,
+                      color: iconColor,
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1978,10 +1990,8 @@ class _RecurrenceNumberChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle labelStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterSm,
@@ -1989,7 +1999,7 @@ class _RecurrenceNumberChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Row(
@@ -2146,10 +2156,8 @@ class _RecurrenceDateChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle labelStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final String label = _formatRecurrenceDateLabel(l10n, entry);
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -2158,7 +2166,7 @@ class _RecurrenceDateChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Row(
@@ -2371,10 +2379,8 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle labelStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final String label = _formatByDayEntry(entry);
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -2383,7 +2389,7 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Row(
@@ -2450,9 +2456,8 @@ class _RecurrenceTimeSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
+    final TextStyle labelStyle = context.textTheme.label.strong.copyWith(
       color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
     );
     return Padding(
       padding: const EdgeInsets.only(bottom: calendarInsetSm),
@@ -2463,10 +2468,8 @@ class _RecurrenceTimeSummaryRow extends StatelessWidget {
           Expanded(
             child: Text(
               values,
-              style: context.textTheme.muted.copyWith(
-                fontSize: _recurrenceBodyFontSize,
-                fontWeight: FontWeight.w500,
-              ),
+              style: context.textTheme.label
+                  .copyWith(color: calendarSubtitleColor),
             ),
           ),
         ],

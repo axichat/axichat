@@ -337,65 +337,84 @@ class CriticalPathCard extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final double progressValue = progress.progressValue;
-    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
     final bool highlighted = isFocused || isActive;
     final Color borderColor = highlighted ? colors.primary : colors.border;
-    final double borderWidth = highlighted ? 1.5 : 1;
+    final BorderSide baseBorder = context.borderSide;
+    final double borderWidth =
+        highlighted ? baseBorder.width * 2 : baseBorder.width;
     final Color backgroundColor = isActive
         ? colors.primary.withValues(alpha: 0.08)
         : colors.muted.withValues(alpha: 0.04);
-    return InkWell(
-      borderRadius: radius,
-      mouseCursor: SystemMouseCursors.click,
-      onTap: onOpen,
-      child: Container(
-        padding: const EdgeInsets.all(calendarGutterMd),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: radius,
-          border: Border.all(color: borderColor, width: borderWidth),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    path.name,
-                    style: context.textTheme.small.strong,
+    final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: BorderSide(
+        color: borderColor,
+        width: borderWidth,
+      ),
+    );
+    return AxiTapBounce(
+      child: ShadFocusable(
+        builder: (context, _, __) {
+          return Material(
+            type: MaterialType.transparency,
+            shape: decoratedShape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor: SystemMouseCursors.click,
+              onTap: onOpen,
+              child: DecoratedBox(
+                decoration: ShapeDecoration(
+                  color: backgroundColor,
+                  shape: decoratedShape,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(calendarGutterMd),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              path.name,
+                              style: context.textTheme.small.strong,
+                            ),
+                          ),
+                          _PathActions(
+                            onFocus: onFocus,
+                            onAddTask: onAddTask,
+                            onRename: onRename,
+                            onDelete: onDelete,
+                            onShare: onShare,
+                            isFocused: isFocused,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: calendarInsetSm),
+                      Text(
+                        l10n.calendarCriticalPathProgressSummary(
+                          progress.completed,
+                          progress.total,
+                        ),
+                        style: context.textTheme.label,
+                      ),
+                      const SizedBox(height: calendarInsetSm),
+                      Text(
+                        l10n.calendarCriticalPathProgressHint,
+                        style: context.textTheme.labelSm,
+                      ),
+                      const SizedBox(height: calendarInsetSm),
+                      _CriticalPathProgressBar(
+                        progressValue: progressValue,
+                        animationDuration: animationDuration,
+                      ),
+                    ],
                   ),
                 ),
-                _PathActions(
-                  onFocus: onFocus,
-                  onAddTask: onAddTask,
-                  onRename: onRename,
-                  onDelete: onDelete,
-                  onShare: onShare,
-                  isFocused: isFocused,
-                ),
-              ],
-            ),
-            const SizedBox(height: calendarInsetSm),
-            Text(
-              l10n.calendarCriticalPathProgressSummary(
-                progress.completed,
-                progress.total,
               ),
-              style: context.textTheme.label,
             ),
-            const SizedBox(height: calendarInsetSm),
-            Text(
-              l10n.calendarCriticalPathProgressHint,
-              style: context.textTheme.labelSm,
-            ),
-            const SizedBox(height: calendarInsetSm),
-            _CriticalPathProgressBar(
-              progressValue: progressValue,
-              animationDuration: animationDuration,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -472,19 +491,23 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
             Stack(
               children: [
                 Container(
-                  height: 8,
+                  height: context.sizing.progressIndicatorBarHeight,
                   decoration: BoxDecoration(
                     color: colors.muted.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(
+                      context.sizing.containerRadius,
+                    ),
                   ),
                 ),
                 FractionallySizedBox(
                   widthFactor: fill,
                   child: Container(
-                    height: 8,
+                    height: context.sizing.progressIndicatorBarHeight,
                     decoration: BoxDecoration(
                       color: colors.primary,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(
+                        context.sizing.containerRadius,
+                      ),
                     ),
                   ),
                 ),
@@ -734,17 +757,17 @@ class _CriticalPathReorderHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final Widget icon = SizedBox(
-      height: 36,
-      width: 36,
+      height: context.sizing.iconButtonSize,
+      width: context.sizing.iconButtonSize,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.card,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         ),
         child: Center(
           child: Icon(
             Icons.drag_indicator,
-            size: 18,
+            size: context.sizing.menuItemIconSize,
             color: colors.mutedForeground,
           ),
         ),
@@ -839,29 +862,27 @@ class CriticalPathMembershipList extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: colors.muted.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(calendarBorderRadius),
+                borderRadius:
+                    BorderRadius.circular(context.sizing.containerRadius),
                 border: Border.all(color: colors.border),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.route, size: 14, color: colors.mutedForeground),
+                  Icon(
+                    Icons.route,
+                    size: context.sizing.menuItemIconSize,
+                    color: colors.mutedForeground,
+                  ),
                   const SizedBox(width: calendarInsetSm),
                   Text(
                     path.name,
-                    style: textTheme.small.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: textTheme.small.strong,
                   ),
                   if (onRemovePath != null) ...[
                     const SizedBox(width: calendarInsetSm),
-                    AxiIconButton(
+                    AxiIconButton.ghost(
                       iconData: Icons.close,
-                      iconSize: 14,
-                      buttonSize: 28,
-                      tapTargetSize: 32,
-                      backgroundColor: Colors.transparent,
-                      borderColor: Colors.transparent,
                       color: colors.mutedForeground,
                       onPressed: () => onRemovePath!(path.id),
                     ),
@@ -920,9 +941,17 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final BorderRadius itemRadius = BorderRadius.circular(
-      calendarBorderRadius.toDouble(),
+    final bool enabled = !widget.isBusy;
+    final RoundedSuperellipseBorder itemShape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: BorderSide(color: colors.border, width: context.borderSide.width),
     );
+    final double iconSize = context.sizing.menuItemIconSize;
+    final double iconContainerSize = context.sizing.menuItemHeight;
+    final BorderRadius iconRadius =
+        BorderRadius.circular(context.sizing.containerRadius);
     return Scrollbar(
       controller: _scrollController,
       thumbVisibility: true,
@@ -934,56 +963,69 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
         separatorBuilder: (_, __) => const SizedBox(height: calendarInsetSm),
         itemBuilder: (context, index) {
           final path = widget.paths[index];
-          return InkWell(
-            borderRadius: itemRadius,
-            mouseCursor: SystemMouseCursors.click,
-            onTap: widget.isBusy
-                ? null
-                : () async {
-                    await widget.onPathPressed(path);
-                  },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterMd,
-                vertical: calendarInsetMd,
-              ),
-              decoration: BoxDecoration(
-                color: colors.card,
-                borderRadius: itemRadius,
-                border: Border.all(color: colors.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: colors.muted.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.route,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: calendarGutterSm),
-                  Expanded(
-                    child: Text(
-                      path.name,
-                      style: textTheme.small.copyWith(
-                        fontWeight: FontWeight.w700,
+          return AxiTapBounce(
+            enabled: enabled,
+            child: ShadFocusable(
+              canRequestFocus: enabled,
+              builder: (context, _, __) {
+                return Material(
+                  type: MaterialType.transparency,
+                  shape: itemShape,
+                  clipBehavior: Clip.antiAlias,
+                  child: ShadGestureDetector(
+                    cursor: enabled
+                        ? SystemMouseCursors.click
+                        : SystemMouseCursors.basic,
+                    onTap: enabled
+                        ? () async {
+                            await widget.onPathPressed(path);
+                          }
+                        : null,
+                    child: DecoratedBox(
+                      decoration: ShapeDecoration(
+                        color: colors.card,
+                        shape: decoratedShape,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: calendarGutterMd,
+                          vertical: calendarInsetMd,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: iconContainerSize,
+                              height: iconContainerSize,
+                              decoration: BoxDecoration(
+                                color: colors.muted.withValues(alpha: 0.12),
+                                borderRadius: iconRadius,
+                              ),
+                              child: Icon(
+                                Icons.route,
+                                size: iconSize,
+                              ),
+                            ),
+                            const SizedBox(width: calendarGutterSm),
+                            Expanded(
+                              child: Text(
+                                path.name,
+                                style: textTheme.small.strong,
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: iconSize,
+                              color: colors.mutedForeground,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: colors.mutedForeground,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-          ).withTapBounce(enabled: !widget.isBusy);
+          );
         },
       ),
     );

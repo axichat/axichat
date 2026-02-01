@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -32,8 +33,17 @@ class PriorityCheckboxTile extends StatelessWidget {
     final borderColor = isActive ? color : calendarBorderColor;
     final Color textColor = isActive ? color : calendarTitleColor;
     final bool showShadow = isActive;
-    final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1);
+    final double baseBorderWidth = context.borderSide.width;
+    final double borderWidth =
+        isIndeterminate || value ? baseBorderWidth * 2 : baseBorderWidth;
     final bool? checkboxValue = isIndeterminate ? null : value;
+    final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: BorderSide(
+        color: borderColor,
+        width: borderWidth,
+      ),
+    );
 
     return Semantics(
       container: true,
@@ -42,65 +52,63 @@ class PriorityCheckboxTile extends StatelessWidget {
       mixed: isIndeterminate,
       enabled: isEnabled,
       onTap: isEnabled ? () => onChanged!(!value) : null,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isEnabled ? () => onChanged!(!value) : null,
-          mouseCursor:
-              isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: borderColor,
-                width: borderWidth,
-              ),
-              boxShadow: showShadow
-                  ? [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.16),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
+      child: AxiTapBounce(
+        enabled: isEnabled,
+        child: ShadFocusable(
+          canRequestFocus: isEnabled,
+          builder: (context, _, __) {
+            return Material(
+              type: MaterialType.transparency,
+              shape: decoratedShape,
+              clipBehavior: Clip.antiAlias,
+              child: ShadGestureDetector(
+                cursor: isEnabled
+                    ? SystemMouseCursors.click
+                    : SystemMouseCursors.basic,
+                onTap: isEnabled ? () => onChanged!(!value) : null,
+                child: AnimatedContainer(
+                  duration: calendarSidebarToggleDuration,
+                  curve: Curves.easeOut,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: calendarGutterMd,
+                    vertical: calendarInsetLg,
+                  ),
+                  decoration: ShapeDecoration(
+                    color: backgroundColor,
+                    shape: decoratedShape,
+                    shadows: showShadow ? calendarLightShadow : const [],
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: calendarCheckboxTapTarget,
+                        height: calendarCheckboxTapTarget,
+                        child: Center(
+                          child: CalendarCheckbox(
+                            value: value,
+                            isIndeterminate: isIndeterminate,
+                            onChanged: onChanged,
+                            activeColor: color,
+                            borderColor: borderColor,
+                            visualSize: calendarCheckboxTapTarget / 2,
+                          ),
+                        ),
                       ),
-                    ]
-                  : const [],
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: calendarCheckboxTapTarget,
-                  height: calendarCheckboxTapTarget,
-                  child: Center(
-                    child: CalendarCheckbox(
-                      value: value,
-                      isIndeterminate: isIndeterminate,
-                      onChanged: onChanged,
-                      activeColor: color,
-                      borderColor: borderColor,
-                      visualSize: 18,
-                    ),
+                      const SizedBox(width: calendarFormGap),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: context.textTheme.small
+                              .strongIf(isActive)
+                              .copyWith(color: textColor),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: calendarFormGap),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: context.textTheme.small
-                        .strongIf(isActive)
-                        .copyWith(color: textColor),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

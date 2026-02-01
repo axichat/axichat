@@ -547,8 +547,8 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   ShadSwitch(
                     value: state.excludeSubject,
                     onChanged: (value) => context
-                        .read<ChatSearchCubit?>()
-                        ?.toggleExcludeSubject(value),
+                        .read<ChatSearchCubit>()
+                        .toggleExcludeSubject(value),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -996,10 +996,6 @@ class _ChatState extends State<Chat> {
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
-  static final RegExp _axiDomainPattern = RegExp(
-    r'@(?:[\\w-]+\\.)*axi\\.im$',
-    caseSensitive: false,
-  );
   static final Map<String, double> _scrollOffsetCache = {};
   String? _lastScrollStorageKey;
 
@@ -1146,6 +1142,27 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleRecipientAdded(FanOutTarget target) {
+    final address = target.address?.trim();
+    if (target.chat == null &&
+        target.transport == null &&
+        address != null &&
+        address.isNotEmpty) {
+      _resolveAddressTransport(address).then((transport) {
+        if (!mounted || transport == null) return;
+        final resolved = FanOutTarget.address(
+          address: address,
+          displayName: target.displayName,
+          shareSignatureEnabled: target.shareSignatureEnabled,
+          transport: transport,
+        );
+        _applyRecipient(resolved);
+      });
+      return;
+    }
+    _applyRecipient(target);
+  }
+
+  void _applyRecipient(FanOutTarget target) {
     final index = _recipients.indexWhere((recipient) {
       return recipient.key == target.key;
     });
@@ -1164,6 +1181,29 @@ class _ChatState extends State<Chat> {
         ComposerRecipient(target: target, included: true),
       ];
     });
+  }
+
+  Future<MessageTransport?> _resolveAddressTransport(String address) async {
+    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final supportsEmail = endpointConfig.enableSmtp;
+    final supportsXmpp = endpointConfig.enableXmpp;
+    if (supportsEmail && !supportsXmpp) {
+      return MessageTransport.email;
+    }
+    if (!supportsEmail && supportsXmpp) {
+      return MessageTransport.xmpp;
+    }
+    if (!supportsEmail && !supportsXmpp) {
+      return null;
+    }
+    final hinted = hintTransportForAddress(address);
+    if (hinted != null) {
+      return hinted;
+    }
+    return showTransportChoiceDialog(
+      context,
+      address: address,
+    );
   }
 
   void _handleRecipientRemoved(String key) {
@@ -2190,14 +2230,8 @@ class _ChatState extends State<Chat> {
 
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = normalizedAddressValue(value);
-    if (normalized == null || normalized.isEmpty) {
-      return false;
-    }
-    if (!normalized.contains('@')) {
-      return false;
-    }
-    return !_axiDomainPattern.hasMatch(normalized);
+    final hinted = hintTransportForAddress(value);
+    return hinted?.isEmail ?? false;
   }
 
   bool _hasEmailAttachmentTarget({

@@ -718,19 +718,20 @@ class _TaskDeadlineBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: _deadlineBackgroundColor(deadline),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.calendar_today_outlined, size: 12, color: color),
+          Icon(
+            Icons.calendar_today_outlined,
+            size: context.sizing.menuItemIconSize,
+            color: color,
+          ),
           const SizedBox(width: calendarInsetMd),
           Text(
             _deadlineLabel(l10n, deadline),
-            style: context.textTheme.label.strong.copyWith(
-              color: color,
-              letterSpacing: 0.1,
-            ),
+            style: context.textTheme.label.strong.copyWith(color: color),
           ),
         ],
       ),

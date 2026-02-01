@@ -20,22 +20,34 @@ class AxiBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count <= 0) return child;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final radii = context.radii;
+    final borders = context.borders;
     final text = count > 99 ? '99+' : '$count';
-    final resolvedOffset = offset ?? const Offset(10, -6);
+    final resolvedOffset = offset ??
+        Offset(
+          spacing.s + spacing.xs - spacing.xxs,
+          -(spacing.s - spacing.xs + spacing.xxs),
+        );
     final badge = DecoratedBox(
       decoration: BoxDecoration(
         color: colors.primary,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.background, width: 1.5),
+        borderRadius: BorderRadius.circular(radii.pill),
+        border: Border.all(
+          color: colors.background,
+          width: borders.widthStrong,
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
+        ),
         child: Text(
           text,
           style: context.textTheme.small.copyWith(
             color: colors.primaryForeground,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
           ),
         ),
       ),

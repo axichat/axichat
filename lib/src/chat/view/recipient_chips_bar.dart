@@ -923,36 +923,34 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       }
     }
 
-    final atIndex = trimmed.indexOf('@');
-    if (atIndex > 0) {
-      final localPart = trimmed.substring(0, atIndex).trim();
-      final typedDomain = trimmed.substring(atIndex + 1).toLowerCase();
-      if (localPart.isNotEmpty) {
-        final normalizedLocal = localPart.toLowerCase();
-        final domainEntries = knownDomains
-            .map(
-              (domain) => _DomainCompletion(
-                domain: domain,
-                hasExactAddress:
-                    knownAddressesLower.contains('$normalizedLocal@$domain'),
-              ),
-            )
-            .where(
-              (entry) =>
-                  typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
-            )
-            .toList()
-          ..sort((a, b) {
-            if (a.hasExactAddress != b.hasExactAddress) {
-              return a.hasExactAddress ? -1 : 1;
-            }
-            return a.domain.compareTo(b.domain);
-          });
-        for (final entry in domainEntries) {
-          final suggestion = '$localPart@${entry.domain}';
-          if (addTarget(addressTarget(suggestion))) {
-            return results;
+    final parts = addressAutocompleteParts(trimmed);
+    if (parts != null) {
+      final localPart = parts.localPart;
+      final typedDomain = parts.domainPart.toLowerCase();
+      final normalizedLocal = localPart.toLowerCase();
+      final domainEntries = knownDomains
+          .map(
+            (domain) => _DomainCompletion(
+              domain: domain,
+              hasExactAddress:
+                  knownAddressesLower.contains('$normalizedLocal@$domain'),
+            ),
+          )
+          .where(
+            (entry) =>
+                typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
+          )
+          .toList()
+        ..sort((a, b) {
+          if (a.hasExactAddress != b.hasExactAddress) {
+            return a.hasExactAddress ? -1 : 1;
           }
+          return a.domain.compareTo(b.domain);
+        });
+      for (final entry in domainEntries) {
+        final suggestion = '$localPart@${entry.domain}';
+        if (addTarget(addressTarget(suggestion))) {
+          return results;
         }
       }
     }

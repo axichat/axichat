@@ -3581,13 +3581,16 @@ class EmailService {
   }
 
   static String? _localPartFromAddress(String address) {
-    if (address.isEmpty) {
+    final normalized = normalizeAddress(address);
+    if (normalized == null) return null;
+    final localPart = addressLocalPart(normalized);
+    if (localPart != null) {
+      return localPart;
+    }
+    if (normalized.contains('@')) {
       return null;
     }
-    final index = address.indexOf('@');
-    final localPart =
-        index == -1 ? address.trim() : address.substring(0, index).trim();
-    return localPart.isEmpty ? null : localPart;
+    return normalized;
   }
 
   String _normalizeLinkedAccountAddress(String address) =>

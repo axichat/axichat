@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -129,7 +130,7 @@ class _LocationInlineSuggestionState extends State<LocationInlineSuggestion> {
 
   TextStyle _resolvedTextStyle(BuildContext context) {
     return widget.textStyle ??
-        TextStyle(fontSize: 14, color: calendarTitleColor);
+        context.textTheme.small.copyWith(color: calendarTitleColor);
   }
 
   Color _resolvedSuggestionColor(BuildContext context) {

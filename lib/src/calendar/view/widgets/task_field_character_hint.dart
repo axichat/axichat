@@ -3,13 +3,13 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
 const double _taskTitleLimitWarningBottomPadding = 4;
-const double _taskTitleLimitWarningFontSize = 12;
 
 /// Displays a live-updating character count for title fields and surfaces a
 /// warning when the task title exceeds the configured limit.
@@ -53,10 +53,7 @@ class TaskFieldCharacterHint extends StatelessWidget {
                 ),
               Text(
                 context.l10n.calendarTaskTitleCharacterCount(length, limit),
-                style: TextStyle(
-                  color: counterColor,
-                  fontSize: _taskTitleLimitWarningFontSize,
-                ),
+                style: context.textTheme.label.copyWith(color: counterColor),
               ),
             ],
           ),
@@ -75,10 +72,7 @@ class _TaskTitleLimitWarningText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       message,
-      style: TextStyle(
-        color: calendarDangerColor,
-        fontSize: _taskTitleLimitWarningFontSize,
-      ),
+      style: context.textTheme.label.copyWith(color: calendarDangerColor),
     );
   }
 }

@@ -27,6 +27,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
@@ -137,13 +138,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double get _edgeScrollSlowOffsetPerFrame =>
       _layoutTheme.edgeScrollSlowOffsetPerFrame;
   double get _taskPopoverHorizontalGap => _layoutTheme.popoverGap;
-  double get _zoomControlsElevation => _layoutTheme.zoomControlsElevation;
-  double get _zoomControlsPaddingHorizontal =>
-      _layoutTheme.zoomControlsPaddingHorizontal;
-  double get _zoomControlsPaddingVertical =>
-      _layoutTheme.zoomControlsPaddingVertical;
-  double get _zoomControlsLabelPaddingHorizontal =>
-      _layoutTheme.zoomControlsLabelPaddingHorizontal;
   ValueListenable<bool> get _cancelBucketHoverNotifier =>
       widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
 
@@ -3273,7 +3267,7 @@ class _CalendarWeekView extends StatelessWidget {
                                       alpha: 0.08,
                                     ),
                                     borderRadius: BorderRadius.circular(
-                                      calendarBorderRadius,
+                                      context.sizing.containerRadius,
                                     ),
                                     border: Border.all(
                                       color: calendarDangerColor.withValues(
@@ -3285,17 +3279,16 @@ class _CalendarWeekView extends StatelessWidget {
                                     children: [
                                       Icon(
                                         Icons.error_outline,
-                                        size: 16,
+                                        size: context.sizing.menuItemIconSize,
                                         color: calendarDangerColor,
                                       ),
                                       const SizedBox(width: calendarInsetLg),
                                       Expanded(
                                         child: Text(
                                           gridState._inlineErrorMessage!,
-                                          style:
-                                              context.textTheme.small.copyWith(
+                                          style: context.textTheme.small.strong
+                                              .copyWith(
                                             color: calendarDangerColor,
-                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                       ),
@@ -3443,6 +3436,9 @@ class DayEventsStrip extends StatelessWidget {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
     final bool hasEvents = events.isNotEmpty;
+    final double iconSize = context.sizing.inputSuffixIconSize;
+    final double iconButtonSize = context.sizing.inputSuffixButtonSize;
+    final double iconTapTarget = context.sizing.menuItemHeight;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
@@ -3459,18 +3455,15 @@ class DayEventsStrip extends StatelessWidget {
             children: [
               Text(
                 context.l10n.calendarDayEventsLabel,
-                style: textTheme.small.copyWith(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: colors.foreground,
-                ),
+                style:
+                    textTheme.label.strong.copyWith(color: colors.foreground),
               ),
               const Spacer(),
               AxiIconButton(
                 iconData: Icons.add,
-                iconSize: 16,
-                buttonSize: 28,
-                tapTargetSize: 36,
+                iconSize: iconSize,
+                buttonSize: iconButtonSize,
+                tapTargetSize: iconTapTarget,
                 borderColor: Colors.transparent,
                 borderWidth: 0,
                 backgroundColor: colors.primary.withValues(alpha: 0.08),
@@ -3484,10 +3477,7 @@ class DayEventsStrip extends StatelessWidget {
           if (!hasEvents)
             Text(
               context.l10n.calendarDayEventsEmpty,
-              style: textTheme.small.copyWith(
-                color: colors.mutedForeground,
-                fontSize: 11,
-              ),
+              style: textTheme.label.copyWith(color: colors.mutedForeground),
             )
           else ...[
             ...events.map(
@@ -3504,8 +3494,6 @@ class DayEventsStrip extends StatelessWidget {
 class _DayEventBulletRow extends StatelessWidget {
   const _DayEventBulletRow({required this.event, required this.onTap});
 
-  static const double _bulletSize = 6;
-
   final DayEvent event;
   final VoidCallback onTap;
 
@@ -3513,36 +3501,49 @@ class _DayEventBulletRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
     return Padding(
       padding: const EdgeInsets.only(bottom: calendarInsetSm),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Container(
-                  width: _bulletSize,
-                  height: _bulletSize,
-                  decoration: BoxDecoration(
-                    color: colors.primary,
-                    shape: BoxShape.circle,
+      child: AxiTapBounce(
+        child: ShadFocusable(
+          canRequestFocus: true,
+          builder: (context, _, __) {
+            return Material(
+              type: MaterialType.transparency,
+              shape: shape,
+              clipBehavior: Clip.antiAlias,
+              child: ShadGestureDetector(
+                cursor: SystemMouseCursors.click,
+                onTap: onTap,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Container(
+                          width: calendarInsetLg,
+                          height: calendarInsetLg,
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      const WidgetSpan(
+                          child: SizedBox(width: calendarGutterSm)),
+                      TextSpan(text: event.title),
+                    ],
                   ),
+                  style: textTheme.labelSm.strong.copyWith(
+                    color: colors.foreground,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const WidgetSpan(child: SizedBox(width: calendarGutterSm)),
-              TextSpan(text: event.title),
-            ],
-          ),
-          style: textTheme.small.copyWith(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: colors.foreground,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+            );
+          },
         ),
       ),
     );
@@ -3996,7 +3997,7 @@ class _HeaderNavButton extends StatelessWidget {
     final Widget button = AxiIconButton.ghost(
       iconData: icon,
       onPressed: onPressed,
-      iconSize: 16,
+      iconSize: context.sizing.menuItemIconSize,
       buttonSize: context.sizing.iconButtonSize,
       tapTargetSize: context.sizing.iconButtonTapTarget,
       color: colors.primary,
@@ -4012,7 +4013,7 @@ class _HeaderNavButton extends StatelessWidget {
   }
 }
 
-class _CalendarDayHeader extends StatelessWidget {
+class _CalendarDayHeader extends StatefulWidget {
   const _CalendarDayHeader({
     required this.gridState,
     required this.date,
@@ -4026,51 +4027,92 @@ class _CalendarDayHeader extends StatelessWidget {
   final bool showRightDivider;
 
   @override
-  Widget build(BuildContext context) {
-    final bool isToday = gridState._isToday(date);
-    final int dayEventCount = gridState.widget.state.dayEventCountForDate(date);
+  State<_CalendarDayHeader> createState() => _CalendarDayHeaderState();
+}
 
-    return InkWell(
-      onTap: gridState.widget.state.viewMode == CalendarView.week
-          ? () => gridState._selectDateAndSwitchToDay(date)
-          : null,
-      hoverColor: calendarSidebarBackgroundColor,
-      child: CustomPaint(
-        painter: _DayHeaderDividerPainter(
-          devicePixelRatio: devicePixelRatio,
-          strokeWidth: calendarBorderStroke,
-          color: calendarBorderDarkColor,
-          drawRightBorder: showRightDivider,
-        ),
-        child: Stack(
-          children: [
-            Container(
-              color: isToday
-                  ? calendarPrimaryColor.withValues(
-                      alpha: calendarDayHeaderHighlightOpacity,
-                    )
-                  : calendarBackgroundColor,
-              child: Center(
-                child: Text(
-                  context.l10n.commonWeekdayDayLabel(
-                    gridState._getDayOfWeekShort(context, date),
-                    date.day,
-                  ),
-                  style: context.textTheme.caption.strong.copyWith(
-                    color: isToday ? calendarPrimaryColor : calendarTitleColor,
-                    letterSpacing: calendarDayHeaderLetterSpacing,
-                  ),
+class _CalendarDayHeaderState extends State<_CalendarDayHeader> {
+  bool _hovered = false;
+
+  void _setHovered(bool value) {
+    if (_hovered == value) return;
+    setState(() {
+      _hovered = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isToday = widget.gridState._isToday(widget.date);
+    final int dayEventCount =
+        widget.gridState.widget.state.dayEventCountForDate(widget.date);
+    final bool enabled =
+        widget.gridState.widget.state.viewMode == CalendarView.week;
+    final Color baseBackground = isToday
+        ? calendarPrimaryColor.withValues(
+            alpha: calendarDayHeaderHighlightOpacity,
+          )
+        : calendarBackgroundColor;
+    final Color background =
+        _hovered && enabled ? calendarSidebarBackgroundColor : baseBackground;
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: context.radius);
+
+    return AxiTapBounce(
+      enabled: enabled,
+      child: ShadFocusable(
+        canRequestFocus: enabled,
+        builder: (context, _, __) {
+          return Material(
+            type: MaterialType.transparency,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor:
+                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              onHoverChange: enabled ? _setHovered : null,
+              onTap: enabled
+                  ? () =>
+                      widget.gridState._selectDateAndSwitchToDay(widget.date)
+                  : null,
+              child: CustomPaint(
+                painter: _DayHeaderDividerPainter(
+                  devicePixelRatio: widget.devicePixelRatio,
+                  strokeWidth: calendarBorderStroke,
+                  color: calendarBorderDarkColor,
+                  drawRightBorder: widget.showRightDivider,
+                ),
+                child: Stack(
+                  children: [
+                    Container(
+                      color: background,
+                      child: Center(
+                        child: Text(
+                          context.l10n.commonWeekdayDayLabel(
+                            widget.gridState
+                                ._getDayOfWeekShort(context, widget.date),
+                            widget.date.day,
+                          ),
+                          style: context.textTheme.label.strong.copyWith(
+                            color: isToday
+                                ? calendarPrimaryColor
+                                : calendarTitleColor,
+                            letterSpacing: calendarDayHeaderLetterSpacing,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (dayEventCount > 0)
+                      Positioned(
+                        top: calendarInsetLg,
+                        right: calendarGutterSm,
+                        child: DayEventBadge(count: dayEventCount),
+                      ),
+                  ],
                 ),
               ),
             ),
-            if (dayEventCount > 0)
-              Positioned(
-                top: 6,
-                right: 8,
-                child: DayEventBadge(count: dayEventCount),
-              ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -4091,11 +4133,11 @@ class DayEventBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarPrimaryColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
       ),
       child: Text(
         count.toString(),
-        style: context.textTheme.micro.strong.copyWith(
+        style: context.textTheme.labelSm.strong.copyWith(
           color: colors.primaryForeground,
         ),
       ),
@@ -4110,15 +4152,9 @@ class _CalendarZoomControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
-    final colors = theme.colorScheme;
-    const double zoomControlsShadowAlpha = 0.12;
-    final Color zoomControlsShadowColor =
-        context.colorScheme.border.withValues(alpha: zoomControlsShadowAlpha);
-    final labelStyle = context.textTheme.caption.strong.copyWith(
+    final colors = context.colorScheme;
+    final labelStyle = context.textTheme.label.strong.copyWith(
       color: colors.foreground,
-      fontFamily: theme.textTheme.small.fontFamily,
-      letterSpacing: 0.2,
     );
     final bool canZoomOut = gridState._isZoomEnabled && gridState._canZoomOut;
     final bool canZoomIn = gridState._isZoomEnabled && gridState._canZoomIn;
@@ -4135,40 +4171,34 @@ class _CalendarZoomControls extends StatelessWidget {
       return AxiTooltip(builder: (_) => Text(tooltip), child: button);
     }
 
-    return Material(
-      elevation: gridState._zoomControlsElevation + 1,
-      color: colors.card,
-      shadowColor: zoomControlsShadowColor,
-      shape: SquircleBorder(
-        cornerRadius: 26,
-        side: BorderSide(color: colors.border),
+    return AxiModalSurface(
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      shadows: calendarMediumShadow,
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarZoomControlsPaddingHorizontal,
+        vertical: calendarZoomControlsPaddingVertical,
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: gridState._zoomControlsPaddingHorizontal + 4,
-          vertical: gridState._zoomControlsPaddingVertical + 2,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            buildButton(
-              tooltip: context.l10n.calendarZoomOut,
-              icon: Icons.remove,
-              onPressed: canZoomOut ? gridState.zoomOut : null,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          buildButton(
+            tooltip: context.l10n.calendarZoomOut,
+            icon: Icons.remove,
+            onPressed: canZoomOut ? gridState.zoomOut : null,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: calendarZoomControlsLabelPaddingHorizontal,
             ),
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: gridState._zoomControlsLabelPaddingHorizontal + 2,
-              ),
-              child: Text(gridState.zoomLabel(context.l10n), style: labelStyle),
-            ),
-            buildButton(
-              tooltip: context.l10n.calendarZoomIn,
-              icon: Icons.add,
-              onPressed: canZoomIn ? gridState.zoomIn : null,
-            ),
-          ],
-        ),
+            child: Text(gridState.zoomLabel(context.l10n), style: labelStyle),
+          ),
+          buildButton(
+            tooltip: context.l10n.calendarZoomIn,
+            icon: Icons.add,
+            onPressed: canZoomIn ? gridState.zoomIn : null,
+          ),
+        ],
       ),
     );
   }

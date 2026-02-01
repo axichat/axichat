@@ -4,13 +4,20 @@
 import 'package:flutter/material.dart';
 
 class AxiBorders extends ThemeExtension<AxiBorders> {
-  const AxiBorders({required this.width});
+  const AxiBorders({
+    required this.width,
+    required this.widthStrong,
+  });
 
   final double width;
+  final double widthStrong;
 
   @override
-  AxiBorders copyWith({double? width}) {
-    return AxiBorders(width: width ?? this.width);
+  AxiBorders copyWith({double? width, double? widthStrong}) {
+    return AxiBorders(
+      width: width ?? this.width,
+      widthStrong: widthStrong ?? this.widthStrong,
+    );
   }
 
   @override
@@ -20,4 +27,4 @@ class AxiBorders extends ThemeExtension<AxiBorders> {
   }
 }
 
-const AxiBorders axiBorders = AxiBorders(width: 1);
+const AxiBorders axiBorders = AxiBorders(width: 1, widthStrong: 2);

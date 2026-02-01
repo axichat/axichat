@@ -111,6 +111,13 @@
   "chatEmptySearch": "没有匹配项",
   "chatEmptyMessages": "没有消息",
   "chatComposerEmailHint": "发送邮件消息",
+  "chatTransportChoiceTitle": "Choose how to send",
+  "chatTransportChoiceMessage": "This address could be chat or email. How should Axichat send to {address}?",
+  "@chatTransportChoiceMessage": {
+    "placeholders": {
+      "address": {}
+    }
+  },
   "chatComposerMessageHint": "发送消息",
   "chatComposerFromHint": "发送自 {address}",
   "chatComposerEmptyMessage": "消息不能为空。",

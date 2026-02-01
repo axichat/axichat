@@ -755,20 +755,28 @@ class _PeerCapabilities {
   const _PeerCapabilities({
     required this.supportsMarkers,
     required this.supportsReceipts,
+    this.resolvedAt,
   });
 
   final bool supportsMarkers;
   final bool supportsReceipts;
+  final DateTime? resolvedAt;
 
   Map<String, Object> toJson() => {
         'markers': supportsMarkers,
         'receipts': supportsReceipts,
+        if (resolvedAt != null)
+          'resolvedAt': resolvedAt!.millisecondsSinceEpoch,
       };
 
   static _PeerCapabilities fromJson(Map<dynamic, dynamic> json) =>
       _PeerCapabilities(
         supportsMarkers: json['markers'] as bool? ?? false,
         supportsReceipts: json['receipts'] as bool? ?? false,
+        resolvedAt: switch (json['resolvedAt']) {
+          final int timestamp => DateTime.fromMillisecondsSinceEpoch(timestamp),
+          _ => null,
+        },
       );
 
   static const empty = _PeerCapabilities(
@@ -1721,6 +1729,7 @@ mixin MessageService
       StreamController<bool>.broadcast();
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
+  final Map<String, Future<_PeerCapabilities>> _capabilityRequests = {};
   var _capabilityCacheLoaded = false;
   final Map<String, Map<String, String>> _readOnlyTaskOwnersByChat =
       <String, Map<String, String>>{};
@@ -4229,29 +4238,68 @@ mixin MessageService
 
   Future<_PeerCapabilities> _capabilitiesFor(String jid) async {
     await _ensureCapabilityCacheLoaded();
-    if (_capabilityCache[jid] case final _PeerCapabilities cached) {
+    final cached = _capabilityCache[jid];
+    if (cached != null && !_isCapabilityStale(cached)) {
       return cached;
     }
 
-    final result = await _connection.discoInfoQuery(jid);
-    if (result == null || result.isType<mox.StanzaError>()) {
-      const fallback = _PeerCapabilities.empty;
-      _capabilityCache[jid] = fallback;
-      await _persistCapabilityCache();
-      return fallback;
+    if (_capabilityRequests[jid] case final Future<_PeerCapabilities> pending) {
+      return pending;
     }
 
-    final info = result.get<mox.DiscoInfo>();
+    final Future<_PeerCapabilities> request = () async {
+      final parsed = parseJid(jid);
+      final capsManager =
+          _connection.getManager<mox.EntityCapabilitiesManager>();
+      if (parsed != null && capsManager != null) {
+        final cachedInfo = await capsManager.getCachedDiscoInfoFromJid(parsed);
+        if (cachedInfo != null) {
+          final capabilities = _peerCapabilitiesFromInfo(cachedInfo);
+          _capabilityCache[jid] = capabilities;
+          await _persistCapabilityCache();
+          return capabilities;
+        }
+      }
+
+      final result = await _connection.discoInfoQuery(jid);
+      if (result == null || result.isType<mox.StanzaError>()) {
+        final fallback = cached ?? _PeerCapabilities.empty;
+        if (cached == null) {
+          _capabilityCache[jid] = fallback;
+          await _persistCapabilityCache();
+        }
+        return fallback;
+      }
+
+      final info = result.get<mox.DiscoInfo>();
+      final capabilities = _peerCapabilitiesFromInfo(info);
+      _capabilityCache[jid] = capabilities;
+      await _persistCapabilityCache();
+      return capabilities;
+    }();
+
+    _capabilityRequests[jid] = request;
+    try {
+      return await request;
+    } finally {
+      _capabilityRequests.remove(jid);
+    }
+  }
+
+  bool _isCapabilityStale(_PeerCapabilities capabilities) {
+    final resolvedAt = capabilities.resolvedAt;
+    if (resolvedAt == null) return true;
+    const ttl = Duration(days: 7);
+    return DateTime.now().difference(resolvedAt) > ttl;
+  }
+
+  _PeerCapabilities _peerCapabilitiesFromInfo(mox.DiscoInfo info) {
     final features = info.features;
-    final capabilities = _PeerCapabilities(
+    return _PeerCapabilities(
       supportsMarkers: features.contains(mox.chatMarkersXmlns),
       supportsReceipts: features.contains(mox.deliveryXmlns),
+      resolvedAt: DateTime.now(),
     );
-
-    _capabilityCache[jid] = capabilities;
-    await _persistCapabilityCache();
-
-    return capabilities;
   }
 
   Future<bool> _supportsMam(String jid) async {
@@ -4514,6 +4562,7 @@ mixin MessageService
     _resetStableKeyCache();
     _lastSeenKeys.clear();
     _capabilityCache.clear();
+    _capabilityRequests.clear();
     _capabilityCacheLoaded = false;
     _inboundAttachmentDownloads.clear();
     _inboundAttachmentAutoDownloadGlobalLimiter.reset();

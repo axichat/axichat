@@ -150,9 +150,7 @@ class CalendarAlarmsField extends StatelessWidget {
           const SizedBox(height: calendarInsetSm),
           Text(
             context.l10n.calendarAlarmsHelper,
-            style: context.textTheme.muted.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
+            style: context.textTheme.muted,
           ),
         ],
         const SizedBox(height: calendarGutterSm),
@@ -199,7 +197,7 @@ class _AlarmEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       context.l10n.calendarAlarmsEmpty,
-      style: context.textTheme.muted.copyWith(fontWeight: FontWeight.w500),
+      style: context.textTheme.muted,
     );
   }
 }
@@ -232,9 +230,8 @@ class _AlarmFieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: context.textTheme.small.copyWith(
+      style: context.textTheme.label.strong.copyWith(
         color: calendarSubtitleColor,
-        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -327,13 +324,9 @@ class _AlarmCardState extends State<_AlarmCard> {
     final CalendarAlarmTrigger trigger = _normalizedTrigger(alarm);
     final bool isProcedure = alarm.action == CalendarAlarmAction.procedure;
     final bool isEmail = alarm.action == CalendarAlarmAction.email;
-    final TextStyle titleStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w700,
-    );
-    final TextStyle helperStyle = context.textTheme.muted.copyWith(
-      fontWeight: FontWeight.w500,
-    );
+    final TextStyle titleStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle helperStyle = context.textTheme.muted;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -498,10 +491,8 @@ class _AlarmActionField extends StatelessWidget {
       CalendarAlarmAction.audio,
       CalendarAlarmAction.email,
     ];
-    final TextStyle valueStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle valueStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final Widget? helperWidget = helper;
     final Widget content = enabled
         ? AxiSelect<CalendarAlarmAction>(
@@ -1239,10 +1230,8 @@ class _AlarmRecipientChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle labelStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final String display = recipient.commonName?.trim().isNotEmpty == true
         ? context.l10n.calendarAlarmRecipientDisplay(
             recipient.commonName!,
@@ -1256,7 +1245,7 @@ class _AlarmRecipientChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Row(
@@ -1297,9 +1286,7 @@ class _AlarmAcknowledgedRow extends StatelessWidget {
         Expanded(
           child: Text(
             formatted,
-            style: context.textTheme.muted.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
+            style: context.textTheme.muted,
           ),
         ),
       ],

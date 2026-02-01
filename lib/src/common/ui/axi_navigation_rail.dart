@@ -32,12 +32,17 @@ class _RailBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final borders = context.borders;
+    final radii = context.radii;
     final text = count > 99 ? '99+' : '$count';
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.primary,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.background, width: 1.5),
+        borderRadius: BorderRadius.circular(radii.pill),
+        border: Border.all(
+          color: colors.background,
+          width: borders.widthStrong,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -46,7 +51,6 @@ class _RailBadge extends StatelessWidget {
           style: context.textTheme.small.copyWith(
             color: colors.primaryForeground,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
           ),
         ),
       ),
@@ -86,7 +90,7 @@ class AxiNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final brightness = Theme.of(context).brightness;
+    final brightness = context.brightness;
     final selectionOverlay = colors.primary.withValues(
       alpha: brightness == Brightness.dark ? 0.12 : 0.08,
     );
@@ -103,7 +107,6 @@ class AxiNavigationRail extends StatelessWidget {
       fontFamily: gabaritoFontFamily,
       fontFamilyFallback: gabaritoFontFallback,
       fontWeight: _railTitleFontWeight,
-      letterSpacing: -0.3,
       color: colors.foreground,
     );
     final Widget? toggleButton = onToggleCollapse == null

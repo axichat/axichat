@@ -168,7 +168,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final l10n = context.l10n;
     final bool isEditing = widget.existing != null;
     final colors = context.colorScheme;
-    final TextStyle titleStyle = calendarTitleTextStyle.copyWith(fontSize: 18);
+    final TextStyle titleStyle =
+        context.textTheme.h4.copyWith(color: calendarTitleColor);
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final bool keyboardOpen = keyboardInset > safeBottom;
@@ -248,14 +249,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     style: titleStyle,
                   ),
                   const Spacer(),
-                  AxiIconButton(
+                  AxiIconButton.ghost(
                     iconData: Icons.close,
-                    iconSize: 16,
-                    buttonSize: 34,
-                    tapTargetSize: 40,
                     color: colors.mutedForeground,
-                    backgroundColor: Colors.transparent,
-                    borderColor: Colors.transparent,
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ],

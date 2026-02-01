@@ -21,6 +21,9 @@ class AxiTransportChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final borders = context.borders;
+    final radii = context.radii;
     final isEmail = transport.isEmail;
     final background = isEmail ? colors.destructive : colors.primary;
     final foreground =
@@ -28,11 +31,16 @@ class AxiTransportChip extends StatelessWidget {
     final borderColor = colors.background;
 
     final padding = compact
-        ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
-        : const EdgeInsets.symmetric(horizontal: 8, vertical: 3);
-    final borderRadius = compact ? 10.0 : 12.0;
-    final borderWidth = compact ? 1.5 : 2.0;
-    final fontSize = compact ? 9.0 : 10.0;
+        ? EdgeInsets.symmetric(
+            horizontal: spacing.s - spacing.xxs,
+            vertical: spacing.xxs,
+          )
+        : EdgeInsets.symmetric(
+            horizontal: spacing.s,
+            vertical: spacing.xs,
+          );
+    final borderRadius = compact ? radii.squircleSm : radii.squircle;
+    final borderWidth = compact ? borders.width : borders.widthStrong;
 
     return Container(
       padding: padding,
@@ -49,10 +57,8 @@ class AxiTransportChip extends StatelessWidget {
         softWrap: false,
         overflow: TextOverflow.visible,
         style: context.textTheme.small.copyWith(
-          fontSize: fontSize,
           fontWeight: FontWeight.w700,
           color: foreground,
-          letterSpacing: 0.2,
         ),
       ),
     );
@@ -67,9 +73,13 @@ class AxiCompatibilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final size = compact ? 18.0 : 22.0;
-    final iconSize = compact ? 10.0 : 12.0;
-    final borderWidth = compact ? 2.0 : 2.4;
+    final sizing = context.sizing;
+    final borders = context.borders;
+    final size =
+        compact ? sizing.iconButtonIconSize : sizing.iconButtonIconSize + 4;
+    final iconSize =
+        compact ? sizing.menuItemIconSize : sizing.menuItemIconSize + 4;
+    final borderWidth = compact ? borders.widthStrong : borders.widthStrong;
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,

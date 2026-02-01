@@ -243,11 +243,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
               final textColor = state.colorfulAvatars
                   ? Colors.white
                   : context.colorScheme.secondaryForeground;
-              final textStyle = TextStyle(
+              final textStyle = context.textTheme.h2.copyWith(
                 color: textColor,
-                fontSize: widget.size * 0.45,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
               );
               return ClipPath(
                 clipper: ShapeBorderClipper(shape: avatarShape),
@@ -262,7 +260,10 @@ class _AxiAvatarState extends State<AxiAvatar> {
                           errorBuilder: (_, __, ___) => ColoredBox(
                             color: backgroundColor,
                             child: Center(
-                              child: Text(initial, style: textStyle),
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: Text(initial, style: textStyle),
+                              ),
                             ),
                           ),
                         ),
@@ -272,7 +273,10 @@ class _AxiAvatarState extends State<AxiAvatar> {
                         child: Center(
                           child: isLoadingAvatar
                               ? const SizedBox.shrink()
-                              : Text(initial, style: textStyle),
+                              : FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: Text(initial, style: textStyle),
+                                ),
                         ),
                       ),
               );
@@ -284,8 +288,10 @@ class _AxiAvatarState extends State<AxiAvatar> {
               ? const SizedBox()
               : Positioned.fill(
                   child: FractionallySizedBox(
-                    widthFactor: 0.35,
-                    heightFactor: 0.35,
+                    widthFactor: context.sizing.iconButtonIconSize /
+                        context.sizing.iconButtonTapTarget,
+                    heightFactor: context.sizing.iconButtonIconSize /
+                        context.sizing.iconButtonTapTarget,
                     alignment: Alignment.bottomRight,
                     child: PresenceIndicator(
                       presence: widget.presence!,

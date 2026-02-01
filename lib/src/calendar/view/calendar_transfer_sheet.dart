@@ -7,7 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
 
 Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   BuildContext context, {
@@ -34,7 +34,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
             onTap: () =>
                 Navigator.of(sheetContext).pop(CalendarExportFormat.ics),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: calendarGutterSm),
           _CalendarTransferOption(
             icon: LucideIcons.braces,
             label: sheetContext.l10n.calendarExportFormatJsonTitle,
@@ -64,7 +64,7 @@ class _CalendarTransferOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final colors = ShadTheme.of(context).colorScheme;
+    final colors = context.colorScheme;
     final iconBackground = colors.muted.withValues(alpha: 0.12);
     return Padding(
       padding: EdgeInsets.symmetric(vertical: spacing.xxs),
@@ -72,7 +72,7 @@ class _CalendarTransferOption extends StatelessWidget {
         leading: DecoratedBox(
           decoration: BoxDecoration(
             color: iconBackground,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(context.sizing.containerRadius),
             border: Border.all(color: colors.border),
           ),
           child: Padding(

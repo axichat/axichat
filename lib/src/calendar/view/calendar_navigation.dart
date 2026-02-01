@@ -169,7 +169,7 @@ class CalendarNavigation extends StatelessWidget {
           bottom: BorderSide(color: colors.border),
         );
         const List<BoxShadow> navShadows = [];
-        final brightness = ShadTheme.of(context).brightness;
+        final brightness = context.brightness;
         final Color navBackground = brightness == Brightness.dark
             ? colors.card
             : calendarSidebarBackgroundColor;
@@ -295,7 +295,6 @@ class _NavigationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final bool useCompactIconOnly = compact && !showLabelInCompact;
     if (useCompactIconOnly) {
       return _CompactNavButton(
@@ -317,9 +316,6 @@ class _NavigationButton extends StatelessWidget {
             label: label,
             onPressed: onPressed,
             icon: icon,
-            foregroundColor: colors.primary,
-            hoverForegroundColor: colors.primary,
-            hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
           );
     return button;
   }
@@ -410,8 +406,11 @@ class _CompactNavButton extends StatelessWidget {
         : colors.mutedForeground;
     final Color background = highlighted ? colors.primary : colors.card;
     final Color border = highlighted ? colors.primary : colors.border;
-    final double buttonSize = dense ? 34 : 40;
-    final double tapTarget = dense ? 40 : 48;
+    final double buttonSize =
+        dense ? context.sizing.menuItemHeight : context.sizing.iconButtonSize;
+    final double tapTarget = dense
+        ? context.sizing.menuItemHeight
+        : context.sizing.iconButtonTapTarget;
     return AxiIconButton(
       iconData: icon,
       onPressed: active ? onPressed : null,
@@ -419,7 +418,7 @@ class _CompactNavButton extends StatelessWidget {
       color: foreground,
       backgroundColor: background,
       borderColor: border,
-      iconSize: 16,
+      iconSize: context.sizing.menuItemIconSize,
       buttonSize: buttonSize,
       tapTargetSize: tapTarget,
     );
@@ -627,7 +626,6 @@ class CalendarViewModeToggle extends StatelessWidget {
   final ValueChanged<CalendarView> onChanged;
   final bool compact;
 
-  static const double _labelFontSize = 10;
   static const double _minWidthExpanded = 180;
   static const double _preferredWidthExpanded = 204;
   static const double _minWidthRegular = 120;
@@ -639,10 +637,6 @@ class CalendarViewModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
-    final shadTheme = ShadTheme.of(context);
-    final secondaryButtonTheme = shadTheme.secondaryButtonTheme;
-    final buttonSizeTheme =
-        secondaryButtonTheme.sizesTheme?.sm ?? shadTheme.buttonSizesTheme.sm!;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
     final Color activeBackground = colors.primary.withValues(alpha: 0.16);
@@ -650,7 +644,7 @@ class CalendarViewModeToggle extends StatelessWidget {
     final EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: compact ? calendarGutterSm : calendarGutterMd,
     );
-    final double minHeight = buttonSizeTheme.height;
+    final double minHeight = context.sizing.buttonHeightSm;
     final double minWidth =
         isExpandedSize ? _minWidthExpanded : _minWidthRegular;
     final double preferredWidth =
@@ -663,16 +657,12 @@ class CalendarViewModeToggle extends StatelessWidget {
       math.max(minWidth, mediaWidth * widthScale),
     );
     final bool useShortLabels = !isExpandedSize;
-    final TextStyle textStyle = context.textTheme.small.copyWith(
-      fontSize: _labelFontSize,
-      fontWeight: FontWeight.w700,
+    final TextStyle textStyle = context.textTheme.labelSm.strong.copyWith(
       letterSpacing: 0.1,
     );
     final Color dividerColor = colors.border.withValues(alpha: 0.55);
     final ShadDecoration outerDecoration =
-        (secondaryButtonTheme.decoration ?? const ShadDecoration()).copyWith(
-      color: secondaryButtonTheme.backgroundColor ?? colors.secondary,
-    );
+        const ShadDecoration().copyWith(color: colors.secondary);
 
     final options = _viewOrder
         .map(
@@ -775,7 +765,7 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
   }
 }
 
-class _SegmentedToggleItem extends StatelessWidget {
+class _SegmentedToggleItem extends StatefulWidget {
   const _SegmentedToggleItem({
     required this.isFirst,
     required this.isLast,
@@ -805,53 +795,98 @@ class _SegmentedToggleItem extends StatelessWidget {
   final Color inactiveTextColor;
 
   @override
+  State<_SegmentedToggleItem> createState() => _SegmentedToggleItemState();
+}
+
+class _SegmentedToggleItemState extends State<_SegmentedToggleItem> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  void _setHovered(bool value) {
+    if (_hovered == value) return;
+    setState(() {
+      _hovered = value;
+    });
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  Color _resolveBackground({required bool focused}) {
+    if (widget.selected) {
+      return widget.activeBackground;
+    }
+    if (_pressed || focused) {
+      return widget.activeBackground;
+    }
+    if (_hovered) {
+      return widget.hoverBackground;
+    }
+    return Colors.transparent;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final BorderRadius radius = BorderRadius.horizontal(
-      left: isFirst ? Radius.circular(cornerRadius) : Radius.zero,
-      right: isLast ? Radius.circular(cornerRadius) : Radius.zero,
+      left: widget.isFirst ? Radius.circular(widget.cornerRadius) : Radius.zero,
+      right: widget.isLast ? Radius.circular(widget.cornerRadius) : Radius.zero,
     );
-    final WidgetStateProperty<Color?> overlay = WidgetStateProperty.resolveWith(
-      (states) {
-        if (states.contains(WidgetState.pressed) ||
-            states.contains(WidgetState.focused)) {
-          return activeBackground;
-        }
-        if (states.contains(WidgetState.hovered)) {
-          return hoverBackground;
-        }
-        return Colors.transparent;
-      },
-    );
+    final RoundedSuperellipseBorder shape =
+        RoundedSuperellipseBorder(borderRadius: radius);
+    final bool enabled = !widget.selected;
     final Widget styledChild = IconTheme.merge(
       data: IconThemeData(
-        color: selected ? activeTextColor : inactiveTextColor,
+        color:
+            widget.selected ? widget.activeTextColor : widget.inactiveTextColor,
       ),
       child: DefaultTextStyle.merge(
         style: context.textTheme.label.copyWith(
-          color: selected ? activeTextColor : inactiveTextColor,
+          color: widget.selected
+              ? widget.activeTextColor
+              : widget.inactiveTextColor,
         ),
-        child: child,
+        child: widget.child,
       ),
     );
-    return InkWell(
-      onTap: selected ? null : onSelected,
-      mouseCursor:
-          selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
-      customBorder: ContinuousRectangleBorder(borderRadius: radius),
-      overlayColor: overlay,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOutCubic,
-        padding: padding,
-        constraints: BoxConstraints(minHeight: minHeight),
-        alignment: Alignment.center,
-        decoration: ShapeDecoration(
-          color: selected ? activeBackground : Colors.transparent,
-          shape: ContinuousRectangleBorder(borderRadius: radius),
-        ),
-        child: styledChild,
+    return AxiTapBounce(
+      enabled: enabled,
+      child: ShadFocusable(
+        canRequestFocus: enabled,
+        builder: (context, focused, _) {
+          final Color background = _resolveBackground(focused: focused);
+          return Material(
+            type: MaterialType.transparency,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor:
+                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              onHoverChange: enabled ? _setHovered : null,
+              onTapDown: enabled ? (_) => _setPressed(true) : null,
+              onTapUp: enabled ? (_) => _setPressed(false) : null,
+              onTapCancel: enabled ? () => _setPressed(false) : null,
+              onTap: enabled ? widget.onSelected : null,
+              child: AnimatedContainer(
+                duration: calendarSlotHoverAnimationDuration,
+                curve: Curves.easeOutCubic,
+                padding: widget.padding,
+                constraints: BoxConstraints(minHeight: widget.minHeight),
+                alignment: Alignment.center,
+                decoration: ShapeDecoration(
+                  color: background,
+                  shape: shape,
+                ),
+                child: styledChild,
+              ),
+            ),
+          );
+        },
       ),
-    ).withTapBounce(enabled: !selected);
+    );
   }
 }
 
@@ -886,11 +921,12 @@ class _SearchButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final double iconSize = context.sizing.menuItemIconSize;
     if (compact) {
       return AxiIconButton.ghost(
         iconData: Icons.search,
         onPressed: onPressed,
-        iconSize: 16,
+        iconSize: iconSize,
         buttonSize: context.sizing.iconButtonSize,
         tapTargetSize: context.sizing.iconButtonTapTarget,
         color: colors.primary,
@@ -899,7 +935,7 @@ class _SearchButton extends StatelessWidget {
     return AxiButton.secondary(
       size: AxiButtonSize.sm,
       onPressed: onPressed,
-      leading: Icon(Icons.search, size: 16, color: colors.primary),
+      leading: Icon(Icons.search, size: iconSize, color: colors.primary),
       child: Text(context.l10n.commonSearch),
     );
   }
@@ -1257,6 +1293,7 @@ class _CalendarDropdown extends StatelessWidget {
               ).isAtSameMomentAs(_weekStart(selectedWeekStart));
               final isSelectedDay = _isSameDay(date, selectedDate);
 
+              final BorderSide baseBorder = context.borderSide;
               Color textColor = calendarTitleColor;
               Color backgroundColor = calendarContainerColor;
               BorderSide border = BorderSide.none;
@@ -1266,10 +1303,13 @@ class _CalendarDropdown extends StatelessWidget {
               }
               if (isSelectedWeek) {
                 backgroundColor = calendarPrimaryColor.withValues(alpha: 0.12);
-                border = BorderSide(color: calendarPrimaryColor, width: 1);
+                border = baseBorder.copyWith(color: calendarPrimaryColor);
               }
               if (isToday && !isSelectedDay) {
-                border = BorderSide(color: calendarPrimaryColor, width: 1.5);
+                border = baseBorder.copyWith(
+                  color: calendarPrimaryColor,
+                  width: baseBorder.width * 2,
+                );
               }
               if (isSelectedDay) {
                 backgroundColor = calendarPrimaryColor;
@@ -1277,35 +1317,44 @@ class _CalendarDropdown extends StatelessWidget {
                 border = BorderSide.none;
               }
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(
-                  calendarBorderRadius / 1.5,
-                ),
-                mouseCursor: SystemMouseCursors.click,
-                hoverColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                splashColor: Colors.transparent,
-                onTap: () => onDateSelected(date),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: backgroundColor,
-                    borderRadius: BorderRadius.circular(
-                      calendarBorderRadius / 1.5,
-                    ),
-                    border: border == BorderSide.none
-                        ? null
-                        : Border.fromBorderSide(border),
-                  ),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: calendarInsetLg,
-                  ),
-                  child: Text(
-                    date.day.toString(),
-                    style: context.textTheme.small.strongIf(isToday).copyWith(
-                          color: textColor,
+              final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+                borderRadius: context.radius,
+                side: border,
+              );
+              return AxiTapBounce(
+                child: ShadFocusable(
+                  canRequestFocus: true,
+                  builder: (context, _, __) {
+                    return Material(
+                      type: MaterialType.transparency,
+                      shape: shape,
+                      clipBehavior: Clip.antiAlias,
+                      child: ShadGestureDetector(
+                        cursor: SystemMouseCursors.click,
+                        onTap: () => onDateSelected(date),
+                        child: DecoratedBox(
+                          decoration: ShapeDecoration(
+                            color: backgroundColor,
+                            shape: shape,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: calendarInsetLg,
+                            ),
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: Text(
+                                date.day.toString(),
+                                style: context.textTheme.small
+                                    .strongIf(isToday)
+                                    .copyWith(color: textColor),
+                              ),
+                            ),
+                          ),
                         ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
               );
             },

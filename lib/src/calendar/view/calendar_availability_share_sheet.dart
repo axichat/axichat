@@ -897,9 +897,7 @@ class _AvailabilityShareHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle = context.textTheme.h4.copyWith(
-      fontWeight: FontWeight.w700,
-    );
+    final TextStyle titleStyle = context.textTheme.h4.strong;
     final TextStyle subtitleStyle = context.textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
     );
@@ -1251,7 +1249,7 @@ String? _resolveTimeZone(CalendarModel model) {
 
 Color _availabilityShareBackgroundColor(BuildContext context) {
   final scheme = context.colorScheme;
-  return ShadTheme.of(context).brightness == Brightness.dark
+  return context.brightness == Brightness.dark
       ? scheme.card
       : calendarSidebarBackgroundColor;
 }

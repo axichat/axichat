@@ -294,9 +294,7 @@ class _InlineSyncControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final TextStyle statusStyle = context.textTheme.small.copyWith(
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle statusStyle = context.textTheme.small.strong;
     final TextStyle secondaryStyle = context.textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
     );

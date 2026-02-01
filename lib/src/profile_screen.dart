@@ -193,8 +193,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
                     iconData: LucideIcons.refreshCcw,
                     tooltip: l10n.commonRetry,
                     onPressed: () async => await context
-                        .read<XmppService?>()
-                        ?.resetDemoInteractivePhase(),
+                        .read<XmppService>()
+                        .resetDemoInteractivePhase(),
                   ),
                 ),
             ],
@@ -669,8 +669,8 @@ class _ProfileCardSection extends StatelessWidget {
                         placeholder: Text(l10n.profileStatusPlaceholder),
                         initialValue: profileState.status,
                         onSubmitted: (value) => context
-                            .read<ProfileCubit?>()
-                            ?.updatePresence(status: value),
+                            .read<ProfileCubit>()
+                            .updatePresence(status: value),
                       ),
                     ),
                   ),

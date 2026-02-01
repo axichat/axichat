@@ -340,5 +340,5 @@ Offset _insideNormal(CutoutEdge edge) {
 
 double _blurSigma(double radius) {
   if (radius <= 0) return 0;
-  return radius * 0.57735 + 0.5;
+  return (radius / 2) + (1 / 2);
 }

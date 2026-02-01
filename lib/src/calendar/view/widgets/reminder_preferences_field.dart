@@ -26,7 +26,6 @@ const String _reminderAdvancedLabel = 'Advanced alarms';
 const String _reminderAdvancedActiveLabel = 'Active';
 const String _reminderAdvancedSummary = 'Advanced alarms applied';
 const double _reminderAdvancedBadgeOpacity = 0.16;
-const double _reminderAdvancedBadgeFontSize = 11;
 const double _reminderAdvancedBadgeRadius = 10;
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 
@@ -210,9 +209,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
             collapsedHint: hasAdvancedData
                 ? Text(
                     _reminderAdvancedSummary,
-                    style: context.textTheme.muted.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: context.textTheme.muted,
                   )
                 : null,
             enabled: enabled,
@@ -336,7 +333,9 @@ class _ReminderSection extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: colors.muted.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(
+                    context.sizing.containerRadius,
+                  ),
                 ),
                 child: Text(
                   'Mixed',

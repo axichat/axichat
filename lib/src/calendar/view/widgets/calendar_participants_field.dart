@@ -428,10 +428,8 @@ class _AttendeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle titleStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final TextStyle subtitleStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
@@ -448,7 +446,7 @@ class _AttendeeCard extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Column(
@@ -606,20 +604,29 @@ class _ParticipantActionsRow extends StatelessWidget {
       spacing: calendarGutterSm,
       runSpacing: calendarInsetSm,
       children: [
-        TaskSecondaryButton(
-          label: _attendeeActionAcceptLabel,
+        AxiButton.outline(
+          size: AxiButtonSize.sm,
           onPressed: onAccept,
-          foregroundColor: acceptColor,
+          child: Text(
+            _attendeeActionAcceptLabel,
+            style: context.textTheme.label.copyWith(color: acceptColor),
+          ),
         ),
-        TaskSecondaryButton(
-          label: _attendeeActionDeclineLabel,
+        AxiButton.outline(
+          size: AxiButtonSize.sm,
           onPressed: onDecline,
-          foregroundColor: declineColor,
+          child: Text(
+            _attendeeActionDeclineLabel,
+            style: context.textTheme.label.copyWith(color: declineColor),
+          ),
         ),
-        TaskSecondaryButton(
-          label: _attendeeActionTentativeLabel,
+        AxiButton.outline(
+          size: AxiButtonSize.sm,
           onPressed: onTentative,
-          foregroundColor: tentativeColor,
+          child: Text(
+            _attendeeActionTentativeLabel,
+            style: context.textTheme.label.copyWith(color: tentativeColor),
+          ),
         ),
       ],
     );

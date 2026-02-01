@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
+
 enum MessageTransport { xmpp, email }
 
 const String _messageTransportXmppWireValue = 'xmpp';
@@ -32,4 +34,40 @@ extension MessageTransportCodec on MessageTransport {
       _ => MessageTransport.xmpp,
     };
   }
+}
+
+const Set<String> _emailDomainHints = <String>{
+  'gmail.com',
+  'outlook.com',
+  'hotmail.com',
+  'yahoo.com',
+  'aol.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'live.com',
+  'msn.com',
+  'protonmail.com',
+  'proton.me',
+  'tuta.com',
+};
+
+const Set<String> _xmppDomainHints = <String>{
+  'conversations.im',
+  'disroot.org',
+  'jabber.org',
+};
+
+MessageTransport? hintTransportForAddress(String? address) {
+  final domain = addressDomainPart(address)?.toLowerCase();
+  if (domain == null || domain.isEmpty) {
+    return null;
+  }
+  if (_emailDomainHints.contains(domain)) {
+    return MessageTransport.email;
+  }
+  if (_xmppDomainHints.contains(domain)) {
+    return MessageTransport.xmpp;
+  }
+  return null;
 }

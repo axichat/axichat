@@ -636,48 +636,69 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         widget.showStatusColors &&
         (widget.showTimeSelectors || statusLabel != displayDate);
 
-    final trigger = InkWell(
-      key: _triggerKey,
-      onTap: enabled ? () => _toggleOverlay(context) : null,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterLg,
-          vertical: 14,
-        ),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: borderColor,
-            width: widget.value != null ? 1.5 : 1,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: backgroundColor,
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.calendar_today_outlined, size: 20, color: iconColor),
-            const SizedBox(width: calendarGutterMd),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _DeadlineFieldContent(
-                  placeholder: placeholder,
-                  valueText: displayDate,
-                  statusLabel: statusLabel,
-                  showStatusLabel: showStatusLabel,
-                  iconColor: iconColor,
+    final BorderSide baseBorder = context.borderSide;
+    final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: BorderSide(
+        color: borderColor,
+        width: widget.value != null ? baseBorder.width * 2 : baseBorder.width,
+      ),
+    );
+    final double iconSize = context.sizing.iconButtonIconSize;
+    final trigger = AxiTapBounce(
+      enabled: enabled,
+      child: ShadFocusable(
+        canRequestFocus: enabled,
+        builder: (context, _, __) {
+          return Material(
+            type: MaterialType.transparency,
+            shape: decoratedShape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor:
+                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              onTap: enabled ? () => _toggleOverlay(context) : null,
+              child: AnimatedContainer(
+                duration: calendarSlotHoverAnimationDuration,
+                padding: calendarFieldPadding,
+                decoration: ShapeDecoration(
+                  color: backgroundColor,
+                  shape: decoratedShape,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: iconSize,
+                      color: iconColor,
+                    ),
+                    const SizedBox(width: calendarGutterMd),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _DeadlineFieldContent(
+                          placeholder: placeholder,
+                          valueText: displayDate,
+                          statusLabel: statusLabel,
+                          showStatusLabel: showStatusLabel,
+                          iconColor: iconColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: calendarGutterSm),
+                    Icon(
+                      _isOpen
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: iconSize,
+                      color: calendarTimeLabelColor,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
-            Icon(
-              _isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              size: 20,
-              color: calendarTimeLabelColor,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
 
@@ -884,11 +905,15 @@ class _DeadlineDropdownSurface extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight, minWidth: minWidth),
         child: Material(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(
+            context.sizing.containerRadius,
+          ),
           color: calendarContainerColor,
           elevation: 12,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(
+              context.sizing.containerRadius,
+            ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final desiredHeight = showTimeSelectors
@@ -1236,11 +1261,14 @@ class _DeadlineCalendarGrid extends StatelessWidget {
           ),
           const SizedBox(height: calendarGutterSm),
           Wrap(
-            spacing: 4,
-            runSpacing: 4,
+            spacing: context.spacing.xs,
+            runSpacing: context.spacing.xs,
             children: days.map((date) {
               if (date == null) {
-                return const SizedBox(width: 36, height: 36);
+                return SizedBox(
+                  width: context.sizing.iconButtonSize,
+                  height: context.sizing.iconButtonSize,
+                );
               }
 
               final isToday = _isSameDay(date, DateTime.now());
@@ -1249,8 +1277,8 @@ class _DeadlineCalendarGrid extends StatelessWidget {
               final isDisabled = !isDateWithinBounds(date);
 
               return SizedBox(
-                width: 36,
-                height: 36,
+                width: context.sizing.iconButtonSize,
+                height: context.sizing.iconButtonSize,
                 child: AxiButton(
                   variant: isSelected
                       ? AxiButtonVariant.primary

@@ -111,6 +111,13 @@
   "chatEmptySearch": "Sin coincidencias",
   "chatEmptyMessages": "Sin mensajes",
   "chatComposerEmailHint": "Enviar mensaje de correo",
+  "chatTransportChoiceTitle": "Choose how to send",
+  "chatTransportChoiceMessage": "This address could be chat or email. How should Axichat send to {address}?",
+  "@chatTransportChoiceMessage": {
+    "placeholders": {
+      "address": {}
+    }
+  },
   "chatComposerMessageHint": "Enviar mensaje",
   "chatComposerFromHint": "Enviando desde {address}",
   "chatComposerEmptyMessage": "El mensaje no puede estar vacío.",

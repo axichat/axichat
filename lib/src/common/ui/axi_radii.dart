@@ -7,16 +7,19 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
   const AxiRadii({
     required this.squircle,
     required this.squircleSm,
+    required this.pill,
   });
 
   final double squircle;
   final double squircleSm;
+  final double pill;
 
   @override
-  AxiRadii copyWith({double? squircle, double? squircleSm}) {
+  AxiRadii copyWith({double? squircle, double? squircleSm, double? pill}) {
     return AxiRadii(
       squircle: squircle ?? this.squircle,
       squircleSm: squircleSm ?? this.squircleSm,
+      pill: pill ?? this.pill,
     );
   }
 
@@ -34,4 +37,5 @@ const BorderRadius axiBorderRadius =
 const AxiRadii axiRadii = AxiRadii(
   squircle: axiSquircleRadius,
   squircleSm: 8,
+  pill: 1000,
 );

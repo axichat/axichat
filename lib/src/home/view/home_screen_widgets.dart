@@ -633,7 +633,7 @@ class _HomeShellDefaultBar extends StatelessWidget {
 
 class _HomeShellRailLayout extends StatelessWidget {
   const _HomeShellRailLayout({
-    required this.homeTabs,
+    required this.tabs,
     required this.homeTabIndex,
     required this.calendarAvailable,
     required this.collapsed,
@@ -641,7 +641,7 @@ class _HomeShellRailLayout extends StatelessWidget {
     required this.child,
   });
 
-  final ValueListenable<List<HomeTabEntry>> homeTabs;
+  final List<HomeTabEntry> tabs;
   final ValueListenable<int> homeTabIndex;
   final bool calendarAvailable;
   final bool collapsed;
@@ -653,10 +653,9 @@ class _HomeShellRailLayout extends StatelessWidget {
     return BlocSelector<ChatsCubit, ChatsState, bool>(
       selector: (state) => state.openCalendar,
       builder: (context, calendarActive) {
-        return AnimatedBuilder(
-          animation: Listenable.merge([homeTabs, homeTabIndex]),
-          builder: (context, _) {
-            final tabs = homeTabs.value;
+        return ValueListenableBuilder<int>(
+          valueListenable: homeTabIndex,
+          builder: (context, selectedIndex, _) {
             if (tabs.isEmpty) {
               return child;
             }
@@ -665,7 +664,7 @@ class _HomeShellRailLayout extends StatelessWidget {
               children: [
                 _HomeShellNavigationRail(
                   tabs: tabs,
-                  selectedIndex: homeTabIndex.value,
+                  selectedIndex: selectedIndex,
                   collapsed: collapsed,
                   calendarAvailable: calendarAvailable,
                   calendarActive: calendarActive,
@@ -1069,7 +1068,6 @@ class _HomeNavigationRail extends StatefulWidget {
 }
 
 class _HomeNavigationRailState extends State<_HomeNavigationRail> {
-  TabController? _tabController;
   int _controllerIndex = 0;
 
   @override
@@ -1081,34 +1079,9 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   @override
   void didUpdateWidget(covariant _HomeNavigationRail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_tabController == null && widget.selectedIndex != _controllerIndex) {
+    if (widget.selectedIndex != _controllerIndex) {
       _controllerIndex = widget.selectedIndex;
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final controller = DefaultTabController.of(context);
-    if (_tabController == controller) return;
-    _tabController?.removeListener(_handleTabChange);
-    _tabController = controller;
-    _controllerIndex = controller.index;
-    _tabController?.addListener(_handleTabChange);
-  }
-
-  @override
-  void dispose() {
-    _tabController?.removeListener(_handleTabChange);
-    super.dispose();
-  }
-
-  void _handleTabChange() {
-    final controller = _tabController;
-    if (controller == null || controller.indexIsChanging) return;
-    setState(() {
-      _controllerIndex = controller.index;
-    });
   }
 
   @override
@@ -1116,7 +1089,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
         final l10n = context.l10n;
-        final selectedIndex = _tabController?.index ?? _controllerIndex;
+        final selectedIndex = _controllerIndex;
         if (widget.tabs.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -1178,9 +1151,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
               if (widget.calendarActive) {
                 widget.onCalendarSelected();
               }
-              setState(() {
-                _controllerIndex = tabIndex;
-              });
+              setState(() => _controllerIndex = tabIndex);
               widget.onDestinationSelected(tabIndex);
             },
           ),
@@ -1418,8 +1389,8 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     AxiButton.ghost(
                       size: AxiButtonSize.sm,
                       onPressed: () => context
-                          .read<HomeSearchCubit?>()
-                          ?.setSearchActive(false),
+                          .read<HomeSearchCubit>()
+                          .setSearchActive(false),
                       child: Text(l10n.commonCancel),
                     ),
                   ],

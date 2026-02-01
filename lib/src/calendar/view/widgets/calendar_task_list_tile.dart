@@ -31,7 +31,12 @@ class CalendarTaskListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      padding: const EdgeInsets.fromLTRB(
+        calendarGutterMd,
+        calendarGutterSm,
+        calendarGutterSm,
+        calendarGutterSm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -109,14 +114,15 @@ class CalendarTaskListTile extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: _deadlineBackgroundColor(task.deadline!),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius:
+                    BorderRadius.circular(context.sizing.containerRadius),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.calendar_today_outlined,
-                    size: 12,
+                    size: context.sizing.menuItemIconSize,
                     color: _deadlineColor(task.deadline!),
                   ),
                   const SizedBox(width: calendarInsetMd),

@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/axi_tab_bar.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -362,16 +362,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                                 Icon(
                                   Icons.close_rounded,
                                   color: iconColor,
-                                  size: 16,
+                                  size: context.sizing.menuItemIconSize,
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: calendarGutterSm),
                                 Text(
-                                  'Cancel drag',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.2,
-                                    color: iconColor,
-                                  ),
+                                  context.l10n.commonCancel,
+                                  style: context.textTheme.label.strong
+                                      .copyWith(color: iconColor),
                                 ),
                               ],
                             ),
@@ -845,9 +842,7 @@ class _DragTabLabel extends StatelessWidget {
         border: Border(bottom: BorderSide(color: cueColor, width: 2)),
       ),
       child: DefaultTextStyle.merge(
-        style: TextStyle(
-          fontWeight: showCue ? FontWeight.w600 : FontWeight.w500,
-        ),
+        style: context.textTheme.label.strongIf(showCue),
         child: Align(alignment: Alignment.center, child: label),
       ),
     );

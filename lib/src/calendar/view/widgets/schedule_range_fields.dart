@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'deadline_picker_field.dart';
@@ -123,9 +124,7 @@ class _ScheduleField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
+          style: context.textTheme.labelSm.strong.copyWith(
             color: calendarSubtitleColor,
             letterSpacing: 0.4,
           ),

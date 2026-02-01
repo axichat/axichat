@@ -39,7 +39,7 @@ class ErrorDisplay extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         border: Border.all(color: border),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -47,7 +47,11 @@ class ErrorDisplay extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.error_outline, color: scheme.destructive, size: 20),
+              Icon(
+                Icons.error_outline,
+                color: scheme.destructive,
+                size: context.sizing.iconButtonIconSize,
+              ),
               const SizedBox(width: calendarGutterSm),
               Text(
                 l10n.calendarErrorTitle,

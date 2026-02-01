@@ -17,7 +17,6 @@ const String _invitationRequestStatusProperty = 'REQUEST-STATUS';
 const String _invitationRequestStatusSeparator = ';';
 const String _invitationRequestStatusFallbackLabel = 'Request status';
 const double _invitationLabelLetterSpacing = 0.2;
-const double _invitationLabelFontSize = 12;
 
 bool hasInvitationStatusData({
   required CalendarMethod? method,
@@ -61,9 +60,8 @@ class CalendarInvitationStatusField extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
+    final TextStyle labelStyle = context.textTheme.label.strong.copyWith(
       color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
       letterSpacing: _invitationLabelLetterSpacing,
     );
 
@@ -154,15 +152,12 @@ class _InvitationDetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = TextStyle(
-      fontSize: _invitationLabelFontSize,
-      fontWeight: FontWeight.w600,
+    final TextStyle labelStyle = context.textTheme.label.strong.copyWith(
       color: calendarSubtitleColor,
       letterSpacing: _invitationLabelLetterSpacing,
     );
-    final TextStyle valueStyle = context.textTheme.small.copyWith(
+    final TextStyle valueStyle = context.textTheme.small.strong.copyWith(
       color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
     );
 
     return Column(
@@ -183,10 +178,8 @@ class _RequestStatusTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle titleStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final TextStyle subtitleStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
@@ -202,7 +195,7 @@ class _RequestStatusTile extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Column(

@@ -10,9 +10,6 @@ import 'calendar_hover_title_scope.dart';
 class CalendarHoverTitleBubble extends StatelessWidget {
   const CalendarHoverTitleBubble({super.key});
 
-  static const double _height = 30.0;
-  static const double _maxWidth = 640.0;
-
   @override
   Widget build(BuildContext context) {
     final controller = CalendarHoverTitleScope.maybeOf(context);
@@ -21,6 +18,8 @@ class CalendarHoverTitleBubble extends StatelessWidget {
     }
 
     final colors = context.colorScheme;
+    final double height = context.sizing.menuItemHeight;
+    final double maxWidth = context.sizing.dialogMaxWidth;
 
     return IgnorePointer(
       ignoring: true,
@@ -33,7 +32,7 @@ class CalendarHoverTitleBubble extends StatelessWidget {
           }
 
           return ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _maxWidth),
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: IntrinsicWidth(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -44,7 +43,7 @@ class CalendarHoverTitleBubble extends StatelessWidget {
                   ),
                 ),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints.tightFor(height: _height),
+                  constraints: BoxConstraints.tightFor(height: height),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: calendarInsetLg,
@@ -56,10 +55,8 @@ class CalendarHoverTitleBubble extends StatelessWidget {
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.ellipsis,
-                        style: context.textTheme.small.copyWith(
-                          fontSize: 13,
-                          color: colors.mutedForeground,
-                        ),
+                        style: context.textTheme.label
+                            .copyWith(color: colors.mutedForeground),
                       ),
                     ),
                   ),

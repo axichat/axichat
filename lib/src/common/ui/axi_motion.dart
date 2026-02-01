@@ -100,6 +100,6 @@ const AxiMotion axiMotion = AxiMotion(
   tapSplashAlpha: 0.18,
   tapHoverAlpha: 0.08,
   tapFocusAlpha: 0.32,
-  statusBannerSlideOffset: Offset(0.0, -0.08),
+  statusBannerSlideOffset: Offset(0.0, -(1 / 12)),
   statusBannerSuccessDuration: Duration(milliseconds: 900),
 );

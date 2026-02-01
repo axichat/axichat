@@ -102,7 +102,6 @@ class AxiListTile extends StatelessWidget {
               title!,
               style: context.textTheme.small.copyWith(
                 color: colors.foreground,
-                height: 1.2,
                 fontWeight: FontWeight.w700,
               ),
               overflow: TextOverflow.ellipsis,
@@ -122,7 +121,6 @@ class AxiListTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: context.textTheme.muted.copyWith(
                 color: colors.mutedForeground,
-                height: 1.2,
               ),
             ),
       trailing: Row(

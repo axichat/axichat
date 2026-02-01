@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
@@ -52,10 +53,6 @@ class DraftSendValidationException implements Exception {
 
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   static const int _emailAttachmentBundleMinimumCount = 2;
-  static final RegExp _axiDomainPattern = RegExp(
-    r'@(?:[\\w-]+\\.)*axi\\.im$',
-    caseSensitive: false,
-  );
 
   DraftCubit({
     required MessageService messageService,
@@ -328,15 +325,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   bool _isEmailOnlyAddress(String value) {
-    const String jidSeparator = '@';
-    final normalized = value.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    if (!normalized.contains(jidSeparator)) {
-      return false;
-    }
-    return !_axiDomainPattern.hasMatch(normalized);
+    final hinted = hintTransportForAddress(value);
+    return hinted?.isEmail ?? false;
   }
 
   Future<void> _sendEmailDraft({

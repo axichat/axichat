@@ -489,6 +489,7 @@ class _FilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
+    final double iconSize = context.sizing.menuItemIconSize;
     return Wrap(
       spacing: calendarInsetSm,
       runSpacing: calendarInsetSm,
@@ -500,35 +501,54 @@ class _FilterRow extends StatelessWidget {
             active ? colors.primary : colors.muted.withValues(alpha: 0.25);
         final Color textColor =
             active ? colors.primary : colors.mutedForeground;
-        return InkWell(
-          onTap: () => onFilterToggled(filter, !active),
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterSm,
-              vertical: calendarInsetMd,
-            ),
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(filter.icon, size: 14, color: textColor),
-                const SizedBox(width: calendarInsetSm),
-                Text(
-                  filter.label(context),
-                  style: context.textTheme.small.copyWith(
-                    color: textColor,
-                    fontWeight: FontWeight.w700,
+        final RoundedSuperellipseBorder shape =
+            RoundedSuperellipseBorder(borderRadius: context.radius);
+        final RoundedSuperellipseBorder decoratedShape =
+            RoundedSuperellipseBorder(
+          borderRadius: context.radius,
+          side: BorderSide(color: border, width: context.borderSide.width),
+        );
+        return AxiTapBounce(
+          child: ShadFocusable(
+            canRequestFocus: true,
+            builder: (context, _, __) {
+              return Material(
+                type: MaterialType.transparency,
+                shape: shape,
+                clipBehavior: Clip.antiAlias,
+                child: ShadGestureDetector(
+                  cursor: SystemMouseCursors.click,
+                  onTap: () => onFilterToggled(filter, !active),
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: background,
+                      shape: decoratedShape,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: calendarGutterSm,
+                        vertical: calendarInsetMd,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(filter.icon, size: iconSize, color: textColor),
+                          const SizedBox(width: calendarInsetSm),
+                          Text(
+                            filter.label(context),
+                            style: context.textTheme.label.strong.copyWith(
+                              color: textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
-        ).withTapBounce();
+        );
       }).toList(),
     );
   }
@@ -602,20 +622,22 @@ class _MetadataTag extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: colors.mutedForeground),
+          Icon(
+            icon,
+            size: context.sizing.menuItemIconSize,
+            color: colors.mutedForeground,
+          ),
           const SizedBox(width: calendarInsetSm),
           Text(
             label,
-            style: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground,
-              fontWeight: FontWeight.w600,
-            ),
+            style: context.textTheme.label.strong
+                .copyWith(color: colors.mutedForeground),
           ),
         ],
       ),
@@ -650,15 +672,17 @@ class _EmptySearchState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search, size: 32, color: colors.mutedForeground),
+            Icon(
+              Icons.search,
+              size: context.sizing.menuItemHeight,
+              color: colors.mutedForeground,
+            ),
             const SizedBox(height: calendarGutterSm),
             Text(
               showHint
                   ? context.l10n.calendarTaskSearchEmptyPrompt
                   : context.l10n.calendarTaskSearchEmptyNoResults,
-              style: context.textTheme.small.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: context.textTheme.small.strong,
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
@@ -685,30 +709,41 @@ class _SearchResultTile extends StatelessWidget {
     final String? subtitle = _subtitle(context);
     return CalendarTaskTitleHoverReporter(
       title: task.title,
-      child: Material(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(calendarBorderRadius.toDouble()),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(calendarBorderRadius.toDouble()),
-          child: Padding(
-            padding: const EdgeInsets.all(calendarGutterMd),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.title,
-                  style: context.textTheme.small.copyWith(
-                    fontWeight: FontWeight.w700,
+      child: AxiTapBounce(
+        child: ShadFocusable(
+          canRequestFocus: true,
+          builder: (context, _, __) {
+            final RoundedSuperellipseBorder shape =
+                RoundedSuperellipseBorder(borderRadius: context.radius);
+            return Material(
+              type: MaterialType.transparency,
+              shape: shape,
+              clipBehavior: Clip.antiAlias,
+              child: ShadGestureDetector(
+                cursor: SystemMouseCursors.click,
+                onTap: onTap,
+                child: DecoratedBox(
+                  decoration: ShapeDecoration(color: colors.card, shape: shape),
+                  child: Padding(
+                    padding: const EdgeInsets.all(calendarGutterMd),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          task.title,
+                          style: context.textTheme.small.strong,
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: calendarInsetSm),
+                          Text(subtitle, style: context.textTheme.muted),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: calendarInsetSm),
-                  Text(subtitle, style: context.textTheme.muted),
-                ],
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

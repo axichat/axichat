@@ -345,6 +345,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatComposerEmailHint => '发送邮件消息';
 
   @override
+  String get chatTransportChoiceTitle => 'Choose how to send';
+
+  @override
+  String chatTransportChoiceMessage(Object address) {
+    return 'This address could be chat or email. How should Axichat send to $address?';
+  }
+
+  @override
   String get chatComposerMessageHint => '发送消息';
 
   @override
@@ -6002,6 +6010,14 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatComposerEmailHint => '傳送電郵訊息';
+
+  @override
+  String get chatTransportChoiceTitle => 'Choose how to send';
+
+  @override
+  String chatTransportChoiceMessage(Object address) {
+    return 'This address could be chat or email. How should Axichat send to $address?';
+  }
 
   @override
   String get chatComposerMessageHint => '傳送訊息';

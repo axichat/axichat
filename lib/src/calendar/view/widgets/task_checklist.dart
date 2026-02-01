@@ -252,7 +252,8 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
       duration: baseAnimationDuration,
       tween: Tween<double>(begin: _previousProgress, end: _targetProgress),
       builder: (context, value, _) {
-        final borderRadius = BorderRadius.circular(999);
+        final borderRadius =
+            BorderRadius.circular(context.sizing.containerRadius);
         final colors = context.colorScheme;
         const double trackMix = 0.08;
         final Color trackColor = Color.lerp(
@@ -260,25 +261,26 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
           colors.foreground,
           trackMix,
         )!;
+        final double barHeight = context.sizing.progressIndicatorBarHeight;
         return ClipRRect(
           borderRadius: borderRadius,
           child: Stack(
             children: [
               Container(
-                height: 6,
+                height: barHeight,
                 decoration: BoxDecoration(
                   color: trackColor,
                   borderRadius: borderRadius,
                 ),
               ),
               SizedBox(
-                height: 6,
+                height: barHeight,
                 child: LinearProgressIndicator(
                   value: value,
                   backgroundColor: Colors.transparent,
                   valueColor: AlwaysStoppedAnimation<Color>(widget.activeColor),
                   borderRadius: borderRadius,
-                  minHeight: 6,
+                  minHeight: barHeight,
                 ),
               ),
             ],
@@ -311,6 +313,10 @@ class _ChecklistItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final double iconSize = context.sizing.menuItemIconSize;
+    final double buttonSize = context.sizing.inputSuffixButtonSize;
+    final double tapTargetSize = context.sizing.menuItemHeight;
+    final double cornerRadius = context.sizing.containerRadius;
     return Padding(
       key: key,
       padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
@@ -320,7 +326,7 @@ class _ChecklistItemRow extends StatelessWidget {
           CalendarCompletionCheckbox(
             value: item.isCompleted,
             onChanged: onChanged,
-            size: 16,
+            size: iconSize,
           ),
           const SizedBox(width: calendarInsetSm),
           Expanded(
@@ -343,14 +349,14 @@ class _ChecklistItemRow extends StatelessWidget {
           ),
           AxiIconButton(
             iconData: Icons.close,
-            iconSize: 14,
-            buttonSize: 28,
-            tapTargetSize: 36,
+            iconSize: iconSize,
+            buttonSize: buttonSize,
+            tapTargetSize: tapTargetSize,
             backgroundColor: colors.muted.withValues(alpha: 0.08),
             borderColor: Colors.transparent,
             borderWidth: 0,
             color: colors.mutedForeground,
-            cornerRadius: 12,
+            cornerRadius: cornerRadius,
             tooltip: context.l10n.calendarRemoveItem,
             onPressed: onRemove,
           ),
@@ -393,16 +399,15 @@ class _ChecklistAddField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final double iconSize = context.sizing.menuItemIconSize;
+    final double buttonSize = context.sizing.menuItemHeight;
     return Row(
       children: [
-        AxiIconButton(
+        AxiIconButton.ghost(
           iconData: Icons.add,
-          iconSize: 16,
-          buttonSize: 32,
-          tapTargetSize: 40,
-          backgroundColor: Colors.transparent,
-          borderColor: Colors.transparent,
-          borderWidth: 0,
+          iconSize: iconSize,
+          buttonSize: buttonSize,
+          tapTargetSize: buttonSize,
           color: colors.primary,
           cornerRadius: 10,
           tooltip: context.l10n.calendarAddChecklistItem,

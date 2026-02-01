@@ -282,8 +282,11 @@ class TaskSkeletonTile extends StatelessWidget {
           margin: calendarMarginSmall,
           decoration: BoxDecoration(
             color: calendarContainerColor,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: calendarBorderColor, width: 1),
+            borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+            border: Border.all(
+              color: calendarBorderColor,
+              width: context.borderSide.width,
+            ),
           ),
           child: Row(
             children: [

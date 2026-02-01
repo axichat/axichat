@@ -360,6 +360,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatComposerEmailHint => 'Envoyer un message e-mail';
 
   @override
+  String get chatTransportChoiceTitle => 'Choose how to send';
+
+  @override
+  String chatTransportChoiceMessage(Object address) {
+    return 'This address could be chat or email. How should Axichat send to $address?';
+  }
+
+  @override
   String get chatComposerMessageHint => 'Envoyer un message';
 
   @override

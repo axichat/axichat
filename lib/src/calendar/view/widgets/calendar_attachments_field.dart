@@ -48,10 +48,8 @@ class _AttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle primaryStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle primaryStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final TextStyle secondaryStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
@@ -65,7 +63,7 @@ class _AttachmentTile extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Row(

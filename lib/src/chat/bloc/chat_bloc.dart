@@ -413,22 +413,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   static const messageBatchSize = 50;
   static const int _emptyMessageCount = 0;
-  static final RegExp _axiDomainPattern = RegExp(
-    r'@(?:[\\w-]+\\.)*axi\\.im$',
-    caseSensitive: false,
-  );
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
       CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
-    final normalized = normalizedAddressValue(value);
-    if (normalized == null || normalized.isEmpty) {
-      return false;
-    }
-    if (!normalized.contains('@')) {
-      return false;
-    }
-    return !_axiDomainPattern.hasMatch(normalized);
+    final hinted = hintTransportForAddress(value);
+    return hinted?.isEmail ?? false;
   }
 
   bool get _forceAllWithContactViewFilter {

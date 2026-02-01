@@ -95,14 +95,14 @@ class HomeShellScope extends InheritedWidget {
     required this.pendingCalendarTabIndex,
     required this.calendarTabHost,
     required this.homeTabIndex,
-    required this.homeTabs,
+    required this.tabs,
     required super.child,
   });
 
   final ValueNotifier<int?> pendingCalendarTabIndex;
   final CalendarMobileTabHostController calendarTabHost;
   final ValueNotifier<int> homeTabIndex;
-  final ValueNotifier<List<HomeTabEntry>> homeTabs;
+  final List<HomeTabEntry> tabs;
 
   static HomeShellScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<HomeShellScope>();
@@ -113,7 +113,7 @@ class HomeShellScope extends InheritedWidget {
     return pendingCalendarTabIndex != oldWidget.pendingCalendarTabIndex ||
         calendarTabHost != oldWidget.calendarTabHost ||
         homeTabIndex != oldWidget.homeTabIndex ||
-        homeTabs != oldWidget.homeTabs;
+        tabs != oldWidget.tabs;
   }
 }
 
@@ -132,8 +132,6 @@ class _HomeShellState extends State<HomeShell> {
   final CalendarMobileTabHostController _calendarTabHost =
       CalendarMobileTabHostController();
   final ValueNotifier<int> _homeTabIndex = ValueNotifier<int>(0);
-  final ValueNotifier<List<HomeTabEntry>> _homeTabs =
-      ValueNotifier<List<HomeTabEntry>>(<HomeTabEntry>[]);
   bool _railCollapsed = true;
 
   @override
@@ -141,22 +139,61 @@ class _HomeShellState extends State<HomeShell> {
     _pendingCalendarTabIndex.dispose();
     _calendarTabHost.dispose();
     _homeTabIndex.dispose();
-    _homeTabs.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final navPlacement = EnvScope.of(context).navPlacement;
     final storageManager = context.watch<CalendarStorageManager>();
     final calendarAvailable = storageManager.isAuthStorageReady;
+    final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
+    final tabs = <HomeTabEntry>[
+      HomeTabEntry(
+        id: HomeTab.chats,
+        label: l10n.homeTabChats,
+        body: ChatsList(
+          key: const PageStorageKey('Chats'),
+          showCalendarShortcut: navPlacement != NavPlacement.rail,
+          calendarAvailable: calendarAvailable,
+        ),
+        fab: const _TabActionGroup(includePrimaryActions: true),
+        searchFilters: chatsSearchFilters(l10n),
+      ),
+      HomeTabEntry(
+        id: HomeTab.drafts,
+        label: l10n.homeTabDrafts,
+        body: const DraftsList(key: PageStorageKey('Drafts')),
+        fab: showDesktopPrimaryActions
+            ? const _TabActionGroup(includePrimaryActions: true)
+            : null,
+        searchFilters: _draftsSearchFilters(l10n),
+      ),
+      HomeTabEntry(
+        id: HomeTab.spam,
+        label: l10n.homeTabSpam,
+        body: const SpamList(key: PageStorageKey('Spam')),
+        fab: showDesktopPrimaryActions
+            ? const _TabActionGroup(includePrimaryActions: true)
+            : null,
+        searchFilters: spamSearchFilters(l10n),
+      ),
+      HomeTabEntry(
+        id: HomeTab.blocked,
+        label: l10n.homeTabBlocked,
+        body: const BlocklistList(key: PageStorageKey('Blocked')),
+        fab: const _TabActionGroup(extraActions: [BlocklistAddButton()]),
+        searchFilters: _blocklistSearchFilters(l10n),
+      ),
+    ];
 
     Widget buildShellChild(Widget child) {
       return HomeShellScope(
         pendingCalendarTabIndex: _pendingCalendarTabIndex,
         calendarTabHost: _calendarTabHost,
         homeTabIndex: _homeTabIndex,
-        homeTabs: _homeTabs,
+        tabs: tabs,
         child: CalendarMobileTabHostScope(
           controller: _calendarTabHost,
           child: child,
@@ -167,7 +204,7 @@ class _HomeShellState extends State<HomeShell> {
     if (navPlacement != NavPlacement.bottom) {
       return buildShellChild(
         _HomeShellRailLayout(
-          homeTabs: _homeTabs,
+          tabs: tabs,
           homeTabIndex: _homeTabIndex,
           calendarAvailable: calendarAvailable,
           collapsed: _railCollapsed,
@@ -235,12 +272,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void deactivate() {
-    final storageManager = context.read<CalendarStorageManager>();
-    if (!storageManager.isAuthStorageReady) {
-      super.deactivate();
-      return;
-    }
-    context.read<CalendarBloc>().clearChatCalendarSyncHandler();
     super.deactivate();
   }
 
@@ -419,12 +450,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final storageManager = context.watch<CalendarStorageManager>();
     final pendingCalendarTabIndex =
         HomeShellScope.maybeOf(context)?.pendingCalendarTabIndex;
-    final homeTabsNotifier = HomeShellScope.maybeOf(context)?.homeTabs;
+    final tabs =
+        HomeShellScope.maybeOf(context)?.tabs ?? const <HomeTabEntry>[];
     return _HomeContent(
       storageManager: storageManager,
       shortcutFocusNode: _shortcutFocusNode,
       pendingCalendarTabIndex: pendingCalendarTabIndex,
-      homeTabs: homeTabsNotifier,
+      tabs: tabs,
       railCollapsed: _railCollapsed,
       onToggleNavRail: () {
         setState(() {
@@ -578,7 +610,7 @@ class _HomeContent extends StatelessWidget {
     required this.storageManager,
     required this.shortcutFocusNode,
     required this.pendingCalendarTabIndex,
-    required this.homeTabs,
+    required this.tabs,
     required this.railCollapsed,
     required this.onToggleNavRail,
     required this.onRailCollapsedChanged,
@@ -589,7 +621,7 @@ class _HomeContent extends StatelessWidget {
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
   final ValueNotifier<int?>? pendingCalendarTabIndex;
-  final ValueNotifier<List<HomeTabEntry>>? homeTabs;
+  final List<HomeTabEntry> tabs;
   final bool railCollapsed;
   final VoidCallback onToggleNavRail;
   final ValueChanged<bool> onRailCollapsedChanged;
@@ -604,53 +636,8 @@ class _HomeContent extends StatelessWidget {
     final isOmemo = xmppService is OmemoService;
     final env = EnvScope.of(context);
     final navPlacement = env.navPlacement;
-    final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
-    final chatsFilters = chatsSearchFilters(l10n);
-    final spamFilters = spamSearchFilters(l10n);
-    final draftsFilters = _draftsSearchFilters(l10n);
-    final blocklistFilters = _blocklistSearchFilters(l10n);
-
-    final tabs = <HomeTabEntry>[
-      HomeTabEntry(
-        id: HomeTab.chats,
-        label: l10n.homeTabChats,
-        body: ChatsList(
-          key: const PageStorageKey('Chats'),
-          showCalendarShortcut: navPlacement != NavPlacement.rail,
-          calendarAvailable: hasCalendarBloc,
-        ),
-        fab: const _TabActionGroup(includePrimaryActions: true),
-        searchFilters: chatsFilters,
-      ),
-      HomeTabEntry(
-        id: HomeTab.drafts,
-        label: l10n.homeTabDrafts,
-        body: const DraftsList(key: PageStorageKey('Drafts')),
-        fab: showDesktopPrimaryActions
-            ? const _TabActionGroup(includePrimaryActions: true)
-            : null,
-        searchFilters: draftsFilters,
-      ),
-      HomeTabEntry(
-        id: HomeTab.spam,
-        label: l10n.homeTabSpam,
-        body: const SpamList(key: PageStorageKey('Spam')),
-        fab: showDesktopPrimaryActions
-            ? const _TabActionGroup(includePrimaryActions: true)
-            : null,
-        searchFilters: spamFilters,
-      ),
-      HomeTabEntry(
-        id: HomeTab.blocked,
-        label: l10n.homeTabBlocked,
-        body: const BlocklistList(key: PageStorageKey('Blocked')),
-        fab: const _TabActionGroup(extraActions: [BlocklistAddButton()]),
-        searchFilters: blocklistFilters,
-      ),
-    ];
-    homeTabs?.value = tabs;
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }

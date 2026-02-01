@@ -1299,7 +1299,6 @@ class _EditTaskHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterLg,
@@ -1308,31 +1307,22 @@ class _EditTaskHeader extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            'Edit Task',
-            style: calendarTitleTextStyle.copyWith(fontSize: 18),
+            context.l10n.calendarEditTaskTitle,
+            style: context.textTheme.h4.copyWith(color: calendarTitleColor),
           ),
           const Spacer(),
-          AxiIconButton(
+          AxiIconButton.outline(
             iconData: Icons.check,
             tooltip: context.l10n.commonSave,
             onPressed: onSave,
             color: calendarPrimaryColor,
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            iconSize: 18,
-            buttonSize: 34,
-            tapTargetSize: 40,
-            cornerRadius: 12,
           ),
           const SizedBox(width: calendarGutterSm),
-          AxiIconButton(
+          AxiIconButton.outline(
             iconData: Icons.close,
             tooltip: context.l10n.calendarCloseTooltip,
             onPressed: onClose,
             color: calendarSubtitleColor,
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            iconSize: 18,
             buttonSize: 34,
             tapTargetSize: 40,
             cornerRadius: 12,
@@ -1569,9 +1559,7 @@ class _EditTaskOccurrenceScopeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle hintStyle = context.textTheme.muted.copyWith(
-      fontWeight: FontWeight.w500,
-    );
+    final TextStyle hintStyle = context.textTheme.muted;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1842,9 +1830,6 @@ class _EditTaskActionsRow extends StatelessWidget {
         TaskSecondaryButton(
           label: context.l10n.commonCancel,
           onPressed: onCancel,
-          foregroundColor: calendarPrimaryColor,
-          hoverForegroundColor: calendarPrimaryHoverColor,
-          hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
         ),
         TaskPrimaryButton(
           label: context.l10n.commonSave,

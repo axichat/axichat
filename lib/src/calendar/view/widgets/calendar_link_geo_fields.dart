@@ -239,10 +239,8 @@ class _LinkGeoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
+    final TextStyle labelStyle =
+        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterSm,
@@ -250,7 +248,7 @@ class _LinkGeoChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         border: Border.all(color: calendarBorderColor),
       ),
       child: Row(

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 /// Shared tab bar used across Axichat surfaces so styling stays consistent.
@@ -41,7 +42,9 @@ class AxiTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assert(tabs.isNotEmpty, 'Tabs cannot be empty');
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final scheme = context.colorScheme;
+    final borders = context.borders;
+    final radii = context.radii;
     final WidgetStateProperty<Color?> overlayColor =
         WidgetStateColor.resolveWith((states) {
       if (states.contains(WidgetState.pressed)) {
@@ -72,7 +75,8 @@ class AxiTabBar extends StatelessWidget {
             final count = resolvedBadges[index];
             if (count <= 0) return tabs[index];
             final child = tabs[index];
-            final offset = badgeOffset ?? const Offset(0, -12);
+            final offset = badgeOffset ??
+                Offset(0, -(context.spacing.m - context.spacing.xs));
             return Stack(
               clipBehavior: Clip.none,
               children: [
@@ -83,10 +87,10 @@ class AxiTabBar extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: scheme.primary,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(radii.pill),
                       border: Border.all(
-                        color: backgroundColor ?? scheme.surface,
-                        width: 1.5,
+                        color: backgroundColor ?? scheme.background,
+                        width: borders.widthStrong,
                       ),
                     ),
                     child: Padding(
@@ -96,11 +100,10 @@ class AxiTabBar extends StatelessWidget {
                       ),
                       child: Text(
                         count > 99 ? '99+' : '$count',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onPrimary,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
+                        style: context.textTheme.small.copyWith(
+                          color: scheme.primaryForeground,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -111,7 +114,7 @@ class AxiTabBar extends StatelessWidget {
         }
 
         return Material(
-          color: backgroundColor ?? scheme.surface,
+          color: backgroundColor ?? scheme.background,
           child: Padding(
             padding: padding,
             child: TabBar(
@@ -127,9 +130,9 @@ class AxiTabBar extends StatelessWidget {
               indicatorColor: indicatorColor,
               indicatorWeight: indicatorWeight ?? 2,
               indicatorSize: indicatorSize,
-              labelColor: labelColor ?? scheme.onSurface,
+              labelColor: labelColor ?? scheme.foreground,
               unselectedLabelColor:
-                  unselectedLabelColor ?? scheme.onSurfaceVariant,
+                  unselectedLabelColor ?? scheme.mutedForeground,
               overlayColor: overlayColor,
             ),
           ),

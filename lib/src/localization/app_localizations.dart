@@ -717,6 +717,18 @@ abstract class AppLocalizations {
   /// **'Send email message'**
   String get chatComposerEmailHint;
 
+  /// No description provided for @chatTransportChoiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how to send'**
+  String get chatTransportChoiceTitle;
+
+  /// No description provided for @chatTransportChoiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This address could be chat or email. How should Axichat send to {address}?'**
+  String chatTransportChoiceMessage(Object address);
+
   /// No description provided for @chatComposerMessageHint.
   ///
   /// In en, this message translates to:

@@ -322,7 +322,7 @@ class _CompactTaskTile extends StatelessWidget {
                     onEdit: onEdit,
                     onDelete: onDelete,
                     showIcons: false,
-                    iconSize: 20,
+                    iconSize: context.sizing.iconButtonIconSize,
                   )
                 : null,
             onToggleCompletion: onToggleCompletion,
@@ -536,7 +536,7 @@ class _FullTaskTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _TaskTitle(task: task, maxLines: 3, fontSize: 16),
+                  _TaskTitle(task: task, maxLines: 3),
                   if (task.description?.isNotEmpty == true) ...[
                     const SizedBox(height: calendarGutterSm),
                     Container(
@@ -549,9 +549,8 @@ class _FullTaskTile extends StatelessWidget {
                         task.description!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: context.textTheme.label.copyWith(
                           color: calendarSubtitleColor,
-                          fontSize: 13,
                         ),
                       ),
                     ),
@@ -576,7 +575,6 @@ class _FullTaskTile extends StatelessWidget {
                         const SizedBox(width: calendarInsetLg),
                         _TaskTimeLabel(
                           text: timeLabel!,
-                          fontSize: 14,
                           color: timeColor,
                           fontWeight: timeFontWeight,
                         ),
@@ -590,9 +588,8 @@ class _FullTaskTile extends StatelessWidget {
                           const SizedBox(width: calendarInsetLg),
                           Text(
                             durationLabel!,
-                            style: TextStyle(
+                            style: context.textTheme.small.copyWith(
                               color: calendarTimeLabelColor,
-                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -606,31 +603,19 @@ class _FullTaskTile extends StatelessWidget {
                       if (showActions) ...[
                         const Spacer(),
                         if (onEdit != null)
-                          AxiIconButton(
+                          AxiIconButton.outline(
                             iconData: Icons.edit,
                             tooltip: context.l10n.calendarEditTaskTooltip,
                             onPressed: onEdit,
-                            iconSize: 18,
-                            buttonSize: 36,
-                            tapTargetSize: 40,
-                            cornerRadius: 12,
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
                             color: colors.mutedForeground,
                           ),
                         if (onEdit != null && onDelete != null)
                           const SizedBox(width: calendarGutterSm),
                         if (onDelete != null)
-                          AxiIconButton(
+                          AxiIconButton.outline(
                             iconData: Icons.delete,
                             tooltip: context.l10n.calendarDeleteTaskTooltip,
                             onPressed: onDelete,
-                            iconSize: 18,
-                            buttonSize: 36,
-                            tapTargetSize: 40,
-                            cornerRadius: 12,
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
                             color: colors.destructive,
                           ),
                       ],
@@ -692,12 +677,10 @@ class _TaskTitle extends StatelessWidget {
   const _TaskTitle({
     required this.task,
     required this.maxLines,
-    required this.fontSize,
   });
 
   final CalendarTask task;
   final int maxLines;
-  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -705,9 +688,7 @@ class _TaskTitle extends StatelessWidget {
       task.title,
       maxLines: maxLines,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w500,
+      style: context.textTheme.p.copyWith(
         decoration: task.isCompleted ? TextDecoration.lineThrough : null,
         color: task.isCompleted ? calendarPrimaryColor : calendarTitleColor,
       ),
@@ -718,13 +699,11 @@ class _TaskTitle extends StatelessWidget {
 class _TaskTimeLabel extends StatelessWidget {
   const _TaskTimeLabel({
     required this.text,
-    required this.fontSize,
     required this.color,
     this.fontWeight,
   });
 
   final String text;
-  final double fontSize;
   final Color color;
   final FontWeight? fontWeight;
 
@@ -732,8 +711,7 @@ class _TaskTimeLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: TextStyle(
-        fontSize: fontSize,
+      style: context.textTheme.small.copyWith(
         color: color,
         fontWeight: fontWeight,
       ),
@@ -841,15 +819,11 @@ class _TaskStatusChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         border: Border.all(color: color),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
+        style: context.textTheme.label.copyWith(color: color),
       ),
     );
   }

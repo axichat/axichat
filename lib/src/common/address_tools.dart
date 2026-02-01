@@ -179,6 +179,17 @@ String? addressDomainPart(String? raw) {
   return domain.isEmpty ? null : domain;
 }
 
+({String localPart, String domainPart})? addressAutocompleteParts(String? raw) {
+  final normalized = normalizeAddress(raw);
+  if (normalized == null) return null;
+  final atIndex = normalized.indexOf('@');
+  if (atIndex <= 0) return null;
+  final localPart = normalized.substring(0, atIndex).trim();
+  if (localPart.isEmpty) return null;
+  final domainPart = normalized.substring(atIndex + 1).trim();
+  return (localPart: localPart, domainPart: domainPart);
+}
+
 String? addressResourcePart(String? raw) {
   final parsed = parseJid(raw);
   if (parsed == null) return null;

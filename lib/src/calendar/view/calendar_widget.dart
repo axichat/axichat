@@ -10,7 +10,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -48,7 +47,7 @@ class CalendarNavSurface extends StatelessWidget {
 
   static Color backgroundColor(BuildContext context) {
     final scheme = context.colorScheme;
-    return ShadTheme.of(context).brightness == Brightness.dark
+    return context.brightness == Brightness.dark
         ? scheme.card
         : calendarSidebarBackgroundColor;
   }

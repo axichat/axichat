@@ -60,7 +60,7 @@ class _AxiTooltipState extends State<AxiTooltip> {
     final double fallbackHeight = context.sizing.iconButtonTapTarget;
     final double resolvedHeight =
         _targetHeight > 0 ? _targetHeight : fallbackHeight;
-    final double verticalOffset = (resolvedHeight * 0.5) + context.spacing.xxs;
+    final double verticalOffset = (resolvedHeight / 2) + context.spacing.xxs;
     final content = widget.builder(context);
     final colors = context.colorScheme;
     final radius = context.radius;

@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -16,7 +17,6 @@ import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
-import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'accessibility_chat_event.dart';
 part 'accessibility_chat_state.dart';
@@ -382,26 +382,8 @@ class AccessibilityChatBloc
     }
     final messageService = _messageService;
     if (messageService is! XmppService) return true;
-    final myJid = messageService.myJid;
-    // If we don't know our JID, default to XMPP to avoid bogus email routing.
-    if (myJid == null) return false;
-    try {
-      final mine = mox.JID.fromString(myJid);
-      final target = mox.JID.fromString(contact.jid);
-      final myDomain = mine.domain.toLowerCase();
-      final targetDomain = target.domain.toLowerCase();
-      // Never email local/first-party domains.
-      if (targetDomain == myDomain ||
-          targetDomain.endsWith('.$myDomain') ||
-          targetDomain == 'axi.im' ||
-          targetDomain.endsWith('.axi.im')) {
-        return false;
-      }
-      return true;
-    } on Exception {
-      // If parsing fails, stick with XMPP to avoid bad fallback addresses.
-      return false;
-    }
+    final hinted = hintTransportForAddress(contact.jid);
+    return hinted?.isEmail ?? false;
   }
 
   int _messageWindowForUnread(int unreadCount) {

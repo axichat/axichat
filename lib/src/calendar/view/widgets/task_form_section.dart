@@ -144,7 +144,7 @@ class TaskSectionDivider extends StatelessWidget {
         height: 1,
         decoration: BoxDecoration(
           color: (color ?? calendarBorderColor).withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
         ),
       ),
     );
@@ -1182,7 +1182,9 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
           alignment: Alignment.topLeft,
           child: Material(
             elevation: 6,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(
+              context.sizing.containerRadius,
+            ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 240, minWidth: 220),
               child: ListView.separated(

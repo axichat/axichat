@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -318,8 +319,12 @@ class _DraftFormState extends State<DraftForm> {
                                     .recipientAddressSuggestionsStream(),
                                 selfJid: locate<ChatsCubit>().selfJid,
                                 onRecipientAdded: (target) {
-                                  _handleRecipientAdded(target);
-                                  field.didChange(null);
+                                  _handleRecipientAdded(target).then(
+                                    (added) {
+                                      if (!mounted || !added) return;
+                                      field.didChange(null);
+                                    },
+                                  );
                                 },
                                 onRecipientRemoved: (key) {
                                   _handleRecipientRemoved(key);
@@ -562,14 +567,9 @@ class _DraftFormState extends State<DraftForm> {
     return recipients;
   }
 
-  bool _isAxiDestination(String value) {
-    final lower = value.toLowerCase();
-    final atIndex = lower.indexOf('@');
-    if (atIndex == -1) {
-      return false;
-    }
-    final domain = lower.substring(atIndex + 1);
-    return domain == 'axi.im' || domain.endsWith('.axi.im');
+  bool _isXmppHint(String value) {
+    final hinted = hintTransportForAddress(value);
+    return hinted?.isXmpp ?? false;
   }
 
   Future<void> _hydrateAttachments() async {
@@ -625,7 +625,28 @@ class _DraftFormState extends State<DraftForm> {
     return attachment.copyWith(mimeType: resolvedMimeType);
   }
 
-  void _handleRecipientAdded(FanOutTarget target) {
+  Future<bool> _handleRecipientAdded(FanOutTarget target) async {
+    final address = target.address?.trim();
+    if (target.chat == null &&
+        target.transport == null &&
+        address != null &&
+        address.isNotEmpty) {
+      final transport = await _resolveAddressTransport(address);
+      if (!mounted || transport == null) return false;
+      final resolved = FanOutTarget.address(
+        address: address,
+        displayName: target.displayName,
+        shareSignatureEnabled: target.shareSignatureEnabled,
+        transport: transport,
+      );
+      _applyRecipient(resolved);
+      return true;
+    }
+    _applyRecipient(target);
+    return true;
+  }
+
+  void _applyRecipient(FanOutTarget target) {
     setState(() {
       _sendErrorMessage = null;
       final existingIndex = _recipients.indexWhere(
@@ -642,6 +663,29 @@ class _DraftFormState extends State<DraftForm> {
     });
     _revalidateFormIfNeeded();
     _scheduleAutosave();
+  }
+
+  Future<MessageTransport?> _resolveAddressTransport(String address) async {
+    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final supportsEmail = endpointConfig.enableSmtp;
+    final supportsXmpp = endpointConfig.enableXmpp;
+    if (supportsEmail && !supportsXmpp) {
+      return MessageTransport.email;
+    }
+    if (!supportsEmail && supportsXmpp) {
+      return MessageTransport.xmpp;
+    }
+    if (!supportsEmail && !supportsXmpp) {
+      return null;
+    }
+    final hinted = hintTransportForAddress(address);
+    if (hinted != null) {
+      return hinted;
+    }
+    return showTransportChoiceDialog(
+      context,
+      address: address,
+    );
   }
 
   void _handleRecipientRemoved(String key) {
@@ -1189,8 +1233,13 @@ class _DraftFormState extends State<DraftForm> {
     if (transport?.isEmail ?? false) {
       return null;
     }
+    if (transport?.isXmpp ?? false) {
+      if (chat != null) {
+        return chat.jid;
+      }
+    }
     if (chat != null) {
-      return _isAxiDestination(chat.jid) ? chat.jid : null;
+      return null;
     }
     final normalizedAddress = recipient.target.normalizedAddress;
     final rawAddress = recipient.target.address;
@@ -1198,7 +1247,10 @@ class _DraftFormState extends State<DraftForm> {
     if (candidate == null || candidate.isEmpty) {
       return null;
     }
-    return _isAxiDestination(candidate) ? candidate : null;
+    if (transport?.isXmpp ?? false) {
+      return candidate;
+    }
+    return _isXmppHint(candidate) ? candidate : null;
   }
 
   bool _isEmailRecipient(ComposerRecipient recipient) {
@@ -1207,9 +1259,12 @@ class _DraftFormState extends State<DraftForm> {
     if (transport?.isEmail ?? false) {
       return true;
     }
+    if (transport?.isXmpp ?? false) {
+      return false;
+    }
     if (chat != null) {
       final address = _recipientAddress(chat);
-      return address != null && !_isAxiDestination(address);
+      return address != null && !_isXmppHint(address);
     }
     final normalizedAddress = recipient.target.normalizedAddress;
     final rawAddress = recipient.target.address;
@@ -1217,7 +1272,8 @@ class _DraftFormState extends State<DraftForm> {
     if (candidate == null || candidate.isEmpty) {
       return false;
     }
-    return !_isAxiDestination(candidate);
+    final hinted = hintTransportForAddress(candidate);
+    return hinted?.isEmail ?? false;
   }
 
   String? _recipientAddress(Chat chat) {

@@ -10,7 +10,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -270,7 +269,7 @@ class _GuestCalendarWidgetState
   }
 
   Color _calendarSurfaceColor(BuildContext context) {
-    return ShadTheme.of(context).brightness == Brightness.dark
+    return context.brightness == Brightness.dark
         ? context.colorScheme.card
         : calendarSidebarBackgroundColor;
   }
@@ -323,7 +322,6 @@ class _GuestBanner extends StatelessWidget {
               context.l10n.calendarGuestModeNotice,
               style: calendarBodyTextStyle.copyWith(
                 color: calendarSubtitleColor,
-                fontSize: 14,
                 overflow: TextOverflow.ellipsis,
               ),
               maxLines: 2,
