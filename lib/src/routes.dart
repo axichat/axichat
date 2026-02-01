@@ -64,24 +64,22 @@ class TransitionGoRouteData extends GoRouteData {
   }
 }
 
-@TypedGoRoute<HomeRoute>(
-  path: '/',
+@TypedShellRoute<HomeShellRoute>(
   routes: [
-    TypedGoRoute<ProfileRoute>(
-      path: ProfileRoute.path,
-      routes: [
-        TypedGoRoute<AvatarEditorRoute>(path: AvatarEditorRoute.path),
-        TypedGoRoute<ArchivesRoute>(
-          path: ArchivesRoute.path,
-          routes: [
-            TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
-          ],
-        ),
-        TypedGoRoute<AttachmentGalleryRoute>(path: AttachmentGalleryRoute.path),
-      ],
-    ),
+    TypedGoRoute<HomeRoute>(path: HomeRoute.path),
+    TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
   ],
 )
+class HomeShellRoute extends ShellRouteData {
+  const HomeShellRoute();
+
+  @override
+  Widget builder(BuildContext context, GoRouterState state, Widget navigator) {
+    return HomeShell(child: navigator);
+  }
+}
+
+@TypedGoRoute<HomeRoute>(path: HomeRoute.path)
 class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const HomeRoute();
 
@@ -97,7 +95,7 @@ class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
 class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const ProfileRoute();
 
-  static const path = 'profile';
+  static const path = '/profile';
 
   @override
   bool get authenticationRequired => true;
@@ -107,11 +105,12 @@ class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
       ProfileScreen(locate: state.extra! as T Function<T>());
 }
 
+@TypedGoRoute<AvatarEditorRoute>(path: AvatarEditorRoute.path)
 class AvatarEditorRoute extends TransitionGoRouteData
     with AuthenticationRouteData {
   const AvatarEditorRoute();
 
-  static const path = 'avatar';
+  static const path = '/profile/avatar';
 
   @override
   bool get authenticationRequired => true;
@@ -121,10 +120,11 @@ class AvatarEditorRoute extends TransitionGoRouteData
       AvatarEditorScreen(locate: state.extra! as T Function<T>());
 }
 
+@TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path)
 class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const ArchivesRoute();
 
-  static const path = 'archives';
+  static const path = '/profile/archives';
 
   @override
   bool get authenticationRequired => true;
@@ -134,11 +134,12 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
       ArchivesScreen(locate: state.extra! as T Function<T>());
 }
 
+@TypedGoRoute<AttachmentGalleryRoute>(path: AttachmentGalleryRoute.path)
 class AttachmentGalleryRoute extends TransitionGoRouteData
     with AuthenticationRouteData {
   const AttachmentGalleryRoute();
 
-  static const path = 'attachments';
+  static const path = '/profile/attachments';
 
   @override
   bool get authenticationRequired => true;
@@ -148,11 +149,12 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
       AttachmentGalleryScreen(locate: state.extra! as T Function<T>());
 }
 
+@TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path)
 class ArchivedChatRoute extends TransitionGoRouteData
     with AuthenticationRouteData {
   const ArchivedChatRoute({required this.jid});
 
-  static const path = 'chat/:jid';
+  static const path = '/profile/archives/chat/:jid';
 
   final String jid;
 

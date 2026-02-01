@@ -496,10 +496,8 @@ class _ResizableTaskBody extends StatelessWidget {
                   task.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: context.textTheme.caption.strong.copyWith(
                     color: titleColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
                     decoration:
                         task.isCompleted ? TextDecoration.lineThrough : null,
                   ),
@@ -544,10 +542,8 @@ class _ResizableTaskBody extends StatelessWidget {
         task.title,
         maxLines: titleLines,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
+        style: context.textTheme.caption.strong.copyWith(
           color: titleColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
           decoration: task.isCompleted ? TextDecoration.lineThrough : null,
         ),
       );
@@ -564,11 +560,8 @@ class _ResizableTaskBody extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: TextStyle(
-                  color: secondaryColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                ),
+                style:
+                    context.textTheme.caption.copyWith(color: secondaryColor),
               ),
             ),
           ],
@@ -592,11 +585,7 @@ class _ResizableTaskBody extends StatelessWidget {
           timeLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: secondaryColor,
-            fontSize: 11,
-            fontWeight: FontWeight.w400,
-          ),
+          style: context.textTheme.caption.copyWith(color: secondaryColor),
         ),
       );
     }
@@ -611,7 +600,10 @@ class _ResizableTaskBody extends StatelessWidget {
           maxLines: descriptionLines,
           overflow: descriptionOverflow,
           softWrap: true,
-          style: TextStyle(color: secondaryColor, fontSize: 10, height: 1.2),
+          style: context.textTheme.micro.copyWith(
+            color: secondaryColor,
+            height: 1.2,
+          ),
         ),
       );
     }
@@ -736,10 +728,8 @@ class _TaskDeadlineBadge extends StatelessWidget {
           const SizedBox(width: calendarInsetMd),
           Text(
             _deadlineLabel(l10n, deadline),
-            style: TextStyle(
-              fontSize: 11,
+            style: context.textTheme.caption.strong.copyWith(
               color: color,
-              fontWeight: FontWeight.w600,
               letterSpacing: 0.1,
             ),
           ),
@@ -758,13 +748,18 @@ class _TaskLocationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Text('📍', style: TextStyle(fontSize: 12, height: 1)),
+        Text(
+          '📍',
+          style: context.textTheme.caption.copyWith(height: 1),
+        ),
         Expanded(
           child: Text(
             location,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: calendarSubtitleColor),
+            style: context.textTheme.caption.copyWith(
+              color: calendarSubtitleColor,
+            ),
           ),
         ),
       ],

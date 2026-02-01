@@ -607,9 +607,10 @@ class _CalendarEventContent extends StatelessWidget {
               Expanded(
                 child: Text(
                   task.title,
-                  style: TextStyle(
-                    fontSize: height < 40 ? 11 : 13,
-                    fontWeight: FontWeight.w500,
+                  style: (height < 40
+                          ? context.textTheme.caption
+                          : context.textTheme.small)
+                      .copyWith(
                     color: textColor,
                     decoration:
                         task.isCompleted ? TextDecoration.lineThrough : null,
@@ -625,11 +626,7 @@ class _CalendarEventContent extends StatelessWidget {
             const SizedBox(height: calendarInsetSm),
             Text(
               timeRange,
-              style: TextStyle(
-                fontSize: 10,
-                color: mutedColor,
-                fontWeight: FontWeight.w400,
-              ),
+              style: context.textTheme.micro.copyWith(color: mutedColor),
             ),
           ],
           if (showDescription && task.description != null) ...[
@@ -637,10 +634,8 @@ class _CalendarEventContent extends StatelessWidget {
             Expanded(
               child: Text(
                 task.description!,
-                style: TextStyle(
-                  fontSize: 11,
+                style: context.textTheme.caption.copyWith(
                   color: mutedColor,
-                  fontWeight: FontWeight.w400,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 3,
@@ -659,15 +654,16 @@ class _CalendarEventContent extends StatelessWidget {
             const SizedBox(height: calendarInsetSm),
             Row(
               children: [
-                const Text('📍', style: TextStyle(fontSize: 8, height: 1)),
+                Text(
+                  '📍',
+                  style: context.textTheme.micro.copyWith(height: 1),
+                ),
                 const SizedBox(width: calendarInsetSm),
                 Expanded(
                   child: Text(
                     task.location!,
-                    style: TextStyle(
-                      fontSize: 8,
+                    style: context.textTheme.micro.copyWith(
                       color: mutedColor,
-                      fontWeight: FontWeight.w400,
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,

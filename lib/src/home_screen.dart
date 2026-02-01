@@ -25,6 +25,7 @@ import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_host.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -88,6 +89,86 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
       ),
     ];
 
+class HomeShellScope extends InheritedWidget {
+  const HomeShellScope({
+    super.key,
+    required this.pendingCalendarTabIndex,
+    required this.calendarTabHost,
+    required super.child,
+  });
+
+  final ValueNotifier<int?> pendingCalendarTabIndex;
+  final CalendarMobileTabHostController calendarTabHost;
+
+  static HomeShellScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<HomeShellScope>();
+  }
+
+  @override
+  bool updateShouldNotify(HomeShellScope oldWidget) {
+    return pendingCalendarTabIndex != oldWidget.pendingCalendarTabIndex ||
+        calendarTabHost != oldWidget.calendarTabHost;
+  }
+}
+
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends State<HomeShell> {
+  final ValueNotifier<int?> _pendingCalendarTabIndex =
+      ValueNotifier<int?>(null);
+  final CalendarMobileTabHostController _calendarTabHost =
+      CalendarMobileTabHostController();
+
+  @override
+  void dispose() {
+    _pendingCalendarTabIndex.dispose();
+    _calendarTabHost.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navPlacement = EnvScope.of(context).navPlacement;
+    final storageManager = context.watch<CalendarStorageManager>();
+    final calendarAvailable = storageManager.isAuthStorageReady;
+
+    Widget buildShellChild(Widget child) {
+      return HomeShellScope(
+        pendingCalendarTabIndex: _pendingCalendarTabIndex,
+        calendarTabHost: _calendarTabHost,
+        child: CalendarMobileTabHostScope(
+          controller: _calendarTabHost,
+          child: child,
+        ),
+      );
+    }
+
+    if (navPlacement != NavPlacement.bottom) {
+      return buildShellChild(widget.child);
+    }
+
+    return buildShellChild(
+      Column(
+        children: [
+          Expanded(child: widget.child),
+          _HomeShellBottomBar(
+            pendingCalendarTabIndex: _pendingCalendarTabIndex,
+            calendarTabHost: _calendarTabHost,
+            calendarAvailable: calendarAvailable,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -97,8 +178,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
-  final ValueNotifier<int?> _pendingCalendarTabIndex =
-      ValueNotifier<int?>(null);
+  ValueNotifier<int?>? _pendingCalendarTabIndex;
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
@@ -117,8 +197,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (handler != null) {
       HardwareKeyboard.instance.removeHandler(handler);
     }
+    _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
     _shortcutFocusNode.dispose();
-    _pendingCalendarTabIndex.dispose();
     _clearOpenChatHistoryEntry();
     _clearOpenCalendarHistoryEntry();
     super.dispose();
@@ -219,6 +299,30 @@ class _HomeScreenState extends State<HomeScreen> {
     super.didChangeDependencies();
     final chatsState = context.read<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
+    _updatePendingCalendarTabIndexListener();
+  }
+
+  void _updatePendingCalendarTabIndexListener() {
+    final scope = HomeShellScope.maybeOf(context);
+    final notifier = scope?.pendingCalendarTabIndex;
+    if (notifier == _pendingCalendarTabIndex) {
+      return;
+    }
+    _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
+    _pendingCalendarTabIndex = notifier;
+    _pendingCalendarTabIndex?.addListener(_handlePendingCalendarTabChange);
+    _handlePendingCalendarTabChange();
+  }
+
+  void _handlePendingCalendarTabChange() {
+    final notifier = _pendingCalendarTabIndex;
+    if (notifier == null || notifier.value == null) {
+      return;
+    }
+    final chatsCubit = context.read<ChatsCubit>();
+    if (!chatsCubit.state.openCalendar) {
+      chatsCubit.toggleCalendar();
+    }
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -255,10 +359,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final storageManager = context.watch<CalendarStorageManager>();
+    final pendingCalendarTabIndex =
+        HomeShellScope.maybeOf(context)?.pendingCalendarTabIndex;
     return _HomeContent(
       storageManager: storageManager,
       shortcutFocusNode: _shortcutFocusNode,
-      pendingCalendarTabIndex: _pendingCalendarTabIndex,
+      pendingCalendarTabIndex: pendingCalendarTabIndex,
       railCollapsed: _railCollapsed,
       onToggleNavRail: () {
         setState(() {
@@ -272,16 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
       onHomeKeyEvent: _handleHomeKeyEvent,
-      onCalendarTabRequested: _handleCalendarTabRequested,
     );
-  }
-
-  void _handleCalendarTabRequested(int index) {
-    _pendingCalendarTabIndex.value = index;
-    final chatsCubit = context.read<ChatsCubit>();
-    if (!chatsCubit.state.openCalendar) {
-      chatsCubit.toggleCalendar();
-    }
   }
 }
 
@@ -426,18 +523,16 @@ class _HomeContent extends StatelessWidget {
     required this.onRailCollapsedChanged,
     required this.onSyncHomeHistoryEntries,
     required this.onHomeKeyEvent,
-    required this.onCalendarTabRequested,
   });
 
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
-  final ValueNotifier<int?> pendingCalendarTabIndex;
+  final ValueNotifier<int?>? pendingCalendarTabIndex;
   final bool railCollapsed;
   final VoidCallback onToggleNavRail;
   final ValueChanged<bool> onRailCollapsedChanged;
   final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
   final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
-  final ValueChanged<int> onCalendarTabRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -645,9 +740,6 @@ class _HomeContent extends StatelessWidget {
                                       navPlacement != NavPlacement.rail,
                                   navRailCollapsed: railCollapsed,
                                   onToggleNavRail: onToggleNavRail,
-                                  calendarAvailable: hasCalendarBloc,
-                                  onCalendarTabRequested:
-                                      onCalendarTabRequested,
                                 ),
                                 secondaryChild: chatPane,
                               ),

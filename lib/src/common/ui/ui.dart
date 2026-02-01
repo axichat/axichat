@@ -104,6 +104,18 @@ extension ModalTypography on BuildContext {
 }
 
 extension AxiTextThemeTokens on ShadTextTheme {
+  TextStyle get micro => muted.copyWith(
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+        height: 1.2,
+      );
+
+  TextStyle get caption => muted.copyWith(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        height: 1.2,
+      );
+
   TextStyle get sectionLabelM => muted.copyWith(
         fontSize: 12,
         fontWeight: FontWeight.w600,
@@ -115,6 +127,12 @@ extension AxiTextThemeTokens on ShadTextTheme {
         fontWeight: FontWeight.w600,
         letterSpacing: 0.2,
       );
+}
+
+extension AxiTextStyleStrength on TextStyle {
+  TextStyle get strong => copyWith(fontWeight: FontWeight.w600);
+
+  TextStyle strongIf(bool enabled) => enabled ? strong : this;
 }
 
 const smallScreen = 920.0;

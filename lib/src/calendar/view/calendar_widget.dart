@@ -6,10 +6,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/models.dart' as m;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +20,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/calendar_navigation.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_host.dart';
 import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
 import 'feedback_system.dart';
@@ -79,6 +77,8 @@ bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
   bool _mobileInitialScrollSynced = false;
+  CalendarMobileTabHostController? _mobileTabHostController;
+  CalendarMobileTabHostData? _pendingTabHostData;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
@@ -97,8 +97,15 @@ class _CalendarWidgetState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _mobileTabHostController = CalendarMobileTabHostScope.maybeOf(context);
+  }
+
+  @override
   void dispose() {
     _hoverTitleController.dispose();
+    _mobileTabHostController?.clear();
     super.dispose();
   }
 
@@ -168,19 +175,18 @@ class _CalendarWidgetState
   ) {
     final env = EnvScope.of(context);
     if (env.navPlacement == NavPlacement.bottom) {
+      _publishMobileTabHost(tabSwitcher, cancelBucket);
       return CalendarMobileTabShell(
-        tabBar: _CalendarMobileNavRow(
-          tabSwitcher: tabSwitcher,
-          onHomePressed: () => context.read<ChatsCubit>().toggleCalendar(),
-        ),
-        cancelBucket: cancelBucket,
+        tabBar: const SizedBox.shrink(),
+        cancelBucket: const SizedBox.shrink(),
         backgroundColor: context.colorScheme.background,
         borderColor: context.colorScheme.border,
         dividerColor: context.colorScheme.border,
-        showTopBorder: true,
+        showTopBorder: false,
         showDivider: false,
       );
     }
+    _mobileTabHostController?.clear();
     final colors = context.colorScheme;
     return CalendarMobileTabShell(
       tabBar: tabSwitcher,
@@ -191,6 +197,23 @@ class _CalendarWidgetState
       showTopBorder: false,
       showDivider: true,
     );
+  }
+
+  void _publishMobileTabHost(Widget tabSwitcher, Widget cancelBucket) {
+    final controller = _mobileTabHostController;
+    if (controller == null) {
+      return;
+    }
+    _pendingTabHostData = CalendarMobileTabHostData(
+      tabSwitcher: tabSwitcher,
+      cancelBucket: cancelBucket,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pending = _pendingTabHostData;
+      if (pending == null) return;
+      controller.update(pending);
+    });
   }
 
   @override
@@ -405,108 +428,6 @@ class CalendarSurfaceNavigator extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _CalendarMobileNavRow extends StatelessWidget {
-  const _CalendarMobileNavRow({
-    required this.tabSwitcher,
-    required this.onHomePressed,
-  });
-
-  final Widget tabSwitcher;
-  final VoidCallback onHomePressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final l10n = context.l10n;
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.s,
-        vertical: spacing.xs,
-      ),
-      child: Row(
-        children: [
-          _CalendarBottomNavItem(
-            label: Text(l10n.homeTabChats),
-            icon: Icon(
-              LucideIcons.messagesSquare,
-              size: sizing.menuItemIconSize,
-            ),
-            onPressed: onHomePressed,
-          ),
-          Expanded(child: tabSwitcher),
-          _CalendarSettingsBottomNavItem(
-            label: l10n.settingsButtonLabel,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CalendarBottomNavItem extends StatelessWidget {
-  const _CalendarBottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final Widget label;
-  final Widget icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final textStyle = context.textTheme.small;
-    return AxiButton.ghost(
-      size: AxiButtonSize.sm,
-      onPressed: onPressed,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          SizedBox(height: spacing.xxs),
-          DefaultTextStyle.merge(
-            style: textStyle,
-            textAlign: TextAlign.center,
-            child: label,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CalendarSettingsBottomNavItem extends StatelessWidget {
-  const _CalendarSettingsBottomNavItem({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<ProfileCubit, ProfileState>(
-      builder: (context, state) {
-        final sizing = context.sizing;
-        return _CalendarBottomNavItem(
-          label: Text(label),
-          icon: AxiAvatar(
-            jid: state.jid,
-            subscription: m.Subscription.both,
-            avatarPath: state.avatarPath,
-            presence: null,
-            status: null,
-            active: false,
-            size: sizing.iconButtonIconSize,
-          ),
-          onPressed: () =>
-              context.push(const ProfileRoute().location, extra: context.read),
-        );
-      },
     );
   }
 }

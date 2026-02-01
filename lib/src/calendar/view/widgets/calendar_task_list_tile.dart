@@ -11,7 +11,6 @@ import 'package:axichat/src/calendar/view/widgets/task_checklist.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class CalendarTaskListTile extends StatelessWidget {
   const CalendarTaskListTile({
@@ -29,7 +28,7 @@ class CalendarTaskListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = ShadTheme.of(context).colorScheme;
+    final colors = context.colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
       child: Column(
@@ -44,8 +43,7 @@ class CalendarTaskListTile extends StatelessWidget {
                   children: [
                     Text(
                       task.title,
-                      style: TextStyle(
-                        fontSize: 13,
+                      style: context.textTheme.small.copyWith(
                         color: task.isCompleted
                             ? calendarPrimaryColor
                             : calendarTitleColor,
@@ -58,8 +56,7 @@ class CalendarTaskListTile extends StatelessWidget {
                       const SizedBox(height: calendarInsetSm),
                       Text(
                         scheduleLabel!,
-                        style: TextStyle(
-                          fontSize: 11,
+                        style: context.textTheme.caption.copyWith(
                           color: task.isCompleted
                               ? calendarPrimaryColor
                               : calendarSubtitleColor,
@@ -89,7 +86,7 @@ class CalendarTaskListTile extends StatelessWidget {
               task.description!.length > 50
                   ? '${task.description!.substring(0, 50)}...'
                   : task.description!,
-              style: const TextStyle(fontSize: 11).copyWith(
+              style: context.textTheme.caption.copyWith(
                 color: calendarSubtitleColor,
               ),
             ),
@@ -124,10 +121,8 @@ class CalendarTaskListTile extends StatelessWidget {
                   const SizedBox(width: calendarInsetMd),
                   Text(
                     _deadlineLabel(context.l10n, task.deadline!),
-                    style: TextStyle(
-                      fontSize: 11,
+                    style: context.textTheme.caption.strong.copyWith(
                       color: _deadlineColor(task.deadline!),
-                      fontWeight: FontWeight.w600,
                       letterSpacing: 0.1,
                     ),
                   ),
@@ -139,11 +134,14 @@ class CalendarTaskListTile extends StatelessWidget {
             const SizedBox(height: calendarInsetMd),
             Row(
               children: [
-                const Text('📍', style: TextStyle(fontSize: 12, height: 1)),
+                Text(
+                  '📍',
+                  style: context.textTheme.caption.copyWith(height: 1),
+                ),
                 Expanded(
                   child: Text(
                     task.location!,
-                    style: const TextStyle(fontSize: 11).copyWith(
+                    style: context.textTheme.caption.copyWith(
                       color: calendarSubtitleColor,
                     ),
                     overflow: TextOverflow.ellipsis,

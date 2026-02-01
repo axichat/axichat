@@ -189,7 +189,8 @@ class CalendarNavigation extends StatelessWidget {
               boxShadow: navShadows,
             ),
             child: DefaultTextStyle.merge(
-              style: TextStyle(fontSize: 12, color: colors.mutedForeground),
+              style: context.textTheme.caption
+                  .copyWith(color: colors.mutedForeground),
               child: stackNavigation
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -826,7 +827,7 @@ class _SegmentedToggleItem extends StatelessWidget {
         color: selected ? activeTextColor : inactiveTextColor,
       ),
       child: DefaultTextStyle.merge(
-        style: TextStyle(
+        style: context.textTheme.caption.copyWith(
           color: selected ? activeTextColor : inactiveTextColor,
         ),
         child: child,
@@ -886,24 +887,21 @@ class _SearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     if (compact) {
-      return ShadButton.ghost(
-        size: ShadButtonSize.sm,
+      return AxiIconButton.ghost(
+        iconData: Icons.search,
         onPressed: onPressed,
-        child: Icon(Icons.search, size: 16, color: colors.primary),
-      ).withTapBounce();
+        iconSize: 16,
+        buttonSize: context.sizing.iconButtonSize,
+        tapTargetSize: context.sizing.iconButtonTapTarget,
+        color: colors.primary,
+      );
     }
-    return ShadButton.secondary(
-      size: ShadButtonSize.sm,
+    return AxiButton.secondary(
+      size: AxiButtonSize.sm,
       onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search, size: 16, color: colors.primary),
-          const SizedBox(width: calendarInsetSm),
-          Text(context.l10n.commonSearch),
-        ],
-      ),
-    ).withTapBounce();
+      leading: Icon(Icons.search, size: 16, color: colors.primary),
+      child: Text(context.l10n.commonSearch),
+    );
   }
 }
 
@@ -990,12 +988,9 @@ class _DateLabelState extends State<_DateLabel> {
       link: _link,
       child: SizedBox(
         height: 40,
-        child: ShadButton.outline(
-          size: ShadButtonSize.sm,
+        child: AxiButton.outline(
+          size: AxiButtonSize.sm,
           onPressed: _toggleOverlay,
-          foregroundColor: textColor,
-          hoverForegroundColor: calendarPrimaryColor,
-          hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -1009,9 +1004,7 @@ class _DateLabelState extends State<_DateLabel> {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    style: context.textTheme.caption.strong.copyWith(
                       color: textColor,
                       letterSpacing: 0.1,
                     ),
@@ -1026,7 +1019,7 @@ class _DateLabelState extends State<_DateLabel> {
               ),
             ],
           ),
-        ).withTapBounce(),
+        ),
       ),
     );
   }
@@ -1221,7 +1214,9 @@ class _CalendarDropdown extends StatelessWidget {
               Expanded(
                 child: Text(
                   monthFormat.format(month),
-                  style: calendarTitleTextStyle,
+                  style: context.textTheme.h4.copyWith(
+                    color: calendarTitleColor,
+                  ),
                 ),
               ),
               _CalendarDropdownNavButton(
@@ -1307,10 +1302,9 @@ class _CalendarDropdown extends StatelessWidget {
                   ),
                   child: Text(
                     date.day.toString(),
-                    style: calendarBodyTextStyle.copyWith(
-                      fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
-                      color: textColor,
-                    ),
+                    style: context.textTheme.small.strongIf(isToday).copyWith(
+                          color: textColor,
+                        ),
                   ),
                 ),
               );
@@ -1394,8 +1388,8 @@ class _DayHeaders extends StatelessWidget {
               child: Center(
                 child: Text(
                   label,
-                  style: calendarSubtitleTextStyle.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: context.textTheme.caption.strong.copyWith(
+                    color: calendarSubtitleColor,
                     letterSpacing: 0.5,
                   ),
                 ),

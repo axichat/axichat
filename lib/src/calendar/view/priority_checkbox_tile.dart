@@ -92,11 +92,9 @@ class PriorityCheckboxTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                      color: textColor,
-                    ),
+                    style: context.textTheme.small
+                        .strongIf(isActive)
+                        .copyWith(color: textColor),
                   ),
                 ),
               ],

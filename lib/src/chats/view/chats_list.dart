@@ -1452,6 +1452,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
 
   Future<void> _exportChat() async {
     final l10n = context.l10n;
+    final scheduleExportCleanup =
+        context.read<ChatsCubit>().scheduleExportCleanup;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     setState(() {
@@ -1484,7 +1486,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       _showSnack(l10n.chatsExportFailure);
     } finally {
       if (exportFile != null) {
-        context.read<ChatsCubit>().scheduleExportCleanup(exportFile);
+        scheduleExportCleanup(exportFile);
       }
       if (mounted) {
         setState(() {

@@ -1611,28 +1611,13 @@ class _OccurrenceScopeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton.raw(
-      variant:
-          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
-      size: ShadButtonSize.sm,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd,
-        vertical: calendarGutterSm,
-      ),
-      backgroundColor:
-          isSelected ? calendarPrimaryColor : calendarContainerColor,
-      hoverBackgroundColor: isSelected
-          ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withValues(alpha: 0.08),
-      foregroundColor: isSelected
-          ? context.colorScheme.primaryForeground
-          : calendarPrimaryColor,
-      hoverForegroundColor: isSelected
-          ? context.colorScheme.primaryForeground
-          : calendarPrimaryHoverColor,
+    return AxiButton(
+      variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
+      size: AxiButtonSize.sm,
+      selected: isSelected,
       onPressed: onPressed,
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-    ).withTapBounce();
+      child: Text(label, style: context.textTheme.caption.strong),
+    );
   }
 }
 

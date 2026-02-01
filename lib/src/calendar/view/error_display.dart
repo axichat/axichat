@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
@@ -24,7 +23,7 @@ class ErrorDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final scheme = ShadTheme.of(context).colorScheme;
+    final scheme = context.colorScheme;
     const double errorBackgroundMix = 0.12;
     const double errorBorderMix = 0.35;
     final Color background =
@@ -51,10 +50,8 @@ class ErrorDisplay extends StatelessWidget {
               const SizedBox(width: calendarGutterSm),
               Text(
                 l10n.calendarErrorTitle,
-                style: TextStyle(
-                  color: scheme.destructive,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: context.textTheme.small.strong
+                    .copyWith(color: scheme.destructive),
               ),
               const Spacer(),
               if (onDismiss != null)
@@ -71,11 +68,12 @@ class ErrorDisplay extends StatelessWidget {
           const SizedBox(height: calendarGutterSm),
           Text(
             _getFriendlyErrorMessage(l10n, error),
-            style: TextStyle(color: scheme.foreground, fontSize: 14),
+            style: context.textTheme.small.copyWith(color: scheme.foreground),
           ),
           if (onRetry != null) ...[
             const SizedBox(height: calendarGutterMd),
-            ShadButton.outline(
+            AxiButton.outline(
+              size: AxiButtonSize.sm,
               onPressed: onRetry,
               child: Text(l10n.commonRetry),
             ),
@@ -129,7 +127,7 @@ class ErrorSnackBar {
     String error, {
     VoidCallback? onRetry,
   }) {
-    final scheme = ShadTheme.of(context).colorScheme;
+    final scheme = context.colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -143,7 +141,8 @@ class ErrorSnackBar {
             Expanded(
               child: Text(
                 ErrorDisplay._getFriendlyErrorMessage(context.l10n, error),
-                style: TextStyle(color: scheme.destructiveForeground),
+                style: context.textTheme.small
+                    .copyWith(color: scheme.destructiveForeground),
               ),
             ),
           ],

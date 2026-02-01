@@ -10,8 +10,6 @@ class Nexus extends StatefulWidget {
     super.key,
     required this.tabs,
     required this.navPlacement,
-    required this.calendarAvailable,
-    required this.onCalendarTabRequested,
     this.showNavigationRail = true,
     this.navRailCollapsed = false,
     this.onToggleNavRail,
@@ -19,8 +17,6 @@ class Nexus extends StatefulWidget {
 
   final List<HomeTabEntry> tabs;
   final NavPlacement navPlacement;
-  final bool calendarAvailable;
-  final ValueChanged<int> onCalendarTabRequested;
   final bool showNavigationRail;
   final bool navRailCollapsed;
   final VoidCallback? onToggleNavRail;
@@ -105,8 +101,6 @@ class _NexusState extends State<Nexus> {
               onToggleNavRail: widget.onToggleNavRail,
               selectedIndex: _tabController?.index ?? 0,
               onDestinationSelected: _handleRailSelection,
-              calendarAvailable: widget.calendarAvailable,
-              onCalendarTabRequested: widget.onCalendarTabRequested,
               searchState: searchState,
               chatsState: chatsState,
               demoPhase: _demoPhase,
@@ -135,8 +129,6 @@ class _NexusScaffold extends StatelessWidget {
     required this.onToggleNavRail,
     required this.selectedIndex,
     required this.onDestinationSelected,
-    required this.calendarAvailable,
-    required this.onCalendarTabRequested,
     required this.searchState,
     required this.chatsState,
     required this.demoPhase,
@@ -150,8 +142,6 @@ class _NexusScaffold extends StatelessWidget {
   final VoidCallback? onToggleNavRail;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
-  final bool calendarAvailable;
-  final ValueChanged<int> onCalendarTabRequested;
   final HomeSearchState searchState;
   final ChatsState chatsState;
   final _HomeDemoPhase demoPhase;
@@ -228,8 +218,6 @@ class _NexusScaffold extends StatelessWidget {
       tabs: tabs,
       selectedChats: selectedChats,
       badgeCounts: badgeCounts,
-      calendarAvailable: calendarAvailable,
-      onCalendarTabRequested: onCalendarTabRequested,
     );
     final column = Column(
       children: [
@@ -413,16 +401,12 @@ class _NexusBottomArea extends StatelessWidget {
     required this.tabs,
     required this.selectedChats,
     required this.badgeCounts,
-    required this.calendarAvailable,
-    required this.onCalendarTabRequested,
   });
 
   final NavPlacement navPlacement;
   final List<HomeTabEntry> tabs;
   final List<m.Chat> selectedChats;
   final Map<HomeTab, int> badgeCounts;
-  final bool calendarAvailable;
-  final ValueChanged<int> onCalendarTabRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -444,29 +428,140 @@ class _NexusBottomArea extends StatelessWidget {
           }).toList(),
         ),
       );
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          tabBar,
-          _HomeBottomAppBar(
-            calendarAvailable: calendarAvailable,
-            onCalendarTabRequested: onCalendarTabRequested,
-          ),
-        ],
-      );
+      return tabBar;
     }
     return const SizedBox.shrink();
   }
 }
 
-class _HomeBottomAppBar extends StatelessWidget {
-  const _HomeBottomAppBar({
+class _HomeShellBottomBar extends StatelessWidget {
+  const _HomeShellBottomBar({
+    required this.pendingCalendarTabIndex,
+    required this.calendarTabHost,
     required this.calendarAvailable,
-    required this.onCalendarTabRequested,
+  });
+
+  final ValueNotifier<int?> pendingCalendarTabIndex;
+  final CalendarMobileTabHostController calendarTabHost;
+  final bool calendarAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<ChatsCubit, ChatsState, bool>(
+      selector: (state) => state.openCalendar,
+      builder: (context, openCalendar) {
+        return AnimatedBuilder(
+          animation: calendarTabHost,
+          builder: (context, _) {
+            final hostData = calendarTabHost.data;
+            if (openCalendar && hostData != null) {
+              return _HomeShellCalendarBar(
+                tabSwitcher: hostData.tabSwitcher,
+                cancelBucket: hostData.cancelBucket,
+                onHomePressed: () =>
+                    context.read<ChatsCubit>().toggleCalendar(),
+              );
+            }
+            return _HomeShellDefaultBar(
+              calendarAvailable: calendarAvailable,
+              pendingCalendarTabIndex: pendingCalendarTabIndex,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _HomeShellCalendarBar extends StatelessWidget {
+  const _HomeShellCalendarBar({
+    required this.tabSwitcher,
+    required this.cancelBucket,
+    required this.onHomePressed,
+  });
+
+  final Widget tabSwitcher;
+  final Widget cancelBucket;
+  final VoidCallback onHomePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return CalendarMobileTabShell(
+      tabBar: _HomeShellCalendarNavRow(
+        tabSwitcher: tabSwitcher,
+        onHomePressed: onHomePressed,
+      ),
+      cancelBucket: cancelBucket,
+      backgroundColor: colors.background,
+      borderColor: colors.border,
+      dividerColor: colors.border,
+      showTopBorder: true,
+      showDivider: false,
+    );
+  }
+}
+
+class _HomeShellCalendarNavRow extends StatelessWidget {
+  const _HomeShellCalendarNavRow({
+    required this.tabSwitcher,
+    required this.onHomePressed,
+  });
+
+  final Widget tabSwitcher;
+  final VoidCallback onHomePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final l10n = context.l10n;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
+        ),
+        child: Row(
+          children: [
+            _BottomNavItem(
+              label: Text(l10n.homeTabChats),
+              icon: Icon(
+                LucideIcons.messagesSquare,
+                size: sizing.menuItemIconSize,
+              ),
+              onPressed: onHomePressed,
+            ),
+            Expanded(child: tabSwitcher),
+            _SettingsBottomNavItem(
+              label: l10n.settingsButtonLabel,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeShellDefaultBar extends StatelessWidget {
+  const _HomeShellDefaultBar({
+    required this.calendarAvailable,
+    required this.pendingCalendarTabIndex,
   });
 
   final bool calendarAvailable;
-  final ValueChanged<int> onCalendarTabRequested;
+  final ValueNotifier<int?> pendingCalendarTabIndex;
+
+  void _openHome(BuildContext context) {
+    const HomeRoute().go(context);
+    context.read<ChatsCubit>().closeAllChats();
+  }
+
+  void _requestCalendarTab(BuildContext context, int index) {
+    pendingCalendarTabIndex.value = index;
+    const HomeRoute().go(context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -495,8 +590,7 @@ class _HomeBottomAppBar extends StatelessWidget {
                     LucideIcons.messagesSquare,
                     size: sizing.menuItemIconSize,
                   ),
-                  selected: true,
-                  onPressed: () => context.read<ChatsCubit>().closeAllChats(),
+                  onPressed: () => _openHome(context),
                 ),
               ),
               Expanded(
@@ -507,7 +601,7 @@ class _HomeBottomAppBar extends StatelessWidget {
                     size: sizing.menuItemIconSize,
                   ),
                   onPressed: calendarAvailable
-                      ? () => onCalendarTabRequested(0)
+                      ? () => _requestCalendarTab(context, 0)
                       : null,
                 ),
               ),
@@ -519,7 +613,7 @@ class _HomeBottomAppBar extends StatelessWidget {
                     size: sizing.menuItemIconSize,
                   ),
                   onPressed: calendarAvailable
-                      ? () => onCalendarTabRequested(1)
+                      ? () => _requestCalendarTab(context, 1)
                       : null,
                 ),
               ),
@@ -541,13 +635,11 @@ class _BottomNavItem extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onPressed,
-    this.selected = false,
   });
 
   final Widget label;
   final Widget icon;
   final VoidCallback? onPressed;
-  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -556,7 +648,6 @@ class _BottomNavItem extends StatelessWidget {
     return AxiButton.ghost(
       size: AxiButtonSize.sm,
       widthBehavior: AxiButtonWidth.expand,
-      selected: selected,
       onPressed: onPressed,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -596,7 +687,7 @@ class _SettingsBottomNavItem extends StatelessWidget {
             size: sizing.iconButtonIconSize,
           ),
           onPressed: () =>
-              context.push(const ProfileRoute().location, extra: context.read),
+              context.go(const ProfileRoute().location, extra: context.read),
         );
       },
     );
