@@ -791,8 +791,9 @@ class _HomeContent extends StatelessWidget {
                 final config = settings.endpointConfig;
                 context.read<ConnectivityCubit>().updateEmailContext(
                       emailEnabled: config.enableSmtp,
-                      emailService:
-                          config.enableSmtp ? context.read<EmailService>() : null,
+                      emailService: config.enableSmtp
+                          ? context.read<EmailService>()
+                          : null,
                     );
               },
               child: _HomeCoordinatorBridge(

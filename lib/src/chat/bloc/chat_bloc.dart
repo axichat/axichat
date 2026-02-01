@@ -304,6 +304,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatNotificationPreviewSettingChanged>(
       _onChatNotificationPreviewSettingChanged,
     );
+    on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatAttachmentAutoDownloadToggled>(_onChatAttachmentAutoDownloadToggled);
     on<ChatAttachmentAutoDownloadRequested>(
@@ -3284,7 +3285,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _omemoService?.recreateSessions(jid: jid!);
   }
 
-  Future<void> loadEarlier() {
+  Future<void> _onChatLoadEarlier(
+    ChatLoadEarlier event,
+    Emitter<ChatState> emit,
+  ) async {
+    try {
+      await _enqueueLoadEarlier();
+    } finally {
+      event.completer?.complete();
+    }
+  }
+
+  Future<void> _enqueueLoadEarlier() {
     _loadEarlierQueue = _loadEarlierQueue.then((_) async {
       try {
         final chat = state.chat;

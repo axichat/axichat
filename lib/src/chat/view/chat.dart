@@ -4637,9 +4637,16 @@ class _ChatState extends State<Chat> {
                                                           .messageBatchSize !=
                                                   0
                                           ? null
-                                          : () async => context
-                                              .read<ChatBloc>()
-                                              .loadEarlier(),
+                                          : () async {
+                                              final completer =
+                                                  Completer<void>();
+                                              context.read<ChatBloc>().add(
+                                                    ChatLoadEarlier(
+                                                      completer: completer,
+                                                    ),
+                                                  );
+                                              await completer.future;
+                                            },
                                       loadEarlierBuilder: Padding(
                                         padding: EdgeInsets.all(
                                           context.spacing.m,

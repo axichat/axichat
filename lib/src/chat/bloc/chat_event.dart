@@ -218,6 +218,15 @@ final class ChatNotificationPreviewSettingChanged extends ChatEvent {
   List<Object?> get props => [setting];
 }
 
+final class ChatLoadEarlier extends ChatEvent {
+  const ChatLoadEarlier({this.completer});
+
+  final Completer<void>? completer;
+
+  @override
+  List<Object?> get props => [completer];
+}
+
 final class ChatShareSignatureToggled extends ChatEvent {
   const ChatShareSignatureToggled(this.enabled);
 

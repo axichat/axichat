@@ -84,7 +84,8 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     required bool emailEnabled,
     EmailService? emailService,
   }) async {
-    if (_emailEnabled == emailEnabled && identical(_emailService, emailService)) {
+    if (_emailEnabled == emailEnabled &&
+        identical(_emailService, emailService)) {
       return;
     }
     _emailEnabled = emailEnabled;

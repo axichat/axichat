@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -700,7 +699,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
-    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final supportsEmail = endpointConfig.enableSmtp;
     final supportsXmpp = endpointConfig.enableXmpp;
     if (supportsEmail && !supportsXmpp) {

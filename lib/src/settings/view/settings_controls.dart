@@ -4,7 +4,6 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -85,7 +84,7 @@ class SettingsControls extends StatelessWidget {
           (cubit) => cubit.state.isBusy,
         );
         final emailEnabled =
-            context.watch<AuthenticationCubit>().endpointConfig.enableSmtp;
+            context.watch<SettingsCubit>().state.endpointConfig.enableSmtp;
         final double dividerIndent =
             fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
         return Column(

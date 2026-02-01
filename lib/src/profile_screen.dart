@@ -84,7 +84,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final emailEnabled = endpointConfig.enableSmtp;
     final EmailService? emailService =
         emailEnabled ? locate<EmailService>() : null;
@@ -307,7 +307,7 @@ class _ProfileMainView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emailEnabled =
-        context.watch<AuthenticationCubit>().endpointConfig.enableSmtp;
+        context.watch<SettingsCubit>().state.endpointConfig.enableSmtp;
     final card = _ProfileCardSection(
       connectivityState: connectivityState,
       demoOffline: demoOffline,

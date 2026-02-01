@@ -968,7 +968,9 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    await bloc.loadEarlier();
+    final completer = Completer<void>();
+    bloc.add(ChatLoadEarlier(completer: completer));
+    await completer.future;
     await _pumpBloc();
 
     verify(

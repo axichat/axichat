@@ -759,98 +759,22 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               child: Stack(
                 children: [
                   child ?? const SizedBox.shrink(),
-                  Positioned.fill(
+                  const Positioned.fill(
                     child: Material(
                       type: MaterialType.transparency,
-                      child: Overlay(
-                        initialEntries: [
-                          OverlayEntry(
-                            builder: (context) {
-                              final shadTheme = ShadTheme.of(context);
-                              final locate = context.read;
-                              return ShadTheme(
-                                data: shadTheme,
-                                child: MultiBlocProvider(
-                                  providers: [
-                                    BlocProvider.value(
-                                      value: locate<AuthenticationCubit>(),
-                                    ),
-                                    BlocProvider.value(
-                                      value: locate<ChatsCubit>(),
-                                    ),
-                                    BlocProvider.value(
-                                      value: locate<ComposeWindowCubit>(),
-                                    ),
-                                    BlocProvider.value(
-                                      value: locate<DraftCubit>(),
-                                    ),
-                                    BlocProvider.value(
-                                      value: locate<ProfileCubit>(),
-                                    ),
-                                    BlocProvider.value(
-                                      value: locate<RosterCubit>(),
-                                    ),
-                                    BlocProvider.value(
-                                      value: locate<SettingsCubit>(),
-                                    ),
-                                  ],
-                                  child: const ComposeWindowOverlay(),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                      child: ComposeWindowOverlay(),
                     ),
                   ),
-                  Positioned.fill(
+                  const Positioned.fill(
                     child: Material(
                       type: MaterialType.transparency,
-                      child: Builder(
-                        builder: (context) {
-                          final shadTheme = ShadTheme.of(context);
-                          final locate = context.read;
-                          return ShadTheme(
-                            data: shadTheme,
-                            child: MultiBlocProvider(
-                              providers: [
-                                BlocProvider.value(
-                                  value: locate<OmemoActivityCubit>(),
-                                ),
-                                BlocProvider.value(
-                                  value: locate<SettingsCubit>(),
-                                ),
-                              ],
-                              child: const OmemoOperationOverlay(),
-                            ),
-                          );
-                        },
-                      ),
+                      child: OmemoOperationOverlay(),
                     ),
                   ),
-                  Positioned.fill(
+                  const Positioned.fill(
                     child: Material(
                       type: MaterialType.transparency,
-                      child: Builder(
-                        builder: (context) {
-                          final shadTheme = ShadTheme.of(context);
-                          final locate = context.read;
-                          return ShadTheme(
-                            data: shadTheme,
-                            child: MultiBlocProvider(
-                              providers: [
-                                BlocProvider.value(
-                                  value: locate<SettingsCubit>(),
-                                ),
-                                BlocProvider.value(
-                                  value: locate<XmppActivityCubit>(),
-                                ),
-                              ],
-                              child: const XmppOperationOverlay(),
-                            ),
-                          );
-                        },
-                      ),
+                      child: XmppOperationOverlay(),
                     ),
                   ),
                 ],

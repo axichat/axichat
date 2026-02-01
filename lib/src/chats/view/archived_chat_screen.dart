@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
@@ -18,9 +17,9 @@ import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -41,7 +40,7 @@ class ArchivedChatScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final xmppService = locate<XmppService>();
     final notificationService = locate<NotificationService>();
-    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final EmailService? emailService =
         endpointConfig.enableSmtp ? locate<EmailService>() : null;
     final OmemoService? omemoService =
